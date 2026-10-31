@@ -8,7 +8,7 @@ from medleyplay.domain.covers import CoverType, cover_id, cover_type, is_cover_i
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 16
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 16
-WEBP = b"RIFF\x10\0\0\0WEBPVP8 " + b"\0" * 8
+WEBP = b"RIFF\x10\0\0\0WEBP" + b"VP8 " + b"\0" * 8
 
 
 @pytest.mark.parametrize(
@@ -42,5 +42,5 @@ def test_a_cover_is_named_by_the_sha256_of_its_bytes() -> None:
 @pytest.mark.parametrize(
     "name", ["", "abc", "A" * 64, "g" * 64, "0" * 63, "../" + "0" * 61, "0" * 64 + "\n"]
 )
-def test_a_name_that_isnt_a_sha256_names_no_cover(name: str) -> None:
+def test_a_name_other_than_a_sha256_names_no_cover(name: str) -> None:
     assert not is_cover_id(name)

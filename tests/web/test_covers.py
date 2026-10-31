@@ -43,7 +43,7 @@ def test_a_cover_is_served_as_its_bytes_say_and_kept_by_the_browser_for_good(
     assert response.headers["cache-control"] == "private, max-age=31536000, immutable"
 
 
-def test_an_upload_that_isnt_an_image_is_refused(
+def test_an_upload_other_than_an_image_is_refused(
     client: TestClient, catalog: CatalogService
 ) -> None:
     set_up_as_alice(client)

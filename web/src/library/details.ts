@@ -69,6 +69,7 @@ const ALBUM_FIELDS: readonly Detail[] = [
   "track_number",
   "disc_number",
   "year",
+  "cover",
 ];
 
 const KINDS = new Map(DETAIL_FIELDS.map((field) => [field.name, field.kind]));

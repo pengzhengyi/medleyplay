@@ -224,6 +224,7 @@ def album_file_values(song: SegmentRow, album_file: Mapping[Field, Shown]) -> di
         Field.DISC_NUMBER: of(Field.DISC_NUMBER),
         Field.YEAR: of(Field.YEAR),
         Field.GENRE: of(Field.GENRE),
+        Field.COVER: of(Field.COVER),
     }
     return {field: value for field, value in given.items() if value is not None}
 

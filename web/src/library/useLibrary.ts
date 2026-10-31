@@ -7,6 +7,7 @@ import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import {
   ApiError,
   type Detail,
+  type Details,
   type JobEvent,
   type Mode,
   type Playlist,
@@ -45,6 +46,10 @@ export interface Library {
    * server's answer. The promise rejects with why when the server refuses.
    */
   readonly readVideoText: (id: number, text: VideoText) => Promise<VideoRead>;
+  /** Make `image` the household's cover for the Track; the Track then shows it. */
+  readonly setCover: (id: number, image: Blob) => Promise<Details>;
+  /** Drop the household's cover for the Track; the Track then shows the next origin's. */
+  readonly removeCover: (id: number) => Promise<Details>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
    * of `newNames`. The Playlists the server saves show at once; the promise rejects
@@ -190,6 +195,8 @@ export function useLibrary(onSignedOut: () => void): Library {
       await changeDetails(id, api.setDetails([id], changes));
     },
     readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
+    setCover: (id, image) => changeDetails(id, api.setCover(id, image)),
+    removeCover: (id) => changeDetails(id, api.removeCover(id)),
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [
         ...playlists

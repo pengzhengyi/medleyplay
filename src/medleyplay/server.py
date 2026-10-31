@@ -23,6 +23,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.changes import Changes
 from medleyplay.application.connectivity import reachable
+from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.events import Events
@@ -219,6 +220,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         mode=mode,
         details=DetailsService(units, clock, changes.tell),
         songs=SongsService(units, clock, changes.tell),
+        covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
     )
 
 
@@ -246,6 +248,7 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
                     services.plugins.start()
                     services.playback.sweep_cache()
                     services.playback.sweep_downloads()
+                    services.covers.sweep()
                     services.jobs.start()
                     services.policy.start()
                     try:

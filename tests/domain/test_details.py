@@ -231,3 +231,25 @@ def test_each_shared_case_shows_what_the_web_client_previews(case: dict[str, Any
         str(field): {"value": each.value, "origin": str(each.origin)}
         for field, each in found.items()
     } == case["shown"]
+
+
+_COVER = "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+"""The name of a cover: the SHA-256 of its bytes."""
+
+
+@pytest.mark.parametrize("value", [_COVER, ""], ids=["a cover's name", "none"])
+def test_the_household_names_a_cover_or_none(value: str) -> None:
+    assert check_value(Field.COVER, value) == value
+
+
+@pytest.mark.parametrize(
+    "value", ["cover.jpg", _COVER.upper(), 3], ids=["a file name", "capitals", "a number"]
+)
+def test_a_cover_that_names_no_image_is_refused(value: object) -> None:
+    with pytest.raises(InvalidInputError, match="SHA-256"):
+        check_value(Field.COVER, value)
+
+
+def test_a_found_cover_that_names_no_image_is_no_value() -> None:
+    assert found_value(Field.COVER, "folder.jpg") is None
+    assert found_value(Field.COVER, _COVER) == _COVER

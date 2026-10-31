@@ -11,6 +11,7 @@ import {
   type JobEvent,
   type Mode,
   type Playlist,
+  type SongRowIn,
   type Track,
   type VideoRead,
   type VideoText,
@@ -50,6 +51,14 @@ export interface Library {
   readonly setCover: (id: number, image: Blob) => Promise<Details>;
   /** Drop the household's cover for the Track; the Track then shows the next origin's. */
   readonly removeCover: (id: number) => Promise<Details>;
+  /** Make `rows` the songs of the file `id`; the Tracks then show the songs as saved. */
+  readonly saveSongs: (
+    id: number,
+    rows: readonly SongRowIn[],
+    known: readonly number[],
+  ) => Promise<void>;
+  /** Remove every song of the file `id`; the Tracks then show the file whole again. */
+  readonly unsplit: (id: number) => Promise<void>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
    * of `newNames`. The Playlists the server saves show at once; the promise rejects
@@ -162,6 +171,24 @@ export function useLibrary(onSignedOut: () => void): Library {
     return answer;
   };
 
+  /** Send `request`, signing out on a 401; then ask for the Tracks again, which it changed. */
+  const changeTracks = async (request: Promise<unknown>): Promise<void> => {
+    try {
+      await request;
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) {
+        onSignedOut();
+      }
+      throw failure;
+    }
+    api.tracks().then(
+      (tracks) => {
+        dispatch({ type: "loaded", tracks });
+      },
+      () => undefined,
+    );
+  };
+
   const write = <F extends Field>(id: number, field: F, value: Track[F], send: Promise<Track>) => {
     const seq = ++writes.current;
     dispatch({ type: "write", id, field, value, seq });
@@ -197,6 +224,12 @@ export function useLibrary(onSignedOut: () => void): Library {
     readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
     setCover: (id, image) => changeDetails(id, api.setCover(id, image)),
     removeCover: (id) => changeDetails(id, api.removeCover(id)),
+    saveSongs: async (id, rows, known) => {
+      await changeTracks(api.saveSongs(id, rows, known));
+    },
+    unsplit: async (id) => {
+      await changeTracks(api.unsplit(id));
+    },
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [
         ...playlists

@@ -179,16 +179,21 @@ standard `proxy` option, and does nothing more.
   The database keeps its scheme, host, port, and whether it has a login, which
   is all the API shows back. The core keeps the URL in memory once read, so a
   call never waits on the Keychain while it holds the plugin host; a Keychain
-  that doesn't answer fails the call as a login does.
+  that doesn't answer fails the call as a login does, and so does one that no
+  longer holds a proxy the catalog has: a call never goes direct instead.
 - **Used for every request of calls keyed `bilibili`:** `canonicalize`, `read`,
   and `download`, so yt-dlp's page, API, and media requests, and the short-link
   hops. `check` makes no network call. No other call gets it: not a Library's,
   the tags', or the Mode's connectivity check, which stays direct.
 - **Never from the environment:** with no proxy set, the plugin passes none and
   reads no `HTTPS_PROXY`, system setting, or bypass list; with one set, it is used
-  for every host, with no bypass. The short-link hops use yt-dlp's networking,
-  which takes the proxy as given and supports `socks5h`, rather than urllib,
-  whose proxy handler honors `no_proxy` and would go direct without saying so.
+  for every host, with no bypass. yt-dlp's own urllib handler, the one it uses
+  unless the optional `requests` package is installed, still asks the standard
+  library whether to skip the proxy for a host, and the standard library answers
+  from `no_proxy` and the system's bypass list, so the plugin gives yt-dlp a
+  handler of its own that takes the proxy as given. It supports `http` and
+  `socks5h`; an `https` proxy needs yt-dlp's `requests` handler. The short-link
+  hops use the same handler, set to answer a redirect instead of following it.
 - **Reaching the plugin:** the proxy is a field of the `canonicalize` and `read`
   requests, and of a download Job's start, so the plugin keeps none and nothing
   is written to disk. A running Job keeps the proxy it started with.
@@ -417,7 +422,7 @@ yutto is GPL-3.0 and medleyplay is MIT.
 | `POST /api/links` | Signed in | Adds the chosen parts as Tracks and starts their Downloads |
 | `GET /api/events` | Signed in | `ready`, then a `job` event each time a Job changes, over SSE |
 | `POST /api/tracks/{id}/playback` | Signed in | Now also plays a Download, or answers *preparing* with its Job |
-| `GET /api/proxies/{site}` | Admin | Whether a proxy is set: its scheme, host, port, and whether it has a login |
+| `GET /api/proxies/{site}` | Admin | The proxy set, or null: its scheme, host, port, whether it has a login, and when it was saved |
 | `PUT /api/proxies/{site}` | Admin | Sets the proxy from the URL in the body; 422 for another shape, never echoing it; 404 for a site no plugin takes one for |
 | `DELETE /api/proxies/{site}` | Admin | Removes the proxy; 204, also when there is none |
 
@@ -446,6 +451,12 @@ yutto is GPL-3.0 and medleyplay is MIT.
   server, cookies files with and without a session, and the yt-dlp module
   against a fixture made from yt-dlp's extractor, with its failures sorted by
   yt-dlp's real exception types. The contract kits run against it.
+- **The proxy:** parsing every accepted and refused shape; the service against the
+  in-memory Keychain; the API, including a 422 that never echoes the URL; yt-dlp
+  and the short-link hops against proxies on `127.0.0.1` that record what they are
+  asked and refuse every tunnel, with the bypass lists set to name Bilibili's hosts
+  and the machine's other connections refused; and the Jobs and lookups of the
+  test plugin `tube`, which echoes the proxy it was handed.
 - **Never live:** no test contacts Bilibili; a live check is an opt-in marker
   run by hand, in step 5b.
 

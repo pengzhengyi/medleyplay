@@ -180,7 +180,8 @@ export function TrackTable({
   const items = virtual.getVirtualItems();
   const before = (items[0]?.start ?? top) - top;
   const after = virtual.getTotalSize() - ((items.at(-1)?.end ?? top) - top);
-  const visibleColumns = table.getVisibleLeafColumns().length;
+  // A spacer row has a cell per column, so a column the layout hides goes from it too.
+  const columns = table.getVisibleLeafColumns().map((column) => column.id);
   const playable = rows.map((row) => row.original).filter((track) => track.availability === "ok");
 
   if (tracks.length === 0) {
@@ -294,7 +295,9 @@ export function TrackTable({
         <tbody ref={body}>
           {before > 0 && (
             <tr aria-hidden className="spacer">
-              <td colSpan={visibleColumns} style={{ height: before }} />
+              {columns.map((id) => (
+                <td key={id} className={id} style={{ height: before }} />
+              ))}
             </tr>
           )}
           {items.map((item) => {
@@ -322,7 +325,9 @@ export function TrackTable({
           })}
           {after > 0 && (
             <tr aria-hidden className="spacer">
-              <td colSpan={visibleColumns} style={{ height: after }} />
+              {columns.map((id) => (
+                <td key={id} className={id} style={{ height: after }} />
+              ))}
             </tr>
           )}
         </tbody>

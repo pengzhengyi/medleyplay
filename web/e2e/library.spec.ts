@@ -58,8 +58,9 @@ test("sorting by time plays from the sorted order", async ({ page }) => {
   await expect(queue).toHaveText([/Alpha/, /Bravo/, /Delta/]);
 });
 
-test("a large Library keeps only the rows on screen in the page", async ({ page }) => {
-  const tracks = Array.from({ length: 5000 }, (_, i) => ({
+/** A Library of `count` songs, "Song 1" on, by 40 artists over 90 albums. */
+function manySongs(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     title: `Song ${String(i + 1)}`,
     artist: `Artist ${String(i % 40)}`,
@@ -74,6 +75,10 @@ test("a large Library keeps only the rows on screen in the page", async ({ page 
     availability: "ok",
     downloaded: false,
   }));
+}
+
+test("a large Library keeps only the rows on screen in the page", async ({ page }) => {
+  const tracks = manySongs(5000);
   await page.route("**/api/tracks", (route) => route.fulfill({ json: tracks }));
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Song 1", exact: true })).toBeVisible();
@@ -131,4 +136,25 @@ test("the song playing has a menu too, which goes to its album", async ({ page }
   await page.getByRole("menuitem", { name: "Go to album" }).click();
   await expect(page.getByRole("heading", { name: "Unknown album" })).toBeVisible();
   expect(page.url()).toContain("#/album?");
+});
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("a large Library gives each song's title the row's free width", async ({ page }) => {
+    await page.route("**/api/tracks", (route) => route.fulfill({ json: manySongs(500) }));
+    await page.goto("/");
+    const title = page
+      .getByRole("row")
+      .filter({ hasText: "Song 1" })
+      .first()
+      .getByRole("cell")
+      .nth(1);
+    await expect(title).toBeVisible();
+
+    const table = await page.getByRole("table").boundingBox();
+    const cell = await title.boundingBox();
+
+    expect(cell?.width).toBeGreaterThan((table?.width ?? 0) * 0.6);
+  });
 });

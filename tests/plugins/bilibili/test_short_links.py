@@ -13,6 +13,7 @@ from medleyplay.plugins.bilibili.short_links import (
     fetch_redirect,
     follow_short_link,
 )
+from tests.support.proxies import Answer, running_http_proxy, running_socks_proxy
 
 VIDEO = "https://www.bilibili.com/video/BV1Xx41117Tz?p=2"
 
@@ -133,3 +134,77 @@ def test_a_server_error_or_no_server_is_a_network_failure(server: str) -> None:
         fetch_redirect(f"{server}/broken")
     with pytest.raises(NetworkError):
         fetch_redirect("http://127.0.0.1:9/")
+
+
+@pytest.fixture
+def bypass_lists_name_the_short_link_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The machine's bypass lists, as the environment holds them, name Bilibili's hosts."""
+    for name in ("no_proxy", "NO_PROXY"):
+        monkeypatch.setenv(name, "b23.tv,www.bilibili.com,127.0.0.1,localhost")
+
+
+def test_a_hop_goes_through_the_proxy_even_when_the_bypass_list_names_its_host(
+    no_outside_network: None, bypass_lists_name_the_short_link_host: None
+) -> None:
+    moved = Answer(302, {"Location": VIDEO})
+    with running_http_proxy({"http://b23.tv/abc123": moved}) as proxy:
+        target = fetch_redirect("http://b23.tv/abc123", proxy=proxy.url)
+
+    assert target == VIDEO
+    assert proxy.requests == ["GET http://b23.tv/abc123 HTTP/1.1"]
+
+
+def test_a_secure_hop_asks_the_proxy_for_a_tunnel_and_a_refusal_is_a_network_failure(
+    no_outside_network: None, bypass_lists_name_the_short_link_host: None
+) -> None:
+    with running_http_proxy() as proxy, pytest.raises(NetworkError):
+        follow_short_link("https://b23.tv/abc123", proxy=proxy.url)
+
+    assert proxy.requests == ["CONNECT b23.tv:443 HTTP/1.1"]
+
+
+def test_a_hop_gives_the_proxy_its_login(no_outside_network: None) -> None:
+    with running_http_proxy({"http://b23.tv/abc123": Answer(302, {"Location": VIDEO})}) as proxy:
+        fetch_redirect("http://b23.tv/abc123", proxy=proxy.url_with_login("alice", "p@ss"))
+
+    assert proxy.authorizations == [proxy.basic_login("alice", "p@ss")]
+
+
+def test_a_hop_through_a_socks_proxy_leaves_the_name_to_the_proxy(
+    no_outside_network: None, bypass_lists_name_the_short_link_host: None
+) -> None:
+    with running_socks_proxy() as proxy, pytest.raises(NetworkError):
+        follow_short_link("https://b23.tv/abc123", proxy=proxy.url)
+
+    assert proxy.asked == ["b23.tv:443"]
+
+
+def test_a_redirect_through_the_proxy_is_read_and_not_followed(no_outside_network: None) -> None:
+    moved = Answer(302, {"Location": "http://b23.tv/next"})
+    with running_http_proxy({"http://b23.tv/abc123": moved}) as proxy:
+        target = fetch_redirect("http://b23.tv/abc123", proxy=proxy.url)
+
+    assert target == "http://b23.tv/next"
+    assert proxy.requests == ["GET http://b23.tv/abc123 HTTP/1.1"]
+
+
+def test_a_proxy_that_answers_with_an_error_is_a_network_failure_asked_once(
+    no_outside_network: None,
+) -> None:
+    with running_http_proxy() as proxy, pytest.raises(NetworkError, match="412"):
+        fetch_redirect("http://b23.tv/abc123", proxy=proxy.url)
+
+    assert len(proxy.requests) == 1
+
+
+def test_a_hop_with_no_proxy_goes_direct_whatever_the_environment_names(
+    server: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with running_http_proxy() as decoy:
+        for name in ("http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"):
+            monkeypatch.setenv(name, decoy.url)
+
+        target = fetch_redirect(f"{server}/moved")
+
+    assert target == VIDEO
+    assert decoy.requests == []

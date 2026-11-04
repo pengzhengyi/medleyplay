@@ -1,5 +1,6 @@
 """Fixtures every suite shares: a migrated database, the services, and an API client."""
 
+import socket
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -48,6 +49,32 @@ hypothesis.settings.register_profile(
     "medleyplay", deadline=None, suppress_health_check=[hypothesis.HealthCheck.too_slow]
 )
 hypothesis.settings.load_profile("medleyplay")
+
+
+@pytest.fixture
+def no_outside_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse every name lookup and connection that would leave this machine.
+
+    A test that must show a request went through a local proxy takes this, so a
+    request that wrongly went direct fails here instead of reaching a site.
+    """
+    local = {"127.0.0.1", "::1", "localhost"}
+    connect, resolve = socket.socket.connect, socket.getaddrinfo
+
+    def connect_locally(self: socket.socket, address: object) -> None:
+        if not isinstance(address, tuple) or address[0] not in local:
+            message = f"A test tried to connect to {address!r}."
+            raise OSError(message)
+        connect(self, address)
+
+    def resolve_locally(host: str | bytes | None, *args: object, **kwargs: object) -> object:
+        if host not in local:
+            message = f"A test tried to look up {host!r}."
+            raise socket.gaierror(message)
+        return resolve(host, *args, **kwargs)  # type: ignore[arg-type] # passed through as given
+
+    monkeypatch.setattr(socket.socket, "connect", connect_locally)
+    monkeypatch.setattr(socket, "getaddrinfo", resolve_locally)
 
 
 @pytest.fixture

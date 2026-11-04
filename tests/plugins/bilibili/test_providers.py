@@ -27,6 +27,7 @@ from medleyplay.plugins.bilibili.providers import (
     BilibiliResolver,
 )
 from tests.plugins.bilibili.infos import TITLE, UPLOADER, VIDEO, YtDlpInfoFactory
+from tests.support.proxies import running_http_proxy
 
 LINK = f"https://www.bilibili.com/video/{VIDEO}"
 
@@ -37,9 +38,13 @@ class Extractor:
     def __init__(self, answers: Mapping[str, Mapping[str, object] | Exception]) -> None:
         self.answers = answers
         self.asked: list[tuple[str, bool]] = []
+        self.proxies: list[str | None] = []
 
-    def __call__(self, url: str, *, playlist: bool) -> Mapping[str, object]:
+    def __call__(
+        self, url: str, *, playlist: bool, proxy: str | None = None
+    ) -> Mapping[str, object]:
         self.asked.append((url, playlist))
+        self.proxies.append(proxy)
         answer = self.answers[url]
         if isinstance(answer, Exception):
             raise answer
@@ -115,6 +120,55 @@ def test_a_video_that_cant_be_read_says_why(failure: Exception, status: VideoSta
     assert (details.status, details.message, details.parts) == (status, str(failure), ())
 
 
+PROXY = "socks5h://alice:hunter2@127.0.0.1:7890"
+
+
+def test_every_extraction_of_a_read_goes_through_the_requests_proxy() -> None:
+    extractor = Extractor(
+        {
+            LINK: YtDlpInfoFactory.anthology(3),
+            f"{LINK}?p=1": YtDlpInfoFactory.anthology_first_part(),
+        }
+    )
+
+    BilibiliResolver(extract=extractor).read(ReadVideo(video=VIDEO, proxy=PROXY))
+
+    assert extractor.proxies == [PROXY, PROXY]
+
+
+def test_a_read_without_a_proxy_extracts_without_one() -> None:
+    extractor = Extractor({LINK: YtDlpInfoFactory.single()})
+
+    BilibiliResolver(extract=extractor).read(ReadVideo(video=VIDEO))
+
+    assert extractor.proxies == [None]
+
+
+def test_a_short_link_is_followed_through_the_requests_proxy(
+    no_outside_network: None,
+) -> None:
+    with running_http_proxy() as proxy, pytest.raises(NetworkError):
+        BilibiliResolver().canonicalize(Canonicalize(link="https://b23.tv/abc123", proxy=proxy.url))
+
+    assert proxy.requests == ["CONNECT b23.tv:443 HTTP/1.1"]
+
+
+def test_a_download_goes_through_the_requests_proxy(tmp_path: Path) -> None:
+    download = Download()
+
+    BilibiliDownloader(download).download(_part(tmp_path, proxy=PROXY))
+
+    assert download.calls[0]["proxy"] == PROXY
+
+
+def test_a_download_without_a_proxy_asks_for_none(tmp_path: Path) -> None:
+    download = Download()
+
+    BilibiliDownloader(download).download(_part(tmp_path))
+
+    assert download.calls[0]["proxy"] is None
+
+
 def test_a_video_with_no_aac_audio_is_gone_naming_its_codecs() -> None:
     muxed = YtDlpInfoFactory.single(
         formats=[{"format_id": "16", "acodec": "mp4a", "vcodec": "avc1"}]
@@ -155,8 +209,12 @@ class Download:
         return YtDlpInfoFactory.downloaded(str(path), format_id="30232")
 
 
-def _part(folder: Path, quality: str = "best", login: str | None = None) -> DownloadPart:
-    return DownloadPart(video=VIDEO, part=2, quality=quality, folder=str(folder), login=login)
+def _part(
+    folder: Path, quality: str = "best", login: str | None = None, proxy: str | None = None
+) -> DownloadPart:
+    return DownloadPart(
+        video=VIDEO, part=2, quality=quality, folder=str(folder), login=login, proxy=proxy
+    )
 
 
 def test_a_download_names_its_bare_file_and_the_quality_it_got(tmp_path: Path) -> None:

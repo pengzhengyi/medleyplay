@@ -136,20 +136,20 @@ def check_tag_reader(reader: TagReader, request: ReadTags) -> Tags:
 
 
 def check_source_resolver(
-    resolver: SourceResolver, link: str
+    resolver: SourceResolver, link: str, proxy: str | None = None
 ) -> tuple[Canonical, VideoDetails | None]:
     """Check a resolver against a link, and return what it names and, for a video, its details.
 
     A readable video has parts and qualities, none named twice; one that can't be
-    read has neither.
+    read has neither. Both calls carry `proxy`, the household's proxy, when given.
     """
-    canonical = check_operation(CANONICALIZE, resolver, Canonicalize(link=link))
+    canonical = check_operation(CANONICALIZE, resolver, Canonicalize(link=link, proxy=proxy))
     if canonical.video is None:
         if canonical.part is not None:
             message = f"{link!r} names a part, {canonical.part}, but no video."
             raise ContractError(message)
         return canonical, None
-    details = check_operation(READ_VIDEO, resolver, ReadVideo(video=canonical.video))
+    details = check_operation(READ_VIDEO, resolver, ReadVideo(video=canonical.video, proxy=proxy))
     if details.status is not VideoStatus.OK:
         if details.parts or details.qualities:
             message = f"A video that is {details.status} has parts or qualities."

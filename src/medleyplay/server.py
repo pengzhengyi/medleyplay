@@ -38,6 +38,7 @@ from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.proxies import ProxyService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
@@ -157,7 +158,9 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
     plugins = PluginService(units, clock, lineup, host, changes.tell)
-    linked = LinkedAccountService(units, clock, plugins, secrets or KeychainSecrets(), changes.tell)
+    keychain = secrets or KeychainSecrets()
+    linked = LinkedAccountService(units, clock, plugins, keychain, changes.tell)
+    proxies = ProxyService(units, clock, keychain)
     scan = scan_library_kind(clock, data_dir / COVERS_FOLDER)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
@@ -182,6 +185,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         processes=processes,
         online=mode.online,
         logins=linked,
+        proxies=proxies,
         events=events,
         network_failed=mode.check_soon,
     )
@@ -197,6 +201,9 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     mode.listen(events.publish_mode)
     mode.listen(runner.follow_mode)
     mode.listen(policy.request)
+    links = LinkService(units, clock, plugins, catalog, downloads, mode.online, proxies)
+    # A changed proxy makes a looked-up video's details stale, so they are looked up again.
+    proxies.listen(links.forget_lookups)
     return Services(
         accounts=AccountService(
             units,
@@ -212,7 +219,8 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
         playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads, mode.online),
         linked=linked,
-        links=LinkService(units, clock, plugins, catalog, downloads, mode.online),
+        proxies=proxies,
+        links=links,
         events=events,
         settings=SettingsService(units, clock, changes.tell),
         policy=policy,

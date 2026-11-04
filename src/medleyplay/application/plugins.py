@@ -25,6 +25,7 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.plugins import PluginState, PluginStatus
+from medleyplay.domain.proxies import redact_proxy
 from medleyplay.persistence.schema import PluginStateRow
 from medleyplay.plugin_api import Operation
 from medleyplay.plugin_host.client import (
@@ -166,21 +167,26 @@ class PluginService:
         except (HostBusyError, HostStartError) as error:
             raise PluginUnavailableError(str(error)) from error
         except CallFailedError as error:
-            raise self._failed(owner, key, error) from error
+            # A request that carried a proxy has its login out of the message, and
+            # the original error, which still holds it, is not chained.
+            proxy = getattr(request, "proxy", None)
+            failure = self._failed(owner, key, error, proxy)
+            raise failure from (None if proxy else error)
         with self._lock:
             self._failures.pop((owner, key), None)
         return reply
 
-    def _failed(self, owner: str, key: str, error: CallFailedError) -> Exception:
+    def _failed(self, owner: str, key: str, error: CallFailedError, proxy: str | None) -> Exception:
+        said = redact_proxy(str(error), proxy)
         match error.kind:
             case "request":
                 # The core sent a request its own models refuse: a bug in the core.
-                return RuntimeError(f"The plugin host refused a request: {error}")
+                return RuntimeError(f"The plugin host refused a request: {said}")
             case "network" | "auth":
-                return PluginCallError(error.kind, f"{owner}: {error}")
+                return PluginCallError(error.kind, f"{owner}: {said}")
             case "plugin":
-                self._count_faults(owner, key, 1, str(error))
-                return PluginCallError("plugin", f"{owner}: {error}")
+                self._count_faults(owner, key, 1, said)
+                return PluginCallError("plugin", f"{owner}: {said}")
 
     def plugins_for(self, points: Iterable[str]) -> tuple[str, ...]:
         """Return the plugins that are on and hold a key for any of `points`, by name."""

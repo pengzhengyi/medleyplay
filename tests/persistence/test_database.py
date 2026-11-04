@@ -12,6 +12,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, Engine, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.persistence.database import (
@@ -217,6 +218,34 @@ def test_undoing_the_covers_forgets_every_cover_value(tmp_path: Path) -> None:
         fields = connection.scalars(text("SELECT field FROM track_value")).all()
     engine.dispose()
     assert fields == ["title"]
+
+
+def test_the_proxy_table_keeps_only_a_scheme_and_port_the_core_takes(
+    units: sessionmaker[Session],
+) -> None:
+    insert = text(
+        "INSERT INTO proxy (site, scheme, host, port, has_login, saved_at)"
+        " VALUES ('bilibili', :scheme, '127.0.0.1', :port, 0, '2026-11-04 00:00:00.000000')"
+    )
+
+    for scheme, port in [("socks5", 7890), ("http", 0), ("http", 65536)]:
+        with pytest.raises(IntegrityError), units.begin() as db:
+            db.execute(insert, {"scheme": scheme, "port": port})
+
+    with units.begin() as db:
+        db.execute(insert, {"scheme": "socks5h", "port": 7890})
+
+
+def test_undoing_the_proxy_migration_drops_the_table(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+
+    _migrate_to(engine, "0016", down=True)
+
+    with engine.connect() as connection:
+        tables = connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+        assert "proxy" not in tables.all()
+    engine.dispose()
 
 
 def test_a_removed_tracks_id_is_never_given_to_another(tmp_path: Path) -> None:

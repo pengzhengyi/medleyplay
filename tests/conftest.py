@@ -1,5 +1,6 @@
 """Fixtures every suite shares: a migrated database, the services, and an API client."""
 
+import socket
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.proxies import ProxyService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
@@ -48,6 +50,32 @@ hypothesis.settings.register_profile(
     "medleyplay", deadline=None, suppress_health_check=[hypothesis.HealthCheck.too_slow]
 )
 hypothesis.settings.load_profile("medleyplay")
+
+
+@pytest.fixture
+def no_outside_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse every name lookup and connection that would leave this machine.
+
+    A test that must show a request went through a local proxy takes this, so a
+    request that wrongly went direct fails here instead of reaching a site.
+    """
+    local = {"127.0.0.1", "::1", "localhost"}
+    connect, resolve = socket.socket.connect, socket.getaddrinfo
+
+    def connect_locally(self: socket.socket, address: object) -> None:
+        if not isinstance(address, tuple) or address[0] not in local:
+            message = f"A test tried to connect to {address!r}."
+            raise OSError(message)
+        connect(self, address)
+
+    def resolve_locally(host: str | bytes | None, *args: object, **kwargs: object) -> object:
+        if host not in local:
+            message = f"A test tried to look up {host!r}."
+            raise socket.gaierror(message)
+        return resolve(host, *args, **kwargs)  # type: ignore[arg-type] # passed through as given
+
+    monkeypatch.setattr(socket.socket, "connect", connect_locally)
+    monkeypatch.setattr(socket, "getaddrinfo", resolve_locally)
 
 
 @pytest.fixture
@@ -219,8 +247,11 @@ def links(
     catalog: CatalogService,
     downloads: DownloadService,
     online_switch: OnlineSwitch,
+    proxies: ProxyService,
 ) -> LinkService:
-    return LinkService(units, clock, plugins, catalog, downloads, online_switch)
+    links = LinkService(units, clock, plugins, catalog, downloads, online_switch, proxies)
+    proxies.listen(links.forget_lookups)
+    return links
 
 
 @pytest.fixture
@@ -251,6 +282,11 @@ def linked(
 
 
 @pytest.fixture
+def proxies(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets) -> ProxyService:
+    return ProxyService(units, clock, secrets)
+
+
+@pytest.fixture
 def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     accounts: AccountService,
     catalog: CatalogService,
@@ -259,6 +295,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     libraries: LibraryService,
     playback: PlaybackService,
     linked: LinkedAccountService,
+    proxies: ProxyService,
     links: LinkService,
     settings: SettingsService,
     policy: PolicyService,
@@ -277,6 +314,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         libraries=libraries,
         playback=playback,
         linked=linked,
+        proxies=proxies,
         links=links,
         events=Events(),
         settings=settings,

@@ -38,7 +38,8 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     must tolerate finding its work already applied. `points` are the extension
     points the program calls; its Job process loads only their plugins. A kind
     with a `login_site` gets a copy of the submitting Account's login on that site,
-    when it has a valid one.
+    when it has a valid one; one with a `proxy_site` gets that site's proxy, if set,
+    as it starts.
     """
 
     name: str
@@ -50,6 +51,7 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     idle_timeout: timedelta = IDLE_TIMEOUT
     max_attempts: int = MAX_ATTEMPTS
     login_site: str | None = None
+    proxy_site: str | None = None
     needs_network: bool = False
 
 

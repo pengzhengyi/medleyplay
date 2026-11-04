@@ -41,9 +41,14 @@ export function serve(routes: Routes): { readonly calls: string[] } {
     const answer = typeof found === "function" ? found(body) : (found ?? { status: 404 });
     const status = answer.status ?? 200;
     return Promise.resolve(
-      new Response(status === 204 ? null : JSON.stringify(answer.body ?? { detail: "Not Found" }), {
-        status,
-      }),
+      new Response(
+        status === 204
+          ? null
+          : JSON.stringify(answer.body === undefined ? { detail: "Not Found" } : answer.body),
+        {
+          status,
+        },
+      ),
     );
   });
   return { calls };

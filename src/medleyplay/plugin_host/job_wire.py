@@ -37,6 +37,8 @@ class JobStart(_Message):
     work_dir: str
     login: str | None = None
     """The path of a copy of a login in the working folder, for the program to pass on."""
+    proxy: str | None = Field(default=None, repr=False)
+    """The household's proxy for the Job's site, for the program to pass on; never on disk."""
 
 
 class KeyOutcome(_Message):

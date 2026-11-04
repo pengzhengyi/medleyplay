@@ -25,6 +25,8 @@ class EchoJob(BaseModel):
     say: Say | None = None
     """Ask the plugin `parrot` to say this, and echo its reply instead."""
     catch_failure: bool = False
+    echo_proxy: bool = False
+    """Echo the proxy the Job started with, instead of the text."""
     fail: Literal["raise", "crash", "hang", "sleeping-child"] | None = None
 
 
@@ -39,7 +41,7 @@ def run(request: EchoJob, context: JobContext) -> Echoed:
     for step in range(1, request.steps + 1):
         context.report(step / request.steps, f"Step {step}")
         time.sleep(request.step_seconds)
-    text = request.text
+    text = f"proxy={context.proxy}" if request.echo_proxy else request.text
     if request.say is not None:
         try:
             text = context.call(SAY, "parrot", request.say).text
@@ -72,6 +74,7 @@ def echo_kind(
     idle_timeout: timedelta = timedelta(seconds=20),
     complete: Callable[[Session, Job, Echoed], None] | None = None,
     needs_network: bool = False,
+    proxy_site: str | None = None,
 ) -> JobKind[EchoJob, Echoed]:
     """Return the kind `echo`, whose completion appends each Job's echo to `completed`.
 
@@ -90,4 +93,5 @@ def echo_kind(
         points=("echo",),
         idle_timeout=idle_timeout,
         needs_network=needs_network,
+        proxy_site=proxy_site,
     )

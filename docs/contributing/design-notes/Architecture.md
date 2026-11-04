@@ -82,7 +82,8 @@ flowchart LR
   from the plugin API, validated on both sides.
 - **Plugins never touch the database or the data folder.** A call carries
   everything it needs: settings, the plugin's stored state, a working folder,
-  and, for a Job that needs one, a temporary copy of a linked login. A plugin's
+  and, for a Job that needs one, a temporary copy of a linked login, and, for
+  a site's calls, the household's proxy for that site. A plugin's
   state changes come back in its result, and the core applies them.
 - **Media never flows through the protocol.** A plugin tells the core where the
   bytes are: a local path, or a path with an offset and length for a stored zip

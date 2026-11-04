@@ -24,6 +24,7 @@ from medleyplay.plugin_api.extension import ExtensionPoint
 
 MAX_TEXT: Final = 512
 MAX_LOGIN_TEXT: Final = 64 * 1024
+MAX_PROXY: Final = 512
 BEST_QUALITY: Final = "best"
 """The quality that asks for the best audio the login allows."""
 
@@ -33,6 +34,8 @@ type PartNumber = Annotated[int, Field(ge=1, le=9999)]
 type QualityId = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_-]{1,32}$")]
 """A site's own name for an audio quality, such as Bilibili's `30280`, or `best`."""
 type Text = Annotated[str, StringConstraints(max_length=MAX_TEXT)]
+type ProxyUrl = Annotated[str, StringConstraints(max_length=MAX_PROXY)]
+"""The URL of the household's proxy for a site, such as `socks5h://127.0.0.1:7890`."""
 
 
 class _Model(BaseModel):
@@ -40,9 +43,14 @@ class _Model(BaseModel):
 
 
 class Canonicalize(_Model):
-    """Find the video a link names; the core has checked that its host is the site's."""
+    """Find the video a link names; the core has checked that its host is the site's.
+
+    `proxy` is the household's proxy for the site, if it set one: every request the
+    plugin makes for the call goes through it, and none goes anywhere else.
+    """
 
     link: Annotated[str, StringConstraints(max_length=2048)]
+    proxy: ProxyUrl | None = Field(default=None, repr=False)
 
 
 class Canonical(_Model):
@@ -57,9 +65,10 @@ class Canonical(_Model):
 
 
 class ReadVideo(_Model):
-    """Read a video's details, without a login."""
+    """Read a video's details, without a login, through `proxy` when there is one."""
 
     video: VideoId
+    proxy: ProxyUrl | None = Field(default=None, repr=False)
 
 
 class VideoStatus(StrEnum):
@@ -115,7 +124,7 @@ class DownloadPart(_Model):
     """Download one part's audio into `folder`, an empty folder the caller owns.
 
     `login` is the path of a cookies file in that folder, or `None` to download
-    without one.
+    without one. `proxy` is the household's proxy for the site, or `None`.
     """
 
     video: VideoId
@@ -123,6 +132,7 @@ class DownloadPart(_Model):
     quality: QualityId
     folder: str
     login: str | None = None
+    proxy: ProxyUrl | None = Field(default=None, repr=False)
 
 
 class Downloaded(_Model):

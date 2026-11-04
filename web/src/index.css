@@ -678,7 +678,8 @@ button.text:hover:not(:disabled) {
   margin-top: 0.15rem;
 }
 
-.mark-metered {
+.mark-metered,
+.proxy-form {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
@@ -693,18 +694,21 @@ button.text:hover:not(:disabled) {
   margin: 0;
 }
 
-.mark-metered input {
+.mark-metered input,
+.proxy-form input {
   margin: 0;
 }
 
-.mark-metered button {
+.mark-metered button,
+.proxy-form button {
   width: auto;
   margin: 0;
   padding: 0.45rem 1.4rem;
   border-radius: 999px;
 }
 
-.mark-metered .hint {
+.mark-metered .hint,
+.proxy-form .hint {
   flex-basis: 100%;
   margin: 0;
 }

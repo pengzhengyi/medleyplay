@@ -72,6 +72,8 @@ class JobContext:
     _send: Callable[[JobProgress], None]
     login: Path | None = None
     """A copy of the login the Job was given, readable by its owner alone, or `None`."""
+    proxy: str | None = field(default=None, repr=False)
+    """The household's proxy for the Job's site, or `None`; held in memory only."""
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
 
     def report(self, fraction: float | None = None, message: str = "") -> None:
@@ -157,7 +159,11 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
     work_dir = Path(start.work_dir)
     endpoints = load_plugins(start.package, start.plugins, lambda _: None)
     context = JobContext(
-        work_dir, endpoints, send, login=Path(start.login) if start.login else None
+        work_dir,
+        endpoints,
+        send,
+        login=Path(start.login) if start.login else None,
+        proxy=start.proxy,
     )
     try:
         program = _program(start.program)

@@ -29,18 +29,26 @@ class FakeClock:
 
 
 class MemorySecrets:
-    """A Keychain in memory; `unavailable` makes every call fail as a locked Keychain does."""
+    """A Keychain in memory; `unavailable` makes every call fail as a locked Keychain does.
+
+    `reads` counts the secrets asked for, and `while_setting` runs as one is kept.
+    """
 
     def __init__(self) -> None:
         self.items: dict[str, str] = {}
         self.unavailable = False
+        self.reads = 0
+        self.while_setting: Callable[[], None] | None = None
 
     def get(self, name: str) -> str | None:
         self._check()
+        self.reads += 1
         return self.items.get(name)
 
     def set(self, name: str, value: str) -> None:
         self._check()
+        if self.while_setting is not None:
+            self.while_setting()
         self.items[name] = value
 
     def delete(self, name: str) -> None:

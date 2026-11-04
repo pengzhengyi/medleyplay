@@ -1,7 +1,7 @@
 """A site's proxy: the household's own path to it, as one URL checked and rebuilt from its parts.
 
 ```text
-socks5h://127.0.0.1:7890                http://alice:s3cret@proxy.lan:3128
+socks5h://127.0.0.1:7890                http://alice:swordfish@proxy.lan:3128
 ```
 
 The URL may hold a password, so the Keychain keeps it and the catalog keeps only

@@ -16,9 +16,9 @@ The video id says how the plugin behaves:
 | `BVleaky` | one part | a fault whose message holds the login |
 | `BVescape`, `BVtext` | one part | a file outside the folder, or of another type |
 | `BVempty`, `BVlink` | one part | an empty file, or a link |
-| `BVsaysproxy` | one part, titled with the proxy it was read through | a file saying the proxy |
-| `BVproxyleak` | a fault whose message holds the proxy | a fault whose message holds it |
-| `BVproxyprogress` | one part | progress that holds the proxy, then `audio.m4a` |
+| `BVProxyEcho` | one part, titled with the proxy it was read through | a file saying the proxy |
+| `BVProxyLeak` | a fault whose message holds the proxy | a fault whose message holds it |
+| `BVProxyProgress` | one part | progress that holds the proxy, then `audio.m4a` |
 
 A downloaded file holds what the download was asked, so a test can read back the
 quality and the login it got: `BV1Xx41117Tz/p1 quality=30280 login=<text> mode=0o600`.
@@ -26,7 +26,7 @@ quality and the login it got: `BV1Xx41117Tz/p1 quality=30280 login=<text> mode=0
 `https://b23.tv/night` leads to `BV1Xx41117Tz`, `https://b23.tv/away` off the site,
 and `https://b23.tv/liar` names a video on a link off the site. `https://b23.tv/proxy`
 names `BVproxied` when the call carried a proxy and `BVdirect` when it did not, and
-both read as `BVsaysproxy` does.
+both read as `BVProxyEcho` does.
 """
 
 import re
@@ -98,11 +98,11 @@ class Resolver:
             return VideoDetails(status=VideoStatus.GONE, message="The video was removed.")
         if video == "BVmembers":
             return VideoDetails(status=VideoStatus.NEEDS_LOGIN, message="Members only.")
-        if video == "BVproxyleak":
+        if video == "BVProxyLeak":
             message = f"Failed through {request.proxy}"
             raise ValueError(message)
         title, parts = _TITLES.get(video, (video, 1))
-        if video in {"BVsaysproxy", "BVproxied", "BVdirect"}:
+        if video in {"BVProxyEcho", "BVproxied", "BVdirect"}:
             title = f"proxy={request.proxy or 'none'}"
         return VideoDetails(
             title=f"【MV】{title}",
@@ -129,13 +129,13 @@ class Downloader:
         if video == "BVrefused" or (video in {"BVmembers", "BVSignedIn"} and request.login is None):
             message = "Bilibili refused the login."
             raise AuthError(message)
-        if video == "BVproxyleak":
+        if video == "BVProxyLeak":
             message = f"Failed through {request.proxy}"
             raise ValueError(message)
         report_progress(
-            0.5, f"Through {request.proxy}" if video == "BVproxyprogress" else "Downloading"
+            0.5, f"Through {request.proxy}" if video == "BVProxyProgress" else "Downloading"
         )
-        if video == "BVproxyprogress":
+        if video == "BVProxyProgress":
             time.sleep(2)
         quality = "30280" if request.quality == "best" else request.quality
         name = _misbehave(video, folder)
@@ -143,7 +143,7 @@ class Downloader:
             name = "audio.m4a"
             said = (
                 f"proxy={request.proxy or 'none'}"
-                if video == "BVsaysproxy"
+                if video == "BVProxyEcho"
                 else _said(request, quality)
             )
             (folder / name).write_text(said, encoding="utf-8")

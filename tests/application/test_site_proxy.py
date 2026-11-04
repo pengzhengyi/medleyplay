@@ -101,7 +101,7 @@ def test_a_download_gets_the_proxy_in_its_start(
 ) -> None:
     site.proxies.save(alice, "bilibili", PROXY)
 
-    view = _download_of(site, alice, units, "BVsaysproxy")
+    view = _download_of(site, alice, units, "BVProxyEcho")
 
     assert view.job.state is JobState.SUCCEEDED
     assert _said_by_the_download(site, view) == f"proxy={PROXY}"
@@ -110,7 +110,7 @@ def test_a_download_gets_the_proxy_in_its_start(
 def test_a_download_without_a_proxy_starts_with_none(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
-    view = _download_of(site, alice, units, "BVsaysproxy")
+    view = _download_of(site, alice, units, "BVProxyEcho")
 
     assert _said_by_the_download(site, view) == "proxy=none"
 
@@ -120,7 +120,7 @@ def test_the_proxy_is_never_written_into_the_job(
 ) -> None:
     site.proxies.save(alice, "bilibili", PROXY)
 
-    view = _download_of(site, alice, units, "BVsaysproxy")
+    view = _download_of(site, alice, units, "BVProxyEcho")
 
     with units() as db:
         stored = db.execute(text("SELECT request FROM job")).scalars().all()
@@ -161,7 +161,7 @@ def test_a_download_waits_while_the_keychain_does_not_answer_for_the_proxy(
 ) -> None:
     ProxyService(units, clock, site.secrets).save(alice, "bilibili", PROXY)
     site.secrets.unavailable = True
-    job = _start_download(site, alice, units, "BVsaysproxy")
+    job = _start_download(site, alice, units, "BVProxyEcho")
 
     waiting = site.wait_for(job.id, JobState.WAITING)
     site.secrets.unavailable = False
@@ -172,19 +172,21 @@ def test_a_download_waits_while_the_keychain_does_not_answer_for_the_proxy(
     assert _said_by_the_download(site, finished) == f"proxy={PROXY}"
 
 
-def test_a_host_call_fault_never_keeps_the_proxys_login(site: Site, alice: Account) -> None:
+def test_a_host_call_fault_never_keeps_the_login_of_the_proxy(site: Site, alice: Account) -> None:
     site.proxies.save(alice, "bilibili", SHORT_PASSWORD_PROXY)
 
     with pytest.raises(PluginCallError) as failed:
-        site.links.lookup(alice, "https://www.bilibili.com/video/BVproxyleak")
+        site.links.lookup(alice, "https://www.bilibili.com/video/BVProxyLeak")
 
     assert "Failed through http://<redacted>@127.0.0.1:3128" in str(failed.value)
     assert "pw" not in str(failed.value).replace("Failed through", "")
     assert failed.value.__cause__ is None
 
 
-def test_a_plugin_fault_reason_never_keeps_the_proxys_login(site: Site, alice: Account) -> None:
-    request = ReadVideo(video="BVproxyleak", proxy=PROXY)
+def test_a_plugin_fault_reason_never_keeps_the_login_of_the_proxy(
+    site: Site, alice: Account
+) -> None:
+    request = ReadVideo(video="BVProxyLeak", proxy=PROXY)
 
     for _ in range(FAULT_AFTER):
         with pytest.raises(PluginCallError):
@@ -196,23 +198,23 @@ def test_a_plugin_fault_reason_never_keeps_the_proxys_login(site: Site, alice: A
     assert "socks5h://<redacted>@127.0.0.1:7890" in tube.reason
 
 
-def test_a_failure_message_of_a_download_never_keeps_the_proxys_login(
+def test_a_failure_message_of_a_download_never_keeps_the_login_of_the_proxy(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
     site.proxies.save(alice, "bilibili", SHORT_PASSWORD_PROXY)
 
-    view = _download_of(site, alice, units, "BVproxyleak")
+    view = _download_of(site, alice, units, "BVProxyLeak")
 
     assert view.job.failure_kind == "plugin"
     assert "Failed through http://<redacted>@127.0.0.1:3128" in view.job.failure_message
     assert "alice" not in view.job.failure_message
 
 
-def test_a_progress_message_never_keeps_the_proxys_login(
+def test_a_progress_message_never_keeps_the_login_of_the_proxy(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
     site.proxies.save(alice, "bilibili", PROXY)
-    job = _start_download(site, alice, units, "BVproxyprogress")
+    job = _start_download(site, alice, units, "BVProxyProgress")
 
     view = site.wait_for(job.id, JobState.RUNNING, until=lambda each: each.progress is not None)
 
@@ -225,7 +227,7 @@ def test_a_running_download_keeps_the_proxy_it_started_with(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
     site.proxies.save(alice, "bilibili", PROXY)
-    job = _start_download(site, alice, units, "BVproxyprogress")
+    job = _start_download(site, alice, units, "BVProxyProgress")
     site.wait_for(job.id, JobState.RUNNING, until=lambda each: each.progress is not None)
 
     site.proxies.remove(alice, "bilibili")
@@ -240,7 +242,7 @@ def test_adding_a_video_after_a_proxy_is_set_downloads_through_it(
     site.proxies.save(alice, "bilibili", PROXY)
 
     added: list[Added] = site.links.add(
-        alice, "https://www.bilibili.com/video/BVsaysproxy", "best", [PartChoice(1, "Song", "Band")]
+        alice, "https://www.bilibili.com/video/BVProxyEcho", "best", [PartChoice(1, "Song", "Band")]
     )
 
     assert added[0].job is not None

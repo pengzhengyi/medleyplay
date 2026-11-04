@@ -24,7 +24,7 @@ from tests.support.fakes import FakeClock, MemorySecrets
 
 ADMIN = AccountFactory.admin()
 MEMBER = AccountFactory.member()
-URL = "socks5h://alice:s3cret@127.0.0.1:7890"
+URL = "socks5h://alice:swordfish@127.0.0.1:7890"
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def test_saving_keeps_the_whole_url_in_the_keychain_and_a_summary_in_the_catalog
             True,
             clock.now,
         )
-        assert "s3cret" not in repr(db.execute(text("SELECT * FROM proxy")).all())
+        assert "swordfish" not in repr(db.execute(text("SELECT * FROM proxy")).all())
 
 
 def test_saving_keeps_the_url_rebuilt_from_its_parts(

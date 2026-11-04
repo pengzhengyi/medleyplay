@@ -27,10 +27,10 @@ PASSWORD = "hunter2"
         ("https://proxy.lan:8443/", "https://proxy.lan:8443"),
         ("SOCKS5H://Proxy.LAN:1080", "socks5h://proxy.lan:1080"),
         ("http://[::1]:8080", "http://[::1]:8080"),
-        ("socks5h://alice:s3cret@127.0.0.1:7890", "socks5h://alice:s3cret@127.0.0.1:7890"),
+        ("socks5h://alice:swordfish@127.0.0.1:7890", "socks5h://alice:swordfish@127.0.0.1:7890"),
         ("socks5h://alice@127.0.0.1:7890", "socks5h://alice@127.0.0.1:7890"),
         ("socks5h://alice:@127.0.0.1:7890", "socks5h://alice@127.0.0.1:7890"),
-        ("http://alice:p%40ss%3Aword@h:1", "http://alice:p%40ss%3Aword@h:1"),
+        ("http://alice:p%40ss%3A1234@h:1", "http://alice:p%40ss%3A1234@h:1"),
         ("http://alice:p@ss@h:1", "http://alice:p%40ss@h:1"),
         ("http://al%69ce:pw@h:1", "http://alice:pw@h:1"),
         ("http://alice:pässword@h:1", "http://alice:p%C3%A4ssword@h:1"),
@@ -41,19 +41,19 @@ def test_a_proxy_is_rebuilt_canonically_from_its_parts(written: str, canonical: 
 
 
 def test_a_proxy_keeps_its_scheme_host_port_and_login_apart() -> None:
-    proxy = ProxyUrl.parse("socks5h://alice:s3cret@proxy.lan:7890")
+    proxy = ProxyUrl.parse("socks5h://alice:swordfish@proxy.lan:7890")
 
     assert (proxy.scheme, proxy.host, proxy.port, proxy.user, proxy.password) == (
         ProxyScheme.SOCKS5H,
         "proxy.lan",
         7890,
         "alice",
-        "s3cret",
+        "swordfish",
     )
 
 
 def test_a_summary_shows_the_address_and_whether_there_is_a_login() -> None:
-    summary = ProxyUrl.parse("socks5h://alice:s3cret@127.0.0.1:7890").summary
+    summary = ProxyUrl.parse("socks5h://alice:swordfish@127.0.0.1:7890").summary
 
     assert summary == ProxySummary(ProxyScheme.SOCKS5H, "127.0.0.1", 7890, has_login=True)
     assert summary.display == "socks5h://127.0.0.1:7890"
@@ -198,8 +198,8 @@ def test_the_whole_login_is_redacted_where_it_is_written_in_a_url() -> None:
 
 
 def test_the_login_is_redacted_as_written_and_as_url_decoded() -> None:
-    proxy = "http://al%40ice:p%40ss%3Aword@127.0.0.1:3128"
-    message = "failed as al%40ice:p%40ss%3Aword and al@ice:p@ss:word and p@ss:word"
+    proxy = "http://al%40ice:p%40ss%3A1234@127.0.0.1:3128"
+    message = "failed as al%40ice:p%40ss%3A1234 and al@ice:p@ss:1234 and p@ss:1234"
 
     assert redact_proxy(message, proxy) == "failed as <redacted> and <redacted> and <redacted>"
 

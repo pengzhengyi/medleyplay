@@ -91,14 +91,14 @@ describe("the Bilibili proxy", () => {
     open(null, routes);
     const field = await screen.findByLabelText("Proxy URL");
 
-    await user.type(field, "  socks5h://alice:s3cret@127.0.0.1:7890  ");
+    await user.type(field, "  socks5h://alice:swordfish@127.0.0.1:7890  ");
     await user.click(screen.getByRole("button", { name: "Save proxy" }));
 
     expect(await screen.findByText("Saved.")).toBeInTheDocument();
-    expect(saved).toEqual({ url: "socks5h://alice:s3cret@127.0.0.1:7890" });
+    expect(saved).toEqual({ url: "socks5h://alice:swordfish@127.0.0.1:7890" });
     expect(screen.getByLabelText("New proxy URL")).toHaveValue("");
     expect(screen.getByText("socks5h://127.0.0.1:7890")).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent("s3cret");
+    expect(document.body).not.toHaveTextContent("swordfish");
   });
 
   it("does not offer to save a blank URL", async () => {

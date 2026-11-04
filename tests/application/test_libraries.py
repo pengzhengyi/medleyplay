@@ -445,12 +445,12 @@ def test_a_rescan_reads_a_changed_image_beside_a_song_that_is_unchanged(
     _rescan(libraries, alice, library)
     before = _covers(libraries, alice)
 
-    changed = image_beside(music / "BV1dm4y1s7ak.wav", "jpg", jpeg_image("Brement"))
+    changed = image_beside(music / "BV1dm4y1s7ak.wav", "jpg", jpeg_image("Bremen, remastered"))
     os.utime(changed, ns=(1, 1))
     _rescan(libraries, alice, library)
 
     assert before == {"BV1dm4y1s7ak": cover_id(jpeg_image("Bremen"))}
-    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": cover_id(jpeg_image("Brement"))}
+    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": cover_id(jpeg_image("Bremen, remastered"))}
 
 
 def test_a_rescan_drops_the_cover_of_an_image_that_was_removed(

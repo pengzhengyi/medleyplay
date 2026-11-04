@@ -2294,10 +2294,39 @@ dialog.modal::backdrop {
 
 .song-row {
   display: grid;
-  grid-template-columns: 5rem minmax(0, 2fr) minmax(0, 1fr) auto;
+  grid-template-columns: auto 5rem minmax(0, 2fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.4rem;
   margin: 0;
+  border-radius: 0.6rem;
+}
+
+.song-row.dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+.song-handle {
+  width: 1.75rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.song-row.dragging .song-handle {
+  cursor: grabbing;
+}
+
+/* The file, played in the dialog from a song's start. */
+.songs-audio {
+  display: block;
+  width: 100%;
+  margin: 0 0 0.75rem;
+}
+
+.songs-audio[hidden] {
+  display: none;
 }
 
 .song-row-buttons {
@@ -2343,9 +2372,13 @@ dialog.modal::backdrop {
   /* Start and title on one line; the artist and the buttons on the next. */
   .song-row {
     grid-template-areas:
-      "start title title"
-      "artist artist buttons";
-    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+      "handle start title title"
+      "handle artist artist buttons";
+    grid-template-columns: auto 4.5rem minmax(0, 1fr) auto;
+  }
+
+  .song-handle {
+    grid-area: handle;
   }
 
   .song-start {
@@ -2362,6 +2395,11 @@ dialog.modal::backdrop {
 
   .song-row-buttons {
     grid-area: buttons;
+    gap: 0;
+  }
+
+  .song-row-buttons .icon {
+    width: 2rem;
   }
 }
 

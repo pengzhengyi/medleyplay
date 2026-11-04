@@ -1,8 +1,9 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, type Song, type SongRowIn, type Songs } from "../api";
+import { ApiError, type PlaybackAnswer, type Song, type SongRowIn, type Songs } from "../api";
+import { fakeMedia } from "../testing/media";
 import { splitSongsOf, trackOf } from "../testing/server";
 import { EditSongs } from "./EditSongs";
 
@@ -15,6 +16,16 @@ const SPLIT = splitSongsOf(104, [
   [2, 252_000, "ゴーゴー幽霊船"],
   [3, 480_000, "Last"],
 ]);
+
+/** *Bremen*'s file, ready to play whole. */
+const BREMEN_AUDIO: PlaybackAnswer = {
+  state: "ready",
+  source_id: 104,
+  audio_url: "/api/sources/104/audio",
+  media_type: "audio/mp4",
+  start_ms: null,
+  end_ms: null,
+};
 
 /** The song list the video's description gives. */
 const LISTED: readonly Song[] = [
@@ -32,6 +43,10 @@ async function renderEditor(
     readList = vi.fn<(trackId: number, text: string) => Promise<readonly Song[]>>(() =>
       Promise.resolve(LISTED),
     ),
+    loadAudio = vi.fn<(trackId: number) => Promise<PlaybackAnswer>>(() =>
+      Promise.resolve(BREMEN_AUDIO),
+    ),
+    onListen = vi.fn(),
   } = {},
 ) {
   const onClose = vi.fn();
@@ -40,6 +55,8 @@ async function renderEditor(
       album={BREMEN}
       load={() => Promise.resolve(songs)}
       readList={readList}
+      loadAudio={loadAudio}
+      onListen={onListen}
       onSave={onSave}
       onUnsplit={onUnsplit}
       onClose={onClose}
@@ -47,7 +64,16 @@ async function renderEditor(
   );
   const dialog = screen.getByRole("dialog");
   await within(dialog).findByRole("button", { name: "Add a song" });
-  return { dialog, onSave, onUnsplit, readList, onClose };
+  const media = fakeMedia(audioOf(dialog));
+  return { dialog, media, onSave, onUnsplit, readList, loadAudio, onListen, onClose };
+}
+
+function audioOf(dialog: HTMLElement): HTMLAudioElement {
+  const audio = dialog.querySelector("audio");
+  if (audio === null) {
+    throw new Error("The songs editor has no player.");
+  }
+  return audio;
 }
 
 const box = (dialog: HTMLElement, name: string) => within(dialog).getByRole("textbox", { name });
@@ -122,9 +148,9 @@ describe("editing a file's songs", () => {
     await press(dialog, "Save");
 
     expect(onSave).not.toHaveBeenCalled();
-    expect(within(dialog).getByRole("status")).toHaveTextContent(
-      "Saving removes 1 song, with their ratings and plays.",
-    );
+    expect(
+      within(dialog).getByText("Saving removes 1 song, with their ratings and plays."),
+    ).toHaveRole("status");
     await press(dialog, "Save and remove 1 song");
     expect(onSave).toHaveBeenCalledOnce();
   });
@@ -209,5 +235,62 @@ describe("the songs editor's guards", () => {
       "Song 3 starts after the file ends",
     );
     expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe("listening in the songs editor", () => {
+  it("plays the file from a song's start, pausing the music playing", async () => {
+    const { dialog, loadAudio, onListen } = await renderEditor();
+
+    await press(dialog, "Listen from song 2");
+
+    await waitFor(() => {
+      expect(audioOf(dialog).paused).toBe(false);
+    });
+    expect(audioOf(dialog)).toHaveAttribute("src", "/api/sources/104/audio");
+    expect(audioOf(dialog).currentTime).toBe(252);
+    expect(loadAudio).toHaveBeenCalledExactlyOnceWith(104);
+    expect(onListen).toHaveBeenCalledOnce();
+  });
+
+  it("starts a song where the file is playing, to the millisecond", async () => {
+    const { dialog, media, onSave } = await renderEditor();
+    await press(dialog, "Listen from song 2");
+    await waitFor(() => {
+      expect(audioOf(dialog).paused).toBe(false);
+    });
+
+    media.playTo(300.5);
+    await press(dialog, "Start song 3 here");
+
+    expect(box(dialog, "Start of song 3")).toHaveValue("5:00");
+    await press(dialog, "Save");
+    expect(onSave.mock.calls[0]?.[0][2]).toMatchObject({ start_ms: 300_500 });
+  });
+
+  it("says when the file is still being prepared", async () => {
+    const { dialog } = await renderEditor(SPLIT, {
+      loadAudio: vi.fn(() =>
+        Promise.resolve<PlaybackAnswer>({ state: "preparing", source_id: 104, job_id: 9 }),
+      ),
+    });
+
+    await press(dialog, "Listen from song 1");
+
+    expect(
+      await within(dialog).findByText("The file is being prepared; listen again in a moment."),
+    ).toHaveRole("status");
+  });
+
+  it("drags a song by its handle, which says how to move it with the keys", async () => {
+    const { dialog } = await renderEditor();
+
+    const handle = within(dialog).getByRole("button", { name: "Reorder “Last”" });
+
+    expect(handle).toHaveAttribute("aria-roledescription", "sortable");
+    // The instructions mount just after the rows do.
+    await waitFor(() => {
+      expect(handle).toHaveAccessibleDescription(/press Space to pick the song up/);
+    });
   });
 });

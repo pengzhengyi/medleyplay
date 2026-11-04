@@ -2,6 +2,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { Track } from "../api";
+import { fakeMedia } from "../testing/media";
 import { serve, trackOf } from "../testing/server";
 import { type Player, usePlayer } from "./usePlayer";
 
@@ -26,60 +27,6 @@ function ready(source: number, start: number | null, end: number | null) {
     media_type: "audio/mp4",
     start_ms: start,
     end_ms: end,
-  };
-}
-
-/**
- * Stand in for a browser's media playback on `element`: time moves only when the test
- * says, play and pause take effect at once, and each pause and each new file is counted.
- */
-function fakeMedia(element: HTMLAudioElement) {
-  let time = 0;
-  let paused = true;
-  let loads = 0;
-  let pauses = 0;
-  const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
-  Object.defineProperties(element, {
-    currentTime: {
-      get: () => time,
-      set: (seconds: number) => {
-        time = seconds;
-      },
-    },
-    duration: { get: () => 600 },
-    paused: { get: () => paused },
-    src: {
-      get: () => src?.get?.call(element) as string,
-      set: (url: string) => {
-        src?.set?.call(element, url);
-        loads++;
-        time = 0;
-        queueMicrotask(() => element.dispatchEvent(new Event("loadedmetadata")));
-      },
-    },
-  });
-  element.play = () => {
-    paused = false;
-    element.dispatchEvent(new Event("play"));
-    return Promise.resolve();
-  };
-  element.pause = () => {
-    pauses++;
-    paused = true;
-    element.dispatchEvent(new Event("pause"));
-  };
-  return {
-    /** Play on to `seconds` into the file. */
-    playTo(seconds: number) {
-      time = seconds;
-      element.dispatchEvent(new Event("timeupdate"));
-    },
-    get loads() {
-      return loads;
-    },
-    get pauses() {
-      return pauses;
-    },
   };
 }
 

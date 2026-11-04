@@ -18,11 +18,30 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.domain.jobs import JobId, JobState, JobView
+from medleyplay.domain.libraries import LibraryId
+from medleyplay.persistence.schema import LibraryRow
 from medleyplay.plugin_host.client import PluginHost
 from medleyplay.plugin_host.loader import plugin_names
 from tests.support.fakes import FakeClock, MemorySecrets
 
 LIBRARY_PLUGINS = ("fsspec-library", "tinytag-tags")
+
+
+def library_row(units: sessionmaker[Session], clock: FakeClock) -> LibraryId:
+    """Add an online, empty Library `Music` at `/music`, and return its id."""
+    with units.begin() as db:
+        row = LibraryRow(
+            name="Music",
+            kind="folder",
+            path="/music",
+            state="online",
+            message="",
+            file_count=0,
+            added_at=clock(),
+        )
+        db.add(row)
+        db.flush()
+        return LibraryId(row.id)
 
 
 @dataclass(frozen=True)
@@ -54,7 +73,8 @@ def running_libraries(
     """Run the Library plugins, the scan and cache Job kinds, and the services over `data_dir`."""
     lineup = Lineup(plugin_names(), LIBRARY_PLUGINS)
     plugins = PluginService(units, clock, lineup, PluginHost(LIBRARY_PLUGINS))
-    scan, cache = scan_library_kind(clock), cache_source_kind(data_dir)
+    scan = scan_library_kind(clock, data_dir / "covers")
+    cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / "jobs", clock)
     kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
     linked = LinkedAccountService(units, clock, plugins, MemorySecrets())

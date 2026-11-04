@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from medleyplay.domain.covers import MAX_COVER_BYTES
+from medleyplay.domain.covers import MAX_COVER_BYTES, cover_id
+from medleyplay.programs.scan_covers import CoverFile
 
 
 def jpeg_image(label: str = "cover") -> bytes:
@@ -48,3 +49,14 @@ def image_beside(audio: Path, extension: str, image: bytes) -> Path:
     cover = audio.with_name(f"{audio.stem}.{extension}")
     cover.write_bytes(image)
     return cover
+
+
+def copy_of(folder: Path, image: bytes) -> CoverFile:
+    """Write `image` in `folder` as the scan's Job does, and return the copy.
+
+    The copy is named by the SHA-256 of its bytes: `<folder>/9f2c...`.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / cover_id(image)
+    path.write_bytes(image)
+    return CoverFile(name=cover_id(image), path=str(path))

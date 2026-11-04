@@ -14,6 +14,7 @@ from medleyplay.application.libraries import READER_VERSION
 from medleyplay.application.segments import SongsService
 from medleyplay.domain import video_text
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.covers import cover_id
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import Library, LibraryKind, LibraryState
@@ -22,6 +23,7 @@ from medleyplay.persistence.schema import SegmentRow, SourceRow
 from tests.support.audio import Song, folder_of, zip_of
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
+from tests.support.images import gif_image, image_beside, jpeg_image, png_image, webp_image
 from tests.support.info_json import info_json_beside, melt_video, world_is_mine_video
 from tests.support.libraries import Libraries, running_libraries
 
@@ -397,3 +399,87 @@ def test_a_rescan_keeps_the_earlier_text_when_the_info_json_is_malformed(
 
     assert _titles(libraries, alice) == ["メルト"]
     assert "isn't valid JSON" in str(details["info_json_error"])
+
+
+def _covers(libraries: Libraries, account: Account) -> dict[str, str | None]:
+    """Return each Track's cover, by title."""
+    return {
+        track.details.title: track.details.cover
+        for track in libraries.catalog.list_tracks(account.id)
+    }
+
+
+def test_a_scan_finds_the_cover_embedded_in_a_song_and_the_image_beside_another(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music = folder_of(
+        tmp_path / "Music",
+        {
+            "Blue/01 Intro.wav": Song("Intro", cover=jpeg_image("Bremen")),
+            "Blue/02 Outro.wav": Song("Outro"),
+        },
+    )
+    image_beside(music / "Blue" / "02 Outro.wav", "png", png_image("Supercell"))
+    (music / "Blue" / "orphan.jpg").write_bytes(jpeg_image("Orphan"))
+
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+
+    assert _covers(libraries, alice) == {
+        "Intro": cover_id(jpeg_image("Bremen")),
+        "Outro": cover_id(png_image("Supercell")),
+    }
+    assert sorted(file.name for file in (tmp_path / "data" / "covers").iterdir()) == sorted(
+        [cover_id(jpeg_image("Bremen")), cover_id(png_image("Supercell"))]
+    )
+
+
+def test_a_rescan_reads_a_changed_image_beside_a_song_that_is_unchanged(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    image_beside(music / "BV1dm4y1s7ak.wav", "jpg", jpeg_image("Bremen"))
+    _rescan(libraries, alice, library)
+    before = _covers(libraries, alice)
+
+    changed = image_beside(music / "BV1dm4y1s7ak.wav", "jpg", jpeg_image("Brement"))
+    os.utime(changed, ns=(1, 1))
+    _rescan(libraries, alice, library)
+
+    assert before == {"BV1dm4y1s7ak": cover_id(jpeg_image("Bremen"))}
+    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": cover_id(jpeg_image("Brement"))}
+
+
+def test_a_rescan_drops_the_cover_of_an_image_that_was_removed(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    image = image_beside(music / "BV1dm4y1s7ak.wav", "webp", webp_image("Bremen"))
+    _rescan(libraries, alice, library)
+
+    image.unlink()
+    _rescan(libraries, alice, library)
+
+    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": None}
+
+
+def test_a_scan_notes_an_image_that_is_no_cover_and_goes_on(
+    libraries: Libraries,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    image_beside(music / "BV1dm4y1s7ak.wav", "jpg", gif_image())
+
+    _rescan(libraries, alice, library)
+    with units() as db:
+        details = db.scalars(select(SourceRow)).one().details or {}
+
+    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": None}
+    assert details["cover_image_error"] == "isn't a JPEG, PNG, or WebP image"

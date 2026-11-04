@@ -20,6 +20,7 @@ import {
   tracksOfArtist,
 } from "../library/views";
 import { type Route, hrefOf } from "../routes";
+import { Cover } from "./Cover";
 import { SettingsView } from "./SettingsView";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
@@ -213,9 +214,9 @@ function AlbumList({ albums }: { readonly albums: readonly Album[] }) {
       {albums.map((album) => (
         <li key={`${album.artist}\n${album.name}`}>
           <a href={hrefOf({ view: "album", artist: album.artist, name: album.name })}>
-            <span className="cover-tile" aria-hidden>
+            <Cover cover={album.cover} className="cover-tile">
               {initialOf(album.name)}
-            </span>
+            </Cover>
             <span className="group-name">{album.name || UNKNOWN_ALBUM}</span>
             <span className="group-meta">
               {album.artist || UNKNOWN_ARTIST}, {formatLength(album.count, album.durationMs)}

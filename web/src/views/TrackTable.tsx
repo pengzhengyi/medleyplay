@@ -36,6 +36,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
+import { Cover } from "./Cover";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 
 /** What every cell may need: the page's callbacks, and which Track is playing. */
@@ -395,6 +396,7 @@ const COLUMNS: Column[] = [
       const { actions, playingId } = meta(table);
       return (
         <div className="title-cell">
+          <Cover cover={track.cover} className="thumb" />
           {track.id === playingId && <span className="bars" aria-hidden />}
           <button
             type="button"

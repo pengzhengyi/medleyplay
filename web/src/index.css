@@ -384,6 +384,8 @@ button.text:hover:not(:disabled) {
 }
 
 .library main {
+  /* The table drops a column when the view is narrow, however wide the window. */
+  container-type: inline-size;
   grid-area: main;
   padding: 0.5rem 1.5rem 9rem;
 
@@ -874,6 +876,13 @@ button.text:hover:not(:disabled) {
   width: 2.75rem;
 }
 
+/* Too narrow for the album beside the title: the album gives way. */
+@container (width < 56rem) {
+  .tracks .album {
+    display: none;
+  }
+}
+
 /* A share of the width until resized, when the header says how wide. */
 .tracks th.artist,
 .tracks th.album {
@@ -1062,6 +1071,19 @@ details.dropdown.columns-menu > summary + ul {
   gap: 0.6rem;
 }
 
+/* A small cover beside a song's title, in the table and in Up next. */
+.cover.thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
 .tracks button.title {
   padding: 0;
   margin: 0;
@@ -1239,8 +1261,8 @@ button.icon.heart.on:hover,
 .queue li {
   display: grid;
   grid-template:
-    "handle title remove" auto
-    "handle artist remove" auto / auto minmax(0, 1fr) auto;
+    "handle thumb title remove" auto
+    "handle thumb artist remove" auto / auto auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 0.35rem;
   margin: 0;
@@ -1258,6 +1280,11 @@ button.icon.heart.on:hover,
   z-index: 1;
   background: var(--surface);
   box-shadow: var(--float);
+}
+
+.queue .thumb {
+  grid-area: thumb;
+  margin-right: 0.3rem;
 }
 
 .queue .handle {
@@ -1815,20 +1842,38 @@ button.icon.heart.on:hover,
     display: none;
   }
 
+  /* The cover beside the title, the artist under it, and the playing bars before it. */
   .tracks .title-cell {
-    display: block;
+    display: grid;
+    grid-template:
+      "thumb bars title" auto
+      "thumb sub sub" auto
+      "thumb why why" auto / auto auto minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .tracks .title-cell .thumb {
+    grid-area: thumb;
+    margin-right: 0.6rem;
   }
 
   .tracks .title-cell .bars {
+    grid-area: bars;
     margin-right: 0.5rem;
   }
 
+  .tracks .title-cell .why {
+    grid-area: why;
+  }
+
   .tracks .title-cell button.title {
+    grid-area: title;
     line-height: 1.35;
   }
 
   .tracks .subtitle {
     display: block;
+    grid-area: sub;
     overflow: hidden;
     color: var(--muted);
     font-size: 0.8rem;

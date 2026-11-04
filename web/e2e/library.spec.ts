@@ -124,6 +124,16 @@ test("the song playing has a menu too, which goes to its album", async ({ page }
   expect(page.url()).toContain("#/album?");
 });
 
+test("a laptop's view keeps room for each song's title beside its cover", async ({ page }) => {
+  await page.goto("/");
+  const title = row(page, "Bravo").getByRole("cell").nth(1);
+  await expect(title).toBeVisible();
+
+  const box = await title.boundingBox();
+
+  expect(box?.width).toBeGreaterThan(190);
+});
+
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

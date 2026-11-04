@@ -142,9 +142,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Covers** — a Library scan finds a song's cover, embedded in its file or as
   an image beside it, and *Edit details* uploads a JPEG, PNG, or WebP image as
-  a song's cover; the player and the lock screen show it. A cover is kept once,
-  by its content, shared by the songs of an album, and removed when the server
-  next starts once nothing shows it. See the
+  a song's cover; the table, Up next, the album cards, the player, and the lock
+  screen show it. A cover is kept once, by its content, shared by the songs of
+  an album, and removed when the server next starts once nothing shows it. See
+  the
   [Track details](docs/contributing/design-notes/Track%20details.md#covers) note.
 
 ### Changed
@@ -152,6 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed the project from stream to medleyplay.
 - A Library backend's `locate` answers *missing* for a file that is gone,
   instead of raising, so an unplugged drive can't fault its plugin.
+- In a narrow view, such as a laptop's with Up next open, the table leaves out
+  the album column so each song's title keeps its room.
 
 ### Removed
 

@@ -189,9 +189,10 @@ values.
 - **Served** with the type its bytes say, `nosniff`, and
   `Cache-Control: private, max-age=31536000, immutable`, since its name is its
   content.
-- **The web client** shows covers in the player and on the lock screen through
-  the Media Session's artwork, and in *Edit details* with the household's upload;
-  the table, the queue, and the album view are next.
+- **The web client** shows covers beside each title in the table and in Up next,
+  on an album's card (the first cover among its songs), in the player and on the
+  lock screen through the Media Session's artwork, and in *Edit details* with the
+  household's upload. An image that fails to load shows the stand-in instead.
 - **A cover no value names** is removed by the sweep at startup, so one replaced
   or removed stays on disk until the server next starts.
 

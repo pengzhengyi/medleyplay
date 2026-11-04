@@ -157,3 +157,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Songs saved as fragmented `.m4a` or `.mp4` files, as Bilibili downloads are,
   now show their length instead of none.
 - A too-large id in a request is refused, not a server error.
+- On a phone, a long Library's song titles take the row's width again, rather
+  than a few letters of it.

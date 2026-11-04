@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
-from medleyplay.application.covers import CoverService
+from medleyplay.application.covers import CoverService, keep_cover
 from medleyplay.application.details import DetailsService, record
 from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
@@ -163,3 +163,23 @@ def test_the_sweep_keeps_a_cover_any_origin_names(
     covers.sweep()
 
     assert [path.name for path in (tmp_path / "covers").iterdir()] == [cover_id(PNG)]
+
+
+def test_a_kept_cover_is_a_file_named_by_its_bytes_and_leaves_nothing_aside(
+    tmp_path: Path,
+) -> None:
+    keep_cover(tmp_path / "covers", cover_id(PNG), PNG)
+
+    assert {path.name: path.read_bytes() for path in (tmp_path / "covers").iterdir()} == {
+        cover_id(PNG): PNG
+    }
+
+
+def test_keeping_a_cover_already_kept_leaves_its_file_as_it_is(tmp_path: Path) -> None:
+    keep_cover(tmp_path / "covers", cover_id(PNG), PNG)
+    kept = tmp_path / "covers" / cover_id(PNG)
+    before = kept.stat().st_ino
+
+    keep_cover(tmp_path / "covers", cover_id(PNG), PNG)
+
+    assert kept.stat().st_ino == before

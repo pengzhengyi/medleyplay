@@ -1,5 +1,9 @@
 import { type Page, expect, test } from "@playwright/test";
 
+/** Wait for the server to answer a save of a Track's `what`. */
+const saved = (page: Page, what: "favorite" | "rating") =>
+  page.waitForResponse((response) => response.url().endsWith(`/${what}`) && response.ok());
+
 const row = (page: Page, title: string) =>
   page.getByRole("row").filter({ has: page.getByRole("button", { name: title, exact: true }) });
 
@@ -8,8 +12,12 @@ test("a favorite and a rating are kept by the server", async ({ page }) => {
   const heart = page.getByRole("button", { name: "Favorite Bravo" }).first();
   const stars = row(page, "Bravo").getByRole("group", { name: "Rate Bravo" });
 
-  await heart.click();
-  await stars.getByRole("button", { name: "4 stars" }).click();
+  // Each click's save reaches the server before the reload asks it again.
+  await Promise.all([saved(page, "favorite"), heart.click()]);
+  await Promise.all([
+    saved(page, "rating"),
+    stars.getByRole("button", { name: "4 stars" }).click(),
+  ]);
   await expect(heart).toHaveAttribute("aria-pressed", "true");
   await page.reload();
 
@@ -22,8 +30,14 @@ test("a favorite and a rating are kept by the server", async ({ page }) => {
     "true",
   );
   // Put Bravo back as the other tests expect it.
-  await page.getByRole("button", { name: "Favorite Bravo" }).first().click();
-  await row(page, "Bravo").getByRole("button", { name: "4 stars" }).click();
+  await Promise.all([
+    saved(page, "favorite"),
+    page.getByRole("button", { name: "Favorite Bravo" }).first().click(),
+  ]);
+  await Promise.all([
+    saved(page, "rating"),
+    row(page, "Bravo").getByRole("button", { name: "4 stars" }).click(),
+  ]);
   await expect(row(page, "Bravo").getByRole("button", { name: "4 stars" })).toHaveAttribute(
     "aria-pressed",
     "false",

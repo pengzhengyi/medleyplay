@@ -146,6 +146,16 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
   }, []);
 
+  /** Ask for the Tracks again; one that can't be read now shows on the next load. */
+  const reloadTracks = () => {
+    api.tracks().then(
+      (tracks) => {
+        dispatch({ type: "loaded", tracks });
+      },
+      () => undefined,
+    );
+  };
+
   /** Send `request`, signing out on a 401; then show the Track as the server now has it. */
   const changeDetails = async <T>(id: number, request: Promise<T>): Promise<T> => {
     let answer: T;
@@ -156,6 +166,11 @@ export function useLibrary(onSignedOut: () => void): Library {
         onSignedOut();
       }
       throw failure;
+    }
+    // A split file's album values are its songs' too, so all the Tracks are read again.
+    if (store.confirmed.get(id)?.split === true) {
+      reloadTracks();
+      return answer;
     }
     // Changed; a Track that can't be read back now shows its new details on the next load.
     const seq = ++writes.current;
@@ -181,12 +196,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       }
       throw failure;
     }
-    api.tracks().then(
-      (tracks) => {
-        dispatch({ type: "loaded", tracks });
-      },
-      () => undefined,
-    );
+    reloadTracks();
   };
 
   const write = <F extends Field>(id: number, field: F, value: Track[F], send: Promise<Track>) => {

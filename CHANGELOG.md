@@ -140,9 +140,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stretch of the file, on into the next song without a gap. See the
   [Segments](docs/contributing/design-notes/Segments.md) note.
 
-- **Covers** — *Edit details* uploads a JPEG, PNG, or WebP image as a song's
-  cover, which the player and the lock screen show; a cover is kept once, by
-  its content, shared by the songs of an album, and removed when the server
+- **Covers** — a Library scan finds a song's cover, embedded in its file or as
+  an image beside it, and *Edit details* uploads a JPEG, PNG, or WebP image as
+  a song's cover; the player and the lock screen show it. A cover is kept once,
+  by its content, shared by the songs of an album, and removed when the server
   next starts once nothing shows it. See the
   [Track details](docs/contributing/design-notes/Track%20details.md#covers) note.
 

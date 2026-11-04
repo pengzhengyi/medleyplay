@@ -8,6 +8,7 @@ from medleyplay.domain.catalog import SourceKey, TrackDetails
 from medleyplay.domain.mode import Network, NetworkKind
 from medleyplay.plugin_api import Tags
 from medleyplay.programs.info_json import InfoChapter, InfoText
+from medleyplay.programs.scan_covers import CoverFile, CoverImage
 from medleyplay.programs.scan_library import InfoJson, ScannedFile
 
 PASSWORD = "correct horse battery"
@@ -114,6 +115,34 @@ class InfoJsonFactory:
         return InfoJson(size=200, modified_ns=modified_ns, error=error)
 
 
+class CoverImageFactory:
+    """Builds what a scan reports of the image beside an audio file."""
+
+    @staticmethod
+    def read(copy: CoverFile, *, extension: str = "jpg", modified_ns: int = 1) -> CoverImage:
+        """Return an image the scan read and kept a copy of."""
+        return CoverImage(extension=extension, size=100, modified_ns=modified_ns, cover=copy)
+
+    @staticmethod
+    def unchanged(*, extension: str = "jpg", modified_ns: int = 1) -> CoverImage:
+        """Return an image the scan listed but skipped, since it hasn't changed."""
+        return CoverImage(extension=extension, size=100, modified_ns=modified_ns)
+
+    @staticmethod
+    def not_a_cover(*, modified_ns: int = 1) -> CoverImage:
+        """Return an image the scan read, whose bytes are a GIF's."""
+        error = "isn't a JPEG, PNG, or WebP image"
+        return CoverImage(extension="jpg", size=100, modified_ns=modified_ns, error=error)
+
+    @staticmethod
+    def unreadable_for_now(*, modified_ns: int = 1) -> CoverImage:
+        """Return an image the scan couldn't read this time, as from a drive too slow to answer."""
+        error = "can't be read (PluginCallFailedError)"
+        return CoverImage(
+            extension="jpg", size=100, modified_ns=modified_ns, error=error, retry=True
+        )
+
+
 class ScannedFileFactory:
     """Builds the files a Library scan reports."""
 
@@ -124,6 +153,8 @@ class ScannedFileFactory:
         *,
         fingerprint: str = "",
         info_json: InfoJson | None = None,
+        cover_image: CoverImage | None = None,
+        embedded_cover: CoverFile | None = None,
     ) -> ScannedFile:
         """Return a new or changed file whose tags were read, fingerprinted by its path."""
         return ScannedFile(
@@ -134,11 +165,18 @@ class ScannedFileFactory:
             fingerprint=fingerprint or f"1000:{path}",
             tags=Tags(title=title, artist="The Band", album="Blue", duration_ms=180_000),
             info_json=info_json,
+            cover_image=cover_image,
+            embedded_cover=embedded_cover,
         )
 
     @staticmethod
     def untagged(
-        path: str = "BV1dm4y1s7ak.m4a", *, fingerprint: str = "", info_json: InfoJson | None = None
+        path: str = "BV1dm4y1s7ak.m4a",
+        *,
+        fingerprint: str = "",
+        info_json: InfoJson | None = None,
+        cover_image: CoverImage | None = None,
+        embedded_cover: CoverFile | None = None,
     ) -> ScannedFile:
         """Return a new or changed file whose tags said nothing, as a video download's do."""
         return ScannedFile(
@@ -149,14 +187,26 @@ class ScannedFileFactory:
             fingerprint=fingerprint or f"1000:{path}",
             tags=Tags(),
             info_json=info_json,
+            cover_image=cover_image,
+            embedded_cover=embedded_cover,
         )
 
     @staticmethod
     def unchanged(
-        path: str = "Blue/01 Intro.wav", *, info_json: InfoJson | None = None
+        path: str = "Blue/01 Intro.wav",
+        *,
+        info_json: InfoJson | None = None,
+        cover_image: CoverImage | None = None,
     ) -> ScannedFile:
         """Return a file the scan skipped because it hasn't changed."""
-        return ScannedFile(path=path, size=1000, modified_ns=1, changed=False, info_json=info_json)
+        return ScannedFile(
+            path=path,
+            size=1000,
+            modified_ns=1,
+            changed=False,
+            info_json=info_json,
+            cover_image=cover_image,
+        )
 
 
 class NetworkFactory:

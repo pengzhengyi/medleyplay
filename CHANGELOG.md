@@ -134,17 +134,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Songs inside a long file** — *Split into songs…* on a song's menu splits a
   whole album uploaded as one video into its songs, from a list found in the
-  video's details or pasted, and *Edit songs…* edits them. Each song is a Track
+  video's details or pasted, and *Edit songs…* edits them, listening in the
+  dialog from any song's start to place the next. Each song is a Track
   of its own that keeps its ratings, plays, and Playlist places when the list is
   edited, takes its album, artist, and track number from the file, and plays its
   stretch of the file, on into the next song without a gap. See the
   [Segments](docs/contributing/design-notes/Segments.md) note.
 
-- **Covers** — *Edit details* uploads a JPEG, PNG, or WebP image as a song's
-  cover, which the table, Up next, the album cards, the player, and the lock
-  screen show; a cover is kept once, by
-  its content, shared by the songs of an album, and removed when the server
-  next starts once nothing shows it. See the
+- **Covers** — a Library scan finds a song's cover, embedded in its file or as
+  an image beside it, and *Edit details* uploads a JPEG, PNG, or WebP image as
+  a song's cover; the table, Up next, the album cards, the player, and the lock
+  screen show it. A cover is kept once, by its content, shared by the songs of
+  an album, and removed when the server next starts once nothing shows it. See
+  the
   [Track details](docs/contributing/design-notes/Track%20details.md#covers) note.
 
 ### Changed

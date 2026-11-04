@@ -53,6 +53,8 @@ export interface Player {
   readonly playNext: (track: Track) => void;
   readonly add: (track: Track) => void;
   readonly toggle: () => void;
+  /** Pause what plays, if anything does; unlike `toggle`, it never starts playing. */
+  readonly pause: () => void;
   readonly next: () => void;
   readonly previous: () => void;
   readonly seek: (seconds: number) => void;
@@ -555,6 +557,9 @@ export function usePlayer(
       dispatch({ type: "add", entry: entryOf(chosen) });
     },
     toggle,
+    pause: () => {
+      audio.current?.pause();
+    },
     next,
     previous,
     seek,

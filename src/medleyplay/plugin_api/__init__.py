@@ -11,6 +11,7 @@ plugin = Plugin(api_version=1, register=register)
 ```
 """
 
+from medleyplay.plugin_api.covers import MAX_COVER_BYTES, is_cover_image
 from medleyplay.plugin_api.errors import AuthError, NetworkError
 from medleyplay.plugin_api.extension import (
     API_VERSION,
@@ -87,6 +88,7 @@ __all__ = [
     "LIBRARY_BACKEND",
     "LIST_FILES",
     "LOCATE_FILE",
+    "MAX_COVER_BYTES",
     "READ_TAGS",
     "READ_VIDEO",
     "SOURCE_DOWNLOADER",
@@ -133,5 +135,6 @@ __all__ = [
     "VideoStatus",
     "check_key",
     "check_library_path",
+    "is_cover_image",
     "report_progress",
 ]

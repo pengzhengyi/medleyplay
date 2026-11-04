@@ -58,6 +58,7 @@ const DETAILS = [
   "disc_number",
   "year",
   "genre",
+  "cover",
 ] as const satisfies readonly (keyof Track)[];
 
 /** A store before the server has listed any Tracks. */

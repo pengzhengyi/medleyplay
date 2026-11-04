@@ -31,6 +31,15 @@ describe("the Track store", () => {
     expect(unknown).toBe(LOADED);
   });
 
+  it("takes a Track's cover from the server's answer, so the player shows it at once", () => {
+    const covered = reduce(LOADED, {
+      type: "details",
+      track: trackOf(1, "Intro", { cover: "a".repeat(64) }),
+    });
+
+    expect(tracksOf(covered).get(1)?.cover).toBe("a".repeat(64));
+  });
+
   it("keeps a favorite confirmed since the details were read", () => {
     const favored = reduce(LOADED, {
       type: "answered",

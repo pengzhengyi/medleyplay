@@ -320,6 +320,33 @@ describe("saving a song's details", () => {
     });
   });
 
+  it("shows a split file's songs as the server now has them once the file's album changes", async () => {
+    const before = [
+      trackOf(7, "BV1dm4y1s7ak", { split: true }),
+      trackOf(8, "Opening", { segment_of: 7 }),
+    ];
+    const after = before.map((track) => ({ ...track, album: "Live in Osaka" }));
+    let tracks = before;
+    serve({
+      ...signedIn(before),
+      "POST /api/tracks/details": () => {
+        tracks = after;
+        return { body: { changed: 1 } };
+      },
+      "GET /api/tracks": () => ({ body: tracks }),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    await act(() => result.current.saveDetails(7, { album: "Live in Osaka" }));
+
+    await waitFor(() => {
+      expect(result.current.tracks.get(8)?.album).toBe("Live in Osaka");
+    });
+  });
+
   it("passes on why the server refused, leaving the Track as it was", async () => {
     const result = await libraryOf({
       "POST /api/tracks/details": { status: 422, body: { detail: "year is from 1000 to 2999." } },

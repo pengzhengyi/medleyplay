@@ -369,6 +369,28 @@
           "origin": "household"
         }
       }
+    },
+    {
+      "name": "the cover comes with the other album fields, from the origin naming the album",
+      "origins": {
+        "files": {
+          "cover": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+        },
+        "video": {
+          "album": "Re:Start",
+          "cover": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "video"
+        },
+        "cover": {
+          "value": "0000000000000000000000000000000000000000000000000000000000000000",
+          "origin": "video"
+        }
+      }
     }
   ]
 }

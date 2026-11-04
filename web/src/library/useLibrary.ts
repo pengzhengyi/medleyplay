@@ -7,6 +7,7 @@ import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import {
   ApiError,
   type Detail,
+  type Details,
   type JobEvent,
   type Mode,
   type Playlist,
@@ -46,6 +47,10 @@ export interface Library {
    * server's answer. The promise rejects with why when the server refuses.
    */
   readonly readVideoText: (id: number, text: VideoText) => Promise<VideoRead>;
+  /** Make `image` the household's cover for the Track; the Track then shows it. */
+  readonly setCover: (id: number, image: Blob) => Promise<Details>;
+  /** Drop the household's cover for the Track; the Track then shows the next origin's. */
+  readonly removeCover: (id: number) => Promise<Details>;
   /** Make `rows` the songs of the file `id`; the Tracks then show the songs as saved. */
   readonly saveSongs: (
     id: number,
@@ -141,6 +146,16 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
   }, []);
 
+  /** Ask for the Tracks again; one that can't be read now shows on the next load. */
+  const reloadTracks = () => {
+    api.tracks().then(
+      (tracks) => {
+        dispatch({ type: "loaded", tracks });
+      },
+      () => undefined,
+    );
+  };
+
   /** Send `request`, signing out on a 401; then show the Track as the server now has it. */
   const changeDetails = async <T>(id: number, request: Promise<T>): Promise<T> => {
     let answer: T;
@@ -151,6 +166,11 @@ export function useLibrary(onSignedOut: () => void): Library {
         onSignedOut();
       }
       throw failure;
+    }
+    // A split file's album values are its songs' too, so all the Tracks are read again.
+    if (store.confirmed.get(id)?.split === true) {
+      reloadTracks();
+      return answer;
     }
     // Changed; a Track that can't be read back now shows its new details on the next load.
     const seq = ++writes.current;
@@ -176,12 +196,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       }
       throw failure;
     }
-    api.tracks().then(
-      (tracks) => {
-        dispatch({ type: "loaded", tracks });
-      },
-      () => undefined,
-    );
+    reloadTracks();
   };
 
   const write = <F extends Field>(id: number, field: F, value: Track[F], send: Promise<Track>) => {
@@ -217,6 +232,8 @@ export function useLibrary(onSignedOut: () => void): Library {
       await changeDetails(id, api.setDetails([id], changes));
     },
     readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
+    setCover: (id, image) => changeDetails(id, api.setCover(id, image)),
+    removeCover: (id) => changeDetails(id, api.removeCover(id)),
     saveSongs: async (id, rows, known) => {
       await changeTracks(api.saveSongs(id, rows, known));
     },

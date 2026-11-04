@@ -12,9 +12,17 @@
  * found, keeping the household's own.
  */
 
+import { MusicNotesIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
-import type { Detail, Details, Track, VideoRead, VideoText } from "../api";
+import {
+  type Detail,
+  type Details,
+  type Track,
+  type VideoRead,
+  type VideoText,
+  coverUrl,
+} from "../api";
 import {
   DETAIL_FIELDS,
   type DetailField,
@@ -45,6 +53,9 @@ const RANGES: Partial<Record<Detail, readonly [number, number]>> = {
 const MAX_VIDEO_TITLE = 1_000;
 const MAX_DESCRIPTION = 20_000;
 
+/** The largest cover the server takes, checked before an image is sent. */
+const MAX_COVER_BYTES = 10 * 1024 * 1024;
+
 /**
  * Edit `track`'s details, read with `load`; `onSave` sends the household's values
  * changed, `null` dropping one, and `onReadVideo` a video's pasted text.
@@ -54,12 +65,16 @@ export function EditDetails({
   load,
   onSave,
   onReadVideo,
+  onSetCover,
+  onRemoveCover,
   onClose,
 }: {
   readonly track: Track;
   readonly load: (trackId: number) => Promise<Details>;
   readonly onSave: (changes: Partial<Record<Detail, string | number | null>>) => Promise<void>;
   readonly onReadVideo: (text: VideoText) => Promise<VideoRead>;
+  readonly onSetCover: (image: Blob) => Promise<Details>;
+  readonly onRemoveCover: () => Promise<Details>;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -72,6 +87,8 @@ export function EditDetails({
   const [reading, setReading] = useState(false);
   const [readNote, setReadNote] = useState("");
   const [readError, setReadError] = useState("");
+  const [covering, setCovering] = useState(false);
+  const [coverError, setCoverError] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -129,6 +146,18 @@ export function EditDetails({
       setReading(false);
     }
   };
+  /** Save the cover change `change` makes at once, and show the details it answers. */
+  const changeCover = async (change: () => Promise<Details>) => {
+    setCovering(true);
+    setCoverError("");
+    try {
+      setDetails(await change());
+    } catch (failure) {
+      setCoverError(messageOf(failure));
+    } finally {
+      setCovering(false);
+    }
+  };
   const boxes = (group: DetailField["group"]) =>
     details !== undefined &&
     DETAIL_FIELDS.filter((field) => field.group === group).map((field) => (
@@ -141,7 +170,7 @@ export function EditDetails({
       className="edit-details"
       labelledBy="edit-details-title"
       describedBy="edit-details-song"
-      locked={saving || reading}
+      locked={saving || reading || covering}
       onClose={onClose}
     >
       <form className="card" onSubmit={(event) => void save(event)}>
@@ -156,9 +185,23 @@ export function EditDetails({
         )}
         {details !== undefined && (
           <>
+            <CoverBox
+              details={details}
+              busy={saving || reading || covering}
+              covering={covering}
+              error={coverError}
+              onChoose={(image) => {
+                if (image.size > MAX_COVER_BYTES) {
+                  setCoverError("A cover is at most 10 MiB.");
+                } else {
+                  void changeCover(() => onSetCover(image));
+                }
+              }}
+              onRemove={() => void changeCover(onRemoveCover)}
+            />
             <PasteVideo
               read={details.video_text}
-              busy={saving || reading}
+              busy={saving || reading || covering}
               reading={reading}
               note={readNote}
               error={readError}
@@ -187,7 +230,7 @@ export function EditDetails({
           <button
             type="button"
             className="secondary outline dialog-button"
-            disabled={saving || reading}
+            disabled={saving || reading || covering}
             onClick={close}
           >
             Cancel
@@ -195,7 +238,7 @@ export function EditDetails({
           <button
             type="submit"
             className="dialog-button"
-            disabled={details === undefined || saving || reading}
+            disabled={details === undefined || saving || reading || covering}
             aria-busy={saving}
           >
             Save
@@ -203,6 +246,94 @@ export function EditDetails({
         </footer>
       </form>
     </Modal>
+  );
+}
+
+/** The cover shown and where it came from, with the household's own to upload or remove. */
+function CoverBox({
+  details,
+  busy,
+  covering,
+  error,
+  onChoose,
+  onRemove,
+}: {
+  readonly details: Details;
+  readonly busy: boolean;
+  /** Whether the household's cover is being saved or removed. */
+  readonly covering: boolean;
+  readonly error: string;
+  readonly onChoose: (image: File) => void;
+  readonly onRemove: () => void;
+}) {
+  const shown = details.shown.cover;
+  const yours = details.origins.household?.cover !== undefined;
+  const cover = typeof shown?.value === "string" && shown.value !== "" ? shown.value : undefined;
+  return (
+    <div className="cover-box">
+      <span className="cover cover-box-image">
+        {cover === undefined ? (
+          <MusicNotesIcon weight="duotone" aria-hidden />
+        ) : (
+          <img src={coverUrl(cover)} alt="Cover" />
+        )}
+      </span>
+      <div className="cover-box-actions">
+        <small
+          className={
+            yours ? "detail-origin cover-box-origin yours" : "detail-origin cover-box-origin"
+          }
+        >
+          {shown === undefined
+            ? "No cover"
+            : !yours
+              ? `From ${ORIGIN_LABELS[shown.origin]}`
+              : cover === undefined
+                ? "None, as you chose"
+                : "Yours"}
+        </small>
+        <label
+          className={
+            busy ? "secondary outline cover-upload disabled" : "secondary outline cover-upload"
+          }
+        >
+          Upload a cover…
+          <input
+            type="file"
+            className="visually-hidden"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={busy}
+            onChange={(event) => {
+              const chosen = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (chosen !== undefined) {
+                onChoose(chosen);
+              }
+            }}
+          />
+        </label>
+        {yours && (
+          <button
+            type="button"
+            className="secondary outline cover-remove"
+            disabled={busy}
+            onClick={onRemove}
+          >
+            Remove your cover
+          </button>
+        )}
+        {covering && (
+          <small className="cover-box-status" role="status">
+            Saving the cover…
+          </small>
+        )}
+        {error !== "" && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 

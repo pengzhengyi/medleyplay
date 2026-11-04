@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from medleyplay.domain.covers import is_cover_id
 from medleyplay.domain.errors import InvalidInputError
 
 MAX_TEXT: Final = 512
@@ -58,6 +59,8 @@ class Field(StrEnum):
     DISC_NUMBER = "disc_number"
     YEAR = "year"
     GENRE = "genre"
+    COVER = "cover"
+    """A cover image, named by the SHA-256 of its bytes; empty text shows none."""
 
 
 TEXT_FIELDS: Final = frozenset(
@@ -65,7 +68,14 @@ TEXT_FIELDS: Final = frozenset(
 )
 NUMBER_FIELDS: Final = frozenset({Field.TRACK_NUMBER, Field.DISC_NUMBER, Field.YEAR})
 ALBUM_FIELDS: Final = frozenset(
-    {Field.ALBUM, Field.ALBUM_ARTIST, Field.TRACK_NUMBER, Field.DISC_NUMBER, Field.YEAR}
+    {
+        Field.ALBUM,
+        Field.ALBUM_ARTIST,
+        Field.TRACK_NUMBER,
+        Field.DISC_NUMBER,
+        Field.YEAR,
+        Field.COVER,
+    }
 )
 """The fields that describe the release a Track is on, shown from one origin."""
 
@@ -85,8 +95,14 @@ def check_value(field: Field, value: object) -> Value:
     """Return `value` as `field` keeps it, or raise `InvalidInputError` saying why.
 
     Text is trimmed and at most `MAX_TEXT` characters; empty text is a value, which
-    shows nothing. Numbers are whole, from 1, and a year has four digits.
+    shows nothing. Numbers are whole, from 1, and a year has four digits. A cover
+    is a cover's name, or empty text for none.
     """
+    if field is Field.COVER:
+        if not isinstance(value, str) or (value != "" and not is_cover_id(value)):
+            message = "cover names an image by the SHA-256 of its bytes, or is empty."
+            raise InvalidInputError(message)
+        return value
     if field in TEXT_FIELDS:
         if not isinstance(value, str):
             message = f"{field} is text."
@@ -112,6 +128,8 @@ def found_value(field: Field, value: Value) -> Value | None:
     Such a value is never refused, as the household's is: text is trimmed and cut to
     `MAX_TEXT` characters, and blank text or a number out of range is no value.
     """
+    if field is Field.COVER:
+        return value if isinstance(value, str) and is_cover_id(value) else None
     if field in TEXT_FIELDS:
         text = value.strip()[:MAX_TEXT].strip() if isinstance(value, str) else ""
         return text or None

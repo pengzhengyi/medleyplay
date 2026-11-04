@@ -169,7 +169,12 @@ def refresh(db: Session, track_id: TrackId, now: datetime) -> dict[Field, Shown]
     found = shown(values_of(db, track_id))
     for field in Field:
         value = found[field].value if field in found else None
-        setattr(track, field.value, "" if value is None and field in TEXT_FIELDS else value)
+        if field in TEXT_FIELDS:
+            value = "" if value is None else value
+        elif value == "":
+            # The household's "no cover" over a found one: the Track shows none.
+            value = None
+        setattr(track, field.value, value)
     _refresh_songs(db, track, found, now)
     return found
 
@@ -224,6 +229,7 @@ def album_file_values(song: SegmentRow, album_file: Mapping[Field, Shown]) -> di
         Field.DISC_NUMBER: of(Field.DISC_NUMBER),
         Field.YEAR: of(Field.YEAR),
         Field.GENRE: of(Field.GENRE),
+        Field.COVER: of(Field.COVER),
     }
     return {field: value for field, value in given.items() if value is not None}
 

@@ -2119,8 +2119,13 @@ dialog.modal::backdrop {
   min-width: 0;
 }
 
-.cover-box-origin {
+.cover-box-origin,
+.cover-box-status {
   flex-basis: 100%;
+}
+
+.cover-box-status {
+  color: var(--muted);
 }
 
 .edit-details .cover-upload,

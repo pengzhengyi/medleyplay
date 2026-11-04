@@ -192,12 +192,43 @@ def test_a_migration_refused_for_broken_references_leaves_the_database_as_it_was
     assert (version, "track_number" in columns) == ("0011", False)
 
 
+def test_undoing_the_covers_forgets_every_cover_value(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO track (id, title, artist, album, album_artist, genre, added_at)"
+                " VALUES (1, 'Bremen', '', '', '', '', '2026-10-01 00:00:00.000000')"
+            )
+        )
+        for field, value in [("title", '"Bremen"'), ("cover", f'"{"0" * 64}"')]:
+            connection.execute(
+                text(
+                    "INSERT INTO track_value (track_id, origin, field, value, recorded_at)"
+                    " VALUES (1, 'household', :field, :value, '2026-10-01 00:00:00.000000')"
+                ),
+                {"field": field, "value": value},
+            )
+
+    _migrate_to(engine, "0014", down=True)
+
+    with engine.connect() as connection:
+        fields = connection.scalars(text("SELECT field FROM track_value")).all()
+    engine.dispose()
+    assert fields == ["title"]
+
+
 _FAVORITE = {"field": "favorite", "op": "is", "value": True}
 
 
-def _migrate_to(engine: Engine, revision: str) -> None:
+def _migrate_to(engine: Engine, revision: str, *, down: bool = False) -> None:
     config = Config()
     config.set_main_option("script_location", MIGRATIONS)
-    with engine.begin() as connection:
-        config.attributes["connection"] = connection
-        command.upgrade(config, revision)
+    with engine.connect() as connection:
+        # As `migrate` does: rebuilding a table must not cascade into the rows that name it.
+        connection.exec_driver_sql("PRAGMA foreign_keys = OFF")
+        connection.commit()
+        with connection.begin():
+            config.attributes["connection"] = connection
+            (command.downgrade if down else command.upgrade)(config, revision)

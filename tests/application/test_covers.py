@@ -134,3 +134,32 @@ def test_the_sweep_removes_the_covers_no_track_shows_or_keeps(
     covers.sweep()
 
     assert [path.name for path in (tmp_path / "covers").iterdir()] == [cover_id(PNG)]
+
+
+def test_a_households_choice_of_no_cover_shows_the_track_with_none(
+    covers: CoverService, details: DetailsService, catalog: CatalogService, alice: Account
+) -> None:
+    track = _song(catalog)
+    covers.set_cover(track, PNG)
+
+    details.set_on_many([track], {"cover": ""})
+
+    assert catalog.get_track(alice.id, track).details.cover is None
+
+
+def test_the_sweep_keeps_a_cover_any_origin_names(
+    covers: CoverService,
+    catalog: CatalogService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    tmp_path: Path,
+) -> None:
+    track = _song(catalog)
+    (tmp_path / "covers").mkdir()
+    (tmp_path / "covers" / cover_id(PNG)).write_bytes(PNG)
+    with units.begin() as db:
+        record(db, track, Origin.VIDEO, {Field.COVER: cover_id(PNG)}, clock())
+
+    covers.sweep()
+
+    assert [path.name for path in (tmp_path / "covers").iterdir()] == [cover_id(PNG)]

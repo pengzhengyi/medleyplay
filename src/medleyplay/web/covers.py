@@ -4,7 +4,10 @@ from typing import Any, Final
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
+from medleyplay.application.covers import CoverService
+from medleyplay.application.details import DetailsService
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.covers import MAX_COVER_BYTES
 from medleyplay.web.deps import CoversDep, DetailsDep, SignedInAccount
@@ -53,8 +56,15 @@ async def set_cover(
         if len(data) > MAX_COVER_BYTES:
             message = f"A cover is at most {MAX_COVER_BYTES // (1024 * 1024)} MiB."
             raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, message)
-    covers.set_cover(TrackId(track_id), bytes(data))
-    return DetailsOut.of(details.details(TrackId(track_id)))
+    # Hashing, writing, and waiting on the database go to a thread, clear of the event loop.
+    return await run_in_threadpool(_keep_cover, TrackId(track_id), bytes(data), covers, details)
+
+
+def _keep_cover(
+    track_id: TrackId, data: bytes, covers: CoverService, details: DetailsService
+) -> DetailsOut:
+    covers.set_cover(track_id, data)
+    return DetailsOut.of(details.details(track_id))
 
 
 @router.delete("/tracks/{track_id}/cover")

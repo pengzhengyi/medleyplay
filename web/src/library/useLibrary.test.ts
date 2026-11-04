@@ -325,7 +325,7 @@ describe("saving a song's details", () => {
       trackOf(7, "BV1dm4y1s7ak", { split: true }),
       trackOf(8, "Opening", { segment_of: 7 }),
     ];
-    const after = before.map((track) => ({ ...track, album: "Live at Budokan" }));
+    const after = before.map((track) => ({ ...track, album: "Live in Osaka" }));
     let tracks = before;
     serve({
       ...signedIn(before),
@@ -340,10 +340,10 @@ describe("saving a song's details", () => {
       expect(result.current.loaded).toBe(true);
     });
 
-    await act(() => result.current.saveDetails(7, { album: "Live at Budokan" }));
+    await act(() => result.current.saveDetails(7, { album: "Live in Osaka" }));
 
     await waitFor(() => {
-      expect(result.current.tracks.get(8)?.album).toBe("Live at Budokan");
+      expect(result.current.tracks.get(8)?.album).toBe("Live in Osaka");
     });
   });
 

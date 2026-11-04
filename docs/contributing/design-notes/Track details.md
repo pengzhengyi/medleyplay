@@ -166,7 +166,8 @@ values.
 - **The web client** shows covers in the player and on the lock screen through
   the Media Session's artwork, and in *Edit details* with the household's upload;
   the table, the queue, and the album view are next.
-- **A cover no value names** is removed by the sweep at startup.
+- **A cover no value names** is removed by the sweep at startup, so one replaced
+  or removed stays on disk until the server next starts.
 
 ## Enrichers
 

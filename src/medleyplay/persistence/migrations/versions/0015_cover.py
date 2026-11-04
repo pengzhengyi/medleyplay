@@ -24,5 +24,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revert this revision."""
+    # The detail is gone too, or reading a Track's values would meet a field it never knew.
+    op.execute("DELETE FROM track_value WHERE field = 'cover'")
     with op.batch_alter_table("track") as batch:
         batch.drop_column("cover")

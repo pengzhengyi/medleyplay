@@ -142,8 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Covers** — *Edit details* uploads a JPEG, PNG, or WebP image as a song's
   cover, which the player and the lock screen show; a cover is kept once, by
-  its content, shared by the songs of an album, and removed once nothing shows
-  it. See the
+  its content, shared by the songs of an album, and removed when the server
+  next starts once nothing shows it. See the
   [Track details](docs/contributing/design-notes/Track%20details.md#covers) note.
 
 ### Changed

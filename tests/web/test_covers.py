@@ -1,5 +1,6 @@
 """The covers API: uploading the household's cover, and serving a cover by its name."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from medleyplay.application.catalog import CatalogService
@@ -84,5 +85,14 @@ def test_a_cover_no_one_kept_is_not_found(client: TestClient) -> None:
     assert client.get("/api/covers/cover.png").status_code == 404
 
 
-def test_covers_need_a_signed_in_account(client: TestClient) -> None:
-    assert client.get(f"/api/covers/{'0' * 64}").status_code == 401
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", f"/api/covers/{'0' * 64}"),
+        ("PUT", "/api/tracks/1/cover"),
+        ("DELETE", "/api/tracks/1/cover"),
+    ],
+    ids=["serving", "uploading", "removing"],
+)
+def test_covers_need_a_signed_in_account(client: TestClient, method: str, path: str) -> None:
+    assert client.request(method, path, content=PNG).status_code == 401

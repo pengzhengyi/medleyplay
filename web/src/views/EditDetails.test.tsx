@@ -449,6 +449,40 @@ describe("editing a song's details", () => {
       expect(within(dialog).queryByRole("img", { name: "Cover" })).toBeNull();
     });
 
+    it("refuses an image over 10 MiB without sending it", async () => {
+      const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7)));
+      const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, { onSetCover });
+      const large = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "Poster.png", {
+        type: "image/png",
+      });
+
+      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), large);
+
+      expect(onSetCover).not.toHaveBeenCalled();
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("at most 10 MiB");
+    });
+
+    it("keeps the dialog's other actions waiting while a cover uploads", async () => {
+      const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
+        onSetCover: () => new Promise<never>(() => undefined),
+      });
+
+      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), PNG);
+
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+      expect(within(dialog).getByText("Saving the cover…")).toBeInTheDocument();
+    });
+
+    it("says the household chose no cover over a found one", async () => {
+      const { dialog } = await renderDialog(
+        detailsOf(7, { cover: "" }, { video: { cover: COVER } }),
+      );
+
+      expect(within(dialog).queryByRole("img", { name: "Cover" })).toBeNull();
+      expect(within(dialog).getByText("None, as you chose")).toBeInTheDocument();
+    });
+
     it("says why an image was refused", async () => {
       const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
         onSetCover: () =>

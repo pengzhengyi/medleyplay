@@ -53,6 +53,9 @@ const RANGES: Partial<Record<Detail, readonly [number, number]>> = {
 const MAX_VIDEO_TITLE = 1_000;
 const MAX_DESCRIPTION = 20_000;
 
+/** The largest cover the server takes, checked before an image is sent. */
+const MAX_COVER_BYTES = 10 * 1024 * 1024;
+
 /**
  * Edit `track`'s details, read with `load`; `onSave` sends the household's values
  * changed, `null` dropping one, and `onReadVideo` a video's pasted text.
@@ -185,13 +188,20 @@ export function EditDetails({
             <CoverBox
               details={details}
               busy={saving || reading || covering}
+              covering={covering}
               error={coverError}
-              onChoose={(image) => void changeCover(() => onSetCover(image))}
+              onChoose={(image) => {
+                if (image.size > MAX_COVER_BYTES) {
+                  setCoverError("A cover is at most 10 MiB.");
+                } else {
+                  void changeCover(() => onSetCover(image));
+                }
+              }}
               onRemove={() => void changeCover(onRemoveCover)}
             />
             <PasteVideo
               read={details.video_text}
-              busy={saving || reading}
+              busy={saving || reading || covering}
               reading={reading}
               note={readNote}
               error={readError}
@@ -220,7 +230,7 @@ export function EditDetails({
           <button
             type="button"
             className="secondary outline dialog-button"
-            disabled={saving || reading}
+            disabled={saving || reading || covering}
             onClick={close}
           >
             Cancel
@@ -228,7 +238,7 @@ export function EditDetails({
           <button
             type="submit"
             className="dialog-button"
-            disabled={details === undefined || saving || reading}
+            disabled={details === undefined || saving || reading || covering}
             aria-busy={saving}
           >
             Save
@@ -243,12 +253,15 @@ export function EditDetails({
 function CoverBox({
   details,
   busy,
+  covering,
   error,
   onChoose,
   onRemove,
 }: {
   readonly details: Details;
   readonly busy: boolean;
+  /** Whether the household's cover is being saved or removed. */
+  readonly covering: boolean;
   readonly error: string;
   readonly onChoose: (image: File) => void;
   readonly onRemove: () => void;
@@ -273,9 +286,11 @@ function CoverBox({
         >
           {shown === undefined
             ? "No cover"
-            : yours
-              ? "Yours"
-              : `From ${ORIGIN_LABELS[shown.origin]}`}
+            : !yours
+              ? `From ${ORIGIN_LABELS[shown.origin]}`
+              : cover === undefined
+                ? "None, as you chose"
+                : "Yours"}
         </small>
         <label
           className={
@@ -306,6 +321,11 @@ function CoverBox({
           >
             Remove your cover
           </button>
+        )}
+        {covering && (
+          <small className="cover-box-status" role="status">
+            Saving the cover…
+          </small>
         )}
         {error !== "" && (
           <p className="error" role="alert">

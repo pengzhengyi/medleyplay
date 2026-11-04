@@ -168,3 +168,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A too-large id in a request is refused, not a server error.
 - On a phone, a long Library's song titles take the row's width again, rather
   than a few letters of it.
+- A removed Track's id is never given to a new one, so a queue still naming it
+  can't play another song in its place.

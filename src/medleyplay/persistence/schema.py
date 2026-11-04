@@ -86,9 +86,11 @@ class SessionRow(Base):
 
 
 class TrackRow(Base):
-    """A piece of music."""
+    """A piece of music; its ids are never reused."""
 
     __tablename__ = "track"
+    # So a queue or a Playlist still naming a removed Track never plays another in its place.
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(512))

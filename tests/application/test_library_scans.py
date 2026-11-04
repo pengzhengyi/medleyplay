@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -27,6 +28,10 @@ from medleyplay.programs.info_json import InfoChapter
 from medleyplay.programs.scan_library import LibraryScan, ScannedFile
 from tests.support.factories import InfoJsonFactory, ScannedFileFactory
 from tests.support.fakes import FakeClock
+from tests.support.libraries import library_row
+
+NO_COVERS = Path("/no/covers/kept/here")
+"""The cover folder of a scan that finds no covers; a scan that kept one there would fail."""
 
 
 @dataclass(frozen=True)
@@ -38,27 +43,11 @@ class Seen:
     track_id: int
 
 
-def _library(units: sessionmaker[Session], clock: FakeClock) -> LibraryId:
-    with units.begin() as db:
-        row = LibraryRow(
-            name="Music",
-            kind="folder",
-            path="/music",
-            state="online",
-            message="",
-            file_count=0,
-            added_at=clock(),
-        )
-        db.add(row)
-        db.flush()
-        return LibraryId(row.id)
-
-
 def _scan(
     units: sessionmaker[Session], clock: FakeClock, library_id: LibraryId, *files: ScannedFile
 ) -> None:
     with units.begin() as db:
-        apply_scan(db, library_id, LibraryScan(readable=True, files=files), clock)
+        apply_scan(db, library_id, LibraryScan(readable=True, files=files), clock, NO_COVERS)
 
 
 def _catalog(units: sessionmaker[Session]) -> dict[str, Seen]:
@@ -81,7 +70,7 @@ def _library_row(units: sessionmaker[Session], library_id: LibraryId) -> Library
 
 @pytest.fixture
 def library(units: sessionmaker[Session], clock: FakeClock) -> LibraryId:
-    return _library(units, clock)
+    return library_row(units, clock)
 
 
 def test_each_new_file_becomes_a_track_with_its_tags(
@@ -263,7 +252,11 @@ def test_an_unreadable_root_marks_the_library_offline_and_no_file_missing(
 
     with units.begin() as db:
         apply_scan(
-            db, library, LibraryScan(readable=False, message="/music isn't a folder."), clock
+            db,
+            library,
+            LibraryScan(readable=False, message="/music isn't a folder."),
+            clock,
+            NO_COVERS,
         )
     row = _library_row(units, library)
 
@@ -327,7 +320,7 @@ def test_tracks_of_an_offline_library_are_listed_offline(
     _scan(units, clock, library, ScannedFileFactory.song("a.wav", "A"))
 
     with units.begin() as db:
-        apply_scan(db, library, LibraryScan(readable=False, message="unplugged"), clock)
+        apply_scan(db, library, LibraryScan(readable=False, message="unplugged"), clock, NO_COVERS)
 
     assert _availability(catalog) == {"A": Availability.OFFLINE}
 

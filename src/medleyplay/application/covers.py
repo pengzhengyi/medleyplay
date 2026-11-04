@@ -26,6 +26,29 @@ COVERS_FOLDER = "covers"
 """Where covers are kept in the data folder."""
 
 
+def keep_cover(folder: Path, name: str, data: bytes) -> None:
+    """Keep the image `data` in `folder` as the cover `name`, unless it is already there.
+
+    `name` is `cover_id(data)`. The bytes are written aside under a name of their
+    own, flushed to the disk, and moved into place, so neither a reader nor a crash
+    leaves half a cover under its name.
+    """
+    path = folder / name
+    if path.is_file():
+        return
+    folder.mkdir(parents=True, exist_ok=True)
+    handle, aside = tempfile.mkstemp(dir=folder, suffix=".tmp")
+    try:
+        with os.fdopen(handle, "wb") as file:
+            file.write(data)
+            file.flush()
+            os.fsync(file.fileno())
+        Path(aside).replace(path)
+    except BaseException:
+        Path(aside).unlink(missing_ok=True)
+        raise
+
+
 class CoverService:
     """Keep covers, set and remove the household's, and sweep those no value names."""
 
@@ -57,7 +80,7 @@ class CoverService:
         name = cover_id(data)
         with self._units.begin() as db:
             set_household(db, track_id, {Field.COVER: name}, self._clock())
-            self._keep(name, data)
+            keep_cover(self._folder, name, data)
         self._changed()
         return name
 
@@ -93,24 +116,6 @@ class CoverService:
             if file.name not in named:
                 with contextlib.suppress(OSError):
                     file.unlink()
-
-    def _keep(self, name: str, data: bytes) -> None:
-        # Written aside under a name of its own, flushed to the disk, and moved into
-        # place, so neither a reader nor a crash leaves half a cover under its name.
-        path = self._folder / name
-        if path.is_file():
-            return
-        self._folder.mkdir(parents=True, exist_ok=True)
-        handle, aside = tempfile.mkstemp(dir=self._folder, suffix=".tmp")
-        try:
-            with os.fdopen(handle, "wb") as file:
-                file.write(data)
-                file.flush()
-                os.fsync(file.fileno())
-            Path(aside).replace(path)
-        except BaseException:
-            Path(aside).unlink(missing_ok=True)
-            raise
 
     def _changed(self) -> None:
         if self._on_change is not None:

@@ -13,16 +13,28 @@ RATE = 8000
 
 @dataclass(frozen=True)
 class Song:
-    """What a test WAV file says about its music, and how long it is."""
+    """What a test audio file says about its music, how long it is, and its front cover.
+
+    A `cover` of no bytes means the file has none.
+    """
 
     title: str = "Intro"
     artist: str = "The Band"
     album: str = "Blue"
     seconds: float = 1.0
+    cover: bytes = b""
 
 
 def wav_bytes(song: Song) -> bytes:
-    """Return a silent mono WAV file whose RIFF `INFO` chunk carries the song's tags."""
+    """Return a silent mono WAV file whose RIFF `INFO` chunk carries the song's tags.
+
+    A song with a cover gets an `id3 ` chunk after them, holding the cover:
+
+        RIFF WAVE
+          fmt, data    one second of silence
+          LIST INFO    INAM, IART, IPRD
+          id3          ID3v2.3 tag with one APIC frame, the front cover
+    """
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as audio:
         audio.setnchannels(1)
@@ -35,8 +47,38 @@ def wav_bytes(song: Song) -> bytes:
         text = value.encode() + b"\0"
         info += key.encode() + struct.pack("<I", len(text)) + text + (b"\0" * (len(text) % 2))
     data += b"LIST" + struct.pack("<I", len(info)) + info
+    if song.cover:
+        tag = id3_tag(song)
+        data += b"id3 " + struct.pack("<I", len(tag)) + tag + (b"\0" * (len(tag) % 2))
     struct.pack_into("<I", data, 4, len(data) - 8)
     return bytes(data)
+
+
+def mp3_bytes(song: Song) -> bytes:
+    """Return an MP3 file: an ID3v2.3 tag with the song's tags and cover, then silent frames."""
+    frame = b"\xff\xfb\x90\x00" + bytes(413)
+    return id3_tag(song) + frame * max(1, round(song.seconds * 38))
+
+
+def id3_tag(song: Song) -> bytes:
+    """Return an ID3v2.3 tag holding the song's title, artist, album, and cover.
+
+    The cover is an `APIC` frame of picture type 3, the front cover, with the media
+    type `image/jpeg`, whatever the bytes are.
+    """
+    frames = b"".join(
+        _id3_frame(name, b"\x03" + value.encode())
+        for name, value in (("TIT2", song.title), ("TPE1", song.artist), ("TALB", song.album))
+    )
+    if song.cover:
+        frames += _id3_frame("APIC", b"\x00image/jpeg\x00\x03\x00" + song.cover)
+    size = len(frames)
+    syncsafe = bytes((size >> shift) & 0x7F for shift in (21, 14, 7, 0))
+    return b"ID3\x03\x00\x00" + syncsafe + frames
+
+
+def _id3_frame(name: str, content: bytes) -> bytes:
+    return name.encode() + struct.pack(">I", len(content)) + b"\0\0" + content
 
 
 def folder_of(root: Path, songs: Mapping[str, Song]) -> Path:

@@ -142,13 +142,18 @@ def _unread(before: object, error: str) -> dict[str, object]:
 
 
 def _keep(copy: CoverFile, folder: Path) -> str:
-    """Keep the scan's copy of a cover in `folder` unless it is already there; return its name."""
-    if is_cover_id(copy.name) and (folder / copy.name).is_file():
+    """Keep the scan's copy of a cover in `folder` unless it is already there; return its name.
+
+    A copy is named by its bytes, so only a file whose name and bytes agree is read
+    as one: a path the Job reported is never taken on its word.
+    """
+    if not is_cover_id(copy.name) or Path(copy.path).name != copy.name:
+        raise _NotACoverError
+    if (folder / copy.name).is_file():
         return copy.name
     with Path(copy.path).open("rb") as file:
         data = file.read(MAX_COVER_BYTES + 1)
-    if len(data) > MAX_COVER_BYTES or cover_type(data) is None:
+    if len(data) > MAX_COVER_BYTES or cover_type(data) is None or cover_id(data) != copy.name:
         raise _NotACoverError
-    name = cover_id(data)
-    keep_cover(folder, name, data)
-    return name
+    keep_cover(folder, copy.name, data)
+    return copy.name

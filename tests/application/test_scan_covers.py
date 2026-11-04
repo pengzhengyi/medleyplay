@@ -14,6 +14,7 @@ from medleyplay.domain.covers import cover_id
 from medleyplay.domain.details import Field, Origin, Shown
 from medleyplay.domain.libraries import LibraryId
 from medleyplay.persistence.schema import SourceRow, TrackRow
+from medleyplay.programs.scan_covers import CoverFile
 from medleyplay.programs.scan_library import LibraryScan, ScannedFile
 from tests.support.factories import CoverImageFactory, ScannedFileFactory
 from tests.support.fakes import FakeClock
@@ -138,6 +139,19 @@ def test_an_embedded_cover_wins_over_an_image_beside_the_file(
     )
 
     assert _shown(units, clock)[Field.COVER] == Shown(cover_id(BREMEN), Origin.FILES)
+
+
+def test_a_copy_reported_as_another_files_bytes_is_no_cover(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId, tmp_path: Path, store: Path
+) -> None:
+    elsewhere = tmp_path / "elsewhere.jpg"
+    elsewhere.write_bytes(BREMEN)
+    misnamed = CoverFile(name=cover_id(SUPERCELL), path=str(elsewhere))
+
+    _scan(units, clock, library, store, ScannedFileFactory.song(SONG, embedded_cover=misnamed))
+
+    assert _cover_of(units) is None
+    assert _stored(store) == {}
 
 
 def test_a_file_with_neither_has_no_cover(

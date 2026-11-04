@@ -99,6 +99,8 @@ class TrackRow(Base):
     disc_number: Mapped[int | None]
     year: Mapped[int | None]
     genre: Mapped[str] = mapped_column(String(512), default="")
+    cover: Mapped[str | None] = mapped_column(String(64))
+    """The cover shown, by name, if any."""
     duration_ms: Mapped[int | None]
     added_at: Mapped[datetime] = mapped_column(UtcDateTime)
 

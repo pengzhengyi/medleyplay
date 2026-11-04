@@ -8,7 +8,7 @@
 
 import { type RefObject, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
-import { ApiError, type PlaybackAnswer, type Track, api } from "../api";
+import { ApiError, type PlaybackAnswer, type Track, api, coverUrl } from "../api";
 import { newId } from "../ids";
 import { PlayTime, countsAsPlayed } from "./playCount";
 import { EMPTY, type Entry, type Queue, type Repeat, current, following, reduce } from "./queue";
@@ -485,7 +485,12 @@ export function usePlayer(
       navigator.mediaSession.metadata =
         track === undefined
           ? null
-          : new MediaMetadata({ title: track.title, artist: track.artist, album: track.album });
+          : new MediaMetadata({
+              title: track.title,
+              artist: track.artist,
+              album: track.album,
+              artwork: track.cover ? [{ src: coverUrl(track.cover) }] : [],
+            });
     }
   }, [track]);
   useEffect(() => {

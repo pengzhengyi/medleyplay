@@ -32,11 +32,26 @@ export interface Track {
   readonly segment_of: number | null;
   /** Whether this Track's file is split into songs, which then stand for it. */
   readonly split: boolean;
+  /** The cover shown, by name, served at `coverUrl(cover)`. */
+  readonly cover: string | null;
+}
+
+/** Return where the cover named `cover` is served. */
+export function coverUrl(cover: string): string {
+  return `/api/covers/${cover}`;
 }
 
 /** A detail of a Track the household can edit. */
 export type Detail =
-  "title" | "artist" | "album" | "album_artist" | "track_number" | "disc_number" | "year" | "genre";
+  | "title"
+  | "artist"
+  | "album"
+  | "album_artist"
+  | "track_number"
+  | "disc_number"
+  | "year"
+  | "genre"
+  | "cover";
 
 /** Where a value came from, the first shown when several give one. */
 export type Origin = "household" | "files" | "musicbrainz" | "video" | "album_file" | "file_name";
@@ -277,6 +292,15 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
+/** Send `image` as the request's body, as it is. */
+async function send<T>(method: string, path: string, image: Blob): Promise<T> {
+  const response = await fetch(path, { method, credentials: "same-origin", body: image });
+  if (!response.ok) {
+    throw new ApiError(response.status, await detailOf(response));
+  }
+  return (await response.json()) as T;
+}
+
 /** Say why the server refused: its own words, each check a request failed, or its status. */
 async function detailOf(response: Response): Promise<string> {
   const status = response.statusText || `The server refused this (${String(response.status)}).`;
@@ -322,6 +346,11 @@ export const api = {
   /** Read a video's pasted title and description as the Track's `video` values. */
   readVideoText: (trackId: number, text: VideoText) =>
     call<VideoRead>("POST", `/api/tracks/${String(trackId)}/video-text`, text),
+  /** Make `image` the household's cover for the Track. */
+  setCover: (trackId: number, image: Blob) =>
+    send<Details>("PUT", `/api/tracks/${String(trackId)}/cover`, image),
+  /** Drop the household's cover for the Track, so the next origin's shows. */
+  removeCover: (trackId: number) => call<Details>("DELETE", `/api/tracks/${String(trackId)}/cover`),
   /** The songs a Track's file is split into, and the lists found for it. */
   songs: (trackId: number) => call<Songs>("GET", `/api/tracks/${String(trackId)}/songs`),
   /** Make `rows` the file's songs: each kept by its id, the others new, the rest removed. */

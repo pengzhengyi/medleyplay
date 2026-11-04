@@ -14,6 +14,10 @@ async function renderDialog(
   onReadVideo = vi.fn<(text: VideoText) => Promise<VideoRead>>(() =>
     Promise.reject(new Error("No video read in this test.")),
   ),
+  covers: {
+    onSetCover?: (image: Blob) => Promise<Details>;
+    onRemoveCover?: () => Promise<Details>;
+  } = {},
 ) {
   const onClose = vi.fn();
   render(
@@ -22,6 +26,10 @@ async function renderDialog(
       load={() => Promise.resolve(details)}
       onSave={onSave}
       onReadVideo={onReadVideo}
+      onSetCover={covers.onSetCover ?? (() => Promise.reject(new Error("No cover in this test.")))}
+      onRemoveCover={
+        covers.onRemoveCover ?? (() => Promise.reject(new Error("No cover in this test.")))
+      }
       onClose={onClose}
     />,
   );
@@ -213,6 +221,8 @@ describe("editing a song's details", () => {
         load={() => Promise.reject(new ApiError(404, "There is no Track 7."))}
         onSave={vi.fn()}
         onReadVideo={vi.fn()}
+        onSetCover={vi.fn()}
+        onRemoveCover={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -393,6 +403,95 @@ describe("editing a song's details", () => {
         "The description is too long.",
       );
       expect(box(dialog, "Album")).toHaveValue("");
+    });
+  });
+
+  describe("the cover", () => {
+    const COVER = "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291";
+    /** A PNG image the household chose. */
+    const PNG = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "Bremen.png", {
+      type: "image/png",
+    });
+
+    it("shows the cover and where it came from", async () => {
+      const { dialog } = await renderDialog(detailsOf(7, {}, { video: { cover: COVER } }));
+
+      expect(within(dialog).getByRole("img", { name: "Cover" })).toHaveAttribute(
+        "src",
+        `/api/covers/${COVER}`,
+      );
+      expect(within(dialog).getByText("From the video")).toBeInTheDocument();
+    });
+
+    it("uploads an image chosen as the household's cover, and shows it", async () => {
+      const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7, { cover: COVER })));
+      const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, { onSetCover });
+
+      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), PNG);
+
+      expect(onSetCover).toHaveBeenCalledExactlyOnceWith(PNG);
+      expect(await within(dialog).findByRole("img", { name: "Cover" })).toHaveAttribute(
+        "src",
+        `/api/covers/${COVER}`,
+      );
+      expect(within(dialog).getByText("Yours")).toBeInTheDocument();
+    });
+
+    it("removes the household's cover", async () => {
+      const onRemoveCover = vi.fn(() => Promise.resolve(detailsOf(7)));
+      const { dialog } = await renderDialog(detailsOf(7, { cover: COVER }), undefined, undefined, {
+        onRemoveCover,
+      });
+
+      await userEvent.click(within(dialog).getByRole("button", { name: "Remove your cover" }));
+
+      expect(onRemoveCover).toHaveBeenCalledOnce();
+      expect(within(dialog).queryByRole("img", { name: "Cover" })).toBeNull();
+    });
+
+    it("refuses an image over 10 MiB without sending it", async () => {
+      const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7)));
+      const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, { onSetCover });
+      const large = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "Poster.png", {
+        type: "image/png",
+      });
+
+      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), large);
+
+      expect(onSetCover).not.toHaveBeenCalled();
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("at most 10 MiB");
+    });
+
+    it("keeps the dialog's other actions waiting while a cover uploads", async () => {
+      const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
+        onSetCover: () => new Promise<never>(() => undefined),
+      });
+
+      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), PNG);
+
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+      expect(within(dialog).getByText("Saving the cover…")).toBeInTheDocument();
+    });
+
+    it("says the household chose no cover over a found one", async () => {
+      const { dialog } = await renderDialog(
+        detailsOf(7, { cover: "" }, { video: { cover: COVER } }),
+      );
+
+      expect(within(dialog).queryByRole("img", { name: "Cover" })).toBeNull();
+      expect(within(dialog).getByText("None, as you chose")).toBeInTheDocument();
+    });
+
+    it("says why an image was refused", async () => {
+      const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
+        onSetCover: () =>
+          Promise.reject(new ApiError(422, "A cover is a JPEG, PNG, or WebP image.")),
+      });
+
+      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), PNG);
+
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent("JPEG, PNG, or WebP");
     });
   });
 });

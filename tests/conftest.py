@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.events import Events
@@ -108,6 +109,11 @@ def details(units: sessionmaker[Session], clock: FakeClock) -> DetailsService:
 @pytest.fixture
 def songs(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> SongsService:
     return SongsService(units, clock, changes.append)
+
+
+@pytest.fixture
+def covers(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> CoverService:
+    return CoverService(units, clock, tmp_path / "data" / "covers")
 
 
 @pytest.fixture
@@ -258,6 +264,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     mode: ModeService,
     details: DetailsService,
     songs: SongsService,
+    covers: CoverService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -276,6 +283,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         mode=mode,
         details=details,
         songs=songs,
+        covers=covers,
     )
 
 

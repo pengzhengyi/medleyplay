@@ -74,6 +74,7 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     downloaded: false,
     segment_of: null,
     split: false,
+    cover: null,
     ...change,
   };
 }

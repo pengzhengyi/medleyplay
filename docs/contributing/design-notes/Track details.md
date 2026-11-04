@@ -154,13 +154,20 @@ values.
   at most 10 MiB.
 - **Where covers come from:** the file's tags; an image beside the file with its
   name; the video's cover, through the file beside it; and the household's
-  upload.
+  upload. The upload is built, in *Edit details*; reading covers in a scan is
+  next.
+- **A cover is a detail** like the others, its value the cover's name, and one of
+  the album fields, so it comes from the origin naming the album and a split
+  file's songs take their file's. The household may also name an existing cover,
+  or none with empty text.
 - **Served** with the type its bytes say, `nosniff`, and
   `Cache-Control: private, max-age=31536000, immutable`, since its name is its
   content.
-- **The web client** shows covers in the table, the player, the queue, and the
-  album view, and on the lock screen through the Media Session's artwork.
-- **A cover no value names** is removed by the sweep at startup.
+- **The web client** shows covers in the player and on the lock screen through
+  the Media Session's artwork, and in *Edit details* with the household's upload;
+  the table, the queue, and the album view are next.
+- **A cover no value names** is removed by the sweep at startup, so one replaced
+  or removed stays on disk until the server next starts.
 
 ## Enrichers
 
@@ -202,7 +209,8 @@ harm the core, and each is turned on or off like any plugin.
 | `POST /api/tracks/details` | Signed in | Sets the given household values on many Tracks |
 | `POST /api/tracks/{id}/video-text` | Signed in | Reads a pasted title and description as the `video` origin; answers the details and the songs listed |
 | `GET /api/covers/{id}` | Signed in | A cover's image |
-| `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body |
+| `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body; answers the details |
+| `DELETE /api/tracks/{id}/cover` | Signed in | Drops the household's cover, so the next origin's shows |
 
 Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 `genre`.

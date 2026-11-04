@@ -2096,6 +2096,65 @@ dialog.modal::backdrop {
   resize: vertical;
 }
 
+/* The cover in Edit details: the image, where it came from, and what to do with it. */
+
+.cover-box {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.cover-box .cover-box-image {
+  width: 5.5rem;
+  height: 5.5rem;
+  font-size: 2rem;
+}
+
+.cover-box-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  min-width: 0;
+}
+
+.cover-box-origin,
+.cover-box-status {
+  flex-basis: 100%;
+}
+
+.cover-box-status {
+  color: var(--muted);
+}
+
+.edit-details .cover-upload,
+.edit-details .cover-remove {
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--pico-border-radius);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.edit-details .cover-upload.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.edit-details .cover-upload:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 /* Pasting a video's title and description, folded away until wanted. */
 
 .paste-video {

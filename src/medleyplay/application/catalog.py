@@ -461,6 +461,7 @@ def _to_track(
             disc_number=track.disc_number,
             year=track.year,
             genre=track.genre,
+            cover=track.cover,
         ),
         added_at=track.added_at,
         favorite=state is not None and state.favorite,

@@ -20,7 +20,7 @@ import {
 } from "@phosphor-icons/react";
 import { useState } from "react";
 
-import type { Track } from "../api";
+import { type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
 import { repeatAfter } from "../player/queue";
 import type { Player } from "../player/usePlayer";
@@ -58,7 +58,11 @@ export function PlayerBar({
       <SeekBar position={position} duration={duration} onSeek={player.seek} />
       <div className="now">
         <span className="cover" aria-hidden>
-          <MusicNotesIcon weight="duotone" />
+          {track?.cover ? (
+            <img src={coverUrl(track.cover)} alt="" />
+          ) : (
+            <MusicNotesIcon weight="duotone" />
+          )}
         </span>
         <div className="names">
           <strong>{track?.title ?? "Nothing playing"}</strong>

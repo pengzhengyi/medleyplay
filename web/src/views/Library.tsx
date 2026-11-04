@@ -315,6 +315,8 @@ export function Library({
             setNotice(`Saved the details of “${editing.title}”.`);
           }}
           onReadVideo={(text) => library.readVideoText(editing.id, text)}
+          onSetCover={(image) => library.setCover(editing.id, image)}
+          onRemoveCover={() => library.removeCover(editing.id)}
           onClose={() => {
             setEditing(undefined);
           }}

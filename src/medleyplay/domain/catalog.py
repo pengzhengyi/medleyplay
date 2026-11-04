@@ -109,6 +109,8 @@ class TrackDetails:
     disc_number: int | None = None
     year: int | None = None
     genre: str = ""
+    cover: str | None = None
+    """The cover shown, by name, if any."""
 
 
 @dataclass(frozen=True)

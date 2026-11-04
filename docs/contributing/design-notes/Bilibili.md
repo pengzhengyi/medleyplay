@@ -13,6 +13,7 @@
 - [Where this stands](#where-this-stands)
 - [Extension points](#extension-points)
 - [Linked accounts](#linked-accounts)
+- [A proxy](#a-proxy)
 - [Links](#links)
 - [Adding from a link](#adding-from-a-link)
 - [Downloads](#downloads)
@@ -45,6 +46,11 @@ nightly get *HTTP 412 Precondition Failed* for the video page, and yutto 2.3.1
 signs in but gets an HTTP error for the video's details. A 412 is Bilibili's
 answer to a client it suspects, so the live check waits for it to stop; nothing
 here tries to get past it.
+
+In November 2026 the household downloaded its videos with yt-dlp's own command
+through a proxy in China, which the site answers. So medleyplay takes the
+household's proxy as a setting; see [A proxy](#a-proxy). The live check of 5b is
+the household's, through the app, once a proxy is set.
 
 This overrides the MVP's step 0, which had the Bilibili steps wait for the fix:
 everything but the tools can be built and tested without Bilibili. Until 5b,
@@ -153,6 +159,35 @@ sequenceDiagram
 - **Plain HTTP:** the pasted file crosses the LAN in the clear, as the session
   cookie does; see [Architecture](Architecture.md#deliberately-left-out).
 
+## A proxy
+
+The household may reach Bilibili through a proxy of its own, as it does with
+yt-dlp's command. medleyplay passes one proxy to the tool and does nothing more.
+
+- **One setting, for admins:** *Settings → Bilibili → Proxy* takes one URL,
+  `http`, `https`, `socks5`, or `socks5h`, with a host, a port, and optionally a
+  user and password, at most 512 characters. Empty, the default, means no proxy.
+  Saving checks only its shape; nothing is fetched to try it.
+- **Kept in the Keychain,** since it may hold a password, under the name
+  `proxy:bilibili`, and in the database only whether one is set and its
+  revision. The API shows it back as its scheme, host, and port, and whether it
+  has a login, never the password.
+- **Used for every request the bilibili plugin makes:** yt-dlp's `read` and
+  `download`, and the short-link hops. Nothing else uses it, and the plugin still
+  reads no proxy from the environment.
+- **Reaching the plugin:** `read` and `canonicalize` run in the host, so the core
+  passes the proxy with each call, and the plugin keeps none. A download Job
+  gets it as it gets a login: the runner copies it as the Job starts into
+  `proxy.txt` in the Job's working folder, readable by its owner alone, which is
+  removed with the folder.
+- **It changes nothing else:** a refusal through the proxy, such as a 412, is a
+  refusal as before, with the same message and circuit breaker; nothing retries
+  without the proxy, through another, or by other means. There is one proxy, not
+  a list.
+- **Kept out of messages,** as a login is: a failure or progress message, or a
+  plugin's fault reason, that holds the proxy's password, as written or
+  URL-decoded, has it replaced before it is stored.
+
 ## Links
 
 - **The core recognizes a link** before any plugin sees it. It must be `http` or
@@ -170,7 +205,7 @@ sequenceDiagram
   request as `https://b23.tv/<code>` from a code of letters and digits, never
   fetching the pasted text, and follows one redirect at a time, at most three,
   checking each hop against its own copy of the allowlist before fetching it,
-  with no cookies, no proxy, and no body read. Each hop waits at most a second,
+  with no cookies, the household's proxy if one is set, and no body read. Each hop waits at most a second,
   so the three stay inside the call's 5-second deadline. The plugin returns the link it
   ended on, and the core checks that link with its full rules again.
 - **yt-dlp is handed a URL the plugin builds** from the `BV` id and the part,
@@ -359,6 +394,9 @@ yutto is GPL-3.0 and medleyplay is MIT.
 | `POST /api/links` | Signed in | Adds the chosen parts as Tracks and starts their Downloads |
 | `GET /api/events` | Signed in | `ready`, then a `job` event each time a Job changes, over SSE |
 | `POST /api/tracks/{id}/playback` | Signed in | Now also plays a Download, or answers *preparing* with its Job |
+| `GET /api/proxies/bilibili` | Admin | Whether a proxy is set: its scheme, host, port, and whether it has a login |
+| `PUT /api/proxies/bilibili` | Admin | Sets the proxy from its URL; 422 for a URL of another shape |
+| `DELETE /api/proxies/bilibili` | Admin | Removes the proxy; 204, also when there is none |
 
 ## Testing
 

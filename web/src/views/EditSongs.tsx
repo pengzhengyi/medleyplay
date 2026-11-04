@@ -37,7 +37,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
-import { type SubmitEvent, useEffect, useRef, useState } from "react";
+import { type SubmitEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import type { PlaybackAnswer, Song, SongRowIn, Songs, Track } from "../api";
 import { newId } from "../ids";
@@ -102,9 +102,23 @@ export function EditSongs({
   const [error, setError] = useState("");
   // Set once saving or unsplitting has said what it removes, so the next press goes ahead.
   const [confirming, setConfirming] = useState<"save" | "unsplit" | undefined>(undefined);
-  const audio = useRef<HTMLAudioElement>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  // The file stops when the dialog goes.
+  const holdAudio = useCallback((element: HTMLAudioElement) => {
+    audio.current = element;
+    return () => {
+      element.pause();
+      audio.current = null;
+    };
+  }, []);
   const [heard, setHeard] = useState(false);
   const [audioNote, setAudioNote] = useState("");
+  // Each Listen's number, so only the latest seeks and plays.
+  const listening = useRef(0);
+  // The file's answer while it is asked for, so Listens pressed meanwhile ask once.
+  const asking = useRef<Promise<PlaybackAnswer> | null>(null);
+  // While a song is dragged, Escape puts it back rather than closing the dialog.
+  const [dragging, setDragging] = useState(false);
   const sensors = useSensors(
     // A few pixels of movement first, so a tap on the handle isn't a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -135,6 +149,7 @@ export function EditSongs({
     setRows(next);
     setConfirming(undefined);
     setError("");
+    setAudioNote("");
   };
   const change = (key: string, field: "start" | "title" | "artist", value: string) => {
     edit(rows.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
@@ -164,6 +179,7 @@ export function EditSongs({
   };
 
   const listen = async (startMs: number) => {
+    const turn = ++listening.current;
     const element = audio.current;
     if (element === null) {
       return;
@@ -171,7 +187,16 @@ export function EditSongs({
     setAudioNote("");
     try {
       if (element.getAttribute("src") === null) {
-        const answer = await loadAudio(album.id);
+        asking.current ??= loadAudio(album.id);
+        let answer: PlaybackAnswer;
+        try {
+          answer = await asking.current;
+        } finally {
+          asking.current = null;
+        }
+        if (turn !== listening.current || audio.current !== element) {
+          return;
+        }
         if (answer.state !== "ready") {
           setAudioNote(
             answer.state === "preparing"
@@ -180,14 +205,21 @@ export function EditSongs({
           );
           return;
         }
-        element.src = answer.audio_url;
-        setHeard(true);
+        if (element.getAttribute("src") === null) {
+          element.src = answer.audio_url;
+          setHeard(true);
+        }
       }
       seek(element, startMs / 1000);
-      onListen();
       await element.play();
+      if (turn === listening.current) {
+        onListen();
+      }
     } catch (failure) {
-      setAudioNote(messageOf(failure));
+      // A newer file or the dialog closing stopped this play, which isn't a fault.
+      if (!(failure instanceof DOMException && failure.name === "AbortError")) {
+        setAudioNote(messageOf(failure));
+      }
     }
   };
   const startHere = (key: string) => {
@@ -258,7 +290,7 @@ export function EditSongs({
       className="edit-songs"
       labelledBy="edit-songs-title"
       describedBy="edit-songs-file"
-      locked={busy}
+      locked={busy || dragging}
       onClose={onClose}
     >
       <form className="card" onSubmit={save}>
@@ -323,23 +355,31 @@ export function EditSongs({
               </div>
             </details>
             <audio
-              ref={audio}
+              ref={holdAudio}
               className="songs-audio"
               controls
               preload="metadata"
               hidden={!heard}
             />
-            {audioNote !== "" && (
-              <p className="songs-note" role="status">
-                {audioNote}
-              </p>
-            )}
+            {/* On the page while empty, so a screen reader hears what it comes to say. */}
+            <p className="songs-note songs-audio-note" role="status">
+              {audioNote}
+            </p>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               modifiers={MODIFIERS}
               accessibility={{ announcements, screenReaderInstructions: INSTRUCTIONS }}
-              onDragEnd={drop}
+              onDragStart={() => {
+                setDragging(true);
+              }}
+              onDragEnd={(event) => {
+                setDragging(false);
+                drop(event);
+              }}
+              onDragCancel={() => {
+                setDragging(false);
+              }}
             >
               <SortableContext
                 items={rows.map((row) => row.key)}
@@ -536,7 +576,9 @@ function SongRow({
           type="button"
           className="icon"
           aria-label={`Start song ${String(place)} here`}
-          title="Start where it is playing"
+          title={
+            heard ? "Start where it is playing" : "Listen first, then start it where it is playing"
+          }
           disabled={!heard}
           onClick={onStartHere}
         >

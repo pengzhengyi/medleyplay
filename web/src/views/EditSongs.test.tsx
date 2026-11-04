@@ -50,7 +50,7 @@ async function renderEditor(
   } = {},
 ) {
   const onClose = vi.fn();
-  render(
+  const { unmount } = render(
     <EditSongs
       album={BREMEN}
       load={() => Promise.resolve(songs)}
@@ -65,7 +65,7 @@ async function renderEditor(
   const dialog = screen.getByRole("dialog");
   await within(dialog).findByRole("button", { name: "Add a song" });
   const media = fakeMedia(audioOf(dialog));
-  return { dialog, media, onSave, onUnsplit, readList, loadAudio, onListen, onClose };
+  return { dialog, media, onSave, onUnsplit, readList, loadAudio, onListen, onClose, unmount };
 }
 
 function audioOf(dialog: HTMLElement): HTMLAudioElement {
@@ -74,6 +74,25 @@ function audioOf(dialog: HTMLElement): HTMLAudioElement {
     throw new Error("The songs editor has no player.");
   }
   return audio;
+}
+
+/** An answer the test gives when it chooses, as a slow server would. */
+function later<T>() {
+  let give: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((resolve) => {
+    give = resolve;
+  });
+  return { promise, give };
+}
+
+/** The note on what listening came to, a status a screen reader hears. */
+function listeningNote(dialog: HTMLElement): HTMLElement {
+  const note = dialog.querySelector<HTMLElement>(".songs-audio-note");
+  if (note === null) {
+    throw new Error("The songs editor has no note on listening.");
+  }
+  expect(note).toHaveRole("status");
+  return note;
 }
 
 const box = (dialog: HTMLElement, name: string) => within(dialog).getByRole("textbox", { name });
@@ -277,9 +296,83 @@ describe("listening in the songs editor", () => {
 
     await press(dialog, "Listen from song 1");
 
-    expect(
-      await within(dialog).findByText("The file is being prepared; listen again in a moment."),
-    ).toHaveRole("status");
+    await waitFor(() => {
+      expect(listeningNote(dialog)).toHaveTextContent(
+        "The file is being prepared; listen again in a moment.",
+      );
+    });
+  });
+
+  it("plays from the latest song pressed while the file is still being asked for", async () => {
+    const answer = later<PlaybackAnswer>();
+    const { dialog, loadAudio } = await renderEditor(SPLIT, {
+      loadAudio: vi.fn(() => answer.promise),
+    });
+
+    await press(dialog, "Listen from song 2");
+    await press(dialog, "Listen from song 3");
+    answer.give(BREMEN_AUDIO);
+
+    await waitFor(() => {
+      expect(audioOf(dialog).paused).toBe(false);
+    });
+    expect(audioOf(dialog).currentTime).toBe(480);
+    expect(loadAudio).toHaveBeenCalledOnce();
+    expect(listeningNote(dialog)).toBeEmptyDOMElement();
+  });
+
+  it("plays nothing, and leaves the music playing, when it closes while the file is asked for", async () => {
+    const answer = later<PlaybackAnswer>();
+    const { dialog, onListen, unmount } = await renderEditor(SPLIT, {
+      loadAudio: vi.fn(() => answer.promise),
+    });
+    const audio = audioOf(dialog);
+
+    await press(dialog, "Listen from song 2");
+    unmount();
+    answer.give(BREMEN_AUDIO);
+    await Promise.resolve();
+
+    expect(audio).not.toHaveAttribute("src");
+    expect(audio.paused).toBe(true);
+    expect(onListen).not.toHaveBeenCalled();
+  });
+
+  it("stops the file when it closes", async () => {
+    const { dialog, media, unmount } = await renderEditor();
+    await press(dialog, "Listen from song 2");
+    await waitFor(() => {
+      expect(audioOf(dialog).paused).toBe(false);
+    });
+    const audio = audioOf(dialog);
+
+    unmount();
+
+    expect(audio.paused).toBe(true);
+    expect(media.pauses).toBe(1);
+  });
+
+  it("forgets what it said about listening once the songs are edited", async () => {
+    const { dialog } = await renderEditor();
+    await userEvent.clear(box(dialog, "Start of song 2"));
+    await press(dialog, "Listen from song 2");
+    expect(listeningNote(dialog)).toHaveTextContent(/Song 2 starts at no time/);
+
+    await userEvent.type(box(dialog, "Start of song 2"), "4:12");
+
+    expect(listeningNote(dialog)).toBeEmptyDOMElement();
+  });
+
+  it("keeps the dialog open when Escape puts a song being dragged back", async () => {
+    const { dialog, onClose } = await renderEditor();
+    within(dialog).getByRole("button", { name: "Reorder “Last”" }).focus();
+
+    await userEvent.keyboard(" ");
+    await userEvent.keyboard("{Escape}");
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(dialog).toHaveAttribute("open");
+    expect(box(dialog, "Title of song 3")).toHaveValue("Last");
   });
 
   it("drags a song by its handle, which says how to move it with the keys", async () => {

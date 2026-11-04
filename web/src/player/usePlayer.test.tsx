@@ -125,3 +125,24 @@ describe("playing songs inside one file", () => {
     expect(element.src).toMatch(/\/api\/sources\/7\/audio$/);
   });
 });
+
+describe("pausing for other music", () => {
+  it("pauses what plays, and stays paused when asked again", async () => {
+    serve(ANSWERS);
+    const { element, player } = renderPlayer([OTHER]);
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+    await playing(player, OTHER);
+
+    act(() => {
+      player().pause();
+    });
+    act(() => {
+      player().pause();
+    });
+
+    expect(element.paused).toBe(true);
+    expect(player().status.kind).not.toBe("playing");
+  });
+});

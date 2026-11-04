@@ -2312,6 +2312,13 @@ dialog.modal::backdrop {
 .edit-songs .card {
   width: min(44rem, calc(100vw - 2rem));
   max-height: min(48rem, 90dvh);
+
+  /* On the title instead, so the player stays at the card's very top as the rows scroll. */
+  padding-top: 0;
+}
+
+.edit-songs #edit-songs-title {
+  padding-top: 1.25rem;
 }
 
 .edit-songs .detail-input {
@@ -2351,7 +2358,7 @@ dialog.modal::backdrop {
   box-shadow: var(--float);
 }
 
-.song-handle {
+button.song-handle {
   width: 1.75rem;
   cursor: grab;
   touch-action: none;
@@ -2363,13 +2370,26 @@ dialog.modal::backdrop {
 
 /* The file, played in the dialog from a song's start. */
 .songs-audio {
+  /* Stays in view while the rows scroll under it, so a song far down can be paused. */
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
   display: block;
   width: 100%;
   margin: 0 0 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+
+  /* Hides the rows passing under it, and above it to the card's edge. */
+  box-shadow: 0 0 0 0.5rem var(--surface);
 }
 
 .songs-audio[hidden] {
   display: none;
+}
+
+.songs-audio-note:empty {
+  margin: 0;
 }
 
 .song-row-buttons {
@@ -2443,6 +2463,21 @@ dialog.modal::backdrop {
 
   .song-row-buttons .icon {
     width: 2rem;
+  }
+}
+
+@media (width < 22rem) {
+  /* Too narrow for the artist beside five buttons: the buttons take a line of their own. */
+  .song-row {
+    grid-template-areas:
+      "handle start title"
+      "handle artist artist"
+      "handle buttons buttons";
+    grid-template-columns: auto 4.5rem minmax(0, 1fr);
+  }
+
+  .song-row-buttons {
+    justify-self: end;
   }
 }
 

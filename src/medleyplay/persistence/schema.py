@@ -338,6 +338,23 @@ class LinkedAccountRow(Base):
     revision: Mapped[int] = mapped_column(Integer)
 
 
+class ProxyRow(Base):
+    """A site's proxy as it is shown; its URL, which may hold a password, is in the Keychain."""
+
+    __tablename__ = "proxy"
+    __table_args__ = (
+        CheckConstraint("scheme IN ('http', 'https', 'socks5h')", name="scheme"),
+        CheckConstraint("port BETWEEN 1 AND 65535", name="port"),
+    )
+
+    site: Mapped[str] = mapped_column(String(64), primary_key=True)
+    scheme: Mapped[str] = mapped_column(String(16))
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer)
+    has_login: Mapped[bool] = mapped_column()
+    saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class DownloadRow(Base):
     """A Source's Download: its file in the data folder's `downloads`, at the quality it got."""
 

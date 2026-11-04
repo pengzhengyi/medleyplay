@@ -11,7 +11,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.persistence.database import (
@@ -217,6 +217,61 @@ def test_undoing_the_covers_forgets_every_cover_value(tmp_path: Path) -> None:
         fields = connection.scalars(text("SELECT field FROM track_value")).all()
     engine.dispose()
     assert fields == ["title"]
+
+
+def test_a_removed_tracks_id_is_never_given_to_another(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        _add_track(connection, "Intro")
+        removed = _add_track(connection, "Outro")
+        connection.execute(text("DELETE FROM track WHERE id = :id"), {"id": removed})
+
+    with engine.begin() as connection:
+        added = _add_track(connection, "Night Drive")
+    engine.dispose()
+
+    assert added > removed
+
+
+def test_keeping_track_ids_unique_keeps_every_track_and_the_rows_naming_it(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0015")
+    with engine.begin() as connection:
+        _add_track(connection, "Intro", track_id=1)
+        _add_track(connection, "Outro", track_id=2)
+        connection.execute(
+            text(
+                "INSERT INTO track_value (track_id, origin, field, value, recorded_at)"
+                " VALUES (1, 'household', 'title', '\"Intro\"', '2026-10-01 00:00:00.000000')"
+            )
+        )
+
+    migrate(engine)
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM track WHERE id = 2"))
+        added = _add_track(connection, "Night Drive")
+        tracks = connection.execute(text("SELECT id, title FROM track ORDER BY id")).all()
+        values = connection.execute(text("SELECT track_id, field FROM track_value")).all()
+    engine.dispose()
+
+    assert added == 3
+    assert [tuple(row) for row in tracks] == [(1, "Intro"), (3, "Night Drive")]
+    assert [tuple(row) for row in values] == [(1, "title")]
+
+
+def _add_track(connection: Connection, title: str, *, track_id: int | None = None) -> int:
+    """Add a Track called `title` as SQL would, with `track_id` or the next id; return its id."""
+    added = connection.execute(
+        text(
+            "INSERT INTO track (id, title, artist, album, album_artist, genre, added_at)"
+            " VALUES (:id, :title, '', '', '', '', '2026-10-01 00:00:00.000000') RETURNING id"
+        ),
+        {"id": track_id, "title": title},
+    ).scalar_one()
+    return int(added)
 
 
 _FAVORITE = {"field": "favorite", "op": "is", "value": True}

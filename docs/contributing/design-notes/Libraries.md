@@ -76,8 +76,9 @@
   new name: a root is a Library's natural key.
 - **Registering starts a scan.**
 - **Removing a Library** cancels its scan, and removes its Sources, and any Track
-  left without a Source; playlists drop those Tracks. Library ids are never
-  reused, so a late scan of a removed Library changes nothing.
+  left without a Source; playlists drop those Tracks. Library and Track ids are
+  never reused, so a late scan of a removed Library changes nothing, and a queue
+  still naming a removed Track never plays another in its place.
 
 ## Scanning
 

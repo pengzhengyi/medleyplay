@@ -1,5 +1,7 @@
 """Image bytes the tests use as covers: each opens as its type does, then holds a label."""
 
+from pathlib import Path
+
 from medleyplay.domain.covers import MAX_COVER_BYTES
 
 
@@ -35,3 +37,14 @@ def jpeg_of_size(size: int) -> bytes:
 def oversized_jpeg() -> bytes:
     """Return a JPEG image one byte over the limit of a cover."""
     return jpeg_of_size(MAX_COVER_BYTES + 1)
+
+
+def image_beside(audio: Path, extension: str, image: bytes) -> Path:
+    """Write `image` as the file beside `audio` that has this extension, and return it.
+
+    `Music/BV1dm4y1s7ak.m4a` with `"jpg"` gets `Music/BV1dm4y1s7ak.jpg`, as yt-dlp's
+    `--write-thumbnail` names it.
+    """
+    cover = audio.with_name(f"{audio.stem}.{extension}")
+    cover.write_bytes(image)
+    return cover

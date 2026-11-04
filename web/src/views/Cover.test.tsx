@@ -32,4 +32,14 @@ describe("a cover", () => {
 
     expect(container.querySelector("img")).toBeNull();
   });
+
+  it("tries a cover again once it shows another in between", () => {
+    const { container, rerender } = render(<Cover cover={BREMEN} />);
+    fireEvent.error(container.querySelector("img") ?? document.body);
+
+    rerender(<Cover cover={null} />);
+    rerender(<Cover cover={BREMEN} />);
+
+    expect(container.querySelector("img")).toHaveAttribute("src", `/api/covers/${BREMEN}`);
+  });
 });

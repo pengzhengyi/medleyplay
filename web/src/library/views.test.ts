@@ -90,7 +90,7 @@ describe("albums", () => {
 
   it("shows an album by the first cover among its songs", () => {
     const tracks = [
-      trackOf(1, "Intro", { album: "Bremen" }),
+      trackOf(1, "Intro", { album: "Bremen", cover: "" }),
       trackOf(2, "Bremen", { album: "Bremen", cover: "b".repeat(64) }),
       trackOf(3, "Outro", { album: "Bremen", cover: "c".repeat(64) }),
       trackOf(4, "Untitled", { album: "" }),

@@ -19,6 +19,12 @@ export function Cover({
   readonly children?: ReactNode;
 }) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
+  const [named, setNamed] = useState(cover);
+  if (named !== cover) {
+    // Another cover: a failure of the one before, even of this one earlier, is forgotten.
+    setNamed(cover);
+    setFailed(undefined);
+  }
   const shown = cover !== null && cover !== "" && cover !== failed ? cover : undefined;
   return (
     <span className={className === undefined ? "cover" : `cover ${className}`} aria-hidden>

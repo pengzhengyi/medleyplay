@@ -65,7 +65,8 @@ const WHY: Record<string, string> = {
 };
 
 const STARS = [1, 2, 3, 4, 5] as const;
-const ROW_HEIGHT = 49;
+// A row with its cover, as measured; rows are measured once on screen.
+const ROW_HEIGHT = 54;
 const SAVED = "medleyplay.columns.v1";
 
 /** Compare as people read names: by locale, numbers in order, ignoring case. */

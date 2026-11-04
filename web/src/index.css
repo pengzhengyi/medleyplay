@@ -877,7 +877,7 @@ button.text:hover:not(:disabled) {
 }
 
 /* Too narrow for the album beside the title: the album gives way. */
-@container (width < 56rem) {
+@container (width < 52rem) {
   .tracks .album {
     display: none;
   }
@@ -1746,10 +1746,6 @@ button.icon.heart.on:hover,
   .player .volume input {
     width: 4rem;
   }
-
-  .tracks .album {
-    display: none;
-  }
 }
 
 @media (width <= 48rem) {
@@ -1859,11 +1855,13 @@ button.icon.heart.on:hover,
 
   .tracks .title-cell .bars {
     grid-area: bars;
+    align-self: center;
     margin-right: 0.5rem;
   }
 
   .tracks .title-cell .why {
     grid-area: why;
+    justify-self: start;
   }
 
   .tracks .title-cell button.title {

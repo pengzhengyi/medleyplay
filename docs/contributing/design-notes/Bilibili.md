@@ -44,13 +44,15 @@ A check on 2026-10-27, through each tool's normal download command, found the
 site now refusing both before either reads anything: yt-dlp 2026.10.26 and its
 nightly get *HTTP 412 Precondition Failed* for the video page, and yutto 2.3.1
 signs in but gets an HTTP error for the video's details. A 412 is Bilibili's
-answer to a client it suspects, so the live check waits for it to stop; nothing
-here tries to get past it.
+answer to a client it suspects; nothing here tries to get past a refusal, and
+none is answered by changing how medleyplay connects.
 
-In November 2026 the household downloaded its videos with yt-dlp's own command
-through a proxy in China, which the site answers. So medleyplay takes the
-household's proxy as a setting; see [A proxy](#a-proxy). The live check of 5b is
-the household's, through the app, once a proxy is set.
+In November 2026 the household downloaded its videos with yt-dlp's own command,
+through a proxy of its own in China. medleyplay can use the same path: an admin
+may set the household's proxy, which the plugin hands to the tool as its
+standard option; see [A proxy](#a-proxy). The proxy is part of how the household
+connects, set by a person, never chosen in answer to a refusal. The live check
+of 5b is the household's, through the app.
 
 This overrides the MVP's step 0, which had the Bilibili steps wait for the fix:
 everything but the tools can be built and tested without Bilibili. Until 5b,
@@ -162,31 +164,51 @@ sequenceDiagram
 ## A proxy
 
 The household may reach Bilibili through a proxy of its own, as it does with
-yt-dlp's command. medleyplay passes one proxy to the tool and does nothing more.
+yt-dlp's command. medleyplay hands that one proxy to the tool, as the tool's
+standard `proxy` option, and does nothing more.
 
-- **One setting, for admins:** *Settings → Bilibili → Proxy* takes one URL,
-  `http`, `https`, `socks5`, or `socks5h`, with a host, a port, and optionally a
-  user and password, at most 512 characters. Empty, the default, means no proxy.
-  Saving checks only its shape; nothing is fetched to try it.
-- **Kept in the Keychain,** since it may hold a password, under the name
-  `proxy:bilibili`, and in the database only whether one is set and its
-  revision. The API shows it back as its scheme, host, and port, and whether it
-  has a login, never the password.
-- **Used for every request the bilibili plugin makes:** yt-dlp's `read` and
-  `download`, and the short-link hops. Nothing else uses it, and the plugin still
-  reads no proxy from the environment.
-- **Reaching the plugin:** `read` and `canonicalize` run in the host, so the core
-  passes the proxy with each call, and the plugin keeps none. A download Job
-  gets it as it gets a login: the runner copies it as the Job starts into
-  `proxy.txt` in the Job's working folder, readable by its owner alone, which is
-  removed with the folder.
+- **One setting, for admins:** *Settings → Bilibili → Proxy* takes one URL:
+  `http`, `https`, or `socks5h`, a host, a port, and optionally a user and
+  password, at most 512 characters, with no path, query, or fragment. `socks5`
+  and `socks4` are refused, saying to use `socks5h`, since they look names up
+  outside the proxy. The URL is checked and rebuilt from its parts; nothing is
+  fetched to try it, so saving can't probe a host or contact the site. A host on
+  the LAN, or `127.0.0.1` for a tunnel, is allowed: what the proxy fetches is
+  always a URL the plugin built, for a host in the allowlist.
+- **Kept in the Keychain** under `proxy:bilibili`, since it may hold a password.
+  The database keeps its scheme, host, port, and whether it has a login, which
+  is all the API shows back. The core keeps the URL in memory once read, so a
+  call never waits on the Keychain while it holds the plugin host; a Keychain
+  that doesn't answer fails the call as a login does.
+- **Used for every request of calls keyed `bilibili`:** `canonicalize`, `read`,
+  and `download`, so yt-dlp's page, API, and media requests, and the short-link
+  hops. `check` makes no network call. No other call gets it: not a Library's,
+  the tags', or the Mode's connectivity check, which stays direct.
+- **Never from the environment:** with no proxy set, the plugin passes none and
+  reads no `HTTPS_PROXY`, system setting, or bypass list; with one set, it is used
+  for every host, with no bypass. The short-link hops use yt-dlp's networking,
+  which takes the proxy as given and supports `socks5h`, rather than urllib,
+  whose proxy handler honors `no_proxy` and would go direct without saying so.
+- **Reaching the plugin:** the proxy is a field of the `canonicalize` and `read`
+  requests, and of a download Job's start, so the plugin keeps none and nothing
+  is written to disk. A running Job keeps the proxy it started with.
 - **It changes nothing else:** a refusal through the proxy, such as a 412, is a
   refusal as before, with the same message and circuit breaker; nothing retries
-  without the proxy, through another, or by other means. There is one proxy, not
-  a list.
-- **Kept out of messages,** as a login is: a failure or progress message, or a
-  plugin's fault reason, that holds the proxy's password, as written or
-  URL-decoded, has it replaced before it is stored.
+  without the proxy, through another, or by other means, and there is one proxy,
+  not a list. Saving or removing it resets no fault, retries no Job, and clears
+  no Source's state; an admin does those as before. No message suggests a proxy.
+  A proxy that is down or refuses its login is a network failure, so a Job
+  waits, as after any network failure. Changing it forgets the ten minutes of
+  looked-up videos.
+- **Kept out of messages,** as a login is: a failure or progress message, a
+  plugin's fault reason, or a refused request's error that holds the proxy's
+  password or its `user:password@` part, as written or URL-decoded, has it
+  replaced before it is stored or answered. A host call's fault is redacted in
+  the core too, not only a Job's.
+- **What the proxy sees:** the hosts the plugin asks for, and the login's cookies
+  only inside TLS. An `http` proxy's own password crosses to it in the clear, and
+  the URL crosses the LAN in the clear when it is saved, as a pasted login does.
+  Every Account's Downloads use the admin's proxy.
 
 ## Links
 
@@ -205,9 +227,10 @@ yt-dlp's command. medleyplay passes one proxy to the tool and does nothing more.
   request as `https://b23.tv/<code>` from a code of letters and digits, never
   fetching the pasted text, and follows one redirect at a time, at most three,
   checking each hop against its own copy of the allowlist before fetching it,
-  with no cookies, the household's proxy if one is set, and no body read. Each hop waits at most a second,
-  so the three stay inside the call's 5-second deadline. The plugin returns the link it
-  ended on, and the core checks that link with its full rules again.
+  with no cookies and no body read, through the household's proxy if one is
+  set. Each hop waits at most a second, so the three stay inside the call's
+  5-second deadline. The plugin returns the link it ended on, and the core
+  checks that link with its full rules again.
 - **yt-dlp is handed a URL the plugin builds** from the `BV` id and the part,
   with only Bilibili's extractors allowed, so its generic extractor never runs.
 - **A Source's locator is `<BV id>/p<part>`,** such as `BV1Xx41117Tz/p1`; a video
@@ -394,9 +417,9 @@ yutto is GPL-3.0 and medleyplay is MIT.
 | `POST /api/links` | Signed in | Adds the chosen parts as Tracks and starts their Downloads |
 | `GET /api/events` | Signed in | `ready`, then a `job` event each time a Job changes, over SSE |
 | `POST /api/tracks/{id}/playback` | Signed in | Now also plays a Download, or answers *preparing* with its Job |
-| `GET /api/proxies/bilibili` | Admin | Whether a proxy is set: its scheme, host, port, and whether it has a login |
-| `PUT /api/proxies/bilibili` | Admin | Sets the proxy from its URL; 422 for a URL of another shape |
-| `DELETE /api/proxies/bilibili` | Admin | Removes the proxy; 204, also when there is none |
+| `GET /api/proxies/{site}` | Admin | Whether a proxy is set: its scheme, host, port, and whether it has a login |
+| `PUT /api/proxies/{site}` | Admin | Sets the proxy from the URL in the body; 422 for another shape, never echoing it; 404 for a site no plugin takes one for |
+| `DELETE /api/proxies/{site}` | Admin | Removes the proxy; 204, also when there is none |
 
 ## Testing
 

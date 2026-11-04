@@ -19,6 +19,7 @@ from medleyplay.application.playback import PlaybackService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.proxies import ProxyService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
@@ -38,6 +39,7 @@ class Services:
     libraries: LibraryService
     playback: PlaybackService
     linked: LinkedAccountService
+    proxies: ProxyService
     links: LinkService
     events: Events
     settings: SettingsService
@@ -85,6 +87,10 @@ def _linked(services: Annotated[Services, Depends(_services)]) -> LinkedAccountS
     return services.linked
 
 
+def _proxies(services: Annotated[Services, Depends(_services)]) -> ProxyService:
+    return services.proxies
+
+
 def _links(services: Annotated[Services, Depends(_services)]) -> LinkService:
     return services.links
 
@@ -128,6 +134,7 @@ JobsDep = Annotated[JobService, Depends(_jobs)]
 LibrariesDep = Annotated[LibraryService, Depends(_libraries)]
 PlaybackDep = Annotated[PlaybackService, Depends(_playback)]
 LinkedDep = Annotated[LinkedAccountService, Depends(_linked)]
+ProxiesDep = Annotated[ProxyService, Depends(_proxies)]
 LinksDep = Annotated[LinkService, Depends(_links)]
 EventsDep = Annotated[Events, Depends(_events)]
 SettingsDep = Annotated[SettingsService, Depends(_settings)]

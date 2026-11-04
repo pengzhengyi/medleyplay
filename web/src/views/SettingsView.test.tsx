@@ -34,6 +34,7 @@ function open(
   const served = serve({
     "GET /api/settings": { body: LIMIT_20 },
     "GET /api/storage": { body: USING_2 },
+    "GET /api/proxies/bilibili": { body: null },
     ...modeSettingsOf(mode, metered),
     ...routes,
   });
@@ -59,6 +60,28 @@ const network = () => within(screen.getByRole("region", { name: "Network" }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("the Bilibili section", () => {
+  it("is the admin's, with the proxy for Bilibili", async () => {
+    open(true);
+
+    const bilibili = within(screen.getByRole("region", { name: "Bilibili" }));
+
+    expect(bilibili.getByRole("heading", { name: "Proxy" })).toBeInTheDocument();
+    expect(await bilibili.findByLabelText("Proxy URL")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to Bilibili" })).toBeInTheDocument();
+  });
+
+  it("is not shown to a member, who never asks for the proxy", async () => {
+    const { calls } = open(false);
+
+    await screen.findByText("The storage limit is 20 GB, set by an admin.");
+
+    expect(screen.queryByRole("region", { name: "Bilibili" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go to Bilibili" })).toBeNull();
+    expect(calls).not.toContain("GET /api/proxies/bilibili");
+  });
 });
 
 describe("storage settings", () => {
@@ -200,7 +223,7 @@ describe("the Settings sections", () => {
 
     expect(
       screen.getAllByRole("button", { expanded: false }).map((button) => button.textContent),
-    ).toEqual(["Appearance", "Keyboard shortcuts", "Network", "Downloads and storage"]);
+    ).toEqual(["Appearance", "Keyboard shortcuts", "Network", "Downloads and storage", "Bilibili"]);
 
     await userEvent.click(screen.getByRole("button", { name: "Open all" }));
 

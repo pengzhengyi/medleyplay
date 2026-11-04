@@ -17,7 +17,12 @@ from medleyplay.application.job_runner import FIRST_RETRY, NETWORK_RETRY, JobPro
 from medleyplay.application.jobs import JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
+from medleyplay.domain.errors import (
+    ConflictError,
+    ForbiddenError,
+    KeychainUnavailableError,
+    NotFoundError,
+)
 from medleyplay.domain.jobs import JobId, JobState, Progress
 from medleyplay.persistence.schema import JobRow
 from medleyplay.plugin_host.process import HostCommand
@@ -598,3 +603,74 @@ def test_a_network_job_whose_launch_outlasts_the_mode_going_offline_is_put_back(
         _wait_until_no_job_runs(jobs.runner)
 
     assert (held.job.attempts, completed) == (0, [])
+
+
+class _Proxies:
+    """The household's proxies, as the runner finds them: one URL for each site set."""
+
+    def __init__(self, urls: dict[str, str]) -> None:
+        self.urls = urls
+        self.asked: list[str] = []
+
+    def current(self, site: str) -> str | None:
+        self.asked.append(site)
+        return self.urls.get(site)
+
+
+def test_a_job_of_a_kind_with_a_proxy_site_starts_with_that_sites_proxy(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    completed: list[str] = []
+    kind = echo_kind(completed, proxy_site="bilibili")
+    proxies = _Proxies({"bilibili": "socks5h://127.0.0.1:7890"})
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, proxies=proxies) as jobs:
+        job = jobs.submit(EchoJob(text="x", echo_proxy=True))
+        jobs.wait_for(job.id, JobState.SUCCEEDED)
+
+    assert completed == ["proxy=socks5h://127.0.0.1:7890"]
+
+
+def test_a_job_of_a_kind_without_a_proxy_site_starts_with_no_proxy(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    completed: list[str] = []
+    proxies = _Proxies({"bilibili": "socks5h://127.0.0.1:7890", "echo": "http://127.0.0.1:3128"})
+    with running_jobs(
+        units, clock, tmp_path / "jobs", kind=echo_kind(completed), proxies=proxies
+    ) as jobs:
+        job = jobs.submit(EchoJob(text="x", echo_proxy=True))
+        jobs.wait_for(job.id, JobState.SUCCEEDED)
+
+    assert completed == ["proxy=None"]
+    assert proxies.asked == []
+
+
+def test_a_job_never_has_its_proxy_in_its_stored_request(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    kind = echo_kind([], proxy_site="bilibili")
+    proxies = _Proxies({"bilibili": "socks5h://alice:hunter2@127.0.0.1:7890"})
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, proxies=proxies) as jobs:
+        job = jobs.submit(EchoJob(text="x", echo_proxy=True))
+        jobs.wait_for(job.id, JobState.SUCCEEDED)
+
+    with units() as db:
+        row = db.get_one(JobRow, job.id)
+        assert "hunter2" not in repr((row.request, row.failure_message))
+
+
+def test_a_job_whose_proxy_cannot_be_read_waits_a_minute_like_one_whose_login_cannot(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    class Locked:
+        def current(self, site: str) -> str | None:
+            message = "The Keychain didn't answer within 5 s."
+            raise KeychainUnavailableError(message)
+
+    kind = echo_kind([], proxy_site="bilibili")
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, proxies=Locked()) as jobs:
+        job = jobs.submit(EchoJob(text="x"))
+        waiting = jobs.wait_for(job.id, JobState.WAITING)
+
+    assert (waiting.job.failure_kind, waiting.job.attempts) == ("keychain", 0)
+    assert "proxy couldn't be read" in waiting.job.failure_message

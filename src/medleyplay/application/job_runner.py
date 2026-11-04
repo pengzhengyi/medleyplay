@@ -27,6 +27,7 @@ from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.errors import KeychainUnavailableError
 from medleyplay.domain.jobs import JobId, JobState, Progress
 from medleyplay.domain.linked_accounts import redact
+from medleyplay.domain.proxies import redact_proxy
 from medleyplay.persistence.schema import JobRow
 from medleyplay.plugin_api.progress import MAX_MESSAGE as MAX_PROGRESS_MESSAGE
 from medleyplay.plugin_host.job_wire import (
@@ -80,6 +81,14 @@ class Logins(Protocol):
         ...
 
 
+class Proxies(Protocol):
+    """Where the runner finds a site's proxy for a Job, as `ProxyService` provides."""
+
+    def current(self, site: str) -> str | None:
+        """Return the URL calls for `site` go through, or `None` when no proxy is set."""
+        ...
+
+
 @dataclass(frozen=True)
 class JobProcesses:
     """How to start Job processes, and where their plugins come from."""
@@ -117,6 +126,7 @@ class _Running:
     work_dir: Path
     process: ChildProcess[FromJob]
     login: _Login | None = None
+    proxy: str | None = None
     thread: threading.Thread | None = None
     held: bool = False
     """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
@@ -124,7 +134,8 @@ class _Running:
     """Its process has ended, so nothing is left to stop."""
 
     def redact(self, message: str) -> str:
-        return redact(message, self.login.lent.text if self.login else None)
+        text = redact(message, self.login.lent.text if self.login else None)
+        return redact_proxy(text, self.proxy)
 
 
 class JobRunner:
@@ -144,6 +155,7 @@ class JobRunner:
         online: Callable[[], bool] = lambda: True,
         memory_limit: int = JOB_MEMORY_LIMIT,
         logins: Logins | None = None,
+        proxies: Proxies | None = None,
         events: Events | None = None,
         network_failed: Callable[[], None] | None = None,
     ) -> None:
@@ -159,6 +171,7 @@ class JobRunner:
         self._online = online
         self._memory_limit = memory_limit
         self._logins = logins
+        self._proxies = proxies
         self._events = events
         self._network_failed = network_failed
         self._network_kinds = tuple(name for name, kind in kinds.items() if kind.needs_network)
@@ -309,11 +322,12 @@ class JobRunner:
         work_dir.mkdir(mode=0o700, exist_ok=True)
         try:
             login = self._lend(kind, login_account, work_dir)
+            proxy = self._proxy(kind)
             process = self._spawn(work_dir)
         except KeychainUnavailableError as error:
             # The Keychain can be locked or prompting; it usually answers again soon.
             shutil.rmtree(work_dir, ignore_errors=True)
-            failure = ("keychain", f"Its login couldn't be read: {error}")
+            failure = ("keychain", f"Its login or proxy couldn't be read: {error}")
             self._set(
                 job_id,
                 JobState.WAITING,
@@ -325,7 +339,7 @@ class JobRunner:
             self._settle_failure(job_id, "program", f"Its process didn't start: {error}")
             shutil.rmtree(work_dir, ignore_errors=True)
             return
-        running = _Running(job_id, kind, work_dir, process, login)
+        running = _Running(job_id, kind, work_dir, process, login, proxy)
         with self._lock:
             self._running[job_id] = running
         # The Mode may have gone Offline since the claim, before `follow_mode` could
@@ -345,10 +359,17 @@ class JobRunner:
                     request=request,  # type: ignore[arg-type] # a JSON column holds JSON
                     work_dir=str(work_dir),
                     login=str(work_dir / LOGIN_FILE) if login else None,
+                    proxy=proxy,
                 )
             )
         running.thread = threading.Thread(target=self._supervise, args=(running,), daemon=True)
         running.thread.start()
+
+    def _proxy(self, kind: AnyJobKind) -> str | None:
+        # The Job keeps the proxy it starts with; it goes to its process, never to disk.
+        if kind.proxy_site is None or self._proxies is None:
+            return None
+        return self._proxies.current(kind.proxy_site)
 
     def _lend(
         self, kind: AnyJobKind, account_id: AccountId | None, work_dir: Path

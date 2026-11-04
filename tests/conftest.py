@@ -27,6 +27,7 @@ from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.proxies import ProxyService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
@@ -244,8 +245,11 @@ def links(
     catalog: CatalogService,
     downloads: DownloadService,
     online_switch: OnlineSwitch,
+    proxies: ProxyService,
 ) -> LinkService:
-    return LinkService(units, clock, plugins, catalog, downloads, online_switch)
+    links = LinkService(units, clock, plugins, catalog, downloads, online_switch, proxies)
+    proxies.listen(links.forget_lookups)
+    return links
 
 
 @pytest.fixture
@@ -276,6 +280,11 @@ def linked(
 
 
 @pytest.fixture
+def proxies(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets) -> ProxyService:
+    return ProxyService(units, clock, secrets)
+
+
+@pytest.fixture
 def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     accounts: AccountService,
     catalog: CatalogService,
@@ -284,6 +293,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     libraries: LibraryService,
     playback: PlaybackService,
     linked: LinkedAccountService,
+    proxies: ProxyService,
     links: LinkService,
     settings: SettingsService,
     policy: PolicyService,
@@ -302,6 +312,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         libraries=libraries,
         playback=playback,
         linked=linked,
+        proxies=proxies,
         links=links,
         events=Events(),
         settings=settings,

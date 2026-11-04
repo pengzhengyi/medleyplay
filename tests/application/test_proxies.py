@@ -1,5 +1,6 @@
 """The proxy service: an admin's proxy for a site, kept in the Keychain and read once."""
 
+from collections.abc import Callable
 from datetime import timedelta
 
 import pytest
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceState
 from medleyplay.domain.errors import (
     ForbiddenError,
@@ -114,11 +116,7 @@ def test_a_proxy_that_is_not_a_proxy_is_refused_and_nothing_is_kept(
 def test_a_member_may_neither_read_set_nor_remove_a_proxy(
     proxies: ProxyService, secrets: MemorySecrets
 ) -> None:
-    for call in (
-        lambda: proxies.get(MEMBER, "bilibili"),
-        lambda: proxies.save(MEMBER, "bilibili", URL),
-        lambda: proxies.remove(MEMBER, "bilibili"),
-    ):
+    for call in _every_call(proxies, MEMBER, "bilibili"):
         with pytest.raises(ForbiddenError):
             call()
 
@@ -127,11 +125,7 @@ def test_a_member_may_neither_read_set_nor_remove_a_proxy(
 
 @pytest.mark.parametrize("site", ["youtube", "Bilibili", "../x"])
 def test_a_site_no_plugin_takes_a_proxy_for_is_not_found(proxies: ProxyService, site: str) -> None:
-    for call in (
-        lambda: proxies.get(ADMIN, site),
-        lambda: proxies.save(ADMIN, site, URL),
-        lambda: proxies.remove(ADMIN, site),
-    ):
+    for call in _every_call(proxies, ADMIN, site):
         with pytest.raises(NotFoundError):
             call()
 
@@ -266,6 +260,15 @@ def test_saving_and_removing_reset_nothing_else(
     assert _rows(units) == before
     with units() as db:
         assert db.get_one(SourceRow, 1).state == SourceState.UNAVAILABLE
+
+
+def _every_call(proxies: ProxyService, caller: Account, site: str) -> list[Callable[[], object]]:
+    """Return a call each of reading, setting, and removing the site's proxy as `caller`."""
+    return [
+        lambda: proxies.get(caller, site),
+        lambda: proxies.save(caller, site, URL),
+        lambda: proxies.remove(caller, site),
+    ]
 
 
 def _rows(units: sessionmaker[Session]) -> list[list[object]]:

@@ -16,15 +16,21 @@ The video id says how the plugin behaves:
 | `BVleaky` | one part | a fault whose message holds the login |
 | `BVescape`, `BVtext` | one part | a file outside the folder, or of another type |
 | `BVempty`, `BVlink` | one part | an empty file, or a link |
+| `BVsaysproxy` | one part, titled with the proxy it was read through | a file saying the proxy |
+| `BVproxyleak` | a fault whose message holds the proxy | a fault whose message holds it |
+| `BVproxyprogress` | one part | progress that holds the proxy, then `audio.m4a` |
 
 A downloaded file holds what the download was asked, so a test can read back the
 quality and the login it got: `BV1Xx41117Tz/p1 quality=30280 login=<text> mode=0o600`.
 
 `https://b23.tv/night` leads to `BV1Xx41117Tz`, `https://b23.tv/away` off the site,
-and `https://b23.tv/liar` names a video on a link off the site.
+and `https://b23.tv/liar` names a video on a link off the site. `https://b23.tv/proxy`
+names `BVproxied` when the call carried a proxy and `BVdirect` when it did not, and
+both read as `BVsaysproxy` does.
 """
 
 import re
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
@@ -74,6 +80,9 @@ class Resolver:
         link = request.link
         if "b23.tv/liar" in link:
             return Canonical(video=NIGHT_DRIVE, link="https://evil.example/")
+        if "b23.tv/proxy" in link:
+            named = "BVproxied" if request.proxy else "BVdirect"
+            return Canonical(video=named, link=f"https://www.bilibili.com/video/{named}")
         for code, target in _SHORT.items():
             if f"b23.tv/{code}" in link:
                 link = target
@@ -89,7 +98,12 @@ class Resolver:
             return VideoDetails(status=VideoStatus.GONE, message="The video was removed.")
         if video == "BVmembers":
             return VideoDetails(status=VideoStatus.NEEDS_LOGIN, message="Members only.")
+        if video == "BVproxyleak":
+            message = f"Failed through {request.proxy}"
+            raise ValueError(message)
         title, parts = _TITLES.get(video, (video, 1))
+        if video in {"BVsaysproxy", "BVproxied", "BVdirect"}:
+            title = f"proxy={request.proxy or 'none'}"
         return VideoDetails(
             title=f"【MV】{title}",
             uploader="Blue Room",
@@ -115,12 +129,24 @@ class Downloader:
         if video == "BVrefused" or (video in {"BVmembers", "BVSignedIn"} and request.login is None):
             message = "Bilibili refused the login."
             raise AuthError(message)
-        report_progress(0.5, "Downloading")
+        if video == "BVproxyleak":
+            message = f"Failed through {request.proxy}"
+            raise ValueError(message)
+        report_progress(
+            0.5, f"Through {request.proxy}" if video == "BVproxyprogress" else "Downloading"
+        )
+        if video == "BVproxyprogress":
+            time.sleep(2)
         quality = "30280" if request.quality == "best" else request.quality
         name = _misbehave(video, folder)
         if name is None:
             name = "audio.m4a"
-            (folder / name).write_text(_said(request, quality), encoding="utf-8")
+            said = (
+                f"proxy={request.proxy or 'none'}"
+                if video == "BVsaysproxy"
+                else _said(request, quality)
+            )
+            (folder / name).write_text(said, encoding="utf-8")
         return Downloaded(file=name, quality=quality, backend="tube")
 
 

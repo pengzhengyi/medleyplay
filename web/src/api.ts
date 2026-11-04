@@ -147,6 +147,17 @@ export interface JobEvent {
   readonly state: Job["state"];
 }
 
+/** A site's proxy as the server shows it: its address, never its login. */
+export interface ProxySetting {
+  readonly scheme: "http" | "https" | "socks5h";
+  readonly host: string;
+  readonly port: number;
+  readonly has_login: boolean;
+  /** The address alone, such as `socks5h://127.0.0.1:7890`. */
+  readonly display: string;
+  readonly saved_at: string;
+}
+
 /** The household's settings, and the revision they were read at; 0 if never saved. */
 export interface Settings {
   /** The most the Downloads and cache may use, in bytes, or `null` for no limit. */
@@ -377,6 +388,12 @@ export const api = {
       "GET",
       previewLimit === undefined ? "/api/storage" : `/api/storage?limit=${String(previewLimit)}`,
     ),
+  /** The household's proxy for a site, or `null` when none is set; admins only. */
+  proxy: (site: string) => call<ProxySetting | null>("GET", `/api/proxies/${site}`),
+  /** Set a site's proxy from its URL, which the server keeps in the Keychain. */
+  saveProxy: (site: string, url: string) =>
+    call<ProxySetting>("PUT", `/api/proxies/${site}`, { url }),
+  removeProxy: (site: string) => call<undefined>("DELETE", `/api/proxies/${site}`),
   mode: () => call<Mode>("GET", "/api/mode"),
   modeSettings: () => call<ModeSettings>("GET", "/api/mode/settings"),
   saveModeSetting: (setting: ModeSetting, revision: number) =>

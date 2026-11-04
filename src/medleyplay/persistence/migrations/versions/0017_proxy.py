@@ -1,7 +1,7 @@
 """Create the proxy table: what is shown of each site's proxy, whose URL is in the Keychain.
 
-Revision ID: 0016
-Revises: 0015
+Revision ID: 0017
+Revises: 0016
 Create Date: 2026-11-04 09:00:00.000000
 """
 
@@ -12,8 +12,8 @@ from alembic import op
 
 import medleyplay.persistence.schema
 
-revision: str = "0016"
-down_revision: str | None = "0015"
+revision: str = "0017"
+down_revision: str | None = "0016"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

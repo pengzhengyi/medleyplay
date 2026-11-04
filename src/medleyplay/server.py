@@ -161,7 +161,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     keychain = secrets or KeychainSecrets()
     linked = LinkedAccountService(units, clock, plugins, keychain, changes.tell)
     proxies = ProxyService(units, clock, keychain)
-    scan = scan_library_kind(clock)
+    scan = scan_library_kind(clock, data_dir / COVERS_FOLDER)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
     job_kinds: dict[str, AnyJobKind] = {

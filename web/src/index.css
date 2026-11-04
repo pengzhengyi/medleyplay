@@ -384,6 +384,8 @@ button.text:hover:not(:disabled) {
 }
 
 .library main {
+  /* The table drops a column when the view is narrow, however wide the window. */
+  container-type: inline-size;
   grid-area: main;
   padding: 0.5rem 1.5rem 9rem;
 
@@ -878,6 +880,13 @@ button.text:hover:not(:disabled) {
   width: 2.75rem;
 }
 
+/* Too narrow for the album beside the title: the album gives way. */
+@container (width < 52rem) {
+  .tracks .album {
+    display: none;
+  }
+}
+
 /* A share of the width until resized, when the header says how wide. */
 .tracks th.artist,
 .tracks th.album {
@@ -1066,6 +1075,19 @@ details.dropdown.columns-menu > summary + ul {
   gap: 0.6rem;
 }
 
+/* A small cover beside a song's title, in the table and in Up next. */
+.cover.thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
 .tracks button.title {
   padding: 0;
   margin: 0;
@@ -1243,8 +1265,8 @@ button.icon.heart.on:hover,
 .queue li {
   display: grid;
   grid-template:
-    "handle title remove" auto
-    "handle artist remove" auto / auto minmax(0, 1fr) auto;
+    "handle thumb title remove" auto
+    "handle thumb artist remove" auto / auto auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 0.35rem;
   margin: 0;
@@ -1262,6 +1284,11 @@ button.icon.heart.on:hover,
   z-index: 1;
   background: var(--surface);
   box-shadow: var(--float);
+}
+
+.queue .thumb {
+  grid-area: thumb;
+  margin-right: 0.3rem;
 }
 
 .queue .handle {
@@ -1723,10 +1750,6 @@ button.icon.heart.on:hover,
   .player .volume input {
     width: 4rem;
   }
-
-  .tracks .album {
-    display: none;
-  }
 }
 
 @media (width <= 48rem) {
@@ -1819,20 +1842,40 @@ button.icon.heart.on:hover,
     display: none;
   }
 
+  /* The cover beside the title, the artist under it, and the playing bars before it. */
   .tracks .title-cell {
-    display: block;
+    display: grid;
+    grid-template:
+      "thumb bars title" auto
+      "thumb sub sub" auto
+      "thumb why why" auto / auto auto minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .tracks .title-cell .thumb {
+    grid-area: thumb;
+    margin-right: 0.6rem;
   }
 
   .tracks .title-cell .bars {
+    grid-area: bars;
+    align-self: center;
     margin-right: 0.5rem;
   }
 
+  .tracks .title-cell .why {
+    grid-area: why;
+    justify-self: start;
+  }
+
   .tracks .title-cell button.title {
+    grid-area: title;
     line-height: 1.35;
   }
 
   .tracks .subtitle {
     display: block;
+    grid-area: sub;
     overflow: hidden;
     color: var(--muted);
     font-size: 0.8rem;
@@ -2273,6 +2316,13 @@ dialog.modal::backdrop {
 .edit-songs .card {
   width: min(44rem, calc(100vw - 2rem));
   max-height: min(48rem, 90dvh);
+
+  /* On the title instead, so the player stays at the card's very top as the rows scroll. */
+  padding-top: 0;
+}
+
+.edit-songs #edit-songs-title {
+  padding-top: 1.25rem;
 }
 
 .edit-songs .detail-input {
@@ -2298,9 +2348,51 @@ dialog.modal::backdrop {
 
 .song-row {
   display: grid;
-  grid-template-columns: 5rem minmax(0, 2fr) minmax(0, 1fr) auto;
+  grid-template-columns: auto 5rem minmax(0, 2fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.4rem;
+  margin: 0;
+  border-radius: 0.6rem;
+}
+
+.song-row.dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+button.song-handle {
+  width: 1.75rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.song-row.dragging .song-handle {
+  cursor: grabbing;
+}
+
+/* The file, played in the dialog from a song's start. */
+.songs-audio {
+  /* Stays in view while the rows scroll under it, so a song far down can be paused. */
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  margin: 0 0 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+
+  /* Hides the rows passing under it, and above it to the card's edge. */
+  box-shadow: 0 0 0 0.5rem var(--surface);
+}
+
+.songs-audio[hidden] {
+  display: none;
+}
+
+.songs-audio-note:empty {
   margin: 0;
 }
 
@@ -2347,9 +2439,13 @@ dialog.modal::backdrop {
   /* Start and title on one line; the artist and the buttons on the next. */
   .song-row {
     grid-template-areas:
-      "start title title"
-      "artist artist buttons";
-    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+      "handle start title title"
+      "handle artist artist buttons";
+    grid-template-columns: auto 4.5rem minmax(0, 1fr) auto;
+  }
+
+  .song-handle {
+    grid-area: handle;
   }
 
   .song-start {
@@ -2366,6 +2462,26 @@ dialog.modal::backdrop {
 
   .song-row-buttons {
     grid-area: buttons;
+    gap: 0;
+  }
+
+  .song-row-buttons .icon {
+    width: 2rem;
+  }
+}
+
+@media (width < 22rem) {
+  /* Too narrow for the artist beside five buttons: the buttons take a line of their own. */
+  .song-row {
+    grid-template-areas:
+      "handle start title"
+      "handle artist artist"
+      "handle buttons buttons";
+    grid-template-columns: auto 4.5rem minmax(0, 1fr);
+  }
+
+  .song-row-buttons {
+    justify-self: end;
   }
 }
 

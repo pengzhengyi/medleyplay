@@ -27,7 +27,9 @@ class Tags(_Model):
     """What a file says about its music; an empty string means the tag is absent.
 
     `protected` is set for a file whose audio is locked to another player, such as
-    an `.m4p` from the iTunes Store.
+    an `.m4p` from the iTunes Store. `cover` is the file's embedded front cover as
+    base64 text, present only when the image is a JPEG, PNG, or WebP of at most
+    `MAX_COVER_BYTES`; any other image is no cover.
     """
 
     title: str = ""
@@ -37,6 +39,7 @@ class Tags(_Model):
     duration_ms: int | None = None
     track_number: int | None = None
     protected: bool = False
+    cover: str | None = None
 
 
 class TagReader(Protocol):

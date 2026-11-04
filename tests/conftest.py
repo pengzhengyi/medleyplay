@@ -190,7 +190,8 @@ def jobs(
     units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, tmp_path: Path
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
-    scan, cache = scan_library_kind(clock), cache_source_kind(tmp_path / "data")
+    scan = scan_library_kind(clock, tmp_path / "data" / "covers")
+    cache = cache_source_kind(tmp_path / "data")
     download = download_source_kind(tmp_path / "data", tmp_path / "jobs", clock)
     kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
@@ -205,7 +206,8 @@ def libraries(
     jobs: JobService,
     tmp_path: Path,
 ) -> LibraryService:
-    return LibraryService(units, clock, plugins, jobs, scan_library_kind(clock), tmp_path / "data")
+    scan = scan_library_kind(clock, tmp_path / "data" / "covers")
+    return LibraryService(units, clock, plugins, jobs, scan, tmp_path / "data")
 
 
 @pytest.fixture

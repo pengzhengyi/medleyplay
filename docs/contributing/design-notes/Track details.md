@@ -120,9 +120,9 @@ values.
   length in its header, and the tag reader answers none for about a third of
   them. The tags plugin reads it from the file's fragments instead.
 - **Files beside the audio,** with its name: `<name>.info.json`, the video
-  details yt-dlp writes with `--write-info-json`, and `<name>.jpg`, `.png`, or
-  `.webp`, a cover such as `--write-thumbnail` writes. A scan notes them, and
-  reads them again when they change.
+  details yt-dlp writes with `--write-info-json`, and `<name>.jpg`, `.jpeg`,
+  `.png`, or `.webp`, a cover such as `--write-thumbnail` writes (see
+  [Covers](#covers)). A scan notes them, and reads them again when they change.
   - **An `.info.json` is read** when it is new, when its size or modified time
     differs from what the last scan kept, and on a full scan, even when the audio
     file is unchanged. Its title, description, and chapters become the Track's
@@ -154,8 +154,34 @@ values.
   at most 10 MiB.
 - **Where covers come from:** the file's tags; an image beside the file with its
   name; the video's cover, through the file beside it; and the household's
-  upload. The upload is built, in *Edit details*; reading covers in a scan is
-  next.
+  upload. The upload, in *Edit details*, and the two a Library scan reads are
+  built; the video's cover is next.
+- **A scan finds two covers.** The tag reader returns the file's embedded front
+  cover when it is a JPEG, PNG, or WebP of at most 10 MiB; any other image is no
+  cover. An image beside the file is `<name>.jpg`, `.jpeg`, `.png`, or `.webp`,
+  the name `--write-thumbnail` gives, matched as an `.info.json` is: in the
+  audio's folder, with the audio's path minus its suffix, whatever the case of
+  its extension, the first found in that order. An image with no audio file of
+  its name beside it is ignored and never becomes a Track.
+- **When they are read.** The embedded cover is read with the file's tags: when
+  the file is new or changed, on a full scan, and when a newer medleyplay reads
+  more than the one that last read it. The image beside the file is read when it
+  is new, when its extension, size, or modified time differs from what the last
+  scan kept, and on a full scan, even when the audio file is unchanged.
+- **Precedence.** A scan records the cover it finds as the `files` origin's
+  `cover`, with the file's other tag values, and an embedded cover wins over an
+  image beside the file. The household's cover is the `household` origin, which
+  a scan never touches, so it stays over both. A removed image drops the cover it
+  gave, and a file with an embedded cover keeps that one.
+- **An image that isn't a cover,** one over 10 MiB or whose bytes aren't a JPEG,
+  PNG, or WebP image, is noted as an error on the Source and does not fail the
+  scan. It keeps the cover the earlier image gave, and a later good read clears
+  the error; one that couldn't be opened, as on a drive too slow to answer, is
+  read again next scan.
+- **A scan result holds no image bytes.** The scan's Job copies each image into
+  its working folder as it reads it, named by the SHA-256 of its bytes, so the
+  songs of an album share one copy, and the result carries only the copy's path.
+  Applying the result moves the copy into `covers/` as the upload does.
 - **A cover is a detail** like the others, its value the cover's name, and one of
   the album fields, so it comes from the origin naming the album and a split
   file's songs take their file's. The household may also name an existing cover,
@@ -163,9 +189,10 @@ values.
 - **Served** with the type its bytes say, `nosniff`, and
   `Cache-Control: private, max-age=31536000, immutable`, since its name is its
   content.
-- **The web client** shows covers in the player and on the lock screen through
-  the Media Session's artwork, and in *Edit details* with the household's upload;
-  the table, the queue, and the album view are next.
+- **The web client** shows covers beside each title in the table and in Up next,
+  on an album's card (the first cover among its songs), in the player and on the
+  lock screen through the Media Session's artwork, and in *Edit details* with the
+  household's upload. An image that fails to load shows the stand-in instead.
 - **A cover no value names** is removed by the sweep at startup, so one replaced
   or removed stays on disk until the server next starts.
 

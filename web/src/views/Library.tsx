@@ -293,6 +293,8 @@ export function Library({
           album={splitting}
           load={api.songs}
           readList={async (trackId, text) => (await api.readSongList(trackId, text)).songs}
+          loadAudio={api.playback}
+          onListen={player.pause}
           onSave={async (rows, known) => {
             await library.saveSongs(splitting.id, rows, known);
             setNotice(`Saved the songs of “${splitting.title}”.`);

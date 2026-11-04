@@ -117,12 +117,15 @@ both read its full length.
   before it was split still plays it whole.
 - ***Split into songs…*** on a file's menu, and ***Edit songs…*** on any of its
   songs, open the editor: a row per song with its start, such as `3:12` or
-  `1:07:40`, its title, and its artist; add, remove, and move rows; start from a
-  list found in the video's details, or ***Paste a list***, which the server
-  reads. Saving says first how many songs it removes with their ratings and
-  plays, and so does ***Unsplit***.
-- **Planned:** a click on a row's start to listen from there, and dragging rows
-  to move them.
+  `1:07:40`, its title, and its artist; add, remove, and move rows, by dragging
+  a row's handle or with its buttons; start from a list found in the video's
+  details, or ***Paste a list***, which the server reads. Saving says first how
+  many songs it removes with their ratings and plays, and so does ***Unsplit***.
+- **Listening in the editor:** a row's ***Listen*** plays the file in the dialog
+  from that row's start, unsaved or not, and pauses the music playing;
+  ***Start here*** then takes the row's start from where the file is playing, to
+  the millisecond. The dialog's player is its own, so the queue is untouched; a
+  Download not yet here says it is being prepared.
 
 ## What the API shows
 

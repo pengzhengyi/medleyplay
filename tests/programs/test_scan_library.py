@@ -4,16 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from medleyplay.plugin_host.job import JobContext
-from medleyplay.plugin_host.loader import BUILT_IN_PLUGINS, load_plugins
 from medleyplay.programs.info_json import MAX_BYTES, InfoChapter
-from medleyplay.programs.scan_library import (
-    KnownFile,
-    ScanLibrary,
-    ScannedFile,
-    Stamp,
-    run,
-)
+from medleyplay.programs.scan_library import ScannedFile
 from tests.support.audio import Song, folder_of, zip_of
 from tests.support.info_json import (
     album_with_odd_chapters,
@@ -21,52 +13,9 @@ from tests.support.info_json import (
     melt_video,
     world_is_mine_video,
 )
-from tests.support.libraries import LIBRARY_PLUGINS
+from tests.support.scans import known_after, scan_files
 
 MELT_TITLE = "【初音ミク】メルト / ryo(supercell)【MV】"
-
-
-def _context(tmp_path: Path) -> JobContext:
-    work_dir = tmp_path / "work"
-    work_dir.mkdir(exist_ok=True)
-    endpoints = load_plugins(BUILT_IN_PLUGINS, LIBRARY_PLUGINS, lambda _: None)
-    return JobContext(work_dir, endpoints, lambda _: None)
-
-
-def _scan(
-    tmp_path: Path,
-    root: Path,
-    kind: str = "folder",
-    *,
-    known: dict[str, KnownFile] | None = None,
-    full: bool = False,
-) -> dict[str, ScannedFile]:
-    """Scan `root` for `.wav` files, and return what was found by path."""
-    request = ScanLibrary.model_validate(
-        {
-            "root": {"kind": kind, "path": str(root)},
-            "extensions": ["wav"],
-            "known": known or {},
-            "full": full,
-        }
-    )
-    scan = run(request, _context(tmp_path))
-    assert scan.readable
-    return {file.path: file for file in scan.files}
-
-
-def _known(found: dict[str, ScannedFile]) -> dict[str, KnownFile]:
-    """What a catalog keeps of a scan: each file's stamp and its sidecar's."""
-    return {
-        path: KnownFile(
-            size=file.size,
-            modified_ns=file.modified_ns,
-            info_json=None
-            if file.info_json is None
-            else Stamp(size=file.info_json.size, modified_ns=file.info_json.modified_ns),
-        )
-        for path, file in found.items()
-    }
 
 
 def _read_title(file: ScannedFile) -> str | None:
@@ -80,7 +29,7 @@ def test_a_sidecar_beside_its_audio_is_read_and_is_not_a_file_of_its_own(tmp_pat
     music = folder_of(tmp_path / "Music", {"Blue/a.wav": Song("A")})
     sidecar = info_json_beside(music / "Blue" / "a.wav", melt_video())
 
-    found = _scan(tmp_path, music)
+    found = scan_files(tmp_path, music)
 
     info = found["Blue/a.wav"].info_json
     assert list(found) == ["Blue/a.wav"]
@@ -96,7 +45,7 @@ def test_a_sidecar_named_in_capitals_is_read(tmp_path: Path) -> None:
     music = folder_of(tmp_path / "Music", {"a.wav": Song("A")})
     (music / "a.INFO.JSON").write_text(melt_video(), encoding="utf-8")
 
-    found = _scan(tmp_path, music)
+    found = scan_files(tmp_path, music)
 
     assert _read_title(found["a.wav"]) == MELT_TITLE
 
@@ -108,7 +57,7 @@ def test_other_json_files_and_a_sidecar_with_no_audio_are_ignored(tmp_path: Path
     (music / "orphan.info.json").write_text(melt_video(), encoding="utf-8")
     (music / "Blue" / "a.info.json").write_text(melt_video(), encoding="utf-8")
 
-    found = _scan(tmp_path, music)
+    found = scan_files(tmp_path, music)
 
     assert list(found) == ["Blue/b.wav", "a.wav"]
     assert [file.info_json for file in found.values()] == [None, None]
@@ -117,10 +66,10 @@ def test_other_json_files_and_a_sidecar_with_no_audio_are_ignored(tmp_path: Path
 def test_a_changed_sidecar_is_read_again_while_the_unchanged_audio_is_not(tmp_path: Path) -> None:
     music = folder_of(tmp_path / "Music", {"a.wav": Song("A")})
     info_json_beside(music / "a.wav", melt_video())
-    known = _known(_scan(tmp_path, music))
+    known = known_after(scan_files(tmp_path, music))
 
     info_json_beside(music / "a.wav", world_is_mine_video())
-    found = _scan(tmp_path, music, known=known)
+    found = scan_files(tmp_path, music, known=known)
 
     assert found["a.wav"].changed is False
     assert found["a.wav"].tags is None
@@ -130,9 +79,9 @@ def test_a_changed_sidecar_is_read_again_while_the_unchanged_audio_is_not(tmp_pa
 def test_an_unchanged_sidecar_is_listed_with_its_stamp_but_not_read(tmp_path: Path) -> None:
     music = folder_of(tmp_path / "Music", {"a.wav": Song("A")})
     sidecar = info_json_beside(music / "a.wav", melt_video())
-    known = _known(_scan(tmp_path, music))
+    known = known_after(scan_files(tmp_path, music))
 
-    info = _scan(tmp_path, music, known=known)["a.wav"].info_json
+    info = scan_files(tmp_path, music, known=known)["a.wav"].info_json
 
     assert info is not None
     assert (info.size, info.modified_ns) == (sidecar.stat().st_size, sidecar.stat().st_mtime_ns)
@@ -142,19 +91,19 @@ def test_an_unchanged_sidecar_is_listed_with_its_stamp_but_not_read(tmp_path: Pa
 def test_a_full_scan_reads_an_unchanged_sidecar(tmp_path: Path) -> None:
     music = folder_of(tmp_path / "Music", {"a.wav": Song("A")})
     info_json_beside(music / "a.wav", melt_video())
-    known = _known(_scan(tmp_path, music))
+    known = known_after(scan_files(tmp_path, music))
 
-    found = _scan(tmp_path, music, known=known, full=True)
+    found = scan_files(tmp_path, music, known=known, full=True)
 
     assert _read_title(found["a.wav"]) == MELT_TITLE
 
 
 def test_a_sidecar_new_beside_a_known_audio_file_is_read(tmp_path: Path) -> None:
     music = folder_of(tmp_path / "Music", {"a.wav": Song("A")})
-    known = _known(_scan(tmp_path, music))
+    known = known_after(scan_files(tmp_path, music))
 
     info_json_beside(music / "a.wav", melt_video())
-    found = _scan(tmp_path, music, known=known)
+    found = scan_files(tmp_path, music, known=known)
 
     assert found["a.wav"].changed is False
     assert _read_title(found["a.wav"]) == MELT_TITLE
@@ -176,7 +125,7 @@ def test_a_sidecar_that_cant_be_read_is_a_noted_error_and_the_scan_goes_on(
     music = folder_of(tmp_path / "Music", {"a.wav": Song("A"), "b.wav": Song("B")})
     info_json_beside(music / "a.wav", content)
 
-    found = _scan(tmp_path, music)
+    found = scan_files(tmp_path, music)
 
     info = found["a.wav"].info_json
     assert info is not None
@@ -191,7 +140,7 @@ def test_a_sidecar_at_the_limit_is_read(tmp_path: Path) -> None:
     padding = " " * (MAX_BYTES - len("{}"))
     info_json_beside(music / "a.wav", "{}" + padding)
 
-    info = _scan(tmp_path, music)["a.wav"].info_json
+    info = scan_files(tmp_path, music)["a.wav"].info_json
 
     assert info is not None
     assert info.error == ""
@@ -204,7 +153,7 @@ def test_a_chapter_that_is_not_a_start_and_a_title_is_skipped_and_the_rest_kept(
     music = folder_of(tmp_path / "Music", {"a.wav": Song("A")})
     info_json_beside(music / "a.wav", album_with_odd_chapters())
 
-    info = _scan(tmp_path, music)["a.wav"].info_json
+    info = scan_files(tmp_path, music)["a.wav"].info_json
 
     assert info is not None
     assert info.text is not None
@@ -227,7 +176,7 @@ def test_the_sidecar_of_a_zip_archive_is_read_stored_or_compressed(tmp_path: Pat
         compressed=frozenset({"x/deflated.info.json"}),
     )
 
-    found = _scan(tmp_path, archive, "zip")
+    found = scan_files(tmp_path, archive, "zip")
 
     assert {path: _read_title(file) for path, file in found.items()} == {
         "x/deflated.wav": "【初音ミク】ワールドイズマイン / ryo(supercell)【MV】",
@@ -240,7 +189,7 @@ def test_a_sidecar_that_cant_be_opened_is_read_again_next_scan(tmp_path: Path) -
     sidecar = info_json_beside(music / "a.wav", melt_video())
     sidecar.chmod(0)
 
-    info = _scan(tmp_path, music)["a.wav"].info_json
+    info = scan_files(tmp_path, music)["a.wav"].info_json
 
     sidecar.chmod(0o644)
     assert info is not None

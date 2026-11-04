@@ -158,7 +158,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
     plugins = PluginService(units, clock, lineup, host, changes.tell)
     linked = LinkedAccountService(units, clock, plugins, secrets or KeychainSecrets(), changes.tell)
-    scan = scan_library_kind(clock)
+    scan = scan_library_kind(clock, data_dir / COVERS_FOLDER)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
     job_kinds: dict[str, AnyJobKind] = {

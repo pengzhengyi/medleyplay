@@ -186,8 +186,9 @@ class LinkService:
         """Return the video `link` names, with each part's Track if it is already added.
 
         A link that isn't a video raises `InvalidInputError`; Offline, it raises
-        `OfflineError`. A video that can't be read, whether the site is gone,
-        refuses, or can't be reached, is answered all the same, with `unreadable`.
+        `OfflineError`. A video that can't be read, because it is gone, needs a login,
+        or the site refuses or can't be reached, is answered all the same, with
+        `unreadable` saying why.
         """
         del caller  # Any signed-in Account may look a link up.
         self._require_online()

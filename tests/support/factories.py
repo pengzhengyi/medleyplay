@@ -260,6 +260,23 @@ class EnrichTrackFactory:
         return EnrichTrack(shown=shown, file_name="Night Drive.m4a", folder=str(folder))
 
     @staticmethod
+    def long_album_file(folder: Path, *, duration_ms: int = 2_961_237) -> EnrichTrack:
+        """Return the ask about a whole album in one file, not split, as a video gives it.
+
+        ```text
+        【HR 24/48】朴树2003《生如夏花》专辑歌词版            49:21
+        title "生如夏花", artist "朴树", album "生如夏花", album_artist "朴树" (video)
+        ```
+        """
+        shown = (
+            ShownDetail(field="title", value="生如夏花", origin="video"),
+            ShownDetail(field="artist", value="朴树", origin="video"),
+            ShownDetail(field="album", value="生如夏花", origin="video"),
+            ShownDetail(field="album_artist", value="朴树", origin="video"),
+        )
+        return EnrichTrack(shown=shown, duration_ms=duration_ms, folder=str(folder))
+
+    @staticmethod
     def album_file(folder: Path) -> EnrichTrack:
         """Return the ask about a long file split into the songs of an album.
 

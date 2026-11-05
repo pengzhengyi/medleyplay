@@ -61,14 +61,14 @@ def test_a_search_asks_for_json_and_names_the_query_and_a_limit() -> None:
     ]
 
 
-def test_a_release_is_looked_up_with_its_recordings_artist_credits_and_media() -> None:
+def test_a_release_is_looked_up_with_its_recordings_artist_credits_media_and_genres() -> None:
     fake = FakeMusicBrainzFactory.knowing_let_down()
 
     client_of(fake).release(ORIGINAL)
 
     assert fake.urls() == [RELEASE]
     assert (fake.parameter("inc"), fake.parameter("fmt")) == (
-        "recordings+artist-credits+media",
+        "recordings+artist-credits+media+genres",
         "json",
     )
 

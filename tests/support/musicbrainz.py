@@ -50,8 +50,10 @@ class MusicBrainzFactory:
     ) -> dict[str, Any]:
         """Return the recorded lookup of *OK Computer*, as the release `release` of `date`.
 
-        The recording is the 2016 reissue's, which says it has no front cover; here its
-        id and date are those of `release`, and `front` says whether it has one.
+        The recording is the 1997 original's, with genres: the release's own is *rock*
+        (counted once), and *Let Down*'s recording has *alternative rock* (6), *rock*
+        (3), and *britpop*, *post-britpop*, and *punk* (1 each). Here its id and date
+        are those of `release`, and `front` says whether it has a front cover.
         """
         answer = recorded_answer("latin-release")
         answer.update(id=release, date=date)
@@ -64,10 +66,14 @@ class MusicBrainzFactory:
         return recorded_answer("cjk-release-search")
 
     @staticmethod
-    def shu_pu_release(*, front: bool = True) -> dict[str, Any]:
-        """Return the hand-made lookup of 生如夏花, with 11 songs."""
+    def shu_pu_release(
+        *, front: bool = True, genres: Mapping[str, int] | None = None
+    ) -> dict[str, Any]:
+        """Return the hand-made lookup of 生如夏花, with 11 songs, and `genres` by count."""
         answer = recorded_answer("cjk-release")
         answer["cover-art-archive"] = {"front": front, "back": False, "count": int(front)}
+        if genres is not None:
+            answer["genres"] = [{"name": name, "count": count} for name, count in genres.items()]
         return answer
 
 

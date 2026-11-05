@@ -76,7 +76,11 @@ def _suggestion(enriching: Enriching, track_id: TrackId) -> dict[Field, str | in
 def _suggested_songs(enriching: Enriching, track_id: TrackId) -> list[tuple[int, str, str]]:
     with enriching.units() as db:
         row = db.get(AiSuggestionRow, track_id)
-        return [] if row is None else [(s["start_ms"], s["title"], s["artist"]) for s in row.songs]  # type: ignore[misc]
+        if row is None:
+            return []
+        return [
+            (int(each["start_ms"]), str(each["title"]), str(each["artist"])) for each in row.songs
+        ]
 
 
 # What is recorded

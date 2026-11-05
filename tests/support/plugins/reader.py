@@ -1,4 +1,4 @@
-"""A plugin that answers for the enrichers `bilibili-details` and `musicbrainz` with scripts.
+"""A plugin that answers for the three enrichers with scripts.
 
 For `bilibili-details`, the video id says how the plugin answers:
 
@@ -35,6 +35,21 @@ long file split into songs:
 | `Echo` | the album *echo*, naming how it was asked |
 | `生如夏花` (a long file) | the album, album artist, year, and a cover |
 | any other | the values of *Let Down* on *OK Computer*, and a cover |
+
+For `ai-details`, the title of the video text says how it answers:
+
+| Title | Answers |
+| --- | --- |
+| `Nowhere` | no values |
+| `Album` | an album, an artist, a year, and three songs |
+| `Refused` | refused, saying to check the key |
+| `Invalid` | invalid |
+| `Down` | a `NetworkError` |
+| `Broken` | a fault |
+| `Leak` | a `NetworkError` that holds the key it was given |
+| `BadSongs` | a title, and songs whose starts fall |
+| `Echo` | the album *echo*, naming the text, the provider, and whether it has a key |
+| any other | the title *Night Drive*, the artist *Blue Room*, an album, and a year |
 """
 
 import time
@@ -50,6 +65,7 @@ from medleyplay.plugin_api import (
     NetworkError,
     Plugin,
     Registry,
+    SuggestedSong,
     VideoText,
 )
 from tests.support.images import jpeg_image, oversized_jpeg
@@ -123,6 +139,67 @@ class Finder:
         return Enriched(values=values, cover=None if key == "NoCover" else _cover(folder, key))
 
 
+_SUGGESTIONS: Final = {
+    "Nowhere": Enriched(),
+    "Refused": Enriched(
+        status=EnrichStatus.REFUSED,
+        message="The AI provider refused the key or the account (401). Check the key.",
+    ),
+    "Invalid": Enriched(
+        status=EnrichStatus.INVALID, message="The AI model's answer was not the JSON asked for."
+    ),
+    "Album": Enriched(
+        values={"artist": "Blue Room", "album": "Re:Start", "year": 2016},
+        songs=(
+            SuggestedSong(start_ms=0, title="Intro"),
+            SuggestedSong(start_ms=192_000, title="Night Drive", artist="Blue Room"),
+            SuggestedSong(start_ms=4_060_000, title="Outro"),
+        ),
+    ),
+    "BadSongs": Enriched(
+        values={"title": "Night Drive"},
+        songs=(
+            SuggestedSong(start_ms=60_000, title="Intro"),
+            SuggestedSong(start_ms=0, title="Outro"),
+        ),
+    ),
+}
+_NIGHT_DRIVE: Final = Enriched(
+    values={"title": "Night Drive", "artist": "Blue Room", "album": "Re:Start", "year": 2016}
+)
+
+
+class Suggester:
+    """Answers each scripted video text as the table says."""
+
+    def enrich(self, request: EnrichTrack) -> Enriched:
+        title = request.text.title if request.text is not None else ""
+        match title:
+            case "Down":
+                message = "The AI provider couldn't be reached."
+                raise NetworkError(message)
+            case "Broken":
+                message = "The answer changed shape."
+                raise ValueError(message)
+            case "Leak":
+                message = f"The AI provider couldn't be reached with {_key_of(request)}."
+                raise NetworkError(message)
+            case "Echo":
+                return Enriched(values={"album": _echo_ai(request)})
+        return _SUGGESTIONS.get(title, _NIGHT_DRIVE)
+
+
+def _key_of(request: EnrichTrack) -> str:
+    return request.ai.key or "no key" if request.ai is not None else "no provider"
+
+
+def _echo_ai(request: EnrichTrack) -> str:
+    ai, text = request.ai, request.text
+    provider = "none" if ai is None else f"{ai.base_url} {ai.model} key={ai.key is not None}"
+    words = "none" if text is None else f"{len(text.description)} {len(text.chapters)}"
+    return f"provider={provider} text={words} file={request.file_name or 'none'}"
+
+
 def _echo(request: EnrichTrack, shown: dict[str, str | int]) -> str:
     return (
         f"whole_album={request.whole_album} video={request.video} proxy={request.proxy or 'none'}"
@@ -166,9 +243,10 @@ def _cover(folder: Path, video: str) -> str:
 
 
 def register(registry: Registry) -> None:
-    """Add the enrichers `bilibili-details` and `musicbrainz`."""
+    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`."""
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
+    registry.add(TRACK_ENRICHER, "ai-details", Suggester())
 
 
 plugin = Plugin(api_version=1, register=register)

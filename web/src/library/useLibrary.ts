@@ -2,7 +2,7 @@
  * @file The signed-in Account's Tracks: loaded once, asked for again when needed, and written.
  */
 
-import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -40,6 +40,8 @@ export interface Library {
   readonly mode: Mode | null;
   /** The Tracks each enricher may be asked about now, by the enricher's name. */
   readonly findable: ReadonlyMap<string, ReadonlySet<number>>;
+  /** Ask the enrichers again which Tracks they may be asked about, as after one is set up. */
+  readonly refreshFindable: () => void;
   /**
    * Ask the enricher about the Track; its details show once the Job has run. The promise
    * rejects with why when the server refuses.
@@ -143,6 +145,20 @@ export function useLibrary(onSignedOut: () => void): Library {
   };
   const onFailure = useEffectEvent(failed);
 
+  /** Ask each enricher which Tracks it may be asked about. */
+  const loadFindable = useCallback(() => {
+    for (const { enricher } of LOOKUPS) {
+      api.enricher(enricher).then(
+        (read) => {
+          setFindable((now) => new Map(now).set(enricher, new Set(read.eligible)));
+        },
+        () => {
+          // Without the enricher, no Track offers its lookup.
+        },
+      );
+    }
+  }, []);
+
   useEffect(() => {
     // Each loads on its own, so Playlists that fail to load don't hide the songs.
     const load = () => {
@@ -160,16 +176,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.mode().then(setMode, () => {
         // Without the Mode, the page shows nothing about it until the stream says.
       });
-      for (const { enricher } of LOOKUPS) {
-        api.enricher(enricher).then(
-          (read) => {
-            setFindable((now) => new Map(now).set(enricher, new Set(read.eligible)));
-          },
-          () => {
-            // Without the enricher, no Track offers its lookup.
-          },
-        );
-      }
+      loadFindable();
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
@@ -191,7 +198,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
     };
-  }, []);
+  }, [loadFindable]);
 
   /** Ask for the Tracks again; one that can't be read now shows on the next load. */
   const reloadTracks = () => {
@@ -280,6 +287,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     error,
     mode,
     findable,
+    refreshFindable: loadFindable,
     find: async (enricher, id) => {
       try {
         await api.findDetails(enricher, id);

@@ -221,8 +221,8 @@ def check_track_enricher(enricher: TrackEnricher, request: EnrichTrack) -> Enric
     """
     answer = check_operation(ENRICH_TRACK, enricher, request)
     if answer.status is not EnrichStatus.OK:
-        if answer.values or answer.video_text is not None or answer.cover is not None:
-            message = f"An answer that is {answer.status} holds values, text, or a cover."
+        if answer.values or answer.video_text is not None or answer.songs or answer.cover:
+            message = f"An answer that is {answer.status} holds values, text, songs, or a cover."
             raise ContractError(message)
         return answer
     if answer.cover is not None:

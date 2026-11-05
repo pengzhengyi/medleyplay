@@ -41,6 +41,8 @@ export interface ViewProps {
   readonly admin: boolean;
   /** Whether medleyplay may contact music sites now, once the server has said. */
   readonly mode: Mode | null;
+  /** Called after Settings changes which Tracks an enricher may be asked about. */
+  readonly onEnrichersChanged: () => void;
 }
 
 /** The view `route` names. */
@@ -106,7 +108,13 @@ export function CurrentView(given: ViewProps) {
     case "search":
       return <SearchResults {...props} query={route.query} />;
     case "settings":
-      return <SettingsView admin={props.admin} mode={props.mode} />;
+      return (
+        <SettingsView
+          admin={props.admin}
+          mode={props.mode}
+          onEnrichersChanged={props.onEnrichersChanged}
+        />
+      );
   }
 }
 
@@ -120,7 +128,7 @@ function Songs({
   empty,
   playingId,
   actions,
-}: Omit<ViewProps, "tracks" | "route" | "playlists" | "admin"> & {
+}: Omit<ViewProps, "tracks" | "route" | "playlists" | "admin" | "onEnrichersChanged"> & {
   readonly title: string;
   readonly subtitle?: string | undefined;
   readonly back?: Route;

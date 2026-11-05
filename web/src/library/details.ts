@@ -39,6 +39,7 @@ export const ORIGIN_LABELS: Readonly<Record<Origin, string>> = {
   video: "the video",
   album_file: "the album file",
   file_name: "the file's name",
+  ai: "the AI",
 };
 
 /** Detail values, keyed by detail. */
@@ -53,7 +54,7 @@ export type Shown = Partial<Readonly<Record<Detail, Found>>>;
 /** The household's values as their boxes hold them; a field absent is not the household's. */
 export type Own = Partial<Readonly<Record<Detail, string>>>;
 
-/** The origins in the order the shown value is chosen. */
+/** The origins in the order the shown value is chosen; the AI only suggests, so it is not one. */
 const ORIGINS: readonly Origin[] = [
   "household",
   "files",
@@ -219,6 +220,12 @@ export function alternativesOf(details: Details, name: Detail, typed: string): A
     found.push({ value: String(value), origin });
   }
   return found;
+}
+
+/** Return what the AI suggests for `name` as its box would hold it, or `undefined` for nothing. */
+export function suggestionOf(details: Details, name: Detail): string | undefined {
+  const value = details.origins.ai?.[name];
+  return value === undefined ? undefined : String(value);
 }
 
 function shownWith(details: Details, own: Own): Shown {

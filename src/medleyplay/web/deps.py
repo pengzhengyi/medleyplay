@@ -6,6 +6,7 @@ from typing import Annotated, Final
 from fastapi import Cookie, Depends, Request
 
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.ai import AiService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
@@ -53,6 +54,7 @@ class Services:
     songs: SongsService
     covers: CoverService
     enrichment: EnrichmentService
+    ai: AiService
 
 
 def _services(request: Request) -> Services:
@@ -139,6 +141,10 @@ def _enrichment(services: Annotated[Services, Depends(_services)]) -> Enrichment
     return services.enrichment
 
 
+def _ai(services: Annotated[Services, Depends(_services)]) -> AiService:
+    return services.ai
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -158,6 +164,7 @@ DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]
 CoversDep = Annotated[CoverService, Depends(_covers)]
 EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
+AiDep = Annotated[AiService, Depends(_ai)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

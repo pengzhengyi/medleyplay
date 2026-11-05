@@ -12,6 +12,7 @@ from pwdlib.hashers.argon2 import Argon2Hasher
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.ai import AiService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
@@ -325,6 +326,11 @@ def proxies(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecre
 
 
 @pytest.fixture
+def ai(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets) -> AiService:
+    return AiService(units, clock, secrets)
+
+
+@pytest.fixture
 def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     accounts: AccountService,
     catalog: CatalogService,
@@ -344,6 +350,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     songs: SongsService,
     covers: CoverService,
     enrichment: EnrichmentService,
+    ai: AiService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -366,6 +373,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         songs=songs,
         covers=covers,
         enrichment=enrichment,
+        ai=ai,
     )
 
 

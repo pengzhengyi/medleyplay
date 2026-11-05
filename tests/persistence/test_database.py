@@ -341,6 +341,80 @@ def test_undoing_the_asks_migration_keeps_every_subject_asked_as_a_video_asked(
     engine.dispose()
 
 
+def test_the_ai_migration_adds_the_provider_and_the_suggested_song_lists(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0019")
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        tables = set(
+            connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+        )
+    engine.dispose()
+    assert {"ai_setting", "ai_suggestion"} <= tables
+
+
+def test_the_provider_has_one_row_only(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    insert = text(
+        "INSERT INTO ai_setting (id, base_url, model, has_key, saved_at)"
+        " VALUES (:id, 'https://api.deepseek.com', 'deepseek-flash', 1,"
+        " '2026-11-06 00:00:00.000000')"
+    )
+
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        connection.execute(insert, {"id": 2})
+    engine.dispose()
+
+
+def test_removing_a_track_removes_the_song_list_suggested_for_it(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        track = _add_track(connection, "Re:Start")
+        connection.execute(
+            text(
+                "INSERT INTO ai_suggestion (track_id, songs, suggested_at)"
+                " VALUES (:track, '[]', '2026-11-06 00:00:00.000000')"
+            ),
+            {"track": track},
+        )
+
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM track WHERE id = :id"), {"id": track})
+        left = connection.scalar(text("SELECT count(*) FROM ai_suggestion"))
+    engine.dispose()
+
+    assert left == 0
+
+
+def test_undoing_the_ai_migration_drops_what_an_ai_model_suggested(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        track = _add_track(connection, "Re:Start")
+        for origin in ("household", "ai"):
+            connection.execute(
+                text(
+                    "INSERT INTO track_value (track_id, origin, field, value, recorded_at)"
+                    " VALUES (:track, :origin, 'title', '\"T\"', '2026-11-06 00:00:00.000000')"
+                ),
+                {"track": track, "origin": origin},
+            )
+
+    _migrate_to(engine, "0019", down=True)
+
+    with engine.connect() as connection:
+        origins = connection.scalars(text("SELECT origin FROM track_value")).all()
+        tables = set(
+            connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+        )
+    engine.dispose()
+    assert (origins, {"ai_setting", "ai_suggestion"} & tables) == (["household"], set())
+
+
 def test_a_removed_tracks_id_is_never_given_to_another(tmp_path: Path) -> None:
     engine = make_engine(database_url(tmp_path))
     migrate(engine)

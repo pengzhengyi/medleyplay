@@ -12,6 +12,7 @@ from medleyplay.domain.jobs import JobId, JobState
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
+from tests.support.ai import KEY
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.fakes import FakeClock
@@ -37,6 +38,7 @@ def enrichers_client(enriching: Enriching, services: Services) -> Iterator[TestC
         jobs=enriching.jobs,
         catalog=enriching.catalog,
         enrichment=enriching.enrichment,
+        ai=enriching.ai,
     )
     app = create_app(on, allowed_hosts=[TEST_HOST])
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
@@ -99,7 +101,7 @@ def test_asking_about_a_track_queues_a_job_for_it_and_asking_again_returns_that_
     assert (first.status_code, body["kind"], body["target"], body["requested_by"]) == (
         200,
         "enrich_track",
-        f"track:{track_id}",
+        f"track:{track_id}:{NAME}",
         alice["id"],
     )
     assert again.json()["id"] == body["id"]
@@ -228,7 +230,10 @@ def test_asking_musicbrainz_about_a_song_queues_a_job_for_it(
 
     response = enrichers_client.post(f"/api/enrichers/{MUSICBRAINZ}/tracks/{track_id}")
 
-    assert (response.status_code, response.json()["target"]) == (200, f"track:{track_id}")
+    assert (response.status_code, response.json()["target"]) == (
+        200,
+        f"track:{track_id}:{MUSICBRAINZ}",
+    )
     enriching.wait_for(JobId(response.json()["id"]), JobState.SUCCEEDED)
 
 
@@ -275,3 +280,40 @@ def test_after_musicbrainz_refuses_it_shows_why_it_stopped_and_an_admin_resets_i
     assert (stopped["stopped"]["reason"], stopped["eligible"]) == ("HTTP Error 403.", [])
     assert reset.status_code == 204
     assert (after["stopped"], after["eligible"]) == (None, [refused])
+
+
+AI_NAME = "ai-details"
+PROVIDER = {"base_url": "https://api.deepseek.com", "model": "deepseek-flash", "key": KEY}
+
+
+def test_the_ai_enricher_asks_about_no_track_until_the_provider_is_set_up(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    track_id = enriching.add_track_with_text("Night Drive")
+
+    before = enrichers_client.get(f"/api/enrichers/{AI_NAME}").json()
+    refused = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}")
+    enrichers_client.put("/api/ai", json=PROVIDER)
+    after = enrichers_client.get(f"/api/enrichers/{AI_NAME}").json()
+
+    assert (before["available"], before["eligible"]) == (True, [])
+    assert (refused.status_code, "not set up" in refused.json()["detail"]) == (409, True)
+    assert after["eligible"] == [track_id]
+
+
+def test_asking_the_ai_about_a_track_queues_a_job_that_suggests_its_details(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    enrichers_client.put("/api/ai", json=PROVIDER)
+    track_id = enriching.add_track_with_text("Night Drive")
+
+    response = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}")
+
+    assert response.status_code == 200
+    enriching.wait_for(JobId(response.json()["id"]), JobState.SUCCEEDED)
+    details = enrichers_client.get(f"/api/tracks/{track_id}/details").json()
+    assert details["origins"]["ai"]["artist"] == "Blue Room"
+    assert "artist" not in details["shown"]
+    assert KEY not in response.text + str(details)

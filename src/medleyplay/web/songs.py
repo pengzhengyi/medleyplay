@@ -74,6 +74,8 @@ class SongsOut(BaseModel):
     needs_check: bool
     songs: list[SongOut]
     found: list[list[ListedSongOut]]
+    suggested: list[ListedSongOut]
+    """The song list an AI model suggested for the file, or empty."""
 
     @classmethod
     def of(cls, view: SongsView) -> "SongsOut":
@@ -94,6 +96,7 @@ class SongsOut(BaseModel):
                 for song in view.songs
             ],
             found=[[_listed(song) for song in listed] for listed in view.found],
+            suggested=[_listed(song) for song in view.suggested],
         )
 
 

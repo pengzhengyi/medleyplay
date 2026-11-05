@@ -16,15 +16,16 @@ from medleyplay.application.enrichment import (
     EnrichmentService,
     enrich_target,
     enrich_track_kind,
+    track_of_target,
 )
 from medleyplay.application.jobs import JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
 from medleyplay.domain.covers import cover_id
 from medleyplay.domain.details import Field, Origin
-from medleyplay.domain.enrichers import ASK_AGAIN_AFTER, BILIBILI_DETAILS
+from medleyplay.domain.enrichers import ASK_AGAIN_AFTER, BILIBILI_DETAILS, MUSICBRAINZ
 from medleyplay.domain.errors import (
     ConflictError,
     ForbiddenError,
@@ -377,11 +378,35 @@ def test_a_job_is_one_per_track_with_the_enrichers_name_in_its_request(
 
     assert (job.kind, job.target, job.requested_by) == (
         ENRICH_KIND,
-        enrich_target(track_id),
+        enrich_target(track_id, NAME),
         alice.id,
     )
     again = enriching.enrichment.find_details(alice, track_id, NAME)
     assert again.id == job.id
+
+
+def test_two_enrichers_asked_about_one_track_each_queue_their_own_job(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.online.online = False
+    track_id = enriching.catalog.add_track(
+        SourceKey("library", "1/Music/BV1dm4y1s7ak.m4a"),
+        TrackDetails(title="Let Down", artist="Radiohead"),
+    )
+
+    site = enriching.enrichment.find_details(alice, track_id, NAME)
+    musicbrainz = enriching.enrichment.find_details(alice, track_id, MUSICBRAINZ.name)
+
+    assert musicbrainz.id != site.id
+    assert (site.target, musicbrainz.target) == (
+        enrich_target(track_id, NAME),
+        enrich_target(track_id, MUSICBRAINZ.name),
+    )
+
+
+def test_a_job_queued_before_targets_named_their_enricher_still_names_its_track() -> None:
+    assert track_of_target("track:7") == TrackId(7)
+    assert track_of_target(enrich_target(TrackId(7), NAME)) == TrackId(7)
 
 
 def test_the_jobs_of_one_enricher_run_one_at_a_time_with_a_pause_between_them(

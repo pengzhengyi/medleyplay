@@ -4,7 +4,7 @@
 > **Status: in progress.** This note describes a Track's details (its title,
 > artist, album, cover, and the rest), where each value comes from, how the
 > household's own values win, and how medleyplay finds what a file doesn't say.
-> The enrichers for Bilibili and MusicBrainz are built; AI is not.
+> The enrichers for Bilibili, MusicBrainz, and AI are built.
 > Splitting a long file into songs is in [Segments](Segments.md).
 
 ## Contents
@@ -64,8 +64,11 @@ values.
 | `video` | The video's own text: its title, uploader, description, and chapters, read from a file beside the audio, pasted by the household, or read from the site, and the video's cover |
 | `album_file` | For a song inside a long file, its album file's album fields; see [Segments](Segments.md) |
 | `file_name` | The file's name, the title of last resort |
+| `ai` | What an AI model suggested from the video's text; a suggestion, never shown |
 
-- **The shown value is the first origin that has one,** in the table's order.
+- **The shown value is the first origin that has one,** in the table's order,
+  `ai` left out: it only suggests, so it takes part in no shown value and
+  *Edit details* offers it beside the field instead.
   `files` comes before `video`, since tags are written on purpose, and when a
   file's tags are garbled, the household's value is the way out.
 - **The album fields travel together:** `album`, `album_artist`, `year`,
@@ -209,20 +212,20 @@ values.
 
 An *enricher* proposes values from somewhere the scan doesn't look. It is a
 plugin at its own extension point, `TRACK_ENRICHER`, so a buggy or slow one can't
-harm the core, and each is turned on or off like any plugin. `bilibili-details`
-and `musicbrainz` are built and, like `bilibili`, are off until the config file
-turns them on, since each contacts a site.
+harm the core, and each is turned on or off like any plugin. `bilibili-details`,
+`musicbrainz`, and `ai-details` are built and, like `bilibili`, are off until the
+config file turns them on, since each contacts a site or a provider.
 
 - **Nothing runs by itself.** An enricher contacts its site only when someone
-  asks: *Find details online* or *Find on MusicBrainz* in a Track's menu, for any
-  signed-in Account, or *Find details for all* in Settings → Bilibili and *Find on
-  MusicBrainz for all* in Settings → MusicBrainz, for admins, which queue every
-  eligible Track and say how many they queued. There is no scheduled or automatic
-  run.
+  asks: *Find details online*, *Find on MusicBrainz*, or *Suggest details with AI*
+  in a Track's menu, for any signed-in Account, or *Find details for all* in
+  Settings → Bilibili, *Find on MusicBrainz for all* in Settings → MusicBrainz, and
+  *Suggest for all* in Settings → AI, for admins, which queue every eligible Track
+  and say how many they queued. There is no scheduled or automatic run.
 - **It is asked** with the Track's shown values and their origins (without the
   values the enricher recorded itself), its length, its file's name, whether it
-  is a long file split into songs, and its video id when it reads videos. It
-  answers with values for any field, or
+  is a long file split into songs, its video id when it reads videos, and its
+  video text when it reads that. It answers with values for any field, or
   with the video's text (title, description, and chapters) in place of parsed
   values, and may write one cover into a folder of the Job's, which it names, as
   a download names its file. `bilibili-details` answers the video's text and its
@@ -236,7 +239,8 @@ turns them on, since each contacts a site.
   (its Bilibili Source, or a Library file named for a `BV` id), that is not a
   segment (its album file is asked instead), whose video text didn't come from a
   file beside it or from the household, and whose video wasn't asked about in the
-  last 24 hours. For `musicbrainz`, see [MusicBrainz](#musicbrainz). What each
+  last 24 hours. For `musicbrainz`, see [MusicBrainz](#musicbrainz); for
+  `ai-details`, see [AI suggestions](#ai-suggestions). What each
   subject (a video, or a Track and what it was searched for) was last asked about
   is kept in the database, so a restart forgets nothing. A video that is gone
   counts as asked; a failure that a retry could fix, such as a lost connection or
@@ -245,18 +249,20 @@ turns them on, since each contacts a site.
   site text, a full scan that reads an unchanged sidecar again included, since
   only a paste stands over an unchanged sidecar. Text the household entered while
   a Job runs stays: the Job records nothing over it.
-- **Each Track is one Job,** of the kind `enrich_track` and the target
-  `track:<id>`, carrying the enricher's name. The Jobs of one enricher run one at
+- **Each Track is one Job per enricher,** of the kind `enrich_track` and the
+  target `track:<id>:<enricher>`, so asking a second enricher about a Track
+  queues its own Job rather than returning the first one's. The Jobs of one enricher run one at
   a time, with at least a pause between two calls: 5 seconds for
-  `bilibili-details` and 1 second for `musicbrainz`, counted from the end of one
-  to the start of the next. Like other network Jobs they wait while the Mode is
-  Offline, and `bilibili-details` goes through the site's proxy as Downloads do:
-  the plugin's page, API, and cover requests all use one handler, which takes the
-  proxy as given. `musicbrainz` has no proxy, since MusicBrainz isn't the
-  household's Bilibili route.
+  `bilibili-details`, 1 second for `musicbrainz`, and 2 seconds for `ai-details`,
+  counted from the end of one to the start of the next. Like other network Jobs
+  they wait while the Mode is Offline, and `bilibili-details` goes through the
+  site's proxy as Downloads do: the plugin's page, API, and cover requests all use
+  one handler, which takes the proxy as given. `musicbrainz` and `ai-details` have
+  no proxy, since neither is the household's Bilibili route.
 - **The first refusal stops the enricher.** When the site refuses a request (an
   HTTP 403 or 412, or one of its risk-control codes, such as 352 or 412, in
-  yt-dlp's error, or MusicBrainz's 403), the Job fails as *refused*, every Job of that enricher that
+  yt-dlp's error, MusicBrainz's 403, or the AI provider's 401 or 403), the Job
+  fails as *refused*, every Job of that enricher that
   hasn't started fails with a message saying why, and nothing more is asked until
   an admin resets it in Settings. The stopped state is kept in the database. A
   Job retried while the enricher is stopped fails without asking. A video that
@@ -267,7 +273,7 @@ turns them on, since each contacts a site.
 | --- | --- | --- | --- |
 | `bilibili-details` | `video` | The video's text and cover through yt-dlp, for a video with an id | Built |
 | `musicbrainz` | `musicbrainz` | The MusicBrainz API and the Cover Art Archive, at most once a second | Built |
-| `ai` | suggestions only | A language model, with the household's key | Later, if wanted |
+| `ai-details` | `ai`, suggestions only | An AI model of the household's choice, with the household's key | Built |
 
 - **The site enricher is its own plugin,** not part of `bilibili`, so its faults
   never stop Downloads. It reuses the Bilibili plugin's yt-dlp wrapper and info
@@ -276,9 +282,9 @@ turns them on, since each contacts a site.
   the text without one.
 - **Each enricher stops on its own:** MusicBrainz refusing a request leaves
   `bilibili-details` running, and the reverse.
-- **An AI enricher would only suggest:** its values show in *Edit details* for
-  the household to take, never as shown values, since it reads the same text
-  the parser does.
+- **The AI enricher only suggests:** its values show in *Edit details* for the
+  household to take, never as shown values, since it reads the same text the
+  parser does.
 
 ### MusicBrainz
 
@@ -339,6 +345,69 @@ library would add nothing.
   file's own tags and the household's values stay over it, and it replaces what
   only the video said. Its album fields travel together as any origin's do.
 
+### AI suggestions
+
+`ai-details` asks an AI model what a Track's video text says, and records the
+answer as suggestions. It never changes what a Track shows: the household takes a
+suggestion with one click in *Edit details*, or loads a suggested song list in the
+songs editor.
+
+- **The provider is the household's choice,** set by an admin in Settings → AI: a
+  base URL, a model, and a key. One hand-written client on `requests` speaks the
+  OpenAI chat protocol, so it works unchanged with DeepSeek, OpenAI, Anthropic's
+  compatible endpoint, and a local Ollama; the section offers each as a preset
+  that fills the base URL and a model. It sends `POST {base_url}/chat/completions`
+  with the key as a bearer token, the model, a system and a user message,
+  `response_format` set to a JSON object, temperature 0, and a bound on the
+  answer, and uses nothing only some providers accept: no JSON schema, no tools,
+  no streaming. A base URL is `http` or `https` with no login, query, or fragment,
+  and `http` only for an address on the machine itself.
+- **The key is a secret.** It is kept in the Keychain, as logins and proxies are,
+  and the database keeps only whether there is one. The API takes it as a secret
+  and never answers it, so Settings shows that a key is set and can replace or
+  remove it. It reaches the Job process in memory with the Job's start, in the one
+  header of the request, never in a Job's request, a log, a message, or an error;
+  every message of a Job is redacted of it again. A refused setting answers 422
+  without repeating what was sent. A provider on the machine itself, such as
+  Ollama, needs no key.
+- **What is sent.** Only the Track's video text (title, description, and chapters,
+  wherever the text came from), its file's name, its length, and the details it
+  shows. The description is cut to its first 6,000 characters, and Settings says
+  so beside a plain sentence that the video's text goes to the provider. The
+  system message names the answer's shape, as a JSON model must be shown it, and
+  says the video's text is data, not instructions.
+- **What comes back** is a JSON object whose fields are all optional: a title,
+  artist, album, year, and a song list of start, title, and artist. It is checked
+  as the household's input is: text of at most 512 characters, a year from 1000 to
+  2999, and at most 300 songs whose starts rise at least a second a song. A value
+  over its limit is rejected, never cut. An answer that does not validate is asked
+  for once more, showing the model its own answer and the fields that failed; if
+  that fails too, the Job fails as an invalid answer, and the Track counts as asked.
+  An answer cut off at its length bound, or empty, is invalid at once.
+- **Failures.** A 401 or 403 means the key or the account is wrong: the enricher
+  stops, as a site's refusal stops one, with a message to check the key, and an
+  admin resets it in Settings once it is fixed. A 429 or 5xx is waited out as long
+  as `Retry-After` says (5 seconds without it), up to 3 tries and at most 30
+  seconds a wait, and then fails the Job as a network failure, which waits and
+  tries again later. A timeout or lost connection is a network failure. Another
+  4xx is an invalid answer that says to check the base URL and the model.
+- **Which Tracks are asked for.** A Track that has video text, from the site, a
+  file beside it, or the household, and is not a segment, once the provider is set
+  up. Asked once a day per Track and text: the subject kept is a hash of the
+  Track's id and its video text, so pasting better text asks again at once.
+- **Where the suggestions are kept.** The values are the Track's `ai` origin,
+  replaced whole by the next suggestion, so an answer that suggests nothing clears
+  the last. A suggested song list is kept apart, one per Track, only when it is a
+  song list the songs editor accepts. Both go with the Track.
+- **Where they show.** *Edit details* offers each suggested value beside its field
+  with *Use*, which copies it into the household's edit, to be saved or not; a
+  suggestion equal to what the box holds is not offered. The songs editor offers a
+  suggested list as *Use the N songs the AI suggested*. Neither the web client's
+  `shownOf` nor the server's precedence includes the `ai` origin; both are checked
+  against the same cases.
+- **Its own lane.** Jobs of `ai-details` run one at a time, at least 2 seconds
+  apart. They wait while the Mode is Offline, a local provider included.
+
 ## What the API shows
 
 | Route | Who | Does |
@@ -354,6 +423,10 @@ library would add nothing.
 | `POST /api/enrichers/{name}/tracks/{id}` | Signed in | Queues the Track's Job, or returns the one already active; 409 with why when the Track is not eligible |
 | `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |
 | `POST /api/enrichers/{name}/reset` | Admin | Lets a stopped enricher be asked again; 204, also when it was not stopped |
+| `GET /api/ai` | Admin | The provider's base URL, model, and whether it has a key, or null; the presets; how much of a description is sent |
+| `PUT /api/ai` | Admin | Sets the base URL and model, and the key when one is given; 422 never repeats the body |
+| `DELETE /api/ai/key` | Admin | Forgets the key and keeps the base URL and model |
+| `DELETE /api/ai` | Admin | Forgets the provider and its key; 204, also when none was set |
 
 Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 `genre`.
@@ -367,8 +440,7 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 4. **The video's text:** the parser, *Paste the video's details*, and
    `<name>.info.json` beside the file.
 5. **Segments:** see [Segments](Segments.md).
-6. **The site enricher** for Bilibili, and **MusicBrainz,** both built; then AI,
-   if wanted.
+6. **The site enricher** for Bilibili, **MusicBrainz,** and **AI,** all built.
 
 ## Testing
 
@@ -395,11 +467,21 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
   two made by hand for 朴树's 生如夏花), with a fake clock for its pauses: query
   escaping, ranking, the length window and the score floor, the cover present,
   absent, oversized, and not an image, a 503 waited out and then failing, and a 403
-  stopping the enricher. No test contacts a site, MusicBrainz, or a model.
+  stopping the enricher. The AI client runs over a fake `requests` transport as well:
+  the request body and URL for each provider's base URL, a key only in the header,
+  an answer valid, invalid then valid, and invalid twice, one cut off, a 401 and a
+  429 and a lost connection, and a key never in a message or a log. In real Jobs,
+  the suggestion is recorded and shown nowhere, replaced by the next, and a
+  refused key stops the enricher. No test contacts a site, MusicBrainz, or a model.
 
 ## Left for later
 
-- **An AI enricher.**
+- **Waiting while Offline for a local provider:** a provider on the machine itself
+  would not contact the Internet, but every Job of the enrich kind waits for the
+  Mode; telling them apart would touch how Jobs hold, for one setup.
+- **Asking again at once** when the household pastes better text for a Track the
+  AI has just been asked about.
+- **Counting what a provider charges.** Settings does not show a spend.
 - **Choosing among close MusicBrainz matches:** the best candidate is taken; the
   household corrects a wrong one in *Edit details*. A long file's songs are not
   matched one by one to the release's tracks.

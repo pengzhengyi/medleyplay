@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from medleyplay.domain.covers import cover_id
-from medleyplay.plugin_api import ShownDetail
+from medleyplay.plugin_api import AiEndpoint, ShownDetail, SuggestedSong, VideoText
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext
 from medleyplay.plugin_host.loader import load_plugins
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob, run
@@ -16,12 +16,12 @@ PROXY = "socks5h://127.0.0.1:7890"
 LET_DOWN = (ShownDetail(field="title", value="Let Down", origin="files"),)
 
 
-def _context(tmp_path: Path, proxy: str | None = None) -> JobContext:
+def _context(tmp_path: Path, proxy: str | None = None, ai: AiEndpoint | None = None) -> JobContext:
     """A Job's context in this process, asking the test plugin `reader`."""
     work_dir = tmp_path / "work"
     work_dir.mkdir()
     endpoints = load_plugins(TEST_PLUGINS, ["reader"], lambda _: None)
-    return JobContext(work_dir, endpoints, lambda _: None, proxy=proxy)
+    return JobContext(work_dir, endpoints, lambda _: None, proxy=proxy, ai=ai)
 
 
 def _ask(video: str) -> EnrichJob:
@@ -125,5 +125,70 @@ def test_a_refusal_by_musicbrainz_fails_the_job_as_refused(tmp_path: Path) -> No
 
     with pytest.raises(AnswerFailedError, match=r"HTTP Error 403\.") as failure:
         run(EnrichJob(enricher="musicbrainz", subject="k", shown=shown), _context(tmp_path))
+
+    assert failure.value.kind == "refused"
+
+
+def _suggest(title: str, description: str = "Blue Room, 2016") -> EnrichJob:
+    """The Job that asks the AI about a Track whose video text has the title `title`."""
+    return EnrichJob(
+        enricher="ai-details",
+        subject="a key",
+        shown=LET_DOWN,
+        file_name="BV1dm4y1s7ak.m4a",
+        text=VideoText(title=title, description=description),
+    )
+
+
+def test_what_the_ai_suggests_is_passed_on_as_values(tmp_path: Path) -> None:
+    found = run(_suggest("Night Drive"), _context(tmp_path))
+
+    assert found == EnrichedTrack(
+        enricher="ai-details",
+        subject="a key",
+        values={"title": "Night Drive", "artist": "Blue Room", "album": "Re:Start", "year": 2016},
+    )
+
+
+def test_the_songs_the_ai_suggests_are_passed_on(tmp_path: Path) -> None:
+    found = run(_suggest("Album"), _context(tmp_path))
+
+    assert found.songs == (
+        SuggestedSong(start_ms=0, title="Intro"),
+        SuggestedSong(start_ms=192_000, title="Night Drive", artist="Blue Room"),
+        SuggestedSong(start_ms=4_060_000, title="Outro"),
+    )
+
+
+def test_the_text_and_the_file_name_and_the_jobs_provider_reach_the_enricher(
+    tmp_path: Path,
+) -> None:
+    ai = AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234")
+
+    found = run(_suggest("Echo", "x" * 40), _context(tmp_path, ai=ai))
+
+    assert found.values["album"] == (
+        "provider=https://api.deepseek.com deepseek-flash key=True text=40 0 file=BV1dm4y1s7ak.m4a"
+    )
+
+
+def test_a_job_without_a_provider_asks_the_enricher_with_none(tmp_path: Path) -> None:
+    found = run(_suggest("Echo"), _context(tmp_path))
+
+    assert str(found.values["album"]).startswith("provider=none")
+
+
+def test_an_answer_the_ai_gave_that_is_invalid_fails_the_job_as_invalid(tmp_path: Path) -> None:
+    with pytest.raises(AnswerFailedError, match="not the JSON asked for") as failure:
+        run(_suggest("Invalid"), _context(tmp_path))
+
+    assert failure.value.kind == "invalid"
+
+
+def test_a_key_the_provider_refuses_fails_the_job_as_refused_saying_to_check_the_key(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(AnswerFailedError, match="Check the key") as failure:
+        run(_suggest("Refused"), _context(tmp_path))
 
     assert failure.value.kind == "refused"

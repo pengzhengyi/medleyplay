@@ -57,8 +57,9 @@ export type Detail =
   | "genre"
   | "cover";
 
-/** Where a value came from, the first shown when several give one. */
-export type Origin = "household" | "files" | "musicbrainz" | "video" | "album_file" | "file_name";
+/** Where a value came from, the first shown when several give one; `ai` is never shown. */
+export type Origin =
+  "household" | "files" | "musicbrainz" | "video" | "album_file" | "file_name" | "ai";
 
 /** A value of a detail, and where it came from. */
 export interface Found {
@@ -105,6 +106,8 @@ export interface Songs {
   readonly needs_check: boolean;
   readonly songs: readonly SplitSong[];
   readonly found: readonly (readonly Song[])[];
+  /** The song list an AI model suggested for the file, or empty. */
+  readonly suggested: readonly Song[];
 }
 
 /** A row of the songs editor: the song it keeps by `id`, or `null` for a new one. */
@@ -155,6 +158,8 @@ export interface JobEvent {
 export const DETAILS_ENRICHER = "bilibili-details";
 /** The enricher that finds a Track's release and cover on MusicBrainz. */
 export const MUSICBRAINZ_ENRICHER = "musicbrainz";
+/** The enricher that suggests a Track's details from its video text with an AI model. */
+export const AI_ENRICHER = "ai-details";
 
 /** An enricher: whether it can be asked, whether the site stopped it, and for which Tracks. */
 export interface Enricher {
@@ -176,6 +181,29 @@ export interface ProxySetting {
   /** The address alone, such as `socks5h://127.0.0.1:7890`. */
   readonly display: string;
   readonly saved_at: string;
+}
+
+/** The AI provider as the server shows it: its address and model, never its key. */
+export interface AiProvider {
+  readonly base_url: string;
+  readonly model: string;
+  readonly has_key: boolean;
+  readonly saved_at: string;
+}
+
+/** A provider to start from. */
+export interface AiPreset {
+  readonly name: string;
+  readonly base_url: string;
+  readonly model: string;
+}
+
+/** The provider, or `null` when it is not set up, and the presets to start from. */
+export interface AiSetting {
+  readonly provider: AiProvider | null;
+  readonly presets: readonly AiPreset[];
+  /** The most characters of a video's description sent to the provider. */
+  readonly max_description: number;
 }
 
 /** The household's settings, and the revision they were read at; 0 if never saved. */
@@ -525,6 +553,17 @@ export const api = {
   saveProxy: (site: string, url: string) =>
     call<ProxySetting>("PUT", `/api/proxies/${site}`, { url }),
   removeProxy: (site: string) => call<undefined>("DELETE", `/api/proxies/${site}`),
+  /** The AI provider, or `null` when none is set up; admins only. */
+  ai: () => call<AiSetting>("GET", "/api/ai"),
+  /** Set the provider's address and model, and its key when one is given; admins only. */
+  saveAi: (baseUrl: string, model: string, key?: string) =>
+    call<AiProvider>("PUT", "/api/ai", {
+      base_url: baseUrl,
+      model,
+      ...(key === undefined ? {} : { key }),
+    }),
+  /** Forget the provider's key and keep its address and model; admins only. */
+  removeAiKey: () => call<AiProvider>("DELETE", "/api/ai/key"),
   /** The enricher's state, and the Tracks it may be asked about. */
   enricher: (name: string) => call<Enricher>("GET", `/api/enrichers/${name}`),
   /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */

@@ -18,10 +18,9 @@ from tests.support.musicbrainz import (
     SHU_PU,
     FakeMusicBrainz,
     FakeMusicBrainzFactory,
-    FakeWaits,
     MusicBrainzFactory,
-    Reply,
 )
+from tests.support.transport import FakeWaits, Reply
 
 LET_DOWN_VALUES = {
     "title": "Let Down",

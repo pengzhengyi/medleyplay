@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The Radio tab** — *My station* plays songs the Account likes and more like
+  them, refilling as it plays, and shelves suggest albums: more like the one
+  played most lately, not played yet by artists the Account plays, loved albums
+  to rediscover, and albums just added, each saying why. A card plays its album
+  or starts a station from it.
 - **Filtering and grouping the song table** — a *Filter* panel of native
   controls keeps songs by artist, album, genre, year, rating, favorites, or
   whether they play now, offering only the values the other filters leave; a

@@ -1,8 +1,11 @@
 # Recommendations
 
 > [!NOTE]
-> **Status: proposed.** This note describes how medleyplay suggests what to play
-> next from an Account's own Library: a radio from a song, and a few mixes. It
+> **Status: the Radio tab and its stations are built, in the web client; *Start
+> radio* in a song's menu and the mixes are proposed.** This note describes how
+> medleyplay suggests what to play
+> next from an Account's own Library: a Radio tab of albums for the Account and
+> a station of its own, a radio from a song, and a few mixes. It
 > builds on plays, favorites, and ratings ([Playback](Playback.md),
 > [Web client](Web%20client.md)) and on Track details
 > ([Track details](Track%20details.md)). Everything here works Offline and sends
@@ -14,6 +17,7 @@
 - [What it learns from](#what-it-learns-from)
 - [Which songs can be suggested](#which-songs-can-be-suggested)
 - [How songs are scored](#how-songs-are-scored)
+- [The Radio tab](#the-radio-tab)
 - [Radio](#radio)
 - [Mixes](#mixes)
 - [Sources considered](#sources-considered)
@@ -23,6 +27,9 @@
 
 ## What it offers
 
+- **The Radio tab:** *My station*, a radio from the Account's own taste, and
+  shelves of albums to play: *More like …*, *Not played yet*, *Rediscover*, and
+  *Just added*.
 - **Radio:** *Start radio* in a song's menu and in Now Playing fills the queue
   with songs like it, and keeps adding more as it plays.
 - **Mixes:** a *For you* view holds three mixes per Account: *On repeat*,
@@ -83,24 +90,80 @@ recency  = 2 if played in the last 2 hours, 1 if in the last day
 - **Each suggestion says why** in one short line, from its largest term:
   *Same artist*, *Same album*, *Same genre*, *A favorite*.
 
+## The Radio tab
+
+A tab of its own, after Songs, with *My station* at the top and shelves of
+album cards below, each card with its cover, name, album artist, and a line
+saying why it is there.
+
+- **An album** is its name and its album artist (the artist when there is
+  none), compared folded with the client's own `fold`, as the Albums view
+  groups them; the songs of one split file are one album, whatever artists they
+  name, called by their album or else by the file's title. A song with no album,
+  or one named only by a video's id (`BV…`), is on none. Only albums of at
+  least 2 songs that play now are suggested, so a single and an album file are
+  not.
+- **An album's taste** is the mean taste of its 3 best-liked songs, so a few
+  favorites make an album loved; **its last play** the latest of its songs';
+  **its added** the earliest *added* of theirs. An album where most rated songs
+  are rated 1–2 is never suggested.
+- **The Account's affinity** for an album artist or a genre is the log of the
+  summed taste of the Account's songs by that artist or with that genre, so
+  playing an artist's songs makes its other albums likelier without the artist
+  with the most songs crowding out the rest; a genre most albums share counts
+  for less, as rarely as it is found. An empty artist or genre is never one.
+
+| Shelf | Albums | Ranked by | Says |
+| --- | --- | --- | --- |
+| *More like …* | Like the most played of the albums played in the last 30 days: same album artist 3, each shared genre 2, years at most 5 apart up to 1 | Likeness | *Like 生如夏花* |
+| *Not played yet* | No song played, by an album artist or with a genre the Account likes | Affinity for the artist, then half the genre's | *New to you, from 朴树* |
+| *Rediscover* | Album taste of at least 0.75, not played in 60 days | Taste times the months since, up to 12 | *Not played since March 2026* |
+| *Just added* | Added in the last 30 days, not every song played | Newest first | *Added 3 days ago* |
+
+- **The client knows lifetime plays, not plays by day:** *played most in the
+  last 30 days* is the album with the most plays among those played in the last
+  30 days.
+- **Each album shows once,** on the first shelf in the table's order that takes
+  it, with at most 2 albums by one album artist on a shelf and at most 12 a
+  shelf. A shelf with none is not shown; when the Account has played and liked
+  nothing, a last shelf, *From your Library*, shows the newest added albums.
+- **Stable for a day:** ties break by a generator seeded by the Account and the
+  date, so the tab doesn't reshuffle on every visit.
+- **A card opens its album** when its songs name one; its play button plays the
+  album's songs that play now, and *Start a station* starts a radio from the
+  album's most played song.
+- ***My station*** is a radio from the Account's taste: its first song is drawn
+  from the Account's 20 best-liked songs, at most 2 by one artist and 2 from one
+  album, never one still titled by a video's id. When songs like it run out, it
+  goes on from another liked song.
+- **Computed in the web client,** which already holds every Track with the
+  Account's favorite, rating, plays, last play, and added: the tab needs no new
+  route, works the moment the Library loads, and goes on working with the server
+  out of reach. Folded names and genres are remembered, and each pick walks one
+  list sorted once: 20,000 Tracks shelve in about 80 ms and give ten picks in
+  about 60.
+
 ## Radio
 
 - **The seed is a song;** radio from an album or artist seeds from its most
   played song, or its first if none was played.
+- **A candidate shares an artist, album, album artist, or genre with the seed;**
+  a close year only adds to that. A seed with nothing tagged has no radio.
 - **Picks are drawn, not ranked:** the next song is drawn from the top 30
   candidates, each weighted by its score (all candidates score above 0), so two
-  radios from one seed differ. The draw uses a generator seeded by the request,
-  so a test fixes it.
+  radios from one seed differ. The draw uses a generator seeded by the Account
+  and the moment the station starts, so a test fixes it.
 - **Variety:** never the same song twice in one radio, at most two songs in a
   row by one artist, and at most three from one album. The rules filter the
-  candidates before the top 30 are taken; when too few remain, the album rule is
+  candidates before the top 30 are taken; when none remains, the album rule is
   dropped first, then the artist rule. When no candidate remains, the radio
-  ends, and the queue says so.
-- **The server keeps no radio:** the client sends the seed, the generator's
-  seed, and the songs the radio already played, and gets the next ones. The
-  queue holds the next ten and asks for more when four remain. Choosing another
-  song or turning shuffle on ends the radio; the queue shows that it is a radio,
-  and from which song.
+  ends.
+- **The client keeps the radio:** it draws from the Tracks it holds, with the
+  seed, the generator, and the songs the radio already queued. The queue holds
+  the next ten and draws more when four remain; *Play next* and *Add to queue*
+  leave it running. Playing a song it didn't queue, or turning shuffle on, ends
+  it. It lives in the page alone, so a reload ends it, and the queue it filled
+  plays on as an ordinary queue.
 
 ## Mixes
 
@@ -130,27 +193,25 @@ An empty mix says why, such as *Play some songs and they'll show here*.
 
 ## What the API shows
 
-- `POST /api/radio`: given a seed Track, a generator seed, the ids already
-  played, and a count of at most 25, the next songs, each with its reason; a
-  read, sent as a body because the list of ids grows.
+- **Radio and the Radio tab need no route:** the web client draws them from the
+  Tracks of `GET /api/tracks`.
 - `GET /api/mixes`: the Account's mixes, each with when it was built, its songs,
   and their reasons; `POST /api/mixes/rebuild` rebuilds them now.
 
 ## Testing
 
-- **Example-based:** hand-made libraries in `tests/support` where the expected
-  pick is obvious (one artist's songs, an album, an untagged pair that must not
-  match, a disliked song, a site Track without a Download), each scoring term on
-  its own.
-- **Properties (Hypothesis):** a radio never repeats a song, never suggests a
-  song rated 1–2, one that cannot play now, or an album file; it keeps the
-  variety rules unless too few songs remain; a mix holds only the Account's own
-  signals; the same seed and generator give the same radio.
-- **Degenerate libraries:** no plays, one artist, one album, everything unrated,
-  nothing tagged.
-- **Performance:** radio for a Library of 20,000 Tracks answers within 200 ms on
-  the household's machine, from a snapshot of the Tracks' details and states
-  kept until the catalog changes, as the download policy keeps its own.
+- **Example-based, in Vitest:** hand-made libraries where the expected pick is
+  obvious (one artist's songs, an album, an untagged pair that must not match,
+  a song sharing only a year, a disliked song, a site Track without a
+  Download, a split file's songs), each scoring term and shelf on its own.
+- **Invariants over many generators:** a radio never repeats a song, never
+  suggests a song rated 1–2, one that cannot play now, or an album file; it
+  plays no three songs in a row by one artist while others remain; the same
+  generator gives the same radio.
+- **Degenerate libraries:** no plays, nothing tagged, albums named for a video,
+  singles only.
+- **Performance:** shelves and ten picks for 20,000 Tracks, bounded at 5 seconds
+  to catch quadratic work without failing on a busy machine.
 
 ## Left for later
 

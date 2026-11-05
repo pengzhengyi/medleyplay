@@ -13,7 +13,8 @@ The album fields travel together: they show from the first origin that names an
 album, so one Track never mixes two releases; the household's own value for any
 of them still wins on its own. When that origin has no cover, the cover comes
 from the first origin naming no album, such as an image beside a file whose
-album only the video names.
+album only the video names. An album the household names corrects the one it
+replaces, so that one's cover stays unless the household gives its own.
 """
 
 from collections.abc import Mapping
@@ -178,10 +179,7 @@ def shown(values: Mapping[Origin, Values]) -> dict[Field, Shown]:
 
 
 def _album(values: Mapping[Origin, Values]) -> dict[Field, Shown]:
-    named = next(
-        (origin for origin in ORIGINS if values.get(origin, {}).get(Field.ALBUM)),
-        None,
-    )
+    named = _naming_an_album(values, ORIGINS)
     # Without a named album, each album field falls back on its own.
     origins = ORIGINS if named is None else (Origin.HOUSEHOLD, named)
     found: dict[Field, Shown] = {}
@@ -189,6 +187,11 @@ def _album(values: Mapping[Origin, Values]) -> dict[Field, Shown]:
         first = _first(values, field, origins)
         if first is not None:
             found[field] = first
+    if Field.COVER not in found and named is Origin.HOUSEHOLD:
+        # The household's album corrects the album it replaces, whose cover stays.
+        replaced = _naming_an_album(values, ORIGINS[1:])
+        if replaced is not None and (cover := _first(values, Field.COVER, (replaced,))):
+            found[Field.COVER] = cover
     if Field.COVER not in found:
         # A cover from an origin naming no album belongs to no other release.
         unnamed = tuple(o for o in ORIGINS if not values.get(o, {}).get(Field.ALBUM))
@@ -196,6 +199,10 @@ def _album(values: Mapping[Origin, Values]) -> dict[Field, Shown]:
         if cover is not None:
             found[Field.COVER] = cover
     return found
+
+
+def _naming_an_album(values: Mapping[Origin, Values], origins: tuple[Origin, ...]) -> Origin | None:
+    return next((origin for origin in origins if values.get(origin, {}).get(Field.ALBUM)), None)
 
 
 def _first(

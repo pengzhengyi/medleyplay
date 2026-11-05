@@ -211,11 +211,14 @@ def test_the_album_fields_never_mix_two_releases(values: dict[Origin, Values]) -
         assert len(others) <= 1
         if Field.COVER in found:
             cover = found[Field.COVER].origin
-            named = next(origin for origin in ORIGINS if values.get(origin, {}).get(Field.ALBUM))
-            assert cover in {Origin.HOUSEHOLD, named} or (
+            naming = [origin for origin in ORIGINS if values.get(origin, {}).get(Field.ALBUM)]
+            # The household's album corrects the first other one naming an album.
+            corrected = next((o for o in naming if o is not Origin.HOUSEHOLD), None)
+            album_origins = {naming[0]} | ({corrected} if naming[0] is Origin.HOUSEHOLD else set())
+            assert cover in {Origin.HOUSEHOLD} | album_origins or (
                 not values[cover].get(Field.ALBUM)
                 and Field.COVER not in values.get(Origin.HOUSEHOLD, {})
-                and Field.COVER not in values[named]
+                and all(Field.COVER not in values[o] for o in album_origins if o is not None)
             )
 
 

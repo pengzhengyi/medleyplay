@@ -19,6 +19,7 @@ import { AddToPlaylist } from "./AddToPlaylist";
 import { EditDetails } from "./EditDetails";
 import { EditSongs } from "./EditSongs";
 import { Nav } from "./Nav";
+import { NowPlaying } from "./NowPlaying";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
 import { SearchBox } from "./SearchBox";
@@ -52,8 +53,20 @@ export function Library({
   const [player, audio] = usePlayer(byId, onSignedOut);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
+  // The view Now Playing was opened over, while it is open; going to another view closes it.
+  const here = hrefOf(route);
+  const [nowPlayingOver, setNowPlayingOver] = useState<string | undefined>(undefined);
+  if (nowPlayingOver !== undefined && nowPlayingOver !== here) {
+    setNowPlayingOver(undefined);
+  }
+  const [nowPlayingQueue, setNowPlayingQueue] = useState(false);
   const playingId = current(player.queue)?.trackId;
   const playing = playingId === undefined ? undefined : byId.get(playingId);
+  // With nothing left playing, Now Playing closes, and the next song doesn't reopen it.
+  if (nowPlayingOver !== undefined && playing === undefined && library.loaded) {
+    setNowPlayingOver(undefined);
+  }
+  const nowPlaying = nowPlayingOver !== undefined && playing !== undefined;
   // The song being added to Playlists, while its dialog is open, and what was last done.
   const [adding, setAdding] = useState<Track | undefined>(undefined);
   // The song whose details are being edited, while its dialog is open.
@@ -207,11 +220,16 @@ export function Library({
       document.getElementById("search")?.focus();
     },
     queue: () => {
-      if (window.matchMedia(NARROW).matches) {
+      if (nowPlaying) {
+        setNowPlayingQueue((open) => !open);
+      } else if (window.matchMedia(NARROW).matches) {
         setQueueOpen((open) => !open);
       } else {
         document.getElementById("queue")?.focus();
       }
+    },
+    nowPlaying: () => {
+      setNowPlayingOver((over) => (over === undefined && playing !== undefined ? here : undefined));
     },
     help: () => {
       setListingShortcuts(true);
@@ -296,6 +314,9 @@ export function Library({
         onToggleQueue={() => {
           setQueueOpen((open) => !open);
         }}
+        onOpenNowPlaying={() => {
+          setNowPlayingOver(here);
+        }}
       />
       {linking !== undefined && (
         <AddLink
@@ -323,6 +344,22 @@ export function Library({
           }}
           onClose={() => {
             setFiling(undefined);
+          }}
+        />
+      )}
+      {nowPlaying && (
+        <NowPlaying
+          player={player}
+          track={playing}
+          tracks={byId}
+          onFavorite={actions.onFavorite}
+          menuActions={actions}
+          queueOpen={nowPlayingQueue}
+          onToggleQueue={() => {
+            setNowPlayingQueue((open) => !open);
+          }}
+          onClose={() => {
+            setNowPlayingOver(undefined);
           }}
         />
       )}

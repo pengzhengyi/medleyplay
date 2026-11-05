@@ -2,8 +2,8 @@
 
 > [!NOTE]
 > **Status: implemented.** This note describes the client's views: the song
-> table, Artists, Albums, Downloaded, Playlists, search, the keyboard
-> shortcuts, and Settings, and how they get their data. What the client must do is in [MVP](MVP.md#client-notes);
+> table, Artists, Albums, Downloaded, Playlists, search, Now Playing, the
+> keyboard shortcuts, and Settings, and how they get their data. What the client must do is in [MVP](MVP.md#client-notes);
 > the player, the queue, and play modes are in
 > [Playback](Playback.md#the-web-client); adding from Bilibili and adding a
 > Track's file by hand are in [Manual downloads](Manual%20downloads.md#the-web-client).
@@ -14,6 +14,7 @@
 - [Views](#views)
 - [The song table](#the-song-table)
 - [A song's menu](#a-songs-menu)
+- [Now Playing](#now-playing)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Search](#search)
 - [Favorites and ratings](#favorites-and-ratings)
@@ -133,6 +134,25 @@ no router package.
   refuses one. Escape, Cancel, or a click outside close it. A notice above the
   player says where the song went.
 
+## Now Playing
+
+- **The song playing, over the whole screen:** its cover large, over the same
+  cover blurred far past recognition, then its title, its artist and album as
+  links to their views, the position with the time gone and left, the
+  player's controls, the volume, and *Up next*.
+- **It opens from the player's cover,** which shows on every width for that,
+  or with F, and closes with Escape, its close button, F again, or by going to
+  another view, as its artist and album links and its menu's *Go to* do.
+- **Its own palette is light on dark,** whatever the theme: it sets the page's
+  tokens inside itself, so the controls it shares with the player take white
+  for the accent. Without a cover, the blur is a gradient of the theme's accent.
+- **Paused, the cover settles back** a little, and grows again when the music
+  plays; with reduced motion, it stays put and the view opens without rising.
+- ***Up next*** shows the queue beside the song on a wide screen, and in the
+  cover's place on a phone; Q opens and closes it there.
+- **The shortcuts work while it is open,** though it is a modal `<dialog>`: it
+  is marked `data-shortcuts`, which lets the keys through.
+
 ## Keyboard shortcuts
 
 | Keys | Command |
@@ -145,6 +165,7 @@ no router package.
 | S, R, and L | Shuffle, Repeat, and favorite the song playing |
 | / | Go to the search box |
 | Q | Open or close *Up next*; where it is always open, go to it |
+| F | Open or close Now Playing |
 | Shift + / (?) | List the shortcuts |
 
 - **Keys are physical keys,** as `KeyboardEvent.code` names them, so a shortcut
@@ -159,7 +180,7 @@ no router package.
   an arrow moves a focused slider, and Space or Enter presses a button reached
   with the keyboard. A button focused by a click doesn't keep Space, so Space
   after clicking a song pauses it rather than playing it again. An open dialog
-  or menu keeps every key.
+  or menu keeps every key, except Now Playing.
 - **Holding a key** repeats seeking and the volume, but not the others, so
   holding Space doesn't flicker between play and pause.
 - **A screen reader's browse mode** takes bare letters and arrows for itself,
@@ -278,8 +299,7 @@ tab bar clear of the iPhone's home indicator (`env(safe-area-inset-bottom)`).
 
 ## Left for later
 
-- **Searching Bilibili by words,** the stage view, and the *Downloads* tab of
-  Jobs.
+- **Searching Bilibili by words** and the *Downloads* tab of Jobs.
 - **Editing Playlists** from the client: renaming, reordering, and removing.
 - **Loading Tracks page by page,** if a Library outgrows loading whole, and
   answering an unchanged list with a 304.

@@ -41,9 +41,15 @@ const INSTRUCTIONS = {
 export function QueuePanel({
   player,
   tracks,
+  id = "queue",
+  announceIn,
 }: {
   readonly player: Player;
   readonly tracks: ReadonlyMap<number, Track>;
+  /** The panel's id, for a second panel on the page such as Now Playing's. */
+  readonly id?: string;
+  /** Where dragging is announced: inside a modal dialog, which leaves the page behind inert. */
+  readonly announceIn?: HTMLElement | null;
 }) {
   const entries = upNext(player.queue);
   const sensors = useSensors(
@@ -76,7 +82,7 @@ export function QueuePanel({
   };
 
   return (
-    <section id="queue" className="queue" aria-label="Up next" tabIndex={-1}>
+    <section id={id} className="queue" aria-label="Up next" tabIndex={-1}>
       <header>
         <h2>Up next</h2>
         <button
@@ -95,7 +101,11 @@ export function QueuePanel({
           sensors={sensors}
           collisionDetection={closestCenter}
           modifiers={MODIFIERS}
-          accessibility={{ announcements, screenReaderInstructions: INSTRUCTIONS }}
+          accessibility={{
+            announcements,
+            screenReaderInstructions: INSTRUCTIONS,
+            ...(announceIn ? { container: announceIn } : {}),
+          }}
           onDragEnd={drop}
         >
           <SortableContext

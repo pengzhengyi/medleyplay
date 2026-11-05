@@ -1419,27 +1419,27 @@ button.icon.heart.on:hover,
   font-size: 0.85rem;
 }
 
-.player .controls {
+:is(.player, .now-playing) .controls {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.player .controls button.icon {
+:is(.player, .now-playing) .controls button.icon {
   color: var(--ink);
 }
 
 /* A play mode that is on keeps the accent, with a dot beneath. */
-.player .controls button.mode {
+:is(.player, .now-playing) .controls button.mode {
   position: relative;
   color: var(--muted);
 }
 
-.player .controls button.mode.on {
+:is(.player, .now-playing) .controls button.mode.on {
   color: var(--accent);
 }
 
-.player .controls button.mode.on::after {
+:is(.player, .now-playing) .controls button.mode.on::after {
   position: absolute;
   bottom: 0.15rem;
   left: 50%;
@@ -1451,7 +1451,7 @@ button.icon.heart.on:hover,
   translate: -50% 0;
 }
 
-.player button.play {
+:is(.player, .now-playing) button.play {
   width: 3rem;
   height: 3rem;
   background: var(--accent);
@@ -1463,11 +1463,11 @@ button.icon.heart.on:hover,
     box-shadow 120ms;
 }
 
-.player button.play:disabled {
+:is(.player, .now-playing) button.play:disabled {
   opacity: 0.5;
 }
 
-.player button.play:hover:not(:disabled) {
+:is(.player, .now-playing) button.play:hover:not(:disabled) {
   background: var(--accent);
   color: var(--accent-ink);
   transform: scale(1.05);
@@ -1523,7 +1523,7 @@ button.icon.heart.on:hover,
 /* The volume: down, a short bar, and up. */
 
 /* Pico styles a `role="group"` as a joined row of fields; the volume is three controls. */
-.player .volume {
+:is(.player, .now-playing) .volume {
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -1533,13 +1533,13 @@ button.icon.heart.on:hover,
   box-shadow: none;
 }
 
-.player .volume button.icon {
+:is(.player, .now-playing) .volume button.icon {
   flex: none;
   margin: 0;
   border-radius: 999px;
 }
 
-.player .volume input {
+:is(.player, .now-playing) .volume input {
   flex: none;
   width: 5.5rem;
   height: 1.2rem;
@@ -1549,7 +1549,7 @@ button.icon.heart.on:hover,
   appearance: none;
 }
 
-.player .volume input::-webkit-slider-thumb {
+:is(.player, .now-playing) .volume input::-webkit-slider-thumb {
   width: 0.8rem;
   height: 0.8rem;
   margin-top: calc(3px - 0.4rem);
@@ -1560,7 +1560,7 @@ button.icon.heart.on:hover,
   appearance: none;
 }
 
-.player .volume input::-moz-range-thumb {
+:is(.player, .now-playing) .volume input::-moz-range-thumb {
   width: 0.8rem;
   height: 0.8rem;
   border: none;
@@ -1570,7 +1570,7 @@ button.icon.heart.on:hover,
 
 /* The volume's bar: a short track, filled to the volume. */
 
-.player .volume input::-webkit-slider-runnable-track {
+:is(.player, .now-playing) .volume input::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;
   background: linear-gradient(
@@ -1580,7 +1580,7 @@ button.icon.heart.on:hover,
   );
 }
 
-.player .volume input::-moz-range-track {
+:is(.player, .now-playing) .volume input::-moz-range-track {
   height: 6px;
   border-radius: 999px;
   background: linear-gradient(
@@ -1862,9 +1862,16 @@ button.icon.heart.on:hover,
     width: auto;
   }
 
+  /* Nothing playing, the stand-in cover goes; a song's cover stays, to open Now Playing. */
   .columns-menu,
-  .player .cover {
+  .player .now > .cover {
     display: none;
+  }
+
+  .player .open-now-playing .cover {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.6rem;
   }
 
   /* The cover beside the title, the artist under it, and the playing bars before it. */
@@ -1936,6 +1943,15 @@ button.icon.heart.on:hover,
 
   .seek-fill,
   .seek-thumb {
+    transition: none;
+  }
+
+  .now-playing[open] {
+    animation: none;
+  }
+
+  .np-art,
+  .player .open-now-playing {
     transition: none;
   }
 }
@@ -2847,7 +2863,7 @@ kbd {
 }
 
 /* Muted, the bar keeps the volume it comes back to, dimmed. */
-.player .volume.muted input {
+:is(.player, .now-playing) .volume.muted input {
   opacity: 0.4;
 }
 
@@ -2864,5 +2880,352 @@ kbd {
 
   .shortcut-row .shortcut-keys {
     justify-content: flex-start;
+  }
+}
+
+/* The player's cover is a button that opens Now Playing. */
+
+.player .open-now-playing {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  background: none;
+  cursor: zoom-in;
+  transition: transform 120ms;
+}
+
+.player .open-now-playing:hover {
+  transform: scale(1.06);
+}
+
+/*
+ * Now Playing: the song over the whole screen. Its own palette is light on a blur of
+ * the cover, whatever the theme, so the shared controls take white for the accent.
+ */
+
+:root {
+  --theme-accent: var(--accent);
+}
+
+.now-playing {
+  --ink: #fff;
+  --muted: rgb(255 255 255 / 72%);
+  --line: rgb(255 255 255 / 24%);
+  --accent: #fff;
+  --accent-soft: rgb(255 255 255 / 16%);
+  --accent-ink: #101614;
+  --surface: rgb(16 22 20 / 52%);
+  --raised: rgb(255 255 255 / 10%);
+  --lift: 0 10px 30px -12px rgb(0 0 0 / 50%);
+
+  /* Pico reads the tokens where it declares them, at the root, so it is told again here. */
+  --pico-color: var(--ink);
+  --pico-muted-color: var(--muted);
+  --pico-muted-border-color: var(--line);
+  --pico-primary: var(--accent);
+  --pico-primary-focus: var(--accent-soft);
+
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: #101614;
+  color: var(--ink);
+}
+
+.now-playing[open] {
+  animation: np-rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.now-playing::backdrop {
+  background: transparent;
+}
+
+@keyframes np-rise {
+  from {
+    opacity: 0;
+    transform: translateY(3%);
+  }
+}
+
+/* The cover's own colors, blurred far past recognition, with a shade for the words. */
+.np-backdrop {
+  position: absolute;
+  inset: -12%;
+  background: radial-gradient(
+    circle at 30% 25%,
+    color-mix(in srgb, var(--theme-accent) 70%, #000),
+    #0b1210 70%
+  );
+}
+
+.np-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(72px) saturate(1.6) brightness(0.62);
+}
+
+.np-backdrop::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 10%), rgb(0 0 0 / 45%));
+  content: "";
+}
+
+/* Pico centres a dialog's content as a flex box; Now Playing's fills it. It takes focus
+   on opening, so no button does, and shows no ring for it. */
+.np-body {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  padding: max(0.75rem, env(safe-area-inset-top)) 1.5rem max(1.25rem, env(safe-area-inset-bottom));
+  outline: none;
+}
+
+.np-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.now-playing .np-top button.icon,
+.now-playing .np-actions button.icon {
+  color: var(--ink);
+  font-size: 1.35rem;
+}
+
+.np-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.np-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  gap: 3rem;
+  min-height: 0;
+}
+
+.np-stage.queue-open {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+}
+
+.np-main {
+  --np-width: min(30rem, 100%, 48dvh);
+
+  display: grid;
+  justify-items: center;
+  gap: 1.1rem;
+  width: 100%;
+}
+
+.now-playing .np-main > * {
+  width: var(--np-width);
+}
+
+.np-art {
+  aspect-ratio: 1;
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Paused, the cover settles back a little, as a record does when the music stops. */
+.np-art.resting {
+  transform: scale(0.88);
+}
+
+.np-art .cover {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--accent-soft);
+  box-shadow: 0 32px 64px -24px rgb(0 0 0 / 65%);
+  color: var(--ink);
+  font-size: 6rem;
+}
+
+.np-art .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.np-names {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+/* A long title takes two lines before it is cut short; the menu's *Edit details* has it whole. */
+.np-names h2 {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.now-playing .np-names a {
+  overflow: hidden;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 28%);
+  text-overflow: ellipsis;
+  text-underline-offset: 0.2em;
+  white-space: nowrap;
+}
+
+.now-playing .np-names a:hover,
+.now-playing .np-names a:focus-visible {
+  color: var(--ink);
+  text-decoration-color: currentcolor;
+}
+
+.now-playing .np-names a:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.np-names .np-artist {
+  font-size: 1.1rem;
+}
+
+.np-names .np-album {
+  font-size: 0.95rem;
+}
+
+.now-playing .np-seek .seek {
+  position: relative;
+  height: 1.2rem;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.now-playing .np-seek .seek:focus-visible {
+  outline: none;
+}
+
+.np-times {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.np-main .controls {
+  justify-content: space-between;
+}
+
+.np-main .controls button.icon {
+  font-size: 1.6rem;
+}
+
+.now-playing .np-main .controls button.play {
+  width: 4rem;
+  height: 4rem;
+  color: var(--accent-ink);
+  font-size: 1.8rem;
+}
+
+.np-extras {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.np-extras .volume {
+  flex: 1;
+}
+
+.now-playing .np-extras .volume input {
+  flex: 1;
+  width: auto;
+}
+
+.np-queue-toggle {
+  color: var(--muted);
+  font-size: 1.3rem;
+}
+
+.np-queue-toggle.on {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+.np-main .note.failed {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0;
+}
+
+.np-stage .queue {
+  display: block;
+  grid-area: auto;
+  position: static;
+  align-self: center;
+  width: 100%;
+  max-height: min(70dvh, 40rem);
+  margin: 0;
+  backdrop-filter: blur(24px);
+}
+
+/* On a phone, Up next takes the cover's place. */
+@media (width <= 48rem) {
+  .np-body {
+    padding-inline: 1.25rem;
+  }
+
+  .np-main {
+    --np-width: min(100%, 26rem);
+  }
+
+  .np-stage.queue-open {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 1rem;
+  }
+
+  .np-stage.queue-open .np-main {
+    order: 2;
+  }
+
+  .np-stage.queue-open .np-art {
+    display: none;
+  }
+
+  .np-names h2 {
+    font-size: 1.35rem;
+  }
+}
+
+@media (height <= 40rem) and (width > 48rem) {
+  .np-main {
+    --np-width: min(24rem, 100%, 42dvh);
+
+    gap: 0.75rem;
   }
 }

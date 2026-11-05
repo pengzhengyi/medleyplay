@@ -1,0 +1,332 @@
+# Track details
+
+> [!NOTE]
+> **Status: in progress.** This note describes a Track's details (its title,
+> artist, album, cover, and the rest), where each value comes from, how the
+> household's own values win, and how medleyplay finds what a file doesn't say.
+> The site enricher for Bilibili is built; MusicBrainz and AI are not.
+> Splitting a long file into songs is in [Segments](Segments.md).
+
+## Contents
+
+- [Why](#why)
+- [The details](#the-details)
+- [Origins and precedence](#origins-and-precedence)
+- [The household's values](#the-households-values)
+- [What medleyplay reads](#what-medleyplay-reads)
+- [Covers](#covers)
+- [Enrichers](#enrichers)
+- [What the API shows](#what-the-api-shows)
+- [Build order](#build-order)
+- [Testing](#testing)
+- [Left for later](#left-for-later)
+
+## Why
+
+A file saved from a video site often says nothing about its music: no tags, no
+cover, only a name such as `BV1dm4y1s7ak.m4a`. Its details are in the video's
+title and description, in a file the download tool can write beside it, or in
+the household's head. medleyplay reads each, keeps where each value came from,
+and lets the household's word win.
+
+## The details
+
+| Field | Kind | Example |
+| --- | --- | --- |
+| `title` | text | 過食性:アイドル症候群 |
+| `artist` | text, as written | GUMI/MAYU |
+| `album` | text | ケビョウニンゲン |
+| `album_artist` | text | MAYU |
+| `track_number`, `disc_number` | whole numbers from 1 | 3, 1 |
+| `year` | a year | 2014 |
+| `genre` | text | Vocaloid |
+| `cover` | a cover's id; see [Covers](#covers) | `9f2c…` |
+
+- **Text** is at most 512 characters, trimmed. The household's value outside these
+  rules is refused; a value read from a file or a site is cut to fit instead, and
+  blank text or a number out of range is no value.
+- **The Track's row keeps the shown value** of each field, so sorting, search,
+  smart playlists, and the Albums and Artists views read it as they do now.
+- **A song list,** the songs inside a long file, is kept the same way; see
+  [Segments](Segments.md).
+
+## Origins and precedence
+
+Each value is kept with its *origin*, so a later finding never overwrites the
+household's word, and a source can be read again without losing anyone else's
+values.
+
+| Origin | What it is |
+| --- | --- |
+| `household` | A value someone in the household entered |
+| `files` | The file's tags, and an image beside it with its name |
+| `musicbrainz` | A release matched in MusicBrainz (later) |
+| `video` | The video's own text: its title, uploader, description, and chapters, read from a file beside the audio, pasted by the household, or read from the site, and the video's cover |
+| `album_file` | For a song inside a long file, its album file's album fields; see [Segments](Segments.md) |
+| `file_name` | The file's name, the title of last resort |
+
+- **The shown value is the first origin that has one,** in the table's order.
+  `files` comes before `video`, since tags are written on purpose, and when a
+  file's tags are garbled, the household's value is the way out.
+- **The album fields travel together:** `album`, `album_artist`, `year`,
+  `track_number`, `disc_number`, and `cover` are shown from the first origin
+  that names an album, so one Track never mixes two releases. A household value
+  for any of them still wins on its own. When that origin has no cover, the
+  cover comes from the first origin naming no album, which can't belong to
+  another release: a video's details name the album, and the image beside the
+  file is its cover. An album the household names corrects the one it
+  replaces, such as a spelling, so that album's cover stays until the household
+  gives its own or empties it.
+- **Empty text is a value:** the household can set a field to show nothing, and
+  dropping its value shows the next origin's again.
+- **A scan reads a file again** when it changed, or when the medleyplay that last
+  read it read less from a file, so a field the tag reader learns fills in on the
+  next scan.
+- **Every value is a row** of `track_value`: the Track, the field, the origin,
+  the value, and when it was recorded. One function writes values and rewrites
+  the Track's shown values in the same transaction; the scan, adding a link,
+  and the household all write through it, and nothing else writes the row.
+- **Adding a site Track** records its title and artist as `video`, since they are
+  the site's text, which the household may have tidied but needn't own.
+- **The migration** records today's values: a Library Track's title as
+  `file_name` when it is the file's name and as `files` otherwise, its other
+  fields as `files`, and a site Track's as `video`.
+
+## The household's values
+
+- **Any signed-in Account may edit a Track's details,** as any may add a link:
+  the catalog is the household's.
+- ***Edit details*** shows each field's value, where it came from, and what each
+  other origin says, so the household can take a found value with one click or
+  type its own. Its boxes show what saving would show, as the album fields
+  change together: naming an album of the household's own empties the file's
+  track number at once. The client keeps its own copy of the shown-value rule
+  for this; the server and the client are checked against one table of cases
+  (`tests/support/shown_details.json`), so the two can't drift.
+- **Saving sends only what changed,** each value set or dropped, so an edit of
+  one field never overwrites another made meanwhile on another device. A value
+  the household types or chooses that reads as what would show anyway, such as
+  `03` over the file's track 3, is dropped rather than saved, so the found value
+  still follows the file.
+- ***Paste the video's details*** takes a video's title and description, copied
+  from the site in a browser, and reads them as the `video` origin, as if the
+  file beside the audio had held them. This works for any video, and asks the
+  site nothing. What it reads replaces what the video said before, including
+  what adding a site link recorded and what the site enricher read, since all are
+  the video's own text; the latest text read wins. The text is kept with the Track, so the
+  dialog opens with it to correct and read again, and the songs it lists stay
+  for [Segments](Segments.md). A paste with no words is refused.
+- **Many Tracks at once:** the same values, such as an album and its artist, can
+  be set on several Tracks.
+
+## What medleyplay reads
+
+- **The file's tags,** as now, and its embedded cover.
+- **The file's length:** a fragmented MP4, as Bilibili's downloads are, has no
+  length in its header, and the tag reader answers none for about a third of
+  them. The tags plugin reads it from the file's fragments instead.
+- **Files beside the audio,** with its name: `<name>.info.json`, the video
+  details yt-dlp writes with `--write-info-json`, and `<name>.jpg`, `.jpeg`,
+  `.png`, or `.webp`, a cover such as `--write-thumbnail` writes (see
+  [Covers](#covers)). A scan notes them, and reads them again when they change.
+  - **An `.info.json` is read** when it is new, when its size or modified time
+    differs from what the last scan kept, and on a full scan, even when the audio
+    file is unchanged. Its title, description, and chapters become the Track's
+    video text, as a paste would; any other `.json`, and an `.info.json` with no
+    audio file of that name beside it, is ignored. A file over 5 MiB is not read.
+  - **The latest text read wins:** a changed file replaces a paste, and a paste
+    stands until the file changes, even when a full scan reads it again. Without
+    a paste, a full scan parses the unchanged file again, so a better reading
+    from a newer medleyplay shows.
+  - **A malformed or oversized file keeps the earlier text** and values. The scan
+    notes the error on the Source, and a later good read clears it; one that
+    couldn't be opened, as on a drive too slow to answer, is read again next scan.
+  - **The file is nobody's word:** text that isn't valid Unicode keeps a
+    replacement character, a chapter's title is cut to a title's length, and
+    chapters past a thousand, or starting more than a week in, are left out.
+  - **A removed file drops only text read from a file,** with the `video` values
+    it gave; a household paste stays. A sidecar with no words records nothing.
+- **The video id** comes from the Track's Bilibili Source, or from a file name
+  that is a `BV` id, such as `BV1dm4y1s7ak.m4a`.
+- **The video's text is read by one parser,** a pure function of the core: it
+  drops bracketed tags such as `【MV】` or `[Hi-Res]`, splits `artist - title`
+  and `title / artist`, takes a year ending the artist's name, as in
+  `朴树2003《生如夏花》`, as the year, recognizes an album by words such as `专辑`, `全专`, or
+  `Full Album`, and reads a song list from the chapters or from timestamps in
+  the description, such as `03:21 Song - Artist`.
+
+## Covers
+
+- **A cover is an image kept once** in `covers/` in the data folder, named by
+  the SHA-256 of its bytes, so the songs of an album share one file.
+- **Accepted:** JPEG, PNG, or WebP, known by their first bytes, not their names,
+  at most 10 MiB.
+- **Where covers come from:** the file's tags; an image beside the file with its
+  name; the video's cover, which the site enricher reads with the video's text;
+  and the household's upload. The video's cover is the `video` origin's `cover`,
+  kept through the same store as every other cover.
+- **A scan finds two covers.** The tag reader returns the file's embedded front
+  cover when it is a JPEG, PNG, or WebP of at most 10 MiB; any other image is no
+  cover. An image beside the file is `<name>.jpg`, `.jpeg`, `.png`, or `.webp`,
+  the name `--write-thumbnail` gives, matched as an `.info.json` is: in the
+  audio's folder, with the audio's path minus its suffix, whatever the case of
+  its extension, the first found in that order. An image with no audio file of
+  its name beside it is ignored and never becomes a Track.
+- **When they are read.** The embedded cover is read with the file's tags: when
+  the file is new or changed, on a full scan, and when a newer medleyplay reads
+  more than the one that last read it. The image beside the file is read when it
+  is new, when its extension, size, or modified time differs from what the last
+  scan kept, and on a full scan, even when the audio file is unchanged.
+- **Precedence.** A scan records the cover it finds as the `files` origin's
+  `cover`, with the file's other tag values, and an embedded cover wins over an
+  image beside the file. The household's cover is the `household` origin, which
+  a scan never touches, so it stays over both. A removed image drops the cover it
+  gave, and a file with an embedded cover keeps that one.
+- **An image that isn't a cover,** one over 10 MiB or whose bytes aren't a JPEG,
+  PNG, or WebP image, is noted as an error on the Source and does not fail the
+  scan. It keeps the cover the earlier image gave, and a later good read clears
+  the error; one that couldn't be opened, as on a drive too slow to answer, is
+  read again next scan.
+- **A scan result holds no image bytes.** The scan's Job copies each image into
+  its working folder as it reads it, named by the SHA-256 of its bytes, so the
+  songs of an album share one copy, and the result carries only the copy's path.
+  Applying the result moves the copy into `covers/` as the upload does.
+- **A cover is a detail** like the others, its value the cover's name, and one of
+  the album fields, so it comes from the origin naming the album, or from the
+  one the household's album corrects, or else from an origin naming none, and a split file's songs take their file's. The
+  household may also name an existing cover, or none with empty text.
+- **Served** with the type its bytes say, `nosniff`, and
+  `Cache-Control: private, max-age=31536000, immutable`, since its name is its
+  content.
+- **The web client** shows covers beside each title in the table and in Up next,
+  on an album's card (the first cover among its songs), in the player and on the
+  lock screen through the Media Session's artwork, and in *Edit details* with the
+  household's upload. An image that fails to load shows the stand-in instead.
+- **A cover no value names** is removed by the sweep at startup, so one replaced
+  or removed stays on disk until the server next starts.
+
+## Enrichers
+
+An *enricher* proposes values from somewhere the scan doesn't look. It is a
+plugin at its own extension point, `TRACK_ENRICHER`, so a buggy or slow one can't
+harm the core, and each is turned on or off like any plugin. `bilibili-details`
+is built and, like `bilibili`, is off until the config file turns it on.
+
+- **Nothing runs by itself.** An enricher contacts its site only when someone
+  asks: *Find details online* in a Track's menu, for any signed-in Account, or
+  *Find details for all* in Settings → Bilibili, for admins, which queues every
+  eligible Track and says how many it queued. There is no scheduled or automatic
+  run.
+- **It is asked** with the Track's shown values and their origins, its length,
+  its file's name, and its video id. It answers with values for any field, or
+  with the video's text (title, description, and chapters) in place of parsed
+  values, and may write one cover into a folder of the Job's, which it names, as
+  a download names its file. `bilibili-details` answers the video's text and its
+  cover.
+- **The core checks an answer** like the household's input. Values are checked
+  as the household's are and recorded under the enricher's origin, replacing that
+  origin's earlier values for the Track. The video's text is read by the same
+  parser as a sidecar or a paste, as the `video` origin, so *Edit details* shows
+  the text that was read; the cover is recorded as the origin's `cover`.
+- **Which Tracks are asked for.** A Track with a video id (its Bilibili Source,
+  or a Library file named for a `BV` id), that is not a segment (its album file
+  is asked instead), whose video text didn't come from a file beside it or from
+  the household, and whose video wasn't asked about in the last 24 hours. When
+  each video was last asked is kept in the database, so a restart forgets
+  nothing. A video that is gone counts as asked; a failure that a retry could
+  fix, such as a lost connection or a fault in the plugin, doesn't.
+- **Site text yields to every other source.** A sidecar read later replaces
+  site text, a full scan that reads an unchanged sidecar again included, since
+  only a paste stands over an unchanged sidecar. Text the household entered while
+  a Job runs stays: the Job records nothing over it.
+- **Each Track is one Job,** of the kind `enrich_track` and the target
+  `track:<id>`, carrying the enricher's name. The Jobs of one enricher run one at
+  a time, with at least a pause between two calls: 5 seconds for
+  `bilibili-details`, counted from the end of one to the start of the next. Like
+  other network Jobs they wait while the Mode is Offline, and they go through the
+  site's proxy as Downloads do: the plugin's page, API, and cover requests all
+  use one handler, which takes the proxy as given.
+- **The first refusal stops the enricher.** When the site refuses a request (an
+  HTTP 403 or 412, or one of its risk-control codes, such as 352 or 412, in
+  yt-dlp's error), the Job fails as *refused*, every Job of that enricher that
+  hasn't started fails with a message saying why, and nothing more is asked until
+  an admin resets it in Settings. The stopped state is kept in the database. A
+  Job retried while the enricher is stopped fails without asking. A video that
+  doesn't exist, or is private, fails that Track's Job alone.
+- **A segment is never enriched;** its album file is.
+
+| Enricher | Origin | Reads | State |
+| --- | --- | --- | --- |
+| `bilibili-details` | `video` | The video's text and cover through yt-dlp, for a video with an id | Built |
+| `musicbrainz` | `musicbrainz` | The MusicBrainz API and the Cover Art Archive, at most once a second | Later, if wanted |
+| `ai` | suggestions only | A language model, with the household's key | Later, if wanted |
+
+- **The site enricher is its own plugin,** not part of `bilibili`, so its faults
+  never stop Downloads. It reuses the Bilibili plugin's yt-dlp wrapper and info
+  readers. It fetches a cover only from Bilibili's image hosts, and a cover it
+  can't fetch, or that is no JPEG, PNG, or WebP image of at most 10 MiB, leaves
+  the text without one.
+- **An AI enricher would only suggest:** its values show in *Edit details* for
+  the household to take, never as shown values, since it reads the same text
+  the parser does.
+
+## What the API shows
+
+| Route | Who | Does |
+| --- | --- | --- |
+| `GET /api/tracks/{id}/details` | Signed in | Every field's shown value and origin, each origin's value, and the video's text read |
+| `PUT /api/tracks/{id}/details` | Signed in | The household's values for the Track, replacing its earlier ones |
+| `POST /api/tracks/details` | Signed in | Sets the given household values on many Tracks |
+| `POST /api/tracks/{id}/video-text` | Signed in | Reads a pasted title and description as the `video` origin; answers the details and the songs listed |
+| `GET /api/covers/{id}` | Signed in | A cover's image |
+| `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body; answers the details |
+| `DELETE /api/tracks/{id}/cover` | Signed in | Drops the household's cover, so the next origin's shows |
+| `GET /api/enrichers/{name}` | Signed in | Whether the enricher is on, why the site stopped it if it did, and the Tracks it may be asked about |
+| `POST /api/enrichers/{name}/tracks/{id}` | Signed in | Queues the Track's Job, or returns the one already active; 409 with why when the Track is not eligible |
+| `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |
+| `POST /api/enrichers/{name}/reset` | Admin | Lets a stopped enricher be asked again; 204, also when it was not stopped |
+
+Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
+`genre`.
+
+## Build order
+
+1. **Lengths:** read a fragmented file's length from its fragments.
+2. **Details and origins:** `track_value`, the one writer, the migration, and
+   *Edit details*, with many Tracks at once.
+3. **Covers,** with embedded and beside-the-file images.
+4. **The video's text:** the parser, *Paste the video's details*, and
+   `<name>.info.json` beside the file.
+5. **Segments:** see [Segments](Segments.md).
+6. **The site enricher** for Bilibili, built; then MusicBrainz and AI, if wanted.
+
+## Testing
+
+- **Precedence** as a Hypothesis property: the shown value is the first origin's
+  in the order, the album fields come from one origin, the cover from it or,
+  when it has none, from an origin naming no album, dropping the household's
+  value shows the next, and the Track's row always equals its shown values.
+- **The parser** against a corpus of real-shaped titles and descriptions as
+  multi-line literals: bracketed tags, `artist - title`, album words, and
+  timestamp lists with and without hours, numbering, and artists.
+- **Files beside the audio:** an `.info.json` read, changed, removed, and
+  malformed, and a cover beside the file.
+- **Lengths** against fragmented and plain MP4 files made with ffmpeg.
+- **Covers:** each accepted type, a renamed file of another type, one over the
+  limit, two Tracks sharing one cover, and the sweep.
+- **Enrichers** through a test plugin, in real Job processes: eligibility rule by
+  rule, the recorded text and cover, a sidecar or paste winning, the 24 hours, one
+  at a time with the pause between calls (on a fake clock), a refusal stopping the
+  enricher and failing its queued Jobs, a reset, waiting while Offline, and bulk
+  queueing for admins only. The Bilibili plugin is read against a real video's
+  recorded yt-dlp answer, with its network at a fake of yt-dlp; no test contacts a
+  site, MusicBrainz, or a model.
+
+## Left for later
+
+- **MusicBrainz and AI enrichers.**
+- **Reading each part of a multi-part video:** the site's text describes the
+  whole video, so after one part is asked, the others are left alone for a day.
+- **Covers in `medleyplay backup`,** which copies only the database.
+- **A folder's `cover.jpg`** for every file in it.
+- **Lyrics,** and naming songs by their audio with AcoustID.

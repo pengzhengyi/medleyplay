@@ -7,7 +7,6 @@
 import {
   CircleNotchIcon,
   HeartIcon,
-  MusicNotesIcon,
   PauseIcon,
   PlayIcon,
   QueueIcon,
@@ -26,6 +25,7 @@ import { repeatAfter } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { hintOf, useBindings } from "../shortcuts";
+import { Cover } from "./Cover";
 import { REPEATS, shuffleSaid } from "./playModes";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
@@ -57,9 +57,7 @@ export function PlayerBar({
     <section className="player" aria-label="Player">
       <SeekBar position={position} duration={duration} onSeek={player.seek} />
       <div className="now">
-        <span className="cover" aria-hidden>
-          <MusicNotesIcon weight="duotone" />
-        </span>
+        <Cover cover={track?.cover ?? null} />
         <div className="names">
           <strong>{track?.title ?? "Nothing playing"}</strong>
           <span>{track?.artist ?? "Choose a Track to play it"}</span>

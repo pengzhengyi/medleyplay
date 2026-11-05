@@ -4,7 +4,20 @@
 
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
-import { ApiError, type JobEvent, type Mode, type Playlist, type Track, api } from "../api";
+import {
+  ApiError,
+  DETAILS_ENRICHER,
+  type Detail,
+  type Details,
+  type JobEvent,
+  type Mode,
+  type Playlist,
+  type SongRowIn,
+  type Track,
+  type VideoRead,
+  type VideoText,
+  api,
+} from "../api";
 import { newId } from "../ids";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
@@ -20,8 +33,40 @@ export interface Library {
   readonly error: string;
   /** Whether medleyplay may contact music sites now, once the server has said. */
   readonly mode: Mode | null;
+  /** The Tracks whose details can be looked up online now. */
+  readonly findable: ReadonlySet<number>;
+  /**
+   * Ask for the details of the Track on its site; they show once the Job has run. The
+   * promise rejects with why when the server refuses.
+   */
+  readonly findDetails: (id: number) => Promise<void>;
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
+  /**
+   * Change the household's values for the Track, `null` dropping one; the Track then
+   * shows the server's answer. The promise rejects with why when the server refuses.
+   */
+  readonly saveDetails: (
+    id: number,
+    changes: Partial<Record<Detail, string | number | null>>,
+  ) => Promise<void>;
+  /**
+   * Read a video's pasted text as the Track's `video` values; the Track then shows the
+   * server's answer. The promise rejects with why when the server refuses.
+   */
+  readonly readVideoText: (id: number, text: VideoText) => Promise<VideoRead>;
+  /** Make `image` the household's cover for the Track; the Track then shows it. */
+  readonly setCover: (id: number, image: Blob) => Promise<Details>;
+  /** Drop the household's cover for the Track; the Track then shows the next origin's. */
+  readonly removeCover: (id: number) => Promise<Details>;
+  /** Make `rows` the songs of the file `id`; the Tracks then show the songs as saved. */
+  readonly saveSongs: (
+    id: number,
+    rows: readonly SongRowIn[],
+    known: readonly number[],
+  ) => Promise<void>;
+  /** Remove every song of the file `id`; the Tracks then show the file whole again. */
+  readonly unsplit: (id: number) => Promise<void>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
    * of `newNames`. The Playlists the server saves show at once; the promise rejects
@@ -35,7 +80,7 @@ export interface Library {
 }
 
 /** The Jobs whose end can change the Tracks. */
-const CHANGES_TRACKS = new Set(["scan_library", "download_source"]);
+const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
 /** How long after the last such Job the Tracks are asked for, so a busy scan asks once. */
 const SETTLE_MS = 1000;
@@ -56,7 +101,10 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [providers, setProviders] = useState<readonly string[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
+  const [findable, setFindable] = useState<ReadonlySet<number>>(new Set());
   const writes = useRef(0);
+  // The latest change of each Track's details, so an older read-back can't land after it.
+  const latestSave = useRef(new Map<number, number>());
 
   const failed = (failure: unknown) => {
     if (failure instanceof ApiError && failure.status === 401) {
@@ -84,6 +132,14 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.mode().then(setMode, () => {
         // Without the Mode, the page shows nothing about it until the stream says.
       });
+      api.enricher(DETAILS_ENRICHER).then(
+        (enricher) => {
+          setFindable(new Set(enricher.eligible));
+        },
+        () => {
+          // Without the enricher, no Track offers to look its details up.
+        },
+      );
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
@@ -107,6 +163,59 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
   }, []);
 
+  /** Ask for the Tracks again; one that can't be read now shows on the next load. */
+  const reloadTracks = () => {
+    api.tracks().then(
+      (tracks) => {
+        dispatch({ type: "loaded", tracks });
+      },
+      () => undefined,
+    );
+  };
+
+  /** Send `request`, signing out on a 401; then show the Track as the server now has it. */
+  const changeDetails = async <T>(id: number, request: Promise<T>): Promise<T> => {
+    let answer: T;
+    try {
+      answer = await request;
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) {
+        onSignedOut();
+      }
+      throw failure;
+    }
+    // A split file's album values are its songs' too, so all the Tracks are read again.
+    if (store.confirmed.get(id)?.split === true) {
+      reloadTracks();
+      return answer;
+    }
+    // Changed; a Track that can't be read back now shows its new details on the next load.
+    const seq = ++writes.current;
+    latestSave.current.set(id, seq);
+    api.track(id).then(
+      (track) => {
+        if (latestSave.current.get(id) === seq) {
+          dispatch({ type: "details", track });
+        }
+      },
+      () => undefined,
+    );
+    return answer;
+  };
+
+  /** Send `request`, signing out on a 401; then ask for the Tracks again, which it changed. */
+  const changeTracks = async (request: Promise<unknown>): Promise<void> => {
+    try {
+      await request;
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) {
+        onSignedOut();
+      }
+      throw failure;
+    }
+    reloadTracks();
+  };
+
   const write = <F extends Field>(id: number, field: F, value: Track[F], send: Promise<Track>) => {
     const seq = ++writes.current;
     dispatch({ type: "write", id, field, value, seq });
@@ -128,6 +237,19 @@ export function useLibrary(onSignedOut: () => void): Library {
     loaded: store.loaded,
     error,
     mode,
+    findable,
+    findDetails: async (id) => {
+      try {
+        await api.findDetails(DETAILS_ENRICHER, id);
+      } catch (failure) {
+        if (failure instanceof ApiError && failure.status === 401) {
+          onSignedOut();
+        }
+        throw failure;
+      }
+      // Asked: the Job is queued, so the Track no longer offers it until the Job is done.
+      setFindable((now) => new Set([...now].filter((each) => each !== id)));
+    },
     setFavorite: (id, favorite) => {
       setError("");
       write(id, "favorite", favorite, api.setFavorite(id, favorite));
@@ -135,6 +257,18 @@ export function useLibrary(onSignedOut: () => void): Library {
     setRating: (id, rating) => {
       setError("");
       write(id, "rating", rating, api.setRating(id, rating));
+    },
+    saveDetails: async (id, changes) => {
+      await changeDetails(id, api.setDetails([id], changes));
+    },
+    readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
+    setCover: (id, image) => changeDetails(id, api.setCover(id, image)),
+    removeCover: (id) => changeDetails(id, api.removeCover(id)),
+    saveSongs: async (id, rows, known) => {
+      await changeTracks(api.saveSongs(id, rows, known));
+    },
+    unsplit: async (id) => {
+      await changeTracks(api.unsplit(id));
     },
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [

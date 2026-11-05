@@ -20,6 +20,7 @@ from medleyplay.domain.catalog import (
 )
 from medleyplay.domain.playback import PlayId
 from medleyplay.web.deps import CatalogDep, SignedInAccount
+from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -32,6 +33,10 @@ class TrackOut(BaseModel):
     artist: str
     album: str
     album_artist: str
+    track_number: int | None
+    disc_number: int | None
+    year: int | None
+    genre: str
     duration_ms: int | None
     added_at: datetime
     favorite: bool
@@ -42,6 +47,9 @@ class TrackOut(BaseModel):
     downloaded: bool = Field(
         description="Whether a Source of the Track has a Download kept on the server."
     )
+    segment_of: int | None = Field(description="The album file this Track is a song of, if any.")
+    split: bool = Field(description="Whether this Track's file is split into songs.")
+    cover: str | None = Field(description="The cover shown, served at `/api/covers/{cover}`.")
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -53,6 +61,10 @@ class TrackOut(BaseModel):
             artist=details.artist,
             album=details.album,
             album_artist=details.album_artist,
+            track_number=details.track_number,
+            disc_number=details.disc_number,
+            year=details.year,
+            genre=details.genre,
             duration_ms=details.duration_ms,
             added_at=track.added_at,
             favorite=track.favorite,
@@ -61,6 +73,9 @@ class TrackOut(BaseModel):
             last_played_at=track.last_played_at,
             availability=track.availability,
             downloaded=track.downloaded,
+            segment_of=track.segment_of,
+            split=track.split,
+            cover=details.cover,
         )
 
 
@@ -79,7 +94,7 @@ class RatingIn(BaseModel):
 class PlayIn(BaseModel):
     """A play of a Track, and when it started; a time in the future is taken as now."""
 
-    track_id: int
+    track_id: RowId
     played_at: AwareDatetime
 
 
@@ -87,7 +102,7 @@ class PlaylistIn(BaseModel):
     """A whole Playlist: its name, and its Tracks in order or its rules, never both."""
 
     name: str = Field(examples=["Morning"])
-    track_ids: list[int] | None = Field(default=None, max_length=MAX_PLAYLIST_LENGTH)
+    track_ids: list[RowId] | None = Field(default=None, max_length=MAX_PLAYLIST_LENGTH)
     rules: RulesIn | None = None
     keep_downloaded: bool = False
     """Keep every Track the Playlist holds downloaded on the server."""
@@ -136,14 +151,14 @@ def list_tracks(me: SignedInAccount, catalog: CatalogDep) -> list[TrackOut]:
 
 
 @router.get("/tracks/{track_id}")
-def get_track(track_id: int, me: SignedInAccount, catalog: CatalogDep) -> TrackOut:
+def get_track(track_id: RowId, me: SignedInAccount, catalog: CatalogDep) -> TrackOut:
     """Return one Track."""
     return TrackOut.of(catalog.get_track(me.id, TrackId(track_id)))
 
 
 @router.put("/tracks/{track_id}/favorite")
 def set_favorite(
-    track_id: int, body: FavoriteIn, me: SignedInAccount, catalog: CatalogDep
+    track_id: RowId, body: FavoriteIn, me: SignedInAccount, catalog: CatalogDep
 ) -> TrackOut:
     """Mark or unmark a Track as your favorite."""
     track = catalog.set_favorite(me.id, TrackId(track_id), favorite=body.favorite)
@@ -151,7 +166,9 @@ def set_favorite(
 
 
 @router.put("/tracks/{track_id}/rating")
-def set_rating(track_id: int, body: RatingIn, me: SignedInAccount, catalog: CatalogDep) -> TrackOut:
+def set_rating(
+    track_id: RowId, body: RatingIn, me: SignedInAccount, catalog: CatalogDep
+) -> TrackOut:
     """Rate a Track 1-5 stars, or clear your rating."""
     return TrackOut.of(catalog.set_rating(me.id, TrackId(track_id), body.rating))
 

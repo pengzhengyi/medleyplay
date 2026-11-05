@@ -7,6 +7,9 @@ from fastapi import Cookie, Depends, Request
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.covers import CoverService
+from medleyplay.application.details import DetailsService
+from medleyplay.application.enrichment import EnrichmentService
 from medleyplay.application.events import Events
 from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
@@ -17,6 +20,8 @@ from medleyplay.application.playback import PlaybackService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.proxies import ProxyService
+from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import NotSignedInError
@@ -35,12 +40,17 @@ class Services:
     libraries: LibraryService
     playback: PlaybackService
     linked: LinkedAccountService
+    proxies: ProxyService
     links: LinkService
     events: Events
     settings: SettingsService
     policy: PolicyService
     preferences: PreferencesService
     mode: ModeService
+    details: DetailsService
+    songs: SongsService
+    covers: CoverService
+    enrichment: EnrichmentService
 
 
 def _services(request: Request) -> Services:
@@ -79,6 +89,10 @@ def _linked(services: Annotated[Services, Depends(_services)]) -> LinkedAccountS
     return services.linked
 
 
+def _proxies(services: Annotated[Services, Depends(_services)]) -> ProxyService:
+    return services.proxies
+
+
 def _links(services: Annotated[Services, Depends(_services)]) -> LinkService:
     return services.links
 
@@ -103,6 +117,22 @@ def _mode(services: Annotated[Services, Depends(_services)]) -> ModeService:
     return services.mode
 
 
+def _details(services: Annotated[Services, Depends(_services)]) -> DetailsService:
+    return services.details
+
+
+def _songs(services: Annotated[Services, Depends(_services)]) -> SongsService:
+    return services.songs
+
+
+def _covers(services: Annotated[Services, Depends(_services)]) -> CoverService:
+    return services.covers
+
+
+def _enrichment(services: Annotated[Services, Depends(_services)]) -> EnrichmentService:
+    return services.enrichment
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -110,12 +140,17 @@ JobsDep = Annotated[JobService, Depends(_jobs)]
 LibrariesDep = Annotated[LibraryService, Depends(_libraries)]
 PlaybackDep = Annotated[PlaybackService, Depends(_playback)]
 LinkedDep = Annotated[LinkedAccountService, Depends(_linked)]
+ProxiesDep = Annotated[ProxyService, Depends(_proxies)]
 LinksDep = Annotated[LinkService, Depends(_links)]
 EventsDep = Annotated[Events, Depends(_events)]
 SettingsDep = Annotated[SettingsService, Depends(_settings)]
 PolicyDep = Annotated[PolicyService, Depends(_policy)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
+DetailsDep = Annotated[DetailsService, Depends(_details)]
+SongsDep = Annotated[SongsService, Depends(_songs)]
+CoversDep = Annotated[CoverService, Depends(_covers)]
+EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

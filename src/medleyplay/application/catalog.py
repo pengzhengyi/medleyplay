@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
+from medleyplay.application.details import record as record_details
 from medleyplay.application.rule_schema import read_rules, rules_document
+from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import (
@@ -35,10 +37,12 @@ from medleyplay.domain.catalog import (
     source_availability,
     track_availability,
 )
+from medleyplay.domain.details import Field, Origin, Value
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.playback import PlayId
 from medleyplay.domain.rules import Rules, matches
+from medleyplay.domain.segments import SEGMENT_SOURCE, parse_segment_locator
 from medleyplay.persistence.schema import (
     DownloadRow,
     LibraryRow,
@@ -75,27 +79,36 @@ class CatalogService:
         key: SourceKey,
         details: TrackDetails,
         source_details: Mapping[str, object] | None = None,
+        origin: Origin = Origin.VIDEO,
     ) -> TrackId:
         """Return the Track for a Source, creating both when the Source is new.
 
         A Source that already exists returns its Track unchanged, `source_details`
         included, so adding the same link or file twice never makes a second Track.
+        The new Track's details are recorded as `origin`'s: a site Track's are its
+        video's.
         """
         existing = self._track_of(key)
         if existing is not None:
             return existing
         try:
             with self._units.begin() as db:
-                track = TrackRow(
-                    title=details.title,
-                    artist=details.artist,
-                    album=details.album,
-                    album_artist=details.album_artist,
-                    duration_ms=details.duration_ms,
-                    added_at=self._clock(),
-                )
+                now = self._clock()
+                track = TrackRow(title=details.title, duration_ms=details.duration_ms, added_at=now)
                 db.add(track)
                 db.flush()
+                given: dict[Field, Value | None] = {
+                    Field.TITLE: details.title,
+                    Field.ARTIST: details.artist,
+                    Field.ALBUM: details.album,
+                    Field.ALBUM_ARTIST: details.album_artist,
+                    Field.TRACK_NUMBER: details.track_number,
+                    Field.DISC_NUMBER: details.disc_number,
+                    Field.YEAR: details.year,
+                    Field.GENRE: details.genre,
+                }
+                values = {field: value for field, value in given.items() if value is not None}
+                record_details(db, TrackId(track.id), origin, values, now)
                 db.add(
                     SourceRow(
                         track_id=track.id,
@@ -120,8 +133,19 @@ class CatalogService:
             rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
             available = _availability(db, select(SourceRow), online=self._online())
             downloaded = _downloaded(db, select(SourceRow.track_id))
+            segment_of = album_file_of(db)
+            split = set(segment_of.values())
+            # A song is downloaded while its album file is.
+            downloaded |= {song for song, album in segment_of.items() if album in downloaded}
             return [
-                _to_track(track, state, available[track.id], downloaded=track.id in downloaded)
+                _to_track(
+                    track,
+                    state,
+                    available[track.id],
+                    downloaded=track.id in downloaded,
+                    segment_of=segment_of.get(TrackId(track.id)),
+                    split=track.id in split,
+                )
                 for track, state in rows
             ]
 
@@ -134,10 +158,18 @@ class CatalogService:
             available = _availability(
                 db, select(SourceRow).where(SourceRow.track_id == track_id), online=self._online()
             )
+            segment_of = album_file_of(db)
+            looked_at = segment_of.get(track_id, track_id)
             downloaded = _downloaded(
-                db, select(SourceRow.track_id).where(SourceRow.track_id == track_id)
+                db, select(SourceRow.track_id).where(SourceRow.track_id == looked_at)
             )
-        return _to_track(*found, available[track_id], downloaded=track_id in downloaded)
+        return _to_track(
+            *found,
+            available[track_id],
+            downloaded=looked_at in downloaded,
+            segment_of=segment_of.get(track_id),
+            split=track_id in segment_of.values(),
+        )
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
         """Mark or unmark a Track as one of `account_id`'s favorites."""
@@ -368,23 +400,34 @@ def _availability(
 ) -> defaultdict[int, Availability]:
     # A Library's Source can play only while its Library is online; another kind must
     # be downloaded, which waits while the Mode is Offline. A Source with a Download
-    # plays it, whatever its state.
+    # plays it, whatever its state. A song plays as its album file's Source does.
     mounted = {row.id: row.state == LibraryState.ONLINE for row in db.scalars(select(LibraryRow))}
     downloaded = set(db.scalars(select(DownloadRow.source_id)))
-    per_track: defaultdict[int, list[Availability]] = defaultdict(list)
-    for source in db.scalars(sources):
+
+    def of(source: SourceRow) -> Availability:
         if source.id in downloaded:
-            per_track[source.track_id].append(Availability.OK)
-            continue
+            return Availability.OK
         if source.kind != LIBRARY_SOURCE:
             state = source_availability(SourceState(source.state), online=True)
-            waits = state is Availability.OK and not online
-            per_track[source.track_id].append(Availability.WAITING_ONLINE if waits else state)
-            continue
+            return Availability.WAITING_ONLINE if state is Availability.OK and not online else state
         reachable = mounted.get(library_of_locator(source.locator), False)
-        per_track[source.track_id].append(
-            source_availability(SourceState(source.state), online=reachable)
-        )
+        return source_availability(SourceState(source.state), online=reachable)
+
+    rows = list(db.scalars(sources))
+    album_of = {
+        row.id: parse_segment_locator(row.locator)[0] for row in rows if row.kind == SEGMENT_SOURCE
+    }
+    albums = {
+        row.id: row
+        for row in db.scalars(select(SourceRow).where(SourceRow.id.in_(set(album_of.values()))))
+    }
+    per_track: defaultdict[int, list[Availability]] = defaultdict(list)
+    for source in rows:
+        if source.kind == SEGMENT_SOURCE:
+            album = albums.get(album_of[source.id])
+            per_track[source.track_id].append(Availability.MISSING if album is None else of(album))
+        else:
+            per_track[source.track_id].append(of(source))
     found: defaultdict[int, Availability] = defaultdict(lambda: Availability.MISSING)
     found.update({track: track_availability(each) for track, each in per_track.items()})
     return found
@@ -403,6 +446,8 @@ def _to_track(
     availability: Availability,
     *,
     downloaded: bool,
+    segment_of: int | None = None,
+    split: bool = False,
 ) -> Track:
     return Track(
         id=TrackId(track.id),
@@ -412,6 +457,11 @@ def _to_track(
             album=track.album,
             album_artist=track.album_artist,
             duration_ms=track.duration_ms,
+            track_number=track.track_number,
+            disc_number=track.disc_number,
+            year=track.year,
+            genre=track.genre,
+            cover=track.cover,
         ),
         added_at=track.added_at,
         favorite=state is not None and state.favorite,
@@ -420,6 +470,8 @@ def _to_track(
         last_played_at=None if state is None else state.last_played_at,
         availability=availability,
         downloaded=downloaded,
+        segment_of=None if segment_of is None else TrackId(segment_of),
+        split=split,
     )
 
 

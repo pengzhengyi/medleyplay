@@ -13,6 +13,8 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "rea
 
 import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
+import { BilibiliSettings } from "./BilibiliSettings";
+import { VideoDetailsSettings } from "./VideoDetailsSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -27,6 +29,7 @@ const SECTIONS = [
   { id: "keyboard-shortcuts", title: "Keyboard shortcuts" },
   { id: "network", title: "Network" },
   { id: "storage", title: "Downloads and storage" },
+  { id: "bilibili", title: "Bilibili" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -81,7 +84,8 @@ export function SettingsView({
     section?.scrollIntoView({ block: "start" });
     document.getElementById(`${id}-toggle`)?.focus({ preventScroll: true });
   };
-  const allFolded = folded.size === SECTIONS.length;
+  const sections = SECTIONS.filter(({ id }) => admin || id !== "bilibili");
+  const allFolded = sections.every(({ id }) => folded.has(id));
   const contents: Record<SectionId, ReactNode> = {
     appearance: (
       <>
@@ -92,6 +96,12 @@ export function SettingsView({
     "keyboard-shortcuts": <ShortcutSettings />,
     network: <NetworkSettings admin={admin} mode={mode} />,
     storage: <StorageSettings admin={admin} />,
+    bilibili: (
+      <>
+        <BilibiliSettings />
+        <VideoDetailsSettings />
+      </>
+    ),
   };
   return (
     <>
@@ -100,7 +110,7 @@ export function SettingsView({
       </header>
       <nav className="settings-toc" aria-label="Settings sections">
         <ul>
-          {SECTIONS.map(({ id, title }) => (
+          {sections.map(({ id, title }) => (
             <li key={id}>
               <button
                 type="button"
@@ -119,13 +129,13 @@ export function SettingsView({
           type="button"
           className="fold-all"
           onClick={() => {
-            fold(allFolded ? new Set() : new Set(SECTIONS.map(({ id }) => id)));
+            fold(allFolded ? new Set() : new Set(sections.map(({ id }) => id)));
           }}
         >
           {allFolded ? "Open all" : "Fold all"}
         </button>
       </nav>
-      {SECTIONS.map(({ id, title }) => (
+      {sections.map(({ id, title }) => (
         <SettingsSection
           key={id}
           id={id}

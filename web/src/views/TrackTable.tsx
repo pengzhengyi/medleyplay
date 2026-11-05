@@ -36,6 +36,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
+import { Cover } from "./Cover";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 
 /** What every cell may need: the page's callbacks, and which Track is playing. */
@@ -64,7 +65,8 @@ const WHY: Record<string, string> = {
 };
 
 const STARS = [1, 2, 3, 4, 5] as const;
-const ROW_HEIGHT = 49;
+// A row with its cover, as measured; rows are measured once on screen.
+const ROW_HEIGHT = 54;
 const SAVED = "medleyplay.columns.v1";
 
 /** Compare as people read names: by locale, numbers in order, ignoring case. */
@@ -180,7 +182,8 @@ export function TrackTable({
   const items = virtual.getVirtualItems();
   const before = (items[0]?.start ?? top) - top;
   const after = virtual.getTotalSize() - ((items.at(-1)?.end ?? top) - top);
-  const visibleColumns = table.getVisibleLeafColumns().length;
+  // A spacer row has a cell per column, so a column the layout hides goes from it too.
+  const columns = table.getVisibleLeafColumns().map((column) => column.id);
   const playable = rows.map((row) => row.original).filter((track) => track.availability === "ok");
 
   if (tracks.length === 0) {
@@ -294,7 +297,9 @@ export function TrackTable({
         <tbody ref={body}>
           {before > 0 && (
             <tr aria-hidden className="spacer">
-              <td colSpan={visibleColumns} style={{ height: before }} />
+              {columns.map((id) => (
+                <td key={id} className={id} style={{ height: before }} />
+              ))}
             </tr>
           )}
           {items.map((item) => {
@@ -322,7 +327,9 @@ export function TrackTable({
           })}
           {after > 0 && (
             <tr aria-hidden className="spacer">
-              <td colSpan={visibleColumns} style={{ height: after }} />
+              {columns.map((id) => (
+                <td key={id} className={id} style={{ height: after }} />
+              ))}
             </tr>
           )}
         </tbody>
@@ -390,6 +397,7 @@ const COLUMNS: Column[] = [
       const { actions, playingId } = meta(table);
       return (
         <div className="title-cell">
+          <Cover cover={track.cover} className="thumb" />
           {track.id === playingId && <span className="bars" aria-hidden />}
           <button
             type="button"

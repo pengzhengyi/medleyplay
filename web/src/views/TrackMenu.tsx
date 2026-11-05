@@ -8,10 +8,13 @@
 
 import {
   DotsThreeIcon,
+  GlobeIcon,
   ListPlusIcon,
   MicrophoneStageIcon,
+  PencilSimpleIcon,
   PlaylistIcon,
   QueueIcon,
+  ScissorsIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
@@ -26,6 +29,13 @@ export interface TrackMenuActions {
   readonly onPlayNext: (track: Track) => void;
   readonly onAdd: (track: Track) => void;
   readonly onAddToPlaylist: (track: Track) => void;
+  readonly onEditDetails: (track: Track) => void;
+  /** Whether `track`'s details can be looked up online now. */
+  readonly canFindDetails: (track: Track) => boolean;
+  /** Ask the Track's site for its details and cover. */
+  readonly onFindDetails: (track: Track) => void;
+  /** Edit the songs of the file `track` is, or is a song of. */
+  readonly onEditSongs: (track: Track) => void;
 }
 
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
@@ -100,6 +110,32 @@ export function TrackMenu({
             }}
           >
             Add to playlist…
+          </Item>
+          <Item
+            icon={<PencilSimpleIcon />}
+            onSelect={() => {
+              actions.onEditDetails(track);
+            }}
+          >
+            Edit details…
+          </Item>
+          {actions.canFindDetails(track) && (
+            <Item
+              icon={<GlobeIcon />}
+              onSelect={() => {
+                actions.onFindDetails(track);
+              }}
+            >
+              Find details online
+            </Item>
+          )}
+          <Item
+            icon={<ScissorsIcon />}
+            onSelect={() => {
+              actions.onEditSongs(track);
+            }}
+          >
+            {track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…"}
           </Item>
         </Menu.Content>
       </Menu.Portal>

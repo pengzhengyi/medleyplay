@@ -1,0 +1,264 @@
+"""A Track's details: checking values, and choosing the value each field shows."""
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from medleyplay.domain.details import (
+    ALBUM_FIELDS,
+    MAX_TEXT,
+    ORIGINS,
+    Field,
+    Origin,
+    Shown,
+    Value,
+    Values,
+    check_value,
+    check_values,
+    found_value,
+    shown,
+)
+from medleyplay.domain.errors import InvalidInputError
+
+
+def test_a_field_shows_the_first_origins_value() -> None:
+    values = {
+        Origin.FILE_NAME: {Field.TITLE: "BV1dm4y1s7ak"},
+        Origin.FILES: {Field.TITLE: "Night Drive"},
+    }
+
+    assert shown(values)[Field.TITLE] == Shown("Night Drive", Origin.FILES)
+
+
+def test_the_households_value_wins_over_every_other() -> None:
+    values = {
+        Origin.FILES: {Field.ARTIST: "GUMI"},
+        Origin.HOUSEHOLD: {Field.ARTIST: "GUMI/MAYU"},
+    }
+
+    assert shown(values)[Field.ARTIST] == Shown("GUMI/MAYU", Origin.HOUSEHOLD)
+
+
+def test_empty_text_from_the_household_shows_nothing() -> None:
+    values = {Origin.FILES: {Field.GENRE: "Pop"}, Origin.HOUSEHOLD: {Field.GENRE: ""}}
+
+    assert shown(values)[Field.GENRE] == Shown("", Origin.HOUSEHOLD)
+
+
+def test_a_field_no_origin_has_is_absent() -> None:
+    assert Field.YEAR not in shown({Origin.FILES: {Field.TITLE: "Intro"}})
+
+
+def test_the_album_fields_come_from_the_first_origin_naming_an_album() -> None:
+    values: dict[Origin, Values] = {
+        Origin.FILES: {Field.TRACK_NUMBER: 7},
+        Origin.VIDEO: {Field.ALBUM: "Re:Start", Field.YEAR: 2016, Field.TRACK_NUMBER: 2},
+    }
+
+    found = shown(values)
+
+    assert found[Field.ALBUM] == Shown("Re:Start", Origin.VIDEO)
+    assert found[Field.TRACK_NUMBER] == Shown(2, Origin.VIDEO)
+    assert found[Field.YEAR] == Shown(2016, Origin.VIDEO)
+
+
+def test_the_households_album_field_still_wins_on_its_own() -> None:
+    values: dict[Origin, Values] = {
+        Origin.VIDEO: {Field.ALBUM: "Re:Start", Field.YEAR: 2016},
+        Origin.HOUSEHOLD: {Field.YEAR: 2017},
+    }
+
+    found = shown(values)
+
+    assert found[Field.ALBUM] == Shown("Re:Start", Origin.VIDEO)
+    assert found[Field.YEAR] == Shown(2017, Origin.HOUSEHOLD)
+
+
+def test_without_a_named_album_each_album_field_falls_back_on_its_own() -> None:
+    values = {Origin.FILES: {Field.TRACK_NUMBER: 3}, Origin.VIDEO: {Field.YEAR: 2014}}
+
+    found = shown(values)
+
+    assert found[Field.TRACK_NUMBER] == Shown(3, Origin.FILES)
+    assert found[Field.YEAR] == Shown(2014, Origin.VIDEO)
+
+
+def test_text_is_trimmed() -> None:
+    assert check_value(Field.TITLE, "  Intro \n") == "Intro"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        (Field.TITLE, "x" * (MAX_TEXT + 1)),
+        (Field.TITLE, 3),
+        (Field.TRACK_NUMBER, 0),
+        (Field.TRACK_NUMBER, "3"),
+        (Field.TRACK_NUMBER, True),
+        (Field.DISC_NUMBER, 1000),
+        (Field.YEAR, 999),
+        (Field.YEAR, 3000),
+    ],
+    ids=[
+        "text too long",
+        "a number for text",
+        "a track number of 0",
+        "text for a number",
+        "a boolean for a number",
+        "a disc number over 999",
+        "a year of three digits",
+        "a year past 2999",
+    ],
+)
+def test_a_value_its_field_cant_keep_is_refused(field: Field, value: object) -> None:
+    with pytest.raises(InvalidInputError):
+        check_value(field, value)
+
+
+def test_values_are_checked_by_their_field_names() -> None:
+    assert check_values({"title": " Intro ", "year": 2014}) == {
+        Field.TITLE: "Intro",
+        Field.YEAR: 2014,
+    }
+
+
+def test_a_field_unknown_to_tracks_is_refused() -> None:
+    with pytest.raises(InvalidInputError, match="lyrics"):
+        check_values({"lyrics": "la la"})
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "kept"),
+    [
+        (Field.TITLE, "  Intro \n", "Intro"),
+        (Field.TITLE, "x" * (MAX_TEXT + 1), "x" * MAX_TEXT),
+        (Field.TITLE, " ", None),
+        (Field.TRACK_NUMBER, 3, 3),
+        (Field.TRACK_NUMBER, 0, None),
+        (Field.YEAR, 99, None),
+    ],
+    ids=[
+        "text is trimmed",
+        "long text is cut",
+        "blank text is no value",
+        "a whole number is kept",
+        "a track number of 0 is no value",
+        "a year of two digits is no value",
+    ],
+)
+def test_a_found_value_is_kept_as_it_can_be_rather_than_refused(
+    field: Field, value: Value, kept: Value | None
+) -> None:
+    assert found_value(field, value) == kept
+
+
+@given(st.sampled_from(Field), st.one_of(st.text(), st.integers()))
+def test_a_found_value_kept_is_one_the_household_could_enter(field: Field, value: Value) -> None:
+    kept = found_value(field, value)
+
+    assert kept is None or check_value(field, kept) == kept
+
+
+_VALUE = st.one_of(st.text(max_size=4), st.integers(min_value=1, max_value=9))
+_VALUES = st.dictionaries(
+    st.sampled_from(Origin),
+    st.dictionaries(st.sampled_from(Field), _VALUE, max_size=4),
+    max_size=len(ORIGINS),
+)
+
+
+@given(_VALUES)
+def test_every_shown_value_is_one_an_origin_holds(values: dict[Origin, Values]) -> None:
+    for field, found in shown(values).items():
+        assert values[found.origin][field] == found.value
+
+
+@given(_VALUES)
+def test_a_field_outside_the_album_shows_the_first_origin_holding_it(
+    values: dict[Origin, Values],
+) -> None:
+    for field in set(Field) - ALBUM_FIELDS:
+        holding = [origin for origin in ORIGINS if field in values.get(origin, {})]
+
+        assert shown(values).get(field) == (
+            Shown(values[holding[0]][field], holding[0]) if holding else None
+        )
+
+
+@given(_VALUES, st.sampled_from(Field), _VALUE)
+def test_the_households_value_always_shows(
+    values: dict[Origin, Values], field: Field, value: Value
+) -> None:
+    values = {**values, Origin.HOUSEHOLD: {**values.get(Origin.HOUSEHOLD, {}), field: value}}
+
+    assert shown(values)[field] == Shown(value, Origin.HOUSEHOLD)
+
+
+@given(_VALUES)
+def test_the_album_fields_never_mix_two_releases(values: dict[Origin, Values]) -> None:
+    found = shown(values)
+    if Field.ALBUM in found and found[Field.ALBUM].value:
+        others = {
+            found[field].origin
+            for field in ALBUM_FIELDS - {Field.COVER}
+            if field in found and found[field].origin is not Origin.HOUSEHOLD
+        }
+
+        assert len(others) <= 1
+        if Field.COVER in found:
+            cover = found[Field.COVER].origin
+            naming = [origin for origin in ORIGINS if values.get(origin, {}).get(Field.ALBUM)]
+            # The household's album corrects the first other one naming an album.
+            corrected = next((o for o in naming if o is not Origin.HOUSEHOLD), None)
+            album_origins = {naming[0]} | ({corrected} if naming[0] is Origin.HOUSEHOLD else set())
+            assert cover in {Origin.HOUSEHOLD} | album_origins or (
+                not values[cover].get(Field.ALBUM)
+                and Field.COVER not in values.get(Origin.HOUSEHOLD, {})
+                and all(Field.COVER not in values[o] for o in album_origins if o is not None)
+            )
+
+
+_SHOWN_CASES = json.loads(
+    (Path(__file__).parents[1] / "support" / "shown_details.json").read_text(encoding="utf-8")
+)["cases"]
+
+
+@pytest.mark.parametrize("case", _SHOWN_CASES, ids=[case["name"] for case in _SHOWN_CASES])
+def test_each_shared_case_shows_what_the_web_client_previews(case: dict[str, Any]) -> None:
+    values = {
+        Origin(origin): {Field(field): value for field, value in given.items()}
+        for origin, given in case["origins"].items()
+    }
+
+    found = shown(values)
+
+    assert {
+        str(field): {"value": each.value, "origin": str(each.origin)}
+        for field, each in found.items()
+    } == case["shown"]
+
+
+_COVER = "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+"""The name of a cover: the SHA-256 of its bytes."""
+
+
+@pytest.mark.parametrize("value", [_COVER, ""], ids=["a cover's name", "none"])
+def test_the_household_names_a_cover_or_none(value: str) -> None:
+    assert check_value(Field.COVER, value) == value
+
+
+@pytest.mark.parametrize(
+    "value", ["cover.jpg", _COVER.upper(), 3], ids=["a file name", "capitals", "a number"]
+)
+def test_a_cover_that_names_no_image_is_refused(value: object) -> None:
+    with pytest.raises(InvalidInputError, match="SHA-256"):
+        check_value(Field.COVER, value)
+
+
+def test_a_found_cover_that_names_no_image_is_no_value() -> None:
+    assert found_value(Field.COVER, "folder.jpg") is None
+    assert found_value(Field.COVER, _COVER) == _COVER

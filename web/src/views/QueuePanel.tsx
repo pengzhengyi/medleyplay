@@ -29,6 +29,7 @@ import { DotsSixVerticalIcon, XIcon } from "@phosphor-icons/react";
 import type { Track } from "../api";
 import { type Entry, upNext } from "../player/queue";
 import type { Player } from "../player/usePlayer";
+import { Cover } from "./Cover";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 const INSTRUCTIONS = {
@@ -156,6 +157,7 @@ function QueueItem({
       >
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
+      <Cover cover={track?.cover ?? null} className="thumb" />
       <span className="entry-title">{title}</span>
       <span className="entry-artist">{track?.artist}</span>
       <button

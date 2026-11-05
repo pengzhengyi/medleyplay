@@ -105,6 +105,12 @@ class TrackDetails:
     album: str = ""
     album_artist: str = ""
     duration_ms: int | None = None
+    track_number: int | None = None
+    disc_number: int | None = None
+    year: int | None = None
+    genre: str = ""
+    cover: str | None = None
+    """The cover shown, by name, if any."""
 
 
 @dataclass(frozen=True)
@@ -121,6 +127,10 @@ class Track:
     availability: Availability
     downloaded: bool = False
     """Whether a Source of the Track has a Download kept on the server."""
+    segment_of: TrackId | None = None
+    """The album file this Track is a song of, if it is one."""
+    split: bool = False
+    """Whether this Track's file is split into songs, which then stand for it."""
 
 
 @dataclass(frozen=True)

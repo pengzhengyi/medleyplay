@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from medleyplay.application.jobs import JobKind
 from medleyplay.domain.jobs import Job
-from medleyplay.plugin_host.job import JobContext, JobProgram, PluginCallFailedError
+from medleyplay.plugin_host.job import (
+    AnswerFailedError,
+    JobContext,
+    JobProgram,
+    PluginCallFailedError,
+)
 from tests.support.echo import SAY, Say
 
 
@@ -25,7 +30,11 @@ class EchoJob(BaseModel):
     say: Say | None = None
     """Ask the plugin `parrot` to say this, and echo its reply instead."""
     catch_failure: bool = False
-    fail: Literal["raise", "crash", "hang", "sleeping-child"] | None = None
+    echo_proxy: bool = False
+    """Echo the proxy the Job started with, instead of the text."""
+    fail: Literal["raise", "crash", "hang", "sleeping-child", "gone", "refused"] | None = None
+    lane: str = "main"
+    """The lane the Job runs in, for a kind that has lanes."""
 
 
 class Echoed(BaseModel):
@@ -39,7 +48,7 @@ def run(request: EchoJob, context: JobContext) -> Echoed:
     for step in range(1, request.steps + 1):
         context.report(step / request.steps, f"Step {step}")
         time.sleep(request.step_seconds)
-    text = request.text
+    text = f"proxy={context.proxy}" if request.echo_proxy else request.text
     if request.say is not None:
         try:
             text = context.call(SAY, "parrot", request.say).text
@@ -47,9 +56,16 @@ def run(request: EchoJob, context: JobContext) -> Echoed:
             if not request.catch_failure:
                 raise
             text = "caught"
+    _misbehave(request, text, context)
+    return Echoed(text=text)
+
+
+def _misbehave(request: EchoJob, text: str, context: JobContext) -> None:
     match request.fail:
         case "raise":
             raise ValueError(text)
+        case "gone" | "refused":
+            raise AnswerFailedError(text, kind=request.fail)
         case "crash":
             os._exit(9)
         case "hang":
@@ -60,7 +76,6 @@ def run(request: EchoJob, context: JobContext) -> Echoed:
             time.sleep(3600)
         case None:
             pass
-    return Echoed(text=text)
 
 
 ECHO: JobProgram[EchoJob, Echoed] = JobProgram(EchoJob, Echoed, run)
@@ -72,6 +87,7 @@ def echo_kind(
     idle_timeout: timedelta = timedelta(seconds=20),
     complete: Callable[[Session, Job, Echoed], None] | None = None,
     needs_network: bool = False,
+    proxy_site: str | None = None,
 ) -> JobKind[EchoJob, Echoed]:
     """Return the kind `echo`, whose completion appends each Job's echo to `completed`.
 
@@ -90,4 +106,5 @@ def echo_kind(
         points=("echo",),
         idle_timeout=idle_timeout,
         needs_network=needs_network,
+        proxy_site=proxy_site,
     )

@@ -14,6 +14,8 @@ import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
 import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
+import { EditDetails } from "./EditDetails";
+import { EditSongs } from "./EditSongs";
 import { Nav } from "./Nav";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
@@ -52,6 +54,10 @@ export function Library({
   const playing = playingId === undefined ? undefined : byId.get(playingId);
   // The song being added to Playlists, while its dialog is open, and what was last done.
   const [adding, setAdding] = useState<Track | undefined>(undefined);
+  // The song whose details are being edited, while its dialog is open.
+  const [editing, setEditing] = useState<Track | undefined>(undefined);
+  // The album file whose songs are being edited: a song's own file, or the file chosen.
+  const [splitting, setSplitting] = useState<Track | undefined>(undefined);
   const [notice, setNotice] = useState("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
   // The header stays at the top, so what else stays there sits under it, however tall it is.
@@ -116,6 +122,23 @@ export function Library({
       library.setRating(track.id, rating);
     },
     onAddToPlaylist: setAdding,
+    onEditDetails: setEditing,
+    canFindDetails: (track: Track) => library.findable.has(track.id),
+    onFindDetails: (track: Track) => {
+      library.findDetails(track.id).then(
+        () => {
+          const wait =
+            library.mode?.online === false ? " It waits until medleyplay is Online." : "";
+          setNotice(`Looking up “${track.title}” on Bilibili.${wait}`);
+        },
+        (failure: unknown) => {
+          setNotice(failure instanceof Error ? failure.message : String(failure));
+        },
+      );
+    },
+    onEditSongs: (track: Track) => {
+      setSplitting(track.segment_of === null ? track : byId.get(track.segment_of));
+    },
   };
   const addTo = async (track: Track, ids: readonly string[], newNames: readonly string[]) => {
     await library.addToPlaylists(track, ids, newNames);
@@ -275,6 +298,42 @@ export function Library({
           onSave={(ids, newNames) => addTo(adding, ids, newNames)}
           onClose={() => {
             setAdding(undefined);
+          }}
+        />
+      )}
+      {splitting !== undefined && (
+        <EditSongs
+          album={splitting}
+          load={api.songs}
+          readList={async (trackId, text) => (await api.readSongList(trackId, text)).songs}
+          loadAudio={api.playback}
+          onListen={player.pause}
+          onSave={async (rows, known) => {
+            await library.saveSongs(splitting.id, rows, known);
+            setNotice(`Saved the songs of “${splitting.title}”.`);
+          }}
+          onUnsplit={async () => {
+            await library.unsplit(splitting.id);
+            setNotice(`“${splitting.title}” plays whole again.`);
+          }}
+          onClose={() => {
+            setSplitting(undefined);
+          }}
+        />
+      )}
+      {editing !== undefined && (
+        <EditDetails
+          track={editing}
+          load={api.details}
+          onSave={async (values) => {
+            await library.saveDetails(editing.id, values);
+            setNotice(`Saved the details of “${editing.title}”.`);
+          }}
+          onReadVideo={(text) => library.readVideoText(editing.id, text)}
+          onSetCover={(image) => library.setCover(editing.id, image)}
+          onRemoveCover={() => library.removeCover(editing.id)}
+          onClose={() => {
+            setEditing(undefined);
           }}
         />
       )}

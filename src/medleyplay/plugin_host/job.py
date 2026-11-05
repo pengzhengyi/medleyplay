@@ -55,6 +55,19 @@ class PluginCallFailedError(Exception):
         self.key = key
 
 
+class AnswerFailedError(Exception):
+    """A program fails its Job because of what the site answered, not because anything broke.
+
+    `kind` is `gone` when the site no longer has what was asked for, and `refused` when
+    it refused the request.
+    """
+
+    def __init__(self, message: str, *, kind: Literal["gone", "refused"]) -> None:
+        """Record why the Job fails."""
+        super().__init__(message)
+        self.kind: Literal["gone", "refused"] = kind
+
+
 @dataclass
 class _KeyRecord:
     plugin: str
@@ -72,6 +85,8 @@ class JobContext:
     _send: Callable[[JobProgress], None]
     login: Path | None = None
     """A copy of the login the Job was given, readable by its owner alone, or `None`."""
+    proxy: str | None = field(default=None, repr=False)
+    """The household's proxy for the Job's site, or `None`; held in memory only."""
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
 
     def report(self, fraction: float | None = None, message: str = "") -> None:
@@ -157,7 +172,11 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
     work_dir = Path(start.work_dir)
     endpoints = load_plugins(start.package, start.plugins, lambda _: None)
     context = JobContext(
-        work_dir, endpoints, send, login=Path(start.login) if start.login else None
+        work_dir,
+        endpoints,
+        send,
+        login=Path(start.login) if start.login else None,
+        proxy=start.proxy,
     )
     try:
         program = _program(start.program)
@@ -169,6 +188,13 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
             message=str(error),
             plugin=error.plugin,
             key=error.key,
+            outcomes=context.outcomes(),
+            peak_memory=peak_memory(),
+        )
+    except AnswerFailedError as error:
+        return JobFailed(
+            kind=error.kind,
+            message=str(error),
             outcomes=context.outcomes(),
             peak_memory=peak_memory(),
         )

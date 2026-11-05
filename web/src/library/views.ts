@@ -19,6 +19,8 @@ export interface Artist {
 /** An album, under its album artist, or its artist when that is blank. */
 export interface Album extends Artist {
   readonly artist: string;
+  /** The first cover among the album's songs, in the order given. */
+  readonly cover: string | null;
 }
 
 /** What a search found. */
@@ -41,6 +43,11 @@ export function fold(text: string): string {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
+/** Return the Tracks that stand for music in the Library: a file split into songs gives way to them. */
+export function songsOf(tracks: readonly Track[]): Track[] {
+  return tracks.filter((track) => !track.split);
+}
+
 /** Return each artist once, sorted by name as people read them, a blank name first. */
 export function artistsOf(tracks: readonly Track[]): Artist[] {
   return groups(tracks, (track) => track.artist).map(({ name, count, durationMs }) => ({
@@ -59,11 +66,12 @@ export function tracksOfArtist(tracks: readonly Track[], name: string): Track[] 
 /** Return each album once, by its artist and then its name. */
 export function albumsOf(tracks: readonly Track[]): Album[] {
   return groups(tracks, (track) => `${albumArtistOf(track)}\n${track.album}`)
-    .map(({ first, count, durationMs }) => ({
+    .map(({ first, count, durationMs, cover }) => ({
       artist: albumArtistOf(first),
       name: first.album,
       count,
       durationMs,
+      cover,
     }))
     .sort((a, b) => collator.compare(a.artist, b.artist) || collator.compare(a.name, b.name));
 }
@@ -125,23 +133,23 @@ interface Group {
   readonly first: Track;
   readonly count: number;
   readonly durationMs: number;
+  readonly cover: string | null;
 }
 
 /** Group `tracks` by `nameOf`, folded, sorted by the name the first Track gives. */
 function groups(tracks: readonly Track[], nameOf: (track: Track) => string): Group[] {
-  const found = new Map<
-    string,
-    { name: string; first: Track; count: number; durationMs: number }
-  >();
+  const found = new Map<string, { -readonly [K in keyof Group]: Group[K] }>();
   for (const track of tracks) {
     const name = nameOf(track);
     const key = fold(name);
     const group = found.get(key);
+    const cover = track.cover === "" ? null : track.cover;
     if (group === undefined) {
-      found.set(key, { name, first: track, count: 1, durationMs: track.duration_ms ?? 0 });
+      found.set(key, { name, first: track, count: 1, durationMs: track.duration_ms ?? 0, cover });
     } else {
       group.count += 1;
       group.durationMs += track.duration_ms ?? 0;
+      group.cover ??= cover;
     }
   }
   return [...found.values()].sort((a, b) => collator.compare(a.name, b.name));

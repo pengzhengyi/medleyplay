@@ -44,11 +44,14 @@ def _readable(*parts: int) -> VideoDetails:
 class Resolver:
     canonical: Canonical = field(default_factory=lambda: Canonical(video=VIDEO, link=LINK))
     details: VideoDetails = field(default_factory=lambda: _readable(1))
+    proxies: list[str | None] = field(default_factory=list)
 
     def canonicalize(self, request: Canonicalize) -> Canonical:
+        self.proxies.append(request.proxy)
         return self.canonical
 
     def read(self, request: ReadVideo) -> VideoDetails:
+        self.proxies.append(request.proxy)
         return self.details
 
 
@@ -57,6 +60,22 @@ def test_a_resolver_that_keeps_the_contract_returns_the_video_and_its_details() 
 
     assert canonical.video == VIDEO
     assert details == _readable(1)
+
+
+def test_a_resolver_is_checked_through_the_proxy_it_is_given() -> None:
+    resolver = Resolver()
+
+    check_source_resolver(resolver, LINK, proxy="socks5h://127.0.0.1:7890")
+
+    assert set(resolver.proxies) == {"socks5h://127.0.0.1:7890"}
+
+
+def test_a_resolver_is_checked_without_a_proxy_by_default() -> None:
+    resolver = Resolver()
+
+    check_source_resolver(resolver, LINK)
+
+    assert set(resolver.proxies) == {None}
 
 
 def test_a_link_to_no_video_has_no_details() -> None:

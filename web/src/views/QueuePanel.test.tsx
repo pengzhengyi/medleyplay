@@ -35,7 +35,7 @@ function upNext(): string[] {
   const queue = screen.getByRole("region", { name: "Up next" });
   return within(queue)
     .queryAllByRole("listitem")
-    .map((item) => item.querySelector("span")?.textContent ?? "");
+    .map((item) => item.querySelector(".entry-title")?.textContent ?? "");
 }
 
 describe("the queue", () => {

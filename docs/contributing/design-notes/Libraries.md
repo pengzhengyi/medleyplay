@@ -58,6 +58,11 @@
   coarse: changing the archive rescans every member.
 - **A protected `.m4p` file** is read by the plugin's own reader with
   `protected` set, so its Track is listed as *can't play*.
+- **A fragmented `m4a`, `m4b`, or `mp4` file,** such as a Bilibili download,
+  says 0 for its length in its header. When tinytag finds no length, the plugin
+  reads one from the file's boxes: the `mehd` fragment duration, or else the sum
+  of the `sidx` subsegment durations. It reads only box headers, never the audio,
+  and a malformed file has no length rather than failing the call.
 - **A file tinytag can't parse has no tags,** rather than failing the call, so a
   folder of damaged files can't fault the plugin; its Track is named after the
   file.
@@ -71,8 +76,9 @@
   new name: a root is a Library's natural key.
 - **Registering starts a scan.**
 - **Removing a Library** cancels its scan, and removes its Sources, and any Track
-  left without a Source; playlists drop those Tracks. Library ids are never
-  reused, so a late scan of a removed Library changes nothing.
+  left without a Source; playlists drop those Tracks. Library and Track ids are
+  never reused, so a late scan of a removed Library changes nothing, and a queue
+  still naming a removed Track never plays another in its place.
 
 ## Scanning
 

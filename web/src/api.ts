@@ -147,6 +147,20 @@ export interface JobEvent {
   readonly state: Job["state"];
 }
 
+/** The enricher that reads a Track's video details and cover from Bilibili. */
+export const DETAILS_ENRICHER = "bilibili-details";
+
+/** An enricher: whether it can be asked, whether the site stopped it, and for which Tracks. */
+export interface Enricher {
+  readonly name: string;
+  /** Its plugin is on. */
+  readonly available: boolean;
+  /** Set after the site refused a request; nothing is asked until an admin resets it. */
+  readonly stopped: { readonly at: string; readonly reason: string } | null;
+  /** The Tracks it may be asked about now; none while it is stopped or turned off. */
+  readonly eligible: readonly number[];
+}
+
 /** A site's proxy as the server shows it: its address, never its login. */
 export interface ProxySetting {
   readonly scheme: "http" | "https" | "socks5h";
@@ -394,6 +408,16 @@ export const api = {
   saveProxy: (site: string, url: string) =>
     call<ProxySetting>("PUT", `/api/proxies/${site}`, { url }),
   removeProxy: (site: string) => call<undefined>("DELETE", `/api/proxies/${site}`),
+  /** The enricher's state, and the Tracks it may be asked about. */
+  enricher: (name: string) => call<Enricher>("GET", `/api/enrichers/${name}`),
+  /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */
+  findDetails: (name: string, trackId: number) =>
+    call<Job>("POST", `/api/enrichers/${name}/tracks/${String(trackId)}`),
+  /** Queue the enricher for every Track it may be asked about; admins only. */
+  findDetailsForAll: (name: string) =>
+    call<{ queued: number }>("POST", `/api/enrichers/${name}/find-all`),
+  /** Let a stopped enricher be asked again; admins only. */
+  resetEnricher: (name: string) => call<undefined>("POST", `/api/enrichers/${name}/reset`),
   mode: () => call<Mode>("GET", "/api/mode"),
   modeSettings: () => call<ModeSettings>("GET", "/api/mode/settings"),
   saveModeSetting: (setting: ModeSetting, revision: number) =>

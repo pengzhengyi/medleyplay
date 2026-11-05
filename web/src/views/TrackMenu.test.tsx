@@ -9,12 +9,14 @@ import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 /** Melt by ryo, on the album Supercell, which is listed under its album artist, supercell. */
 const MELT = trackOf(1, "Melt", { artist: "ryo", album: "Supercell", album_artist: "supercell" });
 
-function renderMenu(queueing = true, track = MELT) {
+function renderMenu(queueing = true, track = MELT, findable = false) {
   const actions: TrackMenuActions = {
     onPlayNext: vi.fn(),
     onAdd: vi.fn(),
     onAddToPlaylist: vi.fn(),
     onEditDetails: vi.fn(),
+    canFindDetails: () => findable,
+    onFindDetails: vi.fn(),
     onEditSongs: vi.fn(),
   };
   render(<TrackMenu track={track} actions={actions} queueing={queueing} />);
@@ -45,6 +47,40 @@ describe("a song's menu", () => {
       "Edit details…",
       "Split into songs…",
     ]);
+  });
+
+  it("offers to find the details online for a Track that can be looked up, after Edit details", async () => {
+    renderMenu(true, MELT, true);
+
+    await open();
+
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Play next",
+      "Add to queue",
+      "Go to artist",
+      "Go to album",
+      "Add to playlist…",
+      "Edit details…",
+      "Find details online",
+      "Split into songs…",
+    ]);
+  });
+
+  it("asks for the Track's details when Find details online is chosen", async () => {
+    const actions = renderMenu(true, MELT, true);
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Find details online" }));
+
+    expect(actions.onFindDetails).toHaveBeenCalledWith(MELT);
+  });
+
+  it("leaves out Find details online for a Track that can't be looked up", async () => {
+    renderMenu(true, MELT, false);
+
+    await open();
+
+    expect(screen.queryByRole("menuitem", { name: "Find details online" })).toBeNull();
   });
 
   it("leaves out queueing for the song playing", async () => {

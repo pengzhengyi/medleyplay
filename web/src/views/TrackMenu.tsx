@@ -8,6 +8,7 @@
 
 import {
   DotsThreeIcon,
+  GlobeIcon,
   ListPlusIcon,
   MicrophoneStageIcon,
   PencilSimpleIcon,
@@ -29,6 +30,10 @@ export interface TrackMenuActions {
   readonly onAdd: (track: Track) => void;
   readonly onAddToPlaylist: (track: Track) => void;
   readonly onEditDetails: (track: Track) => void;
+  /** Whether `track`'s details can be looked up online now. */
+  readonly canFindDetails: (track: Track) => boolean;
+  /** Ask the Track's site for its details and cover. */
+  readonly onFindDetails: (track: Track) => void;
   /** Edit the songs of the file `track` is, or is a song of. */
   readonly onEditSongs: (track: Track) => void;
 }
@@ -114,6 +119,16 @@ export function TrackMenu({
           >
             Edit details…
           </Item>
+          {actions.canFindDetails(track) && (
+            <Item
+              icon={<GlobeIcon />}
+              onSelect={() => {
+                actions.onFindDetails(track);
+              }}
+            >
+              Find details online
+            </Item>
+          )}
           <Item
             icon={<ScissorsIcon />}
             onSelect={() => {

@@ -35,6 +35,9 @@ function open(
     "GET /api/settings": { body: LIMIT_20 },
     "GET /api/storage": { body: USING_2 },
     "GET /api/proxies/bilibili": { body: null },
+    "GET /api/enrichers/bilibili-details": {
+      body: { name: "bilibili-details", available: true, stopped: null, eligible: [1, 2] },
+    },
     ...modeSettingsOf(mode, metered),
     ...routes,
   });
@@ -73,6 +76,16 @@ describe("the Bilibili section", () => {
     expect(screen.getByRole("button", { name: "Go to Bilibili" })).toBeInTheDocument();
   });
 
+  it("also holds the video details, which an admin queues for every Track", async () => {
+    open(true);
+
+    const bilibili = within(screen.getByRole("region", { name: "Bilibili" }));
+
+    expect(bilibili.getByRole("heading", { name: "Video details" })).toBeInTheDocument();
+    expect(await bilibili.findByText("2 Tracks can have their details found.")).toBeInTheDocument();
+    expect(bilibili.getByRole("button", { name: "Find details for all" })).toBeEnabled();
+  });
+
   it("is not shown to a member, who never asks for the proxy", async () => {
     const { calls } = open(false);
 
@@ -81,6 +94,7 @@ describe("the Bilibili section", () => {
     expect(screen.queryByRole("region", { name: "Bilibili" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Go to Bilibili" })).toBeNull();
     expect(calls).not.toContain("GET /api/proxies/bilibili");
+    expect(calls).not.toContain("GET /api/enrichers/bilibili-details");
   });
 });
 

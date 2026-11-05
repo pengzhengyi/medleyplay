@@ -8,6 +8,7 @@ import type {
   Account,
   Details,
   Features,
+  LinkLookup,
   MeteredNetwork,
   Mode,
   ModeSettings,
@@ -16,6 +17,7 @@ import type {
   Song,
   Songs,
   Track,
+  TrackDownload,
   VideoText,
 } from "../api";
 import { type Origins, type Values, shownOf } from "../library/details";
@@ -77,6 +79,8 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     last_played_at: null,
     availability: "ok",
     downloaded: false,
+    download_failed: false,
+    site: null,
     segment_of: null,
     split: false,
     cover: null,
@@ -271,5 +275,73 @@ export function splitSongsOf(
       artist: "",
     })),
     found,
+  };
+}
+
+/**
+ * A video a link names that was read: *Night Drive* by Blue Room with one part, or
+ * *Mixtape* with three when `parts` is 3, both addable at 192 and 64 kbps.
+ */
+export function lookupOf(parts = 1, change: Partial<LinkLookup> = {}): LinkLookup {
+  const title = parts === 1 ? "【MV】Night Drive" : "Mixtape";
+  return {
+    kind: "bilibili",
+    video: "BV1Xx41117Tz",
+    title,
+    uploader: "Blue Room",
+    parts: Array.from({ length: parts }, (_, index) => ({
+      part: index + 1,
+      title: parts === 1 ? "Night Drive" : `Mixtape ${String(index + 1)}`,
+      duration_ms: 187_000,
+      track_id: null,
+    })),
+    qualities: [
+      { id: "30280", label: "192 kbps", kbps: 192 },
+      { id: "30216", label: "64 kbps", kbps: 64 },
+    ],
+    readable: true,
+    reason: null,
+    message: "",
+    ...change,
+  };
+}
+
+/**
+ * A video that couldn't be read, for the reason `reason` and `message`: its one part is
+ * the one the link named.
+ */
+export function unreadableLookupOf(
+  message: string,
+  reason: LinkLookup["reason"] = "network",
+  part = 1,
+): LinkLookup {
+  return {
+    kind: "bilibili",
+    video: "BV1Xx41117Tz",
+    title: "",
+    uploader: "",
+    parts: [{ part, title: "", duration_ms: null, track_id: null }],
+    qualities: [],
+    readable: false,
+    reason,
+    message,
+  };
+}
+
+/** Where a site Track's Download stands: `status`, with `message` when it has one. */
+export function downloadOf(
+  trackId: number,
+  status: TrackDownload["status"],
+  message = "",
+  link = "https://www.bilibili.com/video/BV1Xx41117Tz?p=1",
+): TrackDownload {
+  return {
+    track_id: trackId,
+    source_id: trackId + 100,
+    kind: "bilibili",
+    link,
+    status,
+    message,
+    backend: status === "downloaded" ? "manual" : null,
   };
 }

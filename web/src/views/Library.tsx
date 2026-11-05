@@ -13,6 +13,8 @@ import { usePlayer } from "../player/usePlayer";
 import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
 import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
+import { AddFile } from "./AddFile";
+import { AddLink } from "./AddLink";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { EditDetails } from "./EditDetails";
 import { EditSongs } from "./EditSongs";
@@ -58,6 +60,9 @@ export function Library({
   const [editing, setEditing] = useState<Track | undefined>(undefined);
   // The album file whose songs are being edited: a song's own file, or the file chosen.
   const [splitting, setSplitting] = useState<Track | undefined>(undefined);
+  // The link or code being added from Bilibili, and the Track whose file is being added by hand.
+  const [linking, setLinking] = useState<string | undefined>(undefined);
+  const [filing, setFiling] = useState<Track | undefined>(undefined);
   const [notice, setNotice] = useState("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
   // The header stays at the top, so what else stays there sits under it, however tall it is.
@@ -136,6 +141,7 @@ export function Library({
         },
       );
     },
+    onAddFile: setFiling,
     onEditSongs: (track: Track) => {
       setSplitting(track.segment_of === null ? track : byId.get(track.segment_of));
     },
@@ -225,7 +231,7 @@ export function Library({
             medleyplay
           </a>
         </h1>
-        <SearchBox route={route} providers={library.providers} />
+        <SearchBox route={route} providers={library.providers} onLookUp={setLinking} />
         {library.mode !== null && !library.mode.online && (
           <a
             className="mode-note"
@@ -291,6 +297,35 @@ export function Library({
           setQueueOpen((open) => !open);
         }}
       />
+      {linking !== undefined && (
+        <AddLink
+          link={linking}
+          look={library.lookUpLink}
+          add={library.addLink}
+          onAdded={(count) => {
+            const songs = count === 1 ? "1 song" : `${String(count)} songs`;
+            const wait =
+              library.mode?.online === false ? " They wait until medleyplay is Online." : "";
+            setNotice(`Added ${songs}. They are downloading.${wait}`);
+          }}
+          onClose={() => {
+            setLinking(undefined);
+          }}
+        />
+      )}
+      {filing !== undefined && (
+        <AddFile
+          track={filing}
+          load={library.download}
+          upload={library.addFile}
+          onAdded={() => {
+            setNotice(`Added the file for “${filing.title}”.`);
+          }}
+          onClose={() => {
+            setFiling(undefined);
+          }}
+        />
+      )}
       {adding !== undefined && (
         <AddToPlaylist
           track={adding}

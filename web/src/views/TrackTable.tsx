@@ -414,6 +414,20 @@ const COLUMNS: Column[] = [
             {track.title}
           </button>
           {!playable && <span className="why">{WHY[track.availability]}</span>}
+          {track.download_failed && (
+            <span className="why failed">
+              Download failed
+              <button
+                type="button"
+                className="add-file-link"
+                onClick={() => {
+                  actions.onAddFile(track);
+                }}
+              >
+                Add the file…
+              </button>
+            </span>
+          )}
           <span className="subtitle" aria-hidden>
             {track.artist}
           </span>

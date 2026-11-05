@@ -62,6 +62,7 @@ no router package.
 | View | Route | Shows |
 | --- | --- | --- |
 | Songs | `#/songs` | Every Track, in the song table |
+| Radio | `#/radio` | *My station*, and shelves of albums for the Account; see [Recommendations](Recommendations.md#the-radio-tab) |
 | Artists | `#/artists` | Each artist, with how many Tracks and how long; one opens its Tracks |
 | Albums | `#/albums` | Each album, under its album artist, or its artist when that is blank |
 | Downloaded | `#/downloaded` | The Tracks with `downloaded`, in the song table |

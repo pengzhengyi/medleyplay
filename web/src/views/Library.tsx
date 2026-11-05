@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type Account, type Track, api } from "../api";
 import type { Lookup } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
+import { useStation } from "../library/useStation";
 import { current, repeatAfter } from "../player/queue";
 import { offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
@@ -52,6 +53,7 @@ export function Library({
   const byId = library.tracks;
   const tracks = useMemo(() => [...byId.values()], [byId]);
   const [player, audio] = usePlayer(byId, onSignedOut);
+  const station = useStation(player, tracks, account.id);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
   // The view Now Playing was opened over, while it is open; going to another view closes it.
@@ -300,6 +302,8 @@ export function Library({
             admin={account.role === "admin"}
             mode={library.mode}
             onEnrichersChanged={library.refreshFindable}
+            station={station}
+            accountId={account.id}
           />
         ) : (
           <p className="empty" aria-busy="true">

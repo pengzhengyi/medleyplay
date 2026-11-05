@@ -21,6 +21,8 @@ import {
 } from "../library/views";
 import { type Route, hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import type { Station } from "../library/useStation";
+import { RadioView } from "./RadioView";
 import { SettingsView } from "./SettingsView";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
@@ -43,6 +45,9 @@ export interface ViewProps {
   readonly mode: Mode | null;
   /** Called after Settings changes which Tracks an enricher may be asked about. */
   readonly onEnrichersChanged: () => void;
+  /** The station playing, and a way to start one. */
+  readonly station: Station;
+  readonly accountId: number;
 }
 
 /** The view `route` names; each route is a view of its own, opening with no filters on. */
@@ -62,6 +67,15 @@ function viewOf(given: ViewProps) {
         <Songs title="Songs" {...props} empty={<NoMusic />}>
           {props.tracks}
         </Songs>
+      );
+    case "radio":
+      return (
+        <RadioView
+          tracks={props.tracks}
+          station={props.station}
+          onPlayAll={props.actions.onPlayAll}
+          accountId={props.accountId}
+        />
       );
     case "artists":
       return <Artists tracks={props.tracks} />;

@@ -9,15 +9,17 @@ import {
   MicrophoneStageIcon,
   MusicNotesSimpleIcon,
   PlaylistIcon,
+  RadioIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
 
 import { type Route, hrefOf } from "../routes";
 
-type Top = "songs" | "artists" | "albums" | "downloaded" | "playlists" | "settings";
+type Top = "songs" | "radio" | "artists" | "albums" | "downloaded" | "playlists" | "settings";
 
 const TOPS: readonly { readonly view: Top; readonly label: string; readonly icon: Icon }[] = [
   { view: "songs", label: "Songs", icon: MusicNotesSimpleIcon },
+  { view: "radio", label: "Radio", icon: RadioIcon },
   { view: "artists", label: "Artists", icon: MicrophoneStageIcon },
   { view: "albums", label: "Albums", icon: VinylRecordIcon },
   { view: "downloaded", label: "Downloaded", icon: DownloadSimpleIcon },

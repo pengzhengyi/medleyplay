@@ -112,6 +112,16 @@ describe("the views", () => {
     expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
   });
 
+  it("opens the Radio tab, with the Account's own station", async () => {
+    open("");
+
+    await userEvent.click(await screen.findByRole("link", { name: "Radio" }));
+
+    expect(await screen.findByRole("heading", { name: "Radio" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play my station" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Radio" })).toHaveAttribute("aria-current", "page");
+  });
+
   it("lists only the songs downloaded", async () => {
     open("#/downloaded");
 

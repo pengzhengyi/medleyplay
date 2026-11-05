@@ -28,6 +28,7 @@ from medleyplay.plugin_api.sources import ProxyUrl, Text, VideoId
 MAX_VIDEO_TITLE: Final = 1_000
 MAX_VIDEO_DESCRIPTION: Final = 20_000
 MAX_CHAPTERS: Final = 1_000
+MAX_SUGGESTED_SONGS: Final = 300
 
 type FieldName = Annotated[str, StringConstraints(max_length=32)]
 """The name of one of a Track's details, such as `title`."""
@@ -47,27 +48,6 @@ class ShownDetail(_Model):
     origin: OriginName
 
 
-class EnrichTrack(_Model):
-    """Ask what the site knows about a Track.
-
-    `video` is the Track's video on its site, or `None` for a Track a site that reads
-    no video is asked about. `shown` is what the Track shows now, except the values
-    the enricher itself recorded, `duration_ms` its length when known, and `file_name`
-    the name of its file, or empty. `whole_album` says the Track is a long file split
-    into songs, which is asked about as a release, never as one recording. A cover
-    goes into `folder`, an empty folder the caller owns. `proxy` is the household's
-    proxy for the site, or `None`.
-    """
-
-    video: VideoId | None = None
-    shown: tuple[ShownDetail, ...] = ()
-    whole_album: bool = False
-    duration_ms: Annotated[int, Field(ge=0)] | None = None
-    file_name: Annotated[str, StringConstraints(max_length=255)] = ""
-    folder: str
-    proxy: ProxyUrl | None = Field(default=None, repr=False)
-
-
 class Chapter(_Model):
     """A chapter of a video: where it starts, in milliseconds, and its title."""
 
@@ -83,6 +63,42 @@ class VideoText(_Model):
     chapters: Annotated[tuple[Chapter, ...], Field(max_length=MAX_CHAPTERS)] = ()
 
 
+class AiEndpoint(_Model):
+    """The AI provider an enricher asks: where it is, which model to ask, and the key.
+
+    The provider speaks the OpenAI chat protocol. `key` is `None` for one that needs
+    none, such as a local Ollama.
+    """
+
+    base_url: Annotated[str, StringConstraints(max_length=256)]
+    model: Annotated[str, StringConstraints(max_length=128)]
+    key: Annotated[str, StringConstraints(max_length=512)] | None = Field(default=None, repr=False)
+
+
+class EnrichTrack(_Model):
+    """Ask what the site knows about a Track.
+
+    `video` is the Track's video on its site, or `None` for a Track a site that reads
+    no video is asked about. `shown` is what the Track shows now, except the values
+    the enricher itself recorded, `duration_ms` its length when known, and `file_name`
+    the name of its file, or empty. `whole_album` says the Track is a long file split
+    into songs, which is asked about as a release, never as one recording. A cover
+    goes into `folder`, an empty folder the caller owns. `proxy` is the household's
+    proxy for the site, or `None`. `text` is the Track's video text, for an enricher
+    that reads it, and `ai` the provider an enricher that asks an AI model asks.
+    """
+
+    video: VideoId | None = None
+    shown: tuple[ShownDetail, ...] = ()
+    whole_album: bool = False
+    duration_ms: Annotated[int, Field(ge=0)] | None = None
+    file_name: Annotated[str, StringConstraints(max_length=255)] = ""
+    folder: str
+    proxy: ProxyUrl | None = Field(default=None, repr=False)
+    text: VideoText | None = Field(default=None, repr=False)
+    ai: AiEndpoint | None = Field(default=None, repr=False)
+
+
 class EnrichStatus(StrEnum):
     """Whether the site answered."""
 
@@ -91,6 +107,16 @@ class EnrichStatus(StrEnum):
     """The video is removed, region-locked, or private."""
     REFUSED = "refused"
     """The site refused the request; nothing more should be asked of it."""
+    INVALID = "invalid"
+    """The site answered, but not in a way the enricher can use."""
+
+
+class SuggestedSong(_Model):
+    """A song of a suggested song list: where it starts, in milliseconds, its title and artist."""
+
+    start_ms: Annotated[int, Field(ge=0)]
+    title: Annotated[str, StringConstraints(max_length=512)]
+    artist: Annotated[str, StringConstraints(max_length=512)] = ""
 
 
 class Enriched(_Model):
@@ -98,13 +124,15 @@ class Enriched(_Model):
 
     With `OK`, `values` are details by field name, and `video_text` is the video's
     own text for the core to read instead of values; an answer holds one or the other.
-    `cover` is the bare name of an image the enricher wrote into the folder.
+    `songs` is a song list the enricher suggests, beside the values. `cover` is the
+    bare name of an image the enricher wrote into the folder.
     """
 
     status: EnrichStatus = EnrichStatus.OK
     message: Text = ""
     values: dict[FieldName, Annotated[str, StringConstraints(max_length=512)] | int] = {}
     video_text: VideoText | None = None
+    songs: Annotated[tuple[SuggestedSong, ...], Field(max_length=MAX_SUGGESTED_SONGS)] = ()
     cover: Annotated[str, StringConstraints(max_length=255)] | None = None
 
     @model_validator(mode="after")

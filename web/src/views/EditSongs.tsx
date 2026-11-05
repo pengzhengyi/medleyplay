@@ -323,6 +323,18 @@ export function EditSongs({
                 {`Use the ${String(list.length)} songs from the video's details`}
               </button>
             ))}
+            {songs.suggested.length > 0 && (
+              <button
+                type="button"
+                className="secondary outline songs-found"
+                disabled={busy}
+                onClick={() => {
+                  startFrom(songs.suggested);
+                }}
+              >
+                {`Use the ${String(songs.suggested.length)} songs the AI suggested`}
+              </button>
+            )}
             <details className="paste-video">
               <summary className="paste-video-summary">Paste a list</summary>
               <div className="paste-video-body">

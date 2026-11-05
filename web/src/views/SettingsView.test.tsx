@@ -41,10 +41,14 @@ function open(
     "GET /api/enrichers/musicbrainz": {
       body: { name: "musicbrainz", available: true, stopped: null, eligible: [1, 2, 3] },
     },
+    "GET /api/ai": { body: { provider: null, presets: [], max_description: 6000 } },
+    "GET /api/enrichers/ai-details": {
+      body: { name: "ai-details", available: true, stopped: null, eligible: [1] },
+    },
     ...modeSettingsOf(mode, metered),
     ...routes,
   });
-  render(<SettingsView admin={admin} mode={mode} />);
+  render(<SettingsView admin={admin} mode={mode} onEnrichersChanged={vi.fn()} />);
   return served;
 }
 
@@ -98,6 +102,29 @@ describe("the Bilibili section", () => {
     expect(screen.queryByRole("button", { name: "Go to Bilibili" })).toBeNull();
     expect(calls).not.toContain("GET /api/proxies/bilibili");
     expect(calls).not.toContain("GET /api/enrichers/bilibili-details");
+  });
+});
+
+describe("the AI section", () => {
+  it("is the admin's, with the provider and the suggestion for every Track", async () => {
+    open(true);
+
+    const ai = within(screen.getByRole("region", { name: "AI" }));
+
+    expect(await ai.findByLabelText("Base URL")).toBeInTheDocument();
+    expect(await ai.findByText("1 Track can be given suggestions.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to AI" })).toBeInTheDocument();
+  });
+
+  it("is not shown to a member, who never asks for the provider", async () => {
+    const { calls } = open(false);
+
+    await screen.findByText("The storage limit is 20 GB, set by an admin.");
+
+    expect(screen.queryByRole("region", { name: "AI" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go to AI" })).toBeNull();
+    expect(calls).not.toContain("GET /api/ai");
+    expect(calls).not.toContain("GET /api/enrichers/ai-details");
   });
 });
 
@@ -271,6 +298,7 @@ describe("the Settings sections", () => {
       "Downloads and storage",
       "Bilibili",
       "MusicBrainz",
+      "AI",
     ]);
 
     await userEvent.click(screen.getByRole("button", { name: "Open all" }));

@@ -34,7 +34,12 @@ def test_splitting_a_file_answers_its_songs(client: TestClient, catalog: Catalog
         (0, 252_000, "アイネクライネ"),
         (252_000, 3_600_000, "ゴーゴー幽霊船"),
     ]
-    assert (body["length_ms"], body["needs_check"], body["found"]) == (3_600_000, False, [])
+    assert (body["length_ms"], body["needs_check"], body["found"], body["suggested"]) == (
+        3_600_000,
+        False,
+        [],
+        [],
+    )
 
 
 def test_track_lists_say_which_file_is_split_and_which_file_a_song_is_of(

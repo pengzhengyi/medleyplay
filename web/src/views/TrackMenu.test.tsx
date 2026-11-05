@@ -75,7 +75,7 @@ describe("a song's menu", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Find details online" }));
 
     expect(actions.onFind).toHaveBeenCalledWith(
-      expect.objectContaining({ enricher: "bilibili-details", site: "Bilibili" }),
+      expect.objectContaining({ enricher: "bilibili-details", label: "Find details online" }),
       MELT,
     );
   });
@@ -112,7 +112,7 @@ describe("a song's menu", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Find on MusicBrainz" }));
 
     expect(actions.onFind).toHaveBeenCalledWith(
-      expect.objectContaining({ enricher: "musicbrainz", site: "MusicBrainz" }),
+      expect.objectContaining({ enricher: "musicbrainz", label: "Find on MusicBrainz" }),
       MELT,
     );
   });
@@ -128,6 +128,43 @@ describe("a song's menu", () => {
       "Find details online",
       "Find on MusicBrainz",
     ]);
+  });
+
+  it("offers Suggest details with AI for a Track the AI can be asked about, after Edit details", async () => {
+    renderMenu(true, MELT, ["ai-details"]);
+
+    await open();
+
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Play next",
+      "Add to queue",
+      "Go to artist",
+      "Go to album",
+      "Add to playlist…",
+      "Edit details…",
+      "Suggest details with AI",
+      "Split into songs…",
+    ]);
+  });
+
+  it("asks the AI about the Track when Suggest details with AI is chosen", async () => {
+    const actions = renderMenu(true, MELT, ["ai-details"]);
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Suggest details with AI" }));
+
+    expect(actions.onFind).toHaveBeenCalledWith(
+      expect.objectContaining({ enricher: "ai-details", label: "Suggest details with AI" }),
+      MELT,
+    );
+  });
+
+  it("leaves out Suggest details with AI for a Track the AI can't be asked about", async () => {
+    renderMenu(true, MELT, ["bilibili-details", "musicbrainz"]);
+
+    await open();
+
+    expect(screen.queryByRole("menuitem", { name: "Suggest details with AI" })).toBeNull();
   });
 
   it("leaves out queueing for the song playing", async () => {

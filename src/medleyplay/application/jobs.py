@@ -40,6 +40,8 @@ class Lane:
     spacing: timedelta = timedelta(0)
     """The least time between the end of one Job of the lane and the start of the next."""
     proxy_site: str | None = None
+    lends_ai: bool = False
+    """Its Jobs are lent the AI provider the household set up, key included."""
 
 
 @dataclass(frozen=True)

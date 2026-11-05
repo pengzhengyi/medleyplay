@@ -503,6 +503,44 @@ describe("finding a song's details online", () => {
     expect(findableBy(result.current, "bilibili-details")).toEqual([1]);
   });
 
+  it("offers the AI's suggestion for the Tracks the server says it may be asked about", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
+      "GET /api/enrichers/ai-details": {
+        body: { name: "ai-details", available: true, stopped: null, eligible: [2] },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    await waitFor(() => {
+      expect(findableBy(result.current, "ai-details")).toEqual([2]);
+    });
+  });
+
+  it("asks again which Tracks each enricher may be asked about when told a setting changed", async () => {
+    let eligible: readonly number[] = [];
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/ai-details": () => ({
+        body: { name: "ai-details", available: true, stopped: null, eligible },
+      }),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.findable.get("ai-details")?.size).toBe(0);
+    });
+
+    eligible = [1];
+    act(() => {
+      result.current.refreshFindable();
+    });
+
+    await waitFor(() => {
+      expect(findableBy(result.current, "ai-details")).toEqual([1]);
+    });
+    expect(calls.filter((call) => call === "GET /api/enrichers/ai-details")).toHaveLength(2);
+  });
+
   it("signs out when the server says the session is over", async () => {
     const onSignedOut = vi.fn();
     serve({

@@ -3,7 +3,8 @@
 An enricher that reads videos is asked about a Track's video. One that searches by
 words is asked about the Track's title and artist, or, for a long file split into
 songs, its album: what a Track would be searched for with is kept apart from what the
-searched site said before, so its answer doesn't change the question.
+searched site said before, so its answer doesn't change the question. One that reads
+a Track's video text is asked about the Track alone.
 """
 
 from collections import defaultdict
@@ -15,7 +16,7 @@ from pathlib import PurePosixPath
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from medleyplay.application.details import OriginValues
+from medleyplay.application.details import OriginValues, text_of_row
 from medleyplay.application.segments import album_file_of
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin
@@ -24,10 +25,12 @@ from medleyplay.domain.enrichers import (
     Subject,
     TrackFacts,
     search_terms,
+    text_subject,
     video_id_of,
 )
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
 from medleyplay.domain.links import BILIBILI_SOURCE
+from medleyplay.domain.video_text import VideoText
 from medleyplay.persistence.schema import (
     EnricherAskRow,
     SegmentRow,
@@ -72,6 +75,14 @@ def candidates(
         subjects = {track_id: video_id_of(sources.get(track_id, [])) for track_id in ids}
         videos = subjects
         came_from = _text_came_from(db)
+    elif enricher.subject is Subject.TEXT:
+        texts = _texts(db)
+        came_from = {track_id: source for track_id, (source, _) in texts.items()}
+        subjects = {
+            track_id: text_subject(track_id, texts[track_id][1]) if track_id in texts else None
+            for track_id in ids
+        }
+        videos = dict.fromkeys(ids)
     else:
         words = _words(db, ids)
         subjects = {
@@ -115,6 +126,14 @@ def _sources(
 def _text_came_from(db: Session) -> dict[TrackId, str]:
     rows = db.execute(select(VideoTextRow.track_id, VideoTextRow.came_from))
     return {TrackId(track_id): source for track_id, source in rows}
+
+
+def _texts(db: Session) -> dict[TrackId, tuple[str, VideoText]]:
+    """Return each Track's video text and where it was read from."""
+    return {
+        TrackId(row.track_id): (row.came_from, text_of_row(row))
+        for row in db.scalars(select(VideoTextRow))
+    }
 
 
 def _asked(db: Session, enricher: str) -> dict[str, datetime]:

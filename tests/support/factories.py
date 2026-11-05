@@ -7,7 +7,7 @@ from medleyplay.application.accounts import NewAccount
 from medleyplay.domain.accounts import Account, AccountId, Role, Username
 from medleyplay.domain.catalog import SourceKey, TrackDetails
 from medleyplay.domain.mode import Network, NetworkKind
-from medleyplay.plugin_api import EnrichTrack, ShownDetail, Tags
+from medleyplay.plugin_api import AiEndpoint, Chapter, EnrichTrack, ShownDetail, Tags, VideoText
 from medleyplay.programs.info_json import InfoChapter, InfoText
 from medleyplay.programs.scan_covers import CoverFile, CoverImage
 from medleyplay.programs.scan_library import InfoJson, ScannedFile
@@ -289,3 +289,54 @@ class EnrichTrackFactory:
             ShownDetail(field="album_artist", value="朴树", origin="video"),
         )
         return EnrichTrack(shown=shown, whole_album=True, folder=str(folder))
+
+    @staticmethod
+    def night_drive_video(
+        folder: Path, ai: AiEndpoint | None, *, text: VideoText | None = None
+    ) -> EnrichTrack:
+        """Return the ask about a Track whose video text names a song, for the AI.
+
+        ```text
+        video title "【MV】Night Drive / Blue Room", file BV1dm4y1s7ak.m4a, 4:59
+        shown: title "BV1dm4y1s7ak" (file_name)
+        ```
+        """
+        shown = (ShownDetail(field="title", value="BV1dm4y1s7ak", origin="file_name"),)
+        return EnrichTrack(
+            shown=shown,
+            duration_ms=299_000,
+            file_name="BV1dm4y1s7ak.m4a",
+            folder=str(folder),
+            text=text or EnrichTrackFactory.night_drive_text(),
+            ai=ai,
+        )
+
+    @staticmethod
+    def night_drive_text() -> VideoText:
+        """Return the text of a video of one song.
+
+        ```text
+        title        【MV】Night Drive / Blue Room
+        description  Re:Start, 2016
+        ```
+        """
+        return VideoText(title="【MV】Night Drive / Blue Room", description="Re:Start, 2016")
+
+    @staticmethod
+    def album_text() -> VideoText:
+        """Return the text of a video of an album, with three chapters.
+
+        ```text
+        title        【无损】Blue Room《Re:Start》
+        chapters     00:00 Intro, 03:12 Night Drive, 1:07:40 Outro
+        ```
+        """
+        return VideoText(
+            title="【无损】Blue Room《Re:Start》",
+            description="Blue Room, 2016",
+            chapters=(
+                Chapter(start_ms=0, title="Intro"),
+                Chapter(start_ms=192_000, title="Night Drive"),
+                Chapter(start_ms=4_060_000, title="Outro"),
+            ),
+        )

@@ -20,6 +20,7 @@ from sqlalchemy import Engine
 
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.ai import AiService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.changes import Changes
 from medleyplay.application.connectivity import reachable
@@ -163,6 +164,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     keychain = secrets or KeychainSecrets()
     linked = LinkedAccountService(units, clock, plugins, keychain, changes.tell)
     proxies = ProxyService(units, clock, keychain)
+    ai = AiService(units, clock, keychain)
     scan = scan_library_kind(clock, data_dir / COVERS_FOLDER)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
@@ -190,6 +192,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         online=mode.online,
         logins=linked,
         proxies=proxies,
+        ai=ai,
         events=events,
         network_failed=mode.check_soon,
     )
@@ -236,6 +239,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         songs=SongsService(units, clock, changes.tell),
         covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
         enrichment=EnrichmentService(units, clock, plugins, jobs, enrich),
+        ai=ai,
     )
 
 

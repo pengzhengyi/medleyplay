@@ -23,6 +23,7 @@ album "生如夏花" (video), album artist "朴树" (video)    searched for as a
 """
 
 import hashlib
+import json
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ from medleyplay.domain.details import Field, Origin, Values, shown
 from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
 from medleyplay.domain.links import BILIBILI_SOURCE, parse_part_locator
+from medleyplay.domain.video_text import VideoText
 
 ASK_AGAIN_AFTER: Final = timedelta(hours=24)
 """How long a video is left alone once an enricher has asked about it."""
@@ -50,6 +52,8 @@ class Subject(StrEnum):
     """A Track's video on a site, named by its id."""
     WORDS = "words"
     """What a Track shows: its title and artist, or its album for a split file."""
+    TEXT = "text"
+    """A Track's video text, wherever it came from."""
 
 
 @dataclass(frozen=True)
@@ -58,7 +62,9 @@ class Enricher:
 
     `origin` is what its values are recorded as, `subject` what it is asked about,
     `spacing` the least time between two of its calls, and `site` the site whose
-    proxy its calls go through, or `None` when the household has none for it.
+    proxy its calls go through, or `None` when the household has none for it. `source`
+    is what it asks, as a refusal names it, and `uses_ai` says it asks the AI provider,
+    which it does not until an admin has set it up.
     """
 
     name: str
@@ -66,11 +72,13 @@ class Enricher:
     subject: Subject
     spacing: timedelta
     site: str | None
+    source: str = "the site"
+    uses_ai: bool = False
 
     @property
     def lacking(self) -> "Ineligible":
         """Return why a Track is not asked about when it has nothing to ask about."""
-        return Ineligible.NO_VIDEO if self.subject is Subject.VIDEO else Ineligible.NO_WORDS
+        return _LACKING[self.subject]
 
 
 BILIBILI_DETAILS: Final = Enricher(
@@ -87,7 +95,16 @@ MUSICBRAINZ: Final = Enricher(
     spacing=timedelta(seconds=1),
     site=None,
 )
-ENRICHERS: Final = {each.name: each for each in (BILIBILI_DETAILS, MUSICBRAINZ)}
+AI_DETAILS: Final = Enricher(
+    name="ai-details",
+    origin=Origin.AI,
+    subject=Subject.TEXT,
+    spacing=timedelta(seconds=2),
+    site=None,
+    source="the AI provider",
+    uses_ai=True,
+)
+ENRICHERS: Final = {each.name: each for each in (BILIBILI_DETAILS, MUSICBRAINZ, AI_DETAILS)}
 
 
 def enricher_named(name: str) -> Enricher:
@@ -122,15 +139,24 @@ class Ineligible(StrEnum):
 
     NO_VIDEO = "no_video"
     NO_WORDS = "no_words"
+    NO_TEXT = "no_text"
+    NOT_SET_UP = "not_set_up"
     SEGMENT = "segment"
     HAS_TEXT = "has_text"
     ASKED = "asked"
     STOPPED = "stopped"
 
 
+_LACKING: Final = {
+    Subject.VIDEO: Ineligible.NO_VIDEO,
+    Subject.WORDS: Ineligible.NO_WORDS,
+    Subject.TEXT: Ineligible.NO_TEXT,
+}
 MESSAGES: Final = {
     Ineligible.NO_VIDEO: "This Track has no video to look up.",
     Ineligible.NO_WORDS: "This Track shows no title and artist, or album, to search for.",
+    Ineligible.NO_TEXT: "This Track has no video text for the AI to read.",
+    Ineligible.NOT_SET_UP: "The AI provider is not set up yet. An admin can set it up in Settings.",
     Ineligible.SEGMENT: "A song inside a longer file takes its details from that file.",
     Ineligible.HAS_TEXT: "The video's text was read from a file or entered by the household.",
     Ineligible.ASKED: "This Track was looked up in the last 24 hours.",
@@ -199,17 +225,42 @@ class TrackFacts:
     """When the subject was last asked about, or `None` when it never was."""
 
 
+def text_subject(track_id: TrackId, text: VideoText) -> str:
+    """Return the subject that says the AI was asked about the Track with this text.
+
+    A Track is asked of the AI once a day for one text, so pasting a better
+    description asks again at once.
+    """
+    chapters = [[chapter.start_ms, chapter.title] for chapter in text.chapters]
+    said = json.dumps([track_id, text.title, text.description, chapters], ensure_ascii=False)
+    return hashlib.sha256(f"ai-details\x1f{said}".encode()).hexdigest()
+
+
 def why_not(
-    facts: TrackFacts, now: datetime, *, stopped: bool, enricher: Enricher
+    facts: TrackFacts,
+    now: datetime,
+    *,
+    stopped: bool,
+    enricher: Enricher,
+    set_up: bool = True,
 ) -> Ineligible | None:
-    """Return why the Track is not asked for now, or `None` when it is."""
+    """Return why the Track is not asked for now, or `None` when it is.
+
+    `set_up` says whether the AI provider an enricher uses has been set up.
+    """
     if stopped:
         return Ineligible.STOPPED
+    if enricher.uses_ai and not set_up:
+        return Ineligible.NOT_SET_UP
+    return _why_not_track(facts, now, enricher)
+
+
+def _why_not_track(facts: TrackFacts, now: datetime, enricher: Enricher) -> Ineligible | None:
     if facts.is_segment:
         return Ineligible.SEGMENT
     if facts.subject is None:
         return enricher.lacking
-    if facts.text_came_from in {"file", "household"}:
+    if enricher.subject is Subject.VIDEO and facts.text_came_from in {"file", "household"}:
         return Ineligible.HAS_TEXT
     if facts.asked_at is not None and now - facts.asked_at < ASK_AGAIN_AFTER:
         return Ineligible.ASKED

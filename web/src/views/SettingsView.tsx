@@ -13,6 +13,7 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "rea
 
 import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
+import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
@@ -32,12 +33,13 @@ const SECTIONS = [
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
   { id: "musicbrainz", title: "MusicBrainz" },
+  { id: "ai", title: "AI" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** The sections only an admin sees: they run lookups for every Track. */
-const ADMIN_ONLY: ReadonlySet<SectionId> = new Set(["bilibili", "musicbrainz"]);
+const ADMIN_ONLY: ReadonlySet<SectionId> = new Set(["bilibili", "musicbrainz", "ai"]);
 
 const FOLDED = "medleyplay.settings.folded.v1";
 
@@ -65,9 +67,12 @@ function keepFolded(folded: ReadonlySet<SectionId>): void {
 export function SettingsView({
   admin,
   mode,
+  onEnrichersChanged,
 }: {
   readonly admin: boolean;
   readonly mode: Mode | null;
+  /** Called after a setting changes which Tracks an enricher may be asked about. */
+  readonly onEnrichersChanged: () => void;
 }) {
   const [folded, setFolded] = useState(loadFolded);
   const fold = (next: ReadonlySet<SectionId>) => {
@@ -108,6 +113,7 @@ export function SettingsView({
       </>
     ),
     musicbrainz: <MusicBrainzSettings />,
+    ai: <AiSettings onChanged={onEnrichersChanged} />,
   };
   return (
     <>

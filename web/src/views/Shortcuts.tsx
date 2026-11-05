@@ -3,7 +3,8 @@
  *
  * A key the focused control uses itself stays with it: Space presses a button
  * reached with the keyboard, an arrow moves a focused slider, and typing goes
- * into a text box. An open dialog or menu keeps every key.
+ * into a text box. An open dialog or menu keeps every key, except a dialog marked
+ * `data-shortcuts`, such as Now Playing, which lets them through.
  */
 
 import { type RefObject, useEffect, useRef } from "react";
@@ -52,7 +53,7 @@ const UNTYPED = new Set([
  * dialog or menu; `clicked` when that control was focused by the pointer.
  */
 function belongsToWidget(event: KeyboardEvent, clicked: boolean): boolean {
-  if (document.querySelector("dialog[open]") !== null) {
+  if (document.querySelector("dialog[open]:not([data-shortcuts])") !== null) {
     return true;
   }
   const target = event.target;

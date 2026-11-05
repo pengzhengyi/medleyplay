@@ -41,9 +41,12 @@ const INSTRUCTIONS = {
 export function QueuePanel({
   player,
   tracks,
+  id = "queue",
 }: {
   readonly player: Player;
   readonly tracks: ReadonlyMap<number, Track>;
+  /** The panel's id, for a second panel on the page such as Now Playing's. */
+  readonly id?: string;
 }) {
   const entries = upNext(player.queue);
   const sensors = useSensors(
@@ -76,7 +79,7 @@ export function QueuePanel({
   };
 
   return (
-    <section id="queue" className="queue" aria-label="Up next" tabIndex={-1}>
+    <section id={id} className="queue" aria-label="Up next" tabIndex={-1}>
       <header>
         <h2>Up next</h2>
         <button

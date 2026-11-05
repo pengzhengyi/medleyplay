@@ -22,6 +22,7 @@ function spies() {
     favorite: vi.fn(),
     search: vi.fn(),
     queue: vi.fn(),
+    nowPlaying: vi.fn(),
     help: vi.fn(),
   } satisfies ShortcutHandlers;
 }
@@ -148,6 +149,27 @@ describe("the keyboard shortcuts", () => {
 
     expect(on.toggle).not.toHaveBeenCalled();
     expect(on.shuffle).not.toHaveBeenCalled();
+  });
+
+  it("keep working over a full-screen view that lets them through", async () => {
+    const on = listening(
+      <dialog open data-shortcuts>
+        Now Playing
+      </dialog>,
+    );
+
+    await userEvent.keyboard(" s");
+
+    expect(on.toggle).toHaveBeenCalledOnce();
+    expect(on.shuffle).toHaveBeenCalledOnce();
+  });
+
+  it("open Now Playing with F", async () => {
+    const on = listening();
+
+    await userEvent.keyboard("f");
+
+    expect(on.nowPlaying).toHaveBeenCalledOnce();
   });
 
   it("leave every key to an open menu", async () => {

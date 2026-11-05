@@ -199,18 +199,19 @@ def test_the_households_value_always_shows(
 
 
 @given(_VALUES)
-def test_the_album_fields_never_mix_two_origins_besides_the_household(
-    values: dict[Origin, Values],
-) -> None:
+def test_the_album_fields_never_mix_two_releases(values: dict[Origin, Values]) -> None:
     found = shown(values)
     if Field.ALBUM in found and found[Field.ALBUM].value:
         others = {
             found[field].origin
-            for field in ALBUM_FIELDS
+            for field in ALBUM_FIELDS - {Field.COVER}
             if field in found and found[field].origin is not Origin.HOUSEHOLD
         }
 
         assert len(others) <= 1
+        if Field.COVER in found:
+            cover = found[Field.COVER].origin
+            assert cover in others | {Origin.HOUSEHOLD} or not values[cover].get(Field.ALBUM)
 
 
 _SHOWN_CASES = json.loads(

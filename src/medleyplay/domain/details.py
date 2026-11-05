@@ -11,7 +11,9 @@ title    household: —           files: "Night Drive"   file_name: "BV1dm4y1s7a
 
 The album fields travel together: they show from the first origin that names an
 album, so one Track never mixes two releases; the household's own value for any
-of them still wins on its own.
+of them still wins on its own. When that origin has no cover, the cover comes
+from the first origin naming no album, such as an image beside a file whose
+album only the video names.
 """
 
 from collections.abc import Mapping
@@ -187,6 +189,12 @@ def _album(values: Mapping[Origin, Values]) -> dict[Field, Shown]:
         first = _first(values, field, origins)
         if first is not None:
             found[field] = first
+    if Field.COVER not in found:
+        # A cover from an origin naming no album belongs to no other release.
+        unnamed = tuple(o for o in ORIGINS if not values.get(o, {}).get(Field.ALBUM))
+        cover = _first(values, Field.COVER, unnamed)
+        if cover is not None:
+            found[Field.COVER] = cover
     return found
 
 

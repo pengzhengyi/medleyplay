@@ -4,8 +4,9 @@
  * The dialog keeps the household's values as typed. Every other box shows what the
  * server would show with them, worked out by `shownOf`, the server's rule: a field
  * shows the first origin's value, and the album fields come together from the first
- * origin naming an album. So naming an album of the household's own empties the
- * file's track number at once, as saving would.
+ * origin naming an album, its cover falling back on an origin naming none. So naming
+ * an album of the household's own empties the file's track number at once, as saving
+ * would.
  */
 
 import type { Detail, Details, Found, Origin } from "../api";
@@ -95,6 +96,13 @@ export function shownOf(origins: Origins): Shown {
   const named = ORIGINS.find((origin) => Boolean(origins[origin]?.album));
   for (const field of ALBUM_FIELDS) {
     first(field, named === undefined ? ORIGINS : ["household", named]);
+  }
+  if (shown.cover === undefined) {
+    // A cover from an origin naming no album belongs to no other release.
+    first(
+      "cover",
+      ORIGINS.filter((origin) => !origins[origin]?.album),
+    );
   }
   return shown;
 }

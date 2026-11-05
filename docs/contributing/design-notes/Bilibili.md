@@ -269,8 +269,10 @@ sequenceDiagram
 
 - **Looking up** answers the video's details, each part's Track if it is
   already in the catalog, and the qualities. It waits on host calls, never on a
-  Job. A link that is not a video, or a video that is gone or needs a login,
-  answers 422 with why.
+  Job. A link that is not a video answers 422 with why. It takes a bare `BV` or
+  `av` code as well as a link. A video that can't be read, because it is gone,
+  needs a login, or the read failed, answers `readable: false` with why instead,
+  and can still be added; see [Manual downloads](Manual%20downloads.md).
 - **The client suggests a title and an artist:** the part's title for a video
   with several parts, otherwise the video's, with bracketed tags such as
   `【MV】` at either end removed; the uploader is the artist. The household edits
@@ -278,7 +280,9 @@ sequenceDiagram
 - **Adding** doesn't trust the client: it canonicalizes the link again, and
   checks each part and the quality against the video's details, from the
   lookup's ten-minute memory or a fresh `read`. At most 50 parts are added at
-  once, a title is 1 to 512 characters, and an artist at most 512.
+  once, a title is 1 to 512 characters, and an artist at most 512. A video that
+  couldn't be read has no details to check against, so its parts are added on
+  the household's own details, at the quality `best`.
 - **Each part is one transaction:** it creates a Track and a Source, or finds
   the existing Source by its natural key and keeps its Track. Two adds racing for
   one part meet at the Source's unique key; the loser rolls back and reads the
@@ -347,6 +351,8 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   is one that no plugin that is on downloads.
 - **A Library Source still wins** over a Bilibili one that must be downloaded,
   as a ready Source wins over one being prepared.
+- **A Download the household added by hand** plays the same way; its backend is
+  `manual`. See [Manual downloads](Manual%20downloads.md).
 
 ## Video details
 
@@ -450,8 +456,10 @@ yutto is GPL-3.0 and medleyplay is MIT.
 | `GET /api/me/linked-accounts` | Signed in | The caller's linked accounts: site, state, expiry, when saved |
 | `PUT /api/me/linked-accounts/{site}` | Signed in | Saves a login from a cookies file; 422 when it holds no session |
 | `DELETE /api/me/linked-accounts/{site}` | Signed in | Removes the login; 204, also when there is none |
-| `POST /api/links/lookup` | Signed in | A link's video: title, uploader, parts with any existing Track, qualities |
+| `POST /api/links/lookup` | Signed in | A link's or code's video: title, uploader, parts with any existing Track, qualities; or `readable: false` and why |
 | `POST /api/links` | Signed in | Adds the chosen parts as Tracks and starts their Downloads |
+| `GET /api/tracks/{id}/download` | Signed in | Where a site Track's Download stands |
+| `PUT /api/tracks/{id}/download` | Signed in | Adds the file in the body as the Track's Download; see [Manual downloads](Manual%20downloads.md) |
 | `GET /api/events` | Signed in | `ready`, then a `job` event each time a Job changes, over SSE |
 | `POST /api/tracks/{id}/playback` | Signed in | Now also plays a Download, or answers *preparing* with its Job |
 | `GET /api/proxies/{site}` | Admin | The proxy set, or null: its scheme, host, port, whether it has a login, and when it was saved |
@@ -502,6 +510,6 @@ yutto is GPL-3.0 and medleyplay is MIT.
   fixture, and a live check. The yutto fallback is deferred; see
   [The yutto fallback](#the-yutto-fallback).
 - **Step 6:** the Mode, Offline links, the storage limit, and removing Downloads.
-- **Step 7:** the add dialog, a Track whose video can't be read, and adding its
-  file by hand, in [Manual downloads](Manual%20downloads.md); then linked
-  accounts in Settings, and changing a Source's quality.
+- **Step 7:** linked accounts in Settings, and changing a Source's quality. The
+  add dialog, a Track whose video can't be read, and adding its file by hand are
+  in [Manual downloads](Manual%20downloads.md).

@@ -163,6 +163,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   someone chooses it. The first refusal from Bilibili stops it until an admin
   resets it in Settings. See the
   [Track details](docs/contributing/design-notes/Track%20details.md#enrichers) note.
+- **Manual downloads** — search with *Bilibili* chosen takes a link or a `BV` or
+  `av` code and opens an add dialog, which also adds a video medleyplay can't
+  read, on titles and artists you give. A Track whose Download failed says so and
+  offers *Add the file…*, and any Bilibili Track's menu has *Add the file
+  yourself…*: choose an audio file, with other ways to get it listed, and it
+  becomes the Track's Download, plays, works Offline, and is never removed to make
+  room under the storage limit. See the
+  [Manual downloads](docs/contributing/design-notes/Manual%20downloads.md) note.
 
 ### Changed
 

@@ -1,11 +1,11 @@
 # Manual downloads
 
 > [!NOTE]
-> **Status: proposed (step 7).** This note describes how the household gets a
-> site Track's audio when medleyplay can't: adding a Track whose video can't be
-> read, seeing that its Download failed, and adding the file themselves. How
-> medleyplay downloads on its own is in [Bilibili](Bilibili.md); what the web
-> client shows around it is in [Web client](Web%20client.md).
+> **Status: implemented.** This note describes how the household gets a site
+> Track's audio when medleyplay can't: adding a Track whose video can't be read,
+> seeing that its Download failed, and adding the file themselves. How medleyplay
+> downloads on its own is in [Bilibili](Bilibili.md); what the web client shows
+> around it is in [Web client](Web%20client.md).
 
 ## Contents
 
@@ -48,14 +48,18 @@
 
 - **A lookup whose read fails still answers,** with `readable: false` and why,
   instead of an error, whatever the failure: a fault, a network failure, a
-  refusal, *gone*, or *needs a login*. It names the video and the part the link
-  did, or part 1, and offers no qualities. A link that names no video is still
-  refused with 422.
+  refusal, *gone*, or *needs a login*. The answer's `reason` is `fault`,
+  `network`, `refused`, `gone`, or `needs_login`, and its `message` is the
+  site's or the plugin's own words. It names the video and the part the link
+  did, or part 1, and offers no title, uploader, or qualities. A link that names
+  no video is still refused with 422, and so is a link whose plugin is off or
+  busy, since nothing can try the Download either.
 - **The failure is remembered** with the lookup's ten-minute memory, so the add
   that follows doesn't ask the site again.
-- **Adding then trusts the household's details:** each part's number, title,
-  and artist, checked as before for length, with at most 50 parts, and the
-  quality *best*. The duration is unknown until a file comes.
+- **Adding then trusts the household's details:** each part's number (1 to
+  9999), title, and artist, checked as before for length, with at most 50 parts,
+  and the quality *best*; any other quality is refused. The duration is unknown
+  until a file comes.
 - **Each part still gets a Track, a Source, and a Download Job,** so the
   downloader gets its try; a video the site says is *gone* gets one attempt, and
   its Source becomes *unavailable* as before.
@@ -65,12 +69,17 @@
 ## A failed Download
 
 - **A site Track's Download has failed** when it has no Download and the latest
-  download Job of its Source failed: its three attempts ran out, or the
-  household or the policy gave up on it. A new Job, from playing it again or
-  from the policy, makes it *downloading* again.
+  download Job of its Source failed: its attempts ran out, or the login was
+  refused. A new Job, from a retry or from the policy, makes it *downloading*
+  again. A song inside a longer file fails as its album file does.
 - **The Track says so:** `download_failed` on the Track, beside `downloaded`,
-  and the Track's download state with the failure's message from
-  `GET /api/tracks/{id}/download`.
+  and `site`, the kind of site its audio comes from, such as `bilibili`, or
+  `null` for a Track from a Library, so the client knows which Tracks can take a
+  file by hand. The Track's download state, with the failure's message, is
+  `GET /api/tracks/{id}/download`: `status` is `downloaded`, `downloading`,
+  `failed`, `unavailable` (the site no longer has the video), or `none`, with the
+  Source's `kind`, the part's `link`, a `message` for a failure, and the
+  `backend` of a Download.
 - **Nothing changes in how the Track plays:** playing a failed Track answers its
   failed Job, as it does now.
 
@@ -84,8 +93,11 @@
 - **The file is checked** before it is kept:
   - its name's extension is one the player serves: `m4a`, `mp4`, `mp3`, `flac`,
     `ogg`, `oga`, `opus`, `wav`, `aif`, `aifc`, or `aiff`;
-  - it is at most 1 GiB, counted as it arrives, so a larger one stops with 413;
-  - tinytag reads it as audio with a positive duration; otherwise 422.
+  - it is at most 1 GiB, counted as it arrives, so a larger one stops with 413
+    (one that says its size first is refused before it is read);
+  - tinytag reads it as audio with a positive duration, as the type its
+    extension names; otherwise 422. A fragmented MP4 whose header holds no
+    length is refused for want of one.
 - **It is written beside the Downloads,** under a temporary name, fsynced, then
   renamed over `downloads/<source id>.<ext>` in the transaction that records
   it. A crash before the commit leaves a file no Download names, which the sweep
@@ -103,58 +115,72 @@
 
 - **The web client keeps the list,** per Source kind, so the plugin API and the
   plugins don't change. Each way has a name, a line on when to try it, and a
-  command with the part's link filled in, with a button to copy it.
+  command with the part's link filled in, with a button to copy it. The buttons
+  work on a page served over plain HTTP, as a server on the local network is.
 - **For `bilibili`:** yt-dlp through the household's proxy, yt-dlp with the
   browser's cookies for a video that needs a login, BBDown, yutto, lux, and
-  you-get, in the order the household found them to work. Each command writes
-  the audio only, named by the video's id, so the file is ready to add.
+  you-get, in the order the household found them to work. The yt-dlp commands
+  name the file by the video's id and part; BBDown and yutto save the audio under
+  the video's title; lux and you-get save the whole video, which medleyplay takes
+  when it is an `.mp4` file.
+- **The proxy in the first command is an example,** `socks5h://127.0.0.1:7890`:
+  the proxy medleyplay holds may carry a password and is for admins only, so the
+  client never reads it.
 - **The list shows** in the add dialog, folded, and in the dialog for adding
-  the file.
+  the file, open.
 
 ## The web client
 
 - **Search with *Bilibili* chosen** takes a link or a code. *Enter* looks it up
-  and opens the add dialog; this is all *searching Bilibili* means for now.
+  and opens the add dialog; this is all *searching Bilibili* means for now. The
+  box doesn't search the Library as you type while a site is chosen.
 - **The add dialog, when the video was read:** its title and uploader; each
   part with its suggested title and artist, editable, and a box to choose it;
   the quality; and *Add*.
 - **When it couldn't be read:** why, then one part with its number, a title,
-  and an artist to fill in, and *Add*; the household can add more parts.
+  and an artist to fill in, and *Add*; the household can add more parts or
+  remove one.
 - **After adding,** the dialog closes and says how many Tracks were added and
-  that they are downloading.
+  that they are downloading, or waiting for Online when the Mode is Offline.
 - **A failed Track** shows *Download failed* where its availability shows, with
   *Add the file…*. The Track's menu has *Add the file yourself…* for any site
   Track, failed or not.
 - **The add-the-file dialog:** the failure's message, the other ways, a file
-  picker, and *Add*, with the upload's progress. When it finishes, the Track
-  plays.
+  picker, and *Add*, with the upload's progress; *Cancel* stops an upload under
+  way. When it finishes, the dialog closes and the Track shows as downloaded and
+  plays like any other.
 
 ## What the API shows
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `POST /api/links/lookup` | Signed in | Now takes a code too, and answers `readable: false` with why when the read fails |
+| `POST /api/links/lookup` | Signed in | Now takes a code too, and answers `readable: false` with a `reason` and a `message` when the read fails |
 | `POST /api/links` | Signed in | Now adds parts of a video that couldn't be read, with the household's details |
-| `GET /api/tracks/{id}/download` | Signed in | The Track's site Source: its link, whether it is downloaded, downloading, or failed, and the failure's message |
+| `GET /api/tracks/{id}/download` | Signed in | The Track's site Source: its link, whether it is downloaded, downloading, failed, or unavailable, and the failure's message; 409 without a site Source |
 | `PUT /api/tracks/{id}/download` | Signed in | Adds the file in the body as the Track's Download; 413 too large, 422 not audio, 409 no site Source |
 
-Tracks in every list gain `download_failed`.
+Tracks in every list gain `download_failed` and `site`.
 
 ## Testing
 
 - **Through the test plugin `tube`,** scripted to fail: a lookup that can't
   read answers `readable: false` for each kind of failure, the add that follows
-  doesn't read again, and adding with the household's details makes Tracks and
-  Jobs.
+  doesn't read again until the lookup memory ends, and adding with the
+  household's details makes Tracks and Jobs.
 - **Adding the file:** each accepted extension, a name with no extension or
   another one, an empty file, one over the limit, a file tinytag can't read, a
   Track without a site Source, a running Job cancelled, an earlier Download
   replaced, the duration filled in, and Offline.
 - **The policy** keeps a manual Download over the limit and removes a
   downloaded one beside it.
+- **Damaged files:** a Hypothesis property cuts real WAV, MP3, and MP4 files
+  short and fills them with noise, under every accepted extension; each is
+  audio with a length or is refused, never another error.
 - **The web client:** the code and link lookups, both add dialogs, the failed
-  state, the other ways with the link filled in, and an upload, in Vitest and
-  one Playwright run against a server with `tube`.
+  state, the other ways with the link filled in, and an upload, in Vitest; and
+  Playwright against a second server whose Bilibili is `tube`, which adds a
+  video, a failed Download and its file, and a video that can't be read, and
+  checks the dialogs at 320, 390, and 1280 pixels wide for sideways scrolling.
 
 ## Left for later
 

@@ -5,7 +5,8 @@
 > table, Artists, Albums, Downloaded, Playlists, search, the keyboard
 > shortcuts, and Settings, and how they get their data. What the client must do is in [MVP](MVP.md#client-notes);
 > the player, the queue, and play modes are in
-> [Playback](Playback.md#the-web-client).
+> [Playback](Playback.md#the-web-client); adding from Bilibili and adding a
+> Track's file by hand are in [Manual downloads](Manual%20downloads.md#the-web-client).
 
 ## Contents
 
@@ -43,7 +44,9 @@
   of the Track has a Download row, so a cache copy of a zip member doesn't
   count. Nothing else in the client's data can tell, and the catalog already
   finds it to work out availability. The client also reads `album_artist`,
-  `added_at`, and `last_played_at`, which the API already has.
+  `added_at`, and `last_played_at`, which the API already has. Two more say
+  where a site Track's audio stands: `download_failed`, and `site`, the kind of
+  site it comes from, if any; see [Manual downloads](Manual%20downloads.md).
 - **Large Libraries:** the Track list is loaded whole and the table draws only
   the rows on screen, so tens of thousands of Tracks scroll smoothly. Loading
   page by page from the server would make every view and search a server query;
@@ -109,6 +112,10 @@ no router package.
   *Add to playlist…*. Each song row has one, after its queue buttons, which a
   phone hides, since the menu holds them; the player has one beside the heart,
   without the queue actions.
+- **A Track from a site** also has *Add the file yourself…*, which opens the
+  dialog for adding its audio file by hand; a Track whose Download failed shows
+  *Download failed* beside *Add the file…* in its row. See
+  [Manual downloads](Manual%20downloads.md#the-web-client).
 - **Go to** opens the artist's view, or the album's under its album artist, as
   the Albums view groups it.
 - **Radix's dropdown menu** draws it: unstyled, it handles the arrow keys, Home
@@ -190,9 +197,10 @@ no router package.
 <!-- cspell:ignore ｍｅｌｔ -->
 
 - **One search box in the header,** with a scope toggle: *Library* or
-  *Bilibili*. Library is built now; Bilibili shows only while the `bilibili`
-  plugin is on, and can't be chosen until searching Bilibili exists, which is
-  not in the MVP.
+  *Bilibili*. Bilibili shows only while the `bilibili` plugin is on. With it
+  chosen, the box takes a link or a bare video code and *Enter* opens the add
+  dialog; it doesn't search anything else. See
+  [Manual downloads](Manual%20downloads.md#the-web-client).
 - **Library search** matches the words typed, each anywhere in a Track's title,
   artist, or album, ignoring case, width, and hiragana or katakana: NFKC, lower
   case, and katakana shifted to hiragana, so `ｍｅｌｔ` finds *Melt* and
@@ -270,8 +278,8 @@ tab bar clear of the iPhone's home indicator (`env(safe-area-inset-bottom)`).
 
 ## Left for later
 
-- **Searching Bilibili,** the add dialog, the stage view, and the *Downloads*
-  tab of Jobs.
+- **Searching Bilibili by words,** the stage view, and the *Downloads* tab of
+  Jobs.
 - **Editing Playlists** from the client: renaming, reordering, and removing.
 - **Loading Tracks page by page,** if a Library outgrows loading whole, and
   answering an unchanged list with a 304.

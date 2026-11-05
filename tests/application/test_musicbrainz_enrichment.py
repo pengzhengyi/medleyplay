@@ -418,7 +418,7 @@ def test_a_job_is_one_per_track_and_asking_again_returns_the_one_active(
     job = enriching.enrichment.find_details(alice, track_id, NAME)
     again = enriching.enrichment.find_details(alice, track_id, NAME)
 
-    assert (job.kind, job.target) == (ENRICH_KIND, enrich_target(track_id))
+    assert (job.kind, job.target) == (ENRICH_KIND, enrich_target(track_id, NAME))
     assert again.id == job.id
 
 

@@ -71,9 +71,21 @@ SITE_TEXT: Final = "site"
 type EnrichKind = JobKind[EnrichJob, EnrichedTrack]
 
 
-def enrich_target(track_id: TrackId) -> str:
-    """Return the target of the Job that asks about the Track."""
-    return f"track:{track_id}"
+def enrich_target(track_id: TrackId, enricher: str) -> str:
+    """Return the target of the Job that asks `enricher` about the Track: `track:7:musicbrainz`.
+
+    Each enricher has its own, so asking a second one about a Track queues its own Job
+    rather than returning the first one's.
+    """
+    return f"track:{track_id}:{enricher}"
+
+
+def track_of_target(target: str) -> TrackId:
+    """Return the Track an enrich Job's target names, as `track:7:musicbrainz` or `track:7`.
+
+    A Job queued before targets named their enricher has the Track's alone.
+    """
+    return TrackId(int(target.removeprefix("track:").partition(":")[0]))
 
 
 @dataclass(frozen=True)
@@ -121,7 +133,7 @@ def _complete(
     """
     enricher, now = enricher_named(found.enricher), clock()
     _record_ask(db, enricher.name, found.subject, now)
-    track_id = TrackId(int(job.target.removeprefix("track:")))
+    track_id = track_of_target(job.target)
     if db.get(TrackRow, track_id) is None:
         return
     if enricher.subject is Subject.VIDEO and _text_is_owned(db, track_id):
@@ -258,7 +270,7 @@ class EnrichmentService:
             raise ConflictError(MESSAGES[reason])
         return self._jobs.submit(
             self._kind,
-            enrich_target(track_id),
+            enrich_target(track_id, enricher.name),
             _request(enricher, found, shown_now, duration_ms, text),
             caller.id,
         )
@@ -275,7 +287,7 @@ class EnrichmentService:
             raise ConflictError(MESSAGES[Ineligible.STOPPED])
         queued = 0
         for track_id in self.eligible(name):
-            target = enrich_target(track_id)
+            target = enrich_target(track_id, enricher.name)
             if self._jobs.active(ENRICH_KIND, target) is None:
                 self.find_details(caller, track_id, name)
                 queued += 1

@@ -602,4 +602,4 @@ def test_the_jobs_of_the_ai_are_the_enrich_kind_with_the_tracks_target(
 
     job = enriching.enrichment.find_details(alice, track_id, NAME)
 
-    assert (job.kind, job.target) == (ENRICH_KIND, enrich_target(track_id))
+    assert (job.kind, job.target) == (ENRICH_KIND, enrich_target(track_id, NAME))

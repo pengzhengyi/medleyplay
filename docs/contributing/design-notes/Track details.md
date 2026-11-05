@@ -145,7 +145,8 @@ values.
   that is a `BV` id, such as `BV1dm4y1s7ak.m4a`.
 - **The video's text is read by one parser,** a pure function of the core: it
   drops bracketed tags such as `【MV】` or `[Hi-Res]`, splits `artist - title`
-  and `title / artist`, recognizes an album by words such as `专辑`, `全专`, or
+  and `title / artist`, takes a year ending the artist's name, as in
+  `朴树2003《生如夏花》`, as the year, recognizes an album by words such as `专辑`, `全专`, or
   `Full Album`, and reads a song list from the chapters or from timestamps in
   the description, such as `03:21 Song - Artist`.
 

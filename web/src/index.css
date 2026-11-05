@@ -1776,15 +1776,17 @@ button.icon.heart.on:hover,
 }
 
 @media (width <= 48rem) {
+  /* The scope choice, when there is one, sits under the field. */
   .search {
+    flex-flow: row wrap;
     flex-basis: 100%;
     order: 5;
     max-width: none;
     margin-right: 0;
   }
 
-  .scope {
-    display: none;
+  .search-field {
+    flex-basis: 100%;
   }
 
   /* The views as a tab bar along the bottom, clear of the home indicator. */

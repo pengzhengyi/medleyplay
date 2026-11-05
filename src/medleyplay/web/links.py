@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from medleyplay.application.links import Added, Lookup, PartChoice
+from medleyplay.application.links import Added, Lookup, PartChoice, Reason
 from medleyplay.domain.jobs import JobView
 from medleyplay.plugin_api import BEST_QUALITY
 from medleyplay.web.deps import LinksDep, SignedInAccount
@@ -13,11 +13,13 @@ from medleyplay.web.jobs import JobOut
 
 router = APIRouter(prefix="/api/links", tags=["links"])
 
-type Link = Annotated[str, Field(max_length=2048, examples=["https://b23.tv/abc123"])]
+type Link = Annotated[
+    str, Field(max_length=2048, examples=["https://b23.tv/abc123", "BV1Xx41117Tz"])
+]
 
 
 class LinkIn(BaseModel):
-    """A link to look up, as pasted."""
+    """A link to look up, as pasted, or a bare video code such as `BV1Xx41117Tz`."""
 
     link: Link
 
@@ -40,7 +42,12 @@ class QualityOut(BaseModel):
 
 
 class LookupOut(BaseModel):
-    """The video a link names."""
+    """The video a link names.
+
+    A video that couldn't be read has `readable` false, the `reason` and a `message`
+    saying why, no title, uploader, or qualities, and one part: the one the link
+    names, or part 1.
+    """
 
     kind: str
     video: str
@@ -48,10 +55,14 @@ class LookupOut(BaseModel):
     uploader: str
     parts: list[PartOut]
     qualities: list[QualityOut]
+    readable: bool
+    reason: Reason | None
+    message: str
 
     @classmethod
     def of(cls, lookup: Lookup) -> "LookupOut":
         """Return the API view of `lookup`."""
+        unreadable = lookup.unreadable
         return cls(
             kind=lookup.kind,
             video=lookup.video,
@@ -59,6 +70,9 @@ class LookupOut(BaseModel):
             uploader=lookup.uploader,
             parts=[PartOut(**vars(part)) for part in lookup.parts],
             qualities=[QualityOut(**quality.model_dump()) for quality in lookup.qualities],
+            readable=unreadable is None,
+            reason=None if unreadable is None else unreadable.reason,
+            message="" if unreadable is None else unreadable.message,
         )
 
 
@@ -71,7 +85,10 @@ class PartIn(BaseModel):
 
 
 class AddIn(BaseModel):
-    """The parts of a link's video to add, at a quality: one the lookup listed, or `best`."""
+    """The parts of a link's video to add, at a quality: one the lookup listed, or `best`.
+
+    A video that couldn't be read is added on these titles and artists alone, at `best`.
+    """
 
     link: Link
     quality: str = Field(default=BEST_QUALITY, max_length=32)
@@ -89,7 +106,10 @@ class AddedOut(BaseModel):
 
 @router.post("/lookup")
 def look_up(body: LinkIn, me: SignedInAccount, links: LinksDep) -> LookupOut:
-    """Return the video a link names; a link that isn't one, or can't be added, answers 422."""
+    """Return the video a link names; a link that isn't one answers 422.
+
+    A video that can't be read answers `readable: false` and why.
+    """
     return LookupOut.of(links.lookup(me, body.link))
 
 

@@ -87,7 +87,9 @@ multiple_accounts = false
 enabled = false
 ```
 
-- **Every built-in plugin is on** unless the file turns it off.
+- **Every built-in plugin is on** unless the file turns it off, except the three
+  that contact a site for details, `bilibili`, `bilibili-details`, and
+  `musicbrainz`, which are off until the file turns them on.
 - **A change applies on restart.**
 - **A file that doesn't parse, or a setting with the wrong type, stops the
   server** with a message naming the problem. A plugin name the core doesn't know

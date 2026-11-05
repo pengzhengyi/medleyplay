@@ -78,7 +78,7 @@ def test_an_enricher_that_does_not_exist_is_not_found_without_repeating_its_name
 ) -> None:
     set_up_as_alice(client)
 
-    response = client.get("/api/enrichers/musicbrainz")
+    response = client.get("/api/enrichers/acoustid")
 
     assert (response.status_code, response.json()) == (
         404,
@@ -201,3 +201,77 @@ def test_after_a_refusal_the_enricher_shows_why_it_stopped_and_an_admin_resets_i
     assert reset.status_code == 204
     assert after["stopped"] is None
     assert len(after["eligible"]) == 2
+
+
+# MusicBrainz, through the same routes
+
+MUSICBRAINZ = "musicbrainz"
+
+
+def test_musicbrainz_shows_the_tracks_whose_words_it_may_search_for(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    song = enriching.add_song("Let Down")
+    enriching.add_file_track("Night Drive.m4a")
+
+    body = enrichers_client.get(f"/api/enrichers/{MUSICBRAINZ}").json()
+
+    assert body == {"name": MUSICBRAINZ, "available": True, "stopped": None, "eligible": [song]}
+
+
+def test_asking_musicbrainz_about_a_song_queues_a_job_for_it(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    track_id = enriching.add_song("Let Down")
+
+    response = enrichers_client.post(f"/api/enrichers/{MUSICBRAINZ}/tracks/{track_id}")
+
+    assert (response.status_code, response.json()["target"]) == (200, f"track:{track_id}")
+    enriching.wait_for(JobId(response.json()["id"]), JobState.SUCCEEDED)
+
+
+def test_asking_musicbrainz_about_a_track_with_nothing_to_search_for_says_why(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    track_id = enriching.add_file_track("Night Drive.m4a")
+
+    response = enrichers_client.post(f"/api/enrichers/{MUSICBRAINZ}/tracks/{track_id}")
+
+    assert (response.status_code, response.json()) == (
+        409,
+        {"detail": "This Track shows no title and artist, or album, to search for."},
+    )
+
+
+def test_an_admin_queues_every_song_musicbrainz_may_be_asked_about(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    enriching.add_song("Let Down")
+    enriching.add_song("Karma Police")
+    enriching.add_file_track("Night Drive.m4a")
+
+    response = enrichers_client.post(f"/api/enrichers/{MUSICBRAINZ}/find-all")
+
+    assert (response.status_code, response.json()) == (200, {"queued": 2})
+    enriching.finish_every_job()
+
+
+def test_after_musicbrainz_refuses_it_shows_why_it_stopped_and_an_admin_resets_it(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    refused = enriching.add_song("Refused")
+    job = enrichers_client.post(f"/api/enrichers/{MUSICBRAINZ}/tracks/{refused}").json()
+    enriching.wait_for(JobId(job["id"]), JobState.FAILED)
+
+    stopped = enrichers_client.get(f"/api/enrichers/{MUSICBRAINZ}").json()
+    reset = enrichers_client.post(f"/api/enrichers/{MUSICBRAINZ}/reset")
+    after = enrichers_client.get(f"/api/enrichers/{MUSICBRAINZ}").json()
+
+    assert (stopped["stopped"]["reason"], stopped["eligible"]) == ("HTTP Error 403.", [])
+    assert reset.status_code == 204
+    assert (after["stopped"], after["eligible"]) == (None, [refused])

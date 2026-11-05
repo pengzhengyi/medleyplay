@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from medleyplay.domain.covers import cover_id
+from medleyplay.plugin_api import ShownDetail
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext
 from medleyplay.plugin_host.loader import load_plugins
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob, run
@@ -12,6 +13,7 @@ from tests.support.hosts import TEST_PLUGINS
 from tests.support.images import jpeg_image
 
 PROXY = "socks5h://127.0.0.1:7890"
+LET_DOWN = (ShownDetail(field="title", value="Let Down", origin="files"),)
 
 
 def _context(tmp_path: Path, proxy: str | None = None) -> JobContext:
@@ -23,7 +25,7 @@ def _context(tmp_path: Path, proxy: str | None = None) -> JobContext:
 
 
 def _ask(video: str) -> EnrichJob:
-    return EnrichJob(enricher="bilibili-details", video=video)
+    return EnrichJob(enricher="bilibili-details", subject=video, video=video)
 
 
 def test_the_answer_is_the_videos_text_without_a_cover_when_the_enricher_wrote_none(
@@ -53,7 +55,7 @@ def test_values_an_enricher_answers_are_passed_on(tmp_path: Path) -> None:
 
     assert found == EnrichedTrack(
         enricher="bilibili-details",
-        video="BVValues",
+        subject="BVValues",
         values={"genre": "Vocaloid", "year": 2014},
         cover=found.cover,
     )
@@ -92,3 +94,36 @@ def test_the_jobs_proxy_is_handed_to_the_enricher(tmp_path: Path) -> None:
 
     assert found.video_text is not None
     assert found.video_text.title == f"proxy={PROXY}"
+
+
+def test_a_song_is_asked_about_without_a_video_and_its_values_and_cover_are_passed_on(
+    tmp_path: Path,
+) -> None:
+    ask = EnrichJob(enricher="musicbrainz", subject="a key", shown=LET_DOWN)
+
+    found = run(ask, _context(tmp_path))
+
+    assert (found.enricher, found.subject) == ("musicbrainz", "a key")
+    assert found.values["album"] == "OK Computer"
+    assert found.cover is not None
+    assert Path(found.cover.path).read_bytes() == jpeg_image("Let Down")
+
+
+def test_what_a_track_shows_and_whether_it_is_a_whole_album_reach_the_enricher(
+    tmp_path: Path,
+) -> None:
+    shown = (ShownDetail(field="album", value="Echo", origin="video"),)
+    ask = EnrichJob(enricher="musicbrainz", subject="k", shown=shown, whole_album=True)
+
+    found = run(ask, _context(tmp_path))
+
+    assert str(found.values["album"]).startswith("whole_album=True video=None")
+
+
+def test_a_refusal_by_musicbrainz_fails_the_job_as_refused(tmp_path: Path) -> None:
+    shown = (ShownDetail(field="title", value="Refused", origin="files"),)
+
+    with pytest.raises(AnswerFailedError, match=r"HTTP Error 403\.") as failure:
+        run(EnrichJob(enricher="musicbrainz", subject="k", shown=shown), _context(tmp_path))
+
+    assert failure.value.kind == "refused"

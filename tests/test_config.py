@@ -56,6 +56,13 @@ def test_the_plugin_that_reads_a_tracks_details_from_bilibili_is_off_by_default_
     ) == ("bilibili-details",)
 
 
+def test_the_plugin_that_finds_a_track_on_musicbrainz_is_off_by_default_too() -> None:
+    assert Config().enabled_plugins(["musicbrainz", "tinytag-tags"]) == ("tinytag-tags",)
+    assert Config(plugins={"musicbrainz": PluginConfig(enabled=True)}).enabled_plugins(
+        ["musicbrainz"]
+    ) == ("musicbrainz",)
+
+
 def test_plugins_the_file_names_but_that_dont_exist_are_unknown() -> None:
     config = Config(plugins={"radio": PluginConfig(enabled=False), "zz": PluginConfig()})
 

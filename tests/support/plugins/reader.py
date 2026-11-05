@@ -1,6 +1,6 @@
-"""A plugin that answers for the enricher `bilibili-details` with scripted videos.
+"""A plugin that answers for the enrichers `bilibili-details` and `musicbrainz` with scripts.
 
-The video id says how the plugin answers:
+For `bilibili-details`, the video id says how the plugin answers:
 
 | Video | Answers |
 | --- | --- |
@@ -19,6 +19,22 @@ The video id says how the plugin answers:
 | `BVBroken` | a fault |
 | `BVSlow` | text, after two seconds |
 | `BVProxyEcho` | text titled with the proxy it was asked through |
+
+For `musicbrainz`, the title the Track shows says how it answers, or its album for a
+long file split into songs:
+
+| Title | Answers |
+| --- | --- |
+| `Nowhere` | no values |
+| `Refused` | refused |
+| `Down` | a `NetworkError` |
+| `Broken` | a fault |
+| `BadValues` | a year that is not a year |
+| `NoCover` | the values of a song, and no cover |
+| `Remaster` | the values of a song titled *Remaster (2016)* |
+| `Echo` | the album *echo*, naming how it was asked |
+| `生如夏花` (a long file) | the album, album artist, year, and a cover |
+| any other | the values of *Let Down* on *OK Computer*, and a cover |
 """
 
 import time
@@ -45,7 +61,7 @@ class Reader:
     """Answers each scripted video as the table says."""
 
     def enrich(self, request: EnrichTrack) -> Enriched:
-        video, folder = request.video, Path(request.folder)
+        video, folder = request.video or "", Path(request.folder)
         match video:
             case "BVGone":
                 return Enriched(status=EnrichStatus.GONE, message="The video was removed.")
@@ -67,6 +83,52 @@ class Reader:
             time.sleep(2)
         title = f"proxy={request.proxy or 'none'}" if video == "BVProxyEcho" else _title(video)
         return Enriched(video_text=_text(title, video), cover=_cover_of(folder, video))
+
+
+class Finder:
+    """Answers each scripted Track as the table says."""
+
+    def enrich(self, request: EnrichTrack) -> Enriched:
+        shown = {each.field: each.value for each in request.shown}
+        folder = Path(request.folder)
+        key = str(shown.get("album" if request.whole_album else "title", ""))
+        match key:
+            case "Nowhere":
+                return Enriched()
+            case "Refused":
+                return Enriched(status=EnrichStatus.REFUSED, message="HTTP Error 403.")
+            case "Down":
+                message = "MusicBrainz couldn't be reached."
+                raise NetworkError(message)
+            case "Broken":
+                message = "The answer changed shape."
+                raise ValueError(message)
+            case "BadValues":
+                return Enriched(values={"year": "last year"})
+            case "Echo":
+                return Enriched(values={"album": _echo(request, shown)})
+        if request.whole_album:
+            values: dict[str, str | int] = {"album": key, "album_artist": "朴树", "year": 2003}
+            return Enriched(values=values, cover=_cover(folder, key))
+        title = "Remaster (2016)" if key == "Remaster" else key
+        values = {
+            "title": title,
+            "artist": "Radiohead",
+            "album": "OK Computer",
+            "album_artist": "Radiohead",
+            "year": 1997,
+            "track_number": 5,
+            "disc_number": 1,
+        }
+        return Enriched(values=values, cover=None if key == "NoCover" else _cover(folder, key))
+
+
+def _echo(request: EnrichTrack, shown: dict[str, str | int]) -> str:
+    return (
+        f"whole_album={request.whole_album} video={request.video} proxy={request.proxy or 'none'}"
+        f" duration={request.duration_ms} file={request.file_name or 'none'}"
+        f" shown={sorted(shown)}"
+    )
 
 
 def _title(video: str) -> str:
@@ -104,8 +166,9 @@ def _cover(folder: Path, video: str) -> str:
 
 
 def register(registry: Registry) -> None:
-    """Add the enricher `bilibili-details`."""
+    """Add the enrichers `bilibili-details` and `musicbrainz`."""
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
+    registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
 
 
 plugin = Plugin(api_version=1, register=register)

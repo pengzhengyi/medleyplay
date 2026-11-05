@@ -179,13 +179,16 @@ class EnricherStopRow(Base):
     reason: Mapped[str] = mapped_column(String(2048), default="")
 
 
-class VideoAskRow(Base):
-    """When an enricher last asked its site about a video, so it never asks twice in a day."""
+class EnricherAskRow(Base):
+    """When an enricher last asked its site about a subject, so it never asks twice in a day.
 
-    __tablename__ = "video_ask"
+    The subject is a video's id, or a key made from a Track and what it was searched for.
+    """
+
+    __tablename__ = "enricher_ask"
 
     enricher: Mapped[str] = mapped_column(String(64), primary_key=True)
-    video: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(64), primary_key=True)
     asked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 

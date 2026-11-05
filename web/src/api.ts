@@ -153,6 +153,8 @@ export interface JobEvent {
 
 /** The enricher that reads a Track's video details and cover from Bilibili. */
 export const DETAILS_ENRICHER = "bilibili-details";
+/** The enricher that finds a Track's release and cover on MusicBrainz. */
+export const MUSICBRAINZ_ENRICHER = "musicbrainz";
 
 /** An enricher: whether it can be asked, whether the site stopped it, and for which Tracks. */
 export interface Enricher {

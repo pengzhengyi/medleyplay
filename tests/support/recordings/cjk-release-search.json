@@ -1,0 +1,103 @@
+{
+  "created": "2026-11-05T00:00:00.000Z",
+  "count": 3,
+  "offset": 0,
+  "releases": [
+    {
+      "id": "5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9",
+      "score": 100,
+      "count": 1,
+      "title": "生如夏花",
+      "status": "Official",
+      "artist-credit": [
+        {
+          "name": "朴树",
+          "joinphrase": "",
+          "artist": {
+            "id": "d8f2a1c3-5b6e-4c7d-8e9f-0a1b2c3d4e5f",
+            "name": "朴树",
+            "sort-name": "Pu, Shu"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "b0c1d2e3-f4a5-4b6c-9d7e-8f9a0b1c2d3e",
+        "title": "生如夏花"
+      },
+      "date": "2013-06-21",
+      "country": "CN",
+      "track-count": 11,
+      "media": [
+        {
+          "format": "CD",
+          "disc-count": 0,
+          "track-count": 11
+        }
+      ]
+    },
+    {
+      "id": "0f463449-2b8b-4874-88ed-92392d97f955",
+      "score": 100,
+      "count": 1,
+      "title": "生如夏花",
+      "status": "Official",
+      "artist-credit": [
+        {
+          "name": "朴树",
+          "joinphrase": "",
+          "artist": {
+            "id": "d8f2a1c3-5b6e-4c7d-8e9f-0a1b2c3d4e5f",
+            "name": "朴树",
+            "sort-name": "Pu, Shu"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "b0c1d2e3-f4a5-4b6c-9d7e-8f9a0b1c2d3e",
+        "title": "生如夏花"
+      },
+      "date": "2003-08-01",
+      "country": "CN",
+      "track-count": 11,
+      "media": [
+        {
+          "format": "CD",
+          "disc-count": 0,
+          "track-count": 11
+        }
+      ]
+    },
+    {
+      "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "score": 71,
+      "count": 1,
+      "title": "朴树精选",
+      "status": "Official",
+      "artist-credit": [
+        {
+          "name": "朴树",
+          "joinphrase": "",
+          "artist": {
+            "id": "d8f2a1c3-5b6e-4c7d-8e9f-0a1b2c3d4e5f",
+            "name": "朴树",
+            "sort-name": "Pu, Shu"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "b0c1d2e3-f4a5-4b6c-9d7e-8f9a0b1c2d3e",
+        "title": "朴树精选"
+      },
+      "date": "2008-01-01",
+      "country": "CN",
+      "track-count": 16,
+      "media": [
+        {
+          "format": "CD",
+          "disc-count": 0,
+          "track-count": 16
+        }
+      ]
+    }
+  ]
+}

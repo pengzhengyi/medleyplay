@@ -1,12 +1,13 @@
 """Object Mothers: one factory per type the suites build."""
 
 from ipaddress import IPv4Network
+from pathlib import Path
 
 from medleyplay.application.accounts import NewAccount
 from medleyplay.domain.accounts import Account, AccountId, Role, Username
 from medleyplay.domain.catalog import SourceKey, TrackDetails
 from medleyplay.domain.mode import Network, NetworkKind
-from medleyplay.plugin_api import Tags
+from medleyplay.plugin_api import EnrichTrack, ShownDetail, Tags
 from medleyplay.programs.info_json import InfoChapter, InfoText
 from medleyplay.programs.scan_covers import CoverFile, CoverImage
 from medleyplay.programs.scan_library import InfoJson, ScannedFile
@@ -224,3 +225,50 @@ class NetworkFactory:
     def iphone_hotspot() -> Network:
         """An iPhone's Personal Hotspot: router `172.20.10.1`, on the iPhone's usual /28."""
         return Network(NetworkKind.WIFI, IPv4Network("172.20.10.0/28"), "02:0f:c4:d5:e6:07")
+
+
+class EnrichTrackFactory:
+    """Builds what the core asks an enricher about a Track."""
+
+    @staticmethod
+    def let_down(
+        folder: Path, *, album: str | None = "OK Computer", duration_ms: int | None = 299_000
+    ) -> EnrichTrack:
+        """Return the ask about a song whose file says what it is.
+
+        ```text
+        title "Let Down" (files), artist "Radiohead" (files), album "OK Computer" (files), 4:59
+        ```
+        """
+        shown = [
+            ShownDetail(field="title", value="Let Down", origin="files"),
+            ShownDetail(field="artist", value="Radiohead", origin="files"),
+        ]
+        if album is not None:
+            shown.append(ShownDetail(field="album", value=album, origin="files"))
+        return EnrichTrack(shown=tuple(shown), duration_ms=duration_ms, folder=str(folder))
+
+    @staticmethod
+    def untitled(folder: Path) -> EnrichTrack:
+        """Return the ask about a file that only its name titles.
+
+        ```text
+        title "Night Drive" (file_name)
+        ```
+        """
+        shown = (ShownDetail(field="title", value="Night Drive", origin="file_name"),)
+        return EnrichTrack(shown=shown, file_name="Night Drive.m4a", folder=str(folder))
+
+    @staticmethod
+    def album_file(folder: Path) -> EnrichTrack:
+        """Return the ask about a long file split into the songs of an album.
+
+        ```text
+        album "生如夏花" (video), album_artist "朴树" (video)
+        ```
+        """
+        shown = (
+            ShownDetail(field="album", value="生如夏花", origin="video"),
+            ShownDetail(field="album_artist", value="朴树", origin="video"),
+        )
+        return EnrichTrack(shown=shown, whole_album=True, folder=str(folder))

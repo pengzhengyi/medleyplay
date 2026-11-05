@@ -29,6 +29,7 @@ from medleyplay.domain.errors import (
 )
 from medleyplay.web import (
     accounts,
+    ai,
     catalog,
     covers,
     details,
@@ -70,6 +71,7 @@ _DETAIL_OF: Final[dict[type[MedleyplayError], str]] = {
 }
 _SAFE_METHODS: Final = frozenset({"GET", "HEAD", "OPTIONS"})
 PROXIES_PATH: Final = proxies.router.prefix + "/"
+AI_PATH: Final = ai.router.prefix
 
 type Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
@@ -100,6 +102,7 @@ def create_app(
     app.include_router(playback.router)
     app.include_router(linked_accounts.router)
     app.include_router(proxies.router)
+    app.include_router(ai.router)
     app.include_router(links.router)
     app.include_router(events.router)
     app.include_router(settings.router)
@@ -131,13 +134,19 @@ def _handle_domain_error(_: Request, error: MedleyplayError) -> JSONResponse:
 
 
 async def _handle_invalid_request(request: Request, error: RequestValidationError) -> Response:
-    """Answer 422 as FastAPI does, except for a proxy: its body holds a password.
+    """Answer 422 as FastAPI does, except for a proxy or the AI provider: their bodies hold secrets.
 
     FastAPI echoes the input of each error, which for a body that is missing a key
     is the whole body.
     """
     if request.url.path.startswith(PROXIES_PATH):
         detail = 'The body must be JSON like {"url": "socks5h://127.0.0.1:7890"}.'
+        return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
+    if request.url.path == AI_PATH:
+        detail = (
+            'The body must be JSON like {"base_url": "https://api.deepseek.com", '
+            '"model": "deepseek-chat", "key": "…"}, with a key only to set a new one.'
+        )
         return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
     return await request_validation_exception_handler(request, error)
 

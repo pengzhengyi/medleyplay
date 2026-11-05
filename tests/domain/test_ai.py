@@ -5,6 +5,9 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from medleyplay.domain.ai import (
+    MAX_CHAPTER_TITLE,
+    MAX_CHAPTERS,
+    MAX_DESCRIPTION,
     MAX_KEY,
     MAX_MODEL,
     MAX_URL,
@@ -13,11 +16,13 @@ from medleyplay.domain.ai import (
     check_base_url,
     check_key,
     check_model,
+    cut_text,
     is_loopback,
     redact_key,
 )
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.linked_accounts import REDACTED
+from medleyplay.domain.video_text import Chapter, VideoText
 
 KEY = "sk-9f8e7d6c5b4a"
 
@@ -196,3 +201,37 @@ def test_no_text_keeps_the_key_it_was_redacted_of(text: str, key: str) -> None:
     assume(key not in REDACTED)
 
     assert key not in redact_key(f"{text}{key}{text}", key)
+
+
+def test_a_text_within_the_limits_is_sent_as_it_is() -> None:
+    text = VideoText(
+        "Re:Start", "Blue Room, 2016", (Chapter(0, "Intro"), Chapter(192_000, "Night Drive"))
+    )
+
+    assert cut_text(text) == text
+
+
+def test_a_description_is_cut_to_the_limit() -> None:
+    text = VideoText("Re:Start", "d" * (MAX_DESCRIPTION + 1))
+
+    assert cut_text(text).description == "d" * MAX_DESCRIPTION
+
+
+def test_the_chapters_are_cut_to_the_limit_and_so_is_each_title() -> None:
+    chapters = tuple(
+        Chapter(each * 1_000, "c" * (MAX_CHAPTER_TITLE + 1)) for each in range(MAX_CHAPTERS + 1)
+    )
+
+    cut = cut_text(VideoText("Re:Start", chapters=chapters))
+
+    assert len(cut.chapters) == MAX_CHAPTERS
+    assert {chapter.title for chapter in cut.chapters} == {"c" * MAX_CHAPTER_TITLE}
+    assert [chapter.start_ms for chapter in cut.chapters] == [
+        each * 1_000 for each in range(MAX_CHAPTERS)
+    ]
+
+
+def test_the_title_is_never_cut() -> None:
+    text = VideoText("t" * 1_000)
+
+    assert cut_text(text).title == "t" * 1_000

@@ -20,11 +20,17 @@ from urllib.parse import urlsplit
 
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.linked_accounts import REDACTED
+from medleyplay.domain.video_text import MAX_SONGS, Chapter, VideoText
 
 MAX_URL: Final = 256
 MAX_MODEL: Final = 128
 MIN_KEY: Final = 4
 MAX_KEY: Final = 512
+MAX_DESCRIPTION: Final = 6_000
+"""The most characters of a video's description sent to the provider."""
+MAX_CHAPTERS: Final = MAX_SONGS
+"""The most chapters sent: as many as a song list holds."""
+MAX_CHAPTER_TITLE: Final = 200
 KEY_SECRET: Final = "ai:key"  # noqa: S105 -- the name of a Keychain item, not a key
 """The name the provider's key is kept under in the Keychain."""
 _LOOPBACK_NAMES: Final = frozenset({"localhost"})
@@ -105,6 +111,19 @@ def check_key(text: str) -> str:
     if any(each.isspace() or not each.isprintable() for each in key):
         _refuse("A key has no spaces or control characters.")
     return key
+
+
+def cut_text(text: VideoText) -> VideoText:
+    """Return the video's text as it is sent to the provider, cut to the limits.
+
+    The description keeps its first `MAX_DESCRIPTION` characters, and at most
+    `MAX_CHAPTERS` chapters are kept, each title cut to `MAX_CHAPTER_TITLE`.
+    """
+    chapters = tuple(
+        Chapter(chapter.start_ms, chapter.title[:MAX_CHAPTER_TITLE])
+        for chapter in text.chapters[:MAX_CHAPTERS]
+    )
+    return VideoText(text.title, text.description[:MAX_DESCRIPTION], chapters)
 
 
 def redact_key(text: str, key: str | None) -> str:

@@ -1,11 +1,11 @@
 """Enrichment: asking a site for the details a Track's file does not say, when someone asks.
 
 Nothing here runs by itself. A Track is asked for when a person chooses *Find details
-online* (Bilibili) or *Find on MusicBrainz* for it, or an admin chooses it for every
-Track that is eligible; each Track is one Job, and the Jobs of an enricher run one at
-a time with a pause between them. What the site says is recorded as the enricher's
-origin, and the first time the site refuses a request the enricher stops until an
-admin resets it:
+online* (Bilibili), *Find on MusicBrainz*, or *Suggest details with AI* for it, or an
+admin chooses it for every Track that is eligible; each Track is one Job, and the Jobs
+of an enricher run one at a time with a pause between them. What the site says is
+recorded as the enricher's origin, and the first time the site refuses a request the
+enricher stops until an admin resets it:
 
 ```text
 Find details online     one Track          any Account
@@ -25,13 +25,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock, details
+from medleyplay.application.ai import is_set_up
 from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.ai import cut_text
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.details import Field, Shown, check_values, shown
+from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
 from medleyplay.domain.enrichers import (
     ENRICHERS,
     MESSAGES,
@@ -48,7 +50,7 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.jobs import Job, JobId, JobState
-from medleyplay.domain.video_text import Chapter, VideoText
+from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import (
     EnricherAskRow,
     EnricherStopRow,
@@ -57,6 +59,7 @@ from medleyplay.persistence.schema import (
     VideoTextRow,
 )
 from medleyplay.plugin_api import TRACK_ENRICHER, ShownDetail
+from medleyplay.plugin_api import Chapter as AskedChapter
 from medleyplay.plugin_api import VideoText as AnsweredText
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob
 from medleyplay.programs.info_json import MAX_START_MS
@@ -100,7 +103,7 @@ def enrich_track_kind(covers_folder: Path, clock: Clock) -> EnrichKind:
         needs_network=True,
         lane_field="enricher",
         lanes={
-            each.name: Lane(spacing=each.spacing, proxy_site=each.site)
+            each.name: Lane(spacing=each.spacing, proxy_site=each.site, lends_ai=each.uses_ai)
             for each in ENRICHERS.values()
         },
         refuse_start=_refuse_start,
@@ -123,6 +126,9 @@ def _complete(
         return
     if enricher.subject is Subject.VIDEO and _text_is_owned(db, track_id):
         return
+    if enricher.origin is Origin.AI:
+        _record_suggestion(db, track_id, found, now)
+        return
     cover = _keep_cover(found, covers_folder)
     if found.video_text is not None:
         text = _read_text(found.video_text)
@@ -136,25 +142,44 @@ def _complete(
         details.record(db, track_id, enricher.origin, values, now)
 
 
+def _record_suggestion(db: Session, track_id: TrackId, found: EnrichedTrack, now: datetime) -> None:
+    """Record what the AI suggested, in place of its last suggestion; it shows nowhere.
+
+    An answer that suggests nothing clears the last suggestion.
+    """
+    details.record(db, track_id, Origin.AI, dict(check_values(found.values)), now)
+    songs = [Song(song.start_ms, song.title, song.artist) for song in found.songs]
+    details.record_suggested_songs(db, track_id, songs, now)
+
+
 def _refuse_start(db: Session, request: object) -> str | None:
     name = _enricher_of(request)
-    stop = None if name is None else db.get(EnricherStopRow, name)
-    return None if stop is None else _stopped_message(stop.enricher, stop.reason)
+    if name is None:
+        return None
+    stop = db.get(EnricherStopRow, name)
+    if stop is not None:
+        return _stopped_message(stop.enricher, stop.reason)
+    return (
+        None
+        if is_set_up(db) or not enricher_named(name).uses_ai
+        else MESSAGES[Ineligible.NOT_SET_UP]
+    )
 
 
 def _on_failure(db: Session, job: Job, kind: str, message: str, *, clock: Clock) -> Sequence[JobId]:
-    """Note that a video the site no longer has was asked, and stop the enricher on a refusal.
+    """Note that a subject the site couldn't answer for was asked, and stop on a refusal.
 
-    A refusal stops the enricher and fails its Jobs that haven't started; it doesn't
-    count as asking, so the subject that was refused is eligible once an admin resets
-    the enricher. Return the Jobs failed.
+    A video the site no longer has, and an answer the enricher couldn't use, count as
+    asking, since the site was asked. A refusal stops the enricher and fails its Jobs
+    that haven't started; it doesn't count as asking, so the subject that was refused is
+    eligible once an admin resets the enricher. Return the Jobs failed.
     """
     request = db.get_one(JobRow, job.id).request
     name, subject = _enricher_of(request), request.get("subject")
     if name is None:
         return []
     now = clock()
-    if kind == "gone" and isinstance(subject, str):
+    if kind in {"gone", "invalid"} and isinstance(subject, str):
         _record_ask(db, name, subject, now)
     if kind != "refused":
         return []
@@ -199,11 +224,12 @@ class EnrichmentService:
         with self._units() as db:
             if db.get(EnricherStopRow, enricher.name) is not None:
                 return []
+            set_up = is_set_up(db)
             eligible = candidates(db, enricher, None)
         return [
             track_id
             for track_id, found in eligible.items()
-            if why_not(found.facts, now, stopped=False, enricher=enricher) is None
+            if why_not(found.facts, now, stopped=False, enricher=enricher, set_up=set_up) is None
         ]
 
     def find_details(self, caller: Account, track_id: TrackId, name: str) -> Job:
@@ -225,13 +251,15 @@ class EnrichmentService:
             }
             shown_now = shown(own)
             duration_ms = db.scalar(select(TrackRow.duration_ms).where(TrackRow.id == track_id))
-        reason = why_not(found.facts, now, stopped=stopped, enricher=enricher)
+            set_up = is_set_up(db)
+            text = details.video_text_of(db, track_id) if enricher.uses_ai else None
+        reason = why_not(found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up)
         if reason is not None:
             raise ConflictError(MESSAGES[reason])
         return self._jobs.submit(
             self._kind,
             enrich_target(track_id),
-            _request(enricher, found, shown_now, duration_ms),
+            _request(enricher, found, shown_now, duration_ms, text),
             caller.id,
         )
 
@@ -273,7 +301,11 @@ class EnrichmentService:
 
 
 def _request(
-    enricher: Enricher, found: Candidate, shown_now: Mapping[Field, Shown], duration_ms: int | None
+    enricher: Enricher,
+    found: Candidate,
+    shown_now: Mapping[Field, Shown],
+    duration_ms: int | None,
+    text: VideoText | None,
 ) -> EnrichJob:
     subject = found.facts.subject
     if subject is None:  # pragma: no cover -- an eligible Track has something to ask about
@@ -289,6 +321,7 @@ def _request(
         duration_ms=duration_ms,
         file_name=found.file_name,
         whole_album=found.whole_album,
+        text=None if text is None else _asked_text(text),
     )
 
 
@@ -311,6 +344,15 @@ def _keep_cover(found: EnrichedTrack, folder: Path) -> str | None:
         return None
 
 
+def _asked_text(text: VideoText) -> AnsweredText:
+    """Return the video's text cut to what the AI is sent, as the plugin API carries it."""
+    cut = cut_text(text)
+    chapters = tuple(
+        AskedChapter(start_ms=each.start_ms, title=each.title) for each in cut.chapters
+    )
+    return AnsweredText(title=cut.title, description=cut.description, chapters=chapters)
+
+
 def _read_text(answered: AnsweredText) -> VideoText | None:
     """Return the video's text as the core reads it, or `None` when it has no words."""
     chapters = tuple(
@@ -329,8 +371,9 @@ def _enricher_of(request: object) -> str | None:
 
 
 def _stopped_message(name: str, reason: str) -> str:
+    source = ENRICHERS[name].source if name in ENRICHERS else "the site"
     return (
-        f"{name} is stopped after the site refused a request: {reason.rstrip('.')}. "
+        f"{name} is stopped after {source} refused a request: {reason.rstrip('.')}. "
         "An admin can reset it in Settings."
     )
 

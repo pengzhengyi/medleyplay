@@ -3,7 +3,8 @@
 An enricher that reads videos is asked about a Track's video. One that searches by
 words is asked about the Track's title and artist, or, for a long file split into
 songs, its album: what a Track would be searched for with is kept apart from what the
-searched site said before, so its answer doesn't change the question.
+searched site said before, so its answer doesn't change the question. One that reads
+a Track's video text is asked about the Track alone.
 """
 
 from collections import defaultdict
@@ -24,6 +25,7 @@ from medleyplay.domain.enrichers import (
     Subject,
     TrackFacts,
     search_terms,
+    text_subject,
     video_id_of,
 )
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
@@ -72,6 +74,12 @@ def candidates(
         subjects = {track_id: video_id_of(sources.get(track_id, [])) for track_id in ids}
         videos = subjects
         came_from = _text_came_from(db)
+    elif enricher.subject is Subject.TEXT:
+        came_from = _text_came_from(db)
+        subjects = {
+            track_id: text_subject(track_id) if track_id in came_from else None for track_id in ids
+        }
+        videos = dict.fromkeys(ids)
     else:
         words = _words(db, ids)
         subjects = {

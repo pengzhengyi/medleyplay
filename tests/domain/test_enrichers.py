@@ -9,14 +9,17 @@ from hypothesis import strategies as st
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin, Values
 from medleyplay.domain.enrichers import (
+    AI_DETAILS,
     ASK_AGAIN_AFTER,
     BILIBILI_DETAILS,
     MUSICBRAINZ,
+    Enricher,
     Ineligible,
     SearchTerms,
     TrackFacts,
     enricher_named,
     search_terms,
+    text_subject,
     video_id_of,
     why_not,
 )
@@ -312,3 +315,98 @@ def test_the_same_track_with_the_same_terms_is_the_same_subject_that_fits_a_colu
 
     assert terms.key(TrackId(7)) == terms.key(TrackId(7))
     assert len(terms.key(TrackId(7))) <= 64
+
+
+def a_track_with_video_text(
+    *,
+    is_segment: bool = False,
+    text_came_from: str | None = "site",
+    asked_at: datetime | None = None,
+    subject: str | None = "a key",
+) -> TrackFacts:
+    """A Track whose video text the site gave, never asked of the AI, that is no segment.
+
+    ```text
+    video text from the site, never suggested from, not a segment
+    ```
+    """
+    return TrackFacts(subject, is_segment, text_came_from, asked_at)
+
+
+def test_the_ai_enricher_is_found_by_its_name() -> None:
+    assert enricher_named("ai-details") is AI_DETAILS
+
+
+def test_the_ai_enricher_suggests_from_video_text_with_no_proxy_and_two_seconds_between_calls() -> (
+    None
+):
+    assert (AI_DETAILS.origin, AI_DETAILS.spacing, AI_DETAILS.site) == (
+        Origin.AI,
+        timedelta(seconds=2),
+        None,
+    )
+
+
+def test_a_track_with_video_text_is_asked_of_the_ai() -> None:
+    facts = a_track_with_video_text()
+
+    assert why_not(facts, NOW, stopped=False, enricher=AI_DETAILS) is None
+
+
+@pytest.mark.parametrize("came_from", ["site", "file", "household"])
+def test_video_text_is_read_by_the_ai_wherever_it_came_from(came_from: str) -> None:
+    facts = a_track_with_video_text(text_came_from=came_from)
+
+    assert why_not(facts, NOW, stopped=False, enricher=AI_DETAILS) is None
+
+
+def test_a_track_without_video_text_is_not_asked_of_the_ai_and_the_reason_is_its_text() -> None:
+    facts = a_track_with_video_text(subject=None, text_came_from=None)
+
+    assert why_not(facts, NOW, stopped=False, enricher=AI_DETAILS) is Ineligible.NO_TEXT
+
+
+def test_a_song_inside_a_longer_file_is_not_asked_of_the_ai() -> None:
+    facts = a_track_with_video_text(is_segment=True)
+
+    assert why_not(facts, NOW, stopped=False, enricher=AI_DETAILS) is Ineligible.SEGMENT
+
+
+def test_a_track_asked_of_the_ai_less_than_a_day_ago_is_not_asked_again() -> None:
+    facts = a_track_with_video_text(asked_at=NOW - ASK_AGAIN_AFTER + timedelta(seconds=1))
+
+    assert why_not(facts, NOW, stopped=False, enricher=AI_DETAILS) is Ineligible.ASKED
+
+
+def test_a_track_asked_of_the_ai_a_day_ago_is_asked_again() -> None:
+    facts = a_track_with_video_text(asked_at=NOW - ASK_AGAIN_AFTER)
+
+    assert why_not(facts, NOW, stopped=False, enricher=AI_DETAILS) is None
+
+
+def test_a_stopped_ai_enricher_asks_for_no_track() -> None:
+    assert why_not(a_track_with_video_text(), NOW, stopped=True, enricher=AI_DETAILS) is (
+        Ineligible.STOPPED
+    )
+
+
+def test_the_ai_enricher_asks_for_no_track_until_the_provider_is_set_up() -> None:
+    assert (
+        why_not(a_track_with_video_text(), NOW, stopped=False, enricher=AI_DETAILS, set_up=False)
+        is Ineligible.NOT_SET_UP
+    )
+
+
+@pytest.mark.parametrize("enricher", [BILIBILI_DETAILS, MUSICBRAINZ])
+def test_an_enricher_that_needs_no_provider_asks_for_a_track_whether_or_not_one_is_set_up(
+    enricher: Enricher,
+) -> None:
+    facts = TrackFacts("a key", is_segment=False, text_came_from=None, asked_at=None)
+
+    assert why_not(facts, NOW, stopped=False, enricher=enricher, set_up=False) is None
+
+
+def test_one_track_is_one_subject_of_the_ai_whatever_its_text_says() -> None:
+    assert text_subject(TrackId(7)) == text_subject(TrackId(7))
+    assert text_subject(TrackId(7)) != text_subject(TrackId(8))
+    assert len(text_subject(TrackId(7))) <= 64

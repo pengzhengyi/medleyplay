@@ -7,7 +7,7 @@ chooses. A change to a split file's details reaches its songs, whose album field
 come from it as the `album_file` origin.
 """
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
@@ -30,8 +30,16 @@ from medleyplay.domain.details import (
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
 from medleyplay.domain.segments import ends_of
-from medleyplay.domain.video_text import Chapter, Reading, Song, VideoText, read_video
+from medleyplay.domain.video_text import (
+    Chapter,
+    Reading,
+    Song,
+    VideoText,
+    check_songs,
+    read_video,
+)
 from medleyplay.persistence.schema import (
+    AiSuggestionRow,
     SegmentRow,
     SourceRow,
     TrackRow,
@@ -116,6 +124,41 @@ def record_video_text(
         values[Field.COVER] = cover
     record(db, track_id, Origin.VIDEO, values, now)
     return reading
+
+
+def record_suggested_songs(
+    db: Session, track_id: TrackId, songs: Sequence[Song], now: datetime
+) -> None:
+    """Keep `songs` as the song list an AI model suggested for the Track, replacing the last.
+
+    A list that is no song list, such as one song or starts that fall, leaves none.
+    """
+    _require(db, track_id)
+    try:
+        check_songs(songs)
+    except InvalidInputError:
+        songs = ()
+    row = db.get(AiSuggestionRow, track_id)
+    if not songs:
+        if row is not None:
+            db.delete(row)
+        return
+    row = row or AiSuggestionRow(track_id=track_id)
+    row.songs = [
+        {"start_ms": song.start_ms, "title": song.title, "artist": song.artist} for song in songs
+    ]
+    row.suggested_at = now
+    db.add(row)
+
+
+def suggested_songs_of(db: Session, track_id: TrackId) -> tuple[Song, ...]:
+    """Return the song list an AI model suggested for the Track, or `()` when it suggested none."""
+    row = db.get(AiSuggestionRow, track_id)
+    if row is None:
+        return ()
+    return tuple(
+        Song(int(song["start_ms"]), str(song["title"]), str(song["artist"])) for song in row.songs
+    )
 
 
 def forget_video_text_read_from_a_file(db: Session, track_id: TrackId, now: datetime) -> None:

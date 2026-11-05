@@ -234,8 +234,9 @@ is built and, like `bilibili`, is off until the config file turns it on.
   nothing. A video that is gone counts as asked; a failure that a retry could
   fix, such as a lost connection or a fault in the plugin, doesn't.
 - **Site text yields to every other source.** A sidecar read later replaces
-  site text, as a paste does, and text the household entered while a Job runs
-  stays: the Job records nothing over it.
+  site text, a full scan that reads an unchanged sidecar again included, since
+  only a paste stands over an unchanged sidecar. Text the household entered while
+  a Job runs stays: the Job records nothing over it.
 - **Each Track is one Job,** of the kind `enrich_track` and the target
   `track:<id>`, carrying the enricher's name. The Jobs of one enricher run one at
   a time, with at least a pause between two calls: 5 seconds for

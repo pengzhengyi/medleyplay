@@ -14,10 +14,11 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "rea
 import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
 import { BilibiliSettings } from "./BilibiliSettings";
-import { VideoDetailsSettings } from "./VideoDetailsSettings";
+import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
 const GB = 1_000_000_000;
 /** How long after the limit stops changing its preview is asked for. */
@@ -30,9 +31,13 @@ const SECTIONS = [
   { id: "network", title: "Network" },
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
+  { id: "musicbrainz", title: "MusicBrainz" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
+
+/** The sections only an admin sees: they run lookups for every Track. */
+const ADMIN_ONLY: ReadonlySet<SectionId> = new Set(["bilibili", "musicbrainz"]);
 
 const FOLDED = "medleyplay.settings.folded.v1";
 
@@ -84,7 +89,7 @@ export function SettingsView({
     section?.scrollIntoView({ block: "start" });
     document.getElementById(`${id}-toggle`)?.focus({ preventScroll: true });
   };
-  const sections = SECTIONS.filter(({ id }) => admin || id !== "bilibili");
+  const sections = SECTIONS.filter(({ id }) => admin || !ADMIN_ONLY.has(id));
   const allFolded = sections.every(({ id }) => folded.has(id));
   const contents: Record<SectionId, ReactNode> = {
     appearance: (
@@ -102,6 +107,7 @@ export function SettingsView({
         <VideoDetailsSettings />
       </>
     ),
+    musicbrainz: <MusicBrainzSettings />,
   };
   return (
     <>

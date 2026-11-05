@@ -81,6 +81,47 @@ describe("App", () => {
     expect(calls).toContain("POST /api/enrichers/bilibili-details/tracks/1");
   });
 
+  it("offers Find on MusicBrainz in the menu of a Track that can be found there, not of another", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Night Drive"), trackOf(2, "Melt")]),
+      "GET /api/enrichers/musicbrainz": {
+        body: { name: "musicbrainz", available: true, stopped: null, eligible: [2] },
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "More actions for Melt" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Find on MusicBrainz" }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "More actions for Night Drive" }));
+
+    expect(await screen.findByRole("menuitem", { name: "Edit details…" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Find on MusicBrainz" })).toBeNull();
+  });
+
+  it("asks MusicBrainz about the Track and says so when Find on MusicBrainz is chosen", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/enrichers/musicbrainz": {
+        body: { name: "musicbrainz", available: true, stopped: null, eligible: [1] },
+      },
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 9, state: "queued", failure_message: "" },
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Find on MusicBrainz" }));
+
+    expect(await screen.findByText("Looking up “Night Drive” on MusicBrainz.")).toBeInTheDocument();
+    expect(calls).toContain("POST /api/enrichers/musicbrainz/tracks/1");
+  });
+
   it("says the lookup waits while medleyplay is Offline", async () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive")]),

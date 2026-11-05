@@ -8,7 +8,6 @@
 
 import {
   DotsThreeIcon,
-  GlobeIcon,
   ListPlusIcon,
   MicrophoneStageIcon,
   PencilSimpleIcon,
@@ -21,6 +20,7 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 
 import type { Track } from "../api";
+import { LOOKUPS, type Lookup } from "../library/lookups";
 import { albumArtistOf } from "../library/views";
 import { navigate } from "../routes";
 
@@ -30,10 +30,10 @@ export interface TrackMenuActions {
   readonly onAdd: (track: Track) => void;
   readonly onAddToPlaylist: (track: Track) => void;
   readonly onEditDetails: (track: Track) => void;
-  /** Whether `track`'s details can be looked up online now. */
-  readonly canFindDetails: (track: Track) => boolean;
-  /** Ask the Track's site for its details and cover. */
-  readonly onFindDetails: (track: Track) => void;
+  /** Whether `track` can be looked up with `lookup` now. */
+  readonly canFind: (lookup: Lookup, track: Track) => boolean;
+  /** Look `track` up online with `lookup`, for its details and cover. */
+  readonly onFind: (lookup: Lookup, track: Track) => void;
   /** Edit the songs of the file `track` is, or is a song of. */
   readonly onEditSongs: (track: Track) => void;
 }
@@ -119,16 +119,17 @@ export function TrackMenu({
           >
             Edit details…
           </Item>
-          {actions.canFindDetails(track) && (
+          {LOOKUPS.filter((lookup) => actions.canFind(lookup, track)).map((lookup) => (
             <Item
-              icon={<GlobeIcon />}
+              key={lookup.enricher}
+              icon={<lookup.icon />}
               onSelect={() => {
-                actions.onFindDetails(track);
+                actions.onFind(lookup, track);
               }}
             >
-              Find details online
+              {lookup.label}
             </Item>
-          )}
+          ))}
           <Item
             icon={<ScissorsIcon />}
             onSelect={() => {

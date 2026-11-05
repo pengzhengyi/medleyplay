@@ -369,6 +369,12 @@ const enricherOf = (eligible: readonly number[], change: object = {}) => ({
   body: { name: "bilibili-details", available: true, stopped: null, eligible, ...change },
 });
 
+/** The Tracks the enricher `name` may be asked about, as the library shows them. */
+const findableBy = (
+  library: { findable: ReadonlyMap<string, ReadonlySet<number>> },
+  name: string,
+) => [...(library.findable.get(name) ?? [])];
+
 describe("finding a song's details online", () => {
   it("offers it for the Tracks the server says can be looked up, and no others", async () => {
     serve({
@@ -378,7 +384,7 @@ describe("finding a song's details online", () => {
     const { result } = renderHook(() => useLibrary(vi.fn()));
 
     await waitFor(() => {
-      expect([...result.current.findable]).toEqual([2]);
+      expect(findableBy(result.current, "bilibili-details")).toEqual([2]);
     });
   });
 
@@ -402,15 +408,15 @@ describe("finding a song's details online", () => {
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
     await waitFor(() => {
-      expect(result.current.findable.size).toBe(2);
+      expect(findableBy(result.current, "bilibili-details")).toHaveLength(2);
     });
 
     await act(async () => {
-      await result.current.findDetails(1);
+      await result.current.find("bilibili-details", 1);
     });
 
     expect(calls).toContain("POST /api/enrichers/bilibili-details/tracks/1");
-    expect([...result.current.findable]).toEqual([2]);
+    expect(findableBy(result.current, "bilibili-details")).toEqual([2]);
   });
 
   it("passes on why the server refused, and keeps offering it", async () => {
@@ -424,14 +430,14 @@ describe("finding a song's details online", () => {
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
     await waitFor(() => {
-      expect(result.current.findable.size).toBe(1);
+      expect(findableBy(result.current, "bilibili-details")).toHaveLength(1);
     });
 
-    await expect(result.current.findDetails(1)).rejects.toThrow(
+    await expect(result.current.find("bilibili-details", 1)).rejects.toThrow(
       "This video was looked up in the last 24 hours.",
     );
 
-    expect([...result.current.findable]).toEqual([1]);
+    expect(findableBy(result.current, "bilibili-details")).toEqual([1]);
   });
 
   it("asks for the Tracks and what can be looked up again when a lookup finishes", async () => {
@@ -454,6 +460,47 @@ describe("finding a song's details online", () => {
     expect(calls.filter((call) => call === "GET /api/enrichers/bilibili-details")).toHaveLength(2);
   });
 
+  it("keeps what each enricher may be asked about apart", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "GET /api/enrichers/musicbrainz": {
+        body: { name: "musicbrainz", available: true, stopped: null, eligible: [1, 2] },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1, 2]);
+    });
+    expect(findableBy(result.current, "bilibili-details")).toEqual([1]);
+  });
+
+  it("asks MusicBrainz about the Track, which then no longer offers that and still offers the other", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "GET /api/enrichers/musicbrainz": {
+        body: { name: "musicbrainz", available: true, stopped: null, eligible: [1] },
+      },
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+
+    await act(async () => {
+      await result.current.find("musicbrainz", 1);
+    });
+
+    expect(calls).toContain("POST /api/enrichers/musicbrainz/tracks/1");
+    expect(findableBy(result.current, "musicbrainz")).toEqual([]);
+    expect(findableBy(result.current, "bilibili-details")).toEqual([1]);
+  });
+
   it("signs out when the server says the session is over", async () => {
     const onSignedOut = vi.fn();
     serve({
@@ -466,10 +513,10 @@ describe("finding a song's details online", () => {
     });
     const { result } = renderHook(() => useLibrary(onSignedOut));
     await waitFor(() => {
-      expect(result.current.findable.size).toBe(1);
+      expect(findableBy(result.current, "bilibili-details")).toHaveLength(1);
     });
 
-    await expect(result.current.findDetails(1)).rejects.toThrow("Sign in first.");
+    await expect(result.current.find("bilibili-details", 1)).rejects.toThrow("Sign in first.");
 
     expect(onSignedOut).toHaveBeenCalledOnce();
   });

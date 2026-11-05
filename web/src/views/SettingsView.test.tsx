@@ -38,6 +38,9 @@ function open(
     "GET /api/enrichers/bilibili-details": {
       body: { name: "bilibili-details", available: true, stopped: null, eligible: [1, 2] },
     },
+    "GET /api/enrichers/musicbrainz": {
+      body: { name: "musicbrainz", available: true, stopped: null, eligible: [1, 2, 3] },
+    },
     ...modeSettingsOf(mode, metered),
     ...routes,
   });
@@ -95,6 +98,30 @@ describe("the Bilibili section", () => {
     expect(screen.queryByRole("button", { name: "Go to Bilibili" })).toBeNull();
     expect(calls).not.toContain("GET /api/proxies/bilibili");
     expect(calls).not.toContain("GET /api/enrichers/bilibili-details");
+  });
+});
+
+describe("the MusicBrainz section", () => {
+  it("is the admin's, and an admin queues every Track that can be found there", async () => {
+    open(true);
+
+    const musicbrainz = within(screen.getByRole("region", { name: "MusicBrainz" }));
+
+    expect(
+      await musicbrainz.findByText("3 Tracks can be found on MusicBrainz."),
+    ).toBeInTheDocument();
+    expect(musicbrainz.getByRole("button", { name: "Find on MusicBrainz for all" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Go to MusicBrainz" })).toBeInTheDocument();
+  });
+
+  it("is not shown to a member, who never asks for what it can queue", async () => {
+    const { calls } = open(false);
+
+    await screen.findByText("The storage limit is 20 GB, set by an admin.");
+
+    expect(screen.queryByRole("region", { name: "MusicBrainz" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go to MusicBrainz" })).toBeNull();
+    expect(calls).not.toContain("GET /api/enrichers/musicbrainz");
   });
 });
 
@@ -237,7 +264,14 @@ describe("the Settings sections", () => {
 
     expect(
       screen.getAllByRole("button", { expanded: false }).map((button) => button.textContent),
-    ).toEqual(["Appearance", "Keyboard shortcuts", "Network", "Downloads and storage", "Bilibili"]);
+    ).toEqual([
+      "Appearance",
+      "Keyboard shortcuts",
+      "Network",
+      "Downloads and storage",
+      "Bilibili",
+      "MusicBrainz",
+    ]);
 
     await userEvent.click(screen.getByRole("button", { name: "Open all" }));
 

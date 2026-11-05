@@ -9,6 +9,7 @@ from medleyplay.plugin_api import (
     Enriched,
     EnrichStatus,
     EnrichTrack,
+    ShownDetail,
     VideoText,
 )
 from medleyplay.plugin_api.testing import ContractError, check_track_enricher
@@ -39,6 +40,15 @@ def test_an_answer_holds_values_or_the_videos_text_not_both() -> None:
 def test_a_video_id_that_is_a_path_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValidationError):
         EnrichTrack(video="../etc/passwd", folder=str(tmp_path))
+
+
+def test_an_ask_without_a_video_names_a_track_by_what_it_shows(tmp_path: Path) -> None:
+    ask = EnrichTrack(
+        shown=(ShownDetail(field="title", value="Let Down", origin="files"),),
+        folder=str(tmp_path),
+    )
+
+    assert (ask.video, ask.whole_album) == (None, False)
 
 
 def test_an_answer_with_text_and_a_cover_in_the_folder_keeps_the_contract(tmp_path: Path) -> None:

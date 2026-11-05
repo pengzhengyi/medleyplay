@@ -7,6 +7,9 @@ a folder the core owns:
 ```text
 ask      BV1AC4y1L7Yi, shown: title "BV1AC4y1L7Yi" (file_name)
 answer   video text "【HR 24/48】朴树2003《生如夏花》专辑歌词版", cover.jpg
+
+ask      shown: title "Let Down" (files), artist "Radiohead" (files), 4:59
+answer   title, artist, album "OK Computer", year 1997, track number 5, cover.jpg
 ```
 
 An ordinary *no*, such as a video that was removed or the site refusing the request,
@@ -45,15 +48,20 @@ class ShownDetail(_Model):
 
 
 class EnrichTrack(_Model):
-    """Ask what the site knows about the Track whose video is `video`.
+    """Ask what the site knows about a Track.
 
-    `shown` is what the Track shows now, `duration_ms` its length when known, and
-    `file_name` the name of its file, or empty. A cover goes into `folder`, an empty
-    folder the caller owns. `proxy` is the household's proxy for the site, or `None`.
+    `video` is the Track's video on its site, or `None` for a Track a site that reads
+    no video is asked about. `shown` is what the Track shows now, except the values
+    the enricher itself recorded, `duration_ms` its length when known, and `file_name`
+    the name of its file, or empty. `whole_album` says the Track is a long file split
+    into songs, which is asked about as a release, never as one recording. A cover
+    goes into `folder`, an empty folder the caller owns. `proxy` is the household's
+    proxy for the site, or `None`.
     """
 
-    video: VideoId
+    video: VideoId | None = None
     shown: tuple[ShownDetail, ...] = ()
+    whole_album: bool = False
     duration_ms: Annotated[int, Field(ge=0)] | None = None
     file_name: Annotated[str, StringConstraints(max_length=255)] = ""
     folder: str

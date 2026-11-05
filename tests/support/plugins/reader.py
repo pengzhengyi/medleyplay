@@ -45,7 +45,7 @@ class Reader:
     """Answers each scripted video as the table says."""
 
     def enrich(self, request: EnrichTrack) -> Enriched:
-        video, folder = request.video, Path(request.folder)
+        video, folder = request.video or "", Path(request.folder)
         match video:
             case "BVGone":
                 return Enriched(status=EnrichStatus.GONE, message="The video was removed.")

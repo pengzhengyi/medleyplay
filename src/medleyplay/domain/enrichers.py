@@ -23,6 +23,7 @@ album "生如夏花" (video), album artist "朴树" (video)    searched for as a
 """
 
 import hashlib
+import json
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ from medleyplay.domain.details import Field, Origin, Values, shown
 from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
 from medleyplay.domain.links import BILIBILI_SOURCE, parse_part_locator
+from medleyplay.domain.video_text import VideoText
 
 ASK_AGAIN_AFTER: Final = timedelta(hours=24)
 """How long a video is left alone once an enricher has asked about it."""
@@ -223,13 +225,15 @@ class TrackFacts:
     """When the subject was last asked about, or `None` when it never was."""
 
 
-def text_subject(track_id: TrackId) -> str:
-    """Return the subject that says the AI was asked about the Track, whatever its text says.
+def text_subject(track_id: TrackId, text: VideoText) -> str:
+    """Return the subject that says the AI was asked about the Track with this text.
 
-    A Track is asked of the AI once a day even when its text changes, so the subject is
-    the Track alone.
+    A Track is asked of the AI once a day for one text, so pasting a better
+    description asks again at once.
     """
-    return hashlib.sha256(f"ai-details\x1f{track_id}".encode()).hexdigest()
+    chapters = [[chapter.start_ms, chapter.title] for chapter in text.chapters]
+    said = json.dumps([track_id, text.title, text.description, chapters], ensure_ascii=False)
+    return hashlib.sha256(f"ai-details\x1f{said}".encode()).hexdigest()
 
 
 def why_not(

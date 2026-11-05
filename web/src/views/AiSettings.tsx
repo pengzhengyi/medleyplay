@@ -23,7 +23,7 @@ const WORDS: EnricherWords = {
       Suggest details with AI asks the provider for a song&apos;s title, artist, album, year, and
       song list. What it says is only a suggestion: it shows beside each detail in Edit details and
       changes nothing until someone uses it. It asks only when someone chooses it, one Track at a
-      time, at most once every two seconds, and never the same Track twice in a day.
+      time, at most once every two seconds, and never about the same text twice in a day.
     </>
   ),
   findAll: "Suggest for all",
@@ -140,7 +140,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
                 spellCheck={false}
                 value={model}
                 maxLength={128}
-                placeholder="deepseek-chat"
+                placeholder="deepseek-flash"
                 onChange={(event) => {
                   setModel(event.target.value);
                 }}

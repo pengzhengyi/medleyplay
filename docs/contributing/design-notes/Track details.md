@@ -392,8 +392,8 @@ songs editor.
   4xx is an invalid answer that says to check the base URL and the model.
 - **Which Tracks are asked for.** A Track that has video text, from the site, a
   file beside it, or the household, and is not a segment, once the provider is set
-  up. Asked once a day per Track, whatever its text says: the subject kept is a
-  hash of the Track's id, so pasting better text asks again only the next day.
+  up. Asked once a day per Track and text: the subject kept is a hash of the
+  Track's id and its video text, so pasting better text asks again at once.
 - **Where the suggestions are kept.** The values are the Track's `ai` origin,
   replaced whole by the next suggestion, so an answer that suggests nothing clears
   the last. A suggested song list is kept apart, one per Track, only when it is a

@@ -53,7 +53,7 @@ def enriching(
 ) -> Iterator[Enriching]:
     """The services around a running `reader` plugin, with Alice having set DeepSeek up."""
     with running_enrichment(units, clock, tmp_path / "data") as running:
-        running.ai.save(alice, DEEPSEEK, "deepseek-chat", KEY)
+        running.ai.save(alice, DEEPSEEK, "deepseek-flash", KEY)
         yield running
 
 
@@ -195,7 +195,7 @@ def test_the_job_is_lent_the_provider_with_its_key_the_text_and_the_file_name(
     _suggested(enriching, alice, track_id)
 
     assert _suggestion(enriching, track_id) == {
-        Field.ALBUM: f"provider={DEEPSEEK} deepseek-chat key=True text=40 0 file=BV1dm4y1s7ak.m4a"
+        Field.ALBUM: f"provider={DEEPSEEK} deepseek-flash key=True text=40 0 file=BV1dm4y1s7ak.m4a"
     }
 
 
@@ -322,7 +322,7 @@ def test_a_track_is_asked_of_the_ai_once_a_day(
     assert enriching.enrichment.eligible(NAME) == [track_id, other]
 
 
-def test_pasting_other_text_does_not_make_a_track_eligible_before_the_day_is_over(
+def test_pasting_other_text_makes_a_track_eligible_again_at_once(
     enriching: Enriching, alice: Account
 ) -> None:
     track_id = enriching.add_track_with_text("Night Drive")
@@ -330,10 +330,21 @@ def test_pasting_other_text_does_not_make_a_track_eligible_before_the_day_is_ove
 
     enriching.details.read_video_text(track_id, _text("Album"))
 
+    assert enriching.enrichment.eligible(NAME) == [track_id]
+
+
+def test_the_same_text_is_asked_about_once_a_day(enriching: Enriching, alice: Account) -> None:
+    track_id = enriching.add_track_with_text("Night Drive")
+    _suggested(enriching, alice, track_id)
+
+    enriching.details.read_video_text(track_id, _text("Night Drive"))
+
     assert enriching.enrichment.eligible(NAME) == []
 
 
-def test_an_ask_notes_the_track_alone_as_the_subject(enriching: Enriching, alice: Account) -> None:
+def test_an_ask_notes_the_track_and_its_text_as_one_subject(
+    enriching: Enriching, alice: Account
+) -> None:
     track_id = enriching.add_track_with_text("Night Drive")
     _suggested(enriching, alice, track_id)
 
@@ -387,7 +398,7 @@ def test_the_enricher_is_off_when_its_plugin_is_off(
         started_plugins(units, clock, "tinytag-tags") as plugins,
         running_enrichment(units, clock, tmp_path / "data") as running,
     ):
-        running.ai.save(alice, DEEPSEEK, "deepseek-chat", KEY)
+        running.ai.save(alice, DEEPSEEK, "deepseek-flash", KEY)
         track_id = running.add_track_with_text("Night Drive")
         off = EnrichmentService(units, clock, plugins, running.jobs, running.kind)
 

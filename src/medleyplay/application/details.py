@@ -175,8 +175,11 @@ def forget_video_text_read_from_a_file(db: Session, track_id: TrackId, now: date
 def video_text_of(db: Session, track_id: TrackId) -> VideoText | None:
     """Return the Track's video's text, or `None` when none was read."""
     row = db.get(VideoTextRow, track_id)
-    if row is None:
-        return None
+    return None if row is None else text_of_row(row)
+
+
+def text_of_row(row: VideoTextRow) -> VideoText:
+    """Return the video text a `video_text` row holds."""
     chapters = tuple(
         Chapter(int(chapter["start_ms"]), str(chapter["title"])) for chapter in row.chapters
     )

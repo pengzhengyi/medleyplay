@@ -1,5 +1,6 @@
 """Which Tracks an enricher is asked for, and how a Track's video is found."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -24,6 +25,7 @@ from medleyplay.domain.enrichers import (
     why_not,
 )
 from medleyplay.domain.errors import NotFoundError
+from medleyplay.domain.video_text import Chapter, VideoText
 
 NOW = datetime(2026, 11, 5, 12, tzinfo=UTC)
 
@@ -406,7 +408,13 @@ def test_an_enricher_that_needs_no_provider_asks_for_a_track_whether_or_not_one_
     assert why_not(facts, NOW, stopped=False, enricher=enricher, set_up=False) is None
 
 
-def test_one_track_is_one_subject_of_the_ai_whatever_its_text_says() -> None:
-    assert text_subject(TrackId(7)) == text_subject(TrackId(7))
-    assert text_subject(TrackId(7)) != text_subject(TrackId(8))
-    assert len(text_subject(TrackId(7))) <= 64
+def test_the_ai_is_asked_about_a_track_again_once_its_text_changes() -> None:
+    text = VideoText("朴树《生如夏花》", "00:00 生如夏花", (Chapter(0, "生如夏花"),))
+
+    subject = text_subject(TrackId(7), text)
+
+    assert subject == text_subject(TrackId(7), text)
+    assert subject != text_subject(TrackId(8), text)
+    assert subject != text_subject(TrackId(7), replace(text, description="00:00 生如夏花\n"))
+    assert subject != text_subject(TrackId(7), replace(text, chapters=(Chapter(1, "生如夏花"),)))
+    assert len(subject) <= 64

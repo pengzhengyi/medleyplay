@@ -9,16 +9,16 @@ import { AiSettings } from "./AiSettings";
 const KEY = "sk-4f9a1c7e5b2d";
 
 const PRESETS: AiSetting["presets"] = [
-  { name: "DeepSeek", base_url: "https://api.deepseek.com", model: "deepseek-chat" },
+  { name: "DeepSeek", base_url: "https://api.deepseek.com", model: "deepseek-flash" },
   { name: "OpenAI", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-  { name: "Anthropic", base_url: "https://api.anthropic.com/v1", model: "claude-haiku-4-5" },
+  { name: "Anthropic", base_url: "https://api.anthropic.com/v1", model: "claude-haiku-5-5" },
   { name: "Ollama", base_url: "http://127.0.0.1:11434/v1", model: "llama3.2" },
 ];
 
 /** DeepSeek with a key, saved at noon. */
 const DEEPSEEK: AiProvider = {
   base_url: "https://api.deepseek.com",
-  model: "deepseek-chat",
+  model: "deepseek-flash",
   has_key: true,
   saved_at: "2026-11-06T12:00:00Z",
 };
@@ -124,7 +124,7 @@ describe("the AI provider", () => {
     expect(await screen.findByText("Saved.")).toBeInTheDocument();
     expect(sent).toEqual({
       base_url: "https://api.deepseek.com",
-      model: "deepseek-chat",
+      model: "deepseek-flash",
       key: KEY,
     });
     expect(screen.getByLabelText("New key")).toHaveValue("");
@@ -147,7 +147,7 @@ describe("the AI provider", () => {
 
     expect(await screen.findByText("A key is set.")).toBeInTheDocument();
     expect(screen.getByLabelText("Base URL")).toHaveValue("https://api.deepseek.com");
-    expect(screen.getByLabelText("Model")).toHaveValue("deepseek-chat");
+    expect(screen.getByLabelText("Model")).toHaveValue("deepseek-flash");
     expect(screen.getByLabelText("New key")).toHaveValue("");
     expect(document.body).not.toHaveTextContent(KEY);
   });
@@ -209,7 +209,7 @@ describe("the AI provider", () => {
     });
 
     await user.type(await screen.findByLabelText("Base URL"), "http://api.deepseek.com");
-    await user.type(screen.getByLabelText("Model"), "deepseek-chat");
+    await user.type(screen.getByLabelText("Model"), "deepseek-flash");
     await user.type(screen.getByLabelText("Key"), KEY);
     await user.click(screen.getByRole("button", { name: "Save provider" }));
 
@@ -249,11 +249,11 @@ describe("the AI suggestions", () => {
     expect(calls).toContain("POST /api/enrichers/ai-details/find-all");
   });
 
-  it("says suggestions only suggest, and are asked for once a day per Track", async () => {
+  it("says suggestions only suggest, and are asked for once a day per text", async () => {
     open(DEEPSEEK);
 
     expect(await screen.findByText(/only a suggestion/u)).toBeInTheDocument();
-    expect(screen.getByText(/never the same Track twice in a day/u)).toBeInTheDocument();
+    expect(screen.getByText(/never about the same text twice in a day/u)).toBeInTheDocument();
   });
 
   it("shows it stopped after the provider refused the key, with a reset", async () => {

@@ -249,3 +249,198 @@ describe("a Track whose download failed", () => {
     expect(screen.queryByText(/Download failed/)).toBeNull();
   });
 });
+
+/**
+ * Five songs for filtering and grouping:
+ *
+ * ```text
+ * 1 Colorful Days  朴树         生如夏花   2003  pop; rock   4 stars
+ * 2 生如夏花        朴树         生如夏花   2003  pop         favorite
+ * 3 Let Down       Radiohead    OK Computer 1997 alternative rock; britpop  5 stars
+ * 4 Airbag         Radiohead    OK Computer 1997 alternative rock  can't play
+ * 5 New Song       周杰伦        (none)      —    —
+ * ```
+ */
+const LIBRARY = [
+  trackOf(1, "Colorful Days", {
+    artist: "朴树",
+    album: "生如夏花",
+    year: 2003,
+    genre: "pop; rock",
+    rating: 4,
+  }),
+  trackOf(2, "生如夏花", {
+    artist: "朴树",
+    album: "生如夏花",
+    year: 2003,
+    genre: "pop",
+    favorite: true,
+  }),
+  trackOf(3, "Let Down", {
+    artist: "Radiohead",
+    album: "OK Computer",
+    year: 1997,
+    genre: "alternative rock; britpop",
+    rating: 5,
+  }),
+  trackOf(4, "Airbag", {
+    artist: "Radiohead",
+    album: "OK Computer",
+    year: 1997,
+    genre: "alternative rock",
+    availability: "missing",
+  }),
+  trackOf(5, "New Song", { artist: "周杰伦", album: "" }),
+];
+
+const shownTitles = () =>
+  screen
+    .getAllByRole("button")
+    .filter((button) => button.classList.contains("title"))
+    .map((button) => button.textContent);
+
+async function openFilters() {
+  await userEvent.click(screen.getByText("Filter"));
+  return screen.getByRole("group", { name: "Filters" });
+}
+
+describe("filtering", () => {
+  it("keeps one artist's songs, and says how many of all are shown", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+
+    await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "Radiohead");
+
+    expect(shownTitles()).toEqual(["Let Down", "Airbag"]);
+    expect(screen.getByText("2 of 5 songs")).toBeInTheDocument();
+  });
+
+  it("offers only the albums the other filters leave, each with how many songs it has", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+
+    await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "朴树");
+
+    const albums = within(within(filters).getByLabelText("Album")).getAllByRole("option");
+    expect(albums.map((option) => option.textContent)).toEqual(["Any album", "生如夏花 (2)"]);
+  });
+
+  it("keeps the songs with a genre among any of their genres", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+
+    await userEvent.selectOptions(within(filters).getByLabelText("Genre"), "rock");
+
+    expect(shownTitles()).toEqual(["Colorful Days"]);
+  });
+
+  it("keeps the songs of one year", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+
+    await userEvent.selectOptions(within(filters).getByLabelText("Year"), "1997");
+
+    expect(shownTitles()).toEqual(["Let Down", "Airbag"]);
+  });
+
+  it("keeps the songs rated at least the stars chosen, or the unrated ones", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+    const rating = within(filters).getByLabelText("Rating");
+
+    await userEvent.selectOptions(rating, "At least 4 stars");
+    const rated = shownTitles();
+    await userEvent.selectOptions(rating, "Unrated");
+
+    expect(rated).toEqual(["Colorful Days", "Let Down"]);
+    expect(shownTitles()).toEqual(["生如夏花", "Airbag", "New Song"]);
+  });
+
+  it("keeps only favorites, or only the songs that play now", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+
+    await userEvent.click(within(filters).getByLabelText("Favorites only"));
+    const favorites = shownTitles();
+    await userEvent.click(within(filters).getByLabelText("Favorites only"));
+    await userEvent.click(within(filters).getByLabelText("Only songs that play now"));
+
+    expect(favorites).toEqual(["生如夏花"]);
+    expect(shownTitles()).toEqual(["Colorful Days", "生如夏花", "Let Down", "New Song"]);
+  });
+
+  it("shows each filter on as one to remove, and clears them all", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+    await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "Radiohead");
+    await userEvent.click(within(filters).getByLabelText("Favorites only"));
+    expect(screen.getByText("0 of 5 songs")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove the filter Favorites only" }));
+    const afterOne = shownTitles();
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(afterOne).toEqual(["Let Down", "Airbag"]);
+    expect(shownTitles()).toHaveLength(5);
+    expect(screen.queryByText(/of 5 songs/u)).not.toBeInTheDocument();
+  });
+
+  it("plays from the songs the filters leave", async () => {
+    const { actions } = renderTable(LIBRARY);
+    const filters = await openFilters();
+    await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "Radiohead");
+
+    await userEvent.click(screen.getByRole("button", { name: "Play all" }));
+
+    expect(actions.onPlayAll).toHaveBeenCalledWith([LIBRARY[2]], false);
+  });
+});
+
+describe("grouping", () => {
+  it("puts each album's songs under a row naming the album, its artist, and its count", async () => {
+    renderTable(LIBRARY);
+
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Album");
+
+    const groups = screen.getAllByRole("button", { expanded: true });
+    expect(groups.map((group) => group.textContent)).toEqual([
+      "生如夏花 · 朴树 · 2 songs",
+      "OK Computer · Radiohead · 2 songs",
+      "No album · 周杰伦 · 1 song",
+    ]);
+    expect(shownTitles()).toEqual(["Colorful Days", "生如夏花", "Let Down", "Airbag", "New Song"]);
+  });
+
+  it("folds a group away, and opens it again", async () => {
+    renderTable(LIBRARY);
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Artist");
+
+    await userEvent.click(screen.getByRole("button", { name: /^Radiohead · 2 songs/u }));
+    const folded = shownTitles();
+    await userEvent.click(screen.getByRole("button", { name: /^Radiohead · 2 songs/u }));
+
+    expect(folded).toEqual(["Colorful Days", "生如夏花", "New Song"]);
+    expect(shownTitles()).toHaveLength(5);
+  });
+
+  it("plays a song of a group with the songs shown, in their order", async () => {
+    const { actions } = renderTable(LIBRARY);
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Year");
+
+    await userEvent.click(screen.getByRole("button", { name: "Let Down" }));
+
+    const [shown, index] = vi.mocked(actions.onPlay).mock.calls[0] ?? [];
+    expect(shown?.map((track) => track.id)).toEqual([1, 2, 3, 4, 5]);
+    expect(index).toBe(2);
+  });
+
+  it("groups the songs a filter leaves", async () => {
+    renderTable(LIBRARY);
+    const filters = await openFilters();
+    await userEvent.click(within(filters).getByLabelText("Only songs that play now"));
+
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Album");
+
+    expect(screen.getByRole("button", { name: "OK Computer · Radiohead · 1 song" })).toBeVisible();
+  });
+});

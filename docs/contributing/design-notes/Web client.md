@@ -94,7 +94,8 @@ no router package.
   page; the rows above and below are spacer rows hidden from screen readers,
   and the table states `aria-rowcount`, the Tracks and the header row, with
   `aria-rowindex` on each row, so a screen reader counts every Track.
-- **Columns:** favorite, title, artist, album, time, rating, plays, and added.
+- **Columns:** favorite, title, artist, album, time, rating, plays, and added,
+  and album artist, year, and genre, hidden at first.
   Each sorts by a button in its header, which states `aria-sort`: a click sorts
   it, again the other way, and a third time returns to the server's order, the
   oldest added first. One column sorts at a time, since a second sort key would
@@ -103,8 +104,26 @@ no router package.
   sort as numbers and dates, smallest first.
 - **Columns can be hidden and resized,** from a menu in the header row; the
   choice is kept per browser, versioned, and ignored when it can't be read.
+- **The header stays in view:** it sticks under the top bar while the songs
+  scroll, on a solid band with a rule below it, its names in the ink color.
+- **Filters** are TanStack's own column filters, in a *Filter* panel of native
+  controls, so a phone shows its own pickers: artist, album, genre, and year,
+  each offering only the values the other filters leave, with how many songs
+  each keeps; a rating of at least so many stars, or none; favorites only; and
+  only the songs that play now. A genre such as `alternative rock; britpop`
+  matches each of its parts. Each filter on shows as a chip that removes it,
+  beside how many of the songs are shown and *Clear filters*. Play, Shuffle, and
+  choosing a song play the songs the filters leave. Filters last while the view
+  is open.
+- **Group by** album, artist, album artist, year, or genre puts each group's
+  songs under a row naming it, as *生如夏花 · 朴树 · 2 songs*, which folds and
+  opens them; an album is its name and its album artist, so two albums of one
+  name are two groups. Groups open whenever the grouping changes, and keep the
+  order their first song has. A group's row has a cell per column, as a spacer
+  row has, so a column hidden for width goes from it too.
 - **One table module owns TanStack's types,** so the rest of the client sees
-  Tracks and callbacks only.
+  Tracks and callbacks only; the Filter panel is given plain choices and
+  values.
 
 ## A song's menu
 

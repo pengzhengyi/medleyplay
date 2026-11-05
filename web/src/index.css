@@ -937,11 +937,16 @@ button.text:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.tracks th {
-  position: relative;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 500;
+/* The header stays under the top bar while the songs scroll, a solid band with a rule. */
+.tracks thead th {
+  position: sticky;
+  top: var(--top-height, 0);
+  z-index: 1;
+  background: var(--page);
+  box-shadow: inset 0 -1px 0 var(--line);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 650;
   text-align: left;
 }
 
@@ -964,7 +969,7 @@ button.text:hover:not(:disabled) {
 }
 
 .tracks button.sort:hover {
-  color: var(--ink);
+  color: var(--accent);
 }
 
 .tracks .resizer {
@@ -985,8 +990,9 @@ button.text:hover:not(:disabled) {
 
 .table-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.75rem;
   margin: 0 0 0.25rem 0.75rem;
 }
@@ -996,6 +1002,7 @@ button.text:hover:not(:disabled) {
 .play-all {
   display: flex;
   gap: 0.5rem;
+  margin-right: auto;
 }
 
 .play-all > button {
@@ -1051,6 +1058,173 @@ details.dropdown.columns-menu > summary + ul {
   right: 0;
   left: auto;
   min-width: 11rem;
+}
+
+/* Filter: a panel of native controls, so a phone shows its own pickers. */
+.filter-menu {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+details.dropdown > summary.filter-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: auto;
+  padding: 0.3rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+details.dropdown > summary.filter-summary::after {
+  display: none;
+}
+
+details.dropdown > summary.filter-summary:hover,
+details.dropdown[open] > summary.filter-summary {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.filter-count {
+  min-width: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.filter-panel {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(10rem, 1fr));
+  gap: 0.5rem 0.75rem;
+  width: min(30rem, 90vw);
+  margin-top: 0.35rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+.filter-field {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.filter-select {
+  margin: 0;
+  padding-block: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
+.filter-check-input {
+  margin: 0;
+}
+
+.group-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.group-by-select {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 2rem 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* The filters on: how many songs they keep, each as a chip that removes it. */
+.filters-on {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.5rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.filtered-count {
+  margin-right: 0.25rem;
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: auto;
+  margin: 0;
+  padding: 0.2rem 0.6rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  box-shadow: none;
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.clear-filters {
+  width: auto;
+  margin: 0;
+  padding: 0.2rem 0.6rem;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--accent);
+  font-size: 0.82rem;
+}
+
+/* A group's row: its name and count, opening and folding its songs. */
+
+/* The name runs on over the row's empty cells. */
+.tracks .group-cell {
+  overflow: visible;
+  padding: 1rem 0.75rem 0.35rem;
+  text-align: left;
+}
+
+.group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.group-toggle:hover {
+  color: var(--accent);
 }
 
 .tracks tbody td {
@@ -3245,5 +3419,23 @@ kbd {
     --np-width: min(24rem, 100%, 42dvh);
 
     gap: 0.75rem;
+  }
+}
+
+/* A phone: the filters stack in one column, the width of the screen. */
+@media (width <= 36rem) {
+  details.dropdown.filter-menu {
+    position: static;
+  }
+
+  .filter-panel {
+    left: 1rem;
+    right: 1rem;
+    grid-template-columns: 1fr;
+    width: auto;
+  }
+
+  .table-tools {
+    position: relative;
   }
 }

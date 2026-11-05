@@ -9,6 +9,7 @@
 
 import {
   CaretDownIcon,
+  CaretRightIcon,
   CaretUpIcon,
   HeartIcon,
   ListPlusIcon,
@@ -20,13 +21,25 @@ import {
 } from "@phosphor-icons/react";
 import {
   type ColumnDef,
+  type ColumnFiltersState,
   type ColumnSizingState,
-  type Row,
   type ColumnVisibilityState,
+  type ExpandedState,
+  type FilterFn,
+  type GroupingState,
+  type Row,
+  columnFacetingFeature,
+  columnFilteringFeature,
+  columnGroupingFeature,
   columnResizingFeature,
   columnSizingFeature,
   columnVisibilityFeature,
+  createExpandedRowModel,
+  createFacetedRowModel,
+  createFilteredRowModel,
+  createGroupedRowModel,
   createSortedRowModel,
+  rowExpandingFeature,
   rowSortingFeature,
   tableFeatures,
   useTable,
@@ -37,6 +50,14 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { Track } from "../api";
 import { formatTime } from "../format";
 import { Cover } from "./Cover";
+import {
+  type Choice,
+  type ChoiceField,
+  type FilterField,
+  type Filters,
+  FiltersOn,
+  SongFilters,
+} from "./SongFilters";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 
 /** What every cell may need: the page's callbacks, and which Track is playing. */
@@ -50,7 +71,15 @@ const features = tableFeatures({
   columnVisibilityFeature,
   columnSizingFeature,
   columnResizingFeature,
+  columnFilteringFeature,
+  columnFacetingFeature,
+  columnGroupingFeature,
+  rowExpandingFeature,
   sortedRowModel: createSortedRowModel(),
+  filteredRowModel: createFilteredRowModel(),
+  facetedRowModel: createFacetedRowModel(),
+  groupedRowModel: createGroupedRowModel(),
+  expandedRowModel: createExpandedRowModel(),
   tableMeta: {} as Meta,
 });
 
@@ -76,6 +105,75 @@ const byText = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, 
 const byNumber = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, id: string) =>
   (a.getValue<number | null>(id) ?? -1) - (b.getValue<number | null>(id) ?? -1);
 
+type TrackFilter = FilterFn<typeof features, Track>;
+
+/** A genre such as `alternative rock; britpop` is each of its parts. */
+const genresOf = (genre: string): string[] =>
+  genre
+    .split(/[;,/]/u)
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+
+const isText: TrackFilter = (row, id, value) => row.getValue<string>(id) === value;
+const hasGenre: TrackFilter = (row, id, value) =>
+  genresOf(row.getValue<string>(id)).includes(String(value));
+const isYear: TrackFilter = (row, id, value) =>
+  String(row.getValue<number | null>(id) ?? "") === value;
+const isRated: TrackFilter = (row, id, value) => {
+  const rating = row.getValue<number | null>(id);
+  return value === "unrated" ? rating === null : rating !== null && rating >= Number(value);
+};
+const isOn: TrackFilter = (row, id) =>
+  row.getValue<number | boolean>(id) === 1 || row.getValue(id) === true;
+
+/** The columns a filter of the panel works on. */
+const FILTER_COLUMNS: Record<FilterField, string> = {
+  artist: "artist",
+  album: "album",
+  genre: "genre",
+  year: "year",
+  rating: "rating",
+  favorite: "favorite",
+  playable: "playable",
+};
+
+/** What the table can be grouped by, as the Group by control names it. */
+const GROUP_BY: readonly { id: string; label: string }[] = [
+  { id: "album", label: "Album" },
+  { id: "artist", label: "Artist" },
+  { id: "album_artist", label: "Album artist" },
+  { id: "year", label: "Year" },
+  { id: "genre", label: "Genre" },
+];
+
+const albumArtistOf = (track: Track): string => track.album_artist || track.artist;
+
+/** How a group's row names it, from its first song: `生如夏花 · 朴树`. */
+function groupName(by: string, track: Track): string {
+  switch (by) {
+    case "album":
+      return `${track.album || "No album"} · ${albumArtistOf(track) || "No artist"}`;
+    case "artist":
+      return track.artist || "No artist";
+    case "album_artist":
+      return albumArtistOf(track) || "No artist";
+    case "year":
+      return track.year === null ? "No year" : String(track.year);
+    default:
+      return track.genre || "No genre";
+  }
+}
+
+const songs = (count: number) => (count === 1 ? "1 song" : `${String(count)} songs`);
+
+const filtersOf = (state: ColumnFiltersState): Filters =>
+  Object.fromEntries(
+    (Object.entries(FILTER_COLUMNS) as [FilterField, string][]).flatMap(([field, column]) => {
+      const found = state.find((each) => each.id === column);
+      return found === undefined ? [] : [[field, found.value]];
+    }),
+  );
+
 /** What the table does when a Track is chosen, queued, rated, or added to a Playlist. */
 export interface TrackActions extends TrackMenuActions {
   /** Play `shown`, the Tracks in the order the table shows them, from its entry `index`. */
@@ -92,7 +190,12 @@ interface Layout {
   readonly sizing: ColumnSizingState;
 }
 
-const DEFAULT_LAYOUT: Layout = { visibility: { plays: false, added: false }, sizing: {} };
+const DEFAULT_LAYOUT: Layout = {
+  visibility: { plays: false, added: false, album_artist: false, year: false, genre: false },
+  sizing: {},
+};
+// A column only filters and groups read; it is never shown.
+const NEVER_SHOWN: ColumnVisibilityState = { playable: false };
 
 function savedLayout(): Layout {
   try {
@@ -130,6 +233,9 @@ export function TrackTable({
   useEffect(() => {
     saveLayout(layout);
   }, [layout]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [grouping, setGrouping] = useState<GroupingState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>(true);
 
   const table = useTable({
     features,
@@ -141,7 +247,20 @@ export function TrackTable({
     getRowId: (track, index) => `${String(track.id)}:${String(index)}`,
     enableMultiSort: false,
     columnResizeMode: "onChange",
-    state: { columnVisibility: layout.visibility, columnSizing: layout.sizing },
+    // A grouped column stays where it is, rather than moving first.
+    groupedColumnMode: false,
+    // Groups open when made; choosing another grouping opens them all again.
+    autoResetExpanded: false,
+    state: {
+      columnVisibility: { ...DEFAULT_LAYOUT.visibility, ...layout.visibility, ...NEVER_SHOWN },
+      columnSizing: layout.sizing,
+      columnFilters,
+      grouping,
+      expanded,
+    },
+    onColumnFiltersChange: setColumnFilters,
+    onGroupingChange: setGrouping,
+    onExpandedChange: setExpanded,
     onColumnVisibilityChange: (change) => {
       setLayout((now) => ({
         ...now,
@@ -184,7 +303,16 @@ export function TrackTable({
   const after = virtual.getTotalSize() - ((items.at(-1)?.end ?? top) - top);
   // A spacer row has a cell per column, so a column the layout hides goes from it too.
   const columns = table.getVisibleLeafColumns().map((column) => column.id);
-  const playable = rows.map((row) => row.original).filter((track) => track.availability === "ok");
+  const songRows = rows.filter((row) => !row.getIsGrouped());
+  const playable = songRows
+    .map((row) => row.original)
+    .filter((track) => track.availability === "ok");
+  const filters = filtersOf(columnFilters);
+  const choices = choicesOf(table);
+  const setFilter = (field: FilterField, value: Filters[FilterField]) => {
+    table.getColumn(FILTER_COLUMNS[field])?.setFilterValue(value);
+  };
+  const by = grouping[0] ?? "";
 
   if (tracks.length === 0) {
     return <>{empty}</>;
@@ -240,7 +368,37 @@ export function TrackTable({
               ))}
           </ul>
         </details>
+        <SongFilters filters={filters} choices={choices} onChange={setFilter} />
+        <label className="group-by">
+          Group by
+          <select
+            className="group-by-select"
+            value={by}
+            onChange={(event) => {
+              setExpanded(true);
+              setGrouping(event.target.value === "" ? [] : [event.target.value]);
+            }}
+          >
+            <option value="">None</option>
+            {GROUP_BY.map((each) => (
+              <option key={each.id} value={each.id}>
+                {each.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
+      <FiltersOn
+        filters={filters}
+        shown={table.getFilteredRowModel().rows.length}
+        total={tracks.length}
+        onRemove={(field) => {
+          setFilter(field, undefined);
+        }}
+        onClear={() => {
+          setColumnFilters([]);
+        }}
+      />
       <table className="tracks" aria-rowcount={rows.length + 1}>
         <thead>
           {table.getHeaderGroups().map((group) => (
@@ -308,6 +466,40 @@ export function TrackTable({
               return null;
             }
             const track = row.original;
+            if (row.getIsGrouped()) {
+              return (
+                <tr
+                  key={row.id}
+                  ref={virtual.measureElement}
+                  data-index={item.index}
+                  aria-rowindex={item.index + 2}
+                  className="group"
+                >
+                  {columns.map((id) =>
+                    id === "title" ? (
+                      <th key={id} scope="rowgroup" className={`${id} group-cell`}>
+                        <button
+                          type="button"
+                          className="group-toggle"
+                          aria-expanded={row.getIsExpanded()}
+                          onClick={row.getToggleExpandedHandler()}
+                        >
+                          {row.getIsExpanded() ? (
+                            <CaretDownIcon weight="bold" aria-hidden />
+                          ) : (
+                            <CaretRightIcon weight="bold" aria-hidden />
+                          )}
+                          {`${groupName(by, track)} · ${songs(row.getLeafRows().length)}`}
+                        </button>
+                      </th>
+                    ) : (
+                      // A cell per column, as a spacer row has, so a column hidden by width goes too.
+                      <td key={id} className={`${id} group-cell`} />
+                    ),
+                  )}
+                </tr>
+              );
+            }
             return (
               <tr
                 key={row.id}
@@ -343,6 +535,9 @@ const LABELS: Record<string, string> = {
   title: "Title",
   artist: "Artist",
   album: "Album",
+  album_artist: "Album artist",
+  year: "Year",
+  genre: "Genre",
   time: "Time",
   rating: "Rating",
   plays: "Plays",
@@ -368,6 +563,7 @@ const COLUMNS: Column[] = [
     id: "favorite",
     accessorFn: (track) => (track.favorite ? 1 : 0),
     sortFn: byNumber,
+    filterFn: isOn,
     sortDescFirst: true,
     enableResizing: false,
     cell: ({ row: { original: track }, table }) => (
@@ -403,7 +599,8 @@ const COLUMNS: Column[] = [
             type="button"
             className="title"
             onClick={() => {
-              const shown = table.getRowModel().rows;
+              // A group's row is no song; the songs are the rows shown under the groups.
+              const shown = table.getRowModel().rows.filter((each) => !each.getIsGrouped());
               actions.onPlay(
                 shown.map((each) => each.original),
                 shown.indexOf(row),
@@ -435,8 +632,33 @@ const COLUMNS: Column[] = [
       );
     },
   },
-  { id: "artist", accessorKey: "artist", sortFn: byText, size: 200, minSize: 80 },
-  { id: "album", accessorKey: "album", sortFn: byText, size: 200, minSize: 80 },
+  { id: "artist", accessorKey: "artist", sortFn: byText, filterFn: isText, size: 200, minSize: 80 },
+  {
+    id: "album",
+    accessorKey: "album",
+    sortFn: byText,
+    filterFn: isText,
+    // Two albums of one name by two artists are two groups.
+    getGroupingValue: (track) => `${track.album}\u001f${albumArtistOf(track)}`,
+    size: 200,
+    minSize: 80,
+  },
+  {
+    id: "album_artist",
+    accessorFn: albumArtistOf,
+    sortFn: byText,
+    size: 200,
+    minSize: 80,
+  },
+  {
+    id: "year",
+    accessorKey: "year",
+    sortFn: byNumber,
+    sortDescFirst: false,
+    filterFn: isYear,
+    enableResizing: false,
+  },
+  { id: "genre", accessorKey: "genre", sortFn: byText, filterFn: hasGenre, size: 160, minSize: 80 },
   {
     id: "time",
     accessorKey: "duration_ms",
@@ -449,6 +671,7 @@ const COLUMNS: Column[] = [
     id: "rating",
     accessorKey: "rating",
     sortFn: byNumber,
+    filterFn: isRated,
     sortDescFirst: false,
     enableResizing: false,
     cell: ({ row: { original: track }, table }) => (
@@ -490,6 +713,13 @@ const COLUMNS: Column[] = [
     cell: (info) => added.format(info.getValue<number>()),
   },
   {
+    id: "playable",
+    accessorFn: (track) => track.availability === "ok",
+    filterFn: isOn,
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
     id: "actions",
     enableSorting: false,
     enableHiding: false,
@@ -529,3 +759,27 @@ const COLUMNS: Column[] = [
     },
   },
 ];
+
+type Table = ReturnType<typeof useTable<typeof features, Track>>;
+
+/** Each filter's choices, from the songs the other filters keep, each with its count. */
+function choicesOf(table: Table): Record<ChoiceField, Choice[]> {
+  const count = (column: string, valuesOf: (track: Track) => readonly string[]) => {
+    const counts = new Map<string, number>();
+    for (const row of table.getColumn(column)?.getFacetedRowModel().rows ?? []) {
+      for (const value of valuesOf(row.original)) {
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+    }
+    return [...counts].map(([value, n]) => ({ value, label: value, count: n }));
+  };
+  const byLabel = (a: Choice, b: Choice) => collator.compare(a.label, b.label);
+  return {
+    artist: count("artist", (track) => (track.artist ? [track.artist] : [])).sort(byLabel),
+    album: count("album", (track) => (track.album ? [track.album] : [])).sort(byLabel),
+    genre: count("genre", (track) => genresOf(track.genre)).sort(byLabel),
+    year: count("year", (track) => (track.year === null ? [] : [String(track.year)])).sort(
+      (a, b) => Number(b.value) - Number(a.value),
+    ),
+  };
+}

@@ -66,6 +66,8 @@ function manySongs(count: number) {
     artist: `Artist ${String(i % 40)}`,
     album: `Album ${String(i % 90)}`,
     album_artist: "",
+    year: null,
+    genre: "",
     duration_ms: 180_000,
     added_at: "2026-10-01T12:00:00Z",
     favorite: false,

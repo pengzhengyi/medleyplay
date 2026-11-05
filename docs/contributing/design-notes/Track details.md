@@ -1,9 +1,10 @@
 # Track details
 
 > [!NOTE]
-> **Status: proposed.** This note describes a Track's details (its title,
+> **Status: in progress.** This note describes a Track's details (its title,
 > artist, album, cover, and the rest), where each value comes from, how the
 > household's own values win, and how medleyplay finds what a file doesn't say.
+> The site enricher for Bilibili is built; MusicBrainz and AI are not.
 > Splitting a long file into songs is in [Segments](Segments.md).
 
 ## Contents
@@ -60,7 +61,7 @@ values.
 | `household` | A value someone in the household entered |
 | `files` | The file's tags, and an image beside it with its name |
 | `musicbrainz` | A release matched in MusicBrainz (later) |
-| `video` | The video's own text: its title, uploader, description, and chapters, read from a file beside the audio, pasted by the household, or read from the site |
+| `video` | The video's own text: its title, uploader, description, and chapters, read from a file beside the audio, pasted by the household, or read from the site, and the video's cover |
 | `album_file` | For a song inside a long file, its album file's album fields; see [Segments](Segments.md) |
 | `file_name` | The file's name, the title of last resort |
 
@@ -107,10 +108,10 @@ values.
   still follows the file.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
-  file beside the audio had held them. This works today, for any video, and
-  asks the site nothing. What it reads replaces what the video said before,
-  including what adding a site link recorded, since both are the video's own
-  text; the latest text read wins. The text is kept with the Track, so the
+  file beside the audio had held them. This works for any video, and asks the
+  site nothing. What it reads replaces what the video said before, including
+  what adding a site link recorded and what the site enricher read, since all are
+  the video's own text; the latest text read wins. The text is kept with the Track, so the
   dialog opens with it to correct and read again, and the songs it lists stay
   for [Segments](Segments.md). A paste with no words is refused.
 - **Many Tracks at once:** the same values, such as an album and its artist, can
@@ -157,9 +158,9 @@ values.
 - **Accepted:** JPEG, PNG, or WebP, known by their first bytes, not their names,
   at most 10 MiB.
 - **Where covers come from:** the file's tags; an image beside the file with its
-  name; the video's cover, through the file beside it; and the household's
-  upload. The upload, in *Edit details*, and the two a Library scan reads are
-  built; the video's cover is next.
+  name; the video's cover, which the site enricher reads with the video's text;
+  and the household's upload. The video's cover is the `video` origin's `cover`,
+  kept through the same store as every other cover.
 - **A scan finds two covers.** The tag reader returns the file's embedded front
   cover when it is a JPEG, PNG, or WebP of at most 10 MiB; any other image is no
   cover. An image beside the file is `<name>.jpg`, `.jpeg`, `.png`, or `.webp`,
@@ -203,30 +204,63 @@ values.
 ## Enrichers
 
 An *enricher* proposes values from somewhere the scan doesn't look. It is a
-plugin at a new extension point, `TRACK_ENRICHER`, so a buggy or slow one can't
-harm the core, and each is turned on or off like any plugin.
+plugin at its own extension point, `TRACK_ENRICHER`, so a buggy or slow one can't
+harm the core, and each is turned on or off like any plugin. `bilibili-details`
+is built and, like `bilibili`, is off until the config file turns it on.
 
+- **Nothing runs by itself.** An enricher contacts its site only when someone
+  asks: *Find details online* in a Track's menu, for any signed-in Account, or
+  *Find details for all* in Settings → Bilibili, for admins, which queues every
+  eligible Track and says how many it queued. There is no scheduled or automatic
+  run.
 - **It is asked** with the Track's shown values and their origins, its length,
-  its file's name, and its video id if known. It answers values and a song
-  list, and may write one cover into its working folder, which it names, as a
-  download names its file.
-- **The core checks an answer** like the household's input, records it under the
-  enricher's origin, and replaces that origin's earlier values for the Track.
-- **Each enricher runs in its own Job** per Track, so one waiting or failing
-  doesn't hold another; the core queues them in order and gives each kind a
-  limit of one at a time and a spacing between calls.
+  its file's name, and its video id. It answers with values for any field, or
+  with the video's text (title, description, and chapters) in place of parsed
+  values, and may write one cover into a folder of the Job's, which it names, as
+  a download names its file. `bilibili-details` answers the video's text and its
+  cover.
+- **The core checks an answer** like the household's input. Values are checked
+  as the household's are and recorded under the enricher's origin, replacing that
+  origin's earlier values for the Track. The video's text is read by the same
+  parser as a sidecar or a paste, as the `video` origin, so *Edit details* shows
+  the text that was read; the cover is recorded as the origin's `cover`.
+- **Which Tracks are asked for.** A Track with a video id (its Bilibili Source,
+  or a Library file named for a `BV` id), that is not a segment (its album file
+  is asked instead), whose video text didn't come from a file beside it or from
+  the household, and whose video wasn't asked about in the last 24 hours. When
+  each video was last asked is kept in the database, so a restart forgets
+  nothing. A video that is gone counts as asked; a failure that a retry could
+  fix, such as a lost connection or a fault in the plugin, doesn't.
+- **Site text yields to every other source.** A sidecar read later replaces
+  site text, as a paste does, and text the household entered while a Job runs
+  stays: the Job records nothing over it.
+- **Each Track is one Job,** of the kind `enrich_track` and the target
+  `track:<id>`, carrying the enricher's name. The Jobs of one enricher run one at
+  a time, with at least a pause between two calls: 5 seconds for
+  `bilibili-details`, counted from the end of one to the start of the next. Like
+  other network Jobs they wait while the Mode is Offline, and they go through the
+  site's proxy as Downloads do: the plugin's page, API, and cover requests all
+  use one handler, which takes the proxy as given.
+- **The first refusal stops the enricher.** When the site refuses a request (an
+  HTTP 403 or 412, or one of its risk-control codes, such as 352 or 412, in
+  yt-dlp's error), the Job fails as *refused*, every Job of that enricher that
+  hasn't started fails with a message saying why, and nothing more is asked until
+  an admin resets it in Settings. The stopped state is kept in the database. A
+  Job retried while the enricher is stopped fails without asking. A video that
+  doesn't exist, or is private, fails that Track's Job alone.
 - **A segment is never enriched;** its album file is.
-- **Queuing enrichment for many Tracks is for admins.**
 
-| Enricher | Origin | Reads | When |
+| Enricher | Origin | Reads | State |
 | --- | --- | --- | --- |
-| `bilibili-details` | `video` | The video's details through yt-dlp, for a video with an id and no file beside it | Once yt-dlp reads Bilibili again |
+| `bilibili-details` | `video` | The video's text and cover through yt-dlp, for a video with an id | Built |
 | `musicbrainz` | `musicbrainz` | The MusicBrainz API and the Cover Art Archive, at most once a second | Later, if wanted |
 | `ai` | suggestions only | A language model, with the household's key | Later, if wanted |
 
 - **The site enricher is its own plugin,** not part of `bilibili`, so its faults
-  never stop Downloads. The first refusal from the site stops all of it until an
-  admin resets it, and it never asks the same video twice in a day.
+  never stop Downloads. It reuses the Bilibili plugin's yt-dlp wrapper and info
+  readers. It fetches a cover only from Bilibili's image hosts, and a cover it
+  can't fetch, or that is no JPEG, PNG, or WebP image of at most 10 MiB, leaves
+  the text without one.
 - **An AI enricher would only suggest:** its values show in *Edit details* for
   the household to take, never as shown values, since it reads the same text
   the parser does.
@@ -242,6 +276,10 @@ harm the core, and each is turned on or off like any plugin.
 | `GET /api/covers/{id}` | Signed in | A cover's image |
 | `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body; answers the details |
 | `DELETE /api/tracks/{id}/cover` | Signed in | Drops the household's cover, so the next origin's shows |
+| `GET /api/enrichers/{name}` | Signed in | Whether the enricher is on, why the site stopped it if it did, and the Tracks it may be asked about |
+| `POST /api/enrichers/{name}/tracks/{id}` | Signed in | Queues the Track's Job, or returns the one already active; 409 with why when the Track is not eligible |
+| `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |
+| `POST /api/enrichers/{name}/reset` | Admin | Lets a stopped enricher be asked again; 204, also when it was not stopped |
 
 Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 `genre`.
@@ -255,8 +293,7 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 4. **The video's text:** the parser, *Paste the video's details*, and
    `<name>.info.json` beside the file.
 5. **Segments:** see [Segments](Segments.md).
-6. **The site enricher,** once yt-dlp reads Bilibili again; then MusicBrainz and
-   AI, if wanted.
+6. **The site enricher** for Bilibili, built; then MusicBrainz and AI, if wanted.
 
 ## Testing
 
@@ -272,12 +309,19 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 - **Lengths** against fragmented and plain MP4 files made with ffmpeg.
 - **Covers:** each accepted type, a renamed file of another type, one over the
   limit, two Tracks sharing one cover, and the sweep.
-- **Enrichers** through a test plugin; no test contacts a site, MusicBrainz, or a
-  model.
+- **Enrichers** through a test plugin, in real Job processes: eligibility rule by
+  rule, the recorded text and cover, a sidecar or paste winning, the 24 hours, one
+  at a time with the pause between calls (on a fake clock), a refusal stopping the
+  enricher and failing its queued Jobs, a reset, waiting while Offline, and bulk
+  queueing for admins only. The Bilibili plugin is read against a real video's
+  recorded yt-dlp answer, with its network at a fake of yt-dlp; no test contacts a
+  site, MusicBrainz, or a model.
 
 ## Left for later
 
 - **MusicBrainz and AI enrichers.**
+- **Reading each part of a multi-part video:** the site's text describes the
+  whole video, so after one part is asked, the others are left alone for a day.
 - **Covers in `medleyplay backup`,** which copies only the database.
 - **A folder's `cover.jpg`** for every file in it.
 - **Lyrics,** and naming songs by their audio with AcoustID.

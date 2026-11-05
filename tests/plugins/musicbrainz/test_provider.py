@@ -31,6 +31,7 @@ LET_DOWN_VALUES = {
     "year": 1997,
     "track_number": 5,
     "disc_number": 1,
+    "genre": "alternative rock; rock; britpop",
 }
 
 
@@ -265,7 +266,12 @@ def test_a_release_that_lacks_the_recording_gives_only_what_the_release_says(
         EnrichTrackFactory.let_down(tmp_path)
     )
 
-    assert answer.values == {"album": "OK Computer", "album_artist": "Radiohead", "year": 1997}
+    assert answer.values == {
+        "album": "OK Computer",
+        "album_artist": "Radiohead",
+        "year": 1997,
+        "genre": "rock",
+    }
 
 
 def test_a_track_far_from_every_recordings_length_finds_nothing(tmp_path: Path) -> None:
@@ -417,6 +423,62 @@ def test_an_album_file_is_matched_as_a_release_by_its_album_and_album_artist(
         EnrichStatus.OK,
         {"album": "生如夏花", "album_artist": "朴树", "year": 2003},
     )
+
+
+def test_a_song_whose_recording_has_no_genres_takes_its_releases(tmp_path: Path) -> None:
+    release = MusicBrainzFactory.ok_computer(front=False)
+    for track in release["media"][0]["tracks"]:
+        track["recording"]["genres"] = []
+
+    answer = enricher_over(knowing_the_release(release)).enrich(
+        EnrichTrackFactory.let_down(tmp_path)
+    )
+
+    assert answer.values["genre"] == "rock"
+
+
+def test_a_song_with_no_genre_anywhere_gives_none(tmp_path: Path) -> None:
+    release = MusicBrainzFactory.ok_computer(front=False)
+    release["genres"] = []
+    for track in release["media"][0]["tracks"]:
+        track["recording"]["genres"] = []
+
+    answer = enricher_over(knowing_the_release(release)).enrich(
+        EnrichTrackFactory.let_down(tmp_path)
+    )
+
+    assert "genre" not in answer.values
+
+
+def test_an_album_files_release_gives_its_most_counted_genres(tmp_path: Path) -> None:
+    fake = FakeMusicBrainzFactory.knowing_shu_pu()
+    release = MusicBrainzFactory.shu_pu_release(
+        genres={"folk": 1, "rock": 4, "pop": 2, "ballad": 1}
+    )
+    fake.answer(f"{API}/release/{SHU_PU}", Reply.json(release))
+
+    answer = enricher_over(fake).enrich(EnrichTrackFactory.album_file(tmp_path))
+
+    assert answer.values["genre"] == "rock; pop; ballad"
+
+
+def test_a_long_file_that_names_an_album_is_matched_as_a_release(tmp_path: Path) -> None:
+    fake = FakeMusicBrainzFactory.knowing_shu_pu()
+
+    answer = enricher_over(fake).enrich(EnrichTrackFactory.long_album_file(tmp_path))
+
+    assert fake.urls()[:2] == [f"{API}/release", f"{API}/release/{SHU_PU}"]
+    assert fake.parameter("query") == 'release:"生如夏花" AND artist:"朴树"'
+    assert not {"title", "artist", "track_number", "disc_number"} & set(answer.values)
+    assert answer.values["year"] == 2003
+
+
+def test_a_file_of_twenty_minutes_is_still_searched_as_a_song(tmp_path: Path) -> None:
+    fake = FakeMusicBrainz().answer(f"{API}/recording", Reply.json({"recordings": []}))
+
+    enricher_over(fake).enrich(EnrichTrackFactory.long_album_file(tmp_path, duration_ms=1_200_000))
+
+    assert set(fake.urls()) == {f"{API}/recording"}
 
 
 def test_an_album_file_is_never_matched_as_one_recording(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ from medleyplay.plugin_api import Enriched, EnrichStatus, EnrichTrack
 from medleyplay.plugins.musicbrainz import matching
 from medleyplay.plugins.musicbrainz.client import MusicBrainzClient, RefusedError
 from medleyplay.plugins.musicbrainz.matching import Candidate
-from medleyplay.plugins.musicbrainz.models import Release, ReleaseTrack, credited
+from medleyplay.plugins.musicbrainz.models import Release, ReleaseTrack, credited, top_genres
 
 COVER_NAME: Final = "cover"
 MAX_TEXT: Final = 512
@@ -16,6 +16,8 @@ YEARS: Final = range(1000, 3000)
 """The years a Track may have."""
 NUMBERS: Final = range(1, 1000)
 """The numbers a Track or disc may have."""
+LONGEST_SONG_MS: Final = 20 * 60 * 1000
+"""A file longer than this that names an album is the album, though it isn't split."""
 
 
 @dataclass(frozen=True)
@@ -41,8 +43,13 @@ class MusicBrainz:
         request is a refusal; a network failure is raised.
         """
         terms = _terms(request)
+        long_album = (
+            request.duration_ms is not None
+            and request.duration_ms > LONGEST_SONG_MS
+            and terms.album is not None
+        )
         try:
-            if request.whole_album:
+            if request.whole_album or long_album:
                 return self._release_of(terms, request.folder)
             return self._recording_of(terms, request)
         except RefusedError as error:
@@ -126,6 +133,8 @@ def _release_values(release: Release) -> dict[str, str | int]:
     year = release.date[:4] if release.date else ""
     if year.isdigit() and int(year) in YEARS:
         values["year"] = int(year)
+    if genre := top_genres(release.genres):
+        values["genre"] = genre[:MAX_TEXT]
     return values
 
 
@@ -146,4 +155,6 @@ def _values_of(track: ReleaseTrack, release: Release) -> dict[str, str | int]:
     values: dict[str, str | int] = {"title": track.title[:MAX_TEXT]}
     if artist:
         values["artist"] = artist[:MAX_TEXT]
+    if genre := top_genres(track.recording.genres):
+        values["genre"] = genre[:MAX_TEXT]
     return values

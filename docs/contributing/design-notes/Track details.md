@@ -292,7 +292,8 @@ library would add nothing.
   name is no search term. It needs no video, and video text the household entered
   doesn't matter. A long file split into songs is matched as a release, never as
   one recording, so it needs an album and an artist (its album artist, else its
-  artist). What MusicBrainz itself recorded is no search term, so its answer
+  artist); so is a file longer than 20 minutes that shows an album, split or not,
+  since no song is that long. What MusicBrainz itself recorded is no search term, so its answer
   never changes the question.
 - **The search.** A Lucene query of the shown title, artist, and album when
   known, with every character Lucene reads as syntax escaped; Chinese and Japanese
@@ -314,9 +315,11 @@ library would add nothing.
   original over a reissue, such as *OK Computer* of 1997 over one of 2016. No
   candidate is an answer with no values, and counts as asked, not as a failure.
 - **What it records,** under the `musicbrainz` origin, from a release lookup with
-  `inc=recordings+artist-credits+media`: title, artist, album, album artist,
-  year, and the recording's track and disc numbers; for a long file, only the
-  album, album artist, and year. The cover is fetched from the Cover Art Archive
+  `inc=recordings+artist-credits+media+genres`: title, artist, album, album
+  artist, year, the recording's track and disc numbers, and its genre; for a long
+  file, only the album, album artist, year, and genre. The genre is the three
+  genres MusicBrainz's editors counted most, ties by name, joined as
+  `alternative rock; rock; britpop`: the recording's, else the release's. The cover is fetched from the Cover Art Archive
   (`front-500`, following its redirect) only when the lookup says the release has
   a front cover; it must be a JPEG, PNG, or WebP image of at most 10 MiB, and a
   cover that is missing or fails these checks never fails the Job.

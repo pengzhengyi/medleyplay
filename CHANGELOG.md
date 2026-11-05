@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Filtering and grouping the song table** — a *Filter* panel of native
+  controls keeps songs by artist, album, genre, year, rating, favorites, or
+  whether they play now, offering only the values the other filters leave; a
+  *Group by* control puts songs under folding rows by album, artist, album
+  artist, year, or genre; and the table's header stays in view while it scrolls.
 - **Accounts and the catalog** — the server keeps Accounts, sessions, Tracks,
   Sources, and Playlists in SQLite with migrations. The first Account becomes the
   admin; the server has one Account unless the config file lets the admin create

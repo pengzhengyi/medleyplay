@@ -50,6 +50,28 @@ const use = (dialog: HTMLElement, value: string, from: string) =>
 const save = (dialog: HTMLElement) =>
   userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
+/**
+ * The details of a video with an AI model's suggestion:
+ *
+ * ```text
+ * video   title "ケビョウニンゲン", artist "GUMI/MAYU"
+ * ai      title "Sick Human", artist "GUMI", album "Re:Start", year 2014
+ * ```
+ */
+const SUGGESTED = detailsOf(
+  7,
+  {},
+  {
+    ...ALBUM_FILE_ORIGINS,
+    ai: { title: "Sick Human", artist: "GUMI", album: "Re:Start", year: 2014 },
+  },
+);
+
+const useSuggested = (dialog: HTMLElement, value: string) =>
+  userEvent.click(
+    within(dialog).getByRole("button", { name: `Use “${value}”, suggested by the AI` }),
+  );
+
 describe("editing a song's details", () => {
   it("shows each detail's value and where it came from", async () => {
     const { dialog } = await renderDialog();
@@ -493,5 +515,115 @@ describe("editing a song's details", () => {
 
       expect(await within(dialog).findByRole("alert")).toHaveTextContent("JPEG, PNG, or WebP");
     });
+  });
+});
+
+describe("the AI's suggestions", () => {
+  it("shows each suggested value beside its field", async () => {
+    const { dialog } = await renderDialog(SUGGESTED);
+
+    for (const [label, value] of [
+      ["Title", "Sick Human"],
+      ["Artist", "GUMI"],
+      ["Album", "Re:Start"],
+      ["Year", "2014"],
+    ] as const) {
+      const suggestion = within(dialog).getByRole("group", {
+        name: `The AI's suggestion for ${label}`,
+      });
+      expect(suggestion).toHaveTextContent(`The AI suggests “${value}”`);
+    }
+  });
+
+  it("offers nothing for a detail the AI did not suggest", async () => {
+    const { dialog } = await renderDialog(SUGGESTED);
+
+    expect(
+      within(dialog).queryByRole("group", { name: "The AI's suggestion for Genre" }),
+    ).toBeNull();
+  });
+
+  it("offers nothing when the AI suggested nothing", async () => {
+    const { dialog } = await renderDialog();
+
+    expect(within(dialog).queryByText(/The AI suggests/u)).toBeNull();
+  });
+
+  it("changes nothing a field shows, and says where it comes from as before", async () => {
+    const { dialog } = await renderDialog(SUGGESTED);
+
+    expect(box(dialog, "Title")).toHaveValue("ケビョウニンゲン");
+    expect(box(dialog, "Title")).toHaveAccessibleDescription("From the video");
+    expect(box(dialog, "Album")).toHaveValue("");
+  });
+
+  it("copies a suggested value into the household's edit with Use, and saves it", async () => {
+    const { dialog, onSave } = await renderDialog(SUGGESTED);
+
+    await useSuggested(dialog, "GUMI");
+
+    expect(box(dialog, "Artist")).toHaveValue("GUMI");
+    expect(box(dialog, "Artist")).toHaveAccessibleDescription("Yours");
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ artist: "GUMI" });
+  });
+
+  it("copies a suggested number as a number", async () => {
+    const { dialog, onSave } = await renderDialog(SUGGESTED);
+
+    await useSuggested(dialog, "2014");
+
+    expect(box(dialog, "Year")).toHaveValue(2014);
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ year: 2014 });
+  });
+
+  it("keeps the other values as they were when one suggestion is used", async () => {
+    const { dialog, onSave } = await renderDialog(SUGGESTED);
+
+    await useSuggested(dialog, "Re:Start");
+    await useSuggested(dialog, "Sick Human");
+
+    expect(box(dialog, "Album")).toHaveValue("Re:Start");
+    expect(box(dialog, "Title")).toHaveValue("Sick Human");
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "Re:Start", title: "Sick Human" });
+  });
+
+  it("stops offering a suggestion once the box holds it", async () => {
+    const { dialog } = await renderDialog(SUGGESTED);
+
+    await useSuggested(dialog, "GUMI");
+
+    expect(
+      within(dialog).queryByRole("group", { name: "The AI's suggestion for Artist" }),
+    ).toBeNull();
+  });
+
+  it("does not offer a suggestion that is what the field already shows", async () => {
+    const same = detailsOf(7, {}, { ...ALBUM_FILE_ORIGINS, ai: { artist: "GUMI/MAYU" } });
+
+    const { dialog } = await renderDialog(same);
+
+    expect(
+      within(dialog).queryByRole("group", { name: "The AI's suggestion for Artist" }),
+    ).toBeNull();
+  });
+
+  it("is not among the other origins' values", async () => {
+    const { dialog } = await renderDialog(SUGGESTED);
+
+    expect(within(dialog).queryByRole("button", { name: /from the AI/u })).toBeNull();
+  });
+
+  it("is a suggestion beside a value the household chose, which stays", async () => {
+    const { dialog } = await renderDialog(
+      detailsOf(7, { artist: "MAYU" }, { ...ALBUM_FILE_ORIGINS, ai: { artist: "GUMI" } }),
+    );
+
+    expect(box(dialog, "Artist")).toHaveValue("MAYU");
+    expect(
+      within(dialog).getByRole("group", { name: "The AI's suggestion for Artist" }),
+    ).toHaveTextContent("The AI suggests “GUMI”");
   });
 });

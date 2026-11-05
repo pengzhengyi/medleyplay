@@ -179,14 +179,48 @@ class EnricherStopRow(Base):
     reason: Mapped[str] = mapped_column(String(2048), default="")
 
 
-class VideoAskRow(Base):
-    """When an enricher last asked its site about a video, so it never asks twice in a day."""
+class EnricherAskRow(Base):
+    """When an enricher last asked its site about a subject, so it never asks twice in a day.
 
-    __tablename__ = "video_ask"
+    The subject is a video's id, or a key made from a Track and what it was searched for.
+    """
+
+    __tablename__ = "enricher_ask"
 
     enricher: Mapped[str] = mapped_column(String(64), primary_key=True)
-    video: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(64), primary_key=True)
     asked_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class AiSettingRow(Base):
+    """The AI provider the household set up; its key, if it has one, is in the Keychain.
+
+    The only row has id 1.
+    """
+
+    __tablename__ = "ai_setting"
+    __table_args__ = (CheckConstraint("id = 1", name="single"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    base_url: Mapped[str] = mapped_column(String(256))
+    model: Mapped[str] = mapped_column(String(128))
+    has_key: Mapped[bool] = mapped_column()
+    saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class AiSuggestionRow(Base):
+    """The song list an AI model suggested for a Track, replaced by its next suggestion.
+
+    `songs` lists `{"start_ms": int, "title": str, "artist": str}` in order.
+    """
+
+    __tablename__ = "ai_suggestion"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    songs: Mapped[list[dict[str, str | int]]] = mapped_column(JSON)
+    suggested_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class SourceRow(Base):

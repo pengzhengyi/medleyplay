@@ -687,6 +687,20 @@ button.text:hover:not(:disabled) {
   margin-top: 1rem;
 }
 
+.ai-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+}
+
+.ai-presets button {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 1rem;
+  border-radius: 999px;
+}
+
 .mark-name {
   display: grid;
   flex: 1 1 16rem;
@@ -2503,6 +2517,13 @@ dialog.modal::backdrop {
 
 .detail-alternatives:empty {
   display: none;
+}
+
+.detail-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .edit-details .detail-alternative {

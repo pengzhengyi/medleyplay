@@ -13,7 +13,12 @@ from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.details import refresh, songs_of, video_text_of
+from medleyplay.application.details import (
+    refresh,
+    songs_of,
+    suggested_songs_of,
+    video_text_of,
+)
 from medleyplay.domain.catalog import SourceId, TrackId
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.segments import (
@@ -52,6 +57,8 @@ class SongsView:
     songs: tuple[SongView, ...]
     found: tuple[tuple[Song, ...], ...]
     """Song lists read from the file's video text, to start from."""
+    suggested: tuple[Song, ...]
+    """The song list an AI model suggested for the file, or `()`."""
 
 
 class SongsService:
@@ -88,9 +95,15 @@ class SongsService:
             )
             split_at = current[0].split_length_ms if current else None
             length = album.duration_ms
+            suggested = suggested_songs_of(db, track_id)
         listed = read_video(text).songs if text is not None else ()
         return SongsView(
-            track_id, length, needs_check(split_at, length), songs, (listed,) if listed else ()
+            track_id,
+            length,
+            needs_check(split_at, length),
+            songs,
+            (listed,) if listed else (),
+            suggested,
         )
 
     def save(

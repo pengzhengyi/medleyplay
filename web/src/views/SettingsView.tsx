@@ -13,11 +13,13 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "rea
 
 import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
+import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
-import { VideoDetailsSettings } from "./VideoDetailsSettings";
+import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
 const GB = 1_000_000_000;
 /** How long after the limit stops changing its preview is asked for. */
@@ -30,9 +32,14 @@ const SECTIONS = [
   { id: "network", title: "Network" },
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
+  { id: "musicbrainz", title: "MusicBrainz" },
+  { id: "ai", title: "AI" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
+
+/** The sections only an admin sees: they run lookups for every Track. */
+const ADMIN_ONLY: ReadonlySet<SectionId> = new Set(["bilibili", "musicbrainz", "ai"]);
 
 const FOLDED = "medleyplay.settings.folded.v1";
 
@@ -60,9 +67,12 @@ function keepFolded(folded: ReadonlySet<SectionId>): void {
 export function SettingsView({
   admin,
   mode,
+  onEnrichersChanged,
 }: {
   readonly admin: boolean;
   readonly mode: Mode | null;
+  /** Called after a setting changes which Tracks an enricher may be asked about. */
+  readonly onEnrichersChanged: () => void;
 }) {
   const [folded, setFolded] = useState(loadFolded);
   const fold = (next: ReadonlySet<SectionId>) => {
@@ -84,7 +94,7 @@ export function SettingsView({
     section?.scrollIntoView({ block: "start" });
     document.getElementById(`${id}-toggle`)?.focus({ preventScroll: true });
   };
-  const sections = SECTIONS.filter(({ id }) => admin || id !== "bilibili");
+  const sections = SECTIONS.filter(({ id }) => admin || !ADMIN_ONLY.has(id));
   const allFolded = sections.every(({ id }) => folded.has(id));
   const contents: Record<SectionId, ReactNode> = {
     appearance: (
@@ -102,6 +112,8 @@ export function SettingsView({
         <VideoDetailsSettings />
       </>
     ),
+    musicbrainz: <MusicBrainzSettings />,
+    ai: <AiSettings onChanged={onEnrichersChanged} />,
   };
   return (
     <>

@@ -391,6 +391,74 @@
           "origin": "video"
         }
       }
+    },
+    {
+      "name": "a cover from an origin naming no album shows when the origin naming the album has none",
+      "origins": {
+        "files": {
+          "cover": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+        },
+        "video": {
+          "album": "生如夏花",
+          "artist": "朴树"
+        }
+      },
+      "shown": {
+        "artist": {
+          "value": "朴树",
+          "origin": "video"
+        },
+        "album": {
+          "value": "生如夏花",
+          "origin": "video"
+        },
+        "cover": {
+          "value": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291",
+          "origin": "files"
+        }
+      }
+    },
+    {
+      "name": "a cover from an origin naming another album stays hidden",
+      "origins": {
+        "files": {
+          "album": "Re:Start"
+        },
+        "album_file": {
+          "album": "Re:Start (Deluxe)",
+          "cover": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "files"
+        }
+      }
+    },
+    {
+      "name": "the file's cover shows beside the household's album when the file's tags name none",
+      "origins": {
+        "household": {
+          "album": "生如夏花"
+        },
+        "files": {
+          "cover": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+        },
+        "video": {
+          "album": "生如夏花 专辑歌词版"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "生如夏花",
+          "origin": "household"
+        },
+        "cover": {
+          "value": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291",
+          "origin": "files"
+        }
+      }
     }
   ]
 }

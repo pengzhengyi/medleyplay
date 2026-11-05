@@ -176,6 +176,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   room under the storage limit. See the
   [Manual downloads](docs/contributing/design-notes/Manual%20downloads.md) note.
 
+- **Find a Track on MusicBrainz** — *Find on MusicBrainz* in a song's menu looks
+  up the song's release and its front cover, and an admin's *Find on MusicBrainz
+  for all* in Settings queues every song that shows a title and an artist, or a
+  split album file's album; a file over 20 minutes that shows an album is matched
+  as that album. The `musicbrainz` plugin, off by default, records the album,
+  album artist, year, track and disc numbers, genre, and cover under its own
+  origin, which sits below the file's tags and the household's values. It asks at
+  most once a second with a User-Agent that names medleyplay, waits out
+  MusicBrainz's rate limit, never asks the same Track twice in a day, and stops
+  until an admin resets it when MusicBrainz refuses a request. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md#musicbrainz) note.
+
+- **Suggest a Track's details with AI** — *Suggest details with AI* in a song's
+  menu asks an AI model what the song's video text says, and an admin's *Suggest
+  for all* in Settings → AI queues every song that has video text. An admin sets
+  the provider there: a base URL, a model, and a key, with presets for DeepSeek,
+  OpenAI, Anthropic, and Ollama; the key is kept in the Keychain and never shown
+  again. The `ai-details` plugin, off by default, only suggests. A suggested value
+  shows beside its field in *Edit details* with *Use*, and a suggested song list
+  loads into the songs editor; nothing a Track shows changes until you use one. It
+  sends the video's title, description, and chapters to the provider, asks one
+  Track at a time, never the same Track twice in a day, and stops until an admin
+  resets it when the provider refuses the key. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md#ai-suggestions) note.
+
 ### Changed
 
 - Renamed the project from stream to medleyplay.
@@ -192,6 +217,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Asking a second lookup about a song, such as *Find on MusicBrainz* while its
+  *Find details online* waits, now queues that lookup instead of returning the
+  first one's.
 - Songs saved as fragmented `.m4a` or `.mp4` files, as Bilibili downloads are,
   now show their length instead of none.
 - A too-large id in a request is refused, not a server error.

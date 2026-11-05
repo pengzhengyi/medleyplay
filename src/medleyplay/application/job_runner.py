@@ -24,11 +24,13 @@ from medleyplay.application.events import Events
 from medleyplay.application.jobs import AnyJobKind, Lane, to_job
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import AccountId
+from medleyplay.domain.ai import redact_key
 from medleyplay.domain.errors import KeychainUnavailableError
 from medleyplay.domain.jobs import JobId, JobState, Progress
 from medleyplay.domain.linked_accounts import redact
 from medleyplay.domain.proxies import redact_proxy
 from medleyplay.persistence.schema import JobRow
+from medleyplay.plugin_api import AiEndpoint
 from medleyplay.plugin_api.progress import MAX_MESSAGE as MAX_PROGRESS_MESSAGE
 from medleyplay.plugin_host.job_wire import (
     FROM_JOB,
@@ -89,6 +91,14 @@ class Proxies(Protocol):
         ...
 
 
+class AiProvider(Protocol):
+    """Where the runner finds the AI provider for a Job, as `AiService` provides."""
+
+    def endpoint(self) -> AiEndpoint | None:
+        """Return the provider with its key, or `None` when it is not set up."""
+        ...
+
+
 @dataclass(frozen=True)
 class JobProcesses:
     """How to start Job processes, and where their plugins come from."""
@@ -128,6 +138,7 @@ class _Running:
     login: _Login | None = None
     proxy: str | None = None
     lane: str | None = None
+    ai: AiEndpoint | None = None
     thread: threading.Thread | None = None
     held: bool = False
     """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
@@ -136,6 +147,7 @@ class _Running:
 
     def redact(self, message: str) -> str:
         text = redact(message, self.login.lent.text if self.login else None)
+        text = redact_key(text, self.ai.key if self.ai else None)
         return redact_proxy(text, self.proxy)
 
 
@@ -157,6 +169,7 @@ class JobRunner:
         memory_limit: int = JOB_MEMORY_LIMIT,
         logins: Logins | None = None,
         proxies: Proxies | None = None,
+        ai: AiProvider | None = None,
         events: Events | None = None,
         network_failed: Callable[[], None] | None = None,
     ) -> None:
@@ -173,6 +186,7 @@ class JobRunner:
         self._memory_limit = memory_limit
         self._logins = logins
         self._proxies = proxies
+        self._ai = ai
         self._events = events
         self._network_failed = network_failed
         self._network_kinds = tuple(name for name, kind in kinds.items() if kind.needs_network)
@@ -354,15 +368,18 @@ class JobRunner:
     ) -> None:
         work_dir = self._jobs_dir / str(job_id)
         work_dir.mkdir(mode=0o700, exist_ok=True)
+        lane = _lane_name(kind, request)
+        lane_rules = kind.lanes.get(lane) if lane is not None else None
         try:
             login = self._lend(kind, login_account, work_dir)
-            lane = _lane_name(kind, request)
-            proxy = self._proxy(kind, kind.lanes.get(lane) if lane is not None else None)
+            proxy = self._proxy(kind, lane_rules)
+            ai = self._ai_provider(lane_rules)
             process = self._spawn(work_dir)
         except KeychainUnavailableError as error:
             # The Keychain can be locked or prompting; it usually answers again soon.
             shutil.rmtree(work_dir, ignore_errors=True)
-            failure = ("keychain", f"Its login or proxy couldn't be read: {error}")
+            what = "key" if lane_rules is not None and lane_rules.lends_ai else "login or proxy"
+            failure = ("keychain", f"Its {what} couldn't be read: {error}")
             self._set(
                 job_id,
                 JobState.WAITING,
@@ -374,7 +391,7 @@ class JobRunner:
             self._settle_failure(job_id, "program", f"Its process didn't start: {error}")
             shutil.rmtree(work_dir, ignore_errors=True)
             return
-        running = _Running(job_id, kind, work_dir, process, login, proxy, lane)
+        running = _Running(job_id, kind, work_dir, process, login, proxy, lane, ai)
         with self._lock:
             self._running[job_id] = running
         # The Mode may have gone Offline since the claim, before `follow_mode` could
@@ -395,6 +412,7 @@ class JobRunner:
                     work_dir=str(work_dir),
                     login=str(work_dir / LOGIN_FILE) if login else None,
                     proxy=proxy,
+                    ai=ai,
                 )
             )
         running.thread = threading.Thread(target=self._supervise, args=(running,), daemon=True)
@@ -406,6 +424,12 @@ class JobRunner:
         if site is None or self._proxies is None:
             return None
         return self._proxies.current(site)
+
+    def _ai_provider(self, lane: Lane | None) -> AiEndpoint | None:
+        # The Job keeps the provider it starts with; its key goes to its process, never to disk.
+        if lane is None or not lane.lends_ai or self._ai is None:
+            return None
+        return self._ai.endpoint()
 
     def _lend(
         self, kind: AnyJobKind, account_id: AccountId | None, work_dir: Path

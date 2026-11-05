@@ -32,6 +32,9 @@ class BilibiliDetails:
         The site refusing the request, the video being removed, and a video that
         needs a login are answers, not failures; a network failure is raised.
         """
+        if request.video is None:
+            message = "bilibili-details is asked about a video."
+            raise ValueError(message)
         try:
             info, image = self.extract(
                 video_url(request.video),

@@ -1,4 +1,4 @@
-"""The test plugin `reader` answering for `bilibili-details`, with real enrich Jobs and services."""
+"""The test plugin `reader` answering for the enrichers, with real enrich Jobs and services."""
 
 import time
 from collections.abc import Callable, Iterator
@@ -9,6 +9,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application.ai import AiService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
@@ -18,8 +19,10 @@ from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
-from medleyplay.domain.enrichers import BILIBILI_DETAILS
+from medleyplay.domain.details import Origin
+from medleyplay.domain.enrichers import AI_DETAILS, BILIBILI_DETAILS
 from medleyplay.domain.jobs import JobId, JobState, JobView
+from medleyplay.domain.video_text import Chapter, VideoText
 from tests.support.factories import SourceKeyFactory
 from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS, started_plugins
@@ -29,6 +32,8 @@ SETTLE = 0.6
 """Long enough for the runner, which polls every tenth of a second, to have looked."""
 PAUSE = BILIBILI_DETAILS.spacing
 """The time the enricher waits between two calls."""
+AI_PAUSE = AI_DETAILS.spacing
+"""The time the AI enricher waits between two calls."""
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,8 @@ class Enriching:
     details: DetailsService
     covers: CoverService
     proxies: ProxyService
+    ai: AiService
+    secrets: MemorySecrets
     units: sessionmaker[Session]
     clock: FakeClock
     data_dir: Path
@@ -84,6 +91,38 @@ class Enriching:
             SourceKeyFactory.bilibili(video, part), TrackDetails(title=f"{video} p{part}")
         )
 
+    def add_song(
+        self,
+        title: str,
+        artist: str = "Radiohead",
+        album: str = "",
+        *,
+        origin: Origin = Origin.FILES,
+    ) -> TrackId:
+        """Add a Library file `<title>.m4a` whose tags say `title`, `artist`, and `album`.
+
+        The details are recorded as `origin`'s, which are the file's tags unless changed.
+        """
+        key = SourceKey("library", f"1/Music/{title}.m4a")
+        details = TrackDetails(title=title, artist=artist, album=album, duration_ms=299_000)
+        return self.catalog.add_track(key, details, origin=origin)
+
+    def add_track_with_text(
+        self,
+        title: str,
+        description: str = "",
+        chapters: tuple[Chapter, ...] = (),
+        *,
+        name: str | None = None,
+    ) -> TrackId:
+        """Add a Library file whose video text has the title `title`, as the household pasted it.
+
+        The title says how the test plugin `reader` answers the AI.
+        """
+        track_id = self.add_file_track(name or f"{title}.m4a")
+        self.details.read_video_text(track_id, VideoText(title, description, chapters))
+        return track_id
+
     def add_file_track(self, name: str, library: int = 1) -> TrackId:
         """Add a Library file called `name` as a Track, as a scan does."""
         key = SourceKey("library", f"{library}/Music/{name}")
@@ -106,6 +145,7 @@ def running_enrichment(
     with started_plugins(units, clock, "reader") as plugins:
         secrets = MemorySecrets()
         proxies = ProxyService(units, clock, secrets)
+        ai = AiService(units, clock, secrets)
         runner = JobRunner(
             units,
             clock,
@@ -115,6 +155,7 @@ def running_enrichment(
             processes=JobProcesses(TEST_COMMAND, TEST_PLUGINS),
             poll=timedelta(seconds=0.1),
             proxies=proxies,
+            ai=ai,
             online=online,
         )
         jobs = JobService(units, clock, kinds, runner, online=online)
@@ -130,6 +171,8 @@ def running_enrichment(
                 details=DetailsService(units, clock),
                 covers=CoverService(units, clock, data_dir / COVERS_FOLDER),
                 proxies=proxies,
+                ai=ai,
+                secrets=secrets,
                 units=units,
                 clock=clock,
                 data_dir=data_dir,

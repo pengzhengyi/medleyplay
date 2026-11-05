@@ -229,6 +229,7 @@ function ReadVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
                   type="text"
                   className="part-input"
                   aria-label={`Title of part ${String(row.part)}`}
+                  placeholder="Title"
                   value={row.title}
                   maxLength={512}
                   disabled={!row.chosen}
@@ -240,6 +241,7 @@ function ReadVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
                   type="text"
                   className="part-input"
                   aria-label={`Artist of part ${String(row.part)}`}
+                  placeholder="Artist"
                   value={row.artist}
                   maxLength={512}
                   disabled={!row.chosen}
@@ -336,6 +338,7 @@ function UnreadableVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
                 min={1}
                 max={MAX_PART_NUMBER}
                 aria-label={`Part number ${String(index + 1)}`}
+                placeholder="Part"
                 value={draft.part}
                 onChange={(event) => {
                   change(draft.key, { part: event.currentTarget.value });
@@ -345,6 +348,7 @@ function UnreadableVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
                 type="text"
                 className="part-input"
                 aria-label={`Title of part ${String(index + 1)}`}
+                placeholder="Title"
                 value={draft.title}
                 maxLength={512}
                 onChange={(event) => {
@@ -355,6 +359,7 @@ function UnreadableVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
                 type="text"
                 className="part-input"
                 aria-label={`Artist of part ${String(index + 1)}`}
+                placeholder="Artist"
                 value={draft.artist}
                 maxLength={512}
                 onChange={(event) => {

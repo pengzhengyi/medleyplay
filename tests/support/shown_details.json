@@ -530,6 +530,36 @@
           "origin": "household"
         }
       }
+    },
+    {
+      "name": "a suggestion from the AI shows nowhere",
+      "origins": {
+        "ai": {
+          "title": "Night Drive",
+          "artist": "Blue Room",
+          "year": 2016
+        }
+      },
+      "shown": {}
+    },
+    {
+      "name": "a suggestion from the AI never takes the place of another origin's value",
+      "origins": {
+        "video": {
+          "title": "ケビョウニンゲン"
+        },
+        "ai": {
+          "title": "Kebyo Ningen",
+          "album": "Re:Start",
+          "cover": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "shown": {
+        "title": {
+          "value": "ケビョウニンゲン",
+          "origin": "video"
+        }
+      }
     }
   ]
 }

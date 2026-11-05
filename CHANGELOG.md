@@ -164,6 +164,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resets it in Settings. See the
   [Track details](docs/contributing/design-notes/Track%20details.md#enrichers) note.
 
+- **Find a Track on MusicBrainz** — *Find on MusicBrainz* in a song's menu looks
+  up the song's release and its front cover, and an admin's *Find on MusicBrainz
+  for all* in Settings queues every song that shows a title and an artist, or a
+  split album file's album. The `musicbrainz` plugin, off by default, records the
+  album, album artist, year, track and disc numbers, and cover under its own
+  origin, which sits below the file's tags and the household's values. It asks at
+  most once a second with a User-Agent that names medleyplay, waits out
+  MusicBrainz's rate limit, never asks the same Track twice in a day, and stops
+  until an admin resets it when MusicBrainz refuses a request. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md#musicbrainz) note.
+
 ### Changed
 
 - Renamed the project from stream to medleyplay.

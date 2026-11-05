@@ -4,7 +4,7 @@
 > **Status: in progress.** This note describes a Track's details (its title,
 > artist, album, cover, and the rest), where each value comes from, how the
 > household's own values win, and how medleyplay finds what a file doesn't say.
-> The site enricher for Bilibili is built; MusicBrainz and AI are not.
+> The enrichers for Bilibili and MusicBrainz are built; AI is not.
 > Splitting a long file into songs is in [Segments](Segments.md).
 
 ## Contents
@@ -60,7 +60,7 @@ values.
 | --- | --- |
 | `household` | A value someone in the household entered |
 | `files` | The file's tags, and an image beside it with its name |
-| `musicbrainz` | A release matched in MusicBrainz (later) |
+| `musicbrainz` | A release matched in MusicBrainz, with its cover |
 | `video` | The video's own text: its title, uploader, description, and chapters, read from a file beside the audio, pasted by the household, or read from the site, and the video's cover |
 | `album_file` | For a song inside a long file, its album file's album fields; see [Segments](Segments.md) |
 | `file_name` | The file's name, the title of last resort |
@@ -210,15 +210,19 @@ values.
 An *enricher* proposes values from somewhere the scan doesn't look. It is a
 plugin at its own extension point, `TRACK_ENRICHER`, so a buggy or slow one can't
 harm the core, and each is turned on or off like any plugin. `bilibili-details`
-is built and, like `bilibili`, is off until the config file turns it on.
+and `musicbrainz` are built and, like `bilibili`, are off until the config file
+turns them on, since each contacts a site.
 
 - **Nothing runs by itself.** An enricher contacts its site only when someone
-  asks: *Find details online* in a Track's menu, for any signed-in Account, or
-  *Find details for all* in Settings → Bilibili, for admins, which queues every
-  eligible Track and says how many it queued. There is no scheduled or automatic
+  asks: *Find details online* or *Find on MusicBrainz* in a Track's menu, for any
+  signed-in Account, or *Find details for all* in Settings → Bilibili and *Find on
+  MusicBrainz for all* in Settings → MusicBrainz, for admins, which queue every
+  eligible Track and say how many they queued. There is no scheduled or automatic
   run.
-- **It is asked** with the Track's shown values and their origins, its length,
-  its file's name, and its video id. It answers with values for any field, or
+- **It is asked** with the Track's shown values and their origins (without the
+  values the enricher recorded itself), its length, its file's name, whether it
+  is a long file split into songs, and its video id when it reads videos. It
+  answers with values for any field, or
   with the video's text (title, description, and chapters) in place of parsed
   values, and may write one cover into a folder of the Job's, which it names, as
   a download names its file. `bilibili-details` answers the video's text and its
@@ -228,13 +232,15 @@ is built and, like `bilibili`, is off until the config file turns it on.
   origin's earlier values for the Track. The video's text is read by the same
   parser as a sidecar or a paste, as the `video` origin, so *Edit details* shows
   the text that was read; the cover is recorded as the origin's `cover`.
-- **Which Tracks are asked for.** A Track with a video id (its Bilibili Source,
-  or a Library file named for a `BV` id), that is not a segment (its album file
-  is asked instead), whose video text didn't come from a file beside it or from
-  the household, and whose video wasn't asked about in the last 24 hours. When
-  each video was last asked is kept in the database, so a restart forgets
-  nothing. A video that is gone counts as asked; a failure that a retry could
-  fix, such as a lost connection or a fault in the plugin, doesn't.
+- **Which Tracks are asked for.** For `bilibili-details`, a Track with a video id
+  (its Bilibili Source, or a Library file named for a `BV` id), that is not a
+  segment (its album file is asked instead), whose video text didn't come from a
+  file beside it or from the household, and whose video wasn't asked about in the
+  last 24 hours. For `musicbrainz`, see [MusicBrainz](#musicbrainz). What each
+  subject (a video, or a Track and what it was searched for) was last asked about
+  is kept in the database, so a restart forgets nothing. A video that is gone
+  counts as asked; a failure that a retry could fix, such as a lost connection or
+  a fault in the plugin, doesn't.
 - **Site text yields to every other source.** A sidecar read later replaces
   site text, a full scan that reads an unchanged sidecar again included, since
   only a paste stands over an unchanged sidecar. Text the household entered while
@@ -242,13 +248,15 @@ is built and, like `bilibili`, is off until the config file turns it on.
 - **Each Track is one Job,** of the kind `enrich_track` and the target
   `track:<id>`, carrying the enricher's name. The Jobs of one enricher run one at
   a time, with at least a pause between two calls: 5 seconds for
-  `bilibili-details`, counted from the end of one to the start of the next. Like
-  other network Jobs they wait while the Mode is Offline, and they go through the
-  site's proxy as Downloads do: the plugin's page, API, and cover requests all
-  use one handler, which takes the proxy as given.
+  `bilibili-details` and 1 second for `musicbrainz`, counted from the end of one
+  to the start of the next. Like other network Jobs they wait while the Mode is
+  Offline, and `bilibili-details` goes through the site's proxy as Downloads do:
+  the plugin's page, API, and cover requests all use one handler, which takes the
+  proxy as given. `musicbrainz` has no proxy, since MusicBrainz isn't the
+  household's Bilibili route.
 - **The first refusal stops the enricher.** When the site refuses a request (an
   HTTP 403 or 412, or one of its risk-control codes, such as 352 or 412, in
-  yt-dlp's error), the Job fails as *refused*, every Job of that enricher that
+  yt-dlp's error, or MusicBrainz's 403), the Job fails as *refused*, every Job of that enricher that
   hasn't started fails with a message saying why, and nothing more is asked until
   an admin resets it in Settings. The stopped state is kept in the database. A
   Job retried while the enricher is stopped fails without asking. A video that
@@ -258,7 +266,7 @@ is built and, like `bilibili`, is off until the config file turns it on.
 | Enricher | Origin | Reads | State |
 | --- | --- | --- | --- |
 | `bilibili-details` | `video` | The video's text and cover through yt-dlp, for a video with an id | Built |
-| `musicbrainz` | `musicbrainz` | The MusicBrainz API and the Cover Art Archive, at most once a second | Later, if wanted |
+| `musicbrainz` | `musicbrainz` | The MusicBrainz API and the Cover Art Archive, at most once a second | Built |
 | `ai` | suggestions only | A language model, with the household's key | Later, if wanted |
 
 - **The site enricher is its own plugin,** not part of `bilibili`, so its faults
@@ -266,9 +274,63 @@ is built and, like `bilibili`, is off until the config file turns it on.
   readers. It fetches a cover only from Bilibili's image hosts, and a cover it
   can't fetch, or that is no JPEG, PNG, or WebP image of at most 10 MiB, leaves
   the text without one.
+- **Each enricher stops on its own:** MusicBrainz refusing a request leaves
+  `bilibili-details` running, and the reverse.
 - **An AI enricher would only suggest:** its values show in *Edit details* for
   the household to take, never as shown values, since it reads the same text
   the parser does.
+
+### MusicBrainz
+
+`musicbrainz` finds the release a Track is on, and its front cover. It is a
+hand-written client on `requests` with a Pydantic model for each field it reads,
+and is synchronous: the one-request-a-second limit sets its pace, so an async
+library would add nothing.
+
+- **Which Tracks are searched for.** A Track that is not a segment and shows a
+  title and an artist that don't come only from its file's name; a `BV…` file
+  name is no search term. It needs no video, and video text the household entered
+  doesn't matter. A long file split into songs is matched as a release, never as
+  one recording, so it needs an album and an artist (its album artist, else its
+  artist). What MusicBrainz itself recorded is no search term, so its answer
+  never changes the question.
+- **The search.** A Lucene query of the shown title, artist, and album when
+  known, with every character Lucene reads as syntax escaped; Chinese and Japanese
+  text passes through unchanged.
+
+  ```text
+  recording:"過食性\:アイドル症候群" AND artist:"GUMI\/MAYU" AND release:"ケビョウニンゲン"
+  release:"生如夏花" AND artist:"朴树"                 a long file, searched as a release
+  ```
+
+- **The match.** A candidate scores at least 90 and, when both lengths are known,
+  has a length within 5 seconds of the Track's. Candidates rank by score, then a
+  release whose title is the shown album (ignoring case and the width of
+  characters), then an official release, then the earliest date, which picks an
+  original over a reissue, such as *OK Computer* of 1997 over one of 2016. No
+  candidate is an answer with no values, and counts as asked, not as a failure.
+- **What it records,** under the `musicbrainz` origin, from a release lookup with
+  `inc=recordings+artist-credits+media`: title, artist, album, album artist,
+  year, and the recording's track and disc numbers; for a long file, only the
+  album, album artist, and year. The cover is fetched from the Cover Art Archive
+  (`front-500`, following its redirect) only when the lookup says the release has
+  a front cover; it must be a JPEG, PNG, or WebP image of at most 10 MiB, and a
+  cover that is missing or fails these checks never fails the Job.
+- **Etiquette.** The User-Agent is `medleyplay/<version> ( https://github.com/pengzhengyi/medleyplay )`.
+  Requests are at most a second apart: the lane's pause between Jobs, and the
+  client's own pause, on an injected clock, between the search, lookup, and cover
+  requests of one Job. Every request asks for `fmt=json` and has a timeout. A 503
+  is MusicBrainz's rate limit: the client waits as long as `Retry-After` says (2
+  seconds without it), up to 3 tries in all; a longer wait than 10 seconds, or the
+  last try failing, fails the Job as a network failure, which waits and tries
+  again later. A 403 is a refusal, which stops the enricher.
+- **Asked once a day** per Track and what it was searched for: the subject kept is
+  a hash of the Track's id, title, artist, album, and album artist. Correcting a
+  title asks again at once, and two Tracks with the same words are each asked.
+  This is why the question must not include MusicBrainz's own answer.
+- **Where its values show.** `musicbrainz` sits between `files` and `video`, so a
+  file's own tags and the household's values stay over it, and it replaces what
+  only the video said. Its album fields travel together as any origin's do.
 
 ## What the API shows
 
@@ -298,7 +360,8 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 4. **The video's text:** the parser, *Paste the video's details*, and
    `<name>.info.json` beside the file.
 5. **Segments:** see [Segments](Segments.md).
-6. **The site enricher** for Bilibili, built; then MusicBrainz and AI, if wanted.
+6. **The site enricher** for Bilibili, and **MusicBrainz,** both built; then AI,
+   if wanted.
 
 ## Testing
 
@@ -319,12 +382,20 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
   at a time with the pause between calls (on a fake clock), a refusal stopping the
   enricher and failing its queued Jobs, a reset, waiting while Offline, and bulk
   queueing for admins only. The Bilibili plugin is read against a real video's
-  recorded yt-dlp answer, with its network at a fake of yt-dlp; no test contacts a
-  site, MusicBrainz, or a model.
+  recorded yt-dlp answer, with its network at a fake of yt-dlp. The MusicBrainz
+  client runs over a fake `requests` transport that answers from recorded
+  MusicBrainz answers (a real search and lookup for *Let Down* by *Radiohead*, and
+  two made by hand for 朴树's 生如夏花), with a fake clock for its pauses: query
+  escaping, ranking, the length window and the score floor, the cover present,
+  absent, oversized, and not an image, a 503 waited out and then failing, and a 403
+  stopping the enricher. No test contacts a site, MusicBrainz, or a model.
 
 ## Left for later
 
-- **MusicBrainz and AI enrichers.**
+- **An AI enricher.**
+- **Choosing among close MusicBrainz matches:** the best candidate is taken; the
+  household corrects a wrong one in *Edit details*. A long file's songs are not
+  matched one by one to the release's tracks.
 - **Reading each part of a multi-part video:** the site's text describes the
   whole video, so after one part is asked, the others are left alone for a day.
 - **Covers in `medleyplay backup`,** which copies only the database.

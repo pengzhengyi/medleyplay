@@ -396,7 +396,7 @@ def test_when_a_track_was_asked_is_kept_in_the_database_under_a_key_not_its_word
     assert [tuple(row) for row in asked] == [(NAME, terms.key(track_id), clock())]
 
 
-def test_bilibilis_asks_and_musicbrainzs_are_kept_apart(
+def test_the_asks_of_bilibili_and_of_musicbrainz_are_kept_apart(
     enriching: Enriching, alice: Account
 ) -> None:
     site = enriching.add_site_track("BV1AC4y1L7Yi")

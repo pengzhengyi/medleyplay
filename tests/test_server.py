@@ -14,10 +14,15 @@ from medleyplay.server import (
     PluginSource,
     Settings,
     build_app,
+    build_services,
     default_data_dir,
     local_host_names,
+    open_database,
 )
+from tests.support.ai import KEY
 from tests.support.api import set_up_as_alice, sign_in
+from tests.support.factories import AccountFactory
+from tests.support.fakes import MemorySecrets
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS
 
 
@@ -153,6 +158,19 @@ def test_in_safe_mode_the_built_app_starts_no_plugins(tmp_path: Path) -> None:
         providers = client.get("/api/features").json()["providers"]
 
     assert providers == {}
+
+
+def test_the_built_services_keep_the_ai_providers_key_in_the_secrets_they_are_given(
+    tmp_path: Path,
+) -> None:
+    engine = open_database(tmp_path)
+    secrets = MemorySecrets()
+    services = build_services(engine, tmp_path, secrets=secrets)
+
+    services.ai.save(AccountFactory.admin(), "https://api.deepseek.com", "deepseek-chat", KEY)
+
+    assert secrets.items == {"ai:key": KEY}
+    engine.dispose()
 
 
 def test_a_second_server_on_the_same_data_folder_is_refused(tmp_path: Path) -> None:

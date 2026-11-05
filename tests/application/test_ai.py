@@ -108,9 +108,9 @@ def test_saving_again_without_a_key_keeps_the_key_it_has(
 def test_saving_again_with_a_key_replaces_the_key(ai: AiService, secrets: MemorySecrets) -> None:
     _set_up_deepseek(ai)
 
-    ai.save(ADMIN, DEEPSEEK, "deepseek-chat", "sk-newkey1234")
+    ai.save(ADMIN, DEEPSEEK, "deepseek-chat", "sk-replaced1234")
 
-    assert secrets.items == {"ai:key": "sk-newkey1234"}
+    assert secrets.items == {"ai:key": "sk-replaced1234"}
 
 
 def test_saving_trims_the_key(ai: AiService, secrets: MemorySecrets) -> None:

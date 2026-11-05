@@ -44,7 +44,7 @@ class ChatReplyFactory:
         """Return the answer in which the model says `content` and stops for `finish_reason`."""
         return Reply.json(
             {
-                "id": "chatcmpl-1",
+                "id": "resp-1",
                 "choices": [
                     {
                         "index": 0,

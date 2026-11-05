@@ -16,13 +16,16 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
+from medleyplay.plugin_api import AiEndpoint
+
 RESULT_FILE: Final = "result.json"
 
-type JobFailureKind = Literal["network", "auth", "plugin", "program", "gone", "refused"]
+type JobFailureKind = Literal["network", "auth", "plugin", "program", "gone", "refused", "invalid"]
 """Why a Job failed: the site's network, its login, a plugin, or the Job's own program.
 
 A program may also fail its Job because the site no longer has what it asked for
-(`gone`), or because the site refused the request (`refused`).
+(`gone`), because the site refused the request (`refused`), or because the site
+answered with something unusable (`invalid`).
 """
 
 
@@ -43,6 +46,8 @@ class JobStart(_Message):
     """The path of a copy of a login in the working folder, for the program to pass on."""
     proxy: str | None = Field(default=None, repr=False)
     """The household's proxy for the Job's site, for the program to pass on; never on disk."""
+    ai: AiEndpoint | None = Field(default=None, repr=False)
+    """The AI provider the Job is lent, key included, for the program to pass on; never on disk."""
 
 
 class KeyOutcome(_Message):

@@ -126,6 +126,37 @@ describe("editing a file's songs", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("splits a file from the list the AI suggested, as new songs", async () => {
+    const { dialog, onSave } = await renderEditor(splitSongsOf(104, [], [], LISTED));
+
+    await press(dialog, "Use the 2 songs the AI suggested");
+    await press(dialog, "Save");
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      [
+        { id: null, start_ms: 0, title: "アイネクライネ", artist: "" },
+        { id: null, start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "ハチ" },
+      ],
+      [],
+    );
+  });
+
+  it("offers the list the AI suggested for a file already split, replacing its rows when used", async () => {
+    const { dialog } = await renderEditor({ ...SPLIT, suggested: LISTED });
+
+    await press(dialog, "Use the 2 songs the AI suggested");
+
+    expect(box(dialog, "Title of song 1")).toHaveValue("アイネクライネ");
+    expect(box(dialog, "Artist of song 2")).toHaveValue("ハチ");
+    expect(within(dialog).queryByRole("textbox", { name: "Title of song 3" })).toBeNull();
+  });
+
+  it("offers no AI list when the AI suggested none", async () => {
+    const { dialog } = await renderEditor();
+
+    expect(within(dialog).queryByRole("button", { name: /the AI suggested/u })).toBeNull();
+  });
+
   it("reads a pasted list into its rows", async () => {
     const { dialog, readList } = await renderEditor(splitSongsOf(104, []));
 

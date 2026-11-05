@@ -62,6 +62,13 @@ def test_the_recorded_answer_is_read_into_the_videos_text(tmp_path: Path) -> Non
     assert answer.values == {}
 
 
+def test_an_ask_without_a_video_is_a_fault_since_the_site_reads_only_videos(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="asked about a video"):
+        BilibiliDetails(Extractor()).enrich(EnrichTrack(folder=str(tmp_path)))
+
+
 def test_the_videos_page_is_the_only_url_asked(tmp_path: Path) -> None:
     extractor = Extractor()
 

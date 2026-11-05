@@ -1,6 +1,6 @@
-"""A plugin that answers for the enricher `bilibili-details` with scripted videos.
+"""A plugin that answers for the three enrichers with scripts.
 
-The video id says how the plugin answers:
+For `bilibili-details`, the video id says how the plugin answers:
 
 | Video | Answers |
 | --- | --- |
@@ -19,6 +19,37 @@ The video id says how the plugin answers:
 | `BVBroken` | a fault |
 | `BVSlow` | text, after two seconds |
 | `BVProxyEcho` | text titled with the proxy it was asked through |
+
+For `musicbrainz`, the title the Track shows says how it answers, or its album for a
+long file split into songs:
+
+| Title | Answers |
+| --- | --- |
+| `Nowhere` | no values |
+| `Refused` | refused |
+| `Down` | a `NetworkError` |
+| `Broken` | a fault |
+| `BadValues` | a year that is not a year |
+| `NoCover` | the values of a song, and no cover |
+| `Remaster` | the values of a song titled *Remaster (2016)* |
+| `Echo` | the album *echo*, naming how it was asked |
+| `生如夏花` (a long file) | the album, album artist, year, and a cover |
+| any other | the values of *Let Down* on *OK Computer*, and a cover |
+
+For `ai-details`, the title of the video text says how it answers:
+
+| Title | Answers |
+| --- | --- |
+| `Nowhere` | no values |
+| `Album` | an album, an artist, a year, and three songs |
+| `Refused` | refused, saying to check the key |
+| `Invalid` | invalid |
+| `Down` | a `NetworkError` |
+| `Broken` | a fault |
+| `Leak` | a `NetworkError` that holds the key it was given |
+| `BadSongs` | a title, and songs whose starts fall |
+| `Echo` | the album *echo*, naming the text, the provider, and whether it has a key |
+| any other | the title *Night Drive*, the artist *Blue Room*, an album, and a year |
 """
 
 import time
@@ -34,6 +65,7 @@ from medleyplay.plugin_api import (
     NetworkError,
     Plugin,
     Registry,
+    SuggestedSong,
     VideoText,
 )
 from tests.support.images import jpeg_image, oversized_jpeg
@@ -45,7 +77,7 @@ class Reader:
     """Answers each scripted video as the table says."""
 
     def enrich(self, request: EnrichTrack) -> Enriched:
-        video, folder = request.video, Path(request.folder)
+        video, folder = request.video or "", Path(request.folder)
         match video:
             case "BVGone":
                 return Enriched(status=EnrichStatus.GONE, message="The video was removed.")
@@ -67,6 +99,113 @@ class Reader:
             time.sleep(2)
         title = f"proxy={request.proxy or 'none'}" if video == "BVProxyEcho" else _title(video)
         return Enriched(video_text=_text(title, video), cover=_cover_of(folder, video))
+
+
+class Finder:
+    """Answers each scripted Track as the table says."""
+
+    def enrich(self, request: EnrichTrack) -> Enriched:
+        shown = {each.field: each.value for each in request.shown}
+        folder = Path(request.folder)
+        key = str(shown.get("album" if request.whole_album else "title", ""))
+        match key:
+            case "Nowhere":
+                return Enriched()
+            case "Refused":
+                return Enriched(status=EnrichStatus.REFUSED, message="HTTP Error 403.")
+            case "Down":
+                message = "MusicBrainz couldn't be reached."
+                raise NetworkError(message)
+            case "Broken":
+                message = "The answer changed shape."
+                raise ValueError(message)
+            case "BadValues":
+                return Enriched(values={"year": "last year"})
+            case "Echo":
+                return Enriched(values={"album": _echo(request, shown)})
+        if request.whole_album:
+            values: dict[str, str | int] = {"album": key, "album_artist": "朴树", "year": 2003}
+            return Enriched(values=values, cover=_cover(folder, key))
+        title = "Remaster (2016)" if key == "Remaster" else key
+        values = {
+            "title": title,
+            "artist": "Radiohead",
+            "album": "OK Computer",
+            "album_artist": "Radiohead",
+            "year": 1997,
+            "track_number": 5,
+            "disc_number": 1,
+        }
+        return Enriched(values=values, cover=None if key == "NoCover" else _cover(folder, key))
+
+
+_SUGGESTIONS: Final = {
+    "Nowhere": Enriched(),
+    "Refused": Enriched(
+        status=EnrichStatus.REFUSED,
+        message="The AI provider refused the key or the account (401). Check the key.",
+    ),
+    "Invalid": Enriched(
+        status=EnrichStatus.INVALID, message="The AI model's answer was not the JSON asked for."
+    ),
+    "Album": Enriched(
+        values={"artist": "Blue Room", "album": "Re:Start", "year": 2016},
+        songs=(
+            SuggestedSong(start_ms=0, title="Intro"),
+            SuggestedSong(start_ms=192_000, title="Night Drive", artist="Blue Room"),
+            SuggestedSong(start_ms=4_060_000, title="Outro"),
+        ),
+    ),
+    "BadSongs": Enriched(
+        values={"title": "Night Drive"},
+        songs=(
+            SuggestedSong(start_ms=60_000, title="Intro"),
+            SuggestedSong(start_ms=0, title="Outro"),
+        ),
+    ),
+}
+_NIGHT_DRIVE: Final = Enriched(
+    values={"title": "Night Drive", "artist": "Blue Room", "album": "Re:Start", "year": 2016}
+)
+
+
+class Suggester:
+    """Answers each scripted video text as the table says."""
+
+    def enrich(self, request: EnrichTrack) -> Enriched:
+        title = request.text.title if request.text is not None else ""
+        match title:
+            case "Down":
+                message = "The AI provider couldn't be reached."
+                raise NetworkError(message)
+            case "Broken":
+                message = "The answer changed shape."
+                raise ValueError(message)
+            case "Leak":
+                message = f"The AI provider couldn't be reached with {_key_of(request)}."
+                raise NetworkError(message)
+            case "Echo":
+                return Enriched(values={"album": _echo_ai(request)})
+        return _SUGGESTIONS.get(title, _NIGHT_DRIVE)
+
+
+def _key_of(request: EnrichTrack) -> str:
+    return request.ai.key or "no key" if request.ai is not None else "no provider"
+
+
+def _echo_ai(request: EnrichTrack) -> str:
+    ai, text = request.ai, request.text
+    provider = "none" if ai is None else f"{ai.base_url} {ai.model} key={ai.key is not None}"
+    words = "none" if text is None else f"{len(text.description)} {len(text.chapters)}"
+    return f"provider={provider} text={words} file={request.file_name or 'none'}"
+
+
+def _echo(request: EnrichTrack, shown: dict[str, str | int]) -> str:
+    return (
+        f"whole_album={request.whole_album} video={request.video} proxy={request.proxy or 'none'}"
+        f" duration={request.duration_ms} file={request.file_name or 'none'}"
+        f" shown={sorted(shown)}"
+    )
 
 
 def _title(video: str) -> str:
@@ -104,8 +243,10 @@ def _cover(folder: Path, video: str) -> str:
 
 
 def register(registry: Registry) -> None:
-    """Add the enricher `bilibili-details`."""
+    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`."""
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
+    registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
+    registry.add(TRACK_ENRICHER, "ai-details", Suggester())
 
 
 plugin = Plugin(api_version=1, register=register)

@@ -1,10 +1,11 @@
 """Enrichment: asking a site for the details a Track's file does not say, when someone asks.
 
 Nothing here runs by itself. A Track is asked for when a person chooses *Find details
-online* for it, or an admin chooses it for every Track that is eligible; each Track is
-one Job, and the Jobs of an enricher run one at a time with a pause between them.
-What the site says is recorded as the enricher's origin, and the first time the site
-refuses a request the enricher stops until an admin resets it:
+online* (Bilibili), *Find on MusicBrainz*, or *Suggest details with AI* for it, or an
+admin chooses it for every Track that is eligible; each Track is one Job, and the Jobs
+of an enricher run one at a time with a pause between them. What the site says is
+recorded as the enricher's origin, and the first time the site refuses a request the
+enricher stops until an admin resets it:
 
 ```text
 Find details online     one Track          any Account
@@ -13,32 +14,33 @@ Reset                   a stopped enricher an admin
 ```
 """
 
-from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock, details
+from medleyplay.application.ai import is_set_up
+from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.ai import cut_text
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.details import Field, Shown, check_values, shown
+from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
 from medleyplay.domain.enrichers import (
     ENRICHERS,
     MESSAGES,
     Enricher,
     Ineligible,
-    TrackFacts,
+    Subject,
     enricher_named,
-    video_id_of,
     why_not,
 )
 from medleyplay.domain.errors import (
@@ -48,19 +50,16 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.jobs import Job, JobId, JobState
-from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
-from medleyplay.domain.links import BILIBILI_SOURCE
-from medleyplay.domain.video_text import Chapter, VideoText
+from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import (
+    EnricherAskRow,
     EnricherStopRow,
     JobRow,
-    SegmentRow,
-    SourceRow,
     TrackRow,
-    VideoAskRow,
     VideoTextRow,
 )
 from medleyplay.plugin_api import TRACK_ENRICHER, ShownDetail
+from medleyplay.plugin_api import Chapter as AskedChapter
 from medleyplay.plugin_api import VideoText as AnsweredText
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob
 from medleyplay.programs.info_json import MAX_START_MS
@@ -72,9 +71,21 @@ SITE_TEXT: Final = "site"
 type EnrichKind = JobKind[EnrichJob, EnrichedTrack]
 
 
-def enrich_target(track_id: TrackId) -> str:
-    """Return the target of the Job that asks about the Track."""
-    return f"track:{track_id}"
+def enrich_target(track_id: TrackId, enricher: str) -> str:
+    """Return the target of the Job that asks `enricher` about the Track: `track:7:musicbrainz`.
+
+    Each enricher has its own, so asking a second one about a Track queues its own Job
+    rather than returning the first one's.
+    """
+    return f"track:{track_id}:{enricher}"
+
+
+def track_of_target(target: str) -> TrackId:
+    """Return the Track an enrich Job's target names, as `track:7:musicbrainz` or `track:7`.
+
+    A Job queued before targets named their enricher has the Track's alone.
+    """
+    return TrackId(int(target.removeprefix("track:").partition(":")[0]))
 
 
 @dataclass(frozen=True)
@@ -87,12 +98,6 @@ class EnricherState:
     stopped_at: datetime | None
     reason: str
     """The site's refusal that stopped it, or empty."""
-
-
-@dataclass(frozen=True)
-class _Candidate:
-    facts: TrackFacts
-    file_name: str
 
 
 def enrich_track_kind(covers_folder: Path, clock: Clock) -> EnrichKind:
@@ -110,7 +115,7 @@ def enrich_track_kind(covers_folder: Path, clock: Clock) -> EnrichKind:
         needs_network=True,
         lane_field="enricher",
         lanes={
-            each.name: Lane(spacing=each.spacing, proxy_site=each.site)
+            each.name: Lane(spacing=each.spacing, proxy_site=each.site, lends_ai=each.uses_ai)
             for each in ENRICHERS.values()
         },
         refuse_start=_refuse_start,
@@ -121,15 +126,20 @@ def enrich_track_kind(covers_folder: Path, clock: Clock) -> EnrichKind:
 def _complete(
     db: Session, job: Job, found: EnrichedTrack, *, clock: Clock, covers_folder: Path
 ) -> None:
-    """Note that the video was asked, and record what the site said unless the Track has moved on.
+    """Note that the subject was asked, and record what the site said unless the Track moved on.
 
     A Track whose video text came from a file or the household since the Job was queued
-    is left as it is.
+    is left as it is by an enricher that reads videos.
     """
     enricher, now = enricher_named(found.enricher), clock()
-    _record_ask(db, enricher.name, found.video, now)
-    track_id = TrackId(int(job.target.removeprefix("track:")))
-    if db.get(TrackRow, track_id) is None or _text_is_owned(db, track_id):
+    _record_ask(db, enricher.name, found.subject, now)
+    track_id = track_of_target(job.target)
+    if db.get(TrackRow, track_id) is None:
+        return
+    if enricher.subject is Subject.VIDEO and _text_is_owned(db, track_id):
+        return
+    if enricher.origin is Origin.AI:
+        _record_suggestion(db, track_id, found, now)
         return
     cover = _keep_cover(found, covers_folder)
     if found.video_text is not None:
@@ -144,26 +154,45 @@ def _complete(
         details.record(db, track_id, enricher.origin, values, now)
 
 
+def _record_suggestion(db: Session, track_id: TrackId, found: EnrichedTrack, now: datetime) -> None:
+    """Record what the AI suggested, in place of its last suggestion; it shows nowhere.
+
+    An answer that suggests nothing clears the last suggestion.
+    """
+    details.record(db, track_id, Origin.AI, dict(check_values(found.values)), now)
+    songs = [Song(song.start_ms, song.title, song.artist) for song in found.songs]
+    details.record_suggested_songs(db, track_id, songs, now)
+
+
 def _refuse_start(db: Session, request: object) -> str | None:
     name = _enricher_of(request)
-    stop = None if name is None else db.get(EnricherStopRow, name)
-    return None if stop is None else _stopped_message(stop.enricher, stop.reason)
+    if name is None:
+        return None
+    stop = db.get(EnricherStopRow, name)
+    if stop is not None:
+        return _stopped_message(stop.enricher, stop.reason)
+    return (
+        None
+        if is_set_up(db) or not enricher_named(name).uses_ai
+        else MESSAGES[Ineligible.NOT_SET_UP]
+    )
 
 
 def _on_failure(db: Session, job: Job, kind: str, message: str, *, clock: Clock) -> Sequence[JobId]:
-    """Note that a video the site no longer has was asked, and stop the enricher on a refusal.
+    """Note that a subject the site couldn't answer for was asked, and stop on a refusal.
 
-    A refusal stops the enricher and fails its Jobs that haven't started; it doesn't
-    count as asking, so the video that was refused is eligible once an admin resets
-    the enricher. Return the Jobs failed.
+    A video the site no longer has, and an answer the enricher couldn't use, count as
+    asking, since the site was asked. A refusal stops the enricher and fails its Jobs
+    that haven't started; it doesn't count as asking, so the subject that was refused is
+    eligible once an admin resets the enricher. Return the Jobs failed.
     """
     request = db.get_one(JobRow, job.id).request
-    name, video = _enricher_of(request), request.get("video")
+    name, subject = _enricher_of(request), request.get("subject")
     if name is None:
         return []
     now = clock()
-    if kind == "gone" and isinstance(video, str):
-        _record_ask(db, name, video, now)
+    if kind in {"gone", "invalid"} and isinstance(subject, str):
+        _record_ask(db, name, subject, now)
     if kind != "refused":
         return []
     db.merge(EnricherStopRow(enricher=name, stopped_at=now, reason=message[:2048]))
@@ -207,11 +236,12 @@ class EnrichmentService:
         with self._units() as db:
             if db.get(EnricherStopRow, enricher.name) is not None:
                 return []
-            candidates = _candidates(db, enricher.name, None)
+            set_up = is_set_up(db)
+            eligible = candidates(db, enricher, None)
         return [
             track_id
-            for track_id, found in candidates.items()
-            if why_not(found.facts, now, stopped=False) is None
+            for track_id, found in eligible.items()
+            if why_not(found.facts, now, stopped=False, enricher=enricher, set_up=set_up) is None
         ]
 
     def find_details(self, caller: Account, track_id: TrackId, name: str) -> Job:
@@ -224,19 +254,24 @@ class EnrichmentService:
         now = self._clock()
         with self._units() as db:
             stopped = db.get(EnricherStopRow, enricher.name) is not None
-            found = _candidates(db, enricher.name, [track_id]).get(track_id)
+            found = candidates(db, enricher, [track_id]).get(track_id)
             if found is None:
                 message = f"No Track has the id {track_id}."
                 raise NotFoundError(message)
-            shown_now = shown(details.values_of(db, track_id))
+            own = {
+                o: v for o, v in details.values_of(db, track_id).items() if o is not enricher.origin
+            }
+            shown_now = shown(own)
             duration_ms = db.scalar(select(TrackRow.duration_ms).where(TrackRow.id == track_id))
-        reason = why_not(found.facts, now, stopped=stopped)
+            set_up = is_set_up(db)
+            text = details.video_text_of(db, track_id) if enricher.uses_ai else None
+        reason = why_not(found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up)
         if reason is not None:
             raise ConflictError(MESSAGES[reason])
         return self._jobs.submit(
             self._kind,
-            enrich_target(track_id),
-            _request(enricher, found, shown_now, duration_ms),
+            enrich_target(track_id, enricher.name),
+            _request(enricher, found, shown_now, duration_ms, text),
             caller.id,
         )
 
@@ -252,7 +287,7 @@ class EnrichmentService:
             raise ConflictError(MESSAGES[Ineligible.STOPPED])
         queued = 0
         for track_id in self.eligible(name):
-            target = enrich_target(track_id)
+            target = enrich_target(track_id, enricher.name)
             if self._jobs.active(ENRICH_KIND, target) is None:
                 self.find_details(caller, track_id, name)
                 queued += 1
@@ -277,74 +312,33 @@ class EnrichmentService:
             raise PluginUnavailableError(message)
 
 
-def _candidates(
-    db: Session, enricher: str, track_ids: Sequence[TrackId] | None
-) -> dict[TrackId, _Candidate]:
-    """Return what decides, for each Track, whether the enricher is asked about it.
-
-    With `track_ids`, those Tracks that exist; otherwise every Track with a video.
-    """
-    named = select(SourceRow.track_id, SourceRow.kind, SourceRow.locator).where(
-        SourceRow.kind.in_((BILIBILI_SOURCE, LIBRARY_SOURCE))
-    )
-    if track_ids is not None:
-        named = named.where(SourceRow.track_id.in_(track_ids))
-    sources: defaultdict[TrackId, list[tuple[str, str]]] = defaultdict(list)
-    for track_id, kind, locator in db.execute(named):
-        sources[TrackId(track_id)].append((kind, locator))
-    ids = set(sources)
-    if track_ids is not None:
-        ids = {
-            TrackId(i) for i in db.scalars(select(TrackRow.id).where(TrackRow.id.in_(track_ids)))
-        }
-    videos = {track_id: video_id_of(sources.get(track_id, [])) for track_id in ids}
-    segments = set(db.scalars(select(SegmentRow.track_id)))
-    text_rows = db.execute(select(VideoTextRow.track_id, VideoTextRow.came_from))
-    came_from = {TrackId(track_id): source for track_id, source in text_rows}
-    ask_rows = db.execute(
-        select(VideoAskRow.video, VideoAskRow.asked_at).where(VideoAskRow.enricher == enricher)
-    )
-    asked = {video: at for video, at in ask_rows}  # noqa: C416 -- rows are not pairs to mypy
-    found: dict[TrackId, _Candidate] = {}
-    for track_id, video in videos.items():
-        facts = TrackFacts(
-            video=video,
-            is_segment=track_id in segments,
-            text_came_from=came_from.get(track_id),
-            asked_at=None if video is None else asked.get(video),
-        )
-        found[track_id] = _Candidate(facts, _file_name(sources.get(track_id, [])))
-    return found
-
-
-def _file_name(sources: Sequence[tuple[str, str]]) -> str:
-    """Return the name of the Library file among a Track's Sources, or empty."""
-    for kind, locator in sources:
-        if kind == LIBRARY_SOURCE:
-            return PurePosixPath(path_of_locator(locator)).name
-    return ""
-
-
 def _request(
-    enricher: Enricher, found: _Candidate, shown_now: Mapping[Field, Shown], duration_ms: int | None
+    enricher: Enricher,
+    found: Candidate,
+    shown_now: Mapping[Field, Shown],
+    duration_ms: int | None,
+    text: VideoText | None,
 ) -> EnrichJob:
-    video = found.facts.video
-    if video is None:  # pragma: no cover -- an eligible Track has a video
-        raise ValueError(video)
+    subject = found.facts.subject
+    if subject is None:  # pragma: no cover -- an eligible Track has something to ask about
+        raise ValueError(subject)
     return EnrichJob(
         enricher=enricher.name,
-        video=video,
+        subject=subject,
+        video=found.video,
         shown=tuple(
             ShownDetail(field=str(field), value=each.value, origin=str(each.origin))
             for field, each in shown_now.items()
         ),
         duration_ms=duration_ms,
         file_name=found.file_name,
+        whole_album=found.whole_album,
+        text=None if text is None else _asked_text(text),
     )
 
 
-def _record_ask(db: Session, enricher: str, video: str, now: datetime) -> None:
-    db.merge(VideoAskRow(enricher=enricher, video=video, asked_at=now))
+def _record_ask(db: Session, enricher: str, subject: str, now: datetime) -> None:
+    db.merge(EnricherAskRow(enricher=enricher, subject=subject, asked_at=now))
 
 
 def _text_is_owned(db: Session, track_id: TrackId) -> bool:
@@ -360,6 +354,15 @@ def _keep_cover(found: EnrichedTrack, folder: Path) -> str | None:
         return keep_copy(found.cover, folder)
     except (OSError, NotACoverError):
         return None
+
+
+def _asked_text(text: VideoText) -> AnsweredText:
+    """Return the video's text cut to what the AI is sent, as the plugin API carries it."""
+    cut = cut_text(text)
+    chapters = tuple(
+        AskedChapter(start_ms=each.start_ms, title=each.title) for each in cut.chapters
+    )
+    return AnsweredText(title=cut.title, description=cut.description, chapters=chapters)
 
 
 def _read_text(answered: AnsweredText) -> VideoText | None:
@@ -380,8 +383,9 @@ def _enricher_of(request: object) -> str | None:
 
 
 def _stopped_message(name: str, reason: str) -> str:
+    source = ENRICHERS[name].source if name in ENRICHERS else "the site"
     return (
-        f"{name} is stopped after the site refused a request: {reason.rstrip('.')}. "
+        f"{name} is stopped after {source} refused a request: {reason.rstrip('.')}. "
         "An admin can reset it in Settings."
     )
 

@@ -46,9 +46,12 @@ class Origin(StrEnum):
     """For a song inside a long file, its album file's album fields."""
     FILE_NAME = "file_name"
     """The file's name: the title of last resort."""
+    AI = "ai"
+    """What an AI model suggested from the video's text; a suggestion, never shown."""
 
 
-ORIGINS: Final = tuple(Origin)
+ORIGINS: Final = tuple(origin for origin in Origin if origin is not Origin.AI)
+"""The origins a field shows from, in order. The AI only suggests, so it is not among them."""
 
 
 class Field(StrEnum):

@@ -24,6 +24,7 @@ from medleyplay.plugin_api import (
     EnrichStatus,
     EnrichTrack,
     ShownDetail,
+    SuggestedSong,
     VideoId,
     VideoText,
     is_cover_image,
@@ -40,25 +41,33 @@ class _Model(BaseModel):
 
 
 class EnrichJob(_Model):
-    """Ask the enricher `enricher` about the Track whose video is `video`.
+    """Ask the enricher `enricher` about a Track.
 
-    `shown` is what the Track showed when the Job was queued.
+    `subject` is what the enricher is asked about, which is noted as asked once the Job
+    has run: the Track's video, or a key made from the Track and what it is searched
+    for. `video` is the Track's video, when the enricher reads videos. `shown` is what
+    the Track showed when the Job was queued, and `whole_album` says it is a long file
+    split into songs. `text` is the Track's video text, when the enricher reads it.
     """
 
     enricher: str
-    video: VideoId
+    subject: str
+    video: VideoId | None = None
     shown: tuple[ShownDetail, ...] = ()
     duration_ms: int | None = None
     file_name: str = ""
+    whole_album: bool = False
+    text: VideoText | None = None
 
 
 class EnrichedTrack(_Model):
-    """What the enricher found: values, or the video's text, and a copy of its cover."""
+    """What the enricher found: values and songs, or the video's text, and a copy of its cover."""
 
     enricher: str
-    video: VideoId
+    subject: str
     values: dict[str, str | int] = {}
     video_text: VideoText | None = None
+    songs: tuple[SuggestedSong, ...] = ()
     cover: CoverFile | None = None
 
 
@@ -72,22 +81,28 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
         EnrichTrack(
             video=request.video,
             shown=request.shown,
+            whole_album=request.whole_album,
             duration_ms=request.duration_ms,
             file_name=request.file_name,
             folder=str(folder),
             proxy=context.proxy,
+            text=request.text,
+            ai=context.ai,
         ),
     )
     if answer.status is EnrichStatus.REFUSED:
         raise AnswerFailedError(answer.message or "The site refused the request.", kind="refused")
     if answer.status is EnrichStatus.GONE:
         raise AnswerFailedError(answer.message or "The site no longer has the video.", kind="gone")
+    if answer.status is EnrichStatus.INVALID:
+        raise AnswerFailedError(answer.message or "The answer was not usable.", kind="invalid")
     copy = None if answer.cover is None else _copy_cover(folder, answer.cover, context.work_dir)
     return EnrichedTrack(
         enricher=request.enricher,
-        video=request.video,
+        subject=request.subject,
         values=answer.values,
         video_text=answer.video_text,
+        songs=answer.songs,
         cover=copy,
     )
 

@@ -135,6 +135,25 @@ describe("adding a video that could not be read", () => {
     expect(within(dialog).getByRole("button", { name: "Add" })).toBeDisabled();
   });
 
+  it("shows what goes in each of a part's empty fields", async () => {
+    const { dialog } = renderDialog(unreadableLookupOf("Bilibili couldn't be reached.", "network"));
+
+    await within(dialog).findByRole("alert");
+
+    expect(within(dialog).getByRole("spinbutton", { name: "Part number 1" })).toHaveAttribute(
+      "placeholder",
+      "Part",
+    );
+    expect(within(dialog).getByRole("textbox", { name: "Title of part 1" })).toHaveAttribute(
+      "placeholder",
+      "Title",
+    );
+    expect(within(dialog).getByRole("textbox", { name: "Artist of part 1" })).toHaveAttribute(
+      "placeholder",
+      "Artist",
+    );
+  });
+
   it("adds the parts given at the best quality", async () => {
     const { add, onAdded, dialog } = renderDialog(unreadableLookupOf("Gone.", "gone"));
     await within(dialog).findByRole("alert");

@@ -146,13 +146,15 @@ class SegmentRow(Base):
 
 
 class VideoTextRow(Base):
-    """The text of a Track's video, as pasted or read beside the file: the `video` values' source.
+    """The text of a Track's video, as pasted, read beside the file, or read from the site.
 
     `chapters` lists `{"start_ms": int, "title": str}` in order.
     """
 
     __tablename__ = "video_text"
-    __table_args__ = (CheckConstraint("came_from IN ('household', 'file')", name="came_from"),)
+    __table_args__ = (
+        CheckConstraint("came_from IN ('household', 'file', 'site')", name="came_from"),
+    )
 
     track_id: Mapped[int] = mapped_column(
         ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
@@ -162,6 +164,29 @@ class VideoTextRow(Base):
     chapters: Mapped[list[dict[str, str | int]]] = mapped_column(JSON)
     came_from: Mapped[str] = mapped_column(String(16))
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class EnricherStopRow(Base):
+    """An enricher the site refused: it asks nothing more until an admin resets it.
+
+    A row exists only while the enricher is stopped.
+    """
+
+    __tablename__ = "enricher_stop"
+
+    enricher: Mapped[str] = mapped_column(String(64), primary_key=True)
+    stopped_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    reason: Mapped[str] = mapped_column(String(2048), default="")
+
+
+class VideoAskRow(Base):
+    """When an enricher last asked its site about a video, so it never asks twice in a day."""
+
+    __tablename__ = "video_ask"
+
+    enricher: Mapped[str] = mapped_column(String(64), primary_key=True)
+    video: Mapped[str] = mapped_column(String(64), primary_key=True)
+    asked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class SourceRow(Base):

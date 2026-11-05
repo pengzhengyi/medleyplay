@@ -21,10 +21,9 @@ from tests.support.musicbrainz import (
     ORIGINAL,
     FakeMusicBrainz,
     FakeMusicBrainzFactory,
-    FakeWaits,
     MusicBrainzFactory,
-    Reply,
 )
+from tests.support.transport import FakeWaits, Reply
 
 BUSY = Reply(503, {"Retry-After": "3"})
 SEARCH = f"{API}/recording"

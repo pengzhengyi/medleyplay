@@ -63,6 +63,13 @@ def test_the_plugin_that_finds_a_track_on_musicbrainz_is_off_by_default_too() ->
     ) == ("musicbrainz",)
 
 
+def test_the_plugin_that_asks_an_ai_model_is_off_by_default_too() -> None:
+    assert Config().enabled_plugins(["ai-details", "tinytag-tags"]) == ("tinytag-tags",)
+    assert Config(plugins={"ai-details": PluginConfig(enabled=True)}).enabled_plugins(
+        ["ai-details"]
+    ) == ("ai-details",)
+
+
 def test_plugins_the_file_names_but_that_dont_exist_are_unknown() -> None:
     config = Config(plugins={"radio": PluginConfig(enabled=False), "zz": PluginConfig()})
 

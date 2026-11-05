@@ -98,6 +98,20 @@ describe("the views", () => {
     expect(screen.getByRole("link", { name: /空想.*Various, 1 song/ })).toBeInTheDocument();
   });
 
+  it("opens each view with no filters on, whatever the last view had", async () => {
+    open("");
+    await userEvent.click(await screen.findByText("Filter"));
+    const filters = screen.getByRole("group", { name: "Filters" });
+    await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "ルワン");
+    expect(songs()).toEqual(["クジラ"]);
+
+    await userEvent.click(screen.getByRole("link", { name: "Downloaded" }));
+
+    expect(await screen.findByRole("heading", { name: "Downloaded" })).toBeInTheDocument();
+    expect(songs()).toEqual(["Shiver"]);
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
   it("lists only the songs downloaded", async () => {
     open("#/downloaded");
 

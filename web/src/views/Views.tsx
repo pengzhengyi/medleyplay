@@ -3,7 +3,7 @@
  */
 
 import { CaretLeftIcon, HeartIcon, PlaylistIcon } from "@phosphor-icons/react";
-import { type ReactNode, useMemo } from "react";
+import { Fragment, type ReactNode, useMemo } from "react";
 
 import type { Mode, Playlist, Track } from "../api";
 import { formatLength } from "../format";
@@ -45,8 +45,14 @@ export interface ViewProps {
   readonly onEnrichersChanged: () => void;
 }
 
-/** The view `route` names. */
+/** The view `route` names; each route is a view of its own, opening with no filters on. */
 export function CurrentView(given: ViewProps) {
+  // Search stays one view while its words change, so typing keeps what it has found.
+  const key = given.route.view === "search" ? "search" : JSON.stringify(given.route);
+  return <Fragment key={key}>{viewOf(given)}</Fragment>;
+}
+
+function viewOf(given: ViewProps) {
   // A Playlist names its Tracks by id among them all; every other view lists songs.
   const props = { ...given, tracks: songsOf(given.tracks) };
   const { route } = props;

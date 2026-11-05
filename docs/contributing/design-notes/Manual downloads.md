@@ -104,9 +104,10 @@
 - **The web client keeps the list,** per Source kind, so the plugin API and the
   plugins don't change. Each way has a name, a line on when to try it, and a
   command with the part's link filled in, with a button to copy it.
-- **For `bilibili`:** yt-dlp with a cookies file or the browser's cookies, yt-dlp
-  with the extractor fix under review, BBDown, yutto, lux, and you-get, in the
-  order the household found them to work.
+- **For `bilibili`:** yt-dlp through the household's proxy, yt-dlp with the
+  browser's cookies for a video that needs a login, BBDown, yutto, lux, and
+  you-get, in the order the household found them to work. Each command writes
+  the audio only, named by the video's id, so the file is ready to add.
 - **The list shows** in the add dialog, folded, and in the dialog for adding
   the file.
 

@@ -198,7 +198,10 @@ standard `proxy` option, and does nothing more.
   library whether to skip the proxy for a host, and the standard library answers
   from `no_proxy` and the system's bypass list, so the plugin gives yt-dlp a
   handler of its own that takes the proxy as given. It supports `http` and
-  `socks5h`; an `https` proxy needs yt-dlp's `requests` handler. The short-link
+  `socks5h`; an `https` proxy goes through yt-dlp's `requests` handler, which
+  ignores the environment's proxies too. medleyplay depends on `requests` and
+  `urllib3` for that handler alone, not on `yt-dlp[default]`, whose extras
+  include the GPL-licensed `mutagen`. The short-link
   hops use the same handler, set to answer a redirect instead of following it.
 - **Reaching the plugin:** the proxy is a field of the `canonicalize` and `read`
   requests, and of a download Job's start, so the plugin keeps none and nothing

@@ -9,6 +9,7 @@ from urllib.error import URLError
 
 import pytest
 from yt_dlp.networking import Response  # type: ignore[import-untyped]
+from yt_dlp.networking.common import _REQUEST_HANDLERS  # type: ignore[import-untyped]
 from yt_dlp.networking.exceptions import (  # type: ignore[import-untyped]
     HTTPError,
     ProxyError,
@@ -241,6 +242,16 @@ def test_a_secure_request_asks_the_proxy_for_a_tunnel_to_the_host(
         extract(f"https://{VIDEO_PAGE}", playlist=False, proxy=proxy.url)
 
     assert proxy.requests == ["CONNECT www.bilibili.com:443 HTTP/1.1"]
+
+
+def test_an_https_proxy_has_a_request_handler_that_takes_it() -> None:
+    # urllib takes no `https` proxy, so yt-dlp needs its `requests` handler for one.
+    schemes = [
+        handler._SUPPORTED_PROXY_SCHEMES  # noqa: SLF001 -- yt-dlp states them nowhere public
+        for handler in _REQUEST_HANDLERS.values()
+    ]
+
+    assert any("https" in each for each in schemes)
 
 
 def test_a_socks_proxy_is_asked_for_the_host_by_name(no_outside_network: None) -> None:

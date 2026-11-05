@@ -3,15 +3,22 @@
 yt-dlp answers a video with several parts as a playlist whose entries are only
 the parts' URLs, so only the first part is read in full; it names the uploader,
 the formats, and its own part's title, as `<video title> p01 <part title>`.
-
-Unverified until yt-dlp can read Bilibili again: the fields follow yt-dlp's
-Bilibili extractor, not a recorded answer.
 """
 
+import math
+import re
 from collections.abc import Mapping, Sequence
 from typing import Final
+from urllib.parse import urlsplit
 
-from medleyplay.plugin_api import BEST_QUALITY, AudioQuality, PartDetails, VideoDetails
+from medleyplay.plugin_api import (
+    BEST_QUALITY,
+    AudioQuality,
+    Chapter,
+    PartDetails,
+    VideoDetails,
+    VideoText,
+)
 
 type Info = Mapping[str, object]
 
@@ -19,6 +26,14 @@ QUALITIES: Final = {"30280": 192, "30232": 132, "30216": 64}
 """Bilibili's AAC audio ids and their bitrates in kbps, best first."""
 VIDEO_URL: Final = "https://www.bilibili.com/video/{video}"
 MAX_TEXT: Final = 512
+MAX_VIDEO_TITLE: Final = 1_000
+MAX_VIDEO_DESCRIPTION: Final = 20_000
+MAX_CHAPTERS: Final = 1_000
+MAX_CHAPTER_START_MS: Final = 7 * 24 * 3600 * 1000
+COVER_HOSTS: Final = ("hdslb.com", "biliimg.com", "bilibili.com")
+"""The sites Bilibili serves a video's cover from; an image anywhere else is no cover."""
+
+_ANTHOLOGY_PART: Final = re.compile(r" p01 .*", re.DOTALL)
 
 
 def video_url(video: str, part: int | None = None) -> str:
@@ -42,6 +57,40 @@ def video_details(first: Info, playlist: Info | None = None) -> VideoDetails:
     return VideoDetails(
         title=title, uploader=_text(first, "uploader"), parts=tuple(parts), qualities=qualities
     )
+
+
+def video_text(info: Info) -> VideoText:
+    """Return the title, description, and chapters of a video from its info.
+
+    A part of an anthology is titled `<video title> p01 <part title>` by yt-dlp; the
+    video's own title is what the text holds.
+    """
+    title = _text(info, "title", limit=MAX_VIDEO_TITLE)
+    if str(info.get("id", "")).endswith("_p1"):
+        title = _ANTHOLOGY_PART.sub("", title, count=1)
+    chapters = (_chapter(entry) for entry in _list(info.get("chapters")))
+    return VideoText(
+        title=title,
+        description=_text(info, "description", limit=MAX_VIDEO_DESCRIPTION),
+        chapters=tuple(chapter for chapter in chapters if chapter is not None)[:MAX_CHAPTERS],
+    )
+
+
+def cover_url(info: Info) -> str | None:
+    """Return where the video's cover is, or `None` when it has none or is off Bilibili.
+
+    "http://i2.hdslb.com/bfs/archive/ffd2.jpg" is a cover; the same path on another host is not.
+    """
+    url = info.get("thumbnail")
+    if not isinstance(url, str):
+        thumbnails = [t.get("url") for t in _list(info.get("thumbnails"))]
+        url = thumbnails[-1] if thumbnails else None
+    if not isinstance(url, str):
+        return None
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    from_bilibili = any(host == known or host.endswith(f".{known}") for known in COVER_HOSTS)
+    return url if parts.scheme in {"http", "https"} and from_bilibili else None
 
 
 def audio_qualities(info: Info) -> tuple[AudioQuality, ...]:
@@ -90,9 +139,19 @@ def _list(value: object) -> list[Mapping[str, object]]:
     return [item for item in value if isinstance(item, Mapping)] if isinstance(value, list) else []
 
 
-def _text(info: Info, key: str) -> str:
+def _text(info: Info, key: str, limit: int = MAX_TEXT) -> str:
     value = info.get(key)
-    return value.strip()[:MAX_TEXT] if isinstance(value, str) else ""
+    return value.strip()[:limit] if isinstance(value, str) else ""
+
+
+def _chapter(entry: Mapping[str, object]) -> Chapter | None:
+    start, title = entry.get("start_time"), entry.get("title")
+    if isinstance(start, bool) or not isinstance(start, int | float) or not isinstance(title, str):
+        return None
+    milliseconds = start * 1000
+    if not math.isfinite(milliseconds) or not 0 <= milliseconds <= MAX_CHAPTER_START_MS:
+        return None
+    return Chapter(start_ms=round(milliseconds), title=title.strip()[:MAX_VIDEO_TITLE])
 
 
 def _duration_ms(info: Info) -> int | None:

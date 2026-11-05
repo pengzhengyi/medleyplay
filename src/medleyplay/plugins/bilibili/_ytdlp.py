@@ -52,6 +52,9 @@ OUTPUT_NAME: Final = "audio.%(ext)s"
 _LOGIN: Final = re.compile(r"registered users|log ?in|sign ?in", re.IGNORECASE)
 _MEMBERS: Final = re.compile(r"premium members|supporter-only|members only|purchase", re.IGNORECASE)
 _REFUSED: Final = re.compile(r"rate limit|blocked by server|rejected by server", re.IGNORECASE)
+# The site's risk control answers a request from a client it suspects with 352, 401, or 412.
+_RISK_CONTROL: Final = re.compile(r"Unable to download video info: (?:352|401|412)\b")
+_REFUSED_STATUSES: Final = frozenset({403, 412})
 _REMOVED: Final = re.compile(r"deleted or geo-restricted", re.IGNORECASE)
 _RETRY_LATER: Final = frozenset({429, 500, 502, 503, 504})
 _GONE: Final = frozenset({404, 410})
@@ -65,6 +68,10 @@ class GoneError(Exception):
 
 class NeedsLoginError(Exception):
     """The site shows the video only to a signed-in account, and none was sent."""
+
+
+class RefusedError(RuntimeError):
+    """The site refused the request: a 403, a 412, a rate limit, or its risk control."""
 
 
 def extract(
@@ -82,7 +89,45 @@ def extract(
         "noplaylist": not playlist,
         "extract_flat": "in_playlist",
     }
-    return _run(options, lambda ydl: ydl.extract_info(url, download=False), cookie_file)
+    return _run(options, lambda ydl: _extract(ydl, url, download=False), cookie_file)
+
+
+def extract_with_image(
+    url: str,
+    *,
+    proxy: str | None,
+    image_of: Callable[[Info], str | None],
+    max_bytes: int,
+) -> tuple[Info, bytes | None]:
+    """Read the info of the single video at `url`, and the image `image_of` names in it.
+
+    The image is fetched with the same request handler as the page, so it goes
+    through `proxy` too, or direct when there is none. An image that can't be
+    fetched, or is longer than `max_bytes`, is `None`; the info still comes back.
+    A video's formats aren't needed, so a video with none is read all the same.
+    """
+    options = {
+        **_base(None, proxy),
+        "skip_download": True,
+        "noplaylist": True,
+        "ignore_no_formats_error": True,
+    }
+
+    def read(ydl: Any) -> tuple[Info, bytes | None]:  # noqa: ANN401 -- yt-dlp has no type hints
+        info = _extract(ydl, url, download=False)
+        image_url = image_of(info)
+        return info, None if image_url is None else _fetch(ydl, image_url, max_bytes)
+
+    return _run(options, read, None)
+
+
+def _fetch(ydl: Any, url: str, max_bytes: int) -> bytes | None:  # noqa: ANN401 -- as above
+    try:
+        with ydl.urlopen(Request(url)) as response:
+            data: bytes = response.read(max_bytes + 1)
+    except RequestError:
+        return None
+    return data if len(data) <= max_bytes else None
 
 
 def download(
@@ -114,7 +159,15 @@ def download(
         "progress_hooks": [hook],
         "postprocessors": [],
     }
-    return _run(options, lambda ydl: ydl.extract_info(url, download=True), cookie_file)
+    return _run(options, lambda ydl: _extract(ydl, url, download=True), cookie_file)
+
+
+def _extract(ydl: Any, url: str, *, download: bool) -> Info:  # noqa: ANN401 -- as above
+    info = ydl.extract_info(url, download=download)
+    if not isinstance(info, Mapping):  # pragma: no cover -- yt-dlp returns a dict or raises
+        message = f"yt-dlp returned {type(info).__name__}, not its info."
+        raise TypeError(message)
+    return info
 
 
 def _base(cookie_file: str | None, proxy: str | None) -> dict[str, object]:
@@ -134,17 +187,16 @@ def _base(cookie_file: str | None, proxy: str | None) -> dict[str, object]:
     }
 
 
-def _run(options: dict[str, object], call: Callable[[Any], Any], cookie_file: str | None) -> Info:
+def _run[T](options: dict[str, object], call: Callable[[Any], T], cookie_file: str | None) -> T:
     try:
         with _YoutubeDL(options) as ydl:
-            info = call(ydl)
+            return call(ydl)
     except DownloadError as error:
         cause = (error.exc_info[1] if error.exc_info else None) or error
+        refusal = refusal_of(cause)
+        if refusal is not None:
+            raise RefusedError(refusal) from None
         raise sort_failure(cause, signed_in=cookie_file is not None) from None
-    if not isinstance(info, Mapping):  # pragma: no cover -- yt-dlp returns a dict or raises
-        message = f"yt-dlp returned {type(info).__name__}, not its info."
-        raise TypeError(message)
-    return info
 
 
 def sort_failure(error: BaseException, *, signed_in: bool) -> Exception:
@@ -173,6 +225,22 @@ def sort_failure(error: BaseException, *, signed_in: bool) -> Exception:
     if isinstance(error, ExtractorError) and error.expected:
         return _sort_expected(str(getattr(error, "orig_msg", None) or error), signed_in=signed_in)
     return RuntimeError(f"yt-dlp failed: {error}")
+
+
+def refusal_of(error: BaseException) -> str | None:
+    """Return the message for `error` when it is the site refusing the request, else `None`.
+
+    A 403 or 412 from the site, its rate limit, or the codes of its risk control
+    (352, 401, 412) in the error yt-dlp reports.
+    """
+    for cause in (error, getattr(error, "cause", None)):
+        if isinstance(cause, HTTPError) and cause.status in _REFUSED_STATUSES:
+            return f"Bilibili refused the request ({cause.status})."
+    if isinstance(error, ExtractorError):
+        text = str(getattr(error, "orig_msg", None) or error)
+        if _RISK_CONTROL.search(text) or (error.expected and _REFUSED.search(text)):
+            return f"Bilibili refused the request: {text}"
+    return None
 
 
 def _sort_status(status: int) -> Exception:

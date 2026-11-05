@@ -1,0 +1,134 @@
+{
+  "id": "BV1AC4y1L7Yi",
+  "title": "【HR 24/48】朴树2003《生如夏花》专辑歌词版",
+  "fulltitle": "【HR 24/48】朴树2003《生如夏花》专辑歌词版",
+  "uploader": "HiRes无损体验馆",
+  "description": "-",
+  "duration": 2961.322,
+  "upload_date": "20231002",
+  "tags": [
+    "发现《傻子才悲伤》",
+    "音乐分享官",
+    "HIFI",
+    "无损",
+    "听歌",
+    "歌单",
+    "专辑",
+    "朴树",
+    "生如夏花",
+    "发烧音乐",
+    "HiRes",
+    "音乐分享官第八期"
+  ],
+  "thumbnail": "http://i2.hdslb.com/bfs/archive/ffd2e726d214bc076f6eb9fdae103bd9d8ff7e73.jpg",
+  "webpage_url": "https://www.bilibili.com/video/BV1AC4y1L7Yi",
+  "extractor": "BiliBili",
+  "_type": "video",
+  "thumbnails": [
+    {
+      "url": "http://i2.hdslb.com/bfs/archive/ffd2e726d214bc076f6eb9fdae103bd9d8ff7e73.jpg",
+      "id": "0"
+    }
+  ],
+  "formats": [
+    {
+      "format_id": "30216",
+      "ext": "m4a",
+      "acodec": "mp4a.40.5",
+      "vcodec": "none",
+      "abr": 47.121,
+      "tbr": 47.121,
+      "url": "https://example.invalid/30216"
+    },
+    {
+      "format_id": "30232",
+      "ext": "m4a",
+      "acodec": "mp4a.40.2",
+      "vcodec": "none",
+      "abr": 107.952,
+      "tbr": 107.952,
+      "url": "https://example.invalid/30232"
+    },
+    {
+      "format_id": "30280",
+      "ext": "m4a",
+      "acodec": "mp4a.40.2",
+      "vcodec": "none",
+      "abr": 211.59,
+      "tbr": 211.59,
+      "url": "https://example.invalid/30280"
+    },
+    {
+      "format_id": "100046",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "avc1.64001E",
+      "abr": 0,
+      "tbr": 65.596,
+      "url": "https://example.invalid/100046"
+    },
+    {
+      "format_id": "30011",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "hev1.1.6.L120.90",
+      "abr": 0,
+      "tbr": 154.089,
+      "url": "https://example.invalid/30011"
+    },
+    {
+      "format_id": "100047",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "avc1.64001F",
+      "abr": 0,
+      "tbr": 111.361,
+      "url": "https://example.invalid/100047"
+    },
+    {
+      "format_id": "30033",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "hev1.1.6.L120.90",
+      "abr": 0,
+      "tbr": 207.188,
+      "url": "https://example.invalid/30033"
+    },
+    {
+      "format_id": "100048",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "avc1.640028",
+      "abr": 0,
+      "tbr": 196.76,
+      "url": "https://example.invalid/100048"
+    },
+    {
+      "format_id": "30066",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "hev1.1.6.L120.90",
+      "abr": 0,
+      "tbr": 318.545,
+      "url": "https://example.invalid/30066"
+    },
+    {
+      "format_id": "100050",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "avc1.640032",
+      "abr": 0,
+      "tbr": 283.955,
+      "url": "https://example.invalid/100050"
+    },
+    {
+      "format_id": "30077",
+      "ext": "mp4",
+      "acodec": "none",
+      "vcodec": "hev1.1.6.L150.90",
+      "abr": 0,
+      "tbr": 557.865,
+      "url": "https://example.invalid/30077"
+    }
+  ]
+}

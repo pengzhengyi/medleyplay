@@ -21,10 +21,11 @@ LOOPBACK: Final = "127.0.0.1"
 
 @dataclass(frozen=True)
 class Answer:
-    """An HTTP answer: a status, and headers such as `Location`."""
+    """An HTTP answer: a status, headers such as `Location`, and a body."""
 
     status: int
     headers: Mapping[str, str] = field(default_factory=dict)
+    body: bytes = b""
 
 
 PRECONDITION_FAILED: Final = Answer(412)
@@ -76,8 +77,10 @@ class _HttpHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(answer.status)
         for name, value in answer.headers.items():
             self.send_header(name, value)
-        self.send_header("Content-Length", "0")
+        self.send_header("Content-Length", str(len(answer.body)))
         self.end_headers()
+        if self.command == "GET":
+            self.wfile.write(answer.body)
 
     do_HEAD = do_GET  # noqa: N815 -- the name http.server looks up
 

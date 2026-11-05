@@ -76,9 +76,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *Add to playlist…*, which adds the song to one or several Playlists, or to a
   new one. See the
   [Web client](docs/contributing/design-notes/Web%20client.md#a-songs-menu) note.
+- **Now Playing** — the player's cover, or F, opens the song playing over the
+  whole screen: its cover large over a blur of itself, its title, artist, and
+  album, the player's controls, the volume, and *Up next* beside it. See the
+  [Web client](docs/contributing/design-notes/Web%20client.md#now-playing) note.
 - **Keyboard shortcuts** — Space or K plays or pauses, the arrows seek, Shift
   and the arrows skip, M mutes, and keys for volume, shuffle, repeat, favorite,
-  search, and *Up next*. Each control names its keys on hover, as the keyboard
+  search, *Up next*, and Now Playing. Each control names its keys on hover, as the keyboard
   prints them, and *?* lists them. Settings gives a command more keys or fewer,
   kept with the Account, so they follow it to any browser, through
   `GET` and `PUT /api/me/preferences`. See the
@@ -163,6 +167,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   someone chooses it. The first refusal from Bilibili stops it until an admin
   resets it in Settings. See the
   [Track details](docs/contributing/design-notes/Track%20details.md#enrichers) note.
+- **Manual downloads** — search with *Bilibili* chosen takes a link or a `BV` or
+  `av` code and opens an add dialog, which also adds a video medleyplay can't
+  read, on titles and artists you give. A Track whose Download failed says so and
+  offers *Add the file…*, and any Bilibili Track's menu has *Add the file
+  yourself…*: choose an audio file, with other ways to get it listed, and it
+  becomes the Track's Download, plays, works Offline, and is never removed to make
+  room under the storage limit. See the
+  [Manual downloads](docs/contributing/design-notes/Manual%20downloads.md) note.
 
 - **Find a Track on MusicBrainz** — *Find on MusicBrainz* in a song's menu looks
   up the song's release and its front cover, and an admin's *Find on MusicBrainz

@@ -5,7 +5,9 @@ import pytest
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.links import (
     MAX_LINK_LENGTH,
+    link_of,
     parse_part_locator,
+    part_link,
     part_locator,
     recognize_link,
 )
@@ -55,6 +57,36 @@ def test_a_link_longer_than_the_limit_is_refused() -> None:
         recognize_link(link)
 
 
+@pytest.mark.parametrize(
+    ("text", "link"),
+    [
+        ("BV1Xx41117Tz", "https://www.bilibili.com/video/BV1Xx41117Tz"),
+        ("  bv1Xx41117Tz ", "https://www.bilibili.com/video/BV1Xx41117Tz"),
+        ("av170001", "https://www.bilibili.com/video/av170001"),
+        ("AV170001", "https://www.bilibili.com/video/av170001"),
+    ],
+)
+def test_a_video_code_becomes_its_link(text: str, link: str) -> None:
+    assert link_of(text) == link
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "https://b23.tv/abc123",
+        "BV1Xx41117Tz/p2",
+        "BV1Xx41117",
+        "BV1Xx41117Tz1",
+        "av",
+        "av17x",
+        "../BV1Xx41117Tz",
+        "",
+    ],
+)
+def test_any_other_text_is_left_as_it_is(text: str) -> None:
+    assert link_of(text) == text
+
+
 def test_a_part_locator_names_the_video_and_its_part() -> None:
     assert part_locator("BV1Xx41117Tz", 3) == "BV1Xx41117Tz/p3"
 
@@ -75,3 +107,15 @@ def test_a_part_locator_reads_back_as_its_video_and_part() -> None:
 def test_anything_but_a_part_locator_is_refused(locator: str) -> None:
     with pytest.raises(InvalidInputError):
         parse_part_locator(locator)
+
+
+def test_a_part_of_a_video_has_a_link_to_that_part() -> None:
+    assert (
+        part_link("bilibili", "BV1Xx41117Tz/p2")
+        == "https://www.bilibili.com/video/BV1Xx41117Tz?p=2"
+    )
+
+
+def test_a_source_that_is_not_a_part_of_a_video_has_no_link() -> None:
+    with pytest.raises(InvalidInputError):
+        part_link("bilibili", "BV1Xx41117Tz")

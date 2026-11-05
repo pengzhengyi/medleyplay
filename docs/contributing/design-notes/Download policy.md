@@ -182,9 +182,12 @@ the domain stays free of frameworks.
 A Download may be removed only when **all** of these hold:
 
 - **It is unwanted:** no Account's *Keep downloaded* Playlist holds its Track.
-- **It is replaceable:** its Source is *ok* and a plugin that is on downloads its
-  site. A Download of a video since taken down, or of a site whose plugin is off,
-  is the only copy there will be, so it stays.
+- **It is replaceable:** its Source is *ok*, a plugin that is on downloads its
+  site, and the Download wasn't added by hand. A Download of a video since taken
+  down, or of a site whose plugin is off, or a file the household added (backend
+  `manual`, see [Manual downloads](Manual%20downloads.md)), is the only copy there
+  will be, so it stays. It still counts toward the storage limit, and a limit only
+  such files exceed removes nothing.
 - **It is at rest:** it wasn't downloaded, served, or wanted in the last 24
   hours. *Served* covers a device playing it, whose player asks for range after
   range; *wanted* gives a household a day to undo a rule or Playlist change.

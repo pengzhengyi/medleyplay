@@ -31,6 +31,7 @@ export type Command =
   | "favorite"
   | "search"
   | "queue"
+  | "nowPlaying"
   | "help";
 
 /** Each command's keys. */
@@ -54,6 +55,7 @@ export const COMMANDS: readonly { readonly command: Command; readonly name: stri
   { command: "favorite", name: "Favorite the song playing" },
   { command: "search", name: "Search" },
   { command: "queue", name: "Up next" },
+  { command: "nowPlaying", name: "Now Playing" },
   { command: "help", name: "Keyboard shortcuts" },
 ];
 
@@ -71,6 +73,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   favorite: ["l"],
   search: ["slash"],
   queue: ["q"],
+  nowPlaying: ["f"],
   help: ["shift+slash"],
 };
 

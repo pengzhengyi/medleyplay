@@ -28,6 +28,10 @@ export interface Track {
   readonly availability: Availability;
   /** Whether a Source of the Track has a Download kept on the server. */
   readonly downloaded: boolean;
+  /** Whether the Track has no Download, and the last Job downloading it failed. */
+  readonly download_failed: boolean;
+  /** The kind of site its audio is downloaded from, such as `bilibili`, if any. */
+  readonly site: string | null;
   /** The album file this Track is a song of, if it is one. */
   readonly segment_of: number | null;
   /** Whether this Track's file is split into songs, which then stand for it. */
@@ -295,6 +299,72 @@ export interface Job {
   readonly failure_message: string;
 }
 
+/** One part of a video a link names, and its Track when it is already in the catalog. */
+export interface LinkPart {
+  readonly part: number;
+  readonly title: string;
+  readonly duration_ms: number | null;
+  readonly track_id: number | null;
+}
+
+/** An audio quality a video can be added at. */
+export interface Quality {
+  readonly id: string;
+  readonly label: string;
+  readonly kbps: number | null;
+}
+
+/** Why a video couldn't be read. */
+export type UnreadableReason = "gone" | "needs_login" | "network" | "refused" | "fault";
+
+/**
+ * The video a link names. One that couldn't be read has `readable` false, a `reason` and
+ * a `message`, no title, uploader, or qualities, and one part: the one the link names.
+ */
+export interface LinkLookup {
+  readonly kind: string;
+  readonly video: string;
+  readonly title: string;
+  readonly uploader: string;
+  readonly parts: readonly LinkPart[];
+  readonly qualities: readonly Quality[];
+  readonly readable: boolean;
+  readonly reason: UnreadableReason | null;
+  readonly message: string;
+}
+
+/** A part to add, under the title and artist the household chose. */
+export interface PartChoice {
+  readonly part: number;
+  readonly title: string;
+  readonly artist: string;
+}
+
+/** A part that was added: its Track and Source, and the Job downloading it, if one is needed. */
+export interface AddedPart {
+  readonly part: number;
+  readonly track_id: number;
+  readonly source_id: number;
+  readonly job: Job | null;
+}
+
+/** Where a site Track's Download stands. */
+export type DownloadStatus = "downloaded" | "downloading" | "failed" | "unavailable" | "none";
+
+/** A Track's site Source, its link, and where its Download stands. */
+export interface TrackDownload {
+  readonly track_id: number;
+  readonly source_id: number;
+  readonly kind: string;
+  /** The link to the part, such as `https://www.bilibili.com/video/BV1Xx41117Tz?p=2`. */
+  readonly link: string;
+  readonly status: DownloadStatus;
+  /** Why a Download failed or is unavailable, or `""`. */
+  readonly message: string;
+  /** What made a Download that exists; `manual` for a file the household added. */
+  readonly backend: string | null;
+}
+
 /** A request the server refused; `status` is its HTTP status. */
 export class ApiError extends Error {
   constructor(
@@ -351,6 +421,51 @@ async function detailOf(response: Response): Promise<string> {
   } catch {
     return status;
   }
+}
+
+/**
+ * Send `file` as the body of a PUT to the Track's download, reporting how many bytes
+ * were sent as they go. Aborting `signal` stops it, rejecting with an `AbortError`.
+ * `fetch` can't report an upload's progress, so this is a request of its own.
+ */
+export function uploadFile(
+  trackId: number,
+  file: File,
+  onProgress: (sent: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<TrackDownload> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(
+      "PUT",
+      `/api/tracks/${String(trackId)}/download?name=${encodeURIComponent(file.name)}`,
+    );
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(event.loaded, event.total);
+      }
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve(JSON.parse(request.responseText) as TrackDownload);
+      } else {
+        const answer = new Response(request.responseText, { status: request.status });
+        void detailOf(answer).then((why) => {
+          reject(new ApiError(request.status, why));
+        });
+      }
+    };
+    request.onerror = () => {
+      reject(new ApiError(0, "The file didn't reach the server."));
+    };
+    request.onabort = () => {
+      reject(new DOMException("The upload was stopped.", "AbortError"));
+    };
+    signal?.addEventListener("abort", () => {
+      request.abort();
+    });
+    request.send(file);
+  });
 }
 
 /** The routes the client calls. */
@@ -420,6 +535,14 @@ export const api = {
     call<{ queued: number }>("POST", `/api/enrichers/${name}/find-all`),
   /** Let a stopped enricher be asked again; admins only. */
   resetEnricher: (name: string) => call<undefined>("POST", `/api/enrichers/${name}/reset`),
+  /** Look up the video a link or a bare `BV` or `av` code names. */
+  lookUpLink: (link: string) => call<LinkLookup>("POST", "/api/links/lookup", { link }),
+  /** Add the chosen parts of a link's video as Tracks, and start downloading them. */
+  addLink: (link: string, quality: string, parts: readonly PartChoice[]) =>
+    call<AddedPart[]>("POST", "/api/links", { link, quality, parts }),
+  /** Where a site Track's Download stands. */
+  download: (trackId: number) =>
+    call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),
   mode: () => call<Mode>("GET", "/api/mode"),
   modeSettings: () => call<ModeSettings>("GET", "/api/mode/settings"),
   saveModeSetting: (setting: ModeSetting, revision: number) =>

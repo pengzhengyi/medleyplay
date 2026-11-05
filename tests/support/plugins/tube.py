@@ -12,6 +12,8 @@ The video id says how the plugin behaves:
 | `BVremoved` | one part | gone: removed after it was added |
 | `BVrefused` | one part | an `AuthError`: the site refuses the login |
 | `BVdown` | a `NetworkError` | a `NetworkError` |
+| `BVflaky` | a `NetworkError` the first time it is read, then one part | `audio.m4a` |
+| `BVdenied` | an `AuthError`: the site refuses the read | `audio.m4a` |
 | `BVbroken` | a fault | a fault |
 | `BVleaky` | one part | a fault whose message holds the login |
 | `BVescape`, `BVtext` | one part | a file outside the folder, or of another type |
@@ -76,6 +78,9 @@ _SHORT: Final = {
 class Resolver:
     """Names scripted videos, and reads them as the table says."""
 
+    def __init__(self) -> None:
+        self._flaky_reads = 0
+
     def canonicalize(self, request: Canonicalize) -> Canonical:
         link = request.link
         if "b23.tv/liar" in link:
@@ -98,6 +103,14 @@ class Resolver:
             return VideoDetails(status=VideoStatus.GONE, message="The video was removed.")
         if video == "BVmembers":
             return VideoDetails(status=VideoStatus.NEEDS_LOGIN, message="Members only.")
+        if video == "BVdenied":
+            message = "Bilibili refused the read."
+            raise AuthError(message)
+        if video == "BVflaky":
+            self._flaky_reads += 1
+            if self._flaky_reads == 1:
+                message = "Bilibili couldn't be reached."
+                raise NetworkError(message)
         if video == "BVProxyLeak":
             message = f"Failed through {request.proxy}"
             raise ValueError(message)

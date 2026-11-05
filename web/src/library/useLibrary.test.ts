@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import {
   detailsOf,
+  downloadOf,
   favoritesPlaylistOf,
   playlistOf,
   serve,
   signedIn,
   trackOf,
 } from "../testing/server";
+import { FakeUploads } from "../testing/uploads";
 import { useLibrary } from "./useLibrary";
 
 /** A stand-in for the event stream: the test sends the events the server would. */
@@ -519,5 +521,82 @@ describe("finding a song's details online", () => {
     await expect(result.current.find("bilibili-details", 1)).rejects.toThrow("Sign in first.");
 
     expect(onSignedOut).toHaveBeenCalledOnce();
+  });
+});
+
+describe("adding music by link and by file", () => {
+  const ADDED = [{ part: 1, track_id: 9, source_id: 90, job: null }];
+
+  it("asks for the Tracks again once a link's parts are added", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "POST /api/links": { body: ADDED },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    const added = await result.current.addLink("BV1Xx41117Tz", "best", [
+      { part: 1, title: "Night Drive", artist: "Blue Room" },
+    ]);
+
+    expect(added).toEqual(ADDED);
+    await waitFor(() => {
+      expect(asked(calls)).toBe(2);
+    });
+  });
+
+  it("looks a link up, passing on why the server refused", async () => {
+    serve({
+      ...signedIn([]),
+      "POST /api/links/lookup": { status: 422, body: { detail: "medleyplay can't add music." } },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    await expect(result.current.lookUpLink("https://example.com/")).rejects.toThrow(
+      "medleyplay can't add music.",
+    );
+  });
+
+  it("signs out when the server says the session is over", async () => {
+    serve({
+      ...signedIn([]),
+      "POST /api/links/lookup": { status: 401, body: { detail: "Sign in first." } },
+    });
+    const onSignedOut = vi.fn();
+    const { result } = renderHook(() => useLibrary(onSignedOut));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    await expect(result.current.lookUpLink("BV1Xx41117Tz")).rejects.toThrow();
+
+    expect(onSignedOut).toHaveBeenCalledOnce();
+  });
+
+  it("asks for the Tracks again once a file is added", async () => {
+    const { calls } = serve(signedIn([trackOf(1, "Intro")]));
+    const uploads = FakeUploads.install();
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    const sent = result.current.addFile(
+      1,
+      new File(["abcd"], "intro.wav"),
+      () => undefined,
+      new AbortController().signal,
+    );
+    uploads.last.answer(200, JSON.stringify(downloadOf(1, "downloaded")));
+    await sent;
+
+    await waitFor(() => {
+      expect(asked(calls)).toBe(2);
+    });
   });
 });

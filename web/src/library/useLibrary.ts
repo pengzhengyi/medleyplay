@@ -8,14 +8,19 @@ import {
   ApiError,
   type Detail,
   type Details,
+  type AddedPart,
   type JobEvent,
+  type LinkLookup,
   type Mode,
+  type PartChoice,
   type Playlist,
   type SongRowIn,
   type Track,
+  type TrackDownload,
   type VideoRead,
   type VideoText,
   api,
+  uploadFile,
 } from "../api";
 import { newId } from "../ids";
 import { LOOKUPS } from "./lookups";
@@ -67,6 +72,29 @@ export interface Library {
   ) => Promise<void>;
   /** Remove every song of the file `id`; the Tracks then show the file whole again. */
   readonly unsplit: (id: number) => Promise<void>;
+  /** Look up the video a link or bare code names; the promise rejects with why it can't. */
+  readonly lookUpLink: (link: string) => Promise<LinkLookup>;
+  /**
+   * Add the chosen parts of a link's video as Tracks, which then show downloading. The
+   * promise rejects with why when the server refuses.
+   */
+  readonly addLink: (
+    link: string,
+    quality: string,
+    parts: readonly PartChoice[],
+  ) => Promise<readonly AddedPart[]>;
+  /** Where a site Track's Download stands. */
+  readonly download: (id: number) => Promise<TrackDownload>;
+  /**
+   * Send `file` as the Track's Download, reporting how many bytes went as they do; the
+   * Tracks then show it downloaded. Aborting `signal` stops it.
+   */
+  readonly addFile: (
+    id: number,
+    file: File,
+    onProgress: (sent: number, total: number) => void,
+    signal: AbortSignal,
+  ) => Promise<void>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
    * of `newNames`. The Playlists the server saves show at once; the promise rejects
@@ -218,6 +246,18 @@ export function useLibrary(onSignedOut: () => void): Library {
     reloadTracks();
   };
 
+  /** Send `request`, signing out on a 401. */
+  const signedOutOn401 = async <T>(request: Promise<T>): Promise<T> => {
+    try {
+      return await request;
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) {
+        onSignedOut();
+      }
+      throw failure;
+    }
+  };
+
   const write = <F extends Field>(id: number, field: F, value: Track[F], send: Promise<Track>) => {
     const seq = ++writes.current;
     dispatch({ type: "write", id, field, value, seq });
@@ -274,6 +314,17 @@ export function useLibrary(onSignedOut: () => void): Library {
     },
     unsplit: async (id) => {
       await changeTracks(api.unsplit(id));
+    },
+    lookUpLink: (link) => signedOutOn401(api.lookUpLink(link)),
+    addLink: async (link, quality, parts) => {
+      const added = await signedOutOn401(api.addLink(link, quality, parts));
+      reloadTracks();
+      return added;
+    },
+    download: (id) => signedOutOn401(api.download(id)),
+    addFile: async (id, file, onProgress, signal) => {
+      await signedOutOn401(uploadFile(id, file, onProgress, signal));
+      reloadTracks();
     },
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [

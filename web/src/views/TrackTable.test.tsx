@@ -24,6 +24,7 @@ function renderTable(tracks: readonly Track[] = TRACKS, playingId?: number) {
     canFind: () => false,
     onFind: vi.fn(),
     onEditSongs: vi.fn(),
+    onAddFile: vi.fn(),
     onFavorite: vi.fn(),
     onRate: vi.fn(),
   };
@@ -219,5 +220,32 @@ describe("columns", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Plays" }));
 
     expect(screen.getByRole("columnheader", { name: "Plays" })).toBeInTheDocument();
+  });
+});
+
+describe("a Track whose download failed", () => {
+  const FAILED = trackOf(4, "Night Drive", { download_failed: true, site: "bilibili" });
+
+  it("says so where a Track that can't play says why, and still plays", async () => {
+    const { actions } = renderTable([FAILED]);
+
+    expect(screen.getByText(/Download failed/)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Night Drive" }));
+
+    expect(actions.onPlay).toHaveBeenCalledOnce();
+  });
+
+  it("offers to add the file", async () => {
+    const { actions } = renderTable([FAILED]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Add the file…" }));
+
+    expect(actions.onAddFile).toHaveBeenCalledExactlyOnceWith(FAILED);
+  });
+
+  it("says nothing of a Track whose download did not fail", () => {
+    renderTable();
+
+    expect(screen.queryByText(/Download failed/)).toBeNull();
   });
 });

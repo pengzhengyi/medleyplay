@@ -23,6 +23,7 @@ from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
+from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
@@ -281,6 +282,17 @@ def links(
 
 
 @pytest.fixture
+def manual_downloads(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    jobs: JobService,
+    downloads: DownloadService,
+    changes: list[str],
+) -> ManualDownloadService:
+    return ManualDownloadService(units, clock, jobs, downloads.folder, changes.append)
+
+
+@pytest.fixture
 def policy(
     units: sessionmaker[Session],
     clock: FakeClock,
@@ -323,6 +335,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     linked: LinkedAccountService,
     proxies: ProxyService,
     links: LinkService,
+    manual_downloads: ManualDownloadService,
     settings: SettingsService,
     policy: PolicyService,
     preferences: PreferencesService,
@@ -343,6 +356,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         linked=linked,
         proxies=proxies,
         links=links,
+        manual_downloads=manual_downloads,
         events=Events(),
         settings=settings,
         policy=policy,

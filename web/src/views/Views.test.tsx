@@ -7,6 +7,7 @@ import { App } from "../App";
 import {
   type Routes,
   favoritesPlaylistOf,
+  lookupOf,
   playlistOf,
   serve,
   signedIn,
@@ -31,6 +32,14 @@ const LIBRARY = [
   trackOf(3, "クジラ", { artist: "ルワン", album: "空想", album_artist: "Various" }),
 ];
 
+/** The routes of a server with the Bilibili plugin on, holding `LIBRARY`. */
+function withBilibili(): Routes {
+  return signedIn(LIBRARY, [favoritesPlaylistOf([1])], {
+    multiple_accounts: false,
+    providers: { source_resolver: ["bilibili"] },
+  });
+}
+
 function open(
   hash: string,
   routes: Routes = signedIn(LIBRARY, [
@@ -39,8 +48,9 @@ function open(
   ]),
 ) {
   history.replaceState(null, "", `/${hash}`);
-  serve(routes);
+  const served = serve(routes);
   render(<App />);
+  return served;
 }
 
 const songs = () =>
@@ -159,19 +169,56 @@ describe("search", () => {
     expect(await screen.findByText(/Nothing in your Library matches/)).toBeInTheDocument();
   });
 
-  it("offers a music site a plugin provides as a place to search, not yet to be chosen", async () => {
-    open(
-      "",
-      signedIn(LIBRARY, [], {
-        multiple_accounts: false,
-        providers: { source_resolver: ["bilibili"] },
-      }),
-    );
+  it("offers a music site a plugin provides as a place to search, after the Library", async () => {
+    open("", withBilibili());
 
     const scope = await screen.findByRole("radiogroup", { name: "Search in" });
 
     expect(within(scope).getByRole("radio", { name: "Library" })).toBeChecked();
-    expect(within(scope).getByRole("radio", { name: "Bilibili" })).toBeDisabled();
+    expect(within(scope).getByRole("radio", { name: "Bilibili" })).toBeEnabled();
+  });
+
+  it("takes a link or a code with Bilibili chosen, and opens the add dialog on Enter", async () => {
+    const { calls } = open("", {
+      ...withBilibili(),
+      "POST /api/links/lookup": { body: lookupOf(1) },
+    });
+    await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
+
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
+
+    const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
+    expect(await within(dialog).findByText("【MV】Night Drive")).toBeVisible();
+    expect(calls).toContain("POST /api/links/lookup");
+    expect(location.hash).toBe("");
+    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("");
+  });
+
+  it("adds what is chosen, says so, and asks for the Tracks again", async () => {
+    const { calls } = open("", {
+      ...withBilibili(),
+      "POST /api/links/lookup": { body: lookupOf(1) },
+      "POST /api/links": { body: [{ part: 1, track_id: 9, source_id: 90, job: null }] },
+    });
+    await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
+    const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
+    await within(dialog).findByText("【MV】Night Drive");
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+    expect(await screen.findByText("Added 1 song. They are downloading.")).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/tracks")).toHaveLength(2);
+  });
+
+  it("does not search the Library as you type with Bilibili chosen", async () => {
+    open("", withBilibili());
+    await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
+
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "melt");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(location.hash).not.toContain("search");
   });
 
   it("offers no choice of where to search when only the Library can be", async () => {

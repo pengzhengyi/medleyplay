@@ -19,6 +19,7 @@ function renderMenu(queueing = true, track = MELT, findable: readonly string[] =
     canFind: (lookup) => findable.includes(lookup.enricher),
     onFind: vi.fn(),
     onEditSongs: vi.fn(),
+    onAddFile: vi.fn(),
   };
   render(<TrackMenu track={track} actions={actions} queueing={queueing} />);
   return actions;
@@ -215,5 +216,37 @@ describe("a song's menu for a file already split", () => {
     await open();
 
     expect(screen.getByRole("menuitem", { name: "Edit songs…" })).toBeInTheDocument();
+  });
+});
+
+describe("a song's menu for a Track downloaded from a site", () => {
+  const FROM_SITE = trackOf(1, "Melt", { site: "bilibili" });
+
+  it("offers to add the file yourself, last", async () => {
+    renderMenu(true, FROM_SITE);
+
+    await open();
+
+    expect(screen.getAllByRole("menuitem").at(-1)).toHaveTextContent("Add the file yourself…");
+  });
+
+  it("adds the file of the song, and closes the menu", async () => {
+    const actions = renderMenu(true, FROM_SITE);
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Add the file yourself…" }));
+
+    expect(actions.onAddFile).toHaveBeenCalledExactlyOnceWith(FROM_SITE);
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+  });
+
+  it("offers nothing of the kind for a Track from a Library", async () => {
+    renderMenu();
+
+    await open();
+
+    expect(screen.queryByRole("menuitem", { name: "Add the file yourself…" })).toBeNull();
   });
 });

@@ -100,13 +100,10 @@ def _copy_cover(folder: Path, name: str, work_dir: Path) -> CoverFile | None:
         descriptor = os.open(folder / name, _OPEN_FLAGS)
     except OSError:
         return None
-    try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+    with os.fdopen(descriptor, "rb") as file:
+        if not stat.S_ISREG(os.fstat(file.fileno()).st_mode):
             return None
-        with os.fdopen(descriptor, "rb", closefd=False) as file:
-            data = file.read(MAX_COVER_BYTES + 1)
-    finally:
-        os.close(descriptor)
+        data = file.read(MAX_COVER_BYTES + 1)
     if len(data) > MAX_COVER_BYTES or not is_cover_image(data):
         return None
     return CopyFolder(work_dir / COPIES_FOLDER).keep(data)

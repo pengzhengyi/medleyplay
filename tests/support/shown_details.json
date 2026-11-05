@@ -459,6 +459,77 @@
           "origin": "files"
         }
       }
+    },
+    {
+      "name": "the household's spelling of an album keeps the cover of the album it corrects",
+      "origins": {
+        "household": {
+          "album": "Re:Start"
+        },
+        "files": {
+          "album": "Re: Start",
+          "track_number": 3,
+          "cover": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "household"
+        },
+        "cover": {
+          "value": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291",
+          "origin": "files"
+        }
+      }
+    },
+    {
+      "name": "the cover of the album the household corrects wins over a cover from an origin naming none",
+      "origins": {
+        "household": {
+          "album": "生如夏花"
+        },
+        "files": {
+          "cover": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+        },
+        "video": {
+          "album": "生如夏花 专辑歌词版",
+          "cover": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "生如夏花",
+          "origin": "household"
+        },
+        "cover": {
+          "value": "0000000000000000000000000000000000000000000000000000000000000000",
+          "origin": "video"
+        }
+      }
+    },
+    {
+      "name": "the household's empty cover hides the cover of the album it corrects",
+      "origins": {
+        "household": {
+          "album": "Re:Start",
+          "cover": ""
+        },
+        "files": {
+          "album": "Re: Start",
+          "cover": "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "household"
+        },
+        "cover": {
+          "value": "",
+          "origin": "household"
+        }
+      }
     }
   ]
 }

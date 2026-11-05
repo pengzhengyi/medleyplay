@@ -145,12 +145,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Segments](docs/contributing/design-notes/Segments.md) note.
 
 - **Covers** — a Library scan finds a song's cover, embedded in its file or as
-  an image beside it, shown even when only the video's details name the album,
-  and *Edit details* uploads a JPEG, PNG, or WebP image as
-  a song's cover; the table, Up next, the album cards, the player, and the lock
-  screen show it. A cover is kept once, by its content, shared by the songs of
-  an album, and removed when the server next starts once nothing shows it. See
-  the
+  an image beside it, shown even when only the video's details name the album
+  or the household corrects its spelling, and *Edit details* uploads a JPEG,
+  PNG, or WebP image as a song's cover; the table, Up next, the album cards,
+  the player, and the lock screen show it. A cover is kept once, by its
+  content, shared by the songs of an album, and removed when the server next
+  starts once nothing shows it. See the
   [Track details](docs/contributing/design-notes/Track%20details.md#covers) note.
 
 - **Find a Track's details online** — *Find details online* in a song's menu

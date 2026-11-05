@@ -149,7 +149,7 @@ export function Library({
         () => {
           const wait =
             library.mode?.online === false ? " It waits until medleyplay is Online." : "";
-          setNotice(`Looking up “${track.title}” on ${lookup.site}.${wait}`);
+          setNotice(`${lookup.notice(track.title)}${wait}`);
         },
         (failure: unknown) => {
           setNotice(failure instanceof Error ? failure.message : String(failure));
@@ -299,6 +299,7 @@ export function Library({
             actions={actions}
             admin={account.role === "admin"}
             mode={library.mode}
+            onEnrichersChanged={library.refreshFindable}
           />
         ) : (
           <p className="empty" aria-busy="true">

@@ -122,6 +122,26 @@ describe("App", () => {
     expect(calls).toContain("POST /api/enrichers/musicbrainz/tracks/1");
   });
 
+  it("asks the AI about the Track and says so when Suggest details with AI is chosen", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/enrichers/ai-details": {
+        body: { name: "ai-details", available: true, stopped: null, eligible: [1] },
+      },
+      "POST /api/enrichers/ai-details/tracks/1": {
+        body: { id: 9, state: "queued", failure_message: "" },
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Suggest details with AI" }));
+
+    expect(await screen.findByText("Asking the AI about “Night Drive”.")).toBeInTheDocument();
+    expect(calls).toContain("POST /api/enrichers/ai-details/tracks/1");
+  });
+
   it("says the lookup waits while medleyplay is Offline", async () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive")]),

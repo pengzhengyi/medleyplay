@@ -255,12 +255,14 @@ export async function openWithShortcuts(shortcuts: SavedShortcuts): Promise<void
 
 /**
  * The songs of the album file `trackId`, an hour long, split into `songs` (each
- * `[id, start_ms, title]`, its Track `100 + id`), with the lists `found` for it.
+ * `[id, start_ms, title]`, its Track `100 + id`), with the lists `found` for it and the
+ * list an AI model `suggested`.
  */
 export function splitSongsOf(
   trackId: number,
   songs: readonly (readonly [number, number, string])[],
   found: readonly (readonly Song[])[] = [],
+  suggested: readonly Song[] = [],
 ): Songs {
   return {
     track_id: trackId,
@@ -275,6 +277,7 @@ export function splitSongsOf(
       artist: "",
     })),
     found,
+    suggested,
   };
 }
 

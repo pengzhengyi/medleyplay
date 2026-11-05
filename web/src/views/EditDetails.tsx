@@ -36,6 +36,7 @@ import {
   previewOf,
   settle,
   shownOf,
+  suggestionOf,
 } from "../library/details";
 import { Modal } from "./Modal";
 
@@ -462,6 +463,7 @@ function DetailBox({
   const yours = name in settle(details, own);
   const origin = originOf(details, own, field);
   const range = RANGES[name];
+  const suggestion = suggestionOf(details, name);
   return (
     <div className={`detail detail-${kind}`}>
       <label htmlFor={id} className="detail-label">
@@ -501,6 +503,25 @@ function DetailBox({
           </button>
         ))}
       </div>
+      {suggestion !== undefined && suggestion !== typed.trim() && (
+        <div
+          className="detail-suggestion"
+          role="group"
+          aria-label={`The AI's suggestion for ${label}`}
+        >
+          <small className="detail-origin">The AI suggests “{suggestion}”</small>
+          <button
+            type="button"
+            className="detail-alternative"
+            aria-label={`Use “${suggestion}”, suggested by the AI`}
+            onClick={() => {
+              onChange({ ...own, [name]: suggestion });
+            }}
+          >
+            Use
+          </button>
+        </div>
+      )}
     </div>
   );
 }

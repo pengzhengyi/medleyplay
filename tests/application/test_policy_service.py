@@ -38,6 +38,7 @@ from medleyplay.domain.segments import SongRow
 from medleyplay.domain.settings import Settings
 from medleyplay.domain.video_text import Song as ListedSong
 from medleyplay.persistence.schema import DownloadRow, PlaylistRow, SourceRow
+from tests.support.audio import Song, wav_bytes
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock, MemorySecrets
 from tests.support.sites import WAIT, Site, running_site
@@ -122,6 +123,18 @@ def _downloaded(
         policy.evaluate()
         for source_id in wanted - _stored(units):
             _settled(site, source_id, JobState.SUCCEEDED)
+
+
+def _add_file_by_hand(site: Site, track_id: TrackId) -> None:
+    """Replace the Track's Download with a two-second WAV file the household added."""
+    with site.manual.upload(track_id, "by-hand.wav") as upload:
+        upload.write(wav_bytes(Song(seconds=2)))
+        upload.finish()
+
+
+def _size(site: Site, units: sessionmaker[Session], track_id: TrackId) -> int:
+    with units() as db:
+        return db.get_one(DownloadRow, _source(units, track_id)).size
 
 
 def _limit(settings: SettingsService, admin: Account, limit: int | None) -> None:
@@ -232,6 +245,50 @@ def test_the_download_of_a_video_gone_from_the_site_is_never_removed(
     evaluation = policy.evaluate()
 
     assert (evaluation.removed, _stored(units)) == (0, {_source(units, track)})
+
+
+def test_a_manual_download_is_never_removed_but_counts_toward_the_limit(
+    site: Site,
+    policy: PolicyService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    settings: SettingsService,
+    alice: Account,
+) -> None:
+    by_hand, downloaded = _tracks(site, 2)
+    _keep(site, alice, [by_hand, downloaded])
+    _downloaded(site, policy, units, [by_hand, downloaded])
+    _add_file_by_hand(site, by_hand)
+    _keep(site, alice, [by_hand, downloaded], keep=False)
+    clock.advance(REST + timedelta(hours=1))
+    held = policy.storage(alice).downloads
+    assert held == _size(site, units, by_hand) + _size(site, units, downloaded)
+
+    _limit(settings, alice, _size(site, units, by_hand))
+    evaluation = policy.evaluate()
+
+    assert (evaluation.removed, _stored(units)) == (1, {_source(units, by_hand)})
+
+
+def test_a_limit_only_a_manual_download_exceeds_removes_nothing(
+    site: Site,
+    policy: PolicyService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    settings: SettingsService,
+    alice: Account,
+) -> None:
+    by_hand, downloaded = _tracks(site, 2)
+    _keep(site, alice, [by_hand, downloaded])
+    _downloaded(site, policy, units, [by_hand, downloaded])
+    _add_file_by_hand(site, by_hand)
+    _keep(site, alice, [by_hand, downloaded], keep=False)
+    clock.advance(REST + timedelta(hours=1))
+
+    _limit(settings, alice, 0)
+    evaluation = policy.evaluate()
+
+    assert (evaluation.removed, len(_stored(units))) == (0, 2)
 
 
 def test_rules_this_server_cant_read_on_a_kept_playlist_stop_every_removal(

@@ -99,8 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   short links included, and add its parts as Tracks, which download in the
   background and play even after the video is removed. The `bilibili` plugin is
   off by default until yt-dlp can read Bilibili again. An admin can set the
-  household's proxy for Bilibili, kept in the Keychain, which the plugin uses for
-  every request; nothing retries around a refusal. See the
+  household's proxy for Bilibili (`http`, `https`, or `socks5h`), kept in the
+  Keychain, which the plugin uses for every request; nothing retries around a
+  refusal. See the
   [Bilibili](docs/contributing/design-notes/Bilibili.md) note.
 - **Job progress over SSE** — `GET /api/events` tells every open browser each
   time a Job changes.

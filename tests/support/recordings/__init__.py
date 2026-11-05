@@ -10,8 +10,7 @@ MusicBrainz answers (MusicBrainz data is CC0, free to copy):
 - `latin-search.json`: the real answer to a recording search for *Let Down* by
   *Radiohead*, as the web service gave it: two recordings, on 55 and 2 releases.
 - `latin-release.json`: the real answer to a release lookup with
-  `inc=recordings+artist-credits+media`, the 2016 reissue of *OK Computer*, which says
-  it has no front cover.
+  `inc=genres+recordings+artist-credits+media`, the 1997 original of *OK Computer*.
 - `cjk-release-search.json`: made by hand in the shape of MusicBrainz's release search;
   the album 生如夏花 by 朴树 as its 2003 original and a 2013 reissue, and a compilation
   that scores lower.

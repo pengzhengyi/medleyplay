@@ -67,10 +67,29 @@ class CoverArt(_Model):
     front: bool = False
 
 
+class Genre(_Model):
+    """A genre MusicBrainz's editors gave, and how many of them gave it."""
+
+    name: str
+    count: int = 0
+
+
+def top_genres(genres: list[Genre], most: int = 3) -> str:
+    """Return the `most` most counted genres, ties by name, joined as a genre tag reads.
+
+    ```text
+    alternative rock (6), rock (3), punk (1), britpop (1)  ->  alternative rock; rock; britpop
+    ```
+    """
+    ranked = sorted(genres, key=lambda genre: (-genre.count, genre.name))
+    return "; ".join(genre.name for genre in ranked[:most])
+
+
 class Recording(_Model):
     """The recording a release's track is."""
 
     id: str
+    genres: list[Genre] = []
 
 
 class ReleaseTrack(_Model):
@@ -97,4 +116,5 @@ class Release(_Model):
     date: str | None = None
     artist_credit: Annotated[list[Credit], Field(alias="artist-credit")] = []
     media: list[Medium] = []
+    genres: list[Genre] = []
     cover_art_archive: Annotated[CoverArt, Field(alias="cover-art-archive")] = CoverArt()

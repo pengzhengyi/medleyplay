@@ -22,7 +22,7 @@ from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
-from medleyplay.domain.downloads import download_target, quality_kbps
+from medleyplay.domain.downloads import MANUAL_BACKEND, download_target, quality_kbps
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.jobs import ACTIVE_STATES, JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE
@@ -120,7 +120,8 @@ def read_snapshot(
             last_wanted_at=row.last_wanted_at,
             wanted=source_of[source_id].track_id in wanted_by,
             replaceable=source_of[source_id].state == SourceState.OK
-            and source_of[source_id].kind in sites,
+            and source_of[source_id].kind in sites
+            and row.backend != MANUAL_BACKEND,
             active_job=download_target(source_id) in active,
         )
         for source_id, row in downloads.items()

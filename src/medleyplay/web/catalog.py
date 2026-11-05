@@ -47,6 +47,12 @@ class TrackOut(BaseModel):
     downloaded: bool = Field(
         description="Whether a Source of the Track has a Download kept on the server."
     )
+    download_failed: bool = Field(
+        description="Whether the Track has no Download, and the last Job downloading it failed."
+    )
+    site: str | None = Field(
+        description="The kind of site its audio is downloaded from, such as `bilibili`, if any."
+    )
     segment_of: int | None = Field(description="The album file this Track is a song of, if any.")
     split: bool = Field(description="Whether this Track's file is split into songs.")
     cover: str | None = Field(description="The cover shown, served at `/api/covers/{cover}`.")
@@ -73,6 +79,8 @@ class TrackOut(BaseModel):
             last_played_at=track.last_played_at,
             availability=track.availability,
             downloaded=track.downloaded,
+            download_failed=track.download_failed,
+            site=track.site,
             segment_of=track.segment_of,
             split=track.split,
             cover=details.cover,

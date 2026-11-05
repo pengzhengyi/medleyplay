@@ -13,6 +13,10 @@ class InvalidInputError(MedleyplayError):
     """A value breaks a domain rule, such as a username with spaces."""
 
 
+class TooLargeError(MedleyplayError):
+    """The request carries more than the core accepts, such as a file over the size limit."""
+
+
 class NotFoundError(MedleyplayError):
     """The thing asked for does not exist, or the caller may not see it."""
 

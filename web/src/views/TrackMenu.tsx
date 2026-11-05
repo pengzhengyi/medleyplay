@@ -15,6 +15,7 @@ import {
   PlaylistIcon,
   QueueIcon,
   ScissorsIcon,
+  UploadSimpleIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
@@ -36,6 +37,8 @@ export interface TrackMenuActions {
   readonly onFindDetails: (track: Track) => void;
   /** Edit the songs of the file `track` is, or is a song of. */
   readonly onEditSongs: (track: Track) => void;
+  /** Add the audio file of a Track downloaded from a site by hand. */
+  readonly onAddFile: (track: Track) => void;
 }
 
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
@@ -145,6 +148,16 @@ export function TrackMenu({
           >
             {track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…"}
           </Item>
+          {track.site !== null && (
+            <Item
+              icon={<UploadSimpleIcon />}
+              onSelect={() => {
+                actions.onAddFile(track);
+              }}
+            >
+              Add the file yourself…
+            </Item>
+          )}
         </Menu.Content>
       </Menu.Portal>
     </Menu.Root>

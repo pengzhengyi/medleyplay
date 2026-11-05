@@ -130,7 +130,9 @@ npm run e2e                        # Playwright end-to-end tests
 `uv run medleyplay serve`. `npm run check` is the gate CI runs for the **Frontend
 quality** job; the **Frontend E2E** job runs `npm run e2e`, which builds the client
 and starts the real server, so it needs `uv sync --locked` first. The server runs
-on port 4174 over a fresh data folder and generated music in `web/.cache/e2e`. When an end-to-end test
+on port 4174 over a fresh data folder and generated music in `web/.cache/e2e`. A second
+server, on port 4175, has the test plugin `tube` answer for Bilibili, for the tests that add
+music from links; neither server contacts a site. When an end-to-end test
 fails in CI, download the `playwright-report` artifact from the run and open it with
 `npx playwright show-report <folder>` for the trace and screenshot.
 

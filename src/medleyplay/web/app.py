@@ -25,12 +25,14 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
     SignInRefusedError,
     SignInThrottledError,
+    TooLargeError,
 )
 from medleyplay.web import (
     accounts,
     catalog,
     covers,
     details,
+    downloads,
     enrichers,
     events,
     jobs,
@@ -53,6 +55,7 @@ _STATUS_OF: Final[tuple[tuple[type[MedleyplayError], int], ...]] = (
     (InvalidInputError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (NotFoundError, status.HTTP_404_NOT_FOUND),
     (ConflictError, status.HTTP_409_CONFLICT),
+    (TooLargeError, status.HTTP_413_CONTENT_TOO_LARGE),
     (ForbiddenError, status.HTTP_403_FORBIDDEN),
     (NotSignedInError, status.HTTP_401_UNAUTHORIZED),
     (SignInRefusedError, status.HTTP_401_UNAUTHORIZED),
@@ -90,6 +93,7 @@ def create_app(
     app.state.services = services
     app.include_router(accounts.router)
     app.include_router(catalog.router)
+    app.include_router(downloads.router)
     app.include_router(plugins.router)
     app.include_router(jobs.router)
     app.include_router(libraries.router)

@@ -216,6 +216,26 @@ class JobService:
             self._publish(job_id)
         return self.get_job(job_id)
 
+    def cancel_active_in(self, db: Session, kind: str, target: str) -> JobId | None:
+        """Cancel the active Job of `kind` for `target` in the caller's transaction.
+
+        Return its id, or `None` when none is active. The caller calls
+        `announce_cancelled` once the transaction has committed, which stops a
+        running Job's process.
+        """
+        cancelled = db.execute(
+            update(JobRow)
+            .where(JobRow.kind == kind, JobRow.target == target, JobRow.state.in_(ACTIVE_STATES))
+            .values(state=JobState.CANCELLED, finished_at=self._clock(), pid=None)
+            .returning(JobRow.id)
+        ).scalar_one_or_none()
+        return None if cancelled is None else JobId(cancelled)
+
+    def announce_cancelled(self, job_id: JobId) -> None:
+        """Stop the process of a Job cancelled with `cancel_active_in`, and tell the browsers."""
+        self._runner.kill(job_id)
+        self._publish(job_id)
+
     def retry(self, caller: Account, job_id: JobId) -> Job:
         """Submit a failed or cancelled Job again, as a new Job; return it.
 

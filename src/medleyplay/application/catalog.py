@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime
 
-from sqlalchemy import Select, case, delete, select
+from sqlalchemy import ColumnElement, Select, case, delete, func, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -17,6 +17,7 @@ from medleyplay.application import Clock
 from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
 from medleyplay.application.details import record as record_details
+from medleyplay.application.downloads import DOWNLOAD_KIND
 from medleyplay.application.rule_schema import read_rules, rules_document
 from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
@@ -26,6 +27,7 @@ from medleyplay.domain.catalog import (
     Builtin,
     Playlist,
     PlaylistId,
+    SourceId,
     SourceKey,
     SourceState,
     Track,
@@ -38,13 +40,17 @@ from medleyplay.domain.catalog import (
     track_availability,
 )
 from medleyplay.domain.details import Field, Origin, Value
+from medleyplay.domain.downloads import download_target
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
+from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
+from medleyplay.domain.links import PART_LINKS
 from medleyplay.domain.playback import PlayId
 from medleyplay.domain.rules import Rules, matches
 from medleyplay.domain.segments import SEGMENT_SOURCE, parse_segment_locator
 from medleyplay.persistence.schema import (
     DownloadRow,
+    JobRow,
     LibraryRow,
     PlaylistEntryRow,
     PlaylistRow,
@@ -133,16 +139,21 @@ class CatalogService:
             rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
             available = _availability(db, select(SourceRow), online=self._online())
             downloaded = _downloaded(db, select(SourceRow.track_id))
+            sites = _site_sources(db)
+            failed = _download_failed(db, sites, downloaded)
             segment_of = album_file_of(db)
             split = set(segment_of.values())
-            # A song is downloaded while its album file is.
+            # A song is downloaded, or failed to download, as its album file is.
             downloaded |= {song for song, album in segment_of.items() if album in downloaded}
+            failed |= {song for song, album in segment_of.items() if album in failed}
             return [
                 _to_track(
                     track,
                     state,
                     available[track.id],
                     downloaded=track.id in downloaded,
+                    download_failed=track.id in failed,
+                    site=sites[track.id].kind if track.id in sites else None,
                     segment_of=segment_of.get(TrackId(track.id)),
                     split=track.id in split,
                 )
@@ -163,10 +174,14 @@ class CatalogService:
             downloaded = _downloaded(
                 db, select(SourceRow.track_id).where(SourceRow.track_id == looked_at)
             )
+            sites = _site_sources(db, SourceRow.track_id == looked_at)
+            failed = _download_failed(db, sites, downloaded)
         return _to_track(
             *found,
             available[track_id],
             downloaded=looked_at in downloaded,
+            download_failed=looked_at in failed,
+            site=sites[track_id].kind if track_id in sites else None,
             segment_of=segment_of.get(track_id),
             split=track_id in segment_of.values(),
         )
@@ -440,12 +455,42 @@ def _downloaded(db: Session, track_ids: Select[int]) -> set[int]:
     return set(db.scalars(held))
 
 
-def _to_track(
+def _site_sources(db: Session, *where: ColumnElement[bool]) -> dict[int, SourceRow]:
+    """Return the first site Source of each Track that has one, among the Sources `where` keeps."""
+    sources = db.scalars(
+        select(SourceRow).where(SourceRow.kind.in_(PART_LINKS), *where).order_by(SourceRow.id)
+    )
+    first: dict[int, SourceRow] = {}
+    for source in sources:
+        first.setdefault(source.track_id, source)
+    return first
+
+
+def _download_failed(db: Session, sites: Mapping[int, SourceRow], downloaded: set[int]) -> set[int]:
+    """Return the Tracks with a site Source but no Download whose last download Job failed."""
+    if not sites:
+        return set()
+    latest = select(func.max(JobRow.id)).where(JobRow.kind == DOWNLOAD_KIND).group_by(JobRow.target)
+    failed = set(
+        db.scalars(
+            select(JobRow.target).where(JobRow.id.in_(latest), JobRow.state == JobState.FAILED)
+        )
+    )
+    return {
+        track_id
+        for track_id, source in sites.items()
+        if track_id not in downloaded and download_target(SourceId(source.id)) in failed
+    }
+
+
+def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog works out for it
     track: TrackRow,
     state: TrackStateRow | None,
     availability: Availability,
     *,
     downloaded: bool,
+    download_failed: bool = False,
+    site: str | None = None,
     segment_of: int | None = None,
     split: bool = False,
 ) -> Track:
@@ -470,6 +515,8 @@ def _to_track(
         last_played_at=None if state is None else state.last_played_at,
         availability=availability,
         downloaded=downloaded,
+        download_failed=download_failed,
+        site=site,
         segment_of=None if segment_of is None else TrackId(segment_of),
         split=split,
     )

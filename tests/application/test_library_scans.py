@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
-from medleyplay.application.details import DetailsService, video_text_of
+from medleyplay.application.details import DetailsService, record, video_text_of
 from medleyplay.application.libraries import apply_scan
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import Availability, TrackId
@@ -372,6 +372,14 @@ def _paste(units: sessionmaker[Session], clock: FakeClock, path: str, text: Vide
     DetailsService(units, clock).read_video_text(track_id, text)
 
 
+def _record_as_an_older_parser_did(
+    units: sessionmaker[Session], clock: FakeClock, path: str, values: dict[Field, str]
+) -> None:
+    """Replace the `video` values read from the Track's text, as a parser before today's read it."""
+    with units.begin() as db:
+        record(db, TrackId(_catalog(units)[path].track_id), Origin.VIDEO, values, clock())
+
+
 @pytest.fixture
 def melt_read(units: sessionmaker[Session], clock: FakeClock, library: LibraryId) -> None:
     """A library whose video was scanned with `MELT` read from its sidecar."""
@@ -518,6 +526,19 @@ def test_a_paste_survives_a_rescan_that_reads_the_unchanged_sidecar_again(
 
     assert _video_text(units, VIDEO) == VideoText(WORLD_IS_MINE)
     assert _came_from(units) == ["household"]
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_an_unchanged_sidecar_read_again_is_parsed_again_so_a_better_reading_shows(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _record_as_an_older_parser_did(units, clock, VIDEO, {Field.ARTIST: "ryo(supercell)2007"})
+    reread = InfoJsonFactory.read(MELT)
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=reread))
+
+    assert _shown(units, clock, VIDEO)[Field.ARTIST] == Shown("ryo(supercell)", Origin.VIDEO)
+    assert _came_from(units) == ["file"]
 
 
 @pytest.mark.usefixtures("melt_read")

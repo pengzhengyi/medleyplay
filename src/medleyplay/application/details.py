@@ -131,6 +131,12 @@ def video_text_of(db: Session, track_id: TrackId) -> VideoText | None:
     return VideoText(row.title, row.description, chapters)
 
 
+def video_text_was_pasted(db: Session, track_id: TrackId) -> bool:
+    """Return whether the Track's video's text is one the household pasted."""
+    row = db.get(VideoTextRow, track_id)
+    return row is not None and row.came_from == "household"
+
+
 def set_household(
     db: Session,
     track_id: TrackId,

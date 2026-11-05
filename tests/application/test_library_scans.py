@@ -9,7 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
-from medleyplay.application.details import DetailsService, record, video_text_of
+from medleyplay.application.details import (
+    DetailsService,
+    record,
+    record_video_text,
+    video_text_of,
+)
 from medleyplay.application.libraries import apply_scan
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import Availability, TrackId
@@ -538,6 +543,21 @@ def test_an_unchanged_sidecar_read_again_is_parsed_again_so_a_better_reading_sho
     _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=reread))
 
     assert _shown(units, clock, VIDEO)[Field.ARTIST] == Shown("ryo(supercell)", Origin.VIDEO)
+    assert _came_from(units) == ["file"]
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_an_unchanged_sidecar_read_again_wins_over_text_the_site_read_since(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    track_id = TrackId(_catalog(units)[VIDEO].track_id)
+    with units.begin() as db:
+        record_video_text(db, track_id, VideoText("Night Drive / Blue Room"), "site", clock())
+    reread = InfoJsonFactory.read(MELT)
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=reread))
+
+    assert _shown(units, clock, VIDEO)[Field.TITLE] == Shown("メルト", Origin.VIDEO)
     assert _came_from(units) == ["file"]
 
 

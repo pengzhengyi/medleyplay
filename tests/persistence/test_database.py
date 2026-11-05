@@ -248,6 +248,53 @@ def test_undoing_the_proxy_migration_drops_the_table(tmp_path: Path) -> None:
     engine.dispose()
 
 
+_ADD_VIDEO_TEXT = text(
+    "INSERT INTO video_text (track_id, title, description, chapters, came_from, recorded_at)"
+    " VALUES (1, 'Melt', '', '[]', :came_from, '2026-11-05 00:00:00.000000')"
+)
+
+
+def test_a_videos_text_may_have_come_from_the_household_a_file_or_the_site_and_nowhere_else(
+    units: sessionmaker[Session],
+) -> None:
+    with units.begin() as db:
+        _add_track(db.connection(), "Melt", track_id=1)
+
+    for came_from in ("household", "file", "site"):
+        with units.begin() as db:
+            db.execute(text("DELETE FROM video_text"))
+            db.execute(_ADD_VIDEO_TEXT, {"came_from": came_from})
+    with pytest.raises(IntegrityError), units.begin() as db:
+        db.execute(_ADD_VIDEO_TEXT, {"came_from": "friend"})
+
+
+def test_undoing_the_enrichers_migration_makes_text_read_from_the_site_the_households(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        _add_track(connection, "Melt", track_id=1)
+        connection.execute(_ADD_VIDEO_TEXT, {"came_from": "site"})
+        connection.execute(
+            text(
+                "INSERT INTO video_ask (enricher, video, asked_at)"
+                " VALUES ('bilibili-details', 'BV1', '2026-11-05 00:00:00.000000')"
+            )
+        )
+
+    _migrate_to(engine, "0017", down=True)
+
+    with engine.connect() as connection:
+        came_from = connection.scalars(text("SELECT came_from FROM video_text")).all()
+        tables = connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+        assert (came_from, {"video_ask", "enricher_stop"} & set(tables.all())) == (
+            ["household"],
+            set(),
+        )
+    engine.dispose()
+
+
 def test_a_removed_tracks_id_is_never_given_to_another(tmp_path: Path) -> None:
     engine = make_engine(database_url(tmp_path))
     migrate(engine)

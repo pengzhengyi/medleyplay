@@ -152,6 +152,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the
   [Track details](docs/contributing/design-notes/Track%20details.md#covers) note.
 
+- **Find a Track's details online** — *Find details online* in a song's menu
+  asks Bilibili for the title, description, chapters, and cover of the song's
+  video, read as a sidecar or a paste is, when the song has a video and no text
+  from a file beside it or the household. An admin's *Find details for all* in
+  Settings queues every such song. The `bilibili-details` plugin, off by default
+  like `bilibili`, asks one video at a time with a pause between, never the same
+  video twice in a day, through the household's proxy, and nothing is asked unless
+  someone chooses it. The first refusal from Bilibili stops it until an admin
+  resets it in Settings. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md#enrichers) note.
+
 ### Changed
 
 - Renamed the project from stream to medleyplay.

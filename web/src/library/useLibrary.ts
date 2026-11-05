@@ -6,6 +6,7 @@ import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
 import {
   ApiError,
+  DETAILS_ENRICHER,
   type Detail,
   type Details,
   type JobEvent,
@@ -32,6 +33,13 @@ export interface Library {
   readonly error: string;
   /** Whether medleyplay may contact music sites now, once the server has said. */
   readonly mode: Mode | null;
+  /** The Tracks whose details can be looked up online now. */
+  readonly findable: ReadonlySet<number>;
+  /**
+   * Ask for the details of the Track on its site; they show once the Job has run. The
+   * promise rejects with why when the server refuses.
+   */
+  readonly findDetails: (id: number) => Promise<void>;
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
   /**
@@ -72,7 +80,7 @@ export interface Library {
 }
 
 /** The Jobs whose end can change the Tracks. */
-const CHANGES_TRACKS = new Set(["scan_library", "download_source"]);
+const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
 /** How long after the last such Job the Tracks are asked for, so a busy scan asks once. */
 const SETTLE_MS = 1000;
@@ -93,6 +101,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [providers, setProviders] = useState<readonly string[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
+  const [findable, setFindable] = useState<ReadonlySet<number>>(new Set());
   const writes = useRef(0);
   // The latest change of each Track's details, so an older read-back can't land after it.
   const latestSave = useRef(new Map<number, number>());
@@ -123,6 +132,14 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.mode().then(setMode, () => {
         // Without the Mode, the page shows nothing about it until the stream says.
       });
+      api.enricher(DETAILS_ENRICHER).then(
+        (enricher) => {
+          setFindable(new Set(enricher.eligible));
+        },
+        () => {
+          // Without the enricher, no Track offers to look its details up.
+        },
+      );
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
@@ -220,6 +237,19 @@ export function useLibrary(onSignedOut: () => void): Library {
     loaded: store.loaded,
     error,
     mode,
+    findable,
+    findDetails: async (id) => {
+      try {
+        await api.findDetails(DETAILS_ENRICHER, id);
+      } catch (failure) {
+        if (failure instanceof ApiError && failure.status === 401) {
+          onSignedOut();
+        }
+        throw failure;
+      }
+      // Asked: the Job is queued, so the Track no longer offers it until the Job is done.
+      setFindable((now) => new Set([...now].filter((each) => each !== id)));
+    },
     setFavorite: (id, favorite) => {
       setError("");
       write(id, "favorite", favorite, api.setFavorite(id, favorite));

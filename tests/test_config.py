@@ -49,6 +49,13 @@ def test_a_plugin_that_is_off_by_default_is_on_only_when_the_file_turns_it_on() 
     ) == ("bilibili",)
 
 
+def test_the_plugin_that_reads_a_tracks_details_from_bilibili_is_off_by_default_too() -> None:
+    assert Config().enabled_plugins(["bilibili-details", "tinytag-tags"]) == ("tinytag-tags",)
+    assert Config(plugins={"bilibili-details": PluginConfig(enabled=True)}).enabled_plugins(
+        ["bilibili-details"]
+    ) == ("bilibili-details",)
+
+
 def test_plugins_the_file_names_but_that_dont_exist_are_unknown() -> None:
     config = Config(plugins={"radio": PluginConfig(enabled=False), "zz": PluginConfig()})
 

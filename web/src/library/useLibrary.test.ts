@@ -363,3 +363,114 @@ describe("saving a song's details", () => {
     expect(result.current.tracks.get(7)?.title).toBe("BV1dm4y1s7ak");
   });
 });
+
+/** The enricher of Bilibili's video details, on, with the Tracks it may be asked about. */
+const enricherOf = (eligible: readonly number[], change: object = {}) => ({
+  body: { name: "bilibili-details", available: true, stopped: null, eligible, ...change },
+});
+
+describe("finding a song's details online", () => {
+  it("offers it for the Tracks the server says can be looked up, and no others", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([2]),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    await waitFor(() => {
+      expect([...result.current.findable]).toEqual([2]);
+    });
+  });
+
+  it("offers it for no Track when the server can't say", async () => {
+    serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    expect(result.current.findable.size).toBe(0);
+  });
+
+  it("asks the server to look the Track up, which then no longer offers it", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1, 2]),
+      "POST /api/enrichers/bilibili-details/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.findable.size).toBe(2);
+    });
+
+    await act(async () => {
+      await result.current.findDetails(1);
+    });
+
+    expect(calls).toContain("POST /api/enrichers/bilibili-details/tracks/1");
+    expect([...result.current.findable]).toEqual([2]);
+  });
+
+  it("passes on why the server refused, and keeps offering it", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "POST /api/enrichers/bilibili-details/tracks/1": {
+        status: 409,
+        body: { detail: "This video was looked up in the last 24 hours." },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.findable.size).toBe(1);
+    });
+
+    await expect(result.current.findDetails(1)).rejects.toThrow(
+      "This video was looked up in the last 24 hours.",
+    );
+
+    expect([...result.current.findable]).toEqual([1]);
+  });
+
+  it("asks for the Tracks and what can be looked up again when a lookup finishes", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    vi.useFakeTimers();
+
+    act(() => {
+      stream().send("job", { id: 4, kind: "enrich_track", state: "succeeded" });
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(asked(calls)).toBe(2);
+    expect(calls.filter((call) => call === "GET /api/enrichers/bilibili-details")).toHaveLength(2);
+  });
+
+  it("signs out when the server says the session is over", async () => {
+    const onSignedOut = vi.fn();
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "POST /api/enrichers/bilibili-details/tracks/1": {
+        status: 401,
+        body: { detail: "Sign in first." },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(onSignedOut));
+    await waitFor(() => {
+      expect(result.current.findable.size).toBe(1);
+    });
+
+    await expect(result.current.findDetails(1)).rejects.toThrow("Sign in first.");
+
+    expect(onSignedOut).toHaveBeenCalledOnce();
+  });
+});

@@ -1,7 +1,8 @@
 """yt-dlp's info for Bilibili videos, as the plugin's tests need it.
 
-Made from yt-dlp's Bilibili extractor source, not recorded from the site: yt-dlp
-can't read Bilibili today. Step 5b replaces these with a recorded answer.
+Made from yt-dlp's Bilibili extractor source. The single video agrees with the
+recording in `tests/support/recordings` on every field the plugin reads; the
+anthology is made, since no anthology is recorded.
 """
 
 from collections.abc import Mapping

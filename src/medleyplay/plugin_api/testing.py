@@ -4,6 +4,13 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import BaseModel, ValidationError
 
+from medleyplay.plugin_api.enrichers import (
+    ENRICH_TRACK,
+    Enriched,
+    EnrichStatus,
+    EnrichTrack,
+    TrackEnricher,
+)
 from medleyplay.plugin_api.extension import Operation
 from medleyplay.plugin_api.library import (
     CHECK_ROOT,
@@ -204,3 +211,26 @@ def check_credential_spec(spec: CredentialSpec, text: str) -> CheckedLogin:
         message = f"Checking the kept login again gave {again!r}, not {checked!r}."
         raise ContractError(message)
     return checked
+
+
+def check_track_enricher(enricher: TrackEnricher, request: EnrichTrack) -> Enriched:
+    """Check an enricher against a Track, and return its answer.
+
+    An answer that isn't `OK` holds nothing else. A cover is a regular file named
+    bare, directly in the request's folder.
+    """
+    answer = check_operation(ENRICH_TRACK, enricher, request)
+    if answer.status is not EnrichStatus.OK:
+        if answer.values or answer.video_text is not None or answer.cover is not None:
+            message = f"An answer that is {answer.status} holds values, text, or a cover."
+            raise ContractError(message)
+        return answer
+    if answer.cover is not None:
+        path = Path(request.folder) / answer.cover
+        if PurePosixPath(answer.cover).name != answer.cover or path.is_symlink():
+            message = f"{answer.cover!r} isn't a bare file name."
+            raise ContractError(message)
+        if not path.is_file():
+            message = f"{answer.cover!r} isn't a file in the folder."
+            raise ContractError(message)
+    return answer

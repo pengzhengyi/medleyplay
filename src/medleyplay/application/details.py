@@ -90,10 +90,16 @@ def record_video_text(
     db: Session,
     track_id: TrackId,
     text: VideoText,
-    came_from: Literal["household", "file"],
+    came_from: Literal["household", "file", "site"],
     now: datetime,
+    *,
+    cover: str | None = None,
 ) -> Reading:
-    """Keep `text` as the Track's video's text, and make what it says the `video` values."""
+    """Keep `text` as the Track's video's text, and make what it says the `video` values.
+
+    The video's `cover`, when it has one, is a `video` value too. Text read again
+    replaces the earlier text and everything read from it, the cover included.
+    """
     _require(db, track_id)
     row = db.get(VideoTextRow, track_id) or VideoTextRow(track_id=track_id)
     row.title = text.title
@@ -105,7 +111,10 @@ def record_video_text(
     row.recorded_at = now
     db.add(row)
     reading = read_video(text)
-    record(db, track_id, Origin.VIDEO, reading.values, now)
+    values = dict(reading.values)
+    if cover is not None:
+        values[Field.COVER] = cover
+    record(db, track_id, Origin.VIDEO, values, now)
     return reading
 
 

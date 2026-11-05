@@ -80,6 +80,14 @@ ECHO = JobKind(
   it holds the database's one write lock.
 - **A program may catch a plugin's failure** and carry on, as a scan does when
   one file's tags can't be read. A failure it doesn't catch fails the Job.
+- **A kind may have lanes:** the Jobs whose request names the same value in one
+  field, such as the enricher a Job asks, run one at a time, and a lane may wait
+  a time after one Job ends before the next starts. A lane may also name the site
+  whose proxy its Jobs get. The wait is kept in memory, on the server's clock.
+- **A kind may turn a Job away** with a reason when it is about to start, as an
+  enricher the site refused does; the Job then fails as *refused* without running.
+  It may also react, in the transaction that fails a Job, to a program failing it
+  for the site's answer.
 
 ## The runner
 
@@ -114,6 +122,7 @@ ECHO = JobKind(
 | `AuthError` | *failed* | — |
 | A plugin's fault, an idle timeout, too much memory, or a crashed process | *queued* after a delay, or *failed* on the third attempt | Yes |
 | A fault in the program or the completion | *failed* | — |
+| The site no longer has what was asked for (*gone*), or refused the request (*refused*), as a program reports | *failed* | — |
 
 - **Retry delays** double from 30 seconds.
 - **A Job's plugin calls count toward the plugin's circuit breaker** as calls in

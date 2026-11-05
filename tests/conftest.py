@@ -16,6 +16,7 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.enrichment import EnrichKind, EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
@@ -186,16 +187,41 @@ def plugins(units: sessionmaker[Session], clock: FakeClock) -> PluginService:
 
 
 @pytest.fixture
+def enrich_kind(clock: FakeClock, tmp_path: Path) -> EnrichKind:
+    return enrich_track_kind(tmp_path / "data" / "covers", clock)
+
+
+@pytest.fixture
 def jobs(
-    units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, tmp_path: Path
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    enrich_kind: EnrichKind,
+    tmp_path: Path,
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
     scan = scan_library_kind(clock, tmp_path / "data" / "covers")
     cache = cache_source_kind(tmp_path / "data")
     download = download_source_kind(tmp_path / "data", tmp_path / "jobs", clock)
-    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
+    kinds: dict[str, AnyJobKind] = {
+        scan.name: scan,
+        cache.name: cache,
+        download.name: download,
+        enrich_kind.name: enrich_kind,
+    }
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
+
+
+@pytest.fixture
+def enrichment(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    enrich_kind: EnrichKind,
+) -> EnrichmentService:
+    return EnrichmentService(units, clock, plugins, jobs, enrich_kind)
 
 
 @pytest.fixture
@@ -304,6 +330,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     details: DetailsService,
     songs: SongsService,
     covers: CoverService,
+    enrichment: EnrichmentService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -324,6 +351,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         details=details,
         songs=songs,
         covers=covers,
+        enrichment=enrichment,
     )
 
 

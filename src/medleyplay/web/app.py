@@ -31,6 +31,7 @@ from medleyplay.web import (
     catalog,
     covers,
     details,
+    enrichers,
     events,
     jobs,
     libraries,
@@ -103,6 +104,7 @@ def create_app(
     app.include_router(details.router)
     app.include_router(songs.router)
     app.include_router(covers.router)
+    app.include_router(enrichers.router)
     app.include_router(storage.router)
     app.mount("/", client_app(client_dir))
     app.add_exception_handler(RequestValidationError, _handle_invalid_request)  # type: ignore[arg-type] # Starlette types handlers for any Exception

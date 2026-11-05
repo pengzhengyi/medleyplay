@@ -85,7 +85,8 @@ Auto is Online when all of these hold, and Offline when any doesn't:
 ## What waits while Offline
 
 - **Nothing new contacts a music site.** A Job kind says whether it needs the
-  network: a Download does, a scan and preparing a zip member don't. The
+  network: a Download and finding a Track's details do, a scan and preparing a
+  zip member don't. The
   runner's claim excludes network kinds while Offline, so a held Job stays
   queued, and its view says it waits for Online. Going Online starts them
   oldest first, no more at once than the runner allows.

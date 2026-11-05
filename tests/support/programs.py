@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from medleyplay.application.jobs import JobKind
 from medleyplay.domain.jobs import Job
-from medleyplay.plugin_host.job import JobContext, JobProgram, PluginCallFailedError
+from medleyplay.plugin_host.job import (
+    AnswerFailedError,
+    JobContext,
+    JobProgram,
+    PluginCallFailedError,
+)
 from tests.support.echo import SAY, Say
 
 
@@ -27,7 +32,9 @@ class EchoJob(BaseModel):
     catch_failure: bool = False
     echo_proxy: bool = False
     """Echo the proxy the Job started with, instead of the text."""
-    fail: Literal["raise", "crash", "hang", "sleeping-child"] | None = None
+    fail: Literal["raise", "crash", "hang", "sleeping-child", "gone", "refused"] | None = None
+    lane: str = "main"
+    """The lane the Job runs in, for a kind that has lanes."""
 
 
 class Echoed(BaseModel):
@@ -49,9 +56,16 @@ def run(request: EchoJob, context: JobContext) -> Echoed:
             if not request.catch_failure:
                 raise
             text = "caught"
+    _misbehave(request, text, context)
+    return Echoed(text=text)
+
+
+def _misbehave(request: EchoJob, text: str, context: JobContext) -> None:
     match request.fail:
         case "raise":
             raise ValueError(text)
+        case "gone" | "refused":
+            raise AnswerFailedError(text, kind=request.fail)
         case "crash":
             os._exit(9)
         case "hang":
@@ -62,7 +76,6 @@ def run(request: EchoJob, context: JobContext) -> Echoed:
             time.sleep(3600)
         case None:
             pass
-    return Echoed(text=text)
 
 
 ECHO: JobProgram[EchoJob, Echoed] = JobProgram(EchoJob, Echoed, run)

@@ -9,19 +9,19 @@ import fcntl
 import os
 import shutil
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Final, Protocol
 
 from pydantic import ValidationError
-from sqlalchemy import ColumnElement, or_, select, update
+from sqlalchemy import ColumnElement, and_, not_, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
 from medleyplay.application.events import Events
-from medleyplay.application.jobs import AnyJobKind, to_job
+from medleyplay.application.jobs import AnyJobKind, Lane, to_job
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.errors import KeychainUnavailableError
@@ -127,6 +127,7 @@ class _Running:
     process: ChildProcess[FromJob]
     login: _Login | None = None
     proxy: str | None = None
+    lane: str | None = None
     thread: threading.Thread | None = None
     held: bool = False
     """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
@@ -178,6 +179,8 @@ class JobRunner:
         self._lock = threading.Lock()
         self._running: dict[JobId, _Running] = {}
         self._progress: dict[JobId, Progress] = {}
+        self._lane_opens: dict[tuple[str, str], datetime] = {}
+        """When each lane may start its next Job: after the spacing from its last."""
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._loop_thread: threading.Thread | None = None
@@ -288,6 +291,8 @@ class JobRunner:
             ready = (JobRow.state == JobState.QUEUED) & _due(now)
             if not self._online():
                 ready &= JobRow.kind.not_in(self._network_kinds)
+            if (closed := self._closed_lanes(now)) is not None:
+                ready &= not_(closed)
             row = db.scalar(select(JobRow).where(ready).order_by(JobRow.id).limit(1))
             if row is None:
                 return False
@@ -302,18 +307,47 @@ class JobRunner:
             login_account = (
                 row.login_account_id if row.login_account_id == row.requested_by else None
             )
+            kind = self._kinds.get(kind_name)
+            refusal = None
+            if claimed.rowcount == 1 and kind is not None:
+                refusal = self._turned_away(db, kind, request)
+                if refusal is not None:
+                    self._set_in(db, job_id, JobState.FAILED, failure=("refused", refusal))
         if claimed.rowcount != 1:
             return True
         self._publish(job_id)
-        kind = self._kinds.get(kind_name)
         if kind is None:
             message = f"This server no longer runs Jobs of the kind {kind_name!r}."
             self._settle_failure(job_id, "program", message)
             return True
-        self._launch(
-            job_id, kind, request, None if login_account is None else AccountId(login_account)
-        )
+        if refusal is None:
+            self._launch(
+                job_id, kind, request, None if login_account is None else AccountId(login_account)
+            )
         return True
+
+    def _closed_lanes(self, now: datetime) -> ColumnElement[bool] | None:
+        """Return the Jobs that can't start: those of a lane that is busy or still spacing."""
+        with self._lock:
+            closed = {
+                (running.kind.name, running.lane)
+                for running in self._running.values()
+                if running.lane is not None
+            }
+            closed |= {lane for lane, opens in self._lane_opens.items() if opens > now}
+        clauses = []
+        for name, kind in self._kinds.items():
+            lanes = sorted(lane for kind_name, lane in closed if kind_name == name)
+            if kind.lane_field is not None and lanes:
+                request = JobRow.__table__.c.request[kind.lane_field].as_string()
+                clauses.append(and_(JobRow.kind == name, request.in_(lanes)))
+        return or_(*clauses) if clauses else None
+
+    def _turned_away(self, db: Session, kind: AnyJobKind, request: object) -> str | None:
+        """Return why the Job can't start, or `None`: its kind's reason, or a lane it lacks."""
+        if kind.lane_field is not None and _lane_name(kind, request) not in kind.lanes:
+            return f"This server no longer runs {_lane_name(kind, request)!r} for {kind.name}."
+        return None if kind.refuse_start is None else kind.refuse_start(db, request)
 
     def _launch(
         self, job_id: JobId, kind: AnyJobKind, request: object, login_account: AccountId | None
@@ -322,7 +356,8 @@ class JobRunner:
         work_dir.mkdir(mode=0o700, exist_ok=True)
         try:
             login = self._lend(kind, login_account, work_dir)
-            proxy = self._proxy(kind)
+            lane = _lane_name(kind, request)
+            proxy = self._proxy(kind, kind.lanes.get(lane) if lane is not None else None)
             process = self._spawn(work_dir)
         except KeychainUnavailableError as error:
             # The Keychain can be locked or prompting; it usually answers again soon.
@@ -339,7 +374,7 @@ class JobRunner:
             self._settle_failure(job_id, "program", f"Its process didn't start: {error}")
             shutil.rmtree(work_dir, ignore_errors=True)
             return
-        running = _Running(job_id, kind, work_dir, process, login, proxy)
+        running = _Running(job_id, kind, work_dir, process, login, proxy, lane)
         with self._lock:
             self._running[job_id] = running
         # The Mode may have gone Offline since the claim, before `follow_mode` could
@@ -365,11 +400,12 @@ class JobRunner:
         running.thread = threading.Thread(target=self._supervise, args=(running,), daemon=True)
         running.thread.start()
 
-    def _proxy(self, kind: AnyJobKind) -> str | None:
+    def _proxy(self, kind: AnyJobKind, lane: Lane | None) -> str | None:
         # The Job keeps the proxy it starts with; it goes to its process, never to disk.
-        if kind.proxy_site is None or self._proxies is None:
+        site = kind.proxy_site if lane is None else lane.proxy_site
+        if site is None or self._proxies is None:
             return None
-        return self._proxies.current(kind.proxy_site)
+        return self._proxies.current(site)
 
     def _lend(
         self, kind: AnyJobKind, account_id: AccountId | None, work_dir: Path
@@ -399,6 +435,9 @@ class JobRunner:
         outcome = self._watch(running)
         with self._lock:
             running.done = True
+            if running.lane is not None:
+                spacing = running.kind.lanes[running.lane].spacing
+                self._lane_opens[running.kind.name, running.lane] = self._clock() + spacing
         if isinstance(outcome, JobFinished | JobFailed):
             running.process.finish()
         else:
@@ -462,7 +501,7 @@ class JobRunner:
                 self._retry_or_fail(running, message)
             case JobFailed(kind=kind, message=message, outcomes=outcomes):
                 self._plugins.record_outcomes(outcomes)
-                self._settle_failure(running.job_id, kind, message)
+                self._fail(running, kind, message)
             case _Fault(message=message):
                 self._retry_or_fail(running, message)
             case _Interrupted():
@@ -502,6 +541,24 @@ class JobRunner:
             attempts=attempts,
             not_before=self._clock() + delay,
         )
+
+    def _fail(self, running: _Running, kind: str, message: str) -> None:
+        """Fail the Job for the program's own reason; its kind reacts in the same transaction."""
+        others: Sequence[JobId] = ()
+        try:
+            with self._units.begin() as db:
+                changed = self._set_in(db, running.job_id, JobState.FAILED, failure=(kind, message))
+                if changed and running.kind.on_failure is not None:
+                    job = to_job(_get(db, running.job_id))
+                    others = running.kind.on_failure(db, job, kind, message)
+        except Exception as error:  # noqa: BLE001 -- a kind's reaction can't leave the Job running
+            message = f"{message} (Its failure could not be recorded: {type(error).__name__}.)"
+            self._settle_failure(running.job_id, kind, message)
+            return
+        if changed:
+            self._publish(running.job_id)
+        for other in others:
+            self._publish(other)
 
     def _settle_failure(self, job_id: JobId, kind: str, message: str) -> None:
         self._set(job_id, JobState.FAILED, failure=(kind, message))
@@ -582,6 +639,14 @@ def _redacted(running: _Running, outcome: _Outcome) -> _Outcome:
             update={"outcomes": outcomes, "message": running.redact(outcome.message)}
         )
     return outcome.model_copy(update={"outcomes": outcomes})
+
+
+def _lane_name(kind: AnyJobKind, request: object) -> str | None:
+    """Return the lane the request puts a Job of `kind` in, or `None` when it has no lane."""
+    if kind.lane_field is None or not isinstance(request, dict):
+        return None
+    lane = request.get(kind.lane_field)
+    return lane if isinstance(lane, str) else None
 
 
 def _due(now: datetime) -> ColumnElement[bool]:

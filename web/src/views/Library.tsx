@@ -123,6 +123,19 @@ export function Library({
     },
     onAddToPlaylist: setAdding,
     onEditDetails: setEditing,
+    canFindDetails: (track: Track) => library.findable.has(track.id),
+    onFindDetails: (track: Track) => {
+      library.findDetails(track.id).then(
+        () => {
+          const wait =
+            library.mode?.online === false ? " It waits until medleyplay is Online." : "";
+          setNotice(`Looking up “${track.title}” on Bilibili.${wait}`);
+        },
+        (failure: unknown) => {
+          setNotice(failure instanceof Error ? failure.message : String(failure));
+        },
+      );
+    },
     onEditSongs: (track: Track) => {
       setSplitting(track.segment_of === null ? track : byId.get(track.segment_of));
     },

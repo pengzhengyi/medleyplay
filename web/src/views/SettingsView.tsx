@@ -14,6 +14,7 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "rea
 import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
 import { BilibiliSettings } from "./BilibiliSettings";
+import { VideoDetailsSettings } from "./VideoDetailsSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -95,7 +96,12 @@ export function SettingsView({
     "keyboard-shortcuts": <ShortcutSettings />,
     network: <NetworkSettings admin={admin} mode={mode} />,
     storage: <StorageSettings admin={admin} />,
-    bilibili: <BilibiliSettings />,
+    bilibili: (
+      <>
+        <BilibiliSettings />
+        <VideoDetailsSettings />
+      </>
+    ),
   };
   return (
     <>

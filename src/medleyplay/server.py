@@ -26,6 +26,7 @@ from medleyplay.application.connectivity import reachable
 from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.enrichment import EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
@@ -164,10 +165,12 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     scan = scan_library_kind(clock, data_dir / COVERS_FOLDER)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
+    enrich = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,
         download.name: download,
+        enrich.name: enrich,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -229,6 +232,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         details=DetailsService(units, clock, changes.tell),
         songs=SongsService(units, clock, changes.tell),
         covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
+        enrichment=EnrichmentService(units, clock, plugins, jobs, enrich),
     )
 
 

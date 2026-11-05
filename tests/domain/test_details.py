@@ -211,7 +211,12 @@ def test_the_album_fields_never_mix_two_releases(values: dict[Origin, Values]) -
         assert len(others) <= 1
         if Field.COVER in found:
             cover = found[Field.COVER].origin
-            assert cover in others | {Origin.HOUSEHOLD} or not values[cover].get(Field.ALBUM)
+            named = next(origin for origin in ORIGINS if values.get(origin, {}).get(Field.ALBUM))
+            assert cover in {Origin.HOUSEHOLD, named} or (
+                not values[cover].get(Field.ALBUM)
+                and Field.COVER not in values.get(Origin.HOUSEHOLD, {})
+                and Field.COVER not in values[named]
+            )
 
 
 _SHOWN_CASES = json.loads(

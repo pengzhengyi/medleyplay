@@ -187,8 +187,8 @@ values.
   Applying the result moves the copy into `covers/` as the upload does.
 - **A cover is a detail** like the others, its value the cover's name, and one of
   the album fields, so it comes from the origin naming the album, or else from
-  an origin naming none, and a split file's songs take their file's. The household may also name an existing cover,
-  or none with empty text.
+  an origin naming none, and a split file's songs take their file's. The
+  household may also name an existing cover, or none with empty text.
 - **Served** with the type its bytes say, `nosniff`, and
   `Cache-Control: private, max-age=31536000, immutable`, since its name is its
   content.
@@ -260,7 +260,8 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 ## Testing
 
 - **Precedence** as a Hypothesis property: the shown value is the first origin's
-  in the order, the album fields come from one origin, dropping the household's
+  in the order, the album fields come from one origin, the cover from it or,
+  when it has none, from an origin naming no album, dropping the household's
   value shows the next, and the Track's row always equals its shown values.
 - **The parser** against a corpus of real-shaped titles and descriptions as
   multi-line literals: bracketed tags, `artist - title`, album words, and

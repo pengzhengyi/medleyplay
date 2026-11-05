@@ -236,6 +236,20 @@ def test_a_connection_that_fails_is_a_network_failure(failure: Exception) -> Non
         client_of(fake).search_recordings('recording:"Let Down"')
 
 
+def test_an_answer_that_is_not_json_is_a_network_failure() -> None:
+    """A network's sign-in page answers in place of MusicBrainz:
+
+    ```html
+    <html><body>Sign in to the café's Wi-Fi</body></html>
+    ```
+    """
+    page = b"<html><body>Sign in to the caf\xc3\xa9's Wi-Fi</body></html>"
+    fake = FakeMusicBrainz().answer(SEARCH, Reply(200, {"Content-Type": "text/html"}, page))
+
+    with pytest.raises(NetworkError, match="not MusicBrainz"):
+        client_of(fake).search_recordings('recording:"Let Down"')
+
+
 def test_a_query_the_service_rejects_is_a_fault_not_a_refusal() -> None:
     fake = FakeMusicBrainz().answer(SEARCH, Reply(400))
 

@@ -52,20 +52,11 @@ class MusicBrainz:
         if terms.title is None or terms.artist is None:
             return Enriched()
         query = matching.recording_query(terms.title, terms.artist, terms.album)
-        candidates = [
-            Candidate(
-                release.id,
-                release.title,
-                found.score,
-                release.status == "Official",
-                release.date,
-                found.id,
-            )
-            for found in self.client.search_recordings(query).recordings
-            if matching.within_window(request.duration_ms, found.length)
-            for release in found.releases
-        ]
-        chosen = matching.best(candidates, terms.album)
+        chosen = matching.best(self._candidates(query, request.duration_ms), terms.album)
+        if chosen is None and terms.album is not None:
+            # The album shown may be no release's, such as a video's playlist name.
+            query = matching.recording_query(terms.title, terms.artist)
+            chosen = matching.best(self._candidates(query, request.duration_ms), terms.album)
         if chosen is None:
             return Enriched()
         release = self.client.release(chosen.release)
@@ -75,6 +66,22 @@ class MusicBrainz:
         if chosen.recording is not None:
             values |= _track_values(release, chosen.recording)
         return Enriched(values=values, cover=self._cover(release, request.folder))
+
+    def _candidates(self, query: str, duration_ms: int | None) -> list[Candidate]:
+        """Return each release of each recording the query finds near the Track's length."""
+        return [
+            Candidate(
+                release.id,
+                release.title,
+                found.score,
+                release.status == "Official",
+                release.date,
+                found.id,
+            )
+            for found in self.client.search_recordings(query).recordings
+            if matching.within_window(duration_ms, found.length)
+            for release in found.releases
+        ]
 
     def _release_of(self, terms: Terms, folder: str) -> Enriched:
         artist = terms.album_artist or terms.artist

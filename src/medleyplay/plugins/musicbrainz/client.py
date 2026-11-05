@@ -147,7 +147,12 @@ def _answer(response: requests.Response, *, missing_ok: bool) -> object | None:
         message = f"MusicBrainz answered {status}."
         raise NetworkError(message)
     response.raise_for_status()
-    body: object = response.json()
+    try:
+        body: object = response.json()
+    except requests.JSONDecodeError as error:
+        # Such as a network's sign-in page, answering in MusicBrainz's place.
+        message = "The answer was not MusicBrainz's: it was not JSON."
+        raise NetworkError(message) from error
     return body
 
 

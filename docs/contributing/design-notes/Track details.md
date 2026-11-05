@@ -303,6 +303,10 @@ library would add nothing.
   release:"生如夏花" AND artist:"朴树"                 a long file, searched as a release
   ```
 
+  When nothing passes the match with the album, a song is searched once more by
+  title and artist alone, since the album shown may be no release's, such as a
+  video's playlist name.
+
 - **The match.** A candidate scores at least 90 and, when both lengths are known,
   has a length within 5 seconds of the Track's. Candidates rank by score, then a
   release whose title is the shown album (ignoring case and the width of

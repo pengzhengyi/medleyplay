@@ -78,6 +78,46 @@ def test_the_search_is_by_the_shown_title_artist_and_album(tmp_path: Path) -> No
     )
 
 
+def test_an_album_that_finds_the_song_is_searched_with_once(tmp_path: Path) -> None:
+    fake = FakeMusicBrainzFactory.knowing_let_down()
+
+    enricher_over(fake).enrich(EnrichTrackFactory.let_down(tmp_path))
+
+    assert fake.urls().count(f"{API}/recording") == 1
+
+
+def test_an_album_no_release_of_the_song_is_named_is_searched_again_without_it(
+    tmp_path: Path,
+) -> None:
+    """A video's playlist name stands where the album would be:
+
+    ```text
+    title "Let Down", artist "Radiohead", album "My Favorites 2024"
+    ```
+    """
+    fake = (
+        FakeMusicBrainz()
+        .answer(
+            f"{API}/recording",
+            Reply.json({"recordings": []}),
+            Reply.json(MusicBrainzFactory.let_down_search()),
+        )
+        .answer(
+            f"{API}/release/{ORIGINAL}", Reply.json(MusicBrainzFactory.ok_computer(front=False))
+        )
+    )
+
+    answer = enricher_over(fake).enrich(
+        EnrichTrackFactory.let_down(tmp_path, album="My Favorites 2024")
+    )
+
+    assert [fake.parameter("query", index) for index in (0, 1)] == [
+        'recording:"Let Down" AND artist:"Radiohead" AND release:"My Favorites 2024"',
+        'recording:"Let Down" AND artist:"Radiohead"',
+    ]
+    assert answer.values == LET_DOWN_VALUES
+
+
 def test_without_a_shown_album_the_search_names_none_and_the_earliest_release_is_chosen(
     tmp_path: Path,
 ) -> None:
@@ -235,7 +275,7 @@ def test_a_track_far_from_every_recordings_length_finds_nothing(tmp_path: Path) 
     answer = enricher_over(fake).enrich(ask)
 
     assert (answer.status, answer.values, answer.cover) == (EnrichStatus.OK, {}, None)
-    assert fake.urls() == [f"{API}/recording"]
+    assert fake.urls() == [f"{API}/recording"] * 2, "searched with the album, then without"
 
 
 def test_a_track_of_unknown_length_is_matched_by_its_words_alone(tmp_path: Path) -> None:
@@ -271,7 +311,7 @@ def test_every_candidate_scoring_under_ninety_finds_nothing(tmp_path: Path) -> N
     answer = enricher_over(fake).enrich(EnrichTrackFactory.let_down(tmp_path))
 
     assert (answer.status, answer.values) == (EnrichStatus.OK, {})
-    assert fake.urls() == [f"{API}/recording"]
+    assert fake.urls() == [f"{API}/recording"] * 2, "searched with the album, then without"
 
 
 def test_a_search_that_finds_no_recording_is_an_answer_with_no_values(tmp_path: Path) -> None:

@@ -7,6 +7,8 @@ from typing import Final
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response, status
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -27,7 +29,9 @@ from medleyplay.domain.errors import (
 from medleyplay.web import (
     accounts,
     catalog,
+    covers,
     details,
+    enrichers,
     events,
     jobs,
     libraries,
@@ -37,7 +41,9 @@ from medleyplay.web import (
     playback,
     plugins,
     preferences,
+    proxies,
     settings,
+    songs,
     storage,
 )
 from medleyplay.web.deps import Services
@@ -60,6 +66,7 @@ _DETAIL_OF: Final[dict[type[MedleyplayError], str]] = {
     SignInRefusedError: "The username or password is wrong.",
 }
 _SAFE_METHODS: Final = frozenset({"GET", "HEAD", "OPTIONS"})
+PROXIES_PATH: Final = proxies.router.prefix + "/"
 
 type Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
@@ -88,14 +95,19 @@ def create_app(
     app.include_router(libraries.router)
     app.include_router(playback.router)
     app.include_router(linked_accounts.router)
+    app.include_router(proxies.router)
     app.include_router(links.router)
     app.include_router(events.router)
     app.include_router(settings.router)
     app.include_router(preferences.router)
     app.include_router(mode.router)
     app.include_router(details.router)
+    app.include_router(songs.router)
+    app.include_router(covers.router)
+    app.include_router(enrichers.router)
     app.include_router(storage.router)
     app.mount("/", client_app(client_dir))
+    app.add_exception_handler(RequestValidationError, _handle_invalid_request)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.middleware("http")(_refuse_cross_origin_writes)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
@@ -112,6 +124,18 @@ def _handle_domain_error(_: Request, error: MedleyplayError) -> JSONResponse:
     )
     body = {"detail": detail} if error.code is None else {"detail": detail, "code": error.code}
     return JSONResponse(body, status_code=code, headers=headers)
+
+
+async def _handle_invalid_request(request: Request, error: RequestValidationError) -> Response:
+    """Answer 422 as FastAPI does, except for a proxy: its body holds a password.
+
+    FastAPI echoes the input of each error, which for a body that is missing a key
+    is the whole body.
+    """
+    if request.url.path.startswith(PROXIES_PATH):
+        detail = 'The body must be JSON like {"url": "socks5h://127.0.0.1:7890"}.'
+        return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
+    return await request_validation_exception_handler(request, error)
 
 
 async def _refuse_cross_origin_writes(

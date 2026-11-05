@@ -23,8 +23,10 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.changes import Changes
 from medleyplay.application.connectivity import reachable
+from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.enrichment import EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
@@ -37,7 +39,9 @@ from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.proxies import ProxyService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
+from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
@@ -155,14 +159,18 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
     plugins = PluginService(units, clock, lineup, host, changes.tell)
-    linked = LinkedAccountService(units, clock, plugins, secrets or KeychainSecrets(), changes.tell)
-    scan = scan_library_kind(clock)
+    keychain = secrets or KeychainSecrets()
+    linked = LinkedAccountService(units, clock, plugins, keychain, changes.tell)
+    proxies = ProxyService(units, clock, keychain)
+    scan = scan_library_kind(clock, data_dir / COVERS_FOLDER)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
+    enrich = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,
         download.name: download,
+        enrich.name: enrich,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -180,6 +188,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         processes=processes,
         online=mode.online,
         logins=linked,
+        proxies=proxies,
         events=events,
         network_failed=mode.check_soon,
     )
@@ -195,6 +204,9 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     mode.listen(events.publish_mode)
     mode.listen(runner.follow_mode)
     mode.listen(policy.request)
+    links = LinkService(units, clock, plugins, catalog, downloads, mode.online, proxies)
+    # A changed proxy makes a looked-up video's details stale, so they are looked up again.
+    proxies.listen(links.forget_lookups)
     return Services(
         accounts=AccountService(
             units,
@@ -210,13 +222,17 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
         playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads, mode.online),
         linked=linked,
-        links=LinkService(units, clock, plugins, catalog, downloads, mode.online),
+        proxies=proxies,
+        links=links,
         events=events,
         settings=SettingsService(units, clock, changes.tell),
         policy=policy,
         preferences=PreferencesService(units, clock),
         mode=mode,
         details=DetailsService(units, clock, changes.tell),
+        songs=SongsService(units, clock, changes.tell),
+        covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
+        enrichment=EnrichmentService(units, clock, plugins, jobs, enrich),
     )
 
 
@@ -244,6 +260,7 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
                     services.plugins.start()
                     services.playback.sweep_cache()
                     services.playback.sweep_downloads()
+                    services.covers.sweep()
                     services.jobs.start()
                     services.policy.start()
                     try:

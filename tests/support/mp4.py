@@ -17,13 +17,15 @@ class Mp4:
 
     `header_seconds` goes in `mvhd`, which is 0 in a fragmented file. `fragment_seconds`
     adds `mvex/mehd`, written in `mehd_version`'s layout. `segment_seconds` adds a
-    top-level `sidx` box holding one subsegment duration each.
+    top-level `sidx` box holding one subsegment duration each. A `cover` adds the
+    image as the file's `covr` tag.
     """
 
     header_seconds: float = 0
     fragment_seconds: float | None = None
     mehd_version: int = 0
     segment_seconds: Sequence[float] = ()
+    cover: bytes = b""
 
 
 def mp4_bytes(mp4: Mp4) -> bytes:
@@ -40,9 +42,17 @@ def mp4_bytes(mp4: Mp4) -> bytes:
         sidx            timescale 1000; one subsegment duration per segment
         moof
         mdat
+
+    With a cover, `moov` also holds the tag the way an iTunes file has it:
+
+        udta
+          meta
+            ilst
+              covr
+                data    the image
     """
     mvex = box(b"mvex", _mehd(mp4) + full_box(b"trex", 0, bytes(20)))
-    moov = box(b"moov", mvhd(_units(mp4.header_seconds)) + mvex)
+    moov = box(b"moov", mvhd(_units(mp4.header_seconds)) + mvex + _cover_tag(mp4.cover))
     segments = sidx([_units(seconds) for seconds in mp4.segment_seconds])
     return (
         FTYP
@@ -103,6 +113,13 @@ def sidx(
         + struct.pack(">HH", 0, len(references))
         + b"".join(struct.pack(">III", kind, units, 0) for kind, units in references),
     )
+
+
+def _cover_tag(cover: bytes) -> bytes:
+    if not cover:
+        return b""
+    data = box(b"data", struct.pack(">II", 13, 0) + cover)
+    return box(b"udta", full_box(b"meta", 0, box(b"ilst", box(b"covr", data))))
 
 
 def _mehd(mp4: Mp4) -> bytes:

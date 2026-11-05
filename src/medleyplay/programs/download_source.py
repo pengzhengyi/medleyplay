@@ -46,7 +46,7 @@ class DownloadedSource(_Model):
 
 
 def run(request: DownloadSource, context: JobContext) -> DownloadedSource:
-    """Download the part with the Job's login, if it has one, then check the file."""
+    """Download the part with the Job's login and proxy, if it has them, then check the file."""
     folder = context.work_dir / DOWNLOAD_FOLDER
     folder.mkdir(exist_ok=True)
     downloaded = context.call(
@@ -58,6 +58,7 @@ def run(request: DownloadSource, context: JobContext) -> DownloadedSource:
             quality=request.quality,
             folder=str(folder),
             login=str(context.login) if context.login else None,
+            proxy=context.proxy,
         ),
     )
     if downloaded.file is None:

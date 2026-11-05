@@ -44,9 +44,12 @@ class BilibiliResolver:
     extract: Extract = field(default=_ytdlp.extract)
 
     def canonicalize(self, request: Canonicalize) -> Canonical:
-        """Name the video and part the link does, following a short link first."""
+        """Name the video and part the link does, following a short link first.
+
+        Each hop of a short link goes through the request's proxy, if it has one.
+        """
         link = (
-            follow_short_link(request.link, self.fetch)
+            follow_short_link(request.link, self.fetch, request.proxy)
             if is_short_link(request.link)
             else request.link
         )
@@ -58,9 +61,11 @@ class BilibiliResolver:
     def read(self, request: ReadVideo) -> VideoDetails:
         """Read the video's title, uploader, parts, and AAC qualities."""
         try:
-            top = self.extract(video_url(request.video), playlist=True)
+            top = self.extract(video_url(request.video), playlist=True, proxy=request.proxy)
             if top.get("_type") == "playlist":
-                first = self.extract(video_url(request.video, 1), playlist=False)
+                first = self.extract(
+                    video_url(request.video, 1), playlist=False, proxy=request.proxy
+                )
                 details = video_details(first, top)
             else:
                 first, details = top, video_details(top)
@@ -93,6 +98,7 @@ class BilibiliDownloader:
                 folder=request.folder,
                 cookie_file=request.login,
                 on_progress=on_progress,
+                proxy=request.proxy,
             )
         except _ytdlp.GoneError as error:
             return Downloaded(file=None, gone=True, message=str(error)[:512])

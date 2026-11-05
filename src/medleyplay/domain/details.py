@@ -11,7 +11,9 @@ title    household: —           files: "Night Drive"   file_name: "BV1dm4y1s7a
 
 The album fields travel together: they show from the first origin that names an
 album, so one Track never mixes two releases; the household's own value for any
-of them still wins on its own.
+of them still wins on its own. When that origin has no cover, the cover comes
+from the first origin naming no album, such as an image beside a file whose
+album only the video names.
 """
 
 from collections.abc import Mapping
@@ -19,6 +21,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from medleyplay.domain.covers import is_cover_id
 from medleyplay.domain.errors import InvalidInputError
 
 MAX_TEXT: Final = 512
@@ -58,6 +61,8 @@ class Field(StrEnum):
     DISC_NUMBER = "disc_number"
     YEAR = "year"
     GENRE = "genre"
+    COVER = "cover"
+    """A cover image, named by the SHA-256 of its bytes; empty text shows none."""
 
 
 TEXT_FIELDS: Final = frozenset(
@@ -65,7 +70,14 @@ TEXT_FIELDS: Final = frozenset(
 )
 NUMBER_FIELDS: Final = frozenset({Field.TRACK_NUMBER, Field.DISC_NUMBER, Field.YEAR})
 ALBUM_FIELDS: Final = frozenset(
-    {Field.ALBUM, Field.ALBUM_ARTIST, Field.TRACK_NUMBER, Field.DISC_NUMBER, Field.YEAR}
+    {
+        Field.ALBUM,
+        Field.ALBUM_ARTIST,
+        Field.TRACK_NUMBER,
+        Field.DISC_NUMBER,
+        Field.YEAR,
+        Field.COVER,
+    }
 )
 """The fields that describe the release a Track is on, shown from one origin."""
 
@@ -85,8 +97,14 @@ def check_value(field: Field, value: object) -> Value:
     """Return `value` as `field` keeps it, or raise `InvalidInputError` saying why.
 
     Text is trimmed and at most `MAX_TEXT` characters; empty text is a value, which
-    shows nothing. Numbers are whole, from 1, and a year has four digits.
+    shows nothing. Numbers are whole, from 1, and a year has four digits. A cover
+    is a cover's name, or empty text for none.
     """
+    if field is Field.COVER:
+        if not isinstance(value, str) or (value != "" and not is_cover_id(value)):
+            message = "cover names an image by the SHA-256 of its bytes, or is empty."
+            raise InvalidInputError(message)
+        return value
     if field in TEXT_FIELDS:
         if not isinstance(value, str):
             message = f"{field} is text."
@@ -112,6 +130,8 @@ def found_value(field: Field, value: Value) -> Value | None:
     Such a value is never refused, as the household's is: text is trimmed and cut to
     `MAX_TEXT` characters, and blank text or a number out of range is no value.
     """
+    if field is Field.COVER:
+        return value if isinstance(value, str) and is_cover_id(value) else None
     if field in TEXT_FIELDS:
         text = value.strip()[:MAX_TEXT].strip() if isinstance(value, str) else ""
         return text or None
@@ -169,6 +189,12 @@ def _album(values: Mapping[Origin, Values]) -> dict[Field, Shown]:
         first = _first(values, field, origins)
         if first is not None:
             found[field] = first
+    if Field.COVER not in found:
+        # A cover from an origin naming no album belongs to no other release.
+        unnamed = tuple(o for o in ORIGINS if not values.get(o, {}).get(Field.ALBUM))
+        cover = _first(values, Field.COVER, unnamed)
+        if cover is not None:
+            found[Field.COVER] = cover
     return found
 
 

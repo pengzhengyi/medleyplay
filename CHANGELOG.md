@@ -98,7 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the macOS Keychain and lent to its downloads; look a video up by any link,
   short links included, and add its parts as Tracks, which download in the
   background and play even after the video is removed. The `bilibili` plugin is
-  off by default until yt-dlp can read Bilibili again. See the
+  off by default until yt-dlp can read Bilibili again. An admin can set the
+  household's proxy for Bilibili, kept in the Keychain, which the plugin uses for
+  every request; nothing retries around a refusal. See the
   [Bilibili](docs/contributing/design-notes/Bilibili.md) note.
 - **Job progress over SSE** — `GET /api/events` tells every open browser each
   time a Job changes.
@@ -124,15 +126,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Track details with their origins** — each of a Track's details (title,
   artist, album, album artist, track and disc numbers, year, and genre) is kept
   with where it came from, and the household's own values win over the file's
-  tags, the video's text, and the file's name. Edit them on one Track or many at
-  once through `PUT /api/tracks/{id}/details` and `POST /api/tracks/details`. See
-  the [Track details](docs/contributing/design-notes/Track%20details.md) note.
+  tags, the video's text, and the file's name. *Edit details…* in a song's menu
+  shows where each came from and offers what the others say; many Tracks are
+  edited at once through `POST /api/tracks/details`. *Paste the video's details*
+  there reads a video's title and description, copied from the site, for the
+  song's title, artist, album, and year, and the songs it lists, and a Library scan
+  reads the `.info.json` yt-dlp writes beside a download the same way. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md) note.
+
+- **Songs inside a long file** — *Split into songs…* on a song's menu splits a
+  whole album uploaded as one video into its songs, from a list found in the
+  video's details or pasted, and *Edit songs…* edits them, listening in the
+  dialog from any song's start to place the next. Each song is a Track
+  of its own that keeps its ratings, plays, and Playlist places when the list is
+  edited, takes its album, artist, and track number from the file, and plays its
+  stretch of the file, on into the next song without a gap. See the
+  [Segments](docs/contributing/design-notes/Segments.md) note.
+
+- **Covers** — a Library scan finds a song's cover, embedded in its file or as
+  an image beside it, shown even when only the video's details name the album,
+  and *Edit details* uploads a JPEG, PNG, or WebP image as
+  a song's cover; the table, Up next, the album cards, the player, and the lock
+  screen show it. A cover is kept once, by its content, shared by the songs of
+  an album, and removed when the server next starts once nothing shows it. See
+  the
+  [Track details](docs/contributing/design-notes/Track%20details.md#covers) note.
+
+- **Find a Track's details online** — *Find details online* in a song's menu
+  asks Bilibili for the title, description, chapters, and cover of the song's
+  video, read as a sidecar or a paste is, when the song has a video and no text
+  from a file beside it or the household. An admin's *Find details for all* in
+  Settings queues every such song. The `bilibili-details` plugin, off by default
+  like `bilibili`, asks one video at a time with a pause between, never the same
+  video twice in a day, through the household's proxy, and nothing is asked unless
+  someone chooses it. The first refusal from Bilibili stops it until an admin
+  resets it in Settings. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md#enrichers) note.
 
 ### Changed
 
 - Renamed the project from stream to medleyplay.
 - A Library backend's `locate` answers *missing* for a file that is gone,
   instead of raising, so an unplugged drive can't fault its plugin.
+- In a narrow view, such as a laptop's with Up next open, the table leaves out
+  the album column so each song's title keeps its room.
 
 ### Removed
 
@@ -145,3 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Songs saved as fragmented `.m4a` or `.mp4` files, as Bilibili downloads are,
   now show their length instead of none.
 - A too-large id in a request is refused, not a server error.
+- On a phone, a long Library's song titles take the row's width again, rather
+  than a few letters of it.
+- A removed Track's id is never given to a new one, so a queue still naming it
+  can't play another song in its place.

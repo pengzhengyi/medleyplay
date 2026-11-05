@@ -5,19 +5,26 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.libraries import READER_VERSION
+from medleyplay.application.segments import SongsService
+from medleyplay.domain import video_text
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.covers import cover_id
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError
 from medleyplay.domain.jobs import JobState
-from medleyplay.domain.libraries import LibraryKind, LibraryState
-from medleyplay.persistence.schema import SourceRow
+from medleyplay.domain.libraries import Library, LibraryKind, LibraryState
+from medleyplay.domain.segments import SongRow
+from medleyplay.persistence.schema import SegmentRow, SourceRow
 from tests.support.audio import Song, folder_of, zip_of
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
+from tests.support.images import gif_image, image_beside, jpeg_image, png_image, webp_image
+from tests.support.info_json import info_json_beside, melt_video, world_is_mine_video
 from tests.support.libraries import Libraries, running_libraries
 
 
@@ -210,6 +217,73 @@ def test_removing_a_library_removes_its_tracks(
     assert _titles(libraries, alice) == []
 
 
+_TWO_SONGS = (
+    SongRow(None, video_text.Song(0, "アイネクライネ")),
+    SongRow(None, video_text.Song(2_000, "Last")),
+)
+"""A split of a five-second file into songs at 0 s and 2 s."""
+
+
+def test_removing_a_library_removes_the_songs_split_from_its_files(
+    libraries: Libraries,
+    songs: SongsService,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music = folder_of(tmp_path / "Music", {"Bremen.wav": Song("Bremen", seconds=5.0)})
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    (album,) = libraries.catalog.list_tracks(alice.id)
+    songs.save(album.id, _TWO_SONGS)
+
+    libraries.service.remove(alice, registered.library.id)
+
+    assert _titles(libraries, alice) == []
+    with units() as db:
+        assert db.scalars(select(SegmentRow.id)).all() == []
+        assert db.scalars(select(SourceRow.id)).all() == []
+
+
+def test_an_album_files_source_cant_go_while_its_songs_remain(
+    libraries: Libraries,
+    songs: SongsService,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music = folder_of(tmp_path / "Music", {"Bremen.wav": Song("Bremen", seconds=5.0)})
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    (album,) = libraries.catalog.list_tracks(alice.id)
+    songs.save(album.id, _TWO_SONGS)
+
+    with pytest.raises(IntegrityError), units.begin() as db:
+        db.execute(delete(SourceRow).where(SourceRow.track_id == album.id))
+
+
+def test_a_rescan_of_a_split_file_whose_length_changed_reaches_its_last_song(
+    libraries: Libraries, songs: SongsService, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music = folder_of(tmp_path / "Music", {"Bremen.wav": Song("Bremen", seconds=5.0)})
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    (album,) = libraries.catalog.list_tracks(alice.id)
+    last = songs.save(album.id, _TWO_SONGS).songs[1]
+    folder_of(music, {"Bremen.wav": Song("Bremen", seconds=8.0)})
+
+    libraries.wait_for(libraries.service.scan(alice, registered.library.id).id, JobState.SUCCEEDED)
+
+    assert libraries.catalog.get_track(alice.id, last.track_id).details.duration_ms == 6_000
+    assert songs.songs(album.id).needs_check
+
+
 def test_removing_a_library_cancels_its_scan(
     libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
 ) -> None:
@@ -242,3 +316,170 @@ def test_a_library_whose_folder_disappears_goes_offline_and_keeps_its_tracks(
 
     assert (library.state, library.message) == (LibraryState.OFFLINE, f"{music} isn't a folder.")
     assert _titles(libraries, alice) == ["Intro", "Outro"]
+
+
+def _downloaded_video(
+    libraries: Libraries, alice: Account, tmp_path: Path, sidecar: str | None
+) -> tuple[Path, Library]:
+    """Scan a folder holding `BV1dm4y1s7ak.wav`, which says nothing, and its sidecar if given."""
+    music = folder_of(tmp_path / "Music", {"BV1dm4y1s7ak.wav": Song("", "", "")})
+    if sidecar is not None:
+        info_json_beside(music / "BV1dm4y1s7ak.wav", sidecar)
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    return music, registered.library
+
+
+def _rescan(libraries: Libraries, alice: Account, library: Library) -> None:
+    rescan = libraries.service.scan(alice, library.id)
+    libraries.wait_for(rescan.id, JobState.SUCCEEDED)
+
+
+def test_a_scan_reads_the_info_json_beside_a_song_as_its_videos_text(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+
+    _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    assert _titles(libraries, alice) == ["メルト"]
+
+
+def test_a_rescan_reads_an_info_json_added_beside_a_song_it_already_knew(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    before = _titles(libraries, alice)
+
+    info_json_beside(music / "BV1dm4y1s7ak.wav", melt_video())
+    _rescan(libraries, alice, library)
+
+    assert (before, _titles(libraries, alice)) == (["BV1dm4y1s7ak"], ["メルト"])
+
+
+def test_a_rescan_reads_a_changed_info_json_beside_a_song_that_is_unchanged(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    info_json_beside(music / "BV1dm4y1s7ak.wav", world_is_mine_video())
+    _rescan(libraries, alice, library)
+
+    assert _titles(libraries, alice) == ["ワールドイズマイン"]
+
+
+def test_a_rescan_drops_the_text_of_an_info_json_that_was_removed(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    (music / "BV1dm4y1s7ak.info.json").unlink()
+    _rescan(libraries, alice, library)
+
+    assert _titles(libraries, alice) == ["BV1dm4y1s7ak"]
+
+
+def test_a_rescan_keeps_the_earlier_text_when_the_info_json_is_malformed(
+    libraries: Libraries,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    info_json_beside(music / "BV1dm4y1s7ak.wav", '{"title": ')
+    _rescan(libraries, alice, library)
+    with units() as db:
+        details = db.scalars(select(SourceRow)).one().details or {}
+
+    assert _titles(libraries, alice) == ["メルト"]
+    assert "isn't valid JSON" in str(details["info_json_error"])
+
+
+def _covers(libraries: Libraries, account: Account) -> dict[str, str | None]:
+    """Return each Track's cover, by title."""
+    return {
+        track.details.title: track.details.cover
+        for track in libraries.catalog.list_tracks(account.id)
+    }
+
+
+def test_a_scan_finds_the_cover_embedded_in_a_song_and_the_image_beside_another(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music = folder_of(
+        tmp_path / "Music",
+        {
+            "Blue/01 Intro.wav": Song("Intro", cover=jpeg_image("Bremen")),
+            "Blue/02 Outro.wav": Song("Outro"),
+        },
+    )
+    image_beside(music / "Blue" / "02 Outro.wav", "png", png_image("Supercell"))
+    (music / "Blue" / "orphan.jpg").write_bytes(jpeg_image("Orphan"))
+
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+
+    assert _covers(libraries, alice) == {
+        "Intro": cover_id(jpeg_image("Bremen")),
+        "Outro": cover_id(png_image("Supercell")),
+    }
+    assert sorted(file.name for file in (tmp_path / "data" / "covers").iterdir()) == sorted(
+        [cover_id(jpeg_image("Bremen")), cover_id(png_image("Supercell"))]
+    )
+
+
+def test_a_rescan_reads_a_changed_image_beside_a_song_that_is_unchanged(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    image_beside(music / "BV1dm4y1s7ak.wav", "jpg", jpeg_image("Bremen"))
+    _rescan(libraries, alice, library)
+    before = _covers(libraries, alice)
+
+    changed = image_beside(music / "BV1dm4y1s7ak.wav", "jpg", jpeg_image("Bremen, remastered"))
+    os.utime(changed, ns=(1, 1))
+    _rescan(libraries, alice, library)
+
+    assert before == {"BV1dm4y1s7ak": cover_id(jpeg_image("Bremen"))}
+    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": cover_id(jpeg_image("Bremen, remastered"))}
+
+
+def test_a_rescan_drops_the_cover_of_an_image_that_was_removed(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    image = image_beside(music / "BV1dm4y1s7ak.wav", "webp", webp_image("Bremen"))
+    _rescan(libraries, alice, library)
+
+    image.unlink()
+    _rescan(libraries, alice, library)
+
+    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": None}
+
+
+def test_a_scan_notes_an_image_that_is_no_cover_and_goes_on(
+    libraries: Libraries,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    image_beside(music / "BV1dm4y1s7ak.wav", "jpg", gif_image())
+
+    _rescan(libraries, alice, library)
+    with units() as db:
+        details = db.scalars(select(SourceRow)).one().details or {}
+
+    assert _covers(libraries, alice) == {"BV1dm4y1s7ak": None}
+    assert details["cover_image_error"] == "isn't a JPEG, PNG, or WebP image"

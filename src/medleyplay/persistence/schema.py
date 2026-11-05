@@ -86,9 +86,11 @@ class SessionRow(Base):
 
 
 class TrackRow(Base):
-    """A piece of music."""
+    """A piece of music; its ids are never reused."""
 
     __tablename__ = "track"
+    # So a queue or a Playlist still naming a removed Track never plays another in its place.
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(512))
@@ -99,6 +101,8 @@ class TrackRow(Base):
     disc_number: Mapped[int | None]
     year: Mapped[int | None]
     genre: Mapped[str] = mapped_column(String(512), default="")
+    cover: Mapped[str | None] = mapped_column(String(64))
+    """The cover shown, by name, if any."""
     duration_ms: Mapped[int | None]
     added_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
@@ -115,6 +119,74 @@ class TrackValueRow(Base):
     origin: Mapped[str] = mapped_column(String(32), primary_key=True)
     value: Mapped[str | int] = mapped_column(JSON)
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class SegmentRow(Base):
+    """One song inside an album file: a stretch of that file's Source, played as its own Track.
+
+    The song ends where the next starts, and the last at the end of the file.
+    `split_length_ms` is the file's length when it was split, to tell when it changed.
+    """
+
+    __tablename__ = "segment"
+    # A removed song's id is never given to another, so an editor left open can't adopt it;
+    # and an album file's Source can't go while its songs remain.
+    __table_args__ = ({"sqlite_autoincrement": True},)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    album_source_id: Mapped[int] = mapped_column(
+        ForeignKey("source.id", ondelete="RESTRICT"), index=True
+    )
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id", ondelete="CASCADE"), unique=True)
+    position: Mapped[int]
+    start_ms: Mapped[int]
+    title: Mapped[str] = mapped_column(String(512))
+    artist: Mapped[str] = mapped_column(String(512), default="")
+    split_length_ms: Mapped[int | None]
+
+
+class VideoTextRow(Base):
+    """The text of a Track's video, as pasted, read beside the file, or read from the site.
+
+    `chapters` lists `{"start_ms": int, "title": str}` in order.
+    """
+
+    __tablename__ = "video_text"
+    __table_args__ = (
+        CheckConstraint("came_from IN ('household', 'file', 'site')", name="came_from"),
+    )
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    title: Mapped[str] = mapped_column(String(1_000))
+    description: Mapped[str] = mapped_column(String(20_000))
+    chapters: Mapped[list[dict[str, str | int]]] = mapped_column(JSON)
+    came_from: Mapped[str] = mapped_column(String(16))
+    recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class EnricherStopRow(Base):
+    """An enricher the site refused: it asks nothing more until an admin resets it.
+
+    A row exists only while the enricher is stopped.
+    """
+
+    __tablename__ = "enricher_stop"
+
+    enricher: Mapped[str] = mapped_column(String(64), primary_key=True)
+    stopped_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    reason: Mapped[str] = mapped_column(String(2048), default="")
+
+
+class VideoAskRow(Base):
+    """When an enricher last asked its site about a video, so it never asks twice in a day."""
+
+    __tablename__ = "video_ask"
+
+    enricher: Mapped[str] = mapped_column(String(64), primary_key=True)
+    video: Mapped[str] = mapped_column(String(64), primary_key=True)
+    asked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class SourceRow(Base):
@@ -291,6 +363,23 @@ class LinkedAccountRow(Base):
     expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
     revision: Mapped[int] = mapped_column(Integer)
+
+
+class ProxyRow(Base):
+    """A site's proxy as it is shown; its URL, which may hold a password, is in the Keychain."""
+
+    __tablename__ = "proxy"
+    __table_args__ = (
+        CheckConstraint("scheme IN ('http', 'https', 'socks5h')", name="scheme"),
+        CheckConstraint("port BETWEEN 1 AND 65535", name="port"),
+    )
+
+    site: Mapped[str] = mapped_column(String(64), primary_key=True)
+    scheme: Mapped[str] = mapped_column(String(16))
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer)
+    has_login: Mapped[bool] = mapped_column()
+    saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class DownloadRow(Base):

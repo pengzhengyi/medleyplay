@@ -13,6 +13,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock, details
 from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.application.plugins import PluginService
+from medleyplay.application.scan_covers import (
+    COVER_IMAGE,
+    COVER_KEYS,
+    apply_covers,
+    image_stamp_of,
+    record_cover,
+)
+from medleyplay.application.segments import drop_songs
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceState, TrackId
 from medleyplay.domain.details import Field, Origin, Value
@@ -29,27 +37,39 @@ from medleyplay.domain.libraries import (
     path_of_locator,
     scan_target,
 )
+from medleyplay.domain.video_text import Chapter, VideoText
 from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
 from medleyplay.plugin_api import CHECK_ROOT, LIBRARY_BACKEND, TAG_READER, CheckRoot, LibraryRoot
+from medleyplay.programs.info_json import InfoText
 from medleyplay.programs.scan_library import (
+    InfoJson,
     KnownFile,
     LibraryScan,
     ScanLibrary,
     ScannedFile,
+    Stamp,
 )
 
 SCAN_KIND: Final = "scan_library"
-READER_VERSION: Final = 2
+INFO_JSON: Final = "info_json"
+INFO_JSON_ERROR: Final = "info_json_error"
+_SIDECAR_KEYS: Final = frozenset({INFO_JSON, INFO_JSON_ERROR})
+"""The keys of a Source's details for its `.info.json`: its stamp, and why the last read failed."""
+READER_VERSION: Final = 3
 """What a scan reads from a file; raised when it reads more, so the next scan reads each again."""
 
 type ScanKind = JobKind[ScanLibrary, LibraryScan]
 
 
-def scan_library_kind(clock: Clock) -> ScanKind:
-    """Return the Job kind that scans a Library and applies the scan to the catalog."""
+def scan_library_kind(clock: Clock, covers: Path) -> ScanKind:
+    """Return the Job kind that scans a Library and applies the scan to the catalog.
+
+    The covers a scan finds are kept in the folder `covers`.
+    """
 
     def complete(db: Session, job: Job, scan: LibraryScan) -> None:
-        apply_scan(db, LibraryId(int(job.target.removeprefix("library:"))), scan, clock)
+        library_id = LibraryId(int(job.target.removeprefix("library:")))
+        apply_scan(db, library_id, scan, clock, covers)
 
     return JobKind(
         name=SCAN_KIND,
@@ -147,9 +167,9 @@ class LibraryService:
         return self._jobs.submit(self._kind, scan_target(library_id), request, caller.id)
 
     def remove(self, caller: Account, library_id: LibraryId) -> None:
-        """Remove a Library, its Sources, and Tracks left without one; admins only.
+        """Remove a Library, its Sources, its files' songs, and Tracks left without one.
 
-        Its active scan is cancelled. Removing a Library that is gone changes nothing.
+        Admins only. Its active scan is cancelled. Removing a Library that is gone changes nothing.
         """
         _require_admin(caller)
         active = self._jobs.active(SCAN_KIND, scan_target(library_id))
@@ -160,6 +180,7 @@ class LibraryService:
                 return
             sources = list(db.scalars(_sources_of(library_id)))
             track_ids = {source.track_id for source in sources}
+            drop_songs(db, _sources_of(library_id).with_only_columns(SourceRow.id))
             for source in sources:
                 db.delete(source)
             db.flush()
@@ -185,11 +206,14 @@ class LibraryService:
             return None if row is None else _to_library(row)
 
 
-def apply_scan(db: Session, library_id: LibraryId, scan: LibraryScan, clock: Clock) -> None:
+def apply_scan(
+    db: Session, library_id: LibraryId, scan: LibraryScan, clock: Clock, covers: Path
+) -> None:
     """Apply a completed scan to the catalog; a scan of a removed Library changes nothing.
 
     An unreadable root, or one that lists nothing after holding files, marks the
-    Library offline and changes no Source.
+    Library offline and changes no Source. The covers the scan found are kept in the
+    folder `covers`.
     """
     library = db.get(LibraryRow, library_id)
     if library is None:
@@ -207,15 +231,15 @@ def apply_scan(db: Session, library_id: LibraryId, scan: LibraryScan, clock: Clo
     for file in new:
         source = moved.get(file.path)
         if source is None:
-            _add(db, library_id, file, now)
+            _add(db, library_id, file, now, covers)
         else:
             unseen.pop(path_of_locator(source.locator))
             source.locator = library_locator(library_id, file.path)
             _record_name(db, TrackId(source.track_id), file, now)
-            _update(db, source, file, now)
+            _update(db, source, file, now, covers)
     for path, file in files.items():
         if path in sources and path not in unseen:
-            _update(db, sources[path], file, now)
+            _update(db, sources[path], file, now, covers)
     for source in unseen.values():
         source.state = SourceState.MISSING
     library.state = LibraryState.ONLINE
@@ -241,7 +265,9 @@ def _moves(new: Iterable[ScannedFile], unseen: dict[str, SourceRow]) -> dict[str
     }
 
 
-def _add(db: Session, library_id: LibraryId, file: ScannedFile, now: datetime) -> None:
+def _add(
+    db: Session, library_id: LibraryId, file: ScannedFile, now: datetime, covers: Path
+) -> None:
     track = TrackRow(title=_title(file), added_at=now)
     db.add(track)
     db.flush()
@@ -250,14 +276,22 @@ def _add(db: Session, library_id: LibraryId, file: ScannedFile, now: datetime) -
     )
     db.add(source)
     _record_name(db, TrackId(track.id), file, now)
-    _update(db, source, file, now, added=True)
+    _update(db, source, file, now, covers, added=True)
 
 
 def _update(
-    db: Session, source: SourceRow, file: ScannedFile, now: datetime, *, added: bool = False
+    db: Session,
+    source: SourceRow,
+    file: ScannedFile,
+    now: datetime,
+    covers: Path,
+    *,
+    added: bool = False,
 ) -> None:
     previous = dict(source.details or {})
     track_id = TrackId(source.track_id)
+    sidecar = _apply_info_json(db, track_id, file.info_json, previous, now)
+    cover = apply_covers(file, previous, covers)
     if file.changed:
         source.fingerprint = file.fingerprint
         source.details = {
@@ -265,11 +299,28 @@ def _update(
             "modified_ns": file.modified_ns,
             "error": file.error,
             "reader": READER_VERSION,
+            **sidecar,
+            **cover.kept,
         }
         if file.tags is not None or added:
-            _set_details(db, track_id, file, now)
+            _set_details(db, track_id, file, now, cover.name)
+        else:
+            record_cover(db, track_id, cover.name, now)
     else:
-        source.details = {**previous, "size": file.size, "modified_ns": file.modified_ns}
+        kept = {
+            key: value
+            for key, value in previous.items()
+            if key not in _SIDECAR_KEYS and key not in COVER_KEYS
+        }
+        source.details = {
+            **kept,
+            "size": file.size,
+            "modified_ns": file.modified_ns,
+            **sidecar,
+            **cover.kept,
+        }
+        if file.cover_image is not None or COVER_IMAGE in previous:
+            record_cover(db, track_id, cover.name, now)
     protected = file.tags is not None and file.tags.protected
     if file.changed:
         source.state = SourceState.CANT_PLAY if protected else SourceState.OK
@@ -277,7 +328,57 @@ def _update(
         source.state = SourceState.OK
 
 
-def _set_details(db: Session, track_id: TrackId, file: ScannedFile, now: datetime) -> None:
+def _apply_info_json(
+    db: Session,
+    track_id: TrackId,
+    info: InfoJson | None,
+    previous: dict[str, object],
+    now: datetime,
+) -> dict[str, object]:
+    """Apply the `.info.json` the scan found beside the file; return what the Source keeps of it.
+
+    Text read from a new or changed file replaces the Track's video's text, and
+    text read again from an unchanged file is parsed again unless the household
+    pasted text since. A
+    sidecar that couldn't be read leaves the earlier text and notes the error until
+    a later read succeeds, and one the scan didn't read leaves both as they were. A
+    sidecar that was there last scan and isn't now takes with it the text read from
+    a file, never a paste.
+    """
+    if info is None:
+        if INFO_JSON in previous:
+            details.forget_video_text_read_from_a_file(db, track_id, now)
+        return {}
+    stamp = {"size": info.size, "modified_ns": info.modified_ns}
+    kept: dict[str, object] = {INFO_JSON: stamp}
+    if info.retry:
+        # The last stamp read, if any, so the next scan reads this one again.
+        kept = {INFO_JSON: previous[INFO_JSON]} if INFO_JSON in previous else {}
+        kept[INFO_JSON_ERROR] = info.error
+    elif info.error:
+        kept[INFO_JSON_ERROR] = info.error
+    elif info.text is None and INFO_JSON_ERROR in previous:
+        kept[INFO_JSON_ERROR] = previous[INFO_JSON_ERROR]
+    elif info.text is not None and (text := _video_text(info.text)) is not None:
+        # A file read again unchanged, as by a full scan, leaves a later paste standing;
+        # otherwise it is parsed again, so what today's parser reads better shows.
+        unchanged = previous.get(INFO_JSON) == stamp
+        if not unchanged or not details.video_text_was_pasted(db, track_id):
+            details.record_video_text(db, track_id, text, "file", now)
+    return kept
+
+
+def _video_text(text: InfoText) -> VideoText | None:
+    """Return the sidecar's text, or `None` when it has no words."""
+    if not (text.title.strip() or text.description.strip() or text.chapters):
+        return None
+    chapters = tuple(Chapter(chapter.start_ms, chapter.title) for chapter in text.chapters)
+    return VideoText(text.title, text.description, chapters)
+
+
+def _set_details(
+    db: Session, track_id: TrackId, file: ScannedFile, now: datetime, cover: str | None
+) -> None:
     tags = file.tags
     values: dict[Field, Value] = {}
     if tags is not None:
@@ -289,10 +390,13 @@ def _set_details(db: Session, track_id: TrackId, file: ScannedFile, now: datetim
         }
         if tags.track_number is not None:
             values[Field.TRACK_NUMBER] = tags.track_number
-    details.record(db, track_id, Origin.FILES, values, now)
+    if cover is not None:
+        values[Field.COVER] = cover
+    # The length first, so recording the values settles a split file's songs to it.
     track = db.get(TrackRow, track_id)
     if track is not None:
         track.duration_ms = tags.duration_ms if tags else None
+    details.record(db, track_id, Origin.FILES, values, now)
 
 
 def _record_name(db: Session, track_id: TrackId, file: ScannedFile, now: datetime) -> None:
@@ -312,9 +416,18 @@ def _known_files(db: Session, library_id: LibraryId) -> dict[str, KnownFile]:
         details = source.details or {}
         if not details.get("error") and details.get("reader") == READER_VERSION:
             known[path_of_locator(source.locator)] = KnownFile(
-                size=int(str(details["size"])), modified_ns=int(str(details["modified_ns"]))
+                size=int(str(details["size"])),
+                modified_ns=int(str(details["modified_ns"])),
+                info_json=_stamp_of(details.get(INFO_JSON)),
+                cover_image=image_stamp_of(details.get(COVER_IMAGE)),
             )
     return known
+
+
+def _stamp_of(kept: object) -> Stamp | None:
+    if not isinstance(kept, dict):
+        return None
+    return Stamp(size=int(str(kept["size"])), modified_ns=int(str(kept["modified_ns"])))
 
 
 def _sources_of(library_id: LibraryId) -> Select[SourceRow]:

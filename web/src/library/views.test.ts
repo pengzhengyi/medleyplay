@@ -9,6 +9,7 @@ import {
   favoritesOf,
   fold,
   search,
+  songsOf,
   tracksOfAlbum,
   tracksOfArtist,
 } from "./views";
@@ -87,6 +88,20 @@ describe("albums", () => {
     ]);
   });
 
+  it("shows an album by the first cover among its songs", () => {
+    const tracks = [
+      trackOf(1, "Intro", { album: "Bremen", cover: "" }),
+      trackOf(2, "Bremen", { album: "Bremen", cover: "b".repeat(64) }),
+      trackOf(3, "Outro", { album: "Bremen", cover: "c".repeat(64) }),
+      trackOf(4, "Untitled", { album: "" }),
+    ];
+
+    expect(albumsOf(tracks).map((album) => [album.name, album.cover])).toEqual([
+      ["", null],
+      ["Bremen", "b".repeat(64)],
+    ]);
+  });
+
   it("opens an album's Tracks by its artist and name", () => {
     expect(titles(tracksOfAlbum(LIBRARY, "ルワン", "くじらと空想"))).toEqual(["しるべのクジラ"]);
     expect(titles(tracksOfAlbum(LIBRARY, "various", "LIVE"))).toEqual(["Ｍｅｌｔ (live)"]);
@@ -132,5 +147,15 @@ describe("search", () => {
 
   it("finds nothing for a blank search", () => {
     expect(search(LIBRARY, "   ")).toEqual({ tracks: [], artists: [], albums: [] });
+  });
+});
+
+describe("the songs of the Library", () => {
+  it("are its songs in place of a file split into them", () => {
+    const album = trackOf(104, "BV1dm4y1s7ak", { split: true });
+    const first = trackOf(154, "アイネクライネ", { segment_of: 104 });
+    const melt = trackOf(1, "Melt");
+
+    expect(songsOf([album, first, melt])).toEqual([first, melt]);
   });
 });

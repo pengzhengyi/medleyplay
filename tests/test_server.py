@@ -104,7 +104,7 @@ TEST_SOURCE = PluginSource(TEST_PLUGINS, TEST_COMMAND)
 ONLY_PARROT = "\n".join(
     f"[plugins.{name}]\nenabled = false"
     for name in ("broken-import", "crashes-on-import", "future-version", "hangs-on-import",
-                 "liar", "mute", "mynah", "not-a-plugin", "squatter", "stutter", "tube")
+                 "liar", "mute", "mynah", "not-a-plugin", "reader", "squatter", "stutter", "tube")
 )  # fmt: skip
 
 

@@ -1,5 +1,9 @@
 """A Track's details: checking values, and choosing the value each field shows."""
 
+import json
+from pathlib import Path
+from typing import Any
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -195,15 +199,63 @@ def test_the_households_value_always_shows(
 
 
 @given(_VALUES)
-def test_the_album_fields_never_mix_two_origins_besides_the_household(
-    values: dict[Origin, Values],
-) -> None:
+def test_the_album_fields_never_mix_two_releases(values: dict[Origin, Values]) -> None:
     found = shown(values)
     if Field.ALBUM in found and found[Field.ALBUM].value:
         others = {
             found[field].origin
-            for field in ALBUM_FIELDS
+            for field in ALBUM_FIELDS - {Field.COVER}
             if field in found and found[field].origin is not Origin.HOUSEHOLD
         }
 
         assert len(others) <= 1
+        if Field.COVER in found:
+            cover = found[Field.COVER].origin
+            named = next(origin for origin in ORIGINS if values.get(origin, {}).get(Field.ALBUM))
+            assert cover in {Origin.HOUSEHOLD, named} or (
+                not values[cover].get(Field.ALBUM)
+                and Field.COVER not in values.get(Origin.HOUSEHOLD, {})
+                and Field.COVER not in values[named]
+            )
+
+
+_SHOWN_CASES = json.loads(
+    (Path(__file__).parents[1] / "support" / "shown_details.json").read_text(encoding="utf-8")
+)["cases"]
+
+
+@pytest.mark.parametrize("case", _SHOWN_CASES, ids=[case["name"] for case in _SHOWN_CASES])
+def test_each_shared_case_shows_what_the_web_client_previews(case: dict[str, Any]) -> None:
+    values = {
+        Origin(origin): {Field(field): value for field, value in given.items()}
+        for origin, given in case["origins"].items()
+    }
+
+    found = shown(values)
+
+    assert {
+        str(field): {"value": each.value, "origin": str(each.origin)}
+        for field, each in found.items()
+    } == case["shown"]
+
+
+_COVER = "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291"
+"""The name of a cover: the SHA-256 of its bytes."""
+
+
+@pytest.mark.parametrize("value", [_COVER, ""], ids=["a cover's name", "none"])
+def test_the_household_names_a_cover_or_none(value: str) -> None:
+    assert check_value(Field.COVER, value) == value
+
+
+@pytest.mark.parametrize(
+    "value", ["cover.jpg", _COVER.upper(), 3], ids=["a file name", "capitals", "a number"]
+)
+def test_a_cover_that_names_no_image_is_refused(value: object) -> None:
+    with pytest.raises(InvalidInputError, match="SHA-256"):
+        check_value(Field.COVER, value)
+
+
+def test_a_found_cover_that_names_no_image_is_no_value() -> None:
+    assert found_value(Field.COVER, "folder.jpg") is None
+    assert found_value(Field.COVER, _COVER) == _COVER

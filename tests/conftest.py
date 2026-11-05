@@ -1,5 +1,6 @@
 """Fixtures every suite shares: a migrated database, the services, and an API client."""
 
+import socket
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -12,8 +13,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.enrichment import EnrichKind, EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
@@ -25,6 +28,8 @@ from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.proxies import ProxyService
+from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -46,6 +51,32 @@ hypothesis.settings.register_profile(
     "medleyplay", deadline=None, suppress_health_check=[hypothesis.HealthCheck.too_slow]
 )
 hypothesis.settings.load_profile("medleyplay")
+
+
+@pytest.fixture
+def no_outside_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse every name lookup and connection that would leave this machine.
+
+    A test that must show a request went through a local proxy takes this, so a
+    request that wrongly went direct fails here instead of reaching a site.
+    """
+    local = {"127.0.0.1", "::1", "localhost"}
+    connect, resolve = socket.socket.connect, socket.getaddrinfo
+
+    def connect_locally(self: socket.socket, address: object) -> None:
+        if not isinstance(address, tuple) or address[0] not in local:
+            message = f"A test tried to connect to {address!r}."
+            raise OSError(message)
+        connect(self, address)
+
+    def resolve_locally(host: str | bytes | None, *args: object, **kwargs: object) -> object:
+        if host not in local:
+            message = f"A test tried to look up {host!r}."
+            raise socket.gaierror(message)
+        return resolve(host, *args, **kwargs)  # type: ignore[arg-type] # passed through as given
+
+    monkeypatch.setattr(socket.socket, "connect", connect_locally)
+    monkeypatch.setattr(socket, "getaddrinfo", resolve_locally)
 
 
 @pytest.fixture
@@ -105,6 +136,16 @@ def details(units: sessionmaker[Session], clock: FakeClock) -> DetailsService:
 
 
 @pytest.fixture
+def songs(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> SongsService:
+    return SongsService(units, clock, changes.append)
+
+
+@pytest.fixture
+def covers(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> CoverService:
+    return CoverService(units, clock, tmp_path / "data" / "covers")
+
+
+@pytest.fixture
 def online_switch() -> OnlineSwitch:
     """The Mode as the services see it; a test turns it Offline."""
     return OnlineSwitch()
@@ -146,15 +187,41 @@ def plugins(units: sessionmaker[Session], clock: FakeClock) -> PluginService:
 
 
 @pytest.fixture
+def enrich_kind(clock: FakeClock, tmp_path: Path) -> EnrichKind:
+    return enrich_track_kind(tmp_path / "data" / "covers", clock)
+
+
+@pytest.fixture
 def jobs(
-    units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, tmp_path: Path
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    enrich_kind: EnrichKind,
+    tmp_path: Path,
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
-    scan, cache = scan_library_kind(clock), cache_source_kind(tmp_path / "data")
+    scan = scan_library_kind(clock, tmp_path / "data" / "covers")
+    cache = cache_source_kind(tmp_path / "data")
     download = download_source_kind(tmp_path / "data", tmp_path / "jobs", clock)
-    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
+    kinds: dict[str, AnyJobKind] = {
+        scan.name: scan,
+        cache.name: cache,
+        download.name: download,
+        enrich_kind.name: enrich_kind,
+    }
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
+
+
+@pytest.fixture
+def enrichment(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    enrich_kind: EnrichKind,
+) -> EnrichmentService:
+    return EnrichmentService(units, clock, plugins, jobs, enrich_kind)
 
 
 @pytest.fixture
@@ -165,7 +232,8 @@ def libraries(
     jobs: JobService,
     tmp_path: Path,
 ) -> LibraryService:
-    return LibraryService(units, clock, plugins, jobs, scan_library_kind(clock), tmp_path / "data")
+    scan = scan_library_kind(clock, tmp_path / "data" / "covers")
+    return LibraryService(units, clock, plugins, jobs, scan, tmp_path / "data")
 
 
 @pytest.fixture
@@ -205,8 +273,11 @@ def links(
     catalog: CatalogService,
     downloads: DownloadService,
     online_switch: OnlineSwitch,
+    proxies: ProxyService,
 ) -> LinkService:
-    return LinkService(units, clock, plugins, catalog, downloads, online_switch)
+    links = LinkService(units, clock, plugins, catalog, downloads, online_switch, proxies)
+    proxies.listen(links.forget_lookups)
+    return links
 
 
 @pytest.fixture
@@ -237,6 +308,11 @@ def linked(
 
 
 @pytest.fixture
+def proxies(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets) -> ProxyService:
+    return ProxyService(units, clock, secrets)
+
+
+@pytest.fixture
 def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     accounts: AccountService,
     catalog: CatalogService,
@@ -245,12 +321,16 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     libraries: LibraryService,
     playback: PlaybackService,
     linked: LinkedAccountService,
+    proxies: ProxyService,
     links: LinkService,
     settings: SettingsService,
     policy: PolicyService,
     preferences: PreferencesService,
     mode: ModeService,
     details: DetailsService,
+    songs: SongsService,
+    covers: CoverService,
+    enrichment: EnrichmentService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -261,6 +341,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         libraries=libraries,
         playback=playback,
         linked=linked,
+        proxies=proxies,
         links=links,
         events=Events(),
         settings=settings,
@@ -268,6 +349,9 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         preferences=preferences,
         mode=mode,
         details=details,
+        songs=songs,
+        covers=covers,
+        enrichment=enrichment,
     )
 
 

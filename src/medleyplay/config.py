@@ -30,8 +30,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from medleyplay.application.connectivity import DEFAULT_CHECKS, Check
 
 CONFIG_FILE: Final = "medleyplay.toml"
-OFF_BY_DEFAULT: Final = frozenset({"bilibili"})
-"""Plugins that are on only when the file turns them on: `bilibili` until yt-dlp reads it again."""
+OFF_BY_DEFAULT: Final = frozenset({"bilibili", "bilibili-details"})
+"""Plugins that are on only when the file turns them on: the two that read Bilibili."""
 
 
 class ConfigError(Exception):

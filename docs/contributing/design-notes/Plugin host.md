@@ -72,7 +72,8 @@ plugin = Plugin(api_version=1, register=register)
   operations' deadlines, so a dead network surfaces as `NetworkError` rather than
   a missed deadline.
 - **A call carries only its input.** Plugin settings and stored state, which
-  Architecture describes, join the call once a plugin needs them.
+  Architecture describes, join the call once a plugin needs them; a site's
+  proxy is a field of the input of the calls that reach that site.
 
 ## The config file
 

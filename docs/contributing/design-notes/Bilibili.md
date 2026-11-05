@@ -13,10 +13,12 @@
 - [Where this stands](#where-this-stands)
 - [Extension points](#extension-points)
 - [Linked accounts](#linked-accounts)
+- [A proxy](#a-proxy)
 - [Links](#links)
 - [Adding from a link](#adding-from-a-link)
 - [Downloads](#downloads)
 - [Playing a Download](#playing-a-download)
+- [Video details](#video-details)
 - [Progress over SSE](#progress-over-sse)
 - [The bilibili plugin](#the-bilibili-plugin)
 - [The yutto fallback](#the-yutto-fallback)
@@ -43,8 +45,18 @@ A check on 2026-10-27, through each tool's normal download command, found the
 site now refusing both before either reads anything: yt-dlp 2026.10.26 and its
 nightly get *HTTP 412 Precondition Failed* for the video page, and yutto 2.3.1
 signs in but gets an HTTP error for the video's details. A 412 is Bilibili's
-answer to a client it suspects, so the live check waits for it to stop; nothing
-here tries to get past it.
+answer to a client it suspects; nothing here tries to get past a refusal, and
+none is answered by changing how medleyplay connects.
+
+In November 2026 the household downloaded its videos with yt-dlp's own command,
+through a proxy of its own in China. medleyplay can use the same path: an admin
+may set the household's proxy, which the plugin hands to the tool as its
+standard option; see [A proxy](#a-proxy). The proxy is part of how the household
+connects, set by a person, never chosen in answer to a refusal. The live check
+of 5b is the household's, through the app. One video's answer, recorded that
+way, is a test fixture: the plugin's readers of the video's title, uploader,
+length, qualities, and cover agree with it, while the options it passes to
+yt-dlp and the errors it sorts still follow yt-dlp's source.
 
 This overrides the MVP's step 0, which had the Bilibili steps wait for the fix:
 everything but the tools can be built and tested without Bilibili. Until 5b,
@@ -153,6 +165,62 @@ sequenceDiagram
 - **Plain HTTP:** the pasted file crosses the LAN in the clear, as the session
   cookie does; see [Architecture](Architecture.md#deliberately-left-out).
 
+## A proxy
+
+The household may reach Bilibili through a proxy of its own, as it does with
+yt-dlp's command. medleyplay hands that one proxy to the tool, as the tool's
+standard `proxy` option, and does nothing more.
+
+- **One setting, for admins:** *Settings → Bilibili → Proxy* takes one URL:
+  `http`, `https`, or `socks5h`, a host, a port, and optionally a user and
+  password, at most 512 characters, with no path, query, or fragment. `socks5`
+  and `socks4` are refused, saying to use `socks5h`, since they look names up
+  outside the proxy. The URL is checked and rebuilt from its parts; nothing is
+  fetched to try it, so saving can't probe a host or contact the site. A host on
+  the LAN, or `127.0.0.1` for a tunnel, is allowed: what the proxy fetches is
+  always a URL the plugin built, for a host in the allowlist.
+- **Kept in the Keychain** under `proxy:bilibili`, since it may hold a password.
+  The database keeps its scheme, host, port, and whether it has a login, which
+  is all the API shows back. The core keeps the URL in memory once read, so a
+  call never waits on the Keychain while it holds the plugin host; a Keychain
+  that doesn't answer fails the call as a login does, and so does one that no
+  longer holds a proxy the catalog has: a call never goes direct instead.
+- **Used for every request of calls keyed `bilibili`:** `canonicalize`, `read`,
+  and `download`, so yt-dlp's page, API, and media requests, and the short-link
+  hops. `check` makes no network call. The Jobs that find a Track's details get
+  it too, for the page and the cover; see [Video details](#video-details). No
+  other call gets it: not a Library's, the tags', or the Mode's connectivity
+  check, which stays direct.
+- **Never from the environment:** with no proxy set, the plugin passes none and
+  reads no `HTTPS_PROXY`, system setting, or bypass list; with one set, it is used
+  for every host, with no bypass. yt-dlp's own urllib handler, the one it uses
+  unless the optional `requests` package is installed, still asks the standard
+  library whether to skip the proxy for a host, and the standard library answers
+  from `no_proxy` and the system's bypass list, so the plugin gives yt-dlp a
+  handler of its own that takes the proxy as given. It supports `http` and
+  `socks5h`; an `https` proxy needs yt-dlp's `requests` handler. The short-link
+  hops use the same handler, set to answer a redirect instead of following it.
+- **Reaching the plugin:** the proxy is a field of the `canonicalize` and `read`
+  requests, and of a download Job's start, so the plugin keeps none and nothing
+  is written to disk. A running Job keeps the proxy it started with.
+- **It changes nothing else:** a refusal through the proxy, such as a 412, is a
+  refusal as before, with the same message and circuit breaker; nothing retries
+  without the proxy, through another, or by other means, and there is one proxy,
+  not a list. Saving or removing it resets no fault, retries no Job, and clears
+  no Source's state; an admin does those as before. No message suggests a proxy.
+  A proxy that is down or refuses its login is a network failure, so a Job
+  waits, as after any network failure. Changing it forgets the ten minutes of
+  looked-up videos.
+- **Kept out of messages,** as a login is: a failure or progress message, a
+  plugin's fault reason, or a refused request's error that holds the proxy's
+  password or its `user:password@` part, as written or URL-decoded, has it
+  replaced before it is stored or answered. A host call's fault is redacted in
+  the core too, not only a Job's.
+- **What the proxy sees:** the hosts the plugin asks for, and the login's cookies
+  only inside TLS. An `http` proxy's own password crosses to it in the clear, and
+  the URL crosses the LAN in the clear when it is saved, as a pasted login does.
+  Every Account's Downloads use the admin's proxy.
+
 ## Links
 
 - **The core recognizes a link** before any plugin sees it. It must be `http` or
@@ -170,9 +238,10 @@ sequenceDiagram
   request as `https://b23.tv/<code>` from a code of letters and digits, never
   fetching the pasted text, and follows one redirect at a time, at most three,
   checking each hop against its own copy of the allowlist before fetching it,
-  with no cookies, no proxy, and no body read. Each hop waits at most a second,
-  so the three stay inside the call's 5-second deadline. The plugin returns the link it
-  ended on, and the core checks that link with its full rules again.
+  with no cookies and no body read, through the household's proxy if one is
+  set. Each hop waits at most a second, so the three stay inside the call's
+  5-second deadline. The plugin returns the link it ended on, and the core
+  checks that link with its full rules again.
 - **yt-dlp is handed a URL the plugin builds** from the `BV` id and the part,
   with only Bilibili's extractors allowed, so its generic extractor never runs.
 - **A Source's locator is `<BV id>/p<part>`,** such as `BV1Xx41117Tz/p1`; a video
@@ -276,6 +345,27 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
 - **A Library Source still wins** over a Bilibili one that must be downloaded,
   as a ready Source wins over one being prepared.
 
+## Video details
+
+A Track's title, description, chapters, and cover can be read from the site, only
+when someone asks. The `bilibili-details` plugin does it, apart from `bilibili`,
+so its faults never stop Downloads; what it reads, how it is asked, and what
+follows a refusal are in [Track details](Track%20details.md#enrichers).
+
+- **It reuses the plugin's yt-dlp wrapper and info readers,** and reads the video
+  alone: no media is downloaded, and a video with no formats is read all the
+  same. With the playlist expansion off, the first part of a multi-part video
+  answers, and its title has the part's title removed.
+- **The cover is fetched through the same handler as the page,** so the
+  household's proxy applies to it, a bypass list can't skip it, and it is asked of
+  Bilibili's image hosts only. A cover that can't be fetched, or is longer than
+  10 MiB, leaves the text without one.
+- **The site's refusals are told apart:** a 403 or 412, the rate limit, and the
+  risk-control codes 352, 401, and 412 in yt-dlp's error are a refusal. It still
+  fails a Download as a fault, with the same message. A video that is removed, or
+  that needs a login, is gone for that Track only; a lost connection waits, as a
+  Download's does.
+
 ## Progress over SSE
 
 - **`GET /api/events`** streams Server-Sent Events, with FastAPI's own
@@ -310,7 +400,9 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   post-processing, and `bestaudio` limited by the chosen quality. Bilibili's
   audio is an `m4a` stream, so no ffmpeg is needed.
 - **The yt-dlp module is thin and marked unverified** until 5b: it maps yt-dlp's
-  info into the plugin API's models, and nothing else knows yt-dlp's shape.
+  info into the plugin API's models, and nothing else knows yt-dlp's shape. The
+  readers of the info are checked against a recorded answer; the module's options
+  and errors are not yet.
 - **Its failures are sorted** by yt-dlp's error types as in
   [Downloads](#downloads). An error yt-dlp marks *expected* is an answer only
   when the plugin recognizes it, such as a removed or region-locked video; the
@@ -359,6 +451,9 @@ yutto is GPL-3.0 and medleyplay is MIT.
 | `POST /api/links` | Signed in | Adds the chosen parts as Tracks and starts their Downloads |
 | `GET /api/events` | Signed in | `ready`, then a `job` event each time a Job changes, over SSE |
 | `POST /api/tracks/{id}/playback` | Signed in | Now also plays a Download, or answers *preparing* with its Job |
+| `GET /api/proxies/{site}` | Admin | The proxy set, or null: its scheme, host, port, whether it has a login, and when it was saved |
+| `PUT /api/proxies/{site}` | Admin | Sets the proxy from the URL in the body; 422 for another shape, never echoing it; 404 for a site no plugin takes one for |
+| `DELETE /api/proxies/{site}` | Admin | Removes the proxy; 204, also when there is none |
 
 ## Testing
 
@@ -385,6 +480,16 @@ yutto is GPL-3.0 and medleyplay is MIT.
   server, cookies files with and without a session, and the yt-dlp module
   against a fixture made from yt-dlp's extractor, with its failures sorted by
   yt-dlp's real exception types. The contract kits run against it.
+- **The proxy:** parsing every accepted and refused shape; the service against the
+  in-memory Keychain; the API, including a 422 that never echoes the URL; yt-dlp
+  and the short-link hops against proxies on `127.0.0.1` that record what they are
+  asked and refuse every tunnel, with the bypass lists set to name Bilibili's hosts
+  and the machine's other connections refused; and the Jobs and lookups of the
+  test plugin `tube`, which echoes the proxy it was handed.
+- **Video details:** the plugin against the recorded answer of a real video, with
+  yt-dlp at a stand-in; the cover fetched through a proxy on `127.0.0.1` that
+  records what it is asked, with the bypass lists naming the image host; and each
+  kind of refusal sorted from yt-dlp's real error types.
 - **Never live:** no test contacts Bilibili; a live check is an opt-in marker
   run by hand, in step 5b.
 

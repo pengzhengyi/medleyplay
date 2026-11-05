@@ -47,6 +47,9 @@ class TrackOut(BaseModel):
     downloaded: bool = Field(
         description="Whether a Source of the Track has a Download kept on the server."
     )
+    segment_of: int | None = Field(description="The album file this Track is a song of, if any.")
+    split: bool = Field(description="Whether this Track's file is split into songs.")
+    cover: str | None = Field(description="The cover shown, served at `/api/covers/{cover}`.")
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -70,6 +73,9 @@ class TrackOut(BaseModel):
             last_played_at=track.last_played_at,
             availability=track.availability,
             downloaded=track.downloaded,
+            segment_of=track.segment_of,
+            split=track.split,
+            cover=details.cover,
         )
 
 

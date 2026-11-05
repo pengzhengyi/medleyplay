@@ -13,6 +13,10 @@ export interface Track {
   readonly artist: string;
   readonly album: string;
   readonly album_artist: string;
+  readonly track_number: number | null;
+  readonly disc_number: number | null;
+  readonly year: number | null;
+  readonly genre: string;
   readonly duration_ms: number | null;
   /** When the Track was added, as an ISO 8601 date and time. */
   readonly added_at: string;
@@ -24,6 +28,90 @@ export interface Track {
   readonly availability: Availability;
   /** Whether a Source of the Track has a Download kept on the server. */
   readonly downloaded: boolean;
+  /** The album file this Track is a song of, if it is one. */
+  readonly segment_of: number | null;
+  /** Whether this Track's file is split into songs, which then stand for it. */
+  readonly split: boolean;
+  /** The cover shown, by name, served at `coverUrl(cover)`. */
+  readonly cover: string | null;
+}
+
+/** Return where the cover named `cover` is served. */
+export function coverUrl(cover: string): string {
+  return `/api/covers/${cover}`;
+}
+
+/** A detail of a Track the household can edit. */
+export type Detail =
+  | "title"
+  | "artist"
+  | "album"
+  | "album_artist"
+  | "track_number"
+  | "disc_number"
+  | "year"
+  | "genre"
+  | "cover";
+
+/** Where a value came from, the first shown when several give one. */
+export type Origin = "household" | "files" | "musicbrainz" | "video" | "album_file" | "file_name";
+
+/** A value of a detail, and where it came from. */
+export interface Found {
+  readonly value: string | number;
+  readonly origin: Origin;
+}
+
+/** A Track's details: what shows, what would show without the household's, and every origin's. */
+export interface Details {
+  readonly track_id: number;
+  readonly shown: Partial<Readonly<Record<Detail, Found>>>;
+  readonly found: Partial<Readonly<Record<Detail, Found>>>;
+  readonly origins: Partial<
+    Readonly<Record<Origin, Partial<Readonly<Record<Detail, string | number>>>>>
+  >;
+  /** The video's text the `video` values were read from, if any was. */
+  readonly video_text: VideoText | null;
+}
+
+/** A video's title and description, as the site shows them. */
+export interface VideoText {
+  readonly title: string;
+  readonly description: string;
+}
+
+/** A song of a song list: where it starts, its title, and its artist, or "". */
+export interface Song {
+  readonly start_ms: number;
+  readonly title: string;
+  readonly artist: string;
+}
+
+/** A song of a split file: its id, its Track, and where it ends, if known. */
+export interface SplitSong extends Song {
+  readonly id: number;
+  readonly track_id: number;
+  readonly end_ms: number | null;
+}
+
+/** A file's songs, whether its length changed since it was split, and the lists found. */
+export interface Songs {
+  readonly track_id: number;
+  readonly length_ms: number | null;
+  readonly needs_check: boolean;
+  readonly songs: readonly SplitSong[];
+  readonly found: readonly (readonly Song[])[];
+}
+
+/** A row of the songs editor: the song it keeps by `id`, or `null` for a new one. */
+export interface SongRowIn extends Song {
+  readonly id: number | null;
+}
+
+/** A Track's details once its video's text is read, and the songs that text lists. */
+export interface VideoRead {
+  readonly details: Details;
+  readonly songs: readonly Song[];
 }
 
 /** A Playlist; a smart one's Tracks are the ones its rules match now. */
@@ -57,6 +145,31 @@ export interface JobEvent {
   readonly id: number;
   readonly kind: string;
   readonly state: Job["state"];
+}
+
+/** The enricher that reads a Track's video details and cover from Bilibili. */
+export const DETAILS_ENRICHER = "bilibili-details";
+
+/** An enricher: whether it can be asked, whether the site stopped it, and for which Tracks. */
+export interface Enricher {
+  readonly name: string;
+  /** Its plugin is on. */
+  readonly available: boolean;
+  /** Set after the site refused a request; nothing is asked until an admin resets it. */
+  readonly stopped: { readonly at: string; readonly reason: string } | null;
+  /** The Tracks it may be asked about now; none while it is stopped or turned off. */
+  readonly eligible: readonly number[];
+}
+
+/** A site's proxy as the server shows it: its address, never its login. */
+export interface ProxySetting {
+  readonly scheme: "http" | "https" | "socks5h";
+  readonly host: string;
+  readonly port: number;
+  readonly has_login: boolean;
+  /** The address alone, such as `socks5h://127.0.0.1:7890`. */
+  readonly display: string;
+  readonly saved_at: string;
 }
 
 /** The household's settings, and the revision they were read at; 0 if never saved. */
@@ -165,6 +278,10 @@ export type PlaybackAnswer =
       readonly source_id: number;
       readonly audio_url: string;
       readonly media_type: string;
+      /** Where a song inside a longer file starts in it; `null` for a whole file. */
+      readonly start_ms: number | null;
+      /** Where it ends; `null` when the file's end is its end. */
+      readonly end_ms: number | null;
     }
   | { readonly state: "preparing"; readonly source_id: number; readonly job_id: number }
   | { readonly state: "unplayable"; readonly availability: Availability };
@@ -200,12 +317,37 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
+/** Send `image` as the request's body, as it is. */
+async function send<T>(method: string, path: string, image: Blob): Promise<T> {
+  const response = await fetch(path, { method, credentials: "same-origin", body: image });
+  if (!response.ok) {
+    throw new ApiError(response.status, await detailOf(response));
+  }
+  return (await response.json()) as T;
+}
+
+/** Say why the server refused: its own words, each check a request failed, or its status. */
 async function detailOf(response: Response): Promise<string> {
+  const status = response.statusText || `The server refused this (${String(response.status)}).`;
   try {
     const body = (await response.json()) as { detail?: unknown };
-    return typeof body.detail === "string" ? body.detail : response.statusText;
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+    if (Array.isArray(body.detail)) {
+      const checks = body.detail.flatMap((check: unknown) =>
+        typeof check === "object" &&
+        check !== null &&
+        "msg" in check &&
+        typeof check.msg === "string"
+          ? [check.msg]
+          : [],
+      );
+      return checks.length > 0 ? checks.join("; ") : status;
+    }
+    return status;
   } catch {
-    return response.statusText;
+    return status;
   }
 }
 
@@ -219,6 +361,32 @@ export const api = {
   signOut: () => call<undefined>("DELETE", "/api/session"),
   me: () => call<Account>("GET", "/api/me"),
   tracks: () => call<Track[]>("GET", "/api/tracks"),
+  track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
+  details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),
+  /** Set the household's values on the Tracks; `null` drops one. All change, or none. */
+  setDetails: (
+    trackIds: readonly number[],
+    values: Partial<Record<Detail, string | number | null>>,
+  ) => call<{ changed: number }>("POST", "/api/tracks/details", { track_ids: trackIds, values }),
+  /** Read a video's pasted title and description as the Track's `video` values. */
+  readVideoText: (trackId: number, text: VideoText) =>
+    call<VideoRead>("POST", `/api/tracks/${String(trackId)}/video-text`, text),
+  /** Make `image` the household's cover for the Track. */
+  setCover: (trackId: number, image: Blob) =>
+    send<Details>("PUT", `/api/tracks/${String(trackId)}/cover`, image),
+  /** Drop the household's cover for the Track, so the next origin's shows. */
+  removeCover: (trackId: number) => call<Details>("DELETE", `/api/tracks/${String(trackId)}/cover`),
+  /** The songs a Track's file is split into, and the lists found for it. */
+  songs: (trackId: number) => call<Songs>("GET", `/api/tracks/${String(trackId)}/songs`),
+  /** Make `rows` the file's songs: each kept by its id, the others new, the rest removed. */
+  saveSongs: (trackId: number, rows: readonly SongRowIn[], known: readonly number[]) =>
+    call<Songs>("PUT", `/api/tracks/${String(trackId)}/songs`, { rows, known }),
+  /** Read a song list pasted for the file; refused with the first line that isn't a song. */
+  readSongList: (trackId: number, text: string) =>
+    call<{ songs: Song[] }>("POST", `/api/tracks/${String(trackId)}/songs/read`, { text }),
+  /** Remove every song of the file, with its Track. */
+  unsplit: (trackId: number) =>
+    call<{ removed: number }>("DELETE", `/api/tracks/${String(trackId)}/songs`),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
   /** Create or replace a plain Playlist under an id the client chose. */
   putPlaylist: (id: string, playlist: PlainPlaylist) =>
@@ -234,6 +402,22 @@ export const api = {
       "GET",
       previewLimit === undefined ? "/api/storage" : `/api/storage?limit=${String(previewLimit)}`,
     ),
+  /** The household's proxy for a site, or `null` when none is set; admins only. */
+  proxy: (site: string) => call<ProxySetting | null>("GET", `/api/proxies/${site}`),
+  /** Set a site's proxy from its URL, which the server keeps in the Keychain. */
+  saveProxy: (site: string, url: string) =>
+    call<ProxySetting>("PUT", `/api/proxies/${site}`, { url }),
+  removeProxy: (site: string) => call<undefined>("DELETE", `/api/proxies/${site}`),
+  /** The enricher's state, and the Tracks it may be asked about. */
+  enricher: (name: string) => call<Enricher>("GET", `/api/enrichers/${name}`),
+  /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */
+  findDetails: (name: string, trackId: number) =>
+    call<Job>("POST", `/api/enrichers/${name}/tracks/${String(trackId)}`),
+  /** Queue the enricher for every Track it may be asked about; admins only. */
+  findDetailsForAll: (name: string) =>
+    call<{ queued: number }>("POST", `/api/enrichers/${name}/find-all`),
+  /** Let a stopped enricher be asked again; admins only. */
+  resetEnricher: (name: string) => call<undefined>("POST", `/api/enrichers/${name}/reset`),
   mode: () => call<Mode>("GET", "/api/mode"),
   modeSettings: () => call<ModeSettings>("GET", "/api/mode/settings"),
   saveModeSetting: (setting: ModeSetting, revision: number) =>

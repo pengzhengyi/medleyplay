@@ -17,6 +17,7 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import PluginService
+from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS, started_plugins
@@ -33,6 +34,7 @@ class Site:
     download_kind: DownloadKind
     playback: PlaybackService
     linked: LinkedAccountService
+    proxies: ProxyService
     catalog: CatalogService
     jobs: JobService
     plugins: PluginService
@@ -69,6 +71,7 @@ def running_site(
     kinds: dict[str, AnyJobKind] = {download.name: download, cache.name: cache}
     with started_plugins(units, clock, "tube") as plugins:
         linked = LinkedAccountService(units, clock, plugins, secrets)
+        proxies = ProxyService(units, clock, secrets)
         runner = JobRunner(
             units,
             clock,
@@ -78,19 +81,23 @@ def running_site(
             processes=JobProcesses(TEST_COMMAND, TEST_PLUGINS),
             poll=timedelta(seconds=0.1),
             logins=linked,
+            proxies=proxies,
             online=online,
         )
         jobs = JobService(units, clock, kinds, runner, online=online)
         catalog = CatalogService(units, clock, online=online)
         downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
+        links = LinkService(units, clock, plugins, catalog, downloads, online, proxies)
+        proxies.listen(links.forget_lookups)
         jobs.start()
         try:
             yield Site(
-                links=LinkService(units, clock, plugins, catalog, downloads, online),
+                links=links,
                 downloads=downloads,
                 download_kind=download,
                 playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads, online),
                 linked=linked,
+                proxies=proxies,
                 catalog=catalog,
                 jobs=jobs,
                 plugins=plugins,

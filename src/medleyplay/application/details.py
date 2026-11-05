@@ -1,13 +1,16 @@
 """Writing a Track's details: each origin's values, and the shown values on the Track's row.
 
-Everything that changes a Track's details writes through `record` or
-`set_household`, in the caller's transaction, and each rewrites the Track's row
-from its values, so the row always holds what `shown` chooses.
+Everything that changes a Track's details writes through `record`,
+`record_video_text`, or `set_household`, in the caller's transaction, and each
+rewrites the Track's row from its values, so the row always holds what `shown`
+chooses. A change to a split file's details reaches its songs, whose album fields
+come from it as the `album_file` origin.
 """
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -26,7 +29,15 @@ from medleyplay.domain.details import (
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
-from medleyplay.persistence.schema import TrackRow, TrackValueRow
+from medleyplay.domain.segments import ends_of
+from medleyplay.domain.video_text import Chapter, Reading, Song, VideoText, read_video
+from medleyplay.persistence.schema import (
+    SegmentRow,
+    SourceRow,
+    TrackRow,
+    TrackValueRow,
+    VideoTextRow,
+)
 
 type OriginValues = dict[Origin, dict[Field, Value]]
 
@@ -39,6 +50,16 @@ class DetailsView:
     shown: dict[Field, Shown]
     found: dict[Field, Shown]
     values: OriginValues
+    video_text: VideoText | None
+    """The video's text the `video` values were read from, if any was."""
+
+
+@dataclass(frozen=True)
+class VideoRead:
+    """A Track's details once its video's text is read, and the songs that text lists."""
+
+    details: DetailsView
+    songs: tuple[Song, ...]
 
 
 def record(
@@ -62,7 +83,67 @@ def record(
     )
     db.add_all(_rows(track_id, origin, kept, now))
     db.flush()
-    refresh(db, track_id)
+    refresh(db, track_id, now)
+
+
+def record_video_text(
+    db: Session,
+    track_id: TrackId,
+    text: VideoText,
+    came_from: Literal["household", "file", "site"],
+    now: datetime,
+    *,
+    cover: str | None = None,
+) -> Reading:
+    """Keep `text` as the Track's video's text, and make what it says the `video` values.
+
+    The video's `cover`, when it has one, is a `video` value too. Text read again
+    replaces the earlier text and everything read from it, the cover included.
+    """
+    _require(db, track_id)
+    row = db.get(VideoTextRow, track_id) or VideoTextRow(track_id=track_id)
+    row.title = text.title
+    row.description = text.description
+    row.chapters = [
+        {"start_ms": chapter.start_ms, "title": chapter.title} for chapter in text.chapters
+    ]
+    row.came_from = came_from
+    row.recorded_at = now
+    db.add(row)
+    reading = read_video(text)
+    values = dict(reading.values)
+    if cover is not None:
+        values[Field.COVER] = cover
+    record(db, track_id, Origin.VIDEO, values, now)
+    return reading
+
+
+def forget_video_text_read_from_a_file(db: Session, track_id: TrackId, now: datetime) -> None:
+    """Drop the Track's video's text and its `video` values, if the text was read from a file.
+
+    Text the household pasted stays.
+    """
+    row = db.get(VideoTextRow, track_id)
+    if row is not None and row.came_from == "file":
+        db.delete(row)
+        record(db, track_id, Origin.VIDEO, {}, now)
+
+
+def video_text_of(db: Session, track_id: TrackId) -> VideoText | None:
+    """Return the Track's video's text, or `None` when none was read."""
+    row = db.get(VideoTextRow, track_id)
+    if row is None:
+        return None
+    chapters = tuple(
+        Chapter(int(chapter["start_ms"]), str(chapter["title"])) for chapter in row.chapters
+    )
+    return VideoText(row.title, row.description, chapters)
+
+
+def video_text_was_pasted(db: Session, track_id: TrackId) -> bool:
+    """Return whether the Track's video's text is one the household pasted."""
+    row = db.get(VideoTextRow, track_id)
+    return row is not None and row.came_from == "household"
 
 
 def set_household(
@@ -84,7 +165,7 @@ def set_household(
     given = {field: value for field, value in values.items() if value is not None}
     db.add_all(_rows(track_id, Origin.HOUSEHOLD, given, now))
     db.flush()
-    refresh(db, track_id)
+    refresh(db, track_id, now)
 
 
 def values_of(db: Session, track_id: TrackId) -> OriginValues:
@@ -95,20 +176,81 @@ def values_of(db: Session, track_id: TrackId) -> OriginValues:
     return found
 
 
-def refresh(db: Session, track_id: TrackId) -> dict[Field, Shown]:
-    """Rewrite the Track's row with its shown values, and return them."""
+def refresh(db: Session, track_id: TrackId, now: datetime) -> dict[Field, Shown]:
+    """Rewrite the Track's row with its shown values, and its songs' if it is split; return them."""
     track = db.get(TrackRow, track_id)
     if track is None:
         raise _no_track(track_id)
     found = shown(values_of(db, track_id))
     for field in Field:
         value = found[field].value if field in found else None
-        setattr(track, field.value, "" if value is None and field in TEXT_FIELDS else value)
+        if field in TEXT_FIELDS:
+            value = "" if value is None else value
+        elif value == "":
+            # The household's "no cover" over a found one: the Track shows none.
+            value = None
+        setattr(track, field.value, value)
+    _refresh_songs(db, track, found, now)
     return found
 
 
+def _refresh_songs(
+    db: Session, album: TrackRow, album_shown: Mapping[Field, Shown], now: datetime
+) -> None:
+    # Each song's length from the file's, and its values from the file's, when they changed.
+    songs = songs_of(db, TrackId(album.id))
+    ends = ends_of([song.start_ms for song in songs], album.duration_ms)
+    for song, end in zip(songs, ends, strict=True):
+        track = db.get(TrackRow, song.track_id)
+        if track is not None:
+            track.duration_ms = None if end is None else end - song.start_ms
+        values = album_file_values(song, album_shown)
+        song_id = TrackId(song.track_id)
+        if values_of(db, song_id).get(Origin.ALBUM_FILE, {}) != values:
+            record(db, song_id, Origin.ALBUM_FILE, values, now)
+
+
+def songs_of(db: Session, track_id: TrackId) -> list[SegmentRow]:
+    """Return the songs a Track's file is split into, in order; none when it isn't split."""
+    return list(
+        db.scalars(
+            select(SegmentRow)
+            .join(SourceRow, SourceRow.id == SegmentRow.album_source_id)
+            .where(SourceRow.track_id == track_id)
+            .order_by(SegmentRow.position)
+        )
+    )
+
+
+def album_file_values(song: SegmentRow, album_file: Mapping[Field, Shown]) -> dict[Field, Value]:
+    """Return what a song takes from its row, its place, and its album file's shown values.
+
+    The album is the file's album, or its title when it names none; the album
+    artist is the file's album artist, or its artist; a song with no artist of its
+    own is the album artist's.
+    """
+
+    def of(field: Field) -> Value | None:
+        return album_file[field].value if field in album_file else None
+
+    album = of(Field.ALBUM) or of(Field.TITLE)
+    album_artist = of(Field.ALBUM_ARTIST) or of(Field.ARTIST)
+    given: dict[Field, Value | None] = {
+        Field.TITLE: song.title,
+        Field.ARTIST: song.artist or album_artist,
+        Field.ALBUM: album,
+        Field.ALBUM_ARTIST: album_artist,
+        Field.TRACK_NUMBER: song.position + 1,
+        Field.DISC_NUMBER: of(Field.DISC_NUMBER),
+        Field.YEAR: of(Field.YEAR),
+        Field.GENRE: of(Field.GENRE),
+        Field.COVER: of(Field.COVER),
+    }
+    return {field: value for field, value in given.items() if value is not None}
+
+
 class DetailsService:
-    """Read a Track's details, and set the household's own."""
+    """Read a Track's details, set the household's own, and read a video's pasted text."""
 
     def __init__(
         self,
@@ -127,10 +269,24 @@ class DetailsService:
             values = values_of(db, track_id)
             if db.get(TrackRow, track_id) is None:
                 raise _no_track(track_id)
+            video_text = video_text_of(db, track_id)
         found = shown(
             {origin: kept for origin, kept in values.items() if origin is not Origin.HOUSEHOLD}
         )
-        return DetailsView(track_id, shown(values), found, values)
+        return DetailsView(track_id, shown(values), found, values, video_text)
+
+    def read_video_text(self, track_id: TrackId, text: VideoText) -> VideoRead:
+        """Read the video's text the household pasted as the Track's `video` values.
+
+        They replace what the video said before; text with no words is refused.
+        """
+        if not (text.title.strip() or text.description.strip()):
+            message = "Paste the video's title or its description."
+            raise InvalidInputError(message)
+        with self._units.begin() as db:
+            reading = record_video_text(db, track_id, text, "household", self._clock())
+        self._changed()
+        return VideoRead(self.details(track_id), reading.songs)
 
     def put_household(self, track_id: TrackId, values: Mapping[str, object]) -> DetailsView:
         """Make `values` the household's values for the Track, replacing its earlier ones."""

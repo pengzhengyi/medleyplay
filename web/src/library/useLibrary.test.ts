@@ -1,7 +1,15 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { favoritesPlaylistOf, playlistOf, serve, signedIn, trackOf } from "../testing/server";
+import { api } from "../api";
+import {
+  detailsOf,
+  favoritesPlaylistOf,
+  playlistOf,
+  serve,
+  signedIn,
+  trackOf,
+} from "../testing/server";
 import { useLibrary } from "./useLibrary";
 
 /** A stand-in for the event stream: the test sends the events the server would. */
@@ -47,6 +55,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   FakeEventSource.last = undefined;
 });
@@ -226,5 +235,242 @@ describe("adding a song to Playlists", () => {
     expect(result.current.playlists.find((playlist) => playlist.id === "p1")?.track_ids).toEqual([
       1, 2,
     ]);
+  });
+});
+
+describe("saving a song's details", () => {
+  async function libraryOf(routes: Parameters<typeof serve>[0]) {
+    serve({ ...signedIn([trackOf(7, "BV1dm4y1s7ak")]), ...routes });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    return result;
+  }
+
+  it("sends only the changes, then shows the Track as the server now has it", async () => {
+    const sent: unknown[] = [];
+    const result = await libraryOf({
+      "POST /api/tracks/details": (body: unknown) => {
+        sent.push(body);
+        return { body: { changed: 1 } };
+      },
+      "GET /api/tracks/7": { body: trackOf(7, "ケビョウニンゲン", { year: 2014 }) },
+    });
+
+    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン", genre: null }));
+
+    expect(sent).toEqual([{ track_ids: [7], values: { title: "ケビョウニンゲン", genre: null } }]);
+    await waitFor(() => {
+      expect(result.current.tracks.get(7)).toMatchObject({ title: "ケビョウニンゲン", year: 2014 });
+    });
+  });
+
+  it("counts the changes saved when the Track can't be read back at once", async () => {
+    const result = await libraryOf({
+      "POST /api/tracks/details": { body: { changed: 1 } },
+      "GET /api/tracks/7": { status: 503, body: { detail: "Busy." } },
+    });
+
+    await act(() => result.current.saveDetails(7, { year: 2014 }));
+
+    expect(result.current.error).toBe("");
+  });
+
+  it("shows the last save's read-back when an earlier one answers after it", async () => {
+    const result = await libraryOf({ "POST /api/tracks/details": { body: { changed: 1 } } });
+    const answers: ((track: ReturnType<typeof trackOf>) => void)[] = [];
+    vi.spyOn(api, "track").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answers.push(resolve);
+        }),
+    );
+
+    await act(() => result.current.saveDetails(7, { title: "Sick Human" }));
+    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン" }));
+    act(() => {
+      answers[1]?.(trackOf(7, "ケビョウニンゲン"));
+    });
+    await act(async () => {
+      answers[0]?.(trackOf(7, "Sick Human"));
+      await Promise.resolve();
+    });
+
+    expect(result.current.tracks.get(7)?.title).toBe("ケビョウニンゲン");
+  });
+
+  it("reads a pasted video's text, then shows the Track as the server now has it", async () => {
+    const sent: unknown[] = [];
+    const result = await libraryOf({
+      "POST /api/tracks/7/video-text": (body: unknown) => {
+        sent.push(body);
+        return { body: { details: detailsOf(7), songs: [] } };
+      },
+      "GET /api/tracks/7": { body: trackOf(7, "ケビョウニンゲン") },
+    });
+
+    await act(() =>
+      result.current.readVideoText(7, { title: "ケビョウニンゲン / wowaka", description: "" }),
+    );
+
+    expect(sent).toEqual([{ title: "ケビョウニンゲン / wowaka", description: "" }]);
+    await waitFor(() => {
+      expect(result.current.tracks.get(7)?.title).toBe("ケビョウニンゲン");
+    });
+  });
+
+  it("shows a split file's songs as the server now has them once the file's album changes", async () => {
+    const before = [
+      trackOf(7, "BV1dm4y1s7ak", { split: true }),
+      trackOf(8, "Opening", { segment_of: 7 }),
+    ];
+    const after = before.map((track) => ({ ...track, album: "Live in Osaka" }));
+    let tracks = before;
+    serve({
+      ...signedIn(before),
+      "POST /api/tracks/details": () => {
+        tracks = after;
+        return { body: { changed: 1 } };
+      },
+      "GET /api/tracks": () => ({ body: tracks }),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    await act(() => result.current.saveDetails(7, { album: "Live in Osaka" }));
+
+    await waitFor(() => {
+      expect(result.current.tracks.get(8)?.album).toBe("Live in Osaka");
+    });
+  });
+
+  it("passes on why the server refused, leaving the Track as it was", async () => {
+    const result = await libraryOf({
+      "POST /api/tracks/details": { status: 422, body: { detail: "year is from 1000 to 2999." } },
+    });
+
+    let refused: unknown;
+    await act(async () => {
+      await result.current.saveDetails(7, { year: 14 }).catch((failure: unknown) => {
+        refused = failure;
+      });
+    });
+
+    expect(String(refused)).toContain("year is from 1000 to 2999.");
+    expect(result.current.tracks.get(7)?.title).toBe("BV1dm4y1s7ak");
+  });
+});
+
+/** The enricher of Bilibili's video details, on, with the Tracks it may be asked about. */
+const enricherOf = (eligible: readonly number[], change: object = {}) => ({
+  body: { name: "bilibili-details", available: true, stopped: null, eligible, ...change },
+});
+
+describe("finding a song's details online", () => {
+  it("offers it for the Tracks the server says can be looked up, and no others", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([2]),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    await waitFor(() => {
+      expect([...result.current.findable]).toEqual([2]);
+    });
+  });
+
+  it("offers it for no Track when the server can't say", async () => {
+    serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    expect(result.current.findable.size).toBe(0);
+  });
+
+  it("asks the server to look the Track up, which then no longer offers it", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1, 2]),
+      "POST /api/enrichers/bilibili-details/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.findable.size).toBe(2);
+    });
+
+    await act(async () => {
+      await result.current.findDetails(1);
+    });
+
+    expect(calls).toContain("POST /api/enrichers/bilibili-details/tracks/1");
+    expect([...result.current.findable]).toEqual([2]);
+  });
+
+  it("passes on why the server refused, and keeps offering it", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "POST /api/enrichers/bilibili-details/tracks/1": {
+        status: 409,
+        body: { detail: "This video was looked up in the last 24 hours." },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.findable.size).toBe(1);
+    });
+
+    await expect(result.current.findDetails(1)).rejects.toThrow(
+      "This video was looked up in the last 24 hours.",
+    );
+
+    expect([...result.current.findable]).toEqual([1]);
+  });
+
+  it("asks for the Tracks and what can be looked up again when a lookup finishes", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    vi.useFakeTimers();
+
+    act(() => {
+      stream().send("job", { id: 4, kind: "enrich_track", state: "succeeded" });
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(asked(calls)).toBe(2);
+    expect(calls.filter((call) => call === "GET /api/enrichers/bilibili-details")).toHaveLength(2);
+  });
+
+  it("signs out when the server says the session is over", async () => {
+    const onSignedOut = vi.fn();
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "POST /api/enrichers/bilibili-details/tracks/1": {
+        status: 401,
+        body: { detail: "Sign in first." },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(onSignedOut));
+    await waitFor(() => {
+      expect(result.current.findable.size).toBe(1);
+    });
+
+    await expect(result.current.findDetails(1)).rejects.toThrow("Sign in first.");
+
+    expect(onSignedOut).toHaveBeenCalledOnce();
   });
 });

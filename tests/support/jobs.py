@@ -10,7 +10,12 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.events import Events
-from medleyplay.application.job_runner import JOB_MEMORY_LIMIT, JobProcesses, JobRunner
+from medleyplay.application.job_runner import (
+    JOB_MEMORY_LIMIT,
+    JobProcesses,
+    JobRunner,
+    Proxies,
+)
 from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.jobs import Job, JobId, JobState, JobView
@@ -69,6 +74,7 @@ def running_jobs(  # noqa: PLR0913 -- the database and clock, then settings with
     events: Events | None = None,
     online: Callable[[], bool] = lambda: True,
     network_failed: Callable[[], None] | None = None,
+    proxies: Proxies | None = None,
 ) -> Iterator[Jobs]:
     """Run Jobs of the `echo` kind with the test plugin `parrot` on, and stop them afterwards.
 
@@ -89,6 +95,7 @@ def running_jobs(  # noqa: PLR0913 -- the database and clock, then settings with
             events=events,
             online=online,
             network_failed=network_failed,
+            proxies=proxies,
         )
         service = JobService(units, clock, {"echo": echo}, runner, events, online)
         if start:

@@ -384,6 +384,8 @@ button.text:hover:not(:disabled) {
 }
 
 .library main {
+  /* The table drops a column when the view is narrow, however wide the window. */
+  container-type: inline-size;
   grid-area: main;
   padding: 0.5rem 1.5rem 9rem;
 
@@ -676,7 +678,8 @@ button.text:hover:not(:disabled) {
   margin-top: 0.15rem;
 }
 
-.mark-metered {
+.mark-metered,
+.proxy-form {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
@@ -691,18 +694,21 @@ button.text:hover:not(:disabled) {
   margin: 0;
 }
 
-.mark-metered input {
+.mark-metered input,
+.proxy-form input {
   margin: 0;
 }
 
-.mark-metered button {
+.mark-metered button,
+.proxy-form button {
   width: auto;
   margin: 0;
   padding: 0.45rem 1.4rem;
   border-radius: 999px;
 }
 
-.mark-metered .hint {
+.mark-metered .hint,
+.proxy-form .hint {
   flex-basis: 100%;
   margin: 0;
 }
@@ -872,6 +878,13 @@ button.text:hover:not(:disabled) {
 
 .tracks th.favorite {
   width: 2.75rem;
+}
+
+/* Too narrow for the album beside the title: the album gives way. */
+@container (width < 52rem) {
+  .tracks .album {
+    display: none;
+  }
 }
 
 /* A share of the width until resized, when the header says how wide. */
@@ -1062,6 +1075,19 @@ details.dropdown.columns-menu > summary + ul {
   gap: 0.6rem;
 }
 
+/* A small cover beside a song's title, in the table and in Up next. */
+.cover.thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
 .tracks button.title {
   padding: 0;
   margin: 0;
@@ -1239,8 +1265,8 @@ button.icon.heart.on:hover,
 .queue li {
   display: grid;
   grid-template:
-    "handle title remove" auto
-    "handle artist remove" auto / auto minmax(0, 1fr) auto;
+    "handle thumb title remove" auto
+    "handle thumb artist remove" auto / auto auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 0.35rem;
   margin: 0;
@@ -1258,6 +1284,11 @@ button.icon.heart.on:hover,
   z-index: 1;
   background: var(--surface);
   box-shadow: var(--float);
+}
+
+.queue .thumb {
+  grid-area: thumb;
+  margin-right: 0.3rem;
 }
 
 .queue .handle {
@@ -1719,10 +1750,6 @@ button.icon.heart.on:hover,
   .player .volume input {
     width: 4rem;
   }
-
-  .tracks .album {
-    display: none;
-  }
 }
 
 @media (width <= 48rem) {
@@ -1815,20 +1842,40 @@ button.icon.heart.on:hover,
     display: none;
   }
 
+  /* The cover beside the title, the artist under it, and the playing bars before it. */
   .tracks .title-cell {
-    display: block;
+    display: grid;
+    grid-template:
+      "thumb bars title" auto
+      "thumb sub sub" auto
+      "thumb why why" auto / auto auto minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .tracks .title-cell .thumb {
+    grid-area: thumb;
+    margin-right: 0.6rem;
   }
 
   .tracks .title-cell .bars {
+    grid-area: bars;
+    align-self: center;
     margin-right: 0.5rem;
   }
 
+  .tracks .title-cell .why {
+    grid-area: why;
+    justify-self: start;
+  }
+
   .tracks .title-cell button.title {
+    grid-area: title;
     line-height: 1.35;
   }
 
   .tracks .subtitle {
     display: block;
+    grid-area: sub;
     overflow: hidden;
     color: var(--muted);
     font-size: 0.8rem;
@@ -2029,6 +2076,413 @@ dialog.modal::backdrop {
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+
+/* Editing a song's details: text across the card, the album's numbers three to a row. */
+
+.edit-details .card {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: min(44rem, 90dvh);
+}
+
+.edit-details h2 {
+  margin-bottom: 0.15rem;
+}
+
+.edit-details-song {
+  margin: 0 0 0.9rem;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: none;
+}
+
+.detail-group legend {
+  margin-bottom: 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1 / -1;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.detail-number {
+  grid-column: auto;
+}
+
+.detail-label {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.edit-details .detail-input {
+  height: 2.4rem;
+  margin: 0;
+  padding-block: 0;
+}
+
+.edit-details textarea.detail-input {
+  height: auto;
+  padding-block: 0.4rem;
+  resize: vertical;
+}
+
+/* The cover in Edit details: the image, where it came from, and what to do with it. */
+
+.cover-box {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.cover-box .cover-box-image {
+  width: 5.5rem;
+  height: 5.5rem;
+  font-size: 2rem;
+}
+
+.cover-box-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  min-width: 0;
+}
+
+.cover-box-origin,
+.cover-box-status {
+  flex-basis: 100%;
+}
+
+.cover-box-status {
+  color: var(--muted);
+}
+
+.edit-details .cover-upload,
+.edit-details .cover-remove {
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--pico-border-radius);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.edit-details .cover-upload.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.edit-details .cover-upload:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+/* Pasting a video's title and description, folded away until wanted. */
+
+.paste-video {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+/* On the body, not the details: a flex details shows its body even when closed in WebKit. */
+.paste-video-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.paste-video-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.paste-video[open] .paste-video-summary {
+  margin-bottom: 0.4rem;
+}
+
+.edit-details .paste-video-read {
+  width: auto;
+  height: 2.4rem;
+  margin: 0.4rem 0 0;
+  padding: 0 1rem;
+  align-self: flex-start;
+}
+
+.paste-video-note {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.paste-video-note:empty {
+  margin: 0;
+}
+
+.paste-video-hint {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.detail-origin {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.detail-origin.yours {
+  color: var(--accent);
+}
+
+.detail-alternatives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.detail-alternatives:empty {
+  display: none;
+}
+
+.edit-details .detail-alternative {
+  max-width: 100%;
+  margin: 0;
+  padding: 0.15rem 0.6rem;
+  overflow: hidden;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edit-details .detail-alternative:hover {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.edit-details .dialog-button {
+  width: auto;
+  margin: 0;
+  padding: 0 1rem;
+  height: 2.6rem;
+}
+
+.edit-details .error {
+  margin: 0;
+  color: #d1495b;
+  font-size: 0.9rem;
+}
+
+@media (width <= 30rem) {
+  .detail-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Editing a file's songs: a row each, its start narrow, its title widest. */
+
+.edit-songs .card {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: min(48rem, 90dvh);
+
+  /* On the title instead, so the player stays at the card's very top as the rows scroll. */
+  padding-top: 0;
+}
+
+.edit-songs #edit-songs-title {
+  padding-top: 1.25rem;
+}
+
+.edit-songs .detail-input {
+  height: 2.4rem;
+  margin: 0;
+  padding-block: 0;
+}
+
+.edit-songs textarea.detail-input {
+  height: auto;
+  padding-block: 0.4rem;
+  resize: vertical;
+}
+
+.song-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  list-style: none;
+}
+
+.song-row {
+  display: grid;
+  grid-template-columns: auto 5rem minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  border-radius: 0.6rem;
+}
+
+.song-row.dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+button.song-handle {
+  width: 1.75rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.song-row.dragging .song-handle {
+  cursor: grabbing;
+}
+
+/* The file, played in the dialog from a song's start. */
+.songs-audio {
+  /* Stays in view while the rows scroll under it, so a song far down can be paused. */
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  margin: 0 0 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+
+  /* Hides the rows passing under it, and above it to the card's edge. */
+  box-shadow: 0 0 0 0.5rem var(--surface);
+}
+
+.songs-audio[hidden] {
+  display: none;
+}
+
+.songs-audio-note:empty {
+  margin: 0;
+}
+
+.song-row-buttons {
+  display: flex;
+  gap: 0.1rem;
+}
+
+.edit-songs .songs-found,
+.edit-songs .songs-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  margin: 0 0 0.75rem;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.songs-note {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.edit-songs .dialog-button {
+  width: auto;
+  margin: 0;
+  padding: 0 1rem;
+  height: 2.6rem;
+}
+
+.edit-songs .songs-unsplit {
+  margin-right: auto;
+}
+
+.edit-songs .error {
+  margin: 0;
+  color: #d1495b;
+  font-size: 0.9rem;
+}
+
+@media (width <= 36rem) {
+  /* Start and title on one line; the artist and the buttons on the next. */
+  .song-row {
+    grid-template-areas:
+      "handle start title title"
+      "handle artist artist buttons";
+    grid-template-columns: auto 4.5rem minmax(0, 1fr) auto;
+  }
+
+  .song-handle {
+    grid-area: handle;
+  }
+
+  .song-start {
+    grid-area: start;
+  }
+
+  .song-title {
+    grid-area: title;
+  }
+
+  .song-artist {
+    grid-area: artist;
+  }
+
+  .song-row-buttons {
+    grid-area: buttons;
+    gap: 0;
+  }
+
+  .song-row-buttons .icon {
+    width: 2rem;
+  }
+}
+
+@media (width < 22rem) {
+  /* Too narrow for the artist beside five buttons: the buttons take a line of their own. */
+  .song-row {
+    grid-template-areas:
+      "handle start title"
+      "handle artist artist"
+      "handle buttons buttons";
+    grid-template-columns: auto 4.5rem minmax(0, 1fr);
+  }
+
+  .song-row-buttons {
+    justify-self: end;
+  }
 }
 
 /* What was just done, above the player for a moment. */

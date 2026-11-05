@@ -4,8 +4,8 @@ Every change to a Job's state is a compare-and-set on its row, so the database
 decides between a cancel and a completion that arrive together.
 """
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Final, Generic, Protocol, TypeVar
 
@@ -30,6 +30,19 @@ LIST_LIMIT: Final = 100
 
 
 @dataclass(frozen=True)
+class Lane:
+    """How the Jobs of one lane of a kind run: one at a time, spaced, through a site's proxy.
+
+    A lane is a value of the request field a kind names as its `lane_field`, such as
+    the enricher a Job asks.
+    """
+
+    spacing: timedelta = timedelta(0)
+    """The least time between the end of one Job of the lane and the start of the next."""
+    proxy_site: str | None = None
+
+
+@dataclass(frozen=True)
 class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks its request
     """A kind of Job: the program a Job process runs, and the completion the server runs.
 
@@ -38,7 +51,15 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     must tolerate finding its work already applied. `points` are the extension
     points the program calls; its Job process loads only their plugins. A kind
     with a `login_site` gets a copy of the submitting Account's login on that site,
-    when it has a valid one.
+    when it has a valid one; one with a `proxy_site` gets that site's proxy, if set,
+    as it starts.
+
+    A kind with a `lane_field` runs the Jobs whose request holds the same value
+    there one at a time, as that value's entry in `lanes` says, and takes the proxy
+    of the lane's `proxy_site`. `refuse_start` may give a reason a Job can't start
+    now, and the Job then fails with it; `on_failure` runs in the transaction in
+    which the program fails a Job with its own reason, and returns the other Jobs
+    it changed.
     """
 
     name: str
@@ -50,7 +71,12 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     idle_timeout: timedelta = IDLE_TIMEOUT
     max_attempts: int = MAX_ATTEMPTS
     login_site: str | None = None
+    proxy_site: str | None = None
     needs_network: bool = False
+    lane_field: str | None = None
+    lanes: Mapping[str, Lane] = field(default_factory=dict)
+    refuse_start: Callable[[Session, Any], str | None] | None = None
+    on_failure: Callable[[Session, Job, str, str], Sequence[JobId]] | None = None
 
 
 # Any: each kind has its own request and result models.

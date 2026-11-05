@@ -10,7 +10,7 @@ import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Final
+from typing import Final, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -39,6 +39,14 @@ from medleyplay.plugin_api import (
 LOOKUP_MEMORY: Final = timedelta(minutes=10)
 MAX_PARTS_PER_ADD: Final = 50
 MAX_TEXT: Final = 512
+
+
+class Proxies(Protocol):
+    """Where calls to a site find the household's proxy, as `ProxyService` provides."""
+
+    def current(self, site: str) -> str | None:
+        """Return the URL calls for `site` go through, or `None` when no proxy is set."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -99,10 +107,12 @@ class LinkService:
         catalog: CatalogService,
         downloads: DownloadService,
         online: Callable[[], bool] = lambda: True,
+        proxies: Proxies | None = None,
     ) -> None:
         """Create a service that adds Tracks to `catalog` and downloads them with `downloads`.
 
         While `online` says the Mode is Offline, looking up and adding links are refused.
+        Calls to a site go through its proxy in `proxies`, when it has one.
         """
         self._units = units
         self._clock = clock
@@ -110,10 +120,15 @@ class LinkService:
         self._catalog = catalog
         self._downloads = downloads
         self._online = online
+        self._proxies = proxies
         # One lookup at a time: the plugin host answers one call at a time anyway,
         # and a burst of lookups shouldn't reach the site at once.
         self._reading = threading.Lock()
         self._remembered: dict[tuple[str, str], _Remembered] = {}
+
+    def forget_lookups(self) -> None:
+        """Forget the videos looked up, so the next lookup asks the site again."""
+        self._remembered = {}
 
     def lookup(self, caller: Account, link: str) -> Lookup:
         """Return the video `link` names, with each part's Track if it is already added.
@@ -178,25 +193,29 @@ class LinkService:
 
     def _resolve(self, link: str) -> tuple[str, str, VideoDetails]:
         kind = recognize_link(link)
-        canonical = self._plugins.call(CANONICALIZE, kind, Canonicalize(link=link.strip()))
+        # Read before any call, so a slow Keychain never holds up the plugin host.
+        proxy = self._proxies.current(kind) if self._proxies is not None else None
+        canonical = self._plugins.call(
+            CANONICALIZE, kind, Canonicalize(link=link.strip(), proxy=proxy)
+        )
         # The plugin may have followed a short link; where it ended must be the site too.
         if recognize_link(canonical.link) != kind:  # pragma: no cover -- one kind per host
             raise InvalidInputError(canonical.link)
         if canonical.video is None:
             message = "The link doesn't name a video."
             raise InvalidInputError(message)
-        details = self._read(kind, canonical.video)
+        details = self._read(kind, canonical.video, proxy)
         if details.status is not VideoStatus.OK:
             raise InvalidInputError(details.message or f"The video is {details.status}.")
         return kind, canonical.video, details
 
-    def _read(self, kind: str, video: str) -> VideoDetails:
+    def _read(self, kind: str, video: str, proxy: str | None) -> VideoDetails:
         with self._reading:
             now = self._clock()
             remembered = self._remembered.get((kind, video))
             if remembered is not None and now - remembered.read_at < LOOKUP_MEMORY:
                 return remembered.details
-            details = self._plugins.call(READ_VIDEO, kind, ReadVideo(video=video))
+            details = self._plugins.call(READ_VIDEO, kind, ReadVideo(video=video, proxy=proxy))
             self._remembered = {
                 key: kept
                 for key, kept in self._remembered.items()

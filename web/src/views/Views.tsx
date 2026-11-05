@@ -15,10 +15,12 @@ import {
   downloadedOf,
   favoritesOf,
   search,
+  songsOf,
   tracksOfAlbum,
   tracksOfArtist,
 } from "../library/views";
 import { type Route, hrefOf } from "../routes";
+import { Cover } from "./Cover";
 import { SettingsView } from "./SettingsView";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
@@ -42,7 +44,9 @@ export interface ViewProps {
 }
 
 /** The view `route` names. */
-export function CurrentView(props: ViewProps) {
+export function CurrentView(given: ViewProps) {
+  // A Playlist names its Tracks by id among them all; every other view lists songs.
+  const props = { ...given, tracks: songsOf(given.tracks) };
   const { route } = props;
   switch (route.view) {
     case "songs":
@@ -96,9 +100,9 @@ export function CurrentView(props: ViewProps) {
         </Songs>
       );
     case "playlists":
-      return <Playlists tracks={props.tracks} playlists={props.playlists} />;
+      return <Playlists tracks={given.tracks} playlists={props.playlists} />;
     case "playlist":
-      return <PlaylistView {...props} id={route.id} />;
+      return <PlaylistView {...props} tracks={given.tracks} id={route.id} />;
     case "search":
       return <SearchResults {...props} query={route.query} />;
     case "settings":
@@ -210,9 +214,9 @@ function AlbumList({ albums }: { readonly albums: readonly Album[] }) {
       {albums.map((album) => (
         <li key={`${album.artist}\n${album.name}`}>
           <a href={hrefOf({ view: "album", artist: album.artist, name: album.name })}>
-            <span className="cover-tile" aria-hidden>
+            <Cover cover={album.cover} className="cover-tile">
               {initialOf(album.name)}
-            </span>
+            </Cover>
             <span className="group-name">{album.name || UNKNOWN_ALBUM}</span>
             <span className="group-meta">
               {album.artist || UNKNOWN_ARTIST}, {formatLength(album.count, album.durationMs)}

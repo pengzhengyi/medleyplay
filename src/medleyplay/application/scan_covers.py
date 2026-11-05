@@ -35,8 +35,8 @@ COVER_KEYS: Final = frozenset({COVER_IMAGE, COVER_IMAGE_ERROR, EMBEDDED_COVER})
 _NOT_A_COVER: Final = "isn't a JPEG, PNG, or WebP image"
 
 
-class _NotACoverError(Exception):
-    """A copy the scan made holds bytes that are no cover."""
+class NotACoverError(Exception):
+    """A copy a Job made holds bytes that are no cover."""
 
 
 @dataclass(frozen=True)
@@ -94,8 +94,8 @@ def _embedded(file: ScannedFile, previous: Mapping[str, object], folder: Path) -
     if file.embedded_cover is None:
         return None
     try:
-        return _keep(file.embedded_cover, folder)
-    except (OSError, _NotACoverError):
+        return keep_copy(file.embedded_cover, folder)
+    except (OSError, NotACoverError):
         return None
 
 
@@ -113,10 +113,10 @@ def _beside(
         return name, _unread(before, error)
     if image.cover is not None:
         try:
-            name = _keep(image.cover, folder)
+            name = keep_copy(image.cover, folder)
         except OSError as failure:
             return name, _unread(before, f"can't be read ({type(failure).__name__})")
-        except _NotACoverError:
+        except NotACoverError:
             error = _NOT_A_COVER
     elif not error:
         # Skipped as unchanged: an error noted before stands.
@@ -141,19 +141,20 @@ def _unread(before: object, error: str) -> dict[str, object]:
     return kept
 
 
-def _keep(copy: CoverFile, folder: Path) -> str:
-    """Keep the scan's copy of a cover in `folder` unless it is already there; return its name.
+def keep_copy(copy: CoverFile, folder: Path) -> str:
+    """Keep a Job's copy of a cover in `folder` unless it is already there; return its name.
 
     A copy is named by its bytes, so only a file whose name and bytes agree is read
-    as one: a path the Job reported is never taken on its word.
+    as one: a path the Job reported is never taken on its word. Raise `NotACoverError`
+    for a copy that is no cover.
     """
     if not is_cover_id(copy.name) or Path(copy.path).name != copy.name:
-        raise _NotACoverError
+        raise NotACoverError
     if (folder / copy.name).is_file():
         return copy.name
     with Path(copy.path).open("rb") as file:
         data = file.read(MAX_COVER_BYTES + 1)
     if len(data) > MAX_COVER_BYTES or cover_type(data) is None or cover_id(data) != copy.name:
-        raise _NotACoverError
+        raise NotACoverError
     keep_cover(folder, copy.name, data)
     return copy.name

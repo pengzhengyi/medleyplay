@@ -55,6 +55,19 @@ class PluginCallFailedError(Exception):
         self.key = key
 
 
+class AnswerFailedError(Exception):
+    """A program fails its Job because of what the site answered, not because anything broke.
+
+    `kind` is `gone` when the site no longer has what was asked for, and `refused` when
+    it refused the request.
+    """
+
+    def __init__(self, message: str, *, kind: Literal["gone", "refused"]) -> None:
+        """Record why the Job fails."""
+        super().__init__(message)
+        self.kind: Literal["gone", "refused"] = kind
+
+
 @dataclass
 class _KeyRecord:
     plugin: str
@@ -175,6 +188,13 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
             message=str(error),
             plugin=error.plugin,
             key=error.key,
+            outcomes=context.outcomes(),
+            peak_memory=peak_memory(),
+        )
+    except AnswerFailedError as error:
+        return JobFailed(
+            kind=error.kind,
+            message=str(error),
             outcomes=context.outcomes(),
             peak_memory=peak_memory(),
         )

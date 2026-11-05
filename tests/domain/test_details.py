@@ -222,6 +222,21 @@ def test_the_album_fields_never_mix_two_releases(values: dict[Origin, Values]) -
             )
 
 
+def test_a_suggestion_from_the_ai_is_not_among_the_origins_a_field_shows_from() -> None:
+    assert Origin.AI not in ORIGINS
+
+
+@given(_VALUES)
+def test_what_the_ai_suggests_never_changes_what_a_track_shows(
+    values: dict[Origin, Values],
+) -> None:
+    without: dict[Origin, Values] = {
+        origin: given for origin, given in values.items() if origin is not Origin.AI
+    }
+
+    assert shown(values) == shown(without)
+
+
 _SHOWN_CASES = json.loads(
     (Path(__file__).parents[1] / "support" / "shown_details.json").read_text(encoding="utf-8")
 )["cases"]

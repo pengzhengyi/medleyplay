@@ -24,7 +24,7 @@ from typing import IO, Generic, Literal, TypeVar
 
 from pydantic import BaseModel
 
-from medleyplay.plugin_api import AuthError, NetworkError, Operation
+from medleyplay.plugin_api import AiEndpoint, AuthError, NetworkError, Operation
 from medleyplay.plugin_api.progress import reporting_to
 from medleyplay.plugin_host.host import peak_memory
 from medleyplay.plugin_host.job_wire import (
@@ -58,14 +58,14 @@ class PluginCallFailedError(Exception):
 class AnswerFailedError(Exception):
     """A program fails its Job because of what the site answered, not because anything broke.
 
-    `kind` is `gone` when the site no longer has what was asked for, and `refused` when
-    it refused the request.
+    `kind` is `gone` when the site no longer has what was asked for, `refused` when
+    it refused the request, and `invalid` when it answered with something unusable.
     """
 
-    def __init__(self, message: str, *, kind: Literal["gone", "refused"]) -> None:
+    def __init__(self, message: str, *, kind: Literal["gone", "refused", "invalid"]) -> None:
         """Record why the Job fails."""
         super().__init__(message)
-        self.kind: Literal["gone", "refused"] = kind
+        self.kind: Literal["gone", "refused", "invalid"] = kind
 
 
 @dataclass
@@ -87,6 +87,8 @@ class JobContext:
     """A copy of the login the Job was given, readable by its owner alone, or `None`."""
     proxy: str | None = field(default=None, repr=False)
     """The household's proxy for the Job's site, or `None`; held in memory only."""
+    ai: AiEndpoint | None = field(default=None, repr=False)
+    """The AI provider the Job is lent, key included, or `None`; held in memory only."""
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
 
     def report(self, fraction: float | None = None, message: str = "") -> None:
@@ -177,6 +179,7 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
         send,
         login=Path(start.login) if start.login else None,
         proxy=start.proxy,
+        ai=start.ai,
     )
     try:
         program = _program(start.program)

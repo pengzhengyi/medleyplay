@@ -6,6 +6,7 @@ import { CloudSlashIcon, KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosph
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type Account, type Track, api } from "../api";
+import type { Lookup } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
 import { current, repeatAfter } from "../player/queue";
 import { offlineBecause } from "../mode";
@@ -141,13 +142,14 @@ export function Library({
     },
     onAddToPlaylist: setAdding,
     onEditDetails: setEditing,
-    canFindDetails: (track: Track) => library.findable.has(track.id),
-    onFindDetails: (track: Track) => {
-      library.findDetails(track.id).then(
+    canFind: (lookup: Lookup, track: Track) =>
+      library.findable.get(lookup.enricher)?.has(track.id) ?? false,
+    onFind: (lookup: Lookup, track: Track) => {
+      library.find(lookup.enricher, track.id).then(
         () => {
           const wait =
             library.mode?.online === false ? " It waits until medleyplay is Online." : "";
-          setNotice(`Looking up “${track.title}” on Bilibili.${wait}`);
+          setNotice(`${lookup.notice(track.title)}${wait}`);
         },
         (failure: unknown) => {
           setNotice(failure instanceof Error ? failure.message : String(failure));
@@ -297,6 +299,7 @@ export function Library({
             actions={actions}
             admin={account.role === "admin"}
             mode={library.mode}
+            onEnrichersChanged={library.refreshFindable}
           />
         ) : (
           <p className="empty" aria-busy="true">

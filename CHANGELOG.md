@@ -187,6 +187,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until an admin resets it when MusicBrainz refuses a request. See the
   [Track details](docs/contributing/design-notes/Track%20details.md#musicbrainz) note.
 
+- **Suggest a Track's details with AI** — *Suggest details with AI* in a song's
+  menu asks an AI model what the song's video text says, and an admin's *Suggest
+  for all* in Settings → AI queues every song that has video text. An admin sets
+  the provider there: a base URL, a model, and a key, with presets for DeepSeek,
+  OpenAI, Anthropic, and Ollama; the key is kept in the Keychain and never shown
+  again. The `ai-details` plugin, off by default, only suggests. A suggested value
+  shows beside its field in *Edit details* with *Use*, and a suggested song list
+  loads into the songs editor; nothing a Track shows changes until you use one. It
+  sends the video's title, description, and chapters to the provider, asks one
+  Track at a time, never the same Track twice in a day, and stops until an admin
+  resets it when the provider refuses the key. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md#ai-suggestions) note.
+
 ### Changed
 
 - Renamed the project from stream to medleyplay.

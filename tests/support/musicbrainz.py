@@ -5,6 +5,7 @@ requests, and the fake answers each from the replies it was given for that URL (
 left out), then records what was sent.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 from tests.support.images import jpeg_image

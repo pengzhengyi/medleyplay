@@ -28,7 +28,6 @@ from medleyplay.domain.enrichers import ASK_AGAIN_AFTER, BILIBILI_DETAILS
 from medleyplay.domain.errors import (
     ConflictError,
     ForbiddenError,
-    InvalidInputError,
     NotFoundError,
     PluginUnavailableError,
 )
@@ -550,7 +549,7 @@ def test_the_stopped_state_survives_a_restart(
     assert stop.reason == "HTTP Error 412."
 
 
-def test_an_admin_resets_a_stopped_enricher_and_it_is_asked_again(
+def test_an_admin_resets_a_stopped_enricher_and_the_refused_track_is_eligible_again(
     enriching: Enriching, alice: Account
 ) -> None:
     refused = enriching.add_site_track("BVRefused")
@@ -560,7 +559,7 @@ def test_an_admin_resets_a_stopped_enricher_and_it_is_asked_again(
     enriching.enrichment.reset(alice, NAME)
 
     assert enriching.enrichment.state(NAME).stopped_at is None
-    assert enriching.enrichment.eligible(NAME) == [other]
+    assert enriching.enrichment.eligible(NAME) == [refused, other]
     enriching.pause_passes()
     _found(enriching, alice, other)
 
@@ -641,7 +640,7 @@ def test_the_jobs_of_a_bulk_queue_all_run_one_after_another(
 def test_an_enricher_that_is_not_known_is_refused(enriching: Enriching, alice: Account) -> None:
     track_id = enriching.add_site_track(RECORDED)
 
-    with pytest.raises(InvalidInputError):
+    with pytest.raises(NotFoundError):
         enriching.enrichment.find_details(alice, track_id, "musicbrainz")
 
 

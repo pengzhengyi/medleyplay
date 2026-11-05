@@ -9,6 +9,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
+from medleyplay.application.enrichment import EnrichmentService
 from medleyplay.application.events import Events
 from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
@@ -49,6 +50,7 @@ class Services:
     details: DetailsService
     songs: SongsService
     covers: CoverService
+    enrichment: EnrichmentService
 
 
 def _services(request: Request) -> Services:
@@ -127,6 +129,10 @@ def _covers(services: Annotated[Services, Depends(_services)]) -> CoverService:
     return services.covers
 
 
+def _enrichment(services: Annotated[Services, Depends(_services)]) -> EnrichmentService:
+    return services.enrichment
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -144,6 +150,7 @@ ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]
 CoversDep = Annotated[CoverService, Depends(_covers)]
+EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

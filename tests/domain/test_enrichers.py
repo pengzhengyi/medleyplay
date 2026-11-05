@@ -15,7 +15,7 @@ from medleyplay.domain.enrichers import (
     video_id_of,
     why_not,
 )
-from medleyplay.domain.errors import InvalidInputError
+from medleyplay.domain.errors import NotFoundError
 
 NOW = datetime(2026, 11, 5, 12, tzinfo=UTC)
 
@@ -125,5 +125,7 @@ def test_the_bilibili_enricher_is_found_by_its_name() -> None:
 
 
 def test_an_enricher_that_does_not_exist_is_refused() -> None:
-    with pytest.raises(InvalidInputError, match="no enricher called"):
+    with pytest.raises(NotFoundError, match="no such enricher") as refused:
         enricher_named("musicbrainz")
+
+    assert "musicbrainz" not in str(refused.value)

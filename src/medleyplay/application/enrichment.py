@@ -151,17 +151,18 @@ def _refuse_start(db: Session, request: object) -> str | None:
 
 
 def _on_failure(db: Session, job: Job, kind: str, message: str, *, clock: Clock) -> Sequence[JobId]:
-    """Note that the site answered, and stop the enricher when it refused.
+    """Note that a video the site no longer has was asked, and stop the enricher on a refusal.
 
-    A video that is gone counts as asked; a refusal also fails the enricher's Jobs
-    that haven't started. Return those Jobs.
+    A refusal stops the enricher and fails its Jobs that haven't started; it doesn't
+    count as asking, so the video that was refused is eligible once an admin resets
+    the enricher. Return the Jobs failed.
     """
     request = db.get_one(JobRow, job.id).request
     name, video = _enricher_of(request), request.get("video")
-    if name is None or kind not in {"gone", "refused"}:
+    if name is None:
         return []
     now = clock()
-    if isinstance(video, str):
+    if kind == "gone" and isinstance(video, str):
         _record_ask(db, name, video, now)
     if kind != "refused":
         return []

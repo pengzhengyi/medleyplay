@@ -21,7 +21,7 @@ from pathlib import PurePosixPath
 from typing import Final
 
 from medleyplay.domain.details import Origin
-from medleyplay.domain.errors import InvalidInputError
+from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
 from medleyplay.domain.links import BILIBILI_SOURCE, parse_part_locator
 
@@ -55,11 +55,11 @@ ENRICHERS: Final = {BILIBILI_DETAILS.name: BILIBILI_DETAILS}
 
 
 def enricher_named(name: str) -> Enricher:
-    """Return the enricher called `name`, or raise `InvalidInputError`."""
+    """Return the enricher called `name`, or raise `NotFoundError` without repeating the name."""
     enricher = ENRICHERS.get(name)
     if enricher is None:
-        message = f"There is no enricher called {name[:64]!r}."
-        raise InvalidInputError(message)
+        message = "There is no such enricher."
+        raise NotFoundError(message)
     return enricher
 
 

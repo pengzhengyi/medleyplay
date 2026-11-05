@@ -3,7 +3,7 @@
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 
@@ -14,10 +14,12 @@ from medleyplay.application.downloads import DownloadKind, DownloadService, down
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.linked_accounts import LinkedAccountService
-from medleyplay.application.links import LinkService
+from medleyplay.application.links import Added, LinkService, PartChoice
+from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.domain.accounts import Account
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS, started_plugins
@@ -31,6 +33,7 @@ class Site:
 
     links: LinkService
     downloads: DownloadService
+    manual: ManualDownloadService
     download_kind: DownloadKind
     playback: PlaybackService
     linked: LinkedAccountService
@@ -41,6 +44,8 @@ class Site:
     secrets: MemorySecrets
     data_dir: Path
     online: OnlineSwitch
+    changes: list[str] = field(default_factory=list)
+    """What the services said changed, in order."""
 
     def wait_for(
         self, job_id: JobId, *states: JobState, until: Callable[[JobView], bool] | None = None
@@ -87,6 +92,8 @@ def running_site(
         jobs = JobService(units, clock, kinds, runner, online=online)
         catalog = CatalogService(units, clock, online=online)
         downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
+        changes: list[str] = []
+        manual = ManualDownloadService(units, clock, jobs, downloads.folder, changes.append)
         links = LinkService(units, clock, plugins, catalog, downloads, online, proxies)
         proxies.listen(links.forget_lookups)
         jobs.start()
@@ -94,6 +101,7 @@ def running_site(
             yield Site(
                 links=links,
                 downloads=downloads,
+                manual=manual,
                 download_kind=download,
                 playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads, online),
                 linked=linked,
@@ -104,6 +112,13 @@ def running_site(
                 secrets=secrets,
                 data_dir=data_dir,
                 online=online,
+                changes=changes,
             )
         finally:
             jobs.stop()
+
+
+def add_first_part(site: Site, adder: Account, video: str) -> Added:
+    """Add part 1 of `video` as *Night Drive* by *Blue Room*, as the add dialog would."""
+    link = f"https://www.bilibili.com/video/{video}"
+    return site.links.add(adder, link, "best", [PartChoice(1, "Night Drive", "Blue Room")])[0]

@@ -127,6 +127,10 @@ class Track:
     availability: Availability
     downloaded: bool = False
     """Whether a Source of the Track has a Download kept on the server."""
+    download_failed: bool = False
+    """Whether the Track has no Download, and the last Job downloading it failed."""
+    site: str | None = None
+    """The kind of the site Source the Track is downloaded from, such as `bilibili`."""
     segment_of: TrackId | None = None
     """The album file this Track is a song of, if it is one."""
     split: bool = False

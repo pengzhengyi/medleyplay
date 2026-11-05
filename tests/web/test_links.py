@@ -1,49 +1,15 @@
 """The links API: looking a link up, adding its parts, and playing them once downloaded."""
 
-import dataclasses
 import time
-from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.web.app import create_app
-from medleyplay.web.deps import Services
-from tests.conftest import TEST_HOST
 from tests.support.api import set_up_as_alice
-from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
-from tests.support.sites import running_site
+from tests.support.fakes import OnlineSwitch
 
 NIGHT_DRIVE = "https://www.bilibili.com/video/BV1Xx41117Tz"
 ADD = {"link": NIGHT_DRIVE, "parts": [{"part": 1, "title": "Night Drive", "artist": "Blue Room"}]}
-
-
-@pytest.fixture
-def site_client(
-    units: sessionmaker[Session],
-    clock: FakeClock,
-    tmp_path: Path,
-    secrets: MemorySecrets,
-    services: Services,
-) -> Iterator[TestClient]:
-    """A client of a server with `tube` answering for `bilibili`, and real download Jobs."""
-    with running_site(units, clock, tmp_path / "data", secrets) as site:
-        app = create_app(
-            dataclasses.replace(
-                services,
-                plugins=site.plugins,
-                jobs=site.jobs,
-                playback=site.playback,
-                linked=site.linked,
-                links=site.links,
-            ),
-            allowed_hosts=[TEST_HOST],
-        )
-        with TestClient(app, base_url=f"http://{TEST_HOST}") as client:
-            set_up_as_alice(client)
-            yield client
 
 
 def test_a_lookup_answers_the_video(site_client: TestClient) -> None:

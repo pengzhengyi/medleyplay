@@ -33,6 +33,7 @@ from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
+from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.network import probe_network
 from medleyplay.application.playback import PlaybackService, cache_source_kind
@@ -204,6 +205,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     mode.listen(events.publish_mode)
     mode.listen(runner.follow_mode)
     mode.listen(policy.request)
+    manual_downloads = ManualDownloadService(units, clock, jobs, downloads.folder, changes.tell)
     links = LinkService(units, clock, plugins, catalog, downloads, mode.online, proxies)
     # A changed proxy makes a looked-up video's details stale, so they are looked up again.
     proxies.listen(links.forget_lookups)
@@ -224,6 +226,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         linked=linked,
         proxies=proxies,
         links=links,
+        manual_downloads=manual_downloads,
         events=events,
         settings=SettingsService(units, clock, changes.tell),
         policy=policy,

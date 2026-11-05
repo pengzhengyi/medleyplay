@@ -7,6 +7,7 @@ from medleyplay.domain.links import (
     MAX_LINK_LENGTH,
     link_of,
     parse_part_locator,
+    part_link,
     part_locator,
     recognize_link,
 )
@@ -106,3 +107,15 @@ def test_a_part_locator_reads_back_as_its_video_and_part() -> None:
 def test_anything_but_a_part_locator_is_refused(locator: str) -> None:
     with pytest.raises(InvalidInputError):
         parse_part_locator(locator)
+
+
+def test_a_part_of_a_video_has_a_link_to_that_part() -> None:
+    assert (
+        part_link("bilibili", "BV1Xx41117Tz/p2")
+        == "https://www.bilibili.com/video/BV1Xx41117Tz?p=2"
+    )
+
+
+def test_a_source_that_is_not_a_part_of_a_video_has_no_link() -> None:
+    with pytest.raises(InvalidInputError):
+        part_link("bilibili", "BV1Xx41117Tz")

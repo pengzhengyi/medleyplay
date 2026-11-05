@@ -175,12 +175,11 @@ def test_a_download_waits_while_the_keychain_does_not_answer_for_the_proxy(
 def test_a_host_call_fault_never_keeps_the_login_of_the_proxy(site: Site, alice: Account) -> None:
     site.proxies.save(alice, "bilibili", SHORT_PASSWORD_PROXY)
 
-    with pytest.raises(PluginCallError) as failed:
-        site.links.lookup(alice, "https://www.bilibili.com/video/BVProxyLeak")
+    lookup = site.links.lookup(alice, "https://www.bilibili.com/video/BVProxyLeak")
 
-    assert "Failed through http://<redacted>@127.0.0.1:3128" in str(failed.value)
-    assert "pw" not in str(failed.value).replace("Failed through", "")
-    assert failed.value.__cause__ is None
+    assert lookup.unreadable is not None
+    assert "Failed through http://<redacted>@127.0.0.1:3128" in lookup.unreadable.message
+    assert "pw" not in lookup.unreadable.message.replace("Failed through", "")
 
 
 def test_a_plugin_fault_reason_never_keeps_the_login_of_the_proxy(

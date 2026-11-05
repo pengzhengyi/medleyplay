@@ -35,6 +35,9 @@ LINK_HOSTS: Final = {
 }
 """Each host a link may name, and the Source kind it belongs to; any other is refused."""
 
+PART_LINKS: Final = {BILIBILI_SOURCE: "https://www.bilibili.com/video/{video}?p={part}"}
+"""The link to one part of a video, for each kind of site Source."""
+
 CODE_LINK: Final = "https://www.bilibili.com/video/{code}"
 _BV_CODE: Final = re.compile(r"bv([0-9A-Za-z]{10})", re.IGNORECASE)
 _AV_CODE: Final = re.compile(r"av([0-9]{1,19})", re.IGNORECASE)
@@ -93,6 +96,15 @@ def parse_part_locator(locator: str) -> tuple[str, int]:
         message = f"{locator!r} isn't the locator of a part of a video."
         raise InvalidInputError(message)
     return video, int(part)
+
+
+def part_link(kind: str, locator: str) -> str:
+    """Return the link to the part a site Source's locator names.
+
+    The Source `bilibili` `BV1Xx41117Tz/p2` is `https://www.bilibili.com/video/BV1Xx41117Tz?p=2`.
+    """
+    video, part = parse_part_locator(locator)
+    return PART_LINKS[kind].format(video=video, part=part)
 
 
 def _refused(link: str) -> InvalidInputError:

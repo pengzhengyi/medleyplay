@@ -15,6 +15,7 @@ from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
+from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService
 from medleyplay.application.plugins import PluginService
@@ -42,6 +43,7 @@ class Services:
     linked: LinkedAccountService
     proxies: ProxyService
     links: LinkService
+    manual_downloads: ManualDownloadService
     events: Events
     settings: SettingsService
     policy: PolicyService
@@ -97,6 +99,10 @@ def _links(services: Annotated[Services, Depends(_services)]) -> LinkService:
     return services.links
 
 
+def _manual_downloads(services: Annotated[Services, Depends(_services)]) -> ManualDownloadService:
+    return services.manual_downloads
+
+
 def _events(services: Annotated[Services, Depends(_services)]) -> Events:
     return services.events
 
@@ -142,6 +148,7 @@ PlaybackDep = Annotated[PlaybackService, Depends(_playback)]
 LinkedDep = Annotated[LinkedAccountService, Depends(_linked)]
 ProxiesDep = Annotated[ProxyService, Depends(_proxies)]
 LinksDep = Annotated[LinkService, Depends(_links)]
+ManualDownloadsDep = Annotated[ManualDownloadService, Depends(_manual_downloads)]
 EventsDep = Annotated[Events, Depends(_events)]
 SettingsDep = Annotated[SettingsService, Depends(_settings)]
 PolicyDep = Annotated[PolicyService, Depends(_policy)]

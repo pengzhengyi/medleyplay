@@ -19,7 +19,7 @@ test("Space pauses the song just clicked, and plays it again", async ({ page }) 
 
   await page.keyboard.press("Space");
 
-  await expect(player(page).getByRole("button", { name: "Play" })).toBeVisible();
+  await expect(player(page).getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await expect.poll(() => paused(page)).toBe(true);
 
   await page.keyboard.press("Space");

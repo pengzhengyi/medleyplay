@@ -98,9 +98,22 @@ test("pausing stops the audio, and playing goes on", async ({ page }) => {
 
   await player(page).getByRole("button", { name: "Pause" }).click();
   await expect.poll(async () => (await audioState(page)).playing).toBe(false);
-  await player(page).getByRole("button", { name: "Play" }).click();
+  await player(page).getByRole("button", { name: "Play", exact: true }).click();
 
   await expect.poll(async () => (await audioState(page)).playing).toBe(true);
+});
+
+test("Now Playing, opened from the player's cover, pauses the song from its own controls", async ({
+  page,
+}) => {
+  await play(page, "Alpha");
+  await player(page).getByRole("button", { name: "Open Now Playing" }).click();
+  const nowPlaying = page.getByRole("dialog", { name: "Now Playing" });
+  await expect(nowPlaying.getByRole("heading", { name: "Alpha" })).toBeVisible();
+
+  await nowPlaying.getByRole("button", { name: "Pause" }).click();
+
+  await expect.poll(async () => (await audioState(page)).playing).toBe(false);
 });
 
 test("a Track that ends moves on to the next", async ({ page }) => {
@@ -196,7 +209,7 @@ test("a reload keeps the queue, paused where it was", async ({ page }) => {
   await page.reload();
 
   await expect(player(page).getByText("Alpha", { exact: true })).toBeVisible();
-  await expect(player(page).getByRole("button", { name: "Play" })).toBeEnabled();
+  await expect(player(page).getByRole("button", { name: "Play", exact: true })).toBeEnabled();
   await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(20);
   expect((await audioState(page)).playing).toBe(false);
   await expect(upNext(page)).toHaveText([/Bravo/, /Charlie/, /Delta/]);

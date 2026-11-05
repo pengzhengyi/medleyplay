@@ -821,6 +821,127 @@ button.text:hover:not(:disabled) {
   font-size: 0.82rem;
 }
 
+/* The Radio tab: the Account's own station, then shelves of albums. */
+.my-station {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1.75rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--surface);
+  box-shadow: var(--lift);
+}
+
+.my-station-icon {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 2rem;
+}
+
+.my-station-text h3 {
+  margin: 0 0 0.15rem;
+  font-size: 1.15rem;
+}
+
+.my-station-text p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.my-station-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.shelf {
+  margin: 0 0 1.5rem;
+}
+
+.shelf-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+/* A shelf scrolls sideways, a card at a time, rather than wrapping. */
+.shelf-albums {
+  display: grid;
+  grid-auto-columns: minmax(9.5rem, 11rem);
+  grid-auto-flow: column;
+  gap: 0.5rem;
+  overflow-x: auto;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  scroll-snap-type: x proximity;
+}
+
+.shelf-album {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  list-style: none;
+  scroll-snap-align: start;
+}
+
+.shelf-link {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.6rem 0.6rem 0;
+  border-radius: 1rem 1rem 0 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.shelf-reason {
+  overflow: hidden;
+  padding: 0 0.6rem 0.6rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Play and Start a station sit on the cover's corner. */
+.shelf-actions {
+  position: absolute;
+  top: 0.95rem;
+  right: 0.95rem;
+  display: flex;
+  gap: 0.3rem;
+}
+
+.shelf-button {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--lift);
+  color: var(--ink);
+}
+
+.shelf-button:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* The views: a rail of links, the one shown lit. */
 .views {
   grid-area: nav;
@@ -1993,11 +2114,12 @@ button.icon.heart.on:hover,
     gap: 0;
   }
 
+  /* Seven tabs share a phone's width: each takes no more room than its name. */
   .views .view-link {
     flex-direction: column;
     gap: 0.1rem;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.68rem;
+    padding: 0.3rem 0.2rem;
+    font-size: 0.64rem;
   }
 
   .views .view-link[aria-current="page"] {
@@ -3437,5 +3559,17 @@ kbd {
 
   .table-tools {
     position: relative;
+  }
+}
+
+/* A phone: the station's button takes a row of its own. */
+@media (width <= 36rem) {
+  .my-station {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .my-station-play {
+    grid-column: 1 / -1;
+    justify-content: center;
   }
 }

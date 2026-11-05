@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 /** A view and what it shows. */
 export type Route =
   | { readonly view: "songs" }
+  | { readonly view: "radio" }
   | { readonly view: "artists" }
   | { readonly view: "artist"; readonly name: string }
   | { readonly view: "albums" }
@@ -29,6 +30,7 @@ export function routeOf(hash: string): Route {
   const name = params.get("name");
   switch (path) {
     case "songs":
+    case "radio":
     case "artists":
     case "albums":
     case "downloaded":

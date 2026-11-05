@@ -249,8 +249,9 @@ config file turns them on, since each contacts a site or a provider.
   site text, a full scan that reads an unchanged sidecar again included, since
   only a paste stands over an unchanged sidecar. Text the household entered while
   a Job runs stays: the Job records nothing over it.
-- **Each Track is one Job,** of the kind `enrich_track` and the target
-  `track:<id>`, carrying the enricher's name. The Jobs of one enricher run one at
+- **Each Track is one Job per enricher,** of the kind `enrich_track` and the
+  target `track:<id>:<enricher>`, so asking a second enricher about a Track
+  queues its own Job rather than returning the first one's. The Jobs of one enricher run one at
   a time, with at least a pause between two calls: 5 seconds for
   `bilibili-details`, 1 second for `musicbrainz`, and 2 seconds for `ai-details`,
   counted from the end of one to the start of the next. Like other network Jobs

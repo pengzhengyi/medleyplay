@@ -101,7 +101,7 @@ def test_asking_about_a_track_queues_a_job_for_it_and_asking_again_returns_that_
     assert (first.status_code, body["kind"], body["target"], body["requested_by"]) == (
         200,
         "enrich_track",
-        f"track:{track_id}",
+        f"track:{track_id}:{NAME}",
         alice["id"],
     )
     assert again.json()["id"] == body["id"]
@@ -230,7 +230,10 @@ def test_asking_musicbrainz_about_a_song_queues_a_job_for_it(
 
     response = enrichers_client.post(f"/api/enrichers/{MUSICBRAINZ}/tracks/{track_id}")
 
-    assert (response.status_code, response.json()["target"]) == (200, f"track:{track_id}")
+    assert (response.status_code, response.json()["target"]) == (
+        200,
+        f"track:{track_id}:{MUSICBRAINZ}",
+    )
     enriching.wait_for(JobId(response.json()["id"]), JobState.SUCCEEDED)
 
 

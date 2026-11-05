@@ -280,7 +280,7 @@ def test_after_musicbrainz_refuses_it_shows_why_it_stopped_and_an_admin_resets_i
 
 
 AI_NAME = "ai-details"
-PROVIDER = {"base_url": "https://api.deepseek.com", "model": "deepseek-chat", "key": KEY}
+PROVIDER = {"base_url": "https://api.deepseek.com", "model": "deepseek-flash", "key": KEY}
 
 
 def test_the_ai_enricher_asks_about_no_track_until_the_provider_is_set_up(

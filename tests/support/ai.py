@@ -22,8 +22,8 @@ class AiEndpointFactory:
 
     @staticmethod
     def deepseek(*, key: str | None = KEY) -> AiEndpoint:
-        """Return DeepSeek's `deepseek-chat`, with `key`."""
-        return AiEndpoint(base_url=DEEPSEEK, model="deepseek-chat", key=key)
+        """Return DeepSeek's `deepseek-flash`, with `key`."""
+        return AiEndpoint(base_url=DEEPSEEK, model="deepseek-flash", key=key)
 
     @staticmethod
     def at(base_url: str, *, key: str | None = KEY) -> AiEndpoint:

@@ -8,13 +8,13 @@ from tests.support.ai import KEY
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.fakes import FakeClock, MemorySecrets
 
-SETTING = {"base_url": "https://api.deepseek.com", "model": "deepseek-chat", "key": KEY}
+SETTING = {"base_url": "https://api.deepseek.com", "model": "deepseek-flash", "key": KEY}
 
 
 def _saved(clock: FakeClock, *, has_key: bool = True) -> dict[str, object]:
     return {
         "base_url": "https://api.deepseek.com",
-        "model": "deepseek-chat",
+        "model": "deepseek-flash",
         "has_key": has_key,
         "saved_at": clock.now.isoformat().replace("+00:00", "Z"),
     }

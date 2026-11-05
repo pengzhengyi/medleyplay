@@ -145,7 +145,7 @@ async def _handle_invalid_request(request: Request, error: RequestValidationErro
     if request.url.path == AI_PATH:
         detail = (
             'The body must be JSON like {"base_url": "https://api.deepseek.com", '
-            '"model": "deepseek-chat", "key": "…"}, with a key only to set a new one.'
+            '"model": "deepseek-flash", "key": "…"}, with a key only to set a new one.'
         )
         return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
     return await request_validation_exception_handler(request, error)

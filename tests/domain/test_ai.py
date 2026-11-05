@@ -146,7 +146,7 @@ def test_the_presets_are_deepseek_openai_anthropic_and_ollama_in_that_order() ->
 @pytest.mark.parametrize(
     ("written", "kept"),
     [
-        ("deepseek-chat", "deepseek-chat"),
+        ("deepseek-flash", "deepseek-flash"),
         ("  gpt-4o-mini ", "gpt-4o-mini"),
         ("llama3.2:3b", "llama3.2:3b"),
     ],

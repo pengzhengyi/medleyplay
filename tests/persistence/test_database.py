@@ -360,7 +360,7 @@ def test_the_provider_has_one_row_only(tmp_path: Path) -> None:
     migrate(engine)
     insert = text(
         "INSERT INTO ai_setting (id, base_url, model, has_key, saved_at)"
-        " VALUES (:id, 'https://api.deepseek.com', 'deepseek-chat', 1,"
+        " VALUES (:id, 'https://api.deepseek.com', 'deepseek-flash', 1,"
         " '2026-11-06 00:00:00.000000')"
     )
 

@@ -25,7 +25,7 @@ class AiIn(BaseModel):
     base_url: Annotated[StrictStr, Field(max_length=MAX_URL)] = Field(
         examples=["https://api.deepseek.com"]
     )
-    model: Annotated[StrictStr, Field(max_length=MAX_MODEL)] = Field(examples=["deepseek-chat"])
+    model: Annotated[StrictStr, Field(max_length=MAX_MODEL)] = Field(examples=["deepseek-flash"])
     key: Annotated[SecretStr, Field(max_length=MAX_KEY)] | None = None
     """Left out or `null`, the key the provider has stays."""
 

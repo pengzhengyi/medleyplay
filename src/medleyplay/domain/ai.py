@@ -4,7 +4,7 @@ The provider speaks the OpenAI chat protocol, as DeepSeek, OpenAI, Anthropic, an
 local Ollama all do, so a household chooses one with a base URL and a model:
 
 ```text
-DeepSeek    https://api.deepseek.com          deepseek-chat
+DeepSeek    https://api.deepseek.com          deepseek-flash
 OpenAI      https://api.openai.com/v1         gpt-4o-mini
 Ollama      http://127.0.0.1:11434/v1         llama3.2
 ```
@@ -46,9 +46,9 @@ class Preset:
 
 
 PRESETS: Final = (
-    Preset("DeepSeek", "https://api.deepseek.com", "deepseek-chat"),
+    Preset("DeepSeek", "https://api.deepseek.com", "deepseek-flash"),
     Preset("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
-    Preset("Anthropic", "https://api.anthropic.com/v1", "claude-haiku-4-5"),
+    Preset("Anthropic", "https://api.anthropic.com/v1", "claude-haiku-5-5"),
     Preset("Ollama", "http://127.0.0.1:11434/v1", "llama3.2"),
 )
 

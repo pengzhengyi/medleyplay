@@ -31,7 +31,7 @@ def ai(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets) -
 
 
 def _set_up_deepseek(ai: AiService) -> AiSetting:
-    return ai.save(ADMIN, DEEPSEEK, "deepseek-chat", KEY)
+    return ai.save(ADMIN, DEEPSEEK, "deepseek-flash", KEY)
 
 
 def test_nothing_is_set_up_at_first(ai: AiService, units: sessionmaker[Session]) -> None:
@@ -46,11 +46,11 @@ def test_saving_keeps_the_key_in_the_keychain_and_the_address_and_model_in_the_c
 ) -> None:
     saved = _set_up_deepseek(ai)
 
-    assert saved == AiSetting(DEEPSEEK, "deepseek-chat", has_key=True, saved_at=clock.now)
+    assert saved == AiSetting(DEEPSEEK, "deepseek-flash", has_key=True, saved_at=clock.now)
     assert secrets.items == {"ai:key": KEY}
     with units() as db:
         row = db.get_one(AiSettingRow, 1)
-        assert (row.base_url, row.model, row.has_key) == (DEEPSEEK, "deepseek-chat", True)
+        assert (row.base_url, row.model, row.has_key) == (DEEPSEEK, "deepseek-flash", True)
         assert is_set_up(db)
 
 
@@ -108,13 +108,13 @@ def test_saving_again_without_a_key_keeps_the_key_it_has(
 def test_saving_again_with_a_key_replaces_the_key(ai: AiService, secrets: MemorySecrets) -> None:
     _set_up_deepseek(ai)
 
-    ai.save(ADMIN, DEEPSEEK, "deepseek-chat", "sk-replaced1234")
+    ai.save(ADMIN, DEEPSEEK, "deepseek-flash", "sk-replaced1234")
 
     assert secrets.items == {"ai:key": "sk-replaced1234"}
 
 
 def test_saving_trims_the_key(ai: AiService, secrets: MemorySecrets) -> None:
-    ai.save(ADMIN, DEEPSEEK, "deepseek-chat", f"  {KEY}\n")
+    ai.save(ADMIN, DEEPSEEK, "deepseek-flash", f"  {KEY}\n")
 
     assert secrets.items == {"ai:key": KEY}
 
@@ -122,12 +122,12 @@ def test_saving_trims_the_key(ai: AiService, secrets: MemorySecrets) -> None:
 @pytest.mark.parametrize(
     ("base_url", "model", "key"),
     [
-        ("http://api.deepseek.com", "deepseek-chat", KEY),
-        ("https://alice:pw@api.deepseek.com", "deepseek-chat", KEY),
+        ("http://api.deepseek.com", "deepseek-flash", KEY),
+        ("https://alice:pw@api.deepseek.com", "deepseek-flash", KEY),
         (DEEPSEEK, "", KEY),
         (DEEPSEEK, "deepseek chat", KEY),
-        (DEEPSEEK, "deepseek-chat", "k"),
-        (DEEPSEEK, "deepseek-chat", "sk-with a space"),
+        (DEEPSEEK, "deepseek-flash", "k"),
+        (DEEPSEEK, "deepseek-flash", "sk-with a space"),
     ],
     ids=[
         "plain http",
@@ -149,7 +149,7 @@ def test_a_setting_that_breaks_a_rule_is_refused_and_changes_nothing(
 
 def test_a_refused_key_is_not_repeated_in_the_reason(ai: AiService) -> None:
     with pytest.raises(InvalidInputError) as refused:
-        ai.save(ADMIN, DEEPSEEK, "deepseek-chat", "sk-with a space")
+        ai.save(ADMIN, DEEPSEEK, "deepseek-flash", "sk-with a space")
 
     assert "sk-with" not in str(refused.value)
 
@@ -161,7 +161,7 @@ def test_removing_the_key_keeps_the_address_and_model(
 
     removed = ai.remove_key(ADMIN)
 
-    assert (removed.base_url, removed.model, removed.has_key) == (DEEPSEEK, "deepseek-chat", False)
+    assert (removed.base_url, removed.model, removed.has_key) == (DEEPSEEK, "deepseek-flash", False)
     assert secrets.items == {}
 
 
@@ -187,7 +187,7 @@ def test_removing_the_provider_forgets_its_key_too(
     "act",
     [
         lambda ai: ai.get(MEMBER),
-        lambda ai: ai.save(MEMBER, DEEPSEEK, "deepseek-chat", KEY),
+        lambda ai: ai.save(MEMBER, DEEPSEEK, "deepseek-flash", KEY),
         lambda ai: ai.remove_key(MEMBER),
         lambda ai: ai.remove(MEMBER),
     ],
@@ -203,7 +203,7 @@ def test_only_an_admin_manages_the_provider(
 def test_a_job_is_lent_the_address_the_model_and_the_key(ai: AiService) -> None:
     _set_up_deepseek(ai)
 
-    assert ai.endpoint() == AiEndpoint(base_url=DEEPSEEK, model="deepseek-chat", key=KEY)
+    assert ai.endpoint() == AiEndpoint(base_url=DEEPSEEK, model="deepseek-flash", key=KEY)
 
 
 def test_a_key_the_keychain_no_longer_holds_is_a_keychain_that_must_be_set_again(

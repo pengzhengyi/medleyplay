@@ -167,7 +167,7 @@ def test_the_built_services_keep_the_ai_providers_key_in_the_secrets_they_are_gi
     secrets = MemorySecrets()
     services = build_services(engine, tmp_path, secrets=secrets)
 
-    services.ai.save(AccountFactory.admin(), "https://api.deepseek.com", "deepseek-chat", KEY)
+    services.ai.save(AccountFactory.admin(), "https://api.deepseek.com", "deepseek-flash", KEY)
 
     assert secrets.items == {"ai:key": KEY}
     engine.dispose()

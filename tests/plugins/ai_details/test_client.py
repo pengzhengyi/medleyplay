@@ -82,7 +82,7 @@ def test_the_body_asks_for_a_json_object_from_the_model_at_temperature_zero() ->
     ask(fake)
 
     assert fake.body() == {
-        "model": "deepseek-chat",
+        "model": "deepseek-flash",
         "messages": MESSAGES,
         "response_format": {"type": "json_object"},
         "temperature": 0,

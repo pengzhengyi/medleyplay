@@ -163,12 +163,12 @@ def test_the_songs_the_ai_suggests_are_passed_on(tmp_path: Path) -> None:
 def test_the_text_and_the_file_name_and_the_jobs_provider_reach_the_enricher(
     tmp_path: Path,
 ) -> None:
-    ai = AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-chat", key="sk-1234")
+    ai = AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234")
 
     found = run(_suggest("Echo", "x" * 40), _context(tmp_path, ai=ai))
 
     assert found.values["album"] == (
-        "provider=https://api.deepseek.com deepseek-chat key=True text=40 0 file=BV1dm4y1s7ak.m4a"
+        "provider=https://api.deepseek.com deepseek-flash key=True text=40 0 file=BV1dm4y1s7ak.m4a"
     )
 
 

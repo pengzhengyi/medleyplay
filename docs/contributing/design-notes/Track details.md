@@ -133,7 +133,9 @@ values.
     video text, as a paste would; any other `.json`, and an `.info.json` with no
     audio file of that name beside it, is ignored. A file over 5 MiB is not read.
   - **The latest text read wins:** a changed file replaces a paste, and a paste
-    stands until the file changes, even when a full scan reads it again.
+    stands until the file changes, even when a full scan reads it again. Without
+    a paste, a full scan parses the unchanged file again, so a better reading
+    from a newer medleyplay shows.
   - **A malformed or oversized file keeps the earlier text** and values. The scan
     notes the error on the Source, and a later good read clears it; one that
     couldn't be opened, as on a drive too slow to answer, is read again next scan.

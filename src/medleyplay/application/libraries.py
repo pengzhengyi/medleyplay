@@ -337,7 +337,9 @@ def _apply_info_json(
 ) -> dict[str, object]:
     """Apply the `.info.json` the scan found beside the file; return what the Source keeps of it.
 
-    Text read from a new or changed file replaces the Track's video's text. A
+    Text read from a new or changed file replaces the Track's video's text, and
+    text read again from an unchanged file is parsed again unless the household
+    pasted text since. A
     sidecar that couldn't be read leaves the earlier text and notes the error until
     a later read succeeds, and one the scan didn't read leaves both as they were. A
     sidecar that was there last scan and isn't now takes with it the text read from
@@ -358,9 +360,10 @@ def _apply_info_json(
     elif info.text is None and INFO_JSON_ERROR in previous:
         kept[INFO_JSON_ERROR] = previous[INFO_JSON_ERROR]
     elif info.text is not None and (text := _video_text(info.text)) is not None:
-        # A file read again unchanged, as by a full scan, leaves a later paste standing.
+        # A file read again unchanged, as by a full scan, leaves a later paste standing;
+        # otherwise it is parsed again, so what today's parser reads better shows.
         unchanged = previous.get(INFO_JSON) == stamp
-        if not unchanged or details.video_text_of(db, track_id) is None:
+        if not unchanged or not details.video_text_was_pasted(db, track_id):
             details.record_video_text(db, track_id, text, "file", now)
     return kept
 

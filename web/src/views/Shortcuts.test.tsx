@@ -164,6 +164,22 @@ describe("the keyboard shortcuts", () => {
     expect(on.shuffle).toHaveBeenCalledOnce();
   });
 
+  it("leave every key to a dialog open over a full-screen view", async () => {
+    const on = listening(
+      <>
+        <dialog open data-shortcuts>
+          Now Playing
+        </dialog>
+        <dialog open>Add to playlists</dialog>
+      </>,
+    );
+
+    await userEvent.keyboard(" s");
+
+    expect(on.toggle).not.toHaveBeenCalled();
+    expect(on.shuffle).not.toHaveBeenCalled();
+  });
+
   it("open Now Playing with F", async () => {
     const on = listening();
 

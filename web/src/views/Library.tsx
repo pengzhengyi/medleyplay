@@ -60,6 +60,10 @@ export function Library({
   const [nowPlayingQueue, setNowPlayingQueue] = useState(false);
   const playingId = current(player.queue)?.trackId;
   const playing = playingId === undefined ? undefined : byId.get(playingId);
+  // With nothing left playing, Now Playing closes, and the next song doesn't reopen it.
+  if (nowPlayingOver !== undefined && playing === undefined && library.loaded) {
+    setNowPlayingOver(undefined);
+  }
   const nowPlaying = nowPlayingOver !== undefined && playing !== undefined;
   // The song being added to Playlists, while its dialog is open, and what was last done.
   const [adding, setAdding] = useState<Track | undefined>(undefined);

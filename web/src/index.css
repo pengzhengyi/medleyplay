@@ -1925,7 +1925,8 @@ button.icon.heart.on:hover,
     animation: none;
   }
 
-  .np-art {
+  .np-art,
+  .player .open-now-playing {
     transition: none;
   }
 }
@@ -2761,7 +2762,8 @@ kbd {
   content: "";
 }
 
-/* Pico centres a dialog's content as a flex box; Now Playing's fills it. */
+/* Pico centres a dialog's content as a flex box; Now Playing's fills it. It takes focus
+   on opening, so no button does, and shows no ring for it. */
 .np-body {
   position: relative;
   display: grid;
@@ -2769,6 +2771,7 @@ kbd {
   width: 100%;
   height: 100%;
   padding: max(0.75rem, env(safe-area-inset-top)) 1.5rem max(1.25rem, env(safe-area-inset-bottom));
+  outline: none;
 }
 
 .np-top {
@@ -2848,28 +2851,40 @@ kbd {
   min-width: 0;
 }
 
+/* A long title takes two lines before it is cut short; the menu's *Edit details* has it whole. */
 .np-names h2 {
+  display: -webkit-box;
   overflow: hidden;
   margin: 0;
   color: var(--ink);
   font-size: 1.6rem;
   font-weight: 700;
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .now-playing .np-names a {
   overflow: hidden;
   color: var(--muted);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 28%);
   text-overflow: ellipsis;
+  text-underline-offset: 0.2em;
   white-space: nowrap;
 }
 
-.now-playing .np-names a:hover {
+.now-playing .np-names a:hover,
+.now-playing .np-names a:focus-visible {
   color: var(--ink);
-  text-decoration: underline;
+  text-decoration-color: currentcolor;
+}
+
+.now-playing .np-names a:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .np-names .np-artist {

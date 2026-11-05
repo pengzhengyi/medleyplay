@@ -43,10 +43,16 @@ export function TrackMenu({
   track,
   actions,
   queueing,
+  container,
+  onNavigate,
 }: {
   readonly track: Track;
   readonly actions: TrackMenuActions;
   readonly queueing: boolean;
+  /** Where the menu is drawn: inside a modal dialog, which leaves the page behind inert. */
+  readonly container?: HTMLElement | null;
+  /** Called before *Go to* opens another view. */
+  readonly onNavigate?: () => void;
 }) {
   const playable = track.availability === "ok";
   return (
@@ -61,7 +67,7 @@ export function TrackMenu({
           <DotsThreeIcon weight="bold" aria-hidden />
         </button>
       </Menu.Trigger>
-      <Menu.Portal>
+      <Menu.Portal container={container}>
         <Menu.Content className="track-menu" align="end" sideOffset={4} collisionPadding={8}>
           {queueing && (
             <>
@@ -89,6 +95,7 @@ export function TrackMenu({
           <Item
             icon={<MicrophoneStageIcon />}
             onSelect={() => {
+              onNavigate?.();
               navigate({ view: "artist", name: track.artist });
             }}
           >
@@ -97,6 +104,7 @@ export function TrackMenu({
           <Item
             icon={<VinylRecordIcon />}
             onSelect={() => {
+              onNavigate?.();
               navigate({ view: "album", artist: albumArtistOf(track), name: track.album });
             }}
           >

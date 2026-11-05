@@ -3,11 +3,12 @@
  * blur of itself, with the player's controls and, when asked, what plays next.
  *
  * It opens from the player's cover and closes with Escape, its close button, or by
- * going to another view. The keyboard shortcuts work while it is open.
+ * going to another view. The keyboard shortcuts work while it is open, and the song's
+ * menu and the queue's announcements are drawn inside it, since the page behind is inert.
  */
 
 import { CaretDownIcon, QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
@@ -44,15 +45,22 @@ export function NowPlaying({
   readonly onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  // The open dialog, where the song's menu and the queue's announcements are drawn.
+  const [inside, setInside] = useState<HTMLDialogElement | null>(null);
   const keys = useBindings();
   const { status, position, duration } = player;
   useEffect(() => {
     const element = ref.current;
     element?.showModal();
+    setInside(element);
+    // Focus on no button, so Space plays or pauses rather than pressing it.
+    body.current?.focus();
     return () => {
       element?.close();
     };
   }, []);
+  const close = () => ref.current?.close();
   const remaining = duration === undefined ? undefined : Math.max(0, duration - position);
   return (
     <dialog
@@ -63,28 +71,37 @@ export function NowPlaying({
       onClose={onClose}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
+          // Escape in the song's menu closes the menu only.
           event.preventDefault();
-          event.currentTarget.close();
+          if (!(event.target instanceof Element && event.target.closest("[role=menu]"))) {
+            event.currentTarget.close();
+          }
         }
       }}
     >
       <div className="np-backdrop" aria-hidden>
         {track.cover !== null && track.cover !== "" && <img src={coverUrl(track.cover)} alt="" />}
       </div>
-      <div className="np-body">
+      <div ref={body} className="np-body" tabIndex={-1}>
         <header className="np-top">
           <button
             type="button"
             className="icon"
             aria-label="Close Now Playing"
             {...hintOf("Close Now Playing", keys.nowPlaying)}
-            onClick={() => ref.current?.close()}
+            onClick={close}
           >
             <CaretDownIcon weight="bold" aria-hidden />
           </button>
           <span className="np-actions">
             <FavoriteButton track={track} onFavorite={onFavorite} />
-            <TrackMenu track={track} actions={menuActions} queueing={false} />
+            <TrackMenu
+              track={track}
+              actions={menuActions}
+              queueing={false}
+              container={inside}
+              onNavigate={close}
+            />
           </span>
         </header>
         <div className={queueOpen ? "np-stage queue-open" : "np-stage"}>
@@ -95,7 +112,11 @@ export function NowPlaying({
             <div className="np-names">
               <h2>{track.title}</h2>
               {track.artist !== "" && (
-                <a className="np-artist" href={hrefOf({ view: "artist", name: track.artist })}>
+                <a
+                  className="np-artist"
+                  href={hrefOf({ view: "artist", name: track.artist })}
+                  onClick={close}
+                >
                   {track.artist}
                 </a>
               )}
@@ -103,6 +124,7 @@ export function NowPlaying({
                 <a
                   className="np-album"
                   href={hrefOf({ view: "album", artist: albumArtistOf(track), name: track.album })}
+                  onClick={close}
                 >
                   {track.album}
                 </a>
@@ -147,7 +169,14 @@ export function NowPlaying({
               </p>
             )}
           </div>
-          {queueOpen && <QueuePanel id="now-playing-queue" player={player} tracks={tracks} />}
+          {queueOpen && (
+            <QueuePanel
+              id="now-playing-queue"
+              player={player}
+              tracks={tracks}
+              announceIn={inside}
+            />
+          )}
         </div>
       </div>
     </dialog>

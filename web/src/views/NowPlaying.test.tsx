@@ -42,8 +42,23 @@ async function openNowPlaying() {
   return screen.getByRole("dialog", { name: "Now Playing" });
 }
 
+/** Press Next in `nowPlaying` until the queue runs out: Long Road, Outro, then past the end. */
+async function runOutTheQueue(nowPlaying: HTMLElement) {
+  for (let press = 0; press < 3; press++) {
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Next" }));
+  }
+}
+
 describe("Now Playing", () => {
-  it("opens from the player's cover and shows the song playing", async () => {
+  it("opens from the player's cover", async () => {
+    await playingIntro();
+
+    const nowPlaying = await openNowPlaying();
+
+    expect(nowPlaying).toBeVisible();
+  });
+
+  it("shows the song playing, its artist, and its album", async () => {
     await playingIntro();
 
     const nowPlaying = await openNowPlaying();
@@ -73,28 +88,98 @@ describe("Now Playing", () => {
     ).toBeInTheDocument();
   });
 
-  it("closes with its close button, and with Escape", async () => {
+  it("closes with its close button", async () => {
     await playingIntro();
-    const first = await openNowPlaying();
+    const nowPlaying = await openNowPlaying();
 
-    await userEvent.click(within(first).getByRole("button", { name: "Close Now Playing" }));
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Close Now Playing" }));
 
     expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
+  });
 
+  it("closes with Escape", async () => {
+    await playingIntro();
     await openNowPlaying();
+
     await userEvent.keyboard("{Escape}");
 
     expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
   });
 
-  it("opens and closes with its shortcut", async () => {
+  it("opens with its shortcut", async () => {
     await playingIntro();
 
     await userEvent.keyboard("f");
 
     expect(screen.getByRole("dialog", { name: "Now Playing" })).toBeInTheDocument();
+  });
+
+  it("closes with its shortcut", async () => {
+    await playingIntro();
+    await openNowPlaying();
 
     await userEvent.keyboard("f");
+
+    expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
+  });
+
+  it("leaves Space to play or pause once opened with its shortcut", async () => {
+    await playingIntro();
+    await userEvent.keyboard("f");
+
+    await userEvent.keyboard(" ");
+
+    expect(screen.getByRole("dialog", { name: "Now Playing" })).toBeInTheDocument();
+  });
+
+  it("opens what plays next with Q while it is open", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+
+    await userEvent.keyboard("q");
+
+    expect(within(nowPlaying).getByRole("region", { name: "Up next" })).toBeInTheDocument();
+  });
+
+  it("offers the song's menu inside itself", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+
+    await userEvent.click(
+      within(nowPlaying).getByRole("button", { name: "More actions for Intro" }),
+    );
+
+    expect(within(nowPlaying).getByRole("menuitem", { name: /Add to playlist/ })).toBeVisible();
+  });
+
+  it("stays open when Escape closes the song's menu", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+    await userEvent.click(
+      within(nowPlaying).getByRole("button", { name: "More actions for Intro" }),
+    );
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Now Playing" })).toBeInTheDocument();
+  });
+
+  it("closes when the queue runs out", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+
+    await runOutTheQueue(nowPlaying);
+
+    expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
+  });
+
+  it("stays closed when a song plays after the queue ran out", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+    await runOutTheQueue(nowPlaying);
+
+    await userEvent.click(screen.getByRole("button", { name: "Long Road" }));
 
     expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
   });
@@ -107,6 +192,16 @@ describe("Now Playing", () => {
 
     const queue = within(nowPlaying).getByRole("region", { name: "Up next" });
     expect(within(queue).getByText("Long Road")).toBeInTheDocument();
+  });
+
+  it("closes when its artist link names the view already open", async () => {
+    await playingIntro();
+    window.location.hash = "#/artist?name=The%20Band";
+    const nowPlaying = await openNowPlaying();
+
+    await userEvent.click(within(nowPlaying).getByRole("link", { name: "The Band" }));
+
+    expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
   });
 
   it("closes when its album link opens the album", async () => {

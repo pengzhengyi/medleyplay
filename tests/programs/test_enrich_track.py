@@ -60,7 +60,7 @@ def test_values_an_enricher_answers_are_passed_on(tmp_path: Path) -> None:
     assert found.cover is not None
 
 
-@pytest.mark.parametrize("video", ["BVNotAnImage", "BVEscape", "BVLink", "BVHuge"])
+@pytest.mark.parametrize("video", ["BVNotAnImage", "BVEscape", "BVLink", "BVHuge", "BVFolder"])
 def test_a_cover_that_is_not_a_plain_image_directly_in_the_folder_is_left_out(
     tmp_path: Path, video: str
 ) -> None:

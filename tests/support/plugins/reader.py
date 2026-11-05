@@ -10,6 +10,7 @@ The video id says how the plugin answers:
 | `BVEscape` | text, and a cover named outside its folder |
 | `BVLink` | text, and a cover that is a link to another file |
 | `BVHuge` | text, and a cover one byte over the limit |
+| `BVFolder` | text, and a cover that is a folder |
 | `BVValues` | the genre *Vocaloid* and the year 2014 as values, with a cover |
 | `BVBadValues` | a year that is not a year |
 | `BVGone` | gone |
@@ -78,22 +79,23 @@ def _text(title: str, video: str) -> VideoText:
 
 
 def _cover_of(folder: Path, video: str) -> str | None:
+    if video == "BVNoCover":
+        return None
+    if video == "BVEscape":
+        return "../cover"
+    cover = folder / "cover"
     match video:
-        case "BVNoCover":
-            return None
         case "BVNotAnImage":
-            (folder / "cover").write_text("not an image", encoding="utf-8")
-            return "cover"
-        case "BVEscape":
-            return "../cover"
+            cover.write_text("not an image", encoding="utf-8")
         case "BVLink":
-            (folder / "cover").symlink_to("/etc/hosts")
-            return "cover"
+            cover.symlink_to("/etc/hosts")
+        case "BVFolder":
+            cover.mkdir()
         case "BVHuge":
-            (folder / "cover").write_bytes(oversized_jpeg())
-            return "cover"
+            cover.write_bytes(oversized_jpeg())
         case _:
             return _cover(folder, video)
+    return cover.name
 
 
 def _cover(folder: Path, video: str) -> str:

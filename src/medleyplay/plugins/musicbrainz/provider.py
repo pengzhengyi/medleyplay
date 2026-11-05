@@ -12,6 +12,10 @@ from medleyplay.plugins.musicbrainz.models import Release, ReleaseTrack, credite
 
 COVER_NAME: Final = "cover"
 MAX_TEXT: Final = 512
+YEARS: Final = range(1000, 3000)
+"""The years a Track may have."""
+NUMBERS: Final = range(1, 1000)
+"""The numbers a Track or disc may have."""
 
 
 @dataclass(frozen=True)
@@ -113,7 +117,7 @@ def _release_values(release: Release) -> dict[str, str | int]:
     if album_artist := credited(release.artist_credit):
         values["album_artist"] = album_artist[:MAX_TEXT]
     year = release.date[:4] if release.date else ""
-    if year.isdigit():
+    if year.isdigit() and int(year) in YEARS:
         values["year"] = int(year)
     return values
 
@@ -123,13 +127,16 @@ def _track_values(release: Release, recording: str) -> dict[str, str | int]:
     for medium in release.media:
         for track in medium.tracks:
             if track.recording.id == recording:
-                return _values_of(track, release) | {"disc_number": medium.position}
+                numbers = {"track_number": track.position, "disc_number": medium.position}
+                return _values_of(track, release) | {
+                    name: number for name, number in numbers.items() if number in NUMBERS
+                }
     return {}
 
 
 def _values_of(track: ReleaseTrack, release: Release) -> dict[str, str | int]:
     artist = credited(track.artist_credit) or credited(release.artist_credit)
-    values: dict[str, str | int] = {"title": track.title[:MAX_TEXT], "track_number": track.position}
+    values: dict[str, str | int] = {"title": track.title[:MAX_TEXT]}
     if artist:
         values["artist"] = artist[:MAX_TEXT]
     return values

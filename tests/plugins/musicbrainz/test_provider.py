@@ -180,6 +180,30 @@ def test_a_release_without_a_date_gives_no_year(tmp_path: Path) -> None:
     assert "year" not in answer.values
 
 
+@pytest.mark.parametrize("date", ["0000", "0000-00-00", "3000-01-01"])
+def test_a_year_a_track_cannot_have_is_left_out(tmp_path: Path, date: str) -> None:
+    release = MusicBrainzFactory.ok_computer(front=False, date=date)
+
+    answer = enricher_over(knowing_the_release(release)).enrich(
+        EnrichTrackFactory.let_down(tmp_path)
+    )
+
+    assert "year" not in answer.values
+
+
+def test_a_track_or_disc_number_a_track_cannot_have_is_left_out(tmp_path: Path) -> None:
+    release = MusicBrainzFactory.ok_computer(front=False)
+    release["media"][0]["position"] = 0
+    release["media"][0]["tracks"][4]["position"] = 1000
+
+    answer = enricher_over(knowing_the_release(release)).enrich(
+        EnrichTrackFactory.let_down(tmp_path)
+    )
+
+    assert not {"track_number", "disc_number"} & set(answer.values)
+    assert answer.values["title"] == "Let Down"
+
+
 def test_text_longer_than_a_value_may_be_is_cut(tmp_path: Path) -> None:
     release = MusicBrainzFactory.ok_computer(front=False)
     release["title"] = "A" * 600

@@ -1,4 +1,4 @@
-"""The test plugin `reader` answering for `bilibili-details`, with real enrich Jobs and services."""
+"""The test plugin `reader` answering for the enrichers, with real enrich Jobs and services."""
 
 import time
 from collections.abc import Callable, Iterator
@@ -18,6 +18,7 @@ from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
+from medleyplay.domain.details import Origin
 from medleyplay.domain.enrichers import BILIBILI_DETAILS
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from tests.support.factories import SourceKeyFactory
@@ -83,6 +84,22 @@ class Enriching:
         return self.catalog.add_track(
             SourceKeyFactory.bilibili(video, part), TrackDetails(title=f"{video} p{part}")
         )
+
+    def add_song(
+        self,
+        title: str,
+        artist: str = "Radiohead",
+        album: str = "",
+        *,
+        origin: Origin = Origin.FILES,
+    ) -> TrackId:
+        """Add a Library file `<title>.m4a` whose tags say `title`, `artist`, and `album`.
+
+        The details are recorded as `origin`'s, which are the file's tags unless changed.
+        """
+        key = SourceKey("library", f"1/Music/{title}.m4a")
+        details = TrackDetails(title=title, artist=artist, album=album, duration_ms=299_000)
+        return self.catalog.add_track(key, details, origin=origin)
 
     def add_file_track(self, name: str, library: int = 1) -> TrackId:
         """Add a Library file called `name` as a Track, as a scan does."""

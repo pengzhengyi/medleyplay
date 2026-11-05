@@ -278,7 +278,7 @@ def test_undoing_the_enrichers_migration_makes_text_read_from_the_site_the_house
         connection.execute(_ADD_VIDEO_TEXT, {"came_from": "site"})
         connection.execute(
             text(
-                "INSERT INTO video_ask (enricher, video, asked_at)"
+                "INSERT INTO enricher_ask (enricher, subject, asked_at)"
                 " VALUES ('bilibili-details', 'BV1', '2026-11-05 00:00:00.000000')"
             )
         )
@@ -288,10 +288,56 @@ def test_undoing_the_enrichers_migration_makes_text_read_from_the_site_the_house
     with engine.connect() as connection:
         came_from = connection.scalars(text("SELECT came_from FROM video_text")).all()
         tables = connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
-        assert (came_from, {"video_ask", "enricher_stop"} & set(tables.all())) == (
+        assert (came_from, {"video_ask", "enricher_ask", "enricher_stop"} & set(tables.all())) == (
             ["household"],
             set(),
         )
+    engine.dispose()
+
+
+_ASK = {"enricher": "bilibili-details", "key": "BV1dm4y1s7ak", "at": "2026-11-05 00:00:00.000000"}
+
+
+def test_migrating_keeps_every_video_asked_as_a_subject_asked(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0018")
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO video_ask (enricher, video, asked_at) VALUES (:enricher, :key, :at)"),
+            _ASK,
+        )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        asked = connection.execute(text("SELECT enricher, subject FROM enricher_ask")).all()
+        tables = connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+        assert ([tuple(row) for row in asked], "video_ask" in tables.all()) == (
+            [("bilibili-details", "BV1dm4y1s7ak")],
+            False,
+        )
+    engine.dispose()
+
+
+def test_undoing_the_asks_migration_keeps_every_subject_asked_as_a_video_asked(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO enricher_ask (enricher, subject, asked_at)"
+                " VALUES (:enricher, :key, :at)"
+            ),
+            _ASK,
+        )
+
+    _migrate_to(engine, "0018", down=True)
+
+    with engine.connect() as connection:
+        asked = connection.execute(text("SELECT enricher, video FROM video_ask")).all()
+        assert [tuple(row) for row in asked] == [("bilibili-details", "BV1dm4y1s7ak")]
     engine.dispose()
 
 

@@ -34,7 +34,7 @@ from medleyplay.domain.errors import (
 from medleyplay.domain.jobs import JobState, JobView
 from medleyplay.domain.segments import SongRow
 from medleyplay.domain.video_text import Song, VideoText, read_video
-from medleyplay.persistence.schema import EnricherStopRow, VideoAskRow, VideoTextRow
+from medleyplay.persistence.schema import EnricherAskRow, EnricherStopRow, VideoTextRow
 from tests.support.enrichment import PAUSE, SETTLE, Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -312,7 +312,9 @@ def test_when_a_video_was_asked_is_kept_in_the_database_so_a_restart_forgets_not
     _found(enriching, alice, track_id)
 
     with units() as db:
-        asked = db.execute(select(VideoAskRow.enricher, VideoAskRow.video, VideoAskRow.asked_at))
+        asked = db.execute(
+            select(EnricherAskRow.enricher, EnricherAskRow.subject, EnricherAskRow.asked_at)
+        )
         assert [tuple(row) for row in asked] == [(NAME, RECORDED, clock())]
 
 
@@ -641,7 +643,7 @@ def test_an_enricher_that_is_not_known_is_refused(enriching: Enriching, alice: A
     track_id = enriching.add_site_track(RECORDED)
 
     with pytest.raises(NotFoundError):
-        enriching.enrichment.find_details(alice, track_id, "musicbrainz")
+        enriching.enrichment.find_details(alice, track_id, "acoustid")
 
 
 def test_a_track_that_does_not_exist_is_not_found(enriching: Enriching, alice: Account) -> None:

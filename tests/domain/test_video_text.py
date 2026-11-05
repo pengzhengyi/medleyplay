@@ -210,6 +210,49 @@ def test_an_album_with_no_artist_has_no_album_artist() -> None:
     assert reading.values == {Field.ALBUM: "Bremen", Field.TITLE: "Bremen"}
 
 
+def test_a_year_after_the_artist_is_the_albums_year() -> None:
+    reading = read_video(titled("【HR 24/48】朴树2003《生如夏花》专辑歌词版"))
+
+    assert reading.values == {
+        Field.ALBUM: "生如夏花",
+        Field.TITLE: "生如夏花",
+        Field.ARTIST: "朴树",
+        Field.ALBUM_ARTIST: "朴树",
+        Field.YEAR: 2003,
+    }
+
+
+@pytest.mark.parametrize(
+    ("title", "artist", "year"),
+    [
+        ("周杰伦 2001《范特西》", "周杰伦", 2001),
+        ("ハチ2017 - Bremen", "ハチ", 2017),
+        ("ryo1999《メルト》", "ryo", 1999),
+    ],
+)
+def test_a_year_glued_to_the_artist_or_after_its_last_letter_is_the_year(
+    title: str, artist: str, year: int
+) -> None:
+    values = read_video(titled(title)).values
+
+    assert (values[Field.ARTIST], values[Field.YEAR]) == (artist, year)
+
+
+@pytest.mark.parametrize(
+    ("title", "artist"),
+    [
+        ("The 1975《Notes on a Conditional Form》", "The 1975"),
+        ("朴树3003《生如夏花》", "朴树3003"),
+        ("2003《生如夏花》", "2003"),
+    ],
+)
+def test_a_number_the_artist_is_named_with_stays_in_the_name(title: str, artist: str) -> None:
+    values = read_video(titled(title)).values
+
+    assert values[Field.ARTIST] == artist
+    assert Field.YEAR not in values
+
+
 @pytest.mark.parametrize(
     "title",
     [

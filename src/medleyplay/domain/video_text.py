@@ -44,6 +44,9 @@ _DASH: Final = re.compile(r"\s+[-\u2013\u2014]\s+|\s*\uff0d\s*")
 # Spaced slash, or a full-width slash with or without spaces.
 _SLASH: Final = re.compile(r"\s+/\s+|\s*\uff0f\s*")
 _LEADING_SEPARATOR: Final = re.compile(r"\s*[/\uff0f\-\u2013\u2014\uff0d]")
+# A year ending an artist's name, glued to it or after a space behind a non-Latin
+# letter: "朴树2003" and "周杰伦 2001", but not "The 1975".
+_YEAR_AFTER: Final = re.compile(r"^(.*(?:[^\s\d]|[^\x00-\x7f]\s))((?:19|20)\d{2})$")
 # A space, `|`, `/`, hyphens, dashes, and the middle dot, full-width forms included.
 _SEPARATORS: Final = " |\uff5c/\uff0f-\u2013\u2014\uff0d\u00b7"
 
@@ -88,7 +91,7 @@ class Reading:
     """What a video's text says."""
 
     values: Values
-    """The title, artist, album, and album artist found, each as `found_value` keeps it."""
+    """The title, artist, album, album artist, and year found, each as `found_value` keeps it."""
     songs: tuple[Song, ...]
     """A checked song list, or `()` when none is found."""
     album: bool
@@ -103,9 +106,10 @@ def read_video(text: VideoText) -> Reading:
     otherwise the description's timestamped lines do.
     """
     songs = _songs_of(text)
-    name, artist, album_word = _read_title(text.title)
+    name, named, album_word = _read_title(text.title)
+    artist, year = _year_after(named)
     album = album_word or len(songs) >= ALBUM_SONGS
-    return Reading(_values(name, artist, album=album), songs, album)
+    return Reading(_values(name, artist, year, album=album), songs, album)
 
 
 def read_song_list(text: str) -> tuple[Song, ...]:
@@ -238,6 +242,14 @@ def _read_title(raw: str) -> tuple[str, str, bool]:
     return title, artist, album_word
 
 
+def _year_after(artist: str) -> tuple[str, int | None]:
+    """Return an artist's name without a year ending it, and that year, if any."""
+    found = _YEAR_AFTER.match(artist)
+    if found is None:
+        return artist, None
+    return _tidy(found.group(1)), int(found.group(2))
+
+
 def _split_at(separator: re.Pattern[str], text: str) -> tuple[str, str]:
     """Return the text before and after the first `separator`; the whole text and "" if none."""
     found = separator.search(text)
@@ -252,13 +264,15 @@ def _tidy(text: str) -> str:
     return " ".join(text.split()).strip(_SEPARATORS)
 
 
-def _values(name: str, artist: str, *, album: bool) -> Values:
-    wanted: dict[Field, str] = {Field.TITLE: name, Field.ARTIST: artist}
+def _values(name: str, artist: str, year: int | None, *, album: bool) -> Values:
+    wanted: dict[Field, Value] = {Field.TITLE: name, Field.ARTIST: artist}
     if album:
         wanted |= {Field.ALBUM: name, Field.ALBUM_ARTIST: artist}
+    if year is not None:
+        wanted[Field.YEAR] = year
     values: dict[Field, Value] = {}
-    for field, text in wanted.items():
-        kept = found_value(field, text)
+    for field, value in wanted.items():
+        kept = found_value(field, value)
         if kept is not None:
             values[field] = kept
     return values

@@ -75,11 +75,12 @@ def downgrade() -> None:
         sa.CheckConstraint("id = 1", name=op.f("ck_ai_setting_single")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_ai_setting")),
     )
-    op.execute(
+    op.get_bind().execute(
         sa.text(
             "INSERT INTO ai_setting (id, base_url, model, has_key, saved_at)"
             " SELECT 1, base_url, model, COALESCE(key_secret = :key_secret, 0),"
             " saved_at FROM ai_provider ORDER BY position LIMIT 1"
-        ).bindparams(key_secret=_KEY_SECRET)
+        ),
+        {"key_secret": _KEY_SECRET},
     )
     op.drop_table("ai_provider")

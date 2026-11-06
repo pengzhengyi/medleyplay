@@ -8,6 +8,8 @@ import requests
 
 from medleyplay.plugin_api import (
     AiEndpoint,
+    AiFailure,
+    AiFailureKind,
     Enriched,
     EnrichStatus,
     EnrichTrack,
@@ -21,6 +23,7 @@ from medleyplay.plugins.ai_details.provider import AiDetails
 from tests.support.ai import (
     CHAT,
     KEY,
+    OLLAMA_CHAT,
     AiEndpointFactory,
     ChatReplyFactory,
     FakeAiFactory,
@@ -43,8 +46,9 @@ def enricher_over(fake: FakeTransport) -> AiDetails:
     return AiDetails(ChatClient(fake.session(), sleep=FakeWaits().sleep))
 
 
-def ask_about_night_drive(tmp_path: Path, ai: AiEndpoint | None = None) -> EnrichTrack:
-    return EnrichTrackFactory.night_drive_video(tmp_path, ai or AiEndpointFactory.deepseek())
+def ask_about_night_drive(tmp_path: Path, *ai: AiEndpoint) -> EnrichTrack:
+    """The ask about *Night Drive*, of the providers `ai`, or of DeepSeek alone."""
+    return EnrichTrackFactory.night_drive_video(tmp_path, *(ai or (AiEndpointFactory.deepseek(),)))
 
 
 def enrich(fake: FakeTransport, tmp_path: Path) -> Enriched:
@@ -242,18 +246,111 @@ def test_a_provider_that_cannot_be_reached_is_a_network_failure(tmp_path: Path) 
     assert KEY not in str(unreached.value)
 
 
+# Several providers, asked in turn
+
+
+def _deepseek_then_ollama(tmp_path: Path) -> EnrichTrack:
+    return ask_about_night_drive(tmp_path, AiEndpointFactory.deepseek(), AiEndpointFactory.ollama())
+
+
+def _answering(first: Reply | Exception, second: Reply | Exception) -> FakeTransport:
+    """A fake where DeepSeek answers with `first` and a local Ollama with `second`."""
+    return FakeTransport().answer(CHAT, first).answer(OLLAMA_CHAT, second)
+
+
+def test_the_first_provider_that_answers_is_the_only_one_asked(tmp_path: Path) -> None:
+    fake = _answering(ChatReplyFactory.night_drive(), ChatReplyFactory.album())
+
+    answer = enricher_over(fake).enrich(_deepseek_then_ollama(tmp_path))
+
+    assert answer.values == NIGHT_DRIVE
+    assert (answer.ai_answered, answer.ai_failures) == ("deepseek", ())
+    assert fake.urls() == [CHAT]
+
+
+@pytest.mark.parametrize(
+    ("first", "kind"),
+    [
+        (requests.ConnectionError("down"), AiFailureKind.UNREACHABLE),
+        (Reply(429, {"Retry-After": "1"}), AiFailureKind.BUSY),
+        (Reply(503), AiFailureKind.BUSY),
+        (Reply(401), AiFailureKind.REFUSED),
+        (Reply(404), AiFailureKind.UNUSABLE),
+        (ChatReplyFactory.saying("not json"), AiFailureKind.UNUSABLE),
+    ],
+    ids=[
+        "unreachable",
+        "rate limited",
+        "failing",
+        "a refused key",
+        "a wrong model",
+        "a bad answer",
+    ],
+)
+def test_a_provider_that_gives_no_answer_to_use_is_passed_over_for_the_next(
+    tmp_path: Path, first: Reply | Exception, kind: AiFailureKind
+) -> None:
+    fake = _answering(first, ChatReplyFactory.night_drive())
+
+    answer = enricher_over(fake).enrich(_deepseek_then_ollama(tmp_path))
+
+    assert answer.values == NIGHT_DRIVE
+    assert answer.ai_answered == "ollama"
+    assert answer.ai_failures == (AiFailure(provider="deepseek", kind=kind),)
+
+
+def test_a_busy_provider_with_another_after_it_is_not_waited_for(tmp_path: Path) -> None:
+    waits = FakeWaits()
+    fake = _answering(Reply(429, {"Retry-After": "20"}), ChatReplyFactory.night_drive())
+
+    AiDetails(ChatClient(fake.session(), sleep=waits.sleep)).enrich(_deepseek_then_ollama(tmp_path))
+
+    assert fake.urls() == [CHAT, OLLAMA_CHAT]
+    assert waits.pauses == []
+
+
+def test_providers_that_all_refuse_are_a_refusal_naming_each(tmp_path: Path) -> None:
+    fake = _answering(Reply(401), Reply(403))
+
+    answer = enricher_over(fake).enrich(_deepseek_then_ollama(tmp_path))
+
+    assert answer.status is EnrichStatus.REFUSED
+    assert answer.message.startswith("No AI provider answered. 1. ")
+    assert " 2. " in answer.message
+    assert [each.kind for each in answer.ai_failures] == [AiFailureKind.REFUSED] * 2
+
+
+def test_providers_that_refuse_or_answer_badly_are_invalid(tmp_path: Path) -> None:
+    fake = _answering(Reply(401), Reply(404))
+
+    answer = enricher_over(fake).enrich(_deepseek_then_ollama(tmp_path))
+
+    assert answer.status is EnrichStatus.INVALID
+
+
+def test_providers_none_of_which_answer_are_a_network_failure_if_any_was_unreachable(
+    tmp_path: Path,
+) -> None:
+    fake = _answering(Reply(401), requests.ConnectionError(f"{OLLAMA_CHAT} {KEY}"))
+
+    with pytest.raises(NetworkError, match="No AI provider answered") as failed:
+        enricher_over(fake).enrich(_deepseek_then_ollama(tmp_path))
+
+    assert KEY not in str(failed.value)
+
+
 # What the enricher is asked with
 
 
 def test_an_ask_without_a_provider_is_a_fault_of_the_caller(tmp_path: Path) -> None:
-    request = EnrichTrackFactory.night_drive_video(tmp_path, None)
+    request = EnrichTrackFactory.night_drive_video(tmp_path)
 
     with pytest.raises(ValueError, match="text and a provider"):
         enricher_over(FakeTransport()).enrich(request)
 
 
 def test_an_ask_without_the_videos_text_is_a_fault_of_the_caller(tmp_path: Path) -> None:
-    request = EnrichTrack(ai=AiEndpointFactory.deepseek(), folder=str(tmp_path))
+    request = EnrichTrack(ai=(AiEndpointFactory.deepseek(),), folder=str(tmp_path))
 
     with pytest.raises(ValueError, match="text and a provider"):
         enricher_over(FakeTransport()).enrich(request)

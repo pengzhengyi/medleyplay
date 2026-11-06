@@ -14,6 +14,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.enrichment import ENRICH_KIND, EnrichmentService, enrich_target
 from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.ai import ProviderFailure
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin
 from medleyplay.domain.enrichers import AI_DETAILS, ASK_AGAIN_AFTER
@@ -22,7 +23,7 @@ from medleyplay.domain.jobs import JobState, JobView
 from medleyplay.domain.segments import SongRow
 from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import AiSuggestionRow, EnricherAskRow
-from tests.support.ai import DEEPSEEK, KEY
+from tests.support.ai import DEEPSEEK, KEY, OLLAMA
 from tests.support.enrichment import AI_PAUSE, SETTLE, Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -53,8 +54,13 @@ def enriching(
 ) -> Iterator[Enriching]:
     """The services around a running `reader` plugin, with Alice having set DeepSeek up."""
     with running_enrichment(units, clock, tmp_path / "data") as running:
-        running.ai.save(alice, DEEPSEEK, "deepseek-flash", KEY)
+        running.ai.add(alice, DEEPSEEK, "deepseek-flash", KEY)
         yield running
+
+
+def _remove_providers(enriching: Enriching, alice: Account) -> None:
+    for each in enriching.ai.providers(alice):
+        enriching.ai.remove(alice, each.id)
 
 
 def _suggested(enriching: Enriching, who: Account, track_id: TrackId) -> JobView:
@@ -199,6 +205,33 @@ def test_the_job_is_lent_the_provider_with_its_key_the_text_and_the_file_name(
     }
 
 
+def test_the_job_is_lent_every_provider_in_the_order_they_are_asked(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, OLLAMA, "llama3.2", None)
+    track_id = enriching.add_track_with_text("Echo")
+
+    _suggested(enriching, alice, track_id)
+
+    assert f"provider={DEEPSEEK} deepseek-flash key=True | {OLLAMA} llama3.2 key=False" in str(
+        _suggestion(enriching, track_id)[Field.ALBUM]
+    )
+
+
+def test_a_provider_passed_over_shows_why_and_the_one_that_answered_shows_no_failure(
+    enriching: Enriching, alice: Account, clock: FakeClock
+) -> None:
+    ollama = enriching.ai.add(alice, OLLAMA, "llama3.2", None)
+    track_id = enriching.add_track_with_text("Second")
+
+    _suggested(enriching, alice, track_id)
+
+    deepseek, answered = enriching.ai.providers(alice)
+    assert (deepseek.failure, deepseek.failed_at) == (ProviderFailure.REFUSED, clock.now)
+    assert (answered.id, answered.failure) == (ollama.id, None)
+    assert _suggestion(enriching, track_id) == NIGHT_DRIVE_SUGGESTION
+
+
 def test_the_description_is_cut_before_it_is_sent(enriching: Enriching, alice: Account) -> None:
     track_id = enriching.add_track_with_text("Echo", "d" * 7_000)
 
@@ -232,8 +265,8 @@ def test_the_key_is_in_no_job_row_and_no_view_of_a_job(
 def test_a_local_provider_without_a_key_is_lent_with_none(
     enriching: Enriching, alice: Account
 ) -> None:
-    enriching.ai.save(alice, "http://127.0.0.1:11434/v1", "llama3.2", None)
-    enriching.ai.remove_key(alice)
+    _remove_providers(enriching, alice)
+    enriching.ai.add(alice, OLLAMA, "llama3.2", None)
     track_id = enriching.add_track_with_text("Echo")
 
     _suggested(enriching, alice, track_id)
@@ -283,7 +316,7 @@ def _row(start_ms: int, title: str) -> SongRow:
 def test_nothing_is_eligible_until_the_provider_is_set_up(
     enriching: Enriching, alice: Account
 ) -> None:
-    enriching.ai.remove(alice)
+    _remove_providers(enriching, alice)
     track_id = enriching.add_track_with_text("Night Drive")
 
     assert enriching.enrichment.eligible(NAME) == []
@@ -298,7 +331,7 @@ def test_removing_the_provider_fails_a_queued_job_instead_of_asking(
     enriching.online.online = False
     track_id = enriching.add_track_with_text("Night Drive")
     job = enriching.enrichment.find_details(alice, track_id, NAME)
-    enriching.ai.remove(alice)
+    _remove_providers(enriching, alice)
 
     enriching.online.online = True
     enriching.runner.wake()
@@ -384,7 +417,7 @@ def test_nothing_is_asked_unless_someone_asks(
     enriching: Enriching, alice: Account, clock: FakeClock
 ) -> None:
     enriching.add_track_with_text("Night Drive")
-    enriching.ai.save(alice, DEEPSEEK, "deepseek-reasoner", None)
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-reasoner", None)
     clock.advance(timedelta(days=3))
     time.sleep(SETTLE)
 
@@ -398,7 +431,7 @@ def test_the_enricher_is_off_when_its_plugin_is_off(
         started_plugins(units, clock, "tinytag-tags") as plugins,
         running_enrichment(units, clock, tmp_path / "data") as running,
     ):
-        running.ai.save(alice, DEEPSEEK, "deepseek-flash", KEY)
+        running.ai.add(alice, DEEPSEEK, "deepseek-flash", KEY)
         track_id = running.add_track_with_text("Night Drive")
         off = EnrichmentService(units, clock, plugins, running.jobs, running.kind)
 
@@ -562,6 +595,22 @@ def test_a_failure_that_would_show_the_key_shows_it_redacted(
     assert KEY not in waiting.job.failure_message
     assert "<redacted>" in waiting.job.failure_message
     assert KEY not in caplog.text
+
+
+def test_a_failure_that_would_show_the_keys_of_several_providers_shows_none(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-reasoner", "sk-second5678")
+    track_id = enriching.add_track_with_text("Leak")
+    job = enriching.enrichment.find_details(alice, track_id, NAME)
+
+    waiting = enriching.wait_for(
+        job.id, JobState.WAITING, until=lambda view: view.job.failure_kind is not None
+    )
+
+    assert KEY not in waiting.job.failure_message
+    assert "sk-second5678" not in waiting.job.failure_message
+    assert waiting.job.failure_message.count("<redacted>") == 2
 
 
 def test_the_key_is_in_no_failure_and_no_log_of_any_job(

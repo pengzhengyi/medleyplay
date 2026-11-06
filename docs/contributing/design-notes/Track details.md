@@ -285,7 +285,7 @@ config file turns them on, since each contacts a site or a provider.
   no proxy, since neither is the household's Bilibili route.
 - **The first refusal stops the enricher.** When the site refuses a request (an
   HTTP 403 or 412, or one of its risk-control codes, such as 352 or 412, in
-  yt-dlp's error, MusicBrainz's 403, or the AI provider's 401 or 403), the Job
+  yt-dlp's error, MusicBrainz's 403, or a 401 or 403 from every AI provider), the Job
   fails as *refused*, every Job of that enricher that
   hasn't started fails with a message saying why, and nothing more is asked until
   an admin resets it in Settings. The stopped state is kept in the database. A
@@ -376,8 +376,12 @@ answer as suggestions. It never changes what a Track shows: the household takes 
 suggestion with one click in *Edit details*, or loads a suggested song list in the
 songs editor.
 
-- **The provider is the household's choice,** set by an admin in Settings → AI: a
-  base URL, a model, and a key. One hand-written client on `requests` speaks the
+- **The providers are the household's choice,** set by an admin in Settings → AI:
+  each a base URL, a model, and a key, up to 5, in the order they are asked. Each
+  saved provider is a card that opens to its address and model as read-only
+  fields, with *Change model*, *Replace key*, and *Remove*, which keep its place;
+  a drag handle or the up and down buttons reorder the cards. One hand-written
+  client on `requests` speaks the
   OpenAI chat protocol, so it works unchanged with DeepSeek, OpenAI, Anthropic's
   compatible endpoint, and a local Ollama; the section offers each as a preset
   that fills the base URL and a model. It sends `POST {base_url}/chat/completions`
@@ -386,14 +390,18 @@ songs editor.
   answer, and uses nothing only some providers accept: no JSON schema, no tools,
   no streaming. A base URL is `http` or `https` with no login, query, or fragment,
   and `http` only for an address on the machine itself.
-- **The key is a secret.** It is kept in the Keychain, as logins and proxies are,
-  and the database keeps only whether there is one. The API takes it as a secret
-  and never answers it, so Settings shows that a key is set and can replace or
-  remove it. It reaches the Job process in memory with the Job's start, in the one
-  header of the request, never in a Job's request, a log, a message, or an error;
-  every message of a Job is redacted of it again. A refused setting answers 422
-  without repeating what was sent. A provider on the machine itself, such as
-  Ollama, needs no key.
+- **A key is a secret.** It is kept in the Keychain, as logins and proxies are,
+  under a name of its own that the provider's row keeps; the provider set up when
+  only one could be keeps `ai:key`, so no migration touches the Keychain. The API
+  takes a key as a secret and never answers it, so a card shows only that a key is
+  set. Removing a provider removes its row, then deletes its key; a key a crash
+  leaves behind is named by no row and read by nothing. Every key reaches the Job
+  process in memory with the Job's start, each in the one header of its request,
+  never in a Job's request, a log, a message, or an error; every message of a Job
+  is redacted of each again. A refused setting answers 422 without repeating what
+  was sent. A provider on the machine itself, such as Ollama, needs no key. A
+  provider whose key the Keychain no longer holds is skipped and marked *Key
+  missing* on its card.
 - **What is sent.** Only the Track's video text (title, description, and chapters,
   wherever the text came from), its file's name, its length, and the details it
   shows. The description is cut to its first 6,000 characters, and Settings says
@@ -408,13 +416,18 @@ songs editor.
   for once more, showing the model its own answer and the fields that failed; if
   that fails too, the Job fails as an invalid answer, and the Track counts as asked.
   An answer cut off at its length bound, or empty, is invalid at once.
-- **Failures.** A 401 or 403 means the key or the account is wrong: the enricher
-  stops, as a site's refusal stops one, with a message to check the key, and an
-  admin resets it in Settings once it is fixed. A 429 or 5xx is waited out as long
-  as `Retry-After` says (5 seconds without it), up to 3 tries and at most 30
-  seconds a wait, and then fails the Job as a network failure, which waits and
-  tries again later. A timeout or lost connection is a network failure. Another
-  4xx is an invalid answer that says to check the base URL and the model.
+- **Failures, and the next provider.** A provider that can't be reached, stays
+  busy, refuses the key (401 or 403), or answers with nothing to use (another 4xx,
+  or an answer invalid even when asked again) is passed over, and the next is
+  asked. A 429 or 5xx is waited out as long as `Retry-After` says (5 seconds
+  without it), up to 3 tries and at most 30 seconds a wait, only by the last
+  provider; one with another after it is passed over at once. When none answers, a
+  refusal by every provider stops the enricher, as a site's refusal stops one,
+  until an admin resets it; any that couldn't be reached or stayed busy makes it a
+  network failure, which waits and tries again later; otherwise the Job fails as
+  an invalid answer. Why each provider passed over failed is kept on its row, with
+  when, until it answers again, and its card shows it, such as *Key refused 2 hr.
+  ago*, so a broken first provider shows rather than hiding behind the next.
 - **Which Tracks are asked for.** A Track that has video text, from the site, a
   file beside it, or the household, and is not a segment, once the provider is set
   up. Asked once a day per Track and text: the subject kept is a hash of the
@@ -449,10 +462,12 @@ songs editor.
 | `PUT /api/enrichers/{name}/mode` | Admin | Sets the mode, `manual`, `next`, or `all`; answers the enricher, and with `all` queues every eligible Track first |
 | `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |
 | `POST /api/enrichers/{name}/reset` | Admin | Lets a stopped enricher be asked again; 204, also when it was not stopped |
-| `GET /api/ai` | Admin | The provider's base URL, model, and whether it has a key, or null; the presets; how much of a description is sent |
-| `PUT /api/ai` | Admin | Sets the base URL and model, and the key when one is given; 422 never repeats the body |
-| `DELETE /api/ai/key` | Admin | Forgets the key and keeps the base URL and model |
-| `DELETE /api/ai` | Admin | Forgets the provider and its key; 204, also when none was set |
+| `GET /api/ai` | Admin | The providers in order: each one's id, base URL, model, whether it has a key, and why it last failed; the presets; the limits |
+| `POST /api/ai/providers` | Admin | Adds a provider after the others, with its key when it needs one; 409 for one set up already or one too many; 422 never repeats the body |
+| `PUT /api/ai/providers/{id}/key` | Admin | Replaces the provider's key, keeping its place |
+| `PUT /api/ai/providers/{id}/model` | Admin | Asks another model of the provider, keeping its place and key |
+| `PUT /api/ai/order` | Admin | Asks the providers in the order of the ids given; 409 when they are not every provider once |
+| `DELETE /api/ai/providers/{id}` | Admin | Forgets the provider and deletes its key; 204, also when it is gone |
 
 Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 `genre`.
@@ -496,7 +511,8 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
   stopping the enricher. The AI client runs over a fake `requests` transport as well:
   the request body and URL for each provider's base URL, a key only in the header,
   an answer valid, invalid then valid, and invalid twice, one cut off, a 401 and a
-  429 and a lost connection, and a key never in a message or a log. In real Jobs,
+  429 and a lost connection, each passing over to the next provider, and no key
+  ever in a message or a log. In real Jobs,
   the suggestion is recorded and shown nowhere, replaced by the next, and a
   refused key stops the enricher. No test contacts a site, MusicBrainz, or a model.
 

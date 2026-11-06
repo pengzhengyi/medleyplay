@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict
 from medleyplay.plugin_api import (
     ENRICH_TRACK,
     MAX_COVER_BYTES,
+    AiFailure,
     EnrichStatus,
     EnrichTrack,
     ShownDetail,
@@ -61,7 +62,10 @@ class EnrichJob(_Model):
 
 
 class EnrichedTrack(_Model):
-    """What the enricher found: values and songs, or the video's text, and a copy of its cover."""
+    """What the enricher found: values and songs, or the video's text, and a copy of its cover.
+
+    `ai_answered` and `ai_failures` say which AI provider answered and which failed first.
+    """
 
     enricher: str
     subject: str
@@ -69,6 +73,8 @@ class EnrichedTrack(_Model):
     video_text: VideoText | None = None
     songs: tuple[SuggestedSong, ...] = ()
     cover: CoverFile | None = None
+    ai_answered: str | None = None
+    ai_failures: tuple[AiFailure, ...] = ()
 
 
 def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
@@ -104,6 +110,8 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
         video_text=answer.video_text,
         songs=answer.songs,
         cover=copy,
+        ai_answered=answer.ai_answered,
+        ai_failures=answer.ai_failures,
     )
 
 

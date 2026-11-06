@@ -46,9 +46,10 @@ For `ai-details`, the title of the video text says how it answers:
 | `Invalid` | invalid |
 | `Down` | a `NetworkError` |
 | `Broken` | a fault |
-| `Leak` | a `NetworkError` that holds the key it was given |
+| `Leak` | a `NetworkError` that holds every key it was given |
 | `BadSongs` | a title, and songs whose starts fall |
-| `Echo` | the album *echo*, naming the text, the provider, and whether it has a key |
+| `Echo` | the album *echo*, naming the text, each provider, and whether it has a key |
+| `Second` | *Night Drive*, as the last provider, after the first refused |
 | any other | the title *Night Drive*, the artist *Blue Room*, an album, and a year |
 """
 
@@ -58,6 +59,8 @@ from typing import Final
 
 from medleyplay.plugin_api import (
     TRACK_ENRICHER,
+    AiFailure,
+    AiFailureKind,
     Chapter,
     Enriched,
     EnrichStatus,
@@ -186,16 +189,24 @@ class Suggester:
                 raise NetworkError(message)
             case "Echo":
                 return Enriched(values={"album": _echo_ai(request)})
+            case "Second":
+                refused = AiFailure(provider=request.ai[0].id, kind=AiFailureKind.REFUSED)
+                return _NIGHT_DRIVE.model_copy(
+                    update={"ai_answered": request.ai[-1].id, "ai_failures": (refused,)}
+                )
         return _SUGGESTIONS.get(title, _NIGHT_DRIVE)
 
 
 def _key_of(request: EnrichTrack) -> str:
-    return request.ai.key or "no key" if request.ai is not None else "no provider"
+    return " and ".join(each.key or "no key" for each in request.ai) or "no provider"
 
 
 def _echo_ai(request: EnrichTrack) -> str:
-    ai, text = request.ai, request.text
-    provider = "none" if ai is None else f"{ai.base_url} {ai.model} key={ai.key is not None}"
+    text = request.text
+    provider = (
+        " | ".join(f"{ai.base_url} {ai.model} key={ai.key is not None}" for ai in request.ai)
+        or "none"
+    )
     words = "none" if text is None else f"{len(text.description)} {len(text.chapters)}"
     return f"provider={provider} text={words} file={request.file_name or 'none'}"
 

@@ -91,11 +91,11 @@ class Proxies(Protocol):
         ...
 
 
-class AiProvider(Protocol):
-    """Where the runner finds the AI provider for a Job, as `AiService` provides."""
+class AiProviders(Protocol):
+    """Where the runner finds the AI providers for a Job, as `AiService` provides."""
 
-    def endpoint(self) -> AiEndpoint | None:
-        """Return the provider with its key, or `None` when it is not set up."""
+    def endpoints(self) -> tuple[AiEndpoint, ...]:
+        """Return the providers in order with their keys, or none when none is set up."""
         ...
 
 
@@ -138,7 +138,7 @@ class _Running:
     login: _Login | None = None
     proxy: str | None = None
     lane: str | None = None
-    ai: AiEndpoint | None = None
+    ai: tuple[AiEndpoint, ...] = ()
     thread: threading.Thread | None = None
     held: bool = False
     """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
@@ -147,7 +147,8 @@ class _Running:
 
     def redact(self, message: str) -> str:
         text = redact(message, self.login.lent.text if self.login else None)
-        text = redact_key(text, self.ai.key if self.ai else None)
+        for endpoint in self.ai:
+            text = redact_key(text, endpoint.key)
         return redact_proxy(text, self.proxy)
 
 
@@ -169,7 +170,7 @@ class JobRunner:
         memory_limit: int = JOB_MEMORY_LIMIT,
         logins: Logins | None = None,
         proxies: Proxies | None = None,
-        ai: AiProvider | None = None,
+        ai: AiProviders | None = None,
         events: Events | None = None,
         network_failed: Callable[[], None] | None = None,
     ) -> None:
@@ -373,7 +374,7 @@ class JobRunner:
         try:
             login = self._lend(kind, login_account, work_dir)
             proxy = self._proxy(kind, lane_rules)
-            ai = self._ai_provider(lane_rules)
+            ai = self._ai_providers(lane_rules)
             process = self._spawn(work_dir)
         except KeychainUnavailableError as error:
             # The Keychain can be locked or prompting; it usually answers again soon.
@@ -425,11 +426,11 @@ class JobRunner:
             return None
         return self._proxies.current(site)
 
-    def _ai_provider(self, lane: Lane | None) -> AiEndpoint | None:
-        # The Job keeps the provider it starts with; its key goes to its process, never to disk.
+    def _ai_providers(self, lane: Lane | None) -> tuple[AiEndpoint, ...]:
+        # The Job keeps the providers it starts with; their keys go to its process, never to disk.
         if lane is None or not lane.lends_ai or self._ai is None:
-            return None
-        return self._ai.endpoint()
+            return ()
+        return self._ai.endpoints()
 
     def _lend(
         self, kind: AnyJobKind, account_id: AccountId | None, work_dir: Path

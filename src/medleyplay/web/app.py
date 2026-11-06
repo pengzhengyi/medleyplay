@@ -138,7 +138,7 @@ def _handle_domain_error(_: Request, error: MedleyplayError) -> JSONResponse:
 
 
 async def _handle_invalid_request(request: Request, error: RequestValidationError) -> Response:
-    """Answer 422 as FastAPI does, except for a proxy or the AI provider: their bodies hold secrets.
+    """Answer 422 as FastAPI does, except for a proxy or an AI provider: their bodies hold secrets.
 
     FastAPI echoes the input of each error, which for a body that is missing a key
     is the whole body.
@@ -146,13 +146,25 @@ async def _handle_invalid_request(request: Request, error: RequestValidationErro
     if request.url.path.startswith(PROXIES_PATH):
         detail = 'The body must be JSON like {"url": "socks5h://127.0.0.1:7890"}.'
         return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
-    if request.url.path == AI_PATH:
-        detail = (
-            'The body must be JSON like {"base_url": "https://api.deepseek.com", '
-            '"model": "deepseek-flash", "key": "…"}, with a key only to set a new one.'
+    if request.url.path.startswith(AI_PATH):
+        return JSONResponse(
+            {"detail": _ai_body_like(request.url.path)},
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
-        return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
     return await request_validation_exception_handler(request, error)
+
+
+def _ai_body_like(path: str) -> str:
+    if path.endswith("/key"):
+        return 'The body must be JSON like {"key": "…"}.'
+    if path.endswith("/model"):
+        return 'The body must be JSON like {"model": "deepseek-flash"}.'
+    if path.endswith("/order"):
+        return 'The body must be JSON like {"ids": ["…", "…"]}, naming every provider once.'
+    return (
+        'The body must be JSON like {"base_url": "https://api.deepseek.com", '
+        '"model": "deepseek-flash", "key": "…"}, with a key only for a provider that needs one.'
+    )
 
 
 async def _refuse_cross_origin_writes(

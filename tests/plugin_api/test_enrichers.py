@@ -122,22 +122,31 @@ def test_a_suggested_song_does_not_start_before_the_file() -> None:
         SuggestedSong(start_ms=-1, title="Intro")
 
 
+def _deepseek() -> AiEndpoint:
+    return AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234")
+
+
 def test_an_ask_for_a_suggestion_carries_the_videos_text_and_the_provider(tmp_path: Path) -> None:
     ask = EnrichTrack(
         text=VideoText(title="Night Drive / Blue Room"),
-        ai=AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234"),
+        ai=(
+            AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234"),
+        ),
         folder=str(tmp_path),
     )
 
     assert ask.text is not None
     assert ask.text.title == "Night Drive / Blue Room"
-    assert ask.ai is not None
-    assert (ask.ai.base_url, ask.ai.model) == ("https://api.deepseek.com", "deepseek-flash")
+    assert [(each.base_url, each.model) for each in ask.ai] == [
+        ("https://api.deepseek.com", "deepseek-flash")
+    ]
 
 
 def test_an_ask_shows_no_key_when_printed(tmp_path: Path) -> None:
     ask = EnrichTrack(
-        ai=AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234"),
+        ai=(
+            AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234"),
+        ),
         folder=str(tmp_path),
     )
 

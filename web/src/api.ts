@@ -197,12 +197,19 @@ export interface ProxySetting {
   readonly saved_at: string;
 }
 
-/** The AI provider as the server shows it: its address and model, never its key. */
+/** Why an AI provider last gave no answer to use. */
+export type AiFailure = "unreachable" | "busy" | "refused" | "unusable" | "key_missing";
+
+/** An AI provider as the server shows it: which it is, its address and model, never its key. */
 export interface AiProvider {
+  readonly id: string;
   readonly base_url: string;
   readonly model: string;
   readonly has_key: boolean;
   readonly saved_at: string;
+  /** Why it last gave no answer to use, at `failed_at`, until it answers again. */
+  readonly failure: AiFailure | null;
+  readonly failed_at: string | null;
 }
 
 /** A provider to start from. */
@@ -212,11 +219,12 @@ export interface AiPreset {
   readonly model: string;
 }
 
-/** The provider, or `null` when it is not set up, and the presets to start from. */
+/** The providers in the order they are asked, the presets to start from, and the limits. */
 export interface AiSetting {
-  readonly provider: AiProvider | null;
+  readonly providers: readonly AiProvider[];
   readonly presets: readonly AiPreset[];
-  /** The most characters of a video's description sent to the provider. */
+  readonly max_providers: number;
+  /** The most characters of a video's description sent to a provider. */
   readonly max_description: number;
 }
 
@@ -573,17 +581,25 @@ export const api = {
   saveProxy: (site: string, url: string) =>
     call<ProxySetting>("PUT", `/api/proxies/${site}`, { url }),
   removeProxy: (site: string) => call<undefined>("DELETE", `/api/proxies/${site}`),
-  /** The AI provider, or `null` when none is set up; admins only. */
+  /** The AI providers in the order they are asked; admins only. */
   ai: () => call<AiSetting>("GET", "/api/ai"),
-  /** Set the provider's address and model, and its key when one is given; admins only. */
-  saveAi: (baseUrl: string, model: string, key?: string) =>
-    call<AiProvider>("PUT", "/api/ai", {
+  /** Add a provider after the others, with its key when it needs one; admins only. */
+  addAiProvider: (baseUrl: string, model: string, key?: string) =>
+    call<AiProvider>("POST", "/api/ai/providers", {
       base_url: baseUrl,
       model,
       ...(key === undefined ? {} : { key }),
     }),
-  /** Forget the provider's key and keep its address and model; admins only. */
-  removeAiKey: () => call<AiProvider>("DELETE", "/api/ai/key"),
+  /** Replace a provider's key, keeping its place; admins only. */
+  replaceAiKey: (id: string, key: string) =>
+    call<AiProvider>("PUT", `/api/ai/providers/${id}/key`, { key }),
+  /** Ask another model of a provider, keeping its place and key; admins only. */
+  changeAiModel: (id: string, model: string) =>
+    call<AiProvider>("PUT", `/api/ai/providers/${id}/model`, { model }),
+  /** Ask the providers in the order of `ids`, which names each once; admins only. */
+  reorderAi: (ids: readonly string[]) => call<AiProvider[]>("PUT", "/api/ai/order", { ids }),
+  /** Forget a provider and delete its key; admins only. */
+  removeAiProvider: (id: string) => call<undefined>("DELETE", `/api/ai/providers/${id}`),
   /** Where another device on the network can reach the server: addresses, then names. */
   addresses: () => call<{ addresses: string[] }>("GET", "/api/addresses"),
   /** The enricher's state, and the Tracks it may be asked about. */

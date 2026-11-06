@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBytes, formatLength, formatTime } from "./format";
+import { formatBytes, formatLength, formatQueueLength, formatTime } from "./format";
 
 describe("formatTime", () => {
   it("writes minutes and two-digit seconds", () => {
@@ -23,6 +23,36 @@ describe("formatLength", () => {
 
   it("leaves the length out when it is unknown", () => {
     expect(formatLength(2, 0)).toBe("2 songs");
+  });
+});
+
+describe("formatQueueLength", () => {
+  const now = new Date(2026, 10, 6, 14, 45);
+
+  it("writes what is queued and, while it plays on, when it ends on the clock", () => {
+    const at = new Date(2026, 10, 6, 16, 30);
+
+    expect(formatQueueLength(12, 6_300_000, { now, at })).toMatch(
+      /^12 songs, 1 hr 45 min, ending around 4:30\sPM$/u,
+    );
+  });
+
+  it("names the day a queue ending after today ends on", () => {
+    const at = new Date(2026, 10, 11, 2, 12);
+
+    expect(formatQueueLength(152, 438_540_000, { now, at })).toMatch(
+      /^152 songs, 121 hr 49 min, ending around Wed 2:12\sAM$/u,
+    );
+  });
+
+  it("writes only what is queued when it ends a week or more away", () => {
+    const at = new Date(2026, 10, 13, 15, 0);
+
+    expect(formatQueueLength(900, 605_000_000, { now, at })).toBe("900 songs, 168 hr 3 min");
+  });
+
+  it("writes only what is queued when it won't end on its own", () => {
+    expect(formatQueueLength(12, 6_300_000)).toBe("12 songs, 1 hr 45 min");
   });
 });
 

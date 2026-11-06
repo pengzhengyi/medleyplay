@@ -48,6 +48,13 @@ describe("the queue", () => {
     ).toBeInTheDocument();
   });
 
+  it("says how many songs are queued and how long they play", async () => {
+    await playingIntro();
+
+    const queue = screen.getByRole("region", { name: "Up next" });
+    expect(within(queue).getByText(/^2 songs, 6 min/u)).toBeInTheDocument();
+  });
+
   it("removes what plays next", async () => {
     await playingIntro();
 

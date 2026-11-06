@@ -21,7 +21,7 @@ down_revision: str | None = "0022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_KEY_SECRET = "ai:key"  # noqa: S105 -- the name of a Keychain item, not a key
+_KEY_SECRET = "ai:key"  # noqa: S105  # nosec B105 -- the name of a Keychain item, not a key
 
 
 def upgrade() -> None:

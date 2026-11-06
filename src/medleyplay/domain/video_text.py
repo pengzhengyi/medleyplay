@@ -143,6 +143,86 @@ def read_song_list(text: str) -> tuple[Song, ...]:
     return tuple(songs)
 
 
+@dataclass(frozen=True)
+class LineProblem:
+    """Why a line of a pasted list is no song, or with `line` `None`, why the list isn't one."""
+
+    line: int | None
+    message: str
+
+
+@dataclass(frozen=True)
+class ListCheck:
+    """What a pasted list says: the songs its lines name, and every problem with it."""
+
+    songs: tuple[Song, ...]
+    problems: tuple[LineProblem, ...]
+
+
+def check_song_list(text: str, *, length_ms: int | None = None) -> ListCheck:
+    """Return the songs of a list as it is typed, with every problem it has by line.
+
+    ```text
+    00:00 Intro
+    Night Drive          line 2 has no time
+    03:00 Blue Room
+    02:00 Encore         line 4 starts before the song above
+    ```
+
+    It has no problem exactly when `read_song_list` reads it, and then the same songs,
+    unless a song starts at or after `length_ms`, where a file that long ends.
+    """
+    songs: list[Song] = []
+    problems: list[LineProblem] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        song = _line_song(line)
+        if isinstance(song, str):
+            problems.append(LineProblem(number, song))
+            continue
+        before = songs[-1] if songs else None
+        problems.extend(
+            LineProblem(number, message) for message in _start_problems(song, before, length_ms)
+        )
+        songs.append(song)
+    if len(songs) < MIN_SONGS:
+        problems.append(LineProblem(None, f"A song list has at least {MIN_SONGS} songs."))
+    elif len(songs) > MAX_SONGS:
+        problems.append(LineProblem(None, f"A song list has at most {MAX_SONGS} songs."))
+    return ListCheck(tuple(songs), tuple(problems))
+
+
+def _line_song(line: str) -> Song | str:
+    """Return the song a line of a list names, or why it names none."""
+    if len(line) > MAX_LINE:
+        return "This line is too long for a song."
+    timed = _timed(line)
+    if timed is None:
+        return "This line has no time, such as 3:12."
+    song = _song(*timed)
+    return "This line has no title." if song is None else song
+
+
+def _start_problems(song: Song, before: Song | None, length_ms: int | None) -> list[str]:
+    """Return what is wrong with where `song` starts, after `before`, in a file `length_ms` long."""
+    problems: list[str] = []
+    if before is not None and song.start_ms < before.start_ms:
+        problems.append("This starts before the song above.")
+    elif before is not None and song.start_ms - before.start_ms < MIN_SONG_MS:
+        problems.append("This starts less than a second after the song above.")
+    if length_ms is not None and song.start_ms >= length_ms:
+        problems.append(f"This starts after the file ends, at {_clock(length_ms)}.")
+    return problems
+
+
+def _clock(ms: int) -> str:
+    """Return `ms` as a list writes a time: `5:00`, or `1:02:03` from an hour on."""
+    hours, rest = divmod(ms // 1_000, 3_600)
+    minutes, seconds = divmod(rest, 60)
+    return f"{hours}:{minutes:02}:{seconds:02}" if hours else f"{minutes}:{seconds:02}"
+
+
 def check_songs(songs: Sequence[Song]) -> None:
     """Raise `InvalidInputError` unless `songs` is a song list.
 

@@ -116,6 +116,20 @@ class ListOut(BaseModel):
     songs: list[ListedSongOut]
 
 
+class ProblemOut(BaseModel):
+    """Why a line of a list is no song; with `line` `null`, why the list isn't one."""
+
+    line: int | None
+    message: str
+
+
+class ListCheckOut(BaseModel):
+    """The songs a list names as it is typed, and every problem with it, by line."""
+
+    songs: list[ListedSongOut]
+    problems: list[ProblemOut]
+
+
 class RemovedOut(BaseModel):
     """How many songs were removed."""
 
@@ -151,6 +165,20 @@ def read_list(track_id: RowId, body: ListIn, _: SignedInAccount, service: SongsD
     """Read a song list pasted for the file; 422 names the first line that isn't a song."""
     return ListOut(
         songs=[_listed(song) for song in service.read_list(TrackId(track_id), body.text)]
+    )
+
+
+@router.post("/{track_id}/songs/check")
+def check_list(
+    track_id: RowId, body: ListIn, _: SignedInAccount, service: SongsDep
+) -> ListCheckOut:
+    """Check a song list as it is typed: its songs, and each line that isn't one, and why."""
+    checked = service.check_list(TrackId(track_id), body.text)
+    return ListCheckOut(
+        songs=[_listed(song) for song in checked.songs],
+        problems=[
+            ProblemOut(line=problem.line, message=problem.message) for problem in checked.problems
+        ],
     )
 
 

@@ -106,6 +106,17 @@ values.
   track number at once. The client keeps its own copy of the shown-value rule
   for this; the server and the client are checked against one table of cases
   (`tests/support/shown_details.json`), so the two can't drift.
+- **How the dialog lays it out:** the cover large at the side, with the ways to
+  fill the details in under it, and the fields beside them. Over the cover, on
+  hover or focus, and always on a touch screen, are *Save image*, *Replace*,
+  and, for the household's own cover, *Remove*. Each value's origin is a small
+  tag, a mark and a word such as *BV* or *MB*, which says *From the video* in
+  full in its tooltip and to screen readers. Each other origin's value carries
+  its origin's mark.
+- **Looking the song up from the dialog:** a button for each lookup the song
+  may be asked about, as in its menu, sits under the cover, and how the one
+  asked goes shows beside them. Once it is done, the dialog reads the details
+  again, keeping what was typed, so the new values show at once.
 - **Saving sends only what changed,** each value set or dropped, so an edit of
   one field never overwrites another made meanwhile on another device. A value
   the household types or chooses that reads as what would show anyway, such as

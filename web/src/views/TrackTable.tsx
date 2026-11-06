@@ -11,9 +11,6 @@ import {
   CaretDownIcon,
   CaretRightIcon,
   CaretUpIcon,
-  CheckIcon,
-  CircleNotchIcon,
-  ClockIcon,
   HeartIcon,
   ListPlusIcon,
   PlayIcon,
@@ -21,7 +18,6 @@ import {
   ShuffleIcon,
   SlidersHorizontalIcon,
   StarIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react";
 import {
   type ColumnDef,
@@ -64,6 +60,7 @@ import {
   SongFilters,
 } from "./SongFilters";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
+import { STATUS_ICONS } from "./statusIcons";
 
 /** What every cell may need: the page's callbacks, and which Track is playing. */
 interface Meta {
@@ -800,13 +797,6 @@ const COLUMNS: Column[] = [
     },
   },
 ];
-
-const STATUS_ICONS = {
-  looking: <CircleNotchIcon weight="bold" className="spin" aria-hidden />,
-  waiting: <ClockIcon weight="bold" aria-hidden />,
-  done: <CheckIcon weight="bold" aria-hidden />,
-  failed: <WarningCircleIcon weight="fill" aria-hidden />,
-} as const;
 
 /**
  * What lies over a song's cover: a lookup asked about it, or else bars while it plays,

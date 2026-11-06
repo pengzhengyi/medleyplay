@@ -2662,11 +2662,28 @@ dialog.modal::backdrop {
   }
 }
 
-/* Editing a song's details: text across the card, the album's numbers three to a row. */
+/*
+ * Editing a song's details: the cover and the ways to fill it in at the side, the
+ * fields beside them; a title across, the other text two to a row, numbers three.
+ */
 
 .edit-details .card {
-  width: min(32rem, calc(100vw - 2rem));
-  max-height: min(44rem, 90dvh);
+  width: min(56rem, calc(100vw - 2rem));
+  max-height: min(48rem, 92dvh);
+}
+
+.edit-details-body {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.edit-details-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
 }
 
 .edit-details h2 {
@@ -2684,7 +2701,7 @@ dialog.modal::backdrop {
 
 .detail-group {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.6rem 0.75rem;
   margin: 0 0 1rem;
   padding: 0;
@@ -2701,13 +2718,17 @@ dialog.modal::backdrop {
 .detail {
   display: flex;
   flex-direction: column;
-  grid-column: 1 / -1;
+  grid-column: span 3;
   gap: 0.2rem;
   min-width: 0;
 }
 
+.detail-title {
+  grid-column: 1 / -1;
+}
+
 .detail-number {
-  grid-column: auto;
+  grid-column: span 2;
 }
 
 .detail-label {
@@ -2727,56 +2748,176 @@ dialog.modal::backdrop {
   resize: vertical;
 }
 
-/* The cover in Edit details: the image, where it came from, and what to do with it. */
+/* The cover in Edit details: large, its tools over it, where it came from below. */
 
 .cover-box {
   display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  margin: 0 0 1rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.cover-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
 }
 
 .cover-box .cover-box-image {
-  width: 5.5rem;
-  height: 5.5rem;
-  font-size: 2rem;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 1rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 4rem;
+  box-shadow: var(--lift);
 }
 
-.cover-box-actions {
+/* Shown on hover or focus, as a profile picture's are; a touch screen always shows them. */
+.cover-tools {
+  position: absolute;
+  inset: auto 0 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 0.6rem;
-  min-width: 0;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border-radius: 0 0 1rem 1rem;
+  background: linear-gradient(transparent, rgb(0 0 0 / 55%));
+  opacity: 0;
+  transition: opacity 120ms;
 }
 
-.cover-box-origin,
-.cover-box-status {
-  flex-basis: 100%;
+.cover-frame:hover .cover-tools,
+.cover-frame:focus-within .cover-tools {
+  opacity: 1;
 }
 
-.cover-box-status {
-  color: var(--muted);
+@media (hover: none) {
+  .cover-tools {
+    opacity: 1;
+  }
 }
 
-.edit-details .cover-upload,
-.edit-details .cover-remove {
-  width: auto;
+.edit-details .cover-tool {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
   margin: 0;
-  padding: 0.35rem 0.9rem;
-  border-radius: var(--pico-border-radius);
-  font-size: 0.85rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: #1b1f1d;
+  font-size: 1.1rem;
   cursor: pointer;
 }
 
-.edit-details .cover-upload.disabled {
+.edit-details .cover-tool:hover {
+  background: #fff;
+}
+
+.edit-details .cover-tool:focus-visible,
+.edit-details .cover-tool:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.edit-details .cover-tool.disabled {
   opacity: 0.5;
   pointer-events: none;
 }
 
-.edit-details .cover-upload:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.cover-saving {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 1rem;
+  background: rgb(0 0 0 / 45%);
+  color: #fff;
+  font-size: 2rem;
+}
+
+/* Where a value came from: a mark and a word or two, in full on hover. */
+.origin-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.25rem;
+
+  /* Not Pico's full-width help text under a field. */
+  width: fit-content;
+  margin: 0.1rem 0 0;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: help;
+}
+
+.origin-tag.household {
+  color: var(--accent);
+}
+
+/* The ways to fill the details in: a button each, and how the last one goes. */
+.lookup-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lookup-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.edit-details .lookup-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.8rem;
+}
+
+.edit-details .lookup-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.lookup-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.lookup-mark {
+  display: inline-flex;
+  flex: none;
+  margin-top: 0.1rem;
+}
+
+.lookup-status.done {
+  color: var(--accent);
+}
+
+.lookup-status.failed {
+  color: #d1495b;
 }
 
 .cover img {
@@ -2789,7 +2930,7 @@ dialog.modal::backdrop {
 /* Pasting a video's title and description, folded away until wanted. */
 
 .paste-video {
-  margin: 0 0 1rem;
+  margin: 0;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 0.6rem;
@@ -2864,6 +3005,13 @@ dialog.modal::backdrop {
 }
 
 .edit-details .detail-alternative {
+  display: inline-flex;
+
+  /* Its own width, not a share of Pico's joined group. */
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+  width: auto;
   max-width: 100%;
   margin: 0;
   padding: 0.15rem 0.6rem;
@@ -2896,9 +3044,31 @@ dialog.modal::backdrop {
   font-size: 0.9rem;
 }
 
+/* Narrow: the cover above the fields, smaller, beside the ways to fill them in. */
+@media (width <= 44rem) {
+  .edit-details-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .edit-details-side {
+    display: grid;
+    grid-template-columns: 8rem minmax(0, 1fr);
+    gap: 0.75rem 1rem;
+  }
+
+  .edit-details-side .paste-video {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (width <= 30rem) {
-  .detail-group {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .detail {
+    grid-column: 1 / -1;
+  }
+
+  .detail-number {
+    grid-column: span 2;
   }
 }
 

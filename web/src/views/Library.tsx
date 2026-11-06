@@ -6,7 +6,7 @@ import { CloudSlashIcon, KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosph
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type Account, type Track, api } from "../api";
-import { type Lookup, coverStatusOf } from "../library/lookups";
+import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
 import { useStation } from "../library/useStation";
 import { current, repeatAfter } from "../player/queue";
@@ -405,6 +405,12 @@ export function Library({
           onReadVideo={(text) => library.readVideoText(editing.id, text)}
           onSetCover={(image) => library.setCover(editing.id, image)}
           onRemoveCover={() => library.removeCover(editing.id)}
+          findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing))}
+          lookup={library.lookups.get(editing.id)}
+          online={library.mode?.online !== false}
+          onFind={(lookup) => {
+            actions.onFind(lookup, editing);
+          }}
           onClose={() => {
             setEditing(undefined);
           }}

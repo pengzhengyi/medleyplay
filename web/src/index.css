@@ -1564,6 +1564,9 @@ button.icon.heart.on:hover,
   margin: 0.5rem 1.5rem 0 0;
   padding: 1rem 0.75rem;
   overflow: auto;
+
+  /* Scrolling past either end of the queue stops there, rather than moving the page. */
+  overscroll-behavior: contain;
   border-radius: 1.25rem;
   background: var(--surface);
   box-shadow: var(--lift);
@@ -2339,6 +2342,7 @@ dialog.modal::backdrop {
   margin: 0;
   padding: 1.25rem 1.25rem 1rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 1.25rem;
   background: var(--surface);
   box-shadow: var(--float);

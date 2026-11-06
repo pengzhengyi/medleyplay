@@ -1,5 +1,7 @@
 """The AI API: an admin keeps the providers in order, and nothing ever shows a key."""
 
+from collections.abc import Mapping
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -161,7 +163,7 @@ def test_removing_a_provider_answers_204_also_when_it_is_gone_and_forgets_its_ke
     assert secrets.items == {}
 
 
-_ROUTES = [
+_ROUTES: list[tuple[str, str, Mapping[str, object] | None]] = [
     ("GET", "/api/ai", None),
     ("POST", "/api/ai/providers", DEEPSEEK),
     ("PUT", "/api/ai/providers/any/key", {"key": KEY}),
@@ -173,7 +175,11 @@ _ROUTES = [
 
 @pytest.mark.parametrize(("method", "path", "body"), _ROUTES)
 def test_a_member_may_not_use_the_ai_api(
-    client: TestClient, secrets: MemorySecrets, method: str, path: str, body: dict[str, str] | None
+    client: TestClient,
+    secrets: MemorySecrets,
+    method: str,
+    path: str,
+    body: Mapping[str, object] | None,
 ) -> None:
     _as_bob(client)
 
@@ -185,7 +191,7 @@ def test_a_member_may_not_use_the_ai_api(
 
 @pytest.mark.parametrize(("method", "path", "body"), _ROUTES)
 def test_nobody_signed_out_may_use_the_ai_api(
-    client: TestClient, method: str, path: str, body: dict[str, str] | None
+    client: TestClient, method: str, path: str, body: Mapping[str, object] | None
 ) -> None:
     assert client.request(method, path, json=body).status_code == 401
 

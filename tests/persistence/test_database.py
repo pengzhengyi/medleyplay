@@ -383,7 +383,7 @@ def _set_up_deepseek_before_several(connection: Connection, *, has_key: bool) ->
 
 @pytest.mark.parametrize(("has_key", "secret"), [(True, "ai:key"), (False, None)])
 def test_the_provider_set_up_before_several_becomes_the_first_with_its_key_where_it_was(
-    tmp_path: Path, has_key: bool, secret: str | None
+    tmp_path: Path, *, has_key: bool, secret: str | None
 ) -> None:
     engine = make_engine(database_url(tmp_path))
     _migrate_to(engine, "0022")
@@ -415,9 +415,10 @@ def test_one_address_and_model_is_one_provider(tmp_path: Path) -> None:
         " '2026-11-06 00:00:00.000000')"
     )
 
-    with engine.begin() as connection, pytest.raises(IntegrityError):
+    with engine.begin() as connection:
         connection.execute(insert, {"id": "1"})
-        connection.execute(insert, {"id": "2"})
+        with pytest.raises(IntegrityError):
+            connection.execute(insert, {"id": "2"})
     engine.dispose()
 
 

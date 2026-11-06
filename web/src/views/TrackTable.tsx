@@ -11,6 +11,9 @@ import {
   CaretDownIcon,
   CaretRightIcon,
   CaretUpIcon,
+  CheckIcon,
+  CircleNotchIcon,
+  ClockIcon,
   HeartIcon,
   ListPlusIcon,
   PlayIcon,
@@ -18,6 +21,7 @@ import {
   ShuffleIcon,
   SlidersHorizontalIcon,
   StarIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react";
 import {
   type ColumnDef,
@@ -49,6 +53,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
+import type { CoverStatus } from "../library/lookups";
 import { Cover } from "./Cover";
 import {
   type Choice,
@@ -182,6 +187,8 @@ export interface TrackActions extends TrackMenuActions {
   readonly onPlayAll: (playable: readonly Track[], shuffled: boolean) => void;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
   readonly onRate: (track: Track, rating: number | null) => void;
+  /** What the Track's cover shows of a lookup asked about it, if any. */
+  readonly statusOf: (track: Track) => CoverStatus | undefined;
 }
 
 /** The columns a browser shows and their widths, as it last left them. */
@@ -630,8 +637,10 @@ const COLUMNS: Column[] = [
       const { actions, playingId } = meta(table);
       return (
         <div className="title-cell">
-          <Cover cover={track.cover} className="thumb" />
-          {track.id === playingId && <span className="bars" aria-hidden />}
+          <span className="thumb-frame">
+            <Cover cover={track.cover} className="thumb" />
+            <CoverBadge status={actions.statusOf(track)} playing={track.id === playingId} />
+          </span>
           <button
             type="button"
             className="title"
@@ -791,6 +800,43 @@ const COLUMNS: Column[] = [
     },
   },
 ];
+
+const STATUS_ICONS = {
+  looking: <CircleNotchIcon weight="bold" className="spin" aria-hidden />,
+  waiting: <ClockIcon weight="bold" aria-hidden />,
+  done: <CheckIcon weight="bold" aria-hidden />,
+  failed: <WarningCircleIcon weight="fill" aria-hidden />,
+} as const;
+
+/**
+ * What lies over a song's cover: a lookup asked about it, or else bars while it plays,
+ * so the title beside the cover never moves.
+ */
+function CoverBadge({
+  status,
+  playing,
+}: {
+  readonly status: CoverStatus | undefined;
+  readonly playing: boolean;
+}) {
+  if (status !== undefined) {
+    return (
+      <span
+        className={`cover-badge ${status.kind}`}
+        role="img"
+        aria-label={status.label}
+        title={status.label}
+      >
+        {STATUS_ICONS[status.kind]}
+      </span>
+    );
+  }
+  return playing ? (
+    <span className="cover-badge" role="img" aria-label="Playing" title="Playing">
+      <span className="bars" aria-hidden />
+    </span>
+  ) : null;
+}
 
 type Table = ReturnType<typeof useTable<typeof features, Track>>;
 

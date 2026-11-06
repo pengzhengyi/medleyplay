@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
+import type { CoverStatus } from "../library/lookups";
 import { trackOf } from "../testing/server";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
@@ -13,8 +14,13 @@ const TRACKS = [
   trackOf(3, "Outro", { duration_ms: 90_000, rating: 4, favorite: true }),
 ];
 
-function renderTable(tracks: readonly Track[] = TRACKS, playingId?: number) {
+function renderTable(
+  tracks: readonly Track[] = TRACKS,
+  playingId?: number,
+  statuses: ReadonlyMap<number, CoverStatus> = new Map(),
+) {
   const actions: TrackActions = {
+    statusOf: (track) => statuses.get(track.id),
     onPlay: vi.fn(),
     onPlayAll: vi.fn(),
     onPlayNext: vi.fn(),
@@ -113,6 +119,36 @@ describe("the song table", () => {
       "aria-current",
       "true",
     );
+  });
+
+  it("shows the Track playing on its cover, leaving its title where it was", () => {
+    renderTable(TRACKS, 3);
+
+    const outro = screen.getByRole("row", { name: /Outro/u });
+    expect(within(outro).getByRole("img", { name: "Playing" })).toHaveClass("cover-badge");
+  });
+
+  it("shows a lookup on the Track's cover while it runs, and why it failed", () => {
+    renderTable(
+      TRACKS,
+      3,
+      new Map([
+        [1, { kind: "looking", label: "Looking up on MusicBrainz" }],
+        [3, { kind: "failed", label: "Looking up on MusicBrainz failed: No answer." }],
+      ]),
+    );
+
+    const intro = screen.getByRole("row", { name: /Intro/u });
+    const outro = screen.getByRole("row", { name: /Outro/u });
+    const failed = within(outro).getByRole("img", {
+      name: "Looking up on MusicBrainz failed: No answer.",
+    });
+    expect(within(intro).getByRole("img", { name: "Looking up on MusicBrainz" })).toHaveAttribute(
+      "title",
+      "Looking up on MusicBrainz",
+    );
+    expect(failed).toHaveAttribute("title", "Looking up on MusicBrainz failed: No answer.");
+    expect(within(outro).queryByRole("img", { name: "Playing" })).toBeNull();
   });
 
   it("shows what it was given when there are no Tracks", () => {

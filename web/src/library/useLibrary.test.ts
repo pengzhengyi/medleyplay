@@ -421,6 +421,93 @@ describe("finding a song's details online", () => {
     expect(findableBy(result.current, "bilibili-details")).toEqual([2]);
   });
 
+  it("follows the lookup's Job, so the Track says what it is doing until it is done", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+
+    await act(async () => {
+      await result.current.find("musicbrainz", 1);
+    });
+    const asked = result.current.lookups.get(1);
+    act(() => {
+      stream().send("job", { id: 7, kind: "enrich_track", state: "running" });
+    });
+    const running = result.current.lookups.get(1);
+    act(() => {
+      stream().send("job", { id: 7, kind: "enrich_track", state: "succeeded" });
+    });
+
+    expect(asked).toEqual({ enricher: "musicbrainz", state: "queued", message: "" });
+    expect(running?.state).toBe("running");
+    expect(result.current.lookups.get(1)?.state).toBe("succeeded");
+  });
+
+  it("lets a finished lookup go after a moment", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+    await act(async () => {
+      await result.current.find("musicbrainz", 1);
+    });
+
+    act(() => {
+      stream().send("job", { id: 7, kind: "enrich_track", state: "succeeded" });
+      vi.advanceTimersByTime(5_000);
+    });
+
+    expect(result.current.lookups.has(1)).toBe(false);
+  });
+
+  it("says why a lookup's Job failed", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+      "GET /api/jobs/7": {
+        body: { id: 7, state: "failed", failure_message: "MusicBrainz didn't answer." },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+    await act(async () => {
+      await result.current.find("musicbrainz", 1);
+    });
+
+    act(() => {
+      stream().send("job", { id: 7, kind: "enrich_track", state: "failed" });
+    });
+
+    await waitFor(() => {
+      expect(result.current.lookups.get(1)).toEqual({
+        enricher: "musicbrainz",
+        state: "failed",
+        message: "MusicBrainz didn't answer.",
+      });
+    });
+  });
+
   it("passes on why the server refused, and keeps offering it", async () => {
     serve({
       ...signedIn([trackOf(1, "Intro")]),
@@ -435,11 +522,18 @@ describe("finding a song's details online", () => {
       expect(findableBy(result.current, "bilibili-details")).toHaveLength(1);
     });
 
-    await expect(result.current.find("bilibili-details", 1)).rejects.toThrow(
-      "This video was looked up in the last 24 hours.",
-    );
+    await act(async () => {
+      await expect(result.current.find("bilibili-details", 1)).rejects.toThrow(
+        "This video was looked up in the last 24 hours.",
+      );
+    });
 
     expect(findableBy(result.current, "bilibili-details")).toEqual([1]);
+    expect(result.current.lookups.get(1)).toEqual({
+      enricher: "bilibili-details",
+      state: "failed",
+      message: "This video was looked up in the last 24 hours.",
+    });
   });
 
   it("asks for the Tracks and what can be looked up again when a lookup finishes", async () => {

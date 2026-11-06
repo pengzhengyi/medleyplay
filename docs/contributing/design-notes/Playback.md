@@ -206,6 +206,15 @@ and the full views are in [Web client](Web%20client.md).
   each step), and it can be removed, or the queue cleared. Dragging is dnd-kit's
   sortable list. The queue is a pure reducer, so its rules are unit tested apart
   from the page.
+- **How long the queue plays** shows under *Up next*, as *12 songs, 48 min*, in
+  the words the views use for their length. While it plays on to its end, with
+  repeat off, it adds when that is on the clock, with the day once it isn't
+  today: *ending around 4:30 PM*, or *ending around Wed 2:12 AM*. A week or more
+  away, it gives no time. The words are the client's own, as its other words
+  are, with the time from `Intl.DateTimeFormat`. Moment and Day.js were set
+  aside, as their *humanize* rounds to one unit (*2 hours* for 1 hr 42 min).
+  `Intl.DurationFormat` is the one to take once the client speaks more
+  languages than English.
 - **The look** is Pico's jade theme under the client's own palette, with
   Phosphor's icons in the weight each control's prominence calls for: filled for
   play and pause, regular for the rest, light for a row's actions. The page

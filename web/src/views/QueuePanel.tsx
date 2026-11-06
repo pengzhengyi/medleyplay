@@ -27,8 +27,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { DotsSixVerticalIcon, XIcon } from "@phosphor-icons/react";
 
 import type { Track } from "../api";
+import { formatQueueLength } from "../format";
 import { type Entry, upNext } from "../player/queue";
 import type { Player } from "../player/usePlayer";
+import { useNow } from "../useNow";
 import { Cover } from "./Cover";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
@@ -52,6 +54,7 @@ export function QueuePanel({
   readonly announceIn?: HTMLElement | null;
 }) {
   const entries = upNext(player.queue);
+  const now = useNow();
   const sensors = useSensors(
     // A few pixels of movement first, so a tap on the handle isn't a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -75,6 +78,17 @@ export function QueuePanel({
     onDragCancel: ({ active }) => `${titleOf(entries[placeOf(active.id)])} stays where it was.`,
   };
 
+  const lengthMs = entries.reduce(
+    (sum, entry) => sum + (tracks.get(entry.trackId)?.duration_ms ?? 0),
+    0,
+  );
+  // Only a queue playing on to its end ends at a time on the clock.
+  const leftMs = lengthMs + Math.max(0, (player.duration ?? 0) - player.position) * 1000;
+  const ending =
+    player.status.kind === "playing" && player.repeat === "off"
+      ? { now: new Date(now), at: new Date(now + leftMs) }
+      : undefined;
+
   const drop = ({ active, over }: DragEndEvent) => {
     if (over !== null && active.id !== over.id) {
       player.move(String(active.id), placeOf(over.id));
@@ -94,6 +108,9 @@ export function QueuePanel({
           Clear
         </button>
       </header>
+      {entries.length > 0 && (
+        <p className="queue-length">{formatQueueLength(entries.length, lengthMs, ending)}</p>
+      )}
       {entries.length === 0 ? (
         <p className="empty">Nothing queued. Add a Track from the list to play it later.</p>
       ) : (

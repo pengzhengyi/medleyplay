@@ -1585,6 +1585,14 @@ button.icon.heart.on:hover,
   font-weight: 650;
 }
 
+.queue .queue-length {
+  margin: -0.35rem 0 0.5rem;
+  padding: 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-wrap: balance;
+}
+
 .queue .empty {
   margin: 0;
   padding: 0.5rem;

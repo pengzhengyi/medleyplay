@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { Track } from "../api";
 import type { Player } from "../player/usePlayer";
 import { current, upNext } from "../player/queue";
+import { type FavoriteGroups, NO_FAVORITES } from "./favoriteGroups";
 import { type Random, nextPicks, seedOf, seeded, stationSeed } from "./radio";
 
 const FIRST = 10;
@@ -68,7 +69,12 @@ function shownStore() {
   };
 }
 
-export function useStation(player: Player, tracks: readonly Track[], accountId: number): Station {
+export function useStation(
+  player: Player,
+  tracks: readonly Track[],
+  accountId: number,
+  favorites: FavoriteGroups = NO_FAVORITES,
+): Station {
   const running = useRef<Running | undefined>(undefined);
   const [store] = useState(shownStore);
   const shown = useSyncExternalStore(store.subscribe, store.get);
@@ -81,11 +87,11 @@ export function useStation(player: Player, tracks: readonly Track[], accountId: 
   const start = useCallback(
     (seed?: Track) => {
       const random = seeded(seedOf(`${String(accountId)}:${String(Date.now())}`));
-      const from = seed ?? stationSeed(tracks, random);
+      const from = seed ?? stationSeed(tracks, random, favorites);
       if (from === undefined) {
         return false;
       }
-      const picks = nextPicks(tracks, from, [], FIRST - 1, random, new Date());
+      const picks = nextPicks(tracks, from, [], FIRST - 1, random, new Date(), favorites);
       const list = [from, ...picks.map((pick) => pick.track)];
       running.current = {
         seed: from,
@@ -98,7 +104,7 @@ export function useStation(player: Player, tracks: readonly Track[], accountId: 
       player.playList(list, 0);
       return true;
     },
-    [accountId, player, store, tracks],
+    [accountId, favorites, player, store, tracks],
   );
 
   const { queue } = player;
@@ -129,17 +135,25 @@ export function useStation(player: Player, tracks: readonly Track[], accountId: 
       return;
     }
     const now = new Date();
-    let picks = nextPicks(tracks, station.seed, [...station.queued], MORE, station.random, now);
+    let picks = nextPicks(
+      tracks,
+      station.seed,
+      [...station.queued],
+      MORE,
+      station.random,
+      now,
+      favorites,
+    );
     if (picks.length === 0 && station.own) {
       // The Account's own station goes on from another song it likes.
       const fresh = tracks.filter((track) => !station.queued.has(track.id));
-      const next = stationSeed(fresh, station.random);
+      const next = stationSeed(fresh, station.random, favorites);
       if (next !== undefined) {
         station.seed = next;
         store.set({ seed: next, own: true });
         picks = [
           { track: next, reason: "" },
-          ...nextPicks(tracks, next, [...station.queued], MORE - 1, station.random, now),
+          ...nextPicks(tracks, next, [...station.queued], MORE - 1, station.random, now, favorites),
         ];
       }
     }
@@ -148,7 +162,7 @@ export function useStation(player: Player, tracks: readonly Track[], accountId: 
       station.queued.add(track.id);
       add.current(track);
     }
-  }, [queue, store, tracks, stop]);
+  }, [favorites, queue, store, tracks, stop]);
 
   return { seed: shown?.seed, own: shown?.own ?? false, start };
 }

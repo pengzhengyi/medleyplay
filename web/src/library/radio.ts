@@ -9,10 +9,17 @@
  * likeness = 3·same artist + 2·same album + 1·same album artist
  *          + 2·shared genre + exp(−|year difference| / 5) when at most 5 years apart
  * taste    = favorite + (rating − 3) / 2 + log(1 + plays) / 4      (no rating counts as 3)
+ *          + 0.5 by a favorite artist or from a favorite album
  * ```
  */
 
 import type { Track } from "../api";
+import {
+  type FavoriteGroups,
+  NO_FAVORITES,
+  isFavoriteAlbum,
+  isFavoriteArtist,
+} from "./favoriteGroups";
 import { albumArtistOf, fold } from "./views";
 
 /** A number from 0 up to 1, as `Math.random` gives. */
@@ -45,10 +52,22 @@ const UNNAMED = /^BV[0-9A-Za-z]{10}$/u;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
+/** How much more the Account likes a song by a favorite artist or from a favorite album. */
+const FAVORITE_GROUP_TASTE = 0.5;
+
 /** How much the Account likes the song: 0 for no word either way. */
-export function tasteOf(track: Track): number {
+export function tasteOf(track: Track, favorites: FavoriteGroups = NO_FAVORITES): number {
+  const artist = albumArtistOf(track);
+  // Once, however many of its groups are favorites, so a group can't outweigh a heart.
+  const inFavoriteGroup =
+    isFavoriteArtist(favorites, track.artist) ||
+    isFavoriteArtist(favorites, artist) ||
+    isFavoriteAlbum(favorites, artist, track.album);
   return (
-    (track.favorite ? 1 : 0) + ((track.rating ?? 3) - 3) / 2 + Math.log1p(track.play_count) / 4
+    (track.favorite ? 1 : 0) +
+    ((track.rating ?? 3) - 3) / 2 +
+    Math.log1p(track.play_count) / 4 +
+    (inFavoriteGroup ? FAVORITE_GROUP_TASTE : 0)
   );
 }
 
@@ -189,6 +208,7 @@ export function nextPicks(
   count: number,
   random: Random,
   now: Date,
+  favorites: FavoriteGroups = NO_FAVORITES,
 ): Pick[] {
   const byId = new Map(tracks.map((track) => [track.id, track]));
   const history = [seed, ...played.flatMap((id) => byId.get(id) ?? [])];
@@ -203,7 +223,7 @@ export function nextPicks(
       return [];
     }
     const like = parts.reduce((sum, [, value]) => sum + value, 0);
-    const taste = Math.max(-0.9, Math.min(0.9, tasteOf(track) / 3));
+    const taste = Math.max(-0.9, Math.min(0.9, tasteOf(track, favorites) / 3));
     const score = Math.max(0.05, like + taste - recency(track, now));
     const [largest] = [...parts].sort((a, b) => b[1] - a[1]);
     const reason =
@@ -275,12 +295,16 @@ export function nextPicks(
 }
 
 /** The song the Account's own station starts from: one of its 20 best liked, or any. */
-export function stationSeed(tracks: readonly Track[], random: Random): Track | undefined {
+export function stationSeed(
+  tracks: readonly Track[],
+  random: Random,
+  favorites: FavoriteGroups = NO_FAVORITES,
+): Track | undefined {
   // A title that is still a video's id says nothing a radio could follow.
   const songs = tracks.filter((track) => canSuggest(track) && !UNNAMED.test(track.title));
   const perGroup = new Map<string, number>();
   const liked = songs
-    .map((track) => ({ item: track, score: tasteOf(track) }))
+    .map((track) => ({ item: track, score: tasteOf(track, favorites) }))
     .filter((each) => each.score > 0)
     .sort((a, b) => b.score - a.score)
     .filter(({ item }) => {
@@ -343,9 +367,9 @@ interface Album {
 }
 
 /** An album is as liked as its 3 best-liked songs: a few favorites make it loved. */
-const bestThree = (songs: readonly Track[]) => {
+const bestThree = (songs: readonly Track[], favorites: FavoriteGroups) => {
   const best = songs
-    .map(tasteOf)
+    .map((song) => tasteOf(song, favorites))
     .sort((a, b) => b - a)
     .slice(0, 3);
   return best.reduce((sum, taste) => sum + taste, 0) / best.length;
@@ -381,7 +405,7 @@ function nameOf(first: Track, files: ReadonlyMap<number, Track>): string {
 }
 
 /** Group the songs into albums of at least 2 songs that play now; none of a disliked album. */
-function albumsOf(tracks: readonly Track[]): Album[] {
+function albumsOf(tracks: readonly Track[], favorites: FavoriteGroups): Album[] {
   const files = new Map(tracks.filter((track) => track.split).map((track) => [track.id, track]));
   const groups = new Map<string, Track[]>();
   for (const track of tracks) {
@@ -413,7 +437,7 @@ function albumsOf(tracks: readonly Track[]): Album[] {
         album: UNNAMED.test(first.album.trim()) ? "" : first.album,
         artist: albumArtistOf(first),
         tracks: playable,
-        taste: bestThree(songs),
+        taste: bestThree(songs, favorites),
         lastPlayed: played.length === 0 ? undefined : Math.max(...played),
         added: Math.min(...songs.map((song) => Date.parse(song.added_at))),
         plays: songs.reduce((sum, song) => sum + song.play_count, 0),
@@ -427,11 +451,11 @@ function albumsOf(tracks: readonly Track[]): Album[] {
 }
 
 /** How much the Account likes each album artist and genre, from the songs it plays or likes. */
-function affinities(tracks: readonly Track[], albums: readonly Album[]) {
+function affinities(tracks: readonly Track[], albums: readonly Album[], favorites: FavoriteGroups) {
   const artists = new Map<string, number>();
   const genres = new Map<string, number>();
   for (const track of tracks) {
-    const taste = tasteOf(track);
+    const taste = tasteOf(track, favorites);
     if (taste <= 0) {
       continue;
     }
@@ -482,11 +506,16 @@ function daysAgoText(days: number): string {
  * Library's newest albums. Each album shows once, with at most 2 by one album artist
  * and 12 on a shelf; ties break by `random`. A shelf with no album is left out.
  */
-export function albumShelves(tracks: readonly Track[], now: Date, random: Random): Shelf[] {
-  const albums = albumsOf(tracks);
+export function albumShelves(
+  tracks: readonly Track[],
+  now: Date,
+  random: Random,
+  favorites: FavoriteGroups = NO_FAVORITES,
+): Shelf[] {
+  const albums = albumsOf(tracks, favorites);
   // Ties break the same way for the same generator: a random order, kept stably.
   const order = new Map(albums.map((album) => [album.key, random()]));
-  const { artists, genres } = affinities(tracks, albums);
+  const { artists, genres } = affinities(tracks, albums, favorites);
   const taken = new Set<string>();
   const shelves: Shelf[] = [];
   const shelf = (
@@ -588,7 +617,7 @@ export function albumShelves(tracks: readonly Track[], now: Date, random: Random
     }),
   );
 
-  const anything = tracks.some((track) => track.play_count > 0 || tasteOf(track) > 0);
+  const anything = tracks.some((track) => track.play_count > 0 || tasteOf(track, favorites) > 0);
   if (!anything) {
     shelf(
       "library",

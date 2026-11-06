@@ -44,6 +44,7 @@
   | Signal | Reads as |
   | --- | --- |
   | Favorite | strongly liked |
+  | By a favorite artist, or from a favorite album | a little more liked |
   | Rating 4–5 | liked; 3, and no rating, are neutral |
   | Rating 1–2 | disliked: never suggested, by radio or a mix |
   | Play count | liked, on a log scale |
@@ -71,6 +72,7 @@ Scoring is a small, explainable sum, not a model:
 likeness = 3·same artist + 2·same album + 1·same album artist
          + 2·shared genre + 1·exp(−|year difference| / 5)
 taste    = favorite + (rating − 3) / 2 + log(1 + plays) / 4      (no rating counts as 3)
+         + 0.5 by a favorite artist or from a favorite album      (once, however many)
 score    = likeness + taste − recency                            (a song with likeness 0 is no candidate)
 recency  = 2 if played in the last 2 hours, 1 if in the last day
 ```

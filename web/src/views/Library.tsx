@@ -53,7 +53,7 @@ export function Library({
   const byId = library.tracks;
   const tracks = useMemo(() => [...byId.values()], [byId]);
   const [player, audio] = usePlayer(byId, onSignedOut);
-  const station = useStation(player, tracks, account.id);
+  const station = useStation(player, tracks, account.id, library.favoriteGroups);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
   // The view Now Playing was opened over, while it is open; going to another view closes it.
@@ -298,6 +298,9 @@ export function Library({
             onEnrichersChanged={library.refreshFindable}
             station={station}
             accountId={account.id}
+            favorites={library.favoriteGroups}
+            onFavoriteArtist={library.setArtistFavorite}
+            onFavoriteAlbum={library.setAlbumFavorite}
           />
         ) : (
           <p className="empty" aria-busy="true">

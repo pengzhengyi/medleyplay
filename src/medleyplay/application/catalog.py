@@ -25,6 +25,8 @@ from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import (
     Availability,
     Builtin,
+    FavoriteAlbum,
+    Favorites,
     Playlist,
     PlaylistId,
     SourceId,
@@ -35,6 +37,7 @@ from medleyplay.domain.catalog import (
     TrackId,
     check_playlist_length,
     check_rating,
+    favorite_name,
     parse_playlist_name,
     source_availability,
     track_availability,
@@ -50,6 +53,8 @@ from medleyplay.domain.rules import Rules, matches
 from medleyplay.domain.segments import SEGMENT_SOURCE, parse_segment_locator
 from medleyplay.persistence.schema import (
     DownloadRow,
+    FavoriteAlbumRow,
+    FavoriteArtistRow,
     JobRow,
     LibraryRow,
     PlaylistEntryRow,
@@ -190,6 +195,72 @@ class CatalogService:
         """Mark or unmark a Track as one of `account_id`'s favorites."""
         self._upsert_state(account_id, track_id, favorite=favorite)
         return self.get_track(account_id, track_id)
+
+    def favorites(self, account_id: AccountId) -> Favorites:
+        """Return the artists and albums `account_id` favorited, by name."""
+        with self._units() as db:
+            artists = db.scalars(
+                select(FavoriteArtistRow.name)
+                .where(FavoriteArtistRow.account_id == account_id)
+                .order_by(FavoriteArtistRow.key)
+            ).all()
+            albums = db.execute(
+                select(FavoriteAlbumRow.artist, FavoriteAlbumRow.album)
+                .where(FavoriteAlbumRow.account_id == account_id)
+                .order_by(FavoriteAlbumRow.artist_key, FavoriteAlbumRow.album_key)
+            ).all()
+        return Favorites(
+            artists=tuple(artists),
+            albums=tuple(FavoriteAlbum(artist=artist, name=album) for artist, album in albums),
+        )
+
+    def set_artist_favorite(self, account_id: AccountId, name: str, *, favorite: bool) -> None:
+        """Mark or unmark the artist `name` as one of `account_id`'s favorites."""
+        shown, key = favorite_name(name, what="An artist's name")
+        with self._units.begin() as db:
+            if not favorite:
+                db.execute(
+                    delete(FavoriteArtistRow).where(
+                        FavoriteArtistRow.account_id == account_id, FavoriteArtistRow.key == key
+                    )
+                )
+                return
+            db.execute(
+                insert(FavoriteArtistRow)
+                .values(account_id=account_id, key=key, name=shown)
+                .on_conflict_do_update(index_elements=["account_id", "key"], set_={"name": shown})
+            )
+
+    def set_album_favorite(
+        self, account_id: AccountId, artist: str, name: str, *, favorite: bool
+    ) -> None:
+        """Mark or unmark the album `name` by `artist`, which may be blank, as a favorite."""
+        shown_artist, artist_key = favorite_name(artist, what="An album's artist", blank=True)
+        shown, album_key = favorite_name(name, what="An album's name")
+        with self._units.begin() as db:
+            if not favorite:
+                db.execute(
+                    delete(FavoriteAlbumRow).where(
+                        FavoriteAlbumRow.account_id == account_id,
+                        FavoriteAlbumRow.artist_key == artist_key,
+                        FavoriteAlbumRow.album_key == album_key,
+                    )
+                )
+                return
+            db.execute(
+                insert(FavoriteAlbumRow)
+                .values(
+                    account_id=account_id,
+                    artist_key=artist_key,
+                    album_key=album_key,
+                    artist=shown_artist,
+                    album=shown,
+                )
+                .on_conflict_do_update(
+                    index_elements=["account_id", "artist_key", "album_key"],
+                    set_={"artist": shown_artist, "album": shown},
+                )
+            )
 
     def set_rating(self, account_id: AccountId, track_id: TrackId, rating: int | None) -> Track:
         """Give a Track 1-5 stars from `account_id`, or clear the rating with `None`."""

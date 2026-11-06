@@ -269,6 +269,29 @@ no router package.
   player.
 - Both use `PUT /api/tracks/{id}/favorite` and `PUT /api/tracks/{id}/rating`,
   which take an absolute value, so a retry is harmless.
+- **An artist or an album is a favorite of its own,** by a heart beside its
+  name on its page. A favorite one has a ring and a small heart on its tile in
+  Artists, Albums, and search. An album is its album artist, else its artist,
+  and its name, as the Albums view groups it; an artist or album with no name,
+  or one named for a video's id, has no heart.
+- **Several loved songs suggest the group:** 3 favorite songs, or 2 that are
+  at least half of its songs, make the heart beat three times on landing, with
+  a note such as *3 songs you love* that goes after 6 seconds unless the heart
+  is pointed at or focused. Each artist and album is suggested once per Account
+  in a browser, which remembers it in `localStorage`; reduced motion stills the
+  beat.
+- **They tune Radio and nothing else:** a song by a favorite artist or from a
+  favorite album is liked a little more, as
+  [Recommendations](Recommendations.md#how-songs-are-scored) says. They don't
+  keep songs downloaded or put them in *Favorites*, which follow each song's
+  own heart.
+- **The server keeps each by name:** `GET /api/favorites` lists them,
+  `PUT /api/artists/favorite` takes `{name, favorite}`, and
+  `PUT /api/albums/favorite` takes `{artist, name, favorite}`; each answers with
+  all of them, and each value is absolute. Names that differ only in case or
+  width are one favorite, and one no longer in the Library stays until it is
+  unfavorited. The client alone says which artist or album of the Library a
+  name is, folding names as the views do.
 
 ## Settings
 

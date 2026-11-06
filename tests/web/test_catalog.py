@@ -257,3 +257,52 @@ def test_a_play_without_a_time_zone_answers_422(
     )
 
     assert response.status_code == 422
+
+
+def test_favorite_artists_and_albums_are_put_as_absolute_values_and_listed(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+
+    artist = client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True})
+    album = client.put(
+        "/api/albums/favorite", json={"artist": "朴树", "name": "生如夏花", "favorite": True}
+    )
+    again = client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True})
+
+    assert (artist.status_code, album.status_code, again.status_code) == (200, 200, 200)
+    assert again.json() == {
+        "artists": [{"name": "朴树"}],
+        "albums": [{"artist": "朴树", "name": "生如夏花"}],
+    }
+    assert client.get("/api/favorites").json() == again.json()
+
+
+def test_unfavoriting_an_album_leaves_the_rest(client: TestClient) -> None:
+    set_up_as_alice(client)
+    client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True})
+    client.put(
+        "/api/albums/favorite", json={"artist": "朴树", "name": "生如夏花", "favorite": True}
+    )
+
+    left = client.put(
+        "/api/albums/favorite", json={"artist": "朴树", "name": "生如夏花", "favorite": False}
+    )
+
+    assert left.json() == {"artists": [{"name": "朴树"}], "albums": []}
+
+
+def test_a_favorite_artist_with_no_name_answers_422(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    assert (
+        client.put("/api/artists/favorite", json={"name": " ", "favorite": True}).status_code == 422
+    )
+
+
+def test_favorite_artists_and_albums_need_a_signed_in_account(client: TestClient) -> None:
+    assert client.get("/api/favorites").status_code == 401
+    assert (
+        client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True}).status_code
+        == 401
+    )

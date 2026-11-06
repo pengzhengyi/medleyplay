@@ -1,5 +1,5 @@
 // cspell:ignore supercell ｍｅｌｔ
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -250,6 +250,95 @@ describe("search", () => {
     await screen.findByRole("button", { name: "Melt" });
 
     expect(screen.queryByRole("radiogroup", { name: "Search in" })).toBeNull();
+  });
+});
+
+/** The favorites a server holding `LIBRARY` answers with, after any change to them. */
+function withFavorites(favorites: {
+  readonly artists?: readonly string[];
+  readonly albums?: readonly (readonly [string, string])[];
+}): Routes {
+  const read = {
+    artists: (favorites.artists ?? []).map((name) => ({ name })),
+    albums: (favorites.albums ?? []).map(([artist, name]) => ({ artist, name })),
+  };
+  return {
+    ...signedIn(LIBRARY),
+    "GET /api/favorites": { body: read },
+    "PUT /api/artists/favorite": (body) => {
+      const { name, favorite } = body as { name: string; favorite: boolean };
+      return { body: { ...read, artists: favorite ? [...read.artists, { name }] : [] } };
+    },
+    "PUT /api/albums/favorite": (body) => {
+      const { artist, name, favorite } = body as {
+        artist: string;
+        name: string;
+        favorite: boolean;
+      };
+      return { body: { ...read, albums: favorite ? [...read.albums, { artist, name }] : [] } };
+    },
+  };
+}
+
+describe("favorite artists and albums", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("favorites an artist from its heading, and marks it among the artists", async () => {
+    const { calls } = open("#/artist?name=ryo", withFavorites({}));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Favorite artist ryo" }));
+
+    expect(screen.getByRole("button", { name: "Favorite artist ryo" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(calls).toContain("PUT /api/artists/favorite");
+    await userEvent.click(within(screen.getByRole("main")).getByRole("link", { name: "Artists" }));
+    expect(await screen.findByRole("link", { name: /Favorite.*ryo/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ルワン/ })).not.toHaveAccessibleName(/Favorite/);
+  });
+
+  it("shows an album the server keeps as a favorite, and takes its heart back", async () => {
+    open("#/albums", withFavorites({ albums: [["ryo", "Supercell"]] }));
+
+    await userEvent.click(await screen.findByRole("link", { name: /Favorite.*Supercell/ }));
+    const heart = await screen.findByRole("button", { name: "Favorite album Supercell" });
+    await userEvent.click(heart);
+
+    expect(heart).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("suggests favoriting an artist whose songs the Account loves, once", async () => {
+    const loved = LIBRARY.map((track) => ({ ...track, favorite: track.artist === "ryo" }));
+    const routes = { ...withFavorites({}), "GET /api/tracks": { body: loved } };
+    open("#/artist?name=ryo", routes);
+
+    expect(await screen.findByText("2 songs you love")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Favorite artist ryo" })).toHaveAccessibleDescription(
+      "2 songs you love",
+    );
+    cleanup();
+    open("#/artist?name=ryo", routes);
+
+    expect(
+      await screen.findByRole("button", { name: "Favorite artist ryo" }),
+    ).toHaveAccessibleDescription("Not a favorite");
+    expect(screen.queryByText("2 songs you love")).not.toBeInTheDocument();
+  });
+
+  it("offers no heart for an album with no name", async () => {
+    const unnamed = [trackOf(1, "Demo", { artist: "ryo", album: "" })];
+    open("#/album?artist=ryo&name=", {
+      ...withFavorites({}),
+      "GET /api/tracks": { body: unnamed },
+    });
+
+    const heading = await screen.findByRole("heading", { name: "Unknown album" });
+
+    const header = heading.closest("header") ?? document.body;
+    expect(within(header).queryByRole("button")).not.toBeInTheDocument();
   });
 });
 

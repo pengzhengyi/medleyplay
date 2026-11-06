@@ -6,6 +6,7 @@ import { PlayIcon, RadioIcon } from "@phosphor-icons/react";
 import { useMemo } from "react";
 
 import type { Track } from "../api";
+import { type FavoriteGroups, NO_FAVORITES } from "../library/favoriteGroups";
 import { type AlbumCard, albumShelves, seedOf, seeded } from "../library/radio";
 import type { Station } from "../library/useStation";
 import { hrefOf } from "../routes";
@@ -24,21 +25,24 @@ export function RadioView({
   station,
   onPlayAll,
   accountId,
+  favorites = NO_FAVORITES,
   now = new Date(),
 }: {
   readonly tracks: readonly Track[];
   readonly station: Station;
   readonly onPlayAll: (tracks: readonly Track[], shuffled: boolean) => void;
   readonly accountId: number;
+  /** The artists and albums the Account favorited, which it likes a little more. */
+  readonly favorites?: FavoriteGroups;
   /** The time the shelves are for; the clock's by default. */
   readonly now?: Date;
 }) {
   const day = dayOf(now);
   const shelves = useMemo(
-    () => albumShelves(tracks, now, seeded(seedOf(`${String(accountId)}:${day}`))),
+    () => albumShelves(tracks, now, seeded(seedOf(`${String(accountId)}:${day}`)), favorites),
     // The shelves change with the Tracks and the day, not with every moment of it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tracks, accountId, day],
+    [tracks, accountId, day, favorites],
   );
   const { seed } = station;
   return (

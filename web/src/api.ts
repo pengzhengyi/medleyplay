@@ -320,6 +320,12 @@ export type PlaybackAnswer =
   | { readonly state: "preparing"; readonly source_id: number; readonly job_id: number }
   | { readonly state: "unplayable"; readonly availability: Availability };
 
+/** The artists and albums an Account favorited, by the names it favorited them under. */
+export interface FavoritesRead {
+  readonly artists: readonly { readonly name: string }[];
+  readonly albums: readonly { readonly artist: string; readonly name: string }[];
+}
+
 /** A Job, as far as the player follows one. */
 export interface Job {
   readonly id: number;
@@ -591,6 +597,14 @@ export const api = {
   unmarkMetered: (id: number) => call<undefined>("DELETE", `/api/mode/metered/${String(id)}`),
   setFavorite: (trackId: number, favorite: boolean) =>
     call<Track>("PUT", `/api/tracks/${String(trackId)}/favorite`, { favorite }),
+  /** The artists and albums you favorited. */
+  favorites: () => call<FavoritesRead>("GET", "/api/favorites"),
+  /** Mark or unmark an artist as your favorite; answers with your favorites. */
+  setArtistFavorite: (name: string, favorite: boolean) =>
+    call<FavoritesRead>("PUT", "/api/artists/favorite", { name, favorite }),
+  /** Mark or unmark an album as your favorite, under its album artist; answers likewise. */
+  setAlbumFavorite: (artist: string, name: string, favorite: boolean) =>
+    call<FavoritesRead>("PUT", "/api/albums/favorite", { artist, name, favorite }),
   setRating: (trackId: number, rating: number | null) =>
     call<Track>("PUT", `/api/tracks/${String(trackId)}/rating`, { rating }),
   playback: (trackId: number) =>

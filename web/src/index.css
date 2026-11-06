@@ -423,6 +423,61 @@ button.text:hover:not(:disabled) {
   color: var(--ink);
 }
 
+/* An artist's or album's name, with the heart that favorites it. */
+.view-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+}
+
+.favorite-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.view-title button.favorite-heart {
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: 1.35rem;
+}
+
+.favorite-heart.beat {
+  animation: heart-beat 900ms ease-in-out 3;
+}
+
+@keyframes heart-beat {
+  0%,
+  60%,
+  100% {
+    transform: scale(1);
+  }
+
+  20% {
+    transform: scale(1.3);
+    color: var(--accent);
+  }
+
+  40% {
+    transform: scale(1.1);
+  }
+}
+
+.favorite-note {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.favorite-note:empty {
+  display: none;
+}
+
 .view-heading .subtitle,
 .view-heading .meta {
   margin: 0.15rem 0 0;
@@ -803,6 +858,34 @@ button.text:hover:not(:disabled) {
 .cover-tile.favorites {
   background: var(--accent);
   color: var(--accent-ink);
+}
+
+/* A favorite artist or album: a ring round its tile, and a heart on its corner. */
+.tile-frame {
+  position: relative;
+  display: block;
+}
+
+.groups li.favorite .avatar,
+.groups li.favorite .cover-tile {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+
+.favorite-badge {
+  position: absolute;
+  right: 0.3rem;
+  bottom: 0.65rem;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--lift);
+  color: var(--accent-ink);
+  font-size: 0.9rem;
 }
 
 .group-name,
@@ -2287,7 +2370,8 @@ button.icon.heart.on:hover,
 
 @media (prefers-reduced-motion: reduce) {
   .bars,
-  .spin {
+  .spin,
+  .favorite-heart.beat {
     animation: none;
   }
 

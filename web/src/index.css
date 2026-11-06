@@ -1384,6 +1384,36 @@ details.dropdown[open] > summary.filter-summary {
   gap: 0.6rem;
 }
 
+/* What a song's cover shows over it: a lookup asked about it, or bars while it plays. */
+.thumb-frame {
+  position: relative;
+  display: grid;
+  flex: none;
+}
+
+/* A dark veil and white marks read over any cover, in either scheme. */
+.cover-badge {
+  --accent: #fff;
+
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
+  background: rgb(0 0 0 / 50%);
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.cover-badge.failed {
+  color: #ffb3bb;
+}
+
+/* A song without a cover shows a note, which the badge stands in for. */
+.thumb-frame:has(.cover-badge) > .cover > svg {
+  visibility: hidden;
+}
+
 /* A small cover beside a song's title, in the table and in Up next. */
 .cover.thumb {
   display: grid;
@@ -1551,6 +1581,11 @@ button.icon.heart.on:hover,
       22% 75%,
       22% 100%;
   }
+}
+
+.cover-badge .bars {
+  width: 1rem;
+  height: 0.95rem;
 }
 
 /* The queue: a raised panel; a dragged Track lifts off it. */
@@ -2199,21 +2234,15 @@ button.icon.heart.on:hover,
   .tracks .title-cell {
     display: grid;
     grid-template:
-      "thumb bars title" auto
-      "thumb sub sub" auto
-      "thumb why why" auto / auto auto minmax(0, 1fr);
+      "thumb title" auto
+      "thumb sub" auto
+      "thumb why" auto / auto minmax(0, 1fr);
     gap: 0;
   }
 
-  .tracks .title-cell .thumb {
+  .tracks .title-cell .thumb-frame {
     grid-area: thumb;
     margin-right: 0.6rem;
-  }
-
-  .tracks .title-cell .bars {
-    grid-area: bars;
-    align-self: center;
-    margin-right: 0.5rem;
   }
 
   .tracks .title-cell .why {

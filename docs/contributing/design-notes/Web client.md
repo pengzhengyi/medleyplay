@@ -95,6 +95,9 @@ no router package.
   page; the rows above and below are spacer rows hidden from screen readers,
   and the table states `aria-rowcount`, the Tracks and the header row, with
   `aria-rowindex` on each row, so a screen reader counts every Track.
+- **The song playing shows bars over its cover,** so its title stays where it
+  was, and its row has `aria-current`. A lookup asked about a song takes the
+  cover's place while it runs, as [Track details](Track%20details.md) says.
 - **A click anywhere on a song's row plays it,** with the songs shown queued
   around it, as its title button does. A click on the row's own controls (the
   heart, the stars, the queue buttons, the menu, a link) does only what that

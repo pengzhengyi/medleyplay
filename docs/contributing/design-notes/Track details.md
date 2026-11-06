@@ -222,6 +222,12 @@ config file turns them on, since each contacts a site or a provider.
   Settings → Bilibili, *Find on MusicBrainz for all* in Settings → MusicBrainz, and
   *Suggest for all* in Settings → AI, for admins, which queue every eligible Track
   and say how many they queued. There is no scheduled or automatic run.
+- **The song's cover shows a lookup as it goes,** from the Job's events on the
+  page's event stream. A spinner shows while it is asked; a clock shows while it
+  waits for Online. A check shows for a few seconds once it is done. A warning
+  shows if it failed, and its tooltip and accessible name say why. Screen readers
+  hear the lookup asked through a status region. The page shows no notice for it,
+  as the cover is where it happens.
 - **It is asked** with the Track's shown values and their origins (without the
   values the enricher recorded itself), its length, its file's name, whether it
   is a long file split into songs, its video id when it reads videos, and its

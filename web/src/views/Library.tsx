@@ -6,7 +6,7 @@ import { CloudSlashIcon, KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosph
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type Account, type Track, api } from "../api";
-import type { Lookup } from "../library/lookups";
+import { type Lookup, coverStatusOf } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
 import { useStation } from "../library/useStation";
 import { current, repeatAfter } from "../player/queue";
@@ -79,7 +79,9 @@ export function Library({
   // The link or code being added from Bilibili, and the Track whose file is being added by hand.
   const [linking, setLinking] = useState<string | undefined>(undefined);
   const [filing, setFiling] = useState<Track | undefined>(undefined);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useFading("");
+  // Said to screen readers only: what the page shows where it happens, such as a lookup.
+  const [said, setSaid] = useFading("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
   // The header stays at the top, so what else stays there sits under it, however tall it is.
   const top = useRef<HTMLElement>(null);
@@ -120,17 +122,6 @@ export function Library({
       document.removeEventListener("visibilitychange", onShown);
     };
   }, [account.id]);
-  useEffect(() => {
-    if (notice === "") {
-      return;
-    }
-    const fade = setTimeout(() => {
-      setNotice("");
-    }, NOTICE_MS);
-    return () => {
-      clearTimeout(fade);
-    };
-  }, [notice]);
   const actions: TrackActions = {
     onPlay: player.playList,
     onPlayAll: player.playAll,
@@ -146,15 +137,18 @@ export function Library({
     onEditDetails: setEditing,
     canFind: (lookup: Lookup, track: Track) =>
       library.findable.get(lookup.enricher)?.has(track.id) ?? false,
+    // The song's cover shows the lookup as it goes; screen readers hear it asked.
+    statusOf: (track: Track) =>
+      coverStatusOf(library.lookups.get(track.id), library.mode?.online !== false),
     onFind: (lookup: Lookup, track: Track) => {
       library.find(lookup.enricher, track.id).then(
         () => {
           const wait =
             library.mode?.online === false ? " It waits until medleyplay is Online." : "";
-          setNotice(`${lookup.notice(track.title)}${wait}`);
+          setSaid(`${lookup.notice(track.title)}${wait}`);
         },
         (failure: unknown) => {
-          setNotice(failure instanceof Error ? failure.message : String(failure));
+          setSaid(failure instanceof Error ? failure.message : String(failure));
         },
       );
     },
@@ -427,7 +421,27 @@ export function Library({
       <p className="notice" role="status">
         {notice}
       </p>
+      <p className="visually-hidden" role="status">
+        {said}
+      </p>
       <audio ref={audio} preload="auto" />
     </div>
   );
+}
+
+/** A value that goes back to `cleared` a few seconds after it is set, as a notice fades. */
+function useFading(cleared: string) {
+  const [value, setValue] = useState(cleared);
+  useEffect(() => {
+    if (value === cleared) {
+      return;
+    }
+    const fade = setTimeout(() => {
+      setValue(cleared);
+    }, NOTICE_MS);
+    return () => {
+      clearTimeout(fade);
+    };
+  }, [value, cleared]);
+  return [value, setValue] as const;
 }

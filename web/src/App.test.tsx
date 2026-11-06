@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -77,7 +77,14 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
     await user.click(await screen.findByRole("menuitem", { name: "Find details online" }));
 
-    expect(await screen.findByText("Looking up “Night Drive” on Bilibili.")).toBeInTheDocument();
+    const row = screen.getByRole("row", { name: /Night Drive/u });
+    expect(
+      await within(row).findByRole("img", { name: "Looking up on Bilibili" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Looking up “Night Drive” on Bilibili.")).toHaveClass(
+      "visually-hidden",
+    );
+    expect(document.querySelector(".notice")).toBeEmptyDOMElement();
     expect(calls).toContain("POST /api/enrichers/bilibili-details/tracks/1");
   });
 
@@ -164,6 +171,10 @@ describe("App", () => {
       await screen.findByText(
         "Looking up “Night Drive” on Bilibili. It waits until medleyplay is Online.",
       ),
+    ).toBeInTheDocument();
+    const row = screen.getByRole("row", { name: /Night Drive/u });
+    expect(
+      within(row).getByRole("img", { name: "Looking up on Bilibili once medleyplay is Online" }),
     ).toBeInTheDocument();
   });
 

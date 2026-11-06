@@ -9,6 +9,7 @@ import {
   type Detail,
   type Details,
   type AddedPart,
+  type Job,
   type JobEvent,
   type LinkLookup,
   type Mode,
@@ -25,6 +26,14 @@ import {
 import { newId } from "../ids";
 import { LOOKUPS } from "./lookups";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
+
+/** A lookup asked about a Track, as far as its Job has gone. */
+export interface TrackLookup {
+  readonly enricher: string;
+  readonly state: Job["state"];
+  /** Why it failed, or `""`. */
+  readonly message: string;
+}
 
 /** The Library as the page sees it. */
 export interface Library {
@@ -47,6 +56,11 @@ export interface Library {
    * rejects with why when the server refuses.
    */
   readonly find: (enricher: string, id: number) => Promise<void>;
+  /**
+   * The lookup last asked about each Track, by the Track's id, while its Job runs, a
+   * moment after it succeeds, and until it is asked again after it fails.
+   */
+  readonly lookups: ReadonlyMap<number, TrackLookup>;
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
   /**
@@ -114,6 +128,8 @@ const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
 /** How long after the last such Job the Tracks are asked for, so a busy scan asks once. */
 const SETTLE_MS = 1000;
+/** How long a lookup that succeeded still says so. */
+const DONE_MS = 4000;
 
 /** Compare names as people read them, as the Playlists view lists them. */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -132,6 +148,10 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [findable, setFindable] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
+  const [lookups, setLookups] = useState<ReadonlyMap<number, TrackLookup>>(new Map());
+  // Each lookup's Job, and each Track's latest, so an older Job's end can't land after it.
+  const trackOfJob = useRef(new Map<number, number>());
+  const jobOfTrack = useRef(new Map<number, number>());
   const writes = useRef(0);
   // The latest change of each Track's details, so an older read-back can't land after it.
   const latestSave = useRef(new Map<number, number>());
@@ -144,6 +164,51 @@ export function useLibrary(onSignedOut: () => void): Library {
     setError(failure instanceof Error ? failure.message : String(failure));
   };
   const onFailure = useEffectEvent(failed);
+
+  const setLookup = (id: number, lookup: TrackLookup | undefined) => {
+    setLookups((now) => {
+      const next = new Map(now);
+      if (lookup === undefined) {
+        next.delete(id);
+      } else {
+        next.set(id, lookup);
+      }
+      return next;
+    });
+  };
+  /** Follow a lookup's Job as the event stream tells of it. */
+  const onJob = useEffectEvent((job: JobEvent) => {
+    const id = trackOfJob.current.get(job.id);
+    const lookup = id === undefined ? undefined : lookups.get(id);
+    if (id === undefined || lookup === undefined || jobOfTrack.current.get(id) !== job.id) {
+      return;
+    }
+    if (job.state === "cancelled") {
+      setLookup(id, undefined);
+    } else if (job.state === "failed") {
+      setLookup(id, { ...lookup, state: "failed" });
+      api.job(job.id).then(
+        (read) => {
+          if (jobOfTrack.current.get(id) === job.id) {
+            setLookup(id, { ...lookup, state: "failed", message: read.failure_message });
+          }
+        },
+        () => {
+          // Without the Job, the lookup says it failed but not why.
+        },
+      );
+    } else {
+      setLookup(id, { ...lookup, state: job.state });
+      if (job.state === "succeeded") {
+        setTimeout(() => {
+          if (jobOfTrack.current.get(id) === job.id) {
+            jobOfTrack.current.delete(id);
+            setLookup(id, undefined);
+          }
+        }, DONE_MS);
+      }
+    }
+  });
 
   /** Ask each enricher which Tracks it may be asked about. */
   const loadFindable = useCallback(() => {
@@ -193,7 +258,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       },
     );
     document.addEventListener("visibilitychange", onShown);
-    const stopListening = listen(load, setMode);
+    const stopListening = listen(load, setMode, onJob);
     return () => {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
@@ -288,15 +353,24 @@ export function useLibrary(onSignedOut: () => void): Library {
     mode,
     findable,
     refreshFindable: loadFindable,
+    lookups,
     find: async (enricher, id) => {
+      jobOfTrack.current.delete(id);
+      setLookup(id, { enricher, state: "queued", message: "" });
+      let job: Job;
       try {
-        await api.findDetails(enricher, id);
+        job = await api.findDetails(enricher, id);
       } catch (failure) {
         if (failure instanceof ApiError && failure.status === 401) {
           onSignedOut();
         }
+        const message = failure instanceof Error ? failure.message : String(failure);
+        setLookup(id, { enricher, state: "failed", message });
         throw failure;
       }
+      trackOfJob.current.set(job.id, id);
+      jobOfTrack.current.set(id, job.id);
+      setLookup(id, { enricher, state: job.state, message: job.failure_message });
       // Asked: the Job is queued, so the Track no longer offers it until the Job is done.
       setFindable((now) => {
         const left = [...(now.get(enricher) ?? [])].filter((each) => each !== id);
@@ -378,10 +452,14 @@ function listed(playlists: readonly Playlist[]): Playlist[] {
 /**
  * Call `load` when the event stream (re)connects, which may have missed changes,
  * a moment after a scan or a Download finishes, and when the Mode goes Online or
- * Offline, which changes what can play; tell `onMode` each Mode the stream sends.
- * Return what stops listening.
+ * Offline, which changes what can play; tell `onMode` each Mode the stream sends,
+ * and `onJob` each Job. Return what stops listening.
  */
-function listen(load: () => void, onMode: (mode: Mode) => void): () => void {
+function listen(
+  load: () => void,
+  onMode: (mode: Mode) => void,
+  onJob: (job: JobEvent) => void,
+): () => void {
   if (typeof EventSource === "undefined") {
     return () => undefined;
   }
@@ -406,6 +484,7 @@ function listen(load: () => void, onMode: (mode: Mode) => void): () => void {
   });
   events.addEventListener("job", (event: MessageEvent<string>) => {
     const job = JSON.parse(event.data) as JobEvent;
+    onJob(job);
     if (CHANGES_TRACKS.has(job.kind) && FINISHED.has(job.state)) {
       clearTimeout(settling);
       settling = setTimeout(load, SETTLE_MS);

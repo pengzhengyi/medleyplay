@@ -103,6 +103,8 @@ class TrackRow(Base):
     genre: Mapped[str] = mapped_column(String(512), default="")
     cover: Mapped[str | None] = mapped_column(String(64))
     """The cover shown, by name, if any."""
+    kind: Mapped[str | None] = mapped_column(String(8))
+    """The kind an origin names, if any; otherwise the kind is worked out from the file."""
     duration_ms: Mapped[int | None]
     added_at: Mapped[datetime] = mapped_column(UtcDateTime)
 

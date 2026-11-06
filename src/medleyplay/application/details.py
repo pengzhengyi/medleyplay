@@ -20,12 +20,16 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import (
     TEXT_FIELDS,
     Field,
+    Kind,
+    KindReason,
+    KindShown,
     Origin,
     Shown,
     Value,
     check_values,
     field_named,
     found_value,
+    kind_of,
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
@@ -60,6 +64,8 @@ class DetailsView:
     values: OriginValues
     video_text: VideoText | None
     """The video's text the `video` values were read from, if any was."""
+    kind: KindShown
+    """Whether the Track is a song or an album, and why."""
 
 
 @dataclass(frozen=True)
@@ -202,9 +208,13 @@ def set_household(
 ) -> None:
     """Set the household's values for the Track; `None` drops one, so the next origin shows.
 
-    With `replace`, every household value not in `values` is dropped too.
+    With `replace`, every household value not in `values` is dropped too. A kind
+    is refused for a song of a split file, and *song* for a split file.
     """
-    _require(db, track_id)
+    track = _require(db, track_id)
+    kind = values.get(Field.KIND)
+    if kind is not None:
+        _check_kind(db, track, Kind(str(kind)))
     mine = (TrackValueRow.track_id == track_id) & (TrackValueRow.origin == Origin.HOUSEHOLD)
     dropped = mine if replace else mine & TrackValueRow.field.in_([str(field) for field in values])
     db.execute(delete(TrackValueRow).where(dropped))
@@ -212,6 +222,35 @@ def set_household(
     db.add_all(_rows(track_id, Origin.HOUSEHOLD, given, now))
     db.flush()
     refresh(db, track_id, now)
+
+
+def _check_kind(db: Session, track: TrackRow, kind: Kind) -> None:
+    worked_out = kind_shown_of(db, track)
+    if worked_out.reason is KindReason.SEGMENT:
+        message = "A song of a split file is always a song."
+        raise InvalidInputError(message)
+    if worked_out.reason is KindReason.SPLIT and kind is Kind.SONG:
+        message = "A file split into songs is an album. Unsplit it to call it a song."
+        raise InvalidInputError(message)
+
+
+def kind_shown_of(db: Session, track: TrackRow) -> KindShown:
+    """Return the Track's kind, from the kind its origins name and its file, and why."""
+    segment = db.scalar(select(SegmentRow.id).where(SegmentRow.track_id == track.id))
+    return kind_of(
+        None if track.kind is None else Kind(track.kind),
+        duration_ms=track.duration_ms,
+        split=bool(songs_of(db, TrackId(track.id))),
+        segment=segment is not None,
+    )
+
+
+def forget_song_kind(db: Session, track_id: TrackId) -> None:
+    """Drop the household's word that the Track is a song, as a file split into songs isn't."""
+    row = db.get(TrackValueRow, (track_id, Field.KIND, Origin.HOUSEHOLD))
+    if row is not None and row.value == Kind.SONG:
+        db.delete(row)
+        db.flush()
 
 
 def values_of(db: Session, track_id: TrackId) -> OriginValues:
@@ -313,13 +352,12 @@ class DetailsService:
         """Return the Track's shown values and every origin's values."""
         with self._units() as db:
             values = values_of(db, track_id)
-            if db.get(TrackRow, track_id) is None:
-                raise _no_track(track_id)
+            kind = kind_shown_of(db, _require(db, track_id))
             video_text = video_text_of(db, track_id)
         found = shown(
             {origin: kept for origin, kept in values.items() if origin is not Origin.HOUSEHOLD}
         )
-        return DetailsView(track_id, shown(values), found, values, video_text)
+        return DetailsView(track_id, shown(values), found, values, video_text, kind)
 
     def read_video_text(self, track_id: TrackId, text: VideoText) -> VideoRead:
         """Read the video's text the household pasted as the Track's `video` values.
@@ -376,9 +414,11 @@ def _rows(
     ]
 
 
-def _require(db: Session, track_id: TrackId) -> None:
-    if db.get(TrackRow, track_id) is None:
+def _require(db: Session, track_id: TrackId) -> TrackRow:
+    track = db.get(TrackRow, track_id)
+    if track is None:
         raise _no_track(track_id)
+    return track
 
 
 def _no_track(track_id: TrackId) -> NotFoundError:

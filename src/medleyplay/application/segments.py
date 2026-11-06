@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
 from medleyplay.application.details import (
+    forget_song_kind,
     refresh,
     songs_of,
     suggested_songs_of,
@@ -181,8 +182,11 @@ class SongsService:
 
     def _settle(self, db: Session, album: TrackRow) -> None:
         # The file's length now, and each song's length and details from its row and place.
-        for song in songs_of(db, TrackId(album.id)):
+        songs = songs_of(db, TrackId(album.id))
+        for song in songs:
             song.split_length_ms = album.duration_ms
+        if songs:
+            forget_song_kind(db, TrackId(album.id))
         refresh(db, TrackId(album.id), self._clock())
 
     def _changed(self) -> None:

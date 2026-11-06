@@ -549,6 +549,36 @@ def _add_track(connection: Connection, title: str, *, track_id: int | None = Non
     return int(added)
 
 
+def test_undoing_the_kind_migration_forgets_every_kind_the_household_named(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO track (id, title, artist, album, album_artist, genre, kind, added_at)"
+                " VALUES (1, 'Bremen', '', '', '', '', 'album', '2026-11-07 00:00:00.000000')"
+            )
+        )
+        for field, value in [("title", '"Bremen"'), ("kind", '"album"')]:
+            connection.execute(
+                text(
+                    "INSERT INTO track_value (track_id, origin, field, value, recorded_at)"
+                    " VALUES (1, 'household', :field, :value, '2026-11-07 00:00:00.000000')"
+                ),
+                {"field": field, "value": value},
+            )
+
+    _migrate_to(engine, "0023", down=True)
+
+    with engine.connect() as connection:
+        fields = connection.scalars(text("SELECT field FROM track_value")).all()
+        titles = connection.scalars(text("SELECT title FROM track")).all()
+    engine.dispose()
+    assert (fields, titles) == (["title"], ["Bremen"])
+
+
 _FAVORITE = {"field": "favorite", "op": "is", "value": True}
 
 

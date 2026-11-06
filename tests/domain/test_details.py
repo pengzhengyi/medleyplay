@@ -10,9 +10,13 @@ from hypothesis import strategies as st
 
 from medleyplay.domain.details import (
     ALBUM_FIELDS,
+    LONGEST_SONG_MS,
     MAX_TEXT,
     ORIGINS,
     Field,
+    Kind,
+    KindReason,
+    KindShown,
     Origin,
     Shown,
     Value,
@@ -20,6 +24,7 @@ from medleyplay.domain.details import (
     check_value,
     check_values,
     found_value,
+    kind_of,
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError
@@ -277,3 +282,55 @@ def test_a_cover_that_names_no_image_is_refused(value: object) -> None:
 def test_a_found_cover_that_names_no_image_is_no_value() -> None:
     assert found_value(Field.COVER, "folder.jpg") is None
     assert found_value(Field.COVER, _COVER) == _COVER
+
+
+@pytest.mark.parametrize("value", ["song", "album"])
+def test_a_kind_is_a_song_or_an_album(value: str) -> None:
+    assert check_value(Field.KIND, value) == value
+
+
+@pytest.mark.parametrize("value", ["single", "", 1], ids=["another word", "blank", "a number"])
+def test_a_kind_that_is_neither_is_refused(value: object) -> None:
+    with pytest.raises(InvalidInputError, match="song or album"):
+        check_value(Field.KIND, value)
+
+
+def test_a_found_kind_that_is_neither_is_no_value() -> None:
+    assert found_value(Field.KIND, "EP") is None
+    assert found_value(Field.KIND, " album ") == "album"
+
+
+_SONG_LONG = 4 * 60_000
+"""A four-minute file, as long as most songs."""
+
+
+@pytest.mark.parametrize(
+    ("duration_ms", "kind"),
+    [
+        (_SONG_LONG, Kind.SONG),
+        (LONGEST_SONG_MS - 1, Kind.SONG),
+        (LONGEST_SONG_MS, Kind.ALBUM),
+        (None, Kind.SONG),
+    ],
+    ids=["a song's length", "just short of an album", "an album's length", "unknown"],
+)
+def test_a_file_no_origin_names_the_kind_of_is_guessed_from_its_length(
+    duration_ms: int | None, kind: Kind
+) -> None:
+    assert kind_of(None, duration_ms=duration_ms) == KindShown(kind, KindReason.LENGTH)
+
+
+def test_the_kind_an_origin_names_wins_over_the_guess() -> None:
+    assert kind_of(Kind.ALBUM, duration_ms=_SONG_LONG) == KindShown(Kind.ALBUM, KindReason.NAMED)
+
+
+def test_a_split_file_is_an_album_whatever_its_length_or_name() -> None:
+    assert kind_of(Kind.SONG, duration_ms=_SONG_LONG, split=True) == KindShown(
+        Kind.ALBUM, KindReason.SPLIT
+    )
+
+
+def test_a_song_of_an_album_file_is_a_song_whatever_its_length_or_name() -> None:
+    assert kind_of(Kind.ALBUM, duration_ms=LONGEST_SONG_MS, segment=True) == KindShown(
+        Kind.SONG, KindReason.SEGMENT
+    )

@@ -8,7 +8,7 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.application.details import DetailsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.details import Field, Origin, Shown
+from medleyplay.domain.details import Field, Kind, KindReason, KindShown, Origin, Shown
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
 from medleyplay.domain.video_text import Song, VideoText
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
@@ -209,3 +209,27 @@ def test_a_track_has_no_video_text_until_one_is_read(
 def test_video_text_for_a_missing_track_is_not_found(details: DetailsService) -> None:
     with pytest.raises(NotFoundError):
         details.read_video_text(TrackId(999), VideoText("ケビョウニンゲン"))
+
+
+def test_a_song_no_one_named_the_kind_of_is_guessed_one_from_its_length(
+    catalog: CatalogService, details: DetailsService, alice: Account
+) -> None:
+    track_id = _song(catalog)
+
+    view = details.details(track_id)
+
+    assert view.kind == KindShown(Kind.SONG, KindReason.LENGTH)
+    assert Field.KIND not in view.shown
+    assert catalog.get_track(alice.id, track_id).kind is Kind.SONG
+
+
+def test_the_household_names_a_tracks_kind(
+    catalog: CatalogService, details: DetailsService, alice: Account
+) -> None:
+    track_id = _song(catalog)
+
+    view = details.put_household(track_id, {"kind": "album"})
+
+    assert view.kind == KindShown(Kind.ALBUM, KindReason.NAMED)
+    assert view.shown[Field.KIND] == Shown(Kind.ALBUM, Origin.HOUSEHOLD)
+    assert catalog.get_track(alice.id, track_id).kind is Kind.ALBUM

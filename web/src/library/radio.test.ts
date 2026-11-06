@@ -65,7 +65,7 @@ describe("which songs are suggested", () => {
     ["one that can't play", { availability: "missing" }],
     ["a site song not downloaded", { site: "bilibili", downloaded: false }],
     ["a file split into songs", { split: true }],
-    ["an unsplit file over 20 minutes", { duration_ms: 20 * 60_000 + 1 }],
+    ["a whole album in one file", { kind: "album", duration_ms: 3_600_000 }],
     ["a song rated 2 stars", { rating: 2 }],
   ])("never suggests %s", (_, change) => {
     expect(canSuggest(trackOf(1, "a", change))).toBe(false);

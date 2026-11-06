@@ -62,7 +62,7 @@ no router package.
 
 | View | Route | Shows |
 | --- | --- | --- |
-| Songs | `#/songs` | Every Track, in the song table |
+| Library | `#/library` | Every song and album, a split file's songs folded under it; see [The Library](#the-library) |
 | Radio | `#/radio` | *My station*, and shelves of albums for the Account; see [Recommendations](Recommendations.md#the-radio-tab) |
 | Artists | `#/artists` | Each artist, with how many Tracks and how long; one opens its Tracks |
 | Albums | `#/albums` | Each album, under its album artist, or its artist when that is blank |
@@ -88,6 +88,34 @@ no router package.
 - **Playing from a view** queues the Tracks the view shows, in their order at
   the click; a later sort or a fresh list doesn't change the queue. A Track that
   can't play stays in the queue, and *Next* skips it.
+
+## The Library
+
+The Library holds two kinds of item, songs and albums in one file, which
+support different things: an album is browsed into and played whole, a song is
+played on its own. See [Track details](Track%20details.md#the-details) for how a
+Track's kind is decided.
+
+- **Each item is a row,** marked with a note for a song or a record for an
+  album, each named *Song* or *Album* for screen readers and in its tooltip; the
+  marks show in every song table and in Up next.
+- **A split file's songs fold under it,** behind a caret named *Show the songs
+  of 生如夏花*, which states `aria-expanded`; its songs are set in under it. The
+  table keeps `role="table"` with a disclosure button rather than a treegrid,
+  which would promise arrow-key moves between cells. Sorting sorts the songs
+  under each file too; a filter keeps a file while it keeps any of its songs,
+  showing only those. Grouped, the table lists every song in its file's place,
+  as other tables do.
+- **The heading counts both:** *2 albums, 120 songs, 9 hr 5 min*, the songs of
+  split files among the songs.
+- **`#/songs`**, the route the Library had when it was called Songs, opens it,
+  so old bookmarks still work.
+- **A *music folder*** is what people see for a folder or zip an admin adds;
+  the code and the API call it a Library, as before, and the page keeps
+  *Library* for all the household's music.
+- **Play and Shuffle play the Library's order:** each item in its place, a split
+  file as its songs in their order. A caret beside each offers the other two
+  orders, *by album* and *by song*; see [Playback](Playback.md#the-web-client).
 
 ## The song table
 

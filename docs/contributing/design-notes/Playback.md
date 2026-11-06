@@ -175,6 +175,25 @@ and the full views are in [Web client](Web%20client.md).
   *Play* in the table's order with shuffle off, *Shuffle* at random with shuffle
   on. The queue then holds only that view, so *Repeat all* on an album plays the
   album again; the repeat mode itself is kept.
+- **Three orders** play the Library, and each queues its Tracks in *units* a
+  shuffle keeps together, in order:
+
+  | Order | Where | Plays | A unit is |
+  | --- | --- | --- | --- |
+  | The Library's | The Library's Play and Shuffle | Each item in its place, a split file as its songs | A split file's songs |
+  | By album | Albums, and the Library's carets | Each album whole, in disc and track order, the albums as listed | An album: its album artist and name, as Albums groups it |
+  | By song | The Library's carets | Every song; an album in one file, not split, is left out | None |
+
+  Other views, an artist's or a Playlist's, play their songs as listed, each on
+  its own. A unit is the entry's `unit`, such as `file:9`; entries side by side
+  with one unit shuffle as one, whether Shuffle queued them, shuffle was turned
+  on later, or a Track was clicked while shuffled. A queue saved without units
+  shuffles as it did.
+- **Up next names an album's songs:** two or more songs of one split file in a
+  row show under a row with the file's name and where they start in it, such as
+  *3 of 11*. It folds them away, and its *Remove* removes them all; each song
+  still moves and goes on its own. The row is worked out from the queue, which
+  holds only its entries.
 - **Play modes** are two controls, as in most players: *Shuffle*, on or off,
   and *Repeat*, which cycles through off, all, and one. In order is both off.
   - **Turning shuffle on** puts what plays next in random order. What played and

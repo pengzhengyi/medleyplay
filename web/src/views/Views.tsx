@@ -2,11 +2,17 @@
  * @file Each view of the Library, worked out from the Tracks the page already holds.
  */
 
-import { CaretLeftIcon, HeartIcon, PlaylistIcon } from "@phosphor-icons/react";
+import {
+  CaretLeftIcon,
+  HeartIcon,
+  PlayIcon,
+  PlaylistIcon,
+  ShuffleIcon,
+} from "@phosphor-icons/react";
 import { Fragment, type ReactNode, useMemo } from "react";
 
 import type { Mode, Playlist, Track } from "../api";
-import { formatLength } from "../format";
+import { formatLength, formatLibraryLength } from "../format";
 import {
   type FavoriteGroups,
   albumKey,
@@ -28,6 +34,7 @@ import {
   tracksOfAlbum,
   tracksOfArtist,
 } from "../library/views";
+import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
 import { type Route, hrefOf } from "../routes";
 import { Cover } from "./Cover";
 import { FavoriteHeart } from "./FavoriteHeart";
@@ -76,12 +83,8 @@ function viewOf(given: ViewProps) {
   const props = { ...given, tracks: songsOf(given.tracks) };
   const { route } = props;
   switch (route.view) {
-    case "songs":
-      return (
-        <Songs title="Songs" {...props} empty={<NoMusic />}>
-          {props.tracks}
-        </Songs>
-      );
+    case "library":
+      return <LibraryItems {...given} />;
     case "radio":
       return (
         <RadioView
@@ -123,7 +126,7 @@ function viewOf(given: ViewProps) {
       );
     }
     case "albums":
-      return <Albums tracks={props.tracks} favorites={props.favorites} />;
+      return <Albums tracks={props.tracks} favorites={props.favorites} actions={props.actions} />;
     case "album": {
       const songs = tracksOfAlbum(props.tracks, route.artist, route.name);
       return (
@@ -183,6 +186,28 @@ function viewOf(given: ViewProps) {
         />
       );
   }
+}
+
+/** Every song and album, a split file's songs folded under it. */
+function LibraryItems({ tracks, playingId, actions }: ViewProps) {
+  const items = useMemo(() => tracks.filter((track) => track.segment_of === null), [tracks]);
+  const songsIn = useMemo(() => songsByFile(tracks), [tracks]);
+  const played = inLibraryOrder(items, songsIn);
+  const albums = items.filter((track) => track.kind === "album").length;
+  return (
+    <>
+      <ViewHeading title="Library">
+        {items.length > 0 && formatLibraryLength(albums, bySong(played).length, durationOf(played))}
+      </ViewHeading>
+      <TrackTable
+        tracks={items}
+        songsIn={songsIn}
+        playingId={playingId}
+        actions={actions}
+        empty={<NoMusic />}
+      />
+    </>
+  );
 }
 
 /** A heading, and Tracks in the song table. */
@@ -310,16 +335,48 @@ function ArtistList({
 function Albums({
   tracks,
   favorites,
+  actions,
 }: {
   readonly tracks: readonly Track[];
   readonly favorites: FavoriteGroups;
+  readonly actions: TrackActions;
 }) {
   const albums = useMemo(() => albumsOf(tracks), [tracks]);
+  // Each album plays whole, in its track order, in the order the albums are listed.
+  const playable = everyAlbum(tracks.filter((track) => track.availability === "ok"));
   return (
     <>
       <ViewHeading title="Albums">
         {albums.length > 0 && `${String(albums.length)} albums`}
       </ViewHeading>
+      {albums.length > 0 && (
+        <div className="play-all">
+          <button
+            type="button"
+            aria-label="Play every album"
+            disabled={playable.length === 0}
+            onClick={() => {
+              actions.onPlayAll(playable, false, albumUnit);
+            }}
+          >
+            <PlayIcon weight="fill" aria-hidden />
+            Play
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            aria-label="Shuffle the albums"
+            title="Each album plays whole, in its order"
+            disabled={playable.length === 0}
+            onClick={() => {
+              actions.onPlayAll(playable, true, albumUnit);
+            }}
+          >
+            <ShuffleIcon weight="bold" aria-hidden />
+            Shuffle
+          </button>
+        </div>
+      )}
       {albums.length === 0 ? <NoMusic /> : <AlbumList albums={albums} favorites={favorites} />}
     </>
   );
@@ -498,8 +555,8 @@ function SearchResults({ query, ...props }: ViewProps & { readonly query: string
 function NoMusic() {
   return (
     <p className="empty">
-      No music yet. An admin adds a Library of your own music in <a href="/docs">the API</a>, and
-      its songs appear here.
+      No music yet. An admin adds a music folder of your own in <a href="/docs">the API</a>, and its
+      songs appear here.
     </p>
   );
 }

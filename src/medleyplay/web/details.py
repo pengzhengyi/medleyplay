@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, StrictInt, StrictStr
 from medleyplay.application.details import DetailsView, VideoRead
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field as Detail
-from medleyplay.domain.details import Origin, Shown
+from medleyplay.domain.details import Kind, KindReason, Origin, Shown
 from medleyplay.domain.video_text import VideoText
 from medleyplay.web.deps import DetailsDep, SignedInAccount
 from medleyplay.web.ids import RowId
@@ -25,6 +25,17 @@ class ShownOut(BaseModel):
 
     value: DetailValue
     origin: Origin
+
+
+class KindOut(BaseModel):
+    """Whether the Track is a song or an album, and why.
+
+    An origin names it, its file is split, it is a song of a split file, or its
+    file's length suggests it.
+    """
+
+    value: Kind
+    reason: KindReason
 
 
 class VideoTextIn(BaseModel):
@@ -56,6 +67,7 @@ class DetailsOut(BaseModel):
     found: dict[str, ShownOut]
     origins: dict[Origin, dict[str, DetailValue]]
     video_text: VideoTextOut | None
+    kind: KindOut
 
     @classmethod
     def of(cls, view: DetailsView) -> "DetailsOut":
@@ -71,6 +83,7 @@ class DetailsOut(BaseModel):
             video_text=None
             if view.video_text is None
             else VideoTextOut(title=view.video_text.title, description=view.video_text.description),
+            kind=KindOut(value=view.kind.kind, reason=view.kind.reason),
         )
 
 

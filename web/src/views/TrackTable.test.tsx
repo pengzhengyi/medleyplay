@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
 import type { CoverStatus } from "../library/lookups";
+import { albumUnit, songsByFile } from "../library/playOrder";
+import type { UnitOf } from "../player/usePlayer";
 import { trackOf } from "../testing/server";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
@@ -18,6 +20,7 @@ function renderTable(
   tracks: readonly Track[] = TRACKS,
   playingId?: number,
   statuses: ReadonlyMap<number, CoverStatus> = new Map(),
+  songsIn?: ReadonlyMap<number, readonly Track[]>,
 ) {
   const actions: TrackActions = {
     statusOf: (track) => statuses.get(track.id),
@@ -40,6 +43,7 @@ function renderTable(
       playingId={playingId}
       actions={actions}
       empty={<p>No music yet.</p>}
+      songsIn={songsIn}
     />,
   );
   return { actions, ...view };
@@ -509,5 +513,136 @@ describe("grouping", () => {
     await userEvent.selectOptions(screen.getByLabelText("Group by"), "Album");
 
     expect(screen.getByRole("button", { name: "OK Computer · Radiohead · 1 song" })).toBeVisible();
+  });
+});
+
+/**
+ * The Library's items: a song, an album in one file split into three songs, and an
+ * album in one file not split, as the server lists them:
+ *
+ * ```text
+ * 1   Melt        song
+ * 9   生如夏花     album, split into 11 傲慢的上校, 12 浮游 (a favorite), 13 生如夏花
+ * 20  Bremen      album
+ * ```
+ */
+const ITEMS = [
+  trackOf(1, "Melt", { album: "Re:Start" }),
+  trackOf(9, "生如夏花", { album: "生如夏花", kind: "album", split: true }),
+  trackOf(20, "Bremen", { album: "Bremen", kind: "album", duration_ms: 3_600_000 }),
+];
+const SONGS_OF_9 = [
+  trackOf(11, "傲慢的上校", { album: "生如夏花", segment_of: 9, track_number: 1 }),
+  trackOf(12, "浮游", { album: "生如夏花", segment_of: 9, track_number: 2, favorite: true }),
+  trackOf(13, "生如夏花", { album: "生如夏花", segment_of: 9, track_number: 3 }),
+];
+
+/** Return the row `element` is in. */
+function rowOf(element: HTMLElement): HTMLElement {
+  const row = element.closest("tr");
+  if (row === null) {
+    throw new Error("The element is in no row.");
+  }
+  return row;
+}
+
+const renderLibrary = () => renderTable(ITEMS, undefined, new Map(), songsByFile(SONGS_OF_9));
+const idsOf = (tracks: readonly Track[] | undefined) => tracks?.map((track) => track.id);
+
+describe("the Library", () => {
+  it("folds a split file's songs under it, showing them when asked", async () => {
+    renderLibrary();
+    const folded = shownTitles();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show the songs of 生如夏花" }));
+
+    expect(folded).toEqual(["Melt", "生如夏花", "Bremen"]);
+    expect(shownTitles()).toEqual(["Melt", "生如夏花", "傲慢的上校", "浮游", "生如夏花", "Bremen"]);
+    expect(screen.getByRole("button", { name: "Hide the songs of 生如夏花" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("marks each item a song or an album", () => {
+    renderLibrary();
+
+    const kindOf = (title: string) =>
+      within(rowOf(screen.getByRole("button", { name: title }))).getByRole("img", {
+        name: /^(Song|Album)$/u,
+      }).title;
+    expect(["Melt", "生如夏花", "Bremen"].map(kindOf)).toEqual(["Song", "Album", "Album"]);
+  });
+
+  it("plays a split file from its first song, its songs one unit among the items", async () => {
+    const { actions } = renderLibrary();
+
+    await userEvent.click(screen.getByRole("button", { name: "生如夏花" }));
+
+    const [shown, index, unitOf] = vi.mocked(actions.onPlay).mock.calls[0] ?? [];
+    expect(idsOf(shown)).toEqual([1, 11, 12, 13, 20]);
+    expect(index).toBe(1);
+    expect(shown?.map((track) => unitOf?.(track))).toEqual([
+      undefined,
+      "file:9",
+      "file:9",
+      "file:9",
+      undefined,
+    ]);
+  });
+
+  it("plays a song of a split file from its place", async () => {
+    const { actions } = renderLibrary();
+    await userEvent.click(screen.getByRole("button", { name: "Show the songs of 生如夏花" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "浮游" }));
+
+    expect(vi.mocked(actions.onPlay).mock.calls[0]?.[1]).toBe(2);
+  });
+
+  it("plays every item in its place, or shuffles them", async () => {
+    const { actions } = renderLibrary();
+
+    await userEvent.click(screen.getByRole("button", { name: "Shuffle all" }));
+
+    const [shown, shuffled] = vi.mocked(actions.onPlayAll).mock.calls[0] ?? [];
+    expect([idsOf(shown), shuffled]).toEqual([[1, 11, 12, 13, 20], true]);
+  });
+
+  it.each<[string, string, number[], boolean, UnitOf | undefined]>([
+    ["Play", "Play by song", [1, 11, 12, 13], false, undefined],
+    ["Shuffle", "Shuffle by album", [1, 11, 12, 13, 20], true, albumUnit],
+  ])("from %s's menu, plays %s", async (button, choice, ids, shuffled, unit) => {
+    const { actions } = renderLibrary();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: `More ways to ${button.toLowerCase()}` }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: choice }));
+
+    const [shown, shuffledAs, unitOf] = vi.mocked(actions.onPlayAll).mock.calls[0] ?? [];
+    expect([idsOf(shown), shuffledAs]).toEqual([ids, shuffled]);
+    expect(shown?.map((track) => unitOf?.(track))).toEqual(shown?.map((track) => unit?.(track)));
+  });
+
+  it("keeps a split file whose songs a filter keeps, with only those songs", async () => {
+    const { actions } = renderLibrary();
+    const filters = await openFilters();
+    await userEvent.click(within(filters).getByLabelText("Favorites only"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Show the songs of 生如夏花" }));
+    await userEvent.click(screen.getByRole("button", { name: "Play all" }));
+
+    expect(shownTitles()).toEqual(["生如夏花", "浮游"]);
+    expect(screen.getByText("1 of 3 songs and albums")).toBeInTheDocument();
+    expect(idsOf(vi.mocked(actions.onPlayAll).mock.calls[0]?.[0])).toEqual([12]);
+  });
+
+  it("lists every song in place of its split file when grouped", async () => {
+    renderLibrary();
+
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Album");
+
+    expect(shownTitles()).toEqual(["Melt", "傲慢的上校", "浮游", "生如夏花", "Bremen"]);
   });
 });

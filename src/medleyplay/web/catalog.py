@@ -20,6 +20,7 @@ from medleyplay.domain.catalog import (
     Track,
     TrackId,
 )
+from medleyplay.domain.details import Kind
 from medleyplay.domain.playback import PlayId
 from medleyplay.web.deps import CatalogDep, SignedInAccount
 from medleyplay.web.ids import RowId
@@ -57,6 +58,7 @@ class TrackOut(BaseModel):
     )
     segment_of: int | None = Field(description="The album file this Track is a song of, if any.")
     split: bool = Field(description="Whether this Track's file is split into songs.")
+    kind: Kind = Field(description="Whether the Track is a song or a whole album in one file.")
     cover: str | None = Field(description="The cover shown, served at `/api/covers/{cover}`.")
 
     @classmethod
@@ -85,6 +87,7 @@ class TrackOut(BaseModel):
             site=track.site,
             segment_of=track.segment_of,
             split=track.split,
+            kind=track.kind,
             cover=details.cover,
         )
 

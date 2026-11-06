@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final, NewType
 
+from medleyplay.domain.details import Kind
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.rules import Favorite, Match, Rules, fold
 
@@ -136,6 +137,8 @@ class Track:
     """The album file this Track is a song of, if it is one."""
     split: bool = False
     """Whether this Track's file is split into songs, which then stand for it."""
+    kind: Kind = Kind.SONG
+    """Whether the Track is a song or a whole album, named or worked out from its file."""
 
 
 @dataclass(frozen=True)

@@ -176,3 +176,34 @@ def test_a_paste_for_a_missing_track_is_not_found(client: TestClient) -> None:
     response = client.post("/api/tracks/999/video-text", json={"title": "Melt"})
 
     assert response.status_code == 404
+
+
+def test_a_tracks_details_say_its_kind_and_why(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    body = client.get(f"/api/tracks/{track_id}/details").json()
+
+    assert body["kind"] == {"value": "song", "reason": "length"}
+
+
+def test_the_household_calls_a_track_an_album(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    put = client.put(f"/api/tracks/{track_id}/details", json={"values": {"kind": "album"}})
+
+    assert put.json()["kind"] == {"value": "album", "reason": "named"}
+    assert put.json()["shown"]["kind"] == {"value": "album", "origin": "household"}
+    assert client.get(f"/api/tracks/{track_id}").json()["kind"] == "album"
+
+
+def test_a_kind_that_is_neither_a_song_nor_an_album_is_refused(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    put = client.put(f"/api/tracks/{track_id}/details", json={"values": {"kind": "single"}})
+
+    assert put.status_code == 422

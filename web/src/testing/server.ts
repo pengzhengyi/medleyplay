@@ -84,6 +84,7 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     site: null,
     segment_of: null,
     split: false,
+    kind: "song",
     cover: null,
     ...change,
   };
@@ -132,6 +133,7 @@ export function detailsOf(
     found: shownOf(found),
     origins,
     video_text: videoText,
+    kind: { value: "song", reason: "length" },
   };
 }
 

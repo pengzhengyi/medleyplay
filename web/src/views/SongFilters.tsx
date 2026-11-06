@@ -179,12 +179,15 @@ export function FiltersOn({
   filters,
   shown,
   total,
+  counted = "songs",
   onRemove,
   onClear,
 }: {
   readonly filters: Filters;
   readonly shown: number;
   readonly total: number;
+  /** What is counted, such as *songs and albums* in the Library. */
+  readonly counted?: string;
   readonly onRemove: (field: FilterField) => void;
   readonly onClear: () => void;
 }) {
@@ -195,7 +198,7 @@ export function FiltersOn({
   return (
     <div className="filters-on">
       <span className="filtered-count" role="status">
-        {`${String(shown)} of ${String(total)} songs`}
+        {`${String(shown)} of ${String(total)} ${counted}`}
       </span>
       {on.map((field) => {
         const label = describeFilter(field, filters);

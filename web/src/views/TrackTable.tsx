@@ -5,6 +5,10 @@
  * client hands it Tracks and callbacks. Rows above and below the screen are
  * spacer rows hidden from screen readers, while `aria-rowcount` and
  * `aria-rowindex` count every Track.
+ *
+ * Given the songs of each split file, it is the Library: each item a row, a split
+ * file's songs folded under it, and Play and Shuffle offering to play by album or
+ * by song too.
  */
 
 import {
@@ -13,11 +17,13 @@ import {
   CaretUpIcon,
   HeartIcon,
   ListPlusIcon,
+  MusicNoteSimpleIcon,
   PlayIcon,
   QueueIcon,
   ShuffleIcon,
   SlidersHorizontalIcon,
   StarIcon,
+  VinylRecordIcon,
 } from "@phosphor-icons/react";
 import {
   type ColumnDef,
@@ -45,11 +51,13 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
 import type { CoverStatus } from "../library/lookups";
+import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
+import type { UnitOf } from "../player/usePlayer";
 import { Cover } from "./Cover";
 import {
   type Choice,
@@ -59,13 +67,16 @@ import {
   FiltersOn,
   SongFilters,
 } from "./SongFilters";
-import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
+import { KindMark } from "./KindMark";
+import { MoreWays, TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { STATUS_ICONS } from "./statusIcons";
 
-/** What every cell may need: the page's callbacks, and which Track is playing. */
+/** What every cell may need: the page's callbacks, which Track is playing, and the songs of files. */
 interface Meta {
   readonly actions: TrackActions;
   readonly playingId: number | undefined;
+  /** In the Library, the songs of each split file; elsewhere none. */
+  readonly songsIn: ReadonlyMap<number, readonly Track[]> | undefined;
 }
 
 const features = tableFeatures({
@@ -179,9 +190,9 @@ const filtersOf = (state: ColumnFiltersState): Filters =>
 /** What the table does when a Track is chosen, queued, rated, or added to a Playlist. */
 export interface TrackActions extends TrackMenuActions {
   /** Play `shown`, the Tracks in the order the table shows them, from its entry `index`. */
-  readonly onPlay: (shown: readonly Track[], index: number) => void;
+  readonly onPlay: (shown: readonly Track[], index: number, unitOf?: UnitOf) => void;
   /** Play every Track of `playable` from the first, in the table's order or shuffled. */
-  readonly onPlayAll: (playable: readonly Track[], shuffled: boolean) => void;
+  readonly onPlayAll: (playable: readonly Track[], shuffled: boolean, unitOf?: UnitOf) => void;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
   readonly onRate: (track: Track, rating: number | null) => void;
   /** What the Track's cover shows of a lookup asked about it, if any. */
@@ -221,17 +232,22 @@ function saveLayout(layout: Layout): void {
   }
 }
 
-/** Tracks in a table; with no Tracks, `empty` shows instead. */
+/**
+ * Tracks in a table; with no Tracks, `empty` shows instead. Given `songsIn`, the songs
+ * of each split file, it is the Library: `tracks` are its items.
+ */
 export function TrackTable({
   tracks,
   playingId,
   empty,
   actions,
+  songsIn,
 }: {
   readonly tracks: readonly Track[];
   readonly playingId: number | undefined;
   readonly empty: ReactNode;
   readonly actions: TrackActions;
+  readonly songsIn?: ReadonlyMap<number, readonly Track[]> | undefined;
 }) {
   const [layout, setLayout] = useState(savedLayout);
   useEffect(() => {
@@ -239,14 +255,26 @@ export function TrackTable({
   }, [layout]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [grouping, setGrouping] = useState<GroupingState>([]);
-  const [expanded, setExpanded] = useState<ExpandedState>(true);
+  // Groups open when made; a split file's songs stay folded until asked for.
+  const folded: ExpandedState = songsIn === undefined ? true : {};
+  const [expanded, setExpanded] = useState<ExpandedState>(folded);
+  // Grouped, the Library lists every song in its split file's place, as other tables do.
+  const nested = songsIn !== undefined && grouping.length === 0;
+  const data = useMemo(
+    () => (songsIn === undefined || nested ? tracks : inLibraryOrder(tracks, songsIn)),
+    [tracks, songsIn, nested],
+  );
 
   const table = useTable({
     features,
     columns: COLUMNS,
     // The columns stay put, so a new callback or Track playing doesn't sort again.
-    meta: { actions, playingId },
-    data: tracks,
+    meta: { actions, playingId, songsIn: nested ? songsIn : undefined },
+    data,
+    // Grouped, `data` holds no split file, so no row has songs under it.
+    getSubRows: (track) => (track.split ? songsIn?.get(track.id) : undefined),
+    // A split file stays while a filter keeps any of its songs, showing only those.
+    filterFromLeafRows: nested,
     // A Playlist may hold a Track twice, so a row is a Track at its place.
     getRowId: (track, index) => `${String(track.id)}:${String(index)}`,
     enableMultiSort: false,
@@ -307,10 +335,35 @@ export function TrackTable({
   const after = virtual.getTotalSize() - ((items.at(-1)?.end ?? top) - top);
   // A spacer row has a cell per column, so a column the layout hides goes from it too.
   const columns = table.getVisibleLeafColumns().map((column) => column.id);
-  const songRows = rows.filter((row) => !row.getIsGrouped());
-  const playable = songRows
-    .map((row) => row.original)
-    .filter((track) => track.availability === "ok");
+  const queue = queueOf(table);
+  const playable = queue.filter((track) => track.availability === "ok");
+  const unitOf = songsIn === undefined ? undefined : fileUnit;
+  const playAll = (list: readonly Track[], shuffled: boolean, unit?: UnitOf) => {
+    if (unit === undefined) {
+      actions.onPlayAll(list, shuffled);
+    } else {
+      actions.onPlayAll(list, shuffled, unit);
+    }
+  };
+  const ways = (shuffled: boolean) => {
+    const verb = shuffled ? "Shuffle" : "Play";
+    return [
+      {
+        label: `${verb} by album`,
+        icon: <VinylRecordIcon />,
+        onSelect: () => {
+          playAll(byAlbum(playable), shuffled, albumUnit);
+        },
+      },
+      {
+        label: `${verb} by song`,
+        icon: <MusicNoteSimpleIcon />,
+        onSelect: () => {
+          playAll(bySong(playable), shuffled);
+        },
+      },
+    ];
+  };
   const filters = filtersOf(columnFilters);
   const choices = choicesOf(table);
   const setFilter = (field: FilterField, value: Filters[FilterField]) => {
@@ -325,29 +378,47 @@ export function TrackTable({
     <>
       <div className="table-tools">
         <div className="play-all">
-          <button
-            type="button"
-            aria-label="Play all"
-            disabled={playable.length === 0}
-            onClick={() => {
-              actions.onPlayAll(playable, false);
-            }}
-          >
-            <PlayIcon weight="fill" aria-hidden />
-            Play
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            aria-label="Shuffle all"
-            disabled={playable.length === 0}
-            onClick={() => {
-              actions.onPlayAll(playable, true);
-            }}
-          >
-            <ShuffleIcon weight="bold" aria-hidden />
-            Shuffle
-          </button>
+          <span className="split-button">
+            <button
+              type="button"
+              aria-label="Play all"
+              disabled={playable.length === 0}
+              onClick={() => {
+                playAll(playable, false, unitOf);
+              }}
+            >
+              <PlayIcon weight="fill" aria-hidden />
+              Play
+            </button>
+            {songsIn !== undefined && (
+              <MoreWays
+                label="More ways to play"
+                ways={ways(false)}
+                disabled={playable.length === 0}
+              />
+            )}
+          </span>
+          <span className="split-button secondary">
+            <button
+              type="button"
+              className="secondary"
+              aria-label="Shuffle all"
+              disabled={playable.length === 0}
+              onClick={() => {
+                playAll(playable, true, unitOf);
+              }}
+            >
+              <ShuffleIcon weight="bold" aria-hidden />
+              Shuffle
+            </button>
+            {songsIn !== undefined && (
+              <MoreWays
+                label="More ways to shuffle"
+                ways={ways(true)}
+                disabled={playable.length === 0}
+              />
+            )}
+          </span>
         </div>
         <details className="dropdown columns-menu">
           <summary>
@@ -379,7 +450,7 @@ export function TrackTable({
             className="group-by-select"
             value={by}
             onChange={(event) => {
-              setExpanded(true);
+              setExpanded(event.target.value === "" ? folded : true);
               setGrouping(event.target.value === "" ? [] : [event.target.value]);
             }}
           >
@@ -396,6 +467,7 @@ export function TrackTable({
         filters={filters}
         shown={table.getFilteredRowModel().rows.length}
         total={tracks.length}
+        counted={songsIn === undefined ? "songs" : "songs and albums"}
         onRemove={(field) => {
           setFilter(field, undefined);
         }}
@@ -510,7 +582,11 @@ export function TrackTable({
                 ref={virtual.measureElement}
                 data-index={item.index}
                 aria-rowindex={item.index + 2}
-                className={track.availability === "ok" ? undefined : "unplayable"}
+                className={
+                  [row.depth > 0 ? "child" : "", track.availability === "ok" ? "" : "unplayable"]
+                    .join(" ")
+                    .trim() || undefined
+                }
                 aria-current={track.id === playingId ? "true" : undefined}
                 // A click on the row plays its song, as its title does; the title stays the
                 // control for the keyboard and screen readers.
@@ -580,20 +656,52 @@ const meta = (table: { readonly options: { readonly meta?: Meta } }): Meta => {
 
 type SongRow = Row<typeof features, Track>;
 
-/** Play `row`'s song, with the songs shown queued around it in their order. */
-function playFrom(
-  table: {
-    readonly options: { readonly meta?: Meta };
-    readonly getRowModel: () => { readonly rows: readonly SongRow[] };
-  },
-  row: SongRow,
-) {
-  // A group's row is no song; the songs are the rows shown under the groups.
-  const shown = table.getRowModel().rows.filter((each) => !each.getIsGrouped());
-  meta(table).actions.onPlay(
-    shown.map((each) => each.original),
-    shown.indexOf(row),
-  );
+interface Rows {
+  readonly rows: readonly SongRow[];
+}
+
+/** What `playFrom` and `queueOf` read of the table. */
+interface Played {
+  readonly options: { readonly meta?: Meta };
+  readonly getRowModel: () => Rows;
+  readonly getPreExpandedRowModel: () => Rows;
+}
+
+/**
+ * Return the Tracks the table plays, in its order. In the Library, a split file plays
+ * as its songs the filters keep, in their own order, whether shown or folded away.
+ */
+function queueOf(table: Played): Track[] {
+  const { songsIn } = meta(table);
+  if (songsIn === undefined) {
+    // A group's row is no song; the songs are the rows shown under the groups.
+    return table
+      .getRowModel()
+      .rows.filter((each) => !each.getIsGrouped())
+      .map((each) => each.original);
+  }
+  return table.getPreExpandedRowModel().rows.flatMap((row) => {
+    if (!row.original.split) {
+      return [row.original];
+    }
+    const kept = new Set(row.subRows.map((song) => song.original.id));
+    return (songsIn.get(row.original.id) ?? []).filter((song) => kept.has(song.id));
+  });
+}
+
+/** Play `row`'s song, or a split file's first song, with the Tracks the table plays around it. */
+function playFrom(table: Played, row: SongRow) {
+  const { actions, songsIn } = meta(table);
+  const queue = queueOf(table);
+  const chosen = row.original;
+  const index = chosen.split
+    ? queue.findIndex((song) => song.segment_of === chosen.id)
+    : queue.indexOf(chosen);
+  if (songsIn === undefined) {
+    actions.onPlay(queue, index);
+  } else {
+    actions.onPlay(queue, index, fileUnit);
+  }
 }
 
 /** What on a row does its own thing when clicked, rather than playing the row's song. */
@@ -632,12 +740,30 @@ const COLUMNS: Column[] = [
       const track = row.original;
       const playable = track.availability === "ok";
       const { actions, playingId } = meta(table);
+      const nestedHere = meta(table).songsIn !== undefined;
       return (
-        <div className="title-cell">
+        <div className={row.depth > 0 ? "title-cell child" : "title-cell"}>
+          {nestedHere && row.depth === 0 && (
+            <span className="fold-slot">
+              {row.getCanExpand() && (
+                <button
+                  type="button"
+                  className="icon fold"
+                  aria-expanded={row.getIsExpanded()}
+                  aria-label={`${row.getIsExpanded() ? "Hide" : "Show"} the songs of ${track.title}`}
+                  title={row.getIsExpanded() ? "Hide its songs" : "Show its songs"}
+                  onClick={row.getToggleExpandedHandler()}
+                >
+                  <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
+                </button>
+              )}
+            </span>
+          )}
           <span className="thumb-frame">
             <Cover cover={track.cover} className="thumb" />
             <CoverBadge status={actions.statusOf(track)} playing={track.id === playingId} />
           </span>
+          <KindMark kind={track.kind} />
           <button
             type="button"
             className="title"

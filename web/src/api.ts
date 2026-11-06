@@ -36,9 +36,20 @@ export interface Track {
   readonly segment_of: number | null;
   /** Whether this Track's file is split into songs, which then stand for it. */
   readonly split: boolean;
+  /** Whether the Track is a song or a whole album in one file. */
+  readonly kind: Kind;
   /** The cover shown, by name, served at `coverUrl(cover)`. */
   readonly cover: string | null;
 }
+
+/** What a Track is: one song, or one file holding a whole album. */
+export type Kind = "song" | "album";
+
+/**
+ * Why a Track is the kind it is: an origin names it, its file is split, it is a song of
+ * a split file, or it is guessed from its file's length.
+ */
+export type KindReason = "named" | "split" | "segment" | "length";
 
 /** Return where the cover named `cover` is served. */
 export function coverUrl(cover: string): string {
@@ -55,7 +66,8 @@ export type Detail =
   | "disc_number"
   | "year"
   | "genre"
-  | "cover";
+  | "cover"
+  | "kind";
 
 /** Where a value came from, the first shown when several give one; `ai` is never shown. */
 export type Origin =
@@ -77,6 +89,8 @@ export interface Details {
   >;
   /** The video's text the `video` values were read from, if any was. */
   readonly video_text: VideoText | null;
+  /** Whether the Track is a song or an album, and why. */
+  readonly kind: { readonly value: Kind; readonly reason: KindReason };
 }
 
 /** A video's title and description, as the site shows them. */

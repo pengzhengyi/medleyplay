@@ -42,7 +42,7 @@ from medleyplay.domain.catalog import (
     source_availability,
     track_availability,
 )
-from medleyplay.domain.details import Field, Origin, Value
+from medleyplay.domain.details import Field, Kind, Origin, Value, kind_of
 from medleyplay.domain.downloads import download_target
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import JobState
@@ -590,6 +590,12 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         site=site,
         segment_of=None if segment_of is None else TrackId(segment_of),
         split=split,
+        kind=kind_of(
+            None if track.kind is None else Kind(track.kind),
+            duration_ms=track.duration_ms,
+            split=split,
+            segment=segment_of is not None,
+        ).kind,
     )
 
 

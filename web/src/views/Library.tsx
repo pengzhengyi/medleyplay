@@ -307,7 +307,7 @@ export function Library({
     <div className={queueOpen ? "library queue-open" : "library"}>
       <header ref={top} className="top">
         <h1>
-          <a className="wordmark" href={hrefOf({ view: "songs" })}>
+          <a className="wordmark" href={hrefOf({ view: "library" })}>
             <WaveformIcon weight="bold" aria-hidden />
             medleyplay
           </a>

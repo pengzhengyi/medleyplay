@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBytes, formatLength, formatQueueLength, formatTime } from "./format";
+import {
+  formatBytes,
+  formatLength,
+  formatLibraryLength,
+  formatQueueLength,
+  formatTime,
+} from "./format";
 
 describe("formatTime", () => {
   it("writes minutes and two-digit seconds", () => {
@@ -62,5 +68,16 @@ describe("formatBytes", () => {
     expect(formatBytes(420_000_000)).toBe("420 MB");
     expect(formatBytes(3_210_000_000)).toBe("3.2 GB");
     expect(formatBytes(2_000_000_000_000)).toBe("2 TB");
+  });
+});
+
+describe("formatLibraryLength", () => {
+  it("counts the albums, then the songs, then how long they all play", () => {
+    expect(formatLibraryLength(2, 12, 6_000_000)).toBe("2 albums, 12 songs, 1 hr 40 min");
+    expect(formatLibraryLength(1, 1, 240_000)).toBe("1 album, 1 song, 4 min");
+  });
+
+  it("says only the songs when there is no album", () => {
+    expect(formatLibraryLength(0, 3, 600_000)).toBe("3 songs, 10 min");
   });
 });

@@ -12,7 +12,7 @@ from medleyplay.application.details import DetailsService
 from medleyplay.application.segments import SongsService, SongView
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, SourceState, TrackId
-from medleyplay.domain.details import Field, Origin, Shown
+from medleyplay.domain.details import Field, Kind, KindReason, KindShown, Origin, Shown
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.segments import SongRow
 from medleyplay.domain.video_text import Song, VideoText
@@ -346,3 +346,67 @@ def test_a_save_from_an_editor_opened_before_the_songs_changed_is_refused(
         )
 
     assert len(songs.songs(album).songs) == 4
+
+
+def test_a_whole_album_in_one_file_is_guessed_an_album_before_it_is_split(
+    details: DetailsService, album: TrackId
+) -> None:
+    assert details.details(album).kind == KindShown(Kind.ALBUM, KindReason.LENGTH)
+
+
+def test_a_split_file_is_an_album_and_each_of_its_songs_a_song(
+    songs: SongsService,
+    details: DetailsService,
+    catalog: CatalogService,
+    album: TrackId,
+    alice: Account,
+) -> None:
+    first = songs.save(album, THREE_SONGS).songs[0]
+
+    tracks = {track.id: track for track in catalog.list_tracks(alice.id)}
+
+    assert details.details(album).kind == KindShown(Kind.ALBUM, KindReason.SPLIT)
+    assert details.details(first.track_id).kind == KindShown(Kind.SONG, KindReason.SEGMENT)
+    assert tracks[album].kind is Kind.ALBUM
+    assert tracks[first.track_id].kind is Kind.SONG
+    assert catalog.get_track(alice.id, first.track_id).kind is Kind.SONG
+
+
+def test_calling_a_split_file_a_song_is_refused(
+    songs: SongsService, details: DetailsService, album: TrackId
+) -> None:
+    songs.save(album, THREE_SONGS)
+
+    with pytest.raises(InvalidInputError, match="Unsplit"):
+        details.put_household(album, {"kind": "song"})
+
+
+def test_a_song_of_a_split_file_takes_no_kind_of_its_own(
+    songs: SongsService, details: DetailsService, album: TrackId
+) -> None:
+    first = songs.save(album, THREE_SONGS).songs[0]
+
+    with pytest.raises(InvalidInputError, match="song of"):
+        details.put_household(first.track_id, {"kind": "album"})
+
+
+def test_splitting_a_file_the_household_called_a_song_forgets_that(
+    songs: SongsService, details: DetailsService, album: TrackId
+) -> None:
+    details.put_household(album, {"kind": "song"})
+    songs.save(album, THREE_SONGS)
+
+    songs.unsplit(album)
+
+    assert details.details(album).kind == KindShown(Kind.ALBUM, KindReason.LENGTH)
+    assert Field.KIND not in details.details(album).values.get(Origin.HOUSEHOLD, {})
+
+
+def test_an_album_files_kind_never_reaches_its_songs(
+    songs: SongsService, details: DetailsService, album: TrackId
+) -> None:
+    details.put_household(album, {"kind": "album"})
+
+    first = songs.save(album, THREE_SONGS).songs[0]
+
+    assert Field.KIND not in details.details(first.track_id).values[Origin.ALBUM_FILE]

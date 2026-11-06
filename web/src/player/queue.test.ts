@@ -301,6 +301,65 @@ describe("playing a whole list", () => {
   });
 });
 
+/**
+ * Entries for a song, an album file split into three songs, and another song, as the
+ * Library plays them: `1`, then `2 3 4` of one file, then `5`.
+ */
+const SONG_ALBUM_SONG: readonly Entry[] = entries(1, 2, 3, 4, 5).map((entry) =>
+  entry.trackId >= 2 && entry.trackId <= 4 ? { ...entry, unit: "file:9" } : entry,
+);
+
+/** Return whether Tracks 2, 3, and 4 play one after another, in that order. */
+const albumWhole = (list: readonly Entry[]) => {
+  const at = tracksOf(list).indexOf(2);
+  return (
+    tracksOf(list)
+      .slice(at, at + 3)
+      .join() === "2,3,4"
+  );
+};
+
+describe("units", () => {
+  it.each(SEEDS)("shuffled, a unit's entries play together and in order (seed %i)", (seed) => {
+    const queue = reduce(EMPTY, {
+      type: "playAll",
+      entries: SONG_ALBUM_SONG,
+      shuffled: true,
+      random: seeded(seed),
+    });
+
+    expect(albumWhole(queue.entries)).toBe(true);
+    expect(sorted(tracksOf(queue.entries))).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("shuffled, moves a unit as a whole, not always to the same place", () => {
+    const places = new Set(
+      SEEDS.map((seed) =>
+        tracksOf(
+          reduce(EMPTY, {
+            type: "playAll",
+            entries: SONG_ALBUM_SONG,
+            shuffled: true,
+            random: seeded(seed),
+          }).entries,
+        ).indexOf(2),
+      ),
+    );
+
+    expect([...places].sort()).toEqual([0, 1, 2]);
+  });
+
+  it.each(SEEDS)("turning shuffle on keeps an upcoming unit together (seed %i)", (seed) => {
+    const queue = reduce(
+      { ...EMPTY, entries: SONG_ALBUM_SONG },
+      { type: "shuffle", random: seeded(seed) },
+    );
+
+    expect(albumWhole(queue.entries)).toBe(true);
+    expect(tracksOf(reduce(queue, { type: "unshuffle" }).entries)).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
 describe("repeat", () => {
   it("cycles off, all, one, and off again", () => {
     expect([repeatAfter("off"), repeatAfter("all"), repeatAfter("one")]).toEqual([

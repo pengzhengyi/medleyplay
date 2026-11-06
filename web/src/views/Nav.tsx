@@ -15,10 +15,10 @@ import {
 
 import { type Route, hrefOf } from "../routes";
 
-type Top = "songs" | "radio" | "artists" | "albums" | "downloaded" | "playlists" | "settings";
+type Top = "library" | "radio" | "artists" | "albums" | "downloaded" | "playlists" | "settings";
 
 const TOPS: readonly { readonly view: Top; readonly label: string; readonly icon: Icon }[] = [
-  { view: "songs", label: "Songs", icon: MusicNotesSimpleIcon },
+  { view: "library", label: "Library", icon: MusicNotesSimpleIcon },
   { view: "radio", label: "Radio", icon: RadioIcon },
   { view: "artists", label: "Artists", icon: MicrophoneStageIcon },
   { view: "albums", label: "Albums", icon: VinylRecordIcon },

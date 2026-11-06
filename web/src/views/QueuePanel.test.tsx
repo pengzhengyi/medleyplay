@@ -35,7 +35,7 @@ function upNext(): string[] {
   const queue = screen.getByRole("region", { name: "Up next" });
   return within(queue)
     .queryAllByRole("listitem")
-    .map((item) => item.querySelector(".entry-title")?.textContent ?? "");
+    .flatMap((item) => item.querySelector(".entry-title")?.textContent ?? []);
 }
 
 describe("the queue", () => {
@@ -101,5 +101,80 @@ describe("the queue", () => {
       within(screen.getByRole("region", { name: "Player" })).getByText("Long Road"),
     ).toBeInTheDocument();
     expect(upNext()).toEqual(["Outro"]);
+  });
+});
+
+/**
+ * A signed-in page playing Melt from the Library, so the songs of 生如夏花, a file
+ * split into three songs, and Bremen, an album in one file, play next.
+ */
+async function playingMelt() {
+  const tracks = [
+    trackOf(1, "Melt"),
+    trackOf(9, "生如夏花", { artist: "朴树", kind: "album", split: true }),
+    trackOf(11, "傲慢的上校", { artist: "朴树", segment_of: 9, track_number: 1 }),
+    trackOf(12, "浮游", { artist: "朴树", segment_of: 9, track_number: 2 }),
+    trackOf(13, "生如夏花", { artist: "朴树", segment_of: 9, track_number: 3 }),
+    trackOf(20, "Bremen", { artist: "ハチ", kind: "album", duration_ms: 3_600_000 }),
+  ];
+  serve({
+    ...signedIn(tracks),
+    ...Object.fromEntries(
+      tracks.map(({ id }) => [
+        `POST /api/tracks/${String(id)}/playback`,
+        {
+          body: {
+            state: "ready",
+            source_id: id,
+            audio_url: `/api/sources/${String(id)}/audio`,
+            media_type: "audio/wav",
+          },
+        },
+      ]),
+    ),
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", { name: "Melt" }));
+  return screen.getByRole("region", { name: "Up next" });
+}
+
+describe("an album in the queue", () => {
+  it("shows the songs of one file under its name, saying where they start", async () => {
+    const queue = await playingMelt();
+
+    const album = within(queue).getByRole("listitem", { name: "生如夏花, 1 of 3" });
+    expect(within(album).getByText("1 of 3")).toBeVisible();
+    expect(upNext()).toEqual(["傲慢的上校", "浮游", "生如夏花", "Bremen"]);
+  });
+
+  it("marks an album in one file as an album, and a song as a song", async () => {
+    const queue = await playingMelt();
+
+    const marks = within(queue).getAllByRole("img", { name: /^(Song|Album)$/u });
+    expect(marks.map((mark) => mark.title)).toEqual(["Album", "Song", "Song", "Song", "Album"]);
+  });
+
+  it("removes the rest of an album at once", async () => {
+    const queue = await playingMelt();
+
+    await userEvent.click(
+      within(queue).getByRole("button", { name: "Remove the rest of 生如夏花" }),
+    );
+
+    expect(upNext()).toEqual(["Bremen"]);
+  });
+
+  it("folds an album's songs away, and shows them again", async () => {
+    const queue = await playingMelt();
+    const toggle = within(queue).getByRole("button", { name: "Hide the songs of 生如夏花" });
+
+    await userEvent.click(toggle);
+    const folded = upNext();
+    await userEvent.click(
+      within(queue).getByRole("button", { name: "Show the songs of 生如夏花" }),
+    );
+
+    expect(folded).toEqual(["Bremen"]);
+    expect(upNext()).toEqual(["傲慢的上校", "浮游", "生如夏花", "Bremen"]);
   });
 });

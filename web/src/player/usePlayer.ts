@@ -47,9 +47,10 @@ export interface Player {
   readonly volume: number;
   /** Whether it is silent for now; the volume comes back as it was. */
   readonly muted: boolean;
-  readonly playList: (tracks: readonly Track[], start: number) => void;
-  /** Play every Track of `tracks` from the first, in their order or shuffled. */
-  readonly playAll: (tracks: readonly Track[], shuffled: boolean) => void;
+  /** Play `tracks` from its entry `start`, each in the unit `unitOf` gives it, if any. */
+  readonly playList: (tracks: readonly Track[], start: number, unitOf?: UnitOf) => void;
+  /** Play every Track of `tracks` from the first, in their order or shuffled by unit. */
+  readonly playAll: (tracks: readonly Track[], shuffled: boolean, unitOf?: UnitOf) => void;
   readonly playNext: (track: Track) => void;
   readonly add: (track: Track) => void;
   readonly toggle: () => void;
@@ -94,7 +95,14 @@ const UNPLAYABLE: Record<string, string> = {
   cant_play: "This Track can't be played.",
 };
 
-const entryOf = (track: Track): Entry => ({ key: newId(), trackId: track.id });
+/** The unit a Track is queued as part of, if any; a shuffle keeps a unit together. */
+export type UnitOf = (track: Track) => string | undefined;
+
+const entryOf = (track: Track, unitOf?: UnitOf): Entry => ({
+  key: newId(),
+  trackId: track.id,
+  unit: unitOf?.(track),
+});
 const wait = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -544,11 +552,13 @@ export function usePlayer(
     duration: shown?.duration,
     volume,
     muted,
-    playList: (list, start) => {
-      dispatch({ type: "play", entries: list.map(entryOf), start, random: Math.random });
+    playList: (list, start, unitOf) => {
+      const entries = list.map((track) => entryOf(track, unitOf));
+      dispatch({ type: "play", entries, start, random: Math.random });
     },
-    playAll: (list, shuffled) => {
-      dispatch({ type: "playAll", entries: list.map(entryOf), shuffled, random: Math.random });
+    playAll: (list, shuffled, unitOf) => {
+      const entries = list.map((track) => entryOf(track, unitOf));
+      dispatch({ type: "playAll", entries, shuffled, random: Math.random });
     },
     playNext: (chosen) => {
       dispatch({ type: "playNext", entry: entryOf(chosen) });

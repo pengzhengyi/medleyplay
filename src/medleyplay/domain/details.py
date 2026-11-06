@@ -15,6 +15,10 @@ of them still wins on its own. When that origin has no cover, the cover comes
 from the first origin naming no album, such as an image beside a file whose
 album only the video names. An album the household names corrects the one it
 replaces, so that one's cover stays unless the household gives its own.
+
+A Track's *kind* says whether it is a song or an album: one file holding a
+whole album. An origin may name it; otherwise `kind_of` guesses it from the
+file's length, and a split file is always an album and each of its songs a song.
 """
 
 from collections.abc import Mapping
@@ -29,6 +33,8 @@ MAX_TEXT: Final = 512
 MAX_NUMBER: Final = 999
 MIN_YEAR: Final = 1000
 MAX_YEAR: Final = 2999
+LONGEST_SONG_MS: Final = 20 * 60_000
+"""A file this long or longer is guessed to be an album rather than a song."""
 
 
 class Origin(StrEnum):
@@ -67,6 +73,36 @@ class Field(StrEnum):
     GENRE = "genre"
     COVER = "cover"
     """A cover image, named by the SHA-256 of its bytes; empty text shows none."""
+    KIND = "kind"
+    """Whether the Track is a song or an album, as `Kind` names them."""
+
+
+class Kind(StrEnum):
+    """What a Track is: one song, or one file holding a whole album."""
+
+    SONG = "song"
+    ALBUM = "album"
+
+
+class KindReason(StrEnum):
+    """Why a Track is the kind it is."""
+
+    NAMED = "named"
+    """An origin names it."""
+    SPLIT = "split"
+    """Its file is split into songs, so it is an album."""
+    SEGMENT = "segment"
+    """It is a song of a split file."""
+    LENGTH = "length"
+    """Guessed from its file's length; a file of unknown length is a song."""
+
+
+@dataclass(frozen=True)
+class KindShown:
+    """A Track's kind, and why it is that kind."""
+
+    kind: Kind
+    reason: KindReason
 
 
 TEXT_FIELDS: Final = frozenset(
@@ -109,6 +145,11 @@ def check_value(field: Field, value: object) -> Value:
             message = "cover names an image by the SHA-256 of its bytes, or is empty."
             raise InvalidInputError(message)
         return value
+    if field is Field.KIND:
+        if value not in set(Kind):
+            message = "kind is song or album."
+            raise InvalidInputError(message)
+        return Kind(str(value))
     if field in TEXT_FIELDS:
         if not isinstance(value, str):
             message = f"{field} is text."
@@ -136,6 +177,9 @@ def found_value(field: Field, value: Value) -> Value | None:
     """
     if field is Field.COVER:
         return value if isinstance(value, str) and is_cover_id(value) else None
+    if field is Field.KIND:
+        word = value.strip() if isinstance(value, str) else ""
+        return Kind(word) if word in set(Kind) else None
     if field in TEXT_FIELDS:
         text = value.strip()[:MAX_TEXT].strip() if isinstance(value, str) else ""
         return text or None
@@ -216,3 +260,21 @@ def _first(
         if value is not None:
             return Shown(value, origin)
     return None
+
+
+def kind_of(
+    named: Kind | None, *, duration_ms: int | None, split: bool = False, segment: bool = False
+) -> KindShown:
+    """Return a Track's kind from the kind its origins name, if any, and its file.
+
+    A song of a split file is a song, and a split file an album, whatever is named;
+    otherwise the named kind wins over a guess from the file's length.
+    """
+    if segment:
+        return KindShown(Kind.SONG, KindReason.SEGMENT)
+    if split:
+        return KindShown(Kind.ALBUM, KindReason.SPLIT)
+    if named is not None:
+        return KindShown(named, KindReason.NAMED)
+    long = duration_ms is not None and duration_ms >= LONGEST_SONG_MS
+    return KindShown(Kind.ALBUM if long else Kind.SONG, KindReason.LENGTH)

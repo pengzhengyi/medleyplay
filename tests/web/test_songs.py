@@ -51,9 +51,18 @@ def test_track_lists_say_which_file_is_split_and_which_file_a_song_is_of(
 
     tracks = {track["id"]: track for track in client.get("/api/tracks").json()}
 
-    assert (tracks[album]["split"], tracks[album]["segment_of"]) == (True, None)
+    assert (tracks[album]["split"], tracks[album]["segment_of"], tracks[album]["kind"]) == (
+        True,
+        None,
+        "album",
+    )
     song = tracks[first["track_id"]]
-    assert (song["split"], song["segment_of"], song["title"]) == (False, album, "アイネクライネ")
+    assert (song["split"], song["segment_of"], song["title"], song["kind"]) == (
+        False,
+        album,
+        "アイネクライネ",
+        "song",
+    )
 
 
 def test_a_song_named_by_its_id_keeps_its_track(

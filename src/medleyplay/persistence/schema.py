@@ -179,6 +179,16 @@ class EnricherStopRow(Base):
     reason: Mapped[str] = mapped_column(String(2048), default="")
 
 
+class EnricherModeRow(Base):
+    """When the household has an enricher asked; one without a row is asked manually."""
+
+    __tablename__ = "enricher_mode"
+
+    enricher: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(16))
+    set_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class EnricherAskRow(Base):
     """When an enricher last asked its site about a subject, so it never asks twice in a day.
 

@@ -30,7 +30,7 @@ from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
-from medleyplay.domain.accounts import Account
+from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.ai import cut_text
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
@@ -38,6 +38,7 @@ from medleyplay.domain.enrichers import (
     ENRICHERS,
     MESSAGES,
     Enricher,
+    EnricherMode,
     Ineligible,
     Subject,
     enricher_named,
@@ -53,6 +54,7 @@ from medleyplay.domain.jobs import Job, JobId, JobState
 from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import (
     EnricherAskRow,
+    EnricherModeRow,
     EnricherStopRow,
     JobRow,
     TrackRow,
@@ -98,6 +100,8 @@ class EnricherState:
     stopped_at: datetime | None
     reason: str
     """The site's refusal that stopped it, or empty."""
+    mode: EnricherMode = EnricherMode.MANUAL
+    """When the household has it asked."""
 
 
 def enrich_track_kind(covers_folder: Path, clock: Clock) -> EnrichKind:
@@ -222,12 +226,41 @@ class EnrichmentService:
         enricher = enricher_named(name)
         with self._units() as db:
             stop = db.get(EnricherStopRow, enricher.name)
+            mode = db.get(EnricherModeRow, enricher.name)
         return EnricherState(
             name=enricher.name,
             available=self._available(enricher),
             stopped_at=None if stop is None else stop.stopped_at,
             reason="" if stop is None else stop.reason,
+            mode=EnricherMode.MANUAL if mode is None else EnricherMode(mode.mode),
         )
+
+    def set_mode(self, caller: Account, name: str, mode: EnricherMode) -> EnricherState:
+        """Choose when the enricher is asked; admins only. Finding all asks at once."""
+        _require_admin(caller)
+        enricher = enricher_named(name)
+        with self._units.begin() as db:
+            row = db.get(EnricherModeRow, enricher.name)
+            if row is None:
+                db.add(EnricherModeRow(enricher=enricher.name, mode=mode, set_at=self._clock()))
+            else:
+                row.mode = mode
+                row.set_at = self._clock()
+        if mode is EnricherMode.ALL:
+            self._find_missing(enricher)
+        return self.state(name)
+
+    def sweep(self) -> int:
+        """Queue every enricher set to find all for each Track it may be asked about now.
+
+        Return how many were queued; a Track already queued is left alone, and an
+        enricher turned off or stopped by its site queues nothing.
+        """
+        with self._units() as db:
+            finding = db.scalars(
+                select(EnricherModeRow.enricher).where(EnricherModeRow.mode == EnricherMode.ALL)
+            ).all()
+        return sum(self._find_missing(enricher_named(name)) for name in finding)
 
     def eligible(self, name: str) -> list[TrackId]:
         """Return the Tracks the enricher may be asked about now; none while it is stopped."""
@@ -249,7 +282,9 @@ class EnrichmentService:
 
         The Track must be eligible; the Job waits while the Mode is Offline.
         """
-        enricher = enricher_named(name)
+        return self._submit(enricher_named(name), track_id, caller.id)
+
+    def _submit(self, enricher: Enricher, track_id: TrackId, requested_by: AccountId | None) -> Job:
         self._require_available(enricher)
         now = self._clock()
         with self._units() as db:
@@ -272,7 +307,7 @@ class EnrichmentService:
             self._kind,
             enrich_target(track_id, enricher.name),
             _request(enricher, found, shown_now, duration_ms, text),
-            caller.id,
+            requested_by,
         )
 
     def find_details_for_all(self, caller: Account, name: str) -> int:
@@ -285,11 +320,16 @@ class EnrichmentService:
         self._require_available(enricher)
         if self.state(name).stopped_at is not None:
             raise ConflictError(MESSAGES[Ineligible.STOPPED])
+        return self._find_missing(enricher, caller.id)
+
+    def _find_missing(self, enricher: Enricher, requested_by: AccountId | None = None) -> int:
+        """Queue the enricher for each Track it may be asked about that has no Job; say how many."""
+        if not self._available(enricher):
+            return 0
         queued = 0
-        for track_id in self.eligible(name):
-            target = enrich_target(track_id, enricher.name)
-            if self._jobs.active(ENRICH_KIND, target) is None:
-                self.find_details(caller, track_id, name)
+        for track_id in self.eligible(enricher.name):
+            if self._jobs.active(ENRICH_KIND, enrich_target(track_id, enricher.name)) is None:
+                self._submit(enricher, track_id, requested_by)
                 queued += 1
         return queued
 

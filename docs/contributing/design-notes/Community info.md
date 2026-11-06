@@ -100,7 +100,7 @@ Every keyless source here is keyed by something MusicBrainz knows, so the
   release; its songs, until each is matched, have none of their own, so a song
   inside a long file gets album-level info and no song rating.
 - **Tracks matched before this change** have no ids. The migration forgets the
-  asked-once rows of `musicbrainz`, so *Find on MusicBrainz for all* asks about
+  asked-once rows of `musicbrainz`, so finding them on MusicBrainz asks about
   them again.
 
 ## Changes to the plugin API

@@ -109,10 +109,10 @@ export function SettingsView({
     bilibili: (
       <>
         <BilibiliSettings />
-        <VideoDetailsSettings />
+        <VideoDetailsSettings onChanged={onEnrichersChanged} />
       </>
     ),
-    musicbrainz: <MusicBrainzSettings />,
+    musicbrainz: <MusicBrainzSettings onChanged={onEnrichersChanged} />,
     ai: <AiSettings onChanged={onEnrichersChanged} />,
   };
   return (

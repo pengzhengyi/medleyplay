@@ -8,6 +8,7 @@ import {
   ApiError,
   type Detail,
   type Details,
+  type EnricherMode,
   type FavoritesRead,
   type AddedPart,
   type Job,
@@ -54,6 +55,8 @@ export interface Library {
   readonly findable: ReadonlyMap<string, ReadonlySet<number>>;
   /** Ask the enrichers again which Tracks they may be asked about, as after one is set up. */
   readonly refreshFindable: () => void;
+  /** When the household has each enricher asked, once the server has said. */
+  readonly modes: ReadonlyMap<string, EnricherMode>;
   /**
    * Ask the enricher about the Track; its details show once the Job has run. The promise
    * rejects with why when the server refuses.
@@ -155,6 +158,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [findable, setFindable] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
+  const [modes, setModes] = useState<ReadonlyMap<string, EnricherMode>>(new Map());
   const [lookups, setLookups] = useState<ReadonlyMap<number, TrackLookup>>(new Map());
   const [favoriteGroups, setFavoriteGroups] = useState<FavoriteGroups>(NO_FAVORITES);
   // The latest favorite written, so an older answer can't land after it, and how many
@@ -228,6 +232,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.enricher(enricher).then(
         (read) => {
           setFindable((now) => new Map(now).set(enricher, new Set(read.eligible)));
+          setModes((now) => new Map(now).set(enricher, read.mode));
         },
         () => {
           // Without the enricher, no Track offers its lookup.
@@ -414,6 +419,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     mode,
     findable,
     refreshFindable: loadFindable,
+    modes,
     lookups,
     find: async (enricher, id) => {
       jobOfTrack.current.delete(id);

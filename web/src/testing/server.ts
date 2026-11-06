@@ -7,6 +7,7 @@ import { vi } from "vitest";
 import type {
   Account,
   Details,
+  Enricher,
   Features,
   LinkLookup,
   MeteredNetwork,
@@ -132,6 +133,15 @@ export function detailsOf(
     origins,
     video_text: videoText,
   };
+}
+
+/** The enricher `name`, on, not stopped, asked manually, about the Tracks `eligible`. */
+export function enricherOf(
+  name: string,
+  eligible: readonly number[] = [],
+  change: Partial<Enricher> = {},
+): Enricher {
+  return { name, available: true, stopped: null, eligible, mode: "manual", ...change };
 }
 
 /** A server with no plugins answering any extension point, and one Account. */

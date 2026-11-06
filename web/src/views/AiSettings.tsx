@@ -22,11 +22,10 @@ const WORDS: EnricherWords = {
     <>
       Suggest details with AI asks the provider for a song&apos;s title, artist, album, year, and
       song list. What it says is only a suggestion: it shows beside each detail in Edit details and
-      changes nothing until someone uses it. It asks only when someone chooses it, one Track at a
-      time, at most once every two seconds, and never about the same text twice in a day.
+      changes nothing until someone uses it. It asks about one Track at a time, at most once every
+      two seconds, and never about the same text twice in a day.
     </>
   ),
-  findAll: "Suggest for all",
   count: (tracks) =>
     tracks === 1
       ? "1 Track can be given suggestions."
@@ -178,7 +177,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
           </p>
         </>
       )}
-      <EnricherSettings words={WORDS} />
+      <EnricherSettings words={WORDS} onChanged={onChanged} />
     </>
   );
 }

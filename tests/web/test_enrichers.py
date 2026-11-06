@@ -54,7 +54,13 @@ def test_the_enricher_shows_that_it_is_on_and_which_tracks_it_may_be_asked_about
 
     body = enrichers_client.get(f"/api/enrichers/{NAME}").json()
 
-    assert body == {"name": NAME, "available": True, "stopped": None, "eligible": [eligible]}
+    assert body == {
+        "name": NAME,
+        "available": True,
+        "stopped": None,
+        "eligible": [eligible],
+        "mode": "manual",
+    }
 
 
 def test_with_the_plugin_off_the_enricher_shows_as_unavailable_with_no_track(
@@ -64,7 +70,13 @@ def test_with_the_plugin_off_the_enricher_shows_as_unavailable_with_no_track(
 
     body = client.get(f"/api/enrichers/{NAME}").json()
 
-    assert body == {"name": NAME, "available": False, "stopped": None, "eligible": []}
+    assert body == {
+        "name": NAME,
+        "available": False,
+        "stopped": None,
+        "eligible": [],
+        "mode": "manual",
+    }
 
 
 def test_asking_with_the_plugin_off_is_unavailable(client: TestClient) -> None:
@@ -156,7 +168,7 @@ def test_an_admin_queues_every_eligible_track_and_is_told_how_many(
     enriching.finish_every_job()
 
 
-def test_a_member_cannot_queue_every_track_or_reset(
+def test_a_member_cannot_queue_every_track_reset_or_choose_the_mode(
     enrichers_client: TestClient, enriching: Enriching
 ) -> None:
     set_up_as_alice(enrichers_client)
@@ -166,8 +178,9 @@ def test_a_member_cannot_queue_every_track_or_reset(
 
     queue = enrichers_client.post(f"/api/enrichers/{NAME}/find-all")
     reset = enrichers_client.post(f"/api/enrichers/{NAME}/reset")
+    mode = enrichers_client.put(f"/api/enrichers/{NAME}/mode", json={"mode": "all"})
 
-    assert (queue.status_code, reset.status_code) == (403, 403)
+    assert (queue.status_code, reset.status_code, mode.status_code) == (403, 403, 403)
     assert enriching.jobs.list_jobs() == []
 
 
@@ -219,7 +232,13 @@ def test_musicbrainz_shows_the_tracks_whose_words_it_may_search_for(
 
     body = enrichers_client.get(f"/api/enrichers/{MUSICBRAINZ}").json()
 
-    assert body == {"name": MUSICBRAINZ, "available": True, "stopped": None, "eligible": [song]}
+    assert body == {
+        "name": MUSICBRAINZ,
+        "available": True,
+        "stopped": None,
+        "eligible": [song],
+        "mode": "manual",
+    }
 
 
 def test_asking_musicbrainz_about_a_song_queues_a_job_for_it(
@@ -317,3 +336,28 @@ def test_asking_the_ai_about_a_track_queues_a_job_that_suggests_its_details(
     assert details["origins"]["ai"]["artist"] == "Blue Room"
     assert "artist" not in details["shown"]
     assert KEY not in response.text + str(details)
+
+
+def test_an_admin_chooses_to_find_all_and_every_track_is_queued_at_once(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    enriching.add_site_track(RECORDED)
+
+    response = enrichers_client.put(f"/api/enrichers/{NAME}/mode", json={"mode": "all"})
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "all"
+    assert enrichers_client.get(f"/api/enrichers/{NAME}").json()["mode"] == "all"
+    assert len(enriching.jobs.list_jobs()) == 1
+
+
+@pytest.mark.parametrize("mode", ["auto", "", None])
+def test_a_mode_that_is_none_of_the_three_is_refused(
+    enrichers_client: TestClient, mode: str | None
+) -> None:
+    set_up_as_alice(enrichers_client)
+
+    response = enrichers_client.put(f"/api/enrichers/{NAME}/mode", json={"mode": mode})
+
+    assert response.status_code == 422

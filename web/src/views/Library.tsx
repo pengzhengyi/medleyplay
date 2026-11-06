@@ -8,8 +8,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AI_ENRICHER, type Account, type Track, api } from "../api";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
+import { useLookAhead } from "../library/useLookAhead";
 import { useStation } from "../library/useStation";
-import { current, repeatAfter } from "../player/queue";
+import { current, repeatAfter, upNext } from "../player/queue";
 import { offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
 import { stepVolume } from "../player/volume";
@@ -70,6 +71,8 @@ export function Library({
   const [nowPlayingQueue, setNowPlayingQueue] = useState(false);
   const playingId = current(player.queue)?.trackId;
   const playing = playingId === undefined ? undefined : byId.get(playingId);
+  // An enricher set to the next to play is asked about the song playing and the one after.
+  useLookAhead([playingId, upNext(player.queue)[0]?.trackId], byId, library);
   // With nothing left playing, Now Playing closes, and the next song doesn't reopen it.
   if (nowPlayingOver !== undefined && playing === undefined && library.loaded) {
     setNowPlayingOver(undefined);

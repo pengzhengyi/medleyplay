@@ -45,6 +45,7 @@ from medleyplay.application.proxies import ProxyService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -210,6 +211,11 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     mode.listen(policy.request)
     manual_downloads = ManualDownloadService(units, clock, jobs, downloads.folder, changes.tell)
     links = LinkService(units, clock, plugins, catalog, downloads, mode.online, proxies)
+    enrichment = EnrichmentService(units, clock, plugins, jobs, enrich)
+    # Tracks added, scanned, or downloaded, and Jobs ending, may give finding all more to ask.
+    sweeper = EnrichmentSweeper(enrichment)
+    changes.listen(sweeper.request)
+    events.listen(sweeper.request)
     # A changed proxy makes a looked-up video's details stale, so they are looked up again.
     proxies.listen(links.forget_lookups)
     return Services(
@@ -238,7 +244,8 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         details=DetailsService(units, clock, changes.tell),
         songs=SongsService(units, clock, changes.tell),
         covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
-        enrichment=EnrichmentService(units, clock, plugins, jobs, enrich),
+        enrichment=enrichment,
+        sweeper=sweeper,
         ai=ai,
     )
 
@@ -270,9 +277,11 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
                     services.covers.sweep()
                     services.jobs.start()
                     services.policy.start()
+                    services.sweeper.start()
                     try:
                         yield
                     finally:
+                        services.sweeper.stop()
                         services.policy.stop()
                         services.jobs.stop()
                         services.plugins.close()

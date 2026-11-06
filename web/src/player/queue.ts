@@ -4,12 +4,16 @@
  * A pure reducer, so the player and its tests share one set of rules. Each entry
  * has its own key, since a Track may be queued more than once. Randomness comes
  * in with the actions that shuffle, so the same numbers give the same order.
+ * Entries next to each other with one `unit`, such as the songs of an album,
+ * shuffle as one: they move together and keep their order.
  */
 
 /** One place in the queue. */
 export interface Entry {
   readonly key: string;
   readonly trackId: number;
+  /** What the entry is part of, such as `file:9` for a song of the album file 9. */
+  readonly unit?: string | undefined;
 }
 
 /** What plays after the last entry, and when a Track ends. */
@@ -210,9 +214,28 @@ function unshuffle(queue: Queue, order: readonly string[]): Queue {
   };
 }
 
-/** Return `entries` in random order (Fisher–Yates). */
+/** Return `entries` in random order, each run of one unit kept together and in order. */
 function inRandomOrder(entries: readonly Entry[], random: Random): Entry[] {
-  const result = [...entries];
+  return fisherYates(runsOf(entries), random).flat();
+}
+
+/** Return `entries` as runs: entries next to each other with one unit, or else one each. */
+function runsOf(entries: readonly Entry[]): Entry[][] {
+  const runs: Entry[][] = [];
+  for (const entry of entries) {
+    const last = runs.at(-1);
+    if (last !== undefined && entry.unit !== undefined && last[0]?.unit === entry.unit) {
+      last.push(entry);
+    } else {
+      runs.push([entry]);
+    }
+  }
+  return runs;
+}
+
+/** Return `items` in random order (Fisher–Yates). */
+function fisherYates<T>(items: readonly T[], random: Random): T[] {
+  const result = [...items];
   for (let i = result.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     const [here, there] = [result[i], result[j]];

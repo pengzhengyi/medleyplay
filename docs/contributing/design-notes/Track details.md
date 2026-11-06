@@ -31,16 +31,16 @@ and lets the household's word win.
 
 ## The details
 
-| Field | Kind | Example |
-| --- | --- | --- |
-| `title` | text | 過食性:アイドル症候群 |
-| `artist` | text, as written | GUMI/MAYU |
-| `album` | text | ケビョウニンゲン |
-| `album_artist` | text | MAYU |
-| `track_number`, `disc_number` | whole numbers from 1 | 3, 1 |
-| `year` | a year | 2014 |
-| `genre` | text | Vocaloid |
-| `cover` | a cover's id; see [Covers](#covers) | `9f2c…` |
+| Field                         | Kind                                | Example               |
+| ----------------------------- | ----------------------------------- | --------------------- |
+| `title`                       | text                                | 過食性:アイドル症候群 |
+| `artist`                      | text, as written                    | GUMI/MAYU             |
+| `album`                       | text                                | ケビョウニンゲン      |
+| `album_artist`                | text                                | MAYU                  |
+| `track_number`, `disc_number` | whole numbers from 1                | 3, 1                  |
+| `year`                        | a year                              | 2014                  |
+| `genre`                       | text                                | Vocaloid              |
+| `cover`                       | a cover's id; see [Covers](#covers) | `9f2c…`               |
 
 - **Text** is at most 512 characters, trimmed. The household's value outside these
   rules is refused; a value read from a file or a site is cut to fit instead, and
@@ -52,23 +52,23 @@ and lets the household's word win.
 
 ## Origins and precedence
 
-Each value is kept with its *origin*, so a later finding never overwrites the
+Each value is kept with its _origin_, so a later finding never overwrites the
 household's word, and a source can be read again without losing anyone else's
 values.
 
-| Origin | What it is |
-| --- | --- |
-| `household` | A value someone in the household entered |
-| `files` | The file's tags, and an image beside it with its name |
-| `musicbrainz` | A release matched in MusicBrainz, with its cover |
-| `video` | The video's own text: its title, uploader, description, and chapters, read from a file beside the audio, pasted by the household, or read from the site, and the video's cover |
-| `album_file` | For a song inside a long file, its album file's album fields; see [Segments](Segments.md) |
-| `file_name` | The file's name, the title of last resort |
-| `ai` | What an AI model suggested from the video's text; a suggestion, never shown |
+| Origin        | What it is                                                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `household`   | A value someone in the household entered                                                                                                                                       |
+| `files`       | The file's tags, and an image beside it with its name                                                                                                                          |
+| `musicbrainz` | A release matched in MusicBrainz, with its cover                                                                                                                               |
+| `video`       | The video's own text: its title, uploader, description, and chapters, read from a file beside the audio, pasted by the household, or read from the site, and the video's cover |
+| `album_file`  | For a song inside a long file, its album file's album fields; see [Segments](Segments.md)                                                                                      |
+| `file_name`   | The file's name, the title of last resort                                                                                                                                      |
+| `ai`          | What an AI model suggested from the video's text; a suggestion, never shown                                                                                                    |
 
 - **The shown value is the first origin that has one,** in the table's order,
   `ai` left out: it only suggests, so it takes part in no shown value and
-  *Edit details* offers it beside the field instead.
+  _Edit details_ offers it beside the field instead.
   `files` comes before `video`, since tags are written on purpose, and when a
   file's tags are garbled, the household's value is the way out.
 - **The album fields travel together:** `album`, `album_artist`, `year`,
@@ -99,7 +99,7 @@ values.
 
 - **Any signed-in Account may edit a Track's details,** as any may add a link:
   the catalog is the household's.
-- ***Edit details*** shows each field's value, where it came from, and what each
+- _**Edit details**_ shows each field's value, where it came from, and what each
   other origin says, so the household can take a found value with one click or
   type its own. Its boxes show what saving would show, as the album fields
   change together: naming an album of the household's own empties the file's
@@ -108,9 +108,9 @@ values.
   (`tests/support/shown_details.json`), so the two can't drift.
 - **How the dialog lays it out:** the cover large at the side, with the ways to
   fill the details in under it, and the fields beside them. Over the cover, on
-  hover or focus, and always on a touch screen, are *Save image*, *Replace*,
-  and, for the household's own cover, *Remove*. Each value's origin is a small
-  tag, a mark and a word such as *BV* or *MB*, which says *From the video* in
+  hover or focus, and always on a touch screen, are _Save image_, _Replace_,
+  and, for the household's own cover, _Remove_. Each value's origin is a small
+  tag, a mark and a word such as _BV_ or _MB_, which says _From the video_ in
   full in its tooltip and to screen readers. Each other origin's value carries
   its origin's mark.
 - **Looking the song up from the dialog:** a button for each lookup the song
@@ -122,7 +122,7 @@ values.
   the household types or chooses that reads as what would show anyway, such as
   `03` over the file's track 3, is dropped rather than saved, so the found value
   still follows the file.
-- ***Paste the video's details*** takes a video's title and description, copied
+- _**Paste the video's details**_ takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works for any video, and asks the
   site nothing. What it reads replaces what the video said before, including
@@ -143,23 +143,23 @@ values.
   details yt-dlp writes with `--write-info-json`, and `<name>.jpg`, `.jpeg`,
   `.png`, or `.webp`, a cover such as `--write-thumbnail` writes (see
   [Covers](#covers)). A scan notes them, and reads them again when they change.
-  - **An `.info.json` is read** when it is new, when its size or modified time
-    differs from what the last scan kept, and on a full scan, even when the audio
-    file is unchanged. Its title, description, and chapters become the Track's
-    video text, as a paste would; any other `.json`, and an `.info.json` with no
-    audio file of that name beside it, is ignored. A file over 5 MiB is not read.
-  - **The latest text read wins:** a changed file replaces a paste, and a paste
-    stands until the file changes, even when a full scan reads it again. Without
-    a paste, a full scan parses the unchanged file again, so a better reading
-    from a newer medleyplay shows.
-  - **A malformed or oversized file keeps the earlier text** and values. The scan
-    notes the error on the Source, and a later good read clears it; one that
-    couldn't be opened, as on a drive too slow to answer, is read again next scan.
-  - **The file is nobody's word:** text that isn't valid Unicode keeps a
-    replacement character, a chapter's title is cut to a title's length, and
-    chapters past a thousand, or starting more than a week in, are left out.
-  - **A removed file drops only text read from a file,** with the `video` values
-    it gave; a household paste stays. A sidecar with no words records nothing.
+    - **An `.info.json` is read** when it is new, when its size or modified time
+      differs from what the last scan kept, and on a full scan, even when the audio
+      file is unchanged. Its title, description, and chapters become the Track's
+      video text, as a paste would; any other `.json`, and an `.info.json` with no
+      audio file of that name beside it, is ignored. A file over 5 MiB is not read.
+    - **The latest text read wins:** a changed file replaces a paste, and a paste
+      stands until the file changes, even when a full scan reads it again. Without
+      a paste, a full scan parses the unchanged file again, so a better reading
+      from a newer medleyplay shows.
+    - **A malformed or oversized file keeps the earlier text** and values. The scan
+      notes the error on the Source, and a later good read clears it; one that
+      couldn't be opened, as on a drive too slow to answer, is read again next scan.
+    - **The file is nobody's word:** text that isn't valid Unicode keeps a
+      replacement character, a chapter's title is cut to a title's length, and
+      chapters past a thousand, or starting more than a week in, are left out.
+    - **A removed file drops only text read from a file,** with the `video` values
+      it gave; a household paste stays. A sidecar with no words records nothing.
 - **The video id** comes from the Track's Bilibili Source, or from a file name
   that is a `BV` id, such as `BV1dm4y1s7ak.m4a`.
 - **The video's text is read by one parser,** a pure function of the core: it
@@ -214,14 +214,14 @@ values.
   content.
 - **The web client** shows covers beside each title in the table and in Up next,
   on an album's card (the first cover among its songs), in the player and on the
-  lock screen through the Media Session's artwork, and in *Edit details* with the
+  lock screen through the Media Session's artwork, and in _Edit details_ with the
   household's upload. An image that fails to load shows the stand-in instead.
 - **A cover no value names** is removed by the sweep at startup, so one replaced
   or removed stays on disk until the server next starts.
 
 ## Enrichers
 
-An *enricher* proposes values from somewhere the scan doesn't look. It is a
+An _enricher_ proposes values from somewhere the scan doesn't look. It is a
 plugin at its own extension point, `TRACK_ENRICHER`, so a buggy or slow one can't
 harm the core, and each is turned on or off like any plugin. `bilibili-details`,
 `musicbrainz`, and `ai-details` are built and, like `bilibili`, are off until the
@@ -230,16 +230,17 @@ config file turns them on, since each contacts a site or a provider.
 - **Each enricher has a mode, manual by default,** which an admin chooses in its
   part of Settings and the household keeps:
 
-  | Mode | Asks |
-  | --- | --- |
-  | *Manually* | Only when someone chooses *Find details online*, *Find on MusicBrainz*, or *Suggest details with AI* in a Track's menu or its details |
-  | *Next to play* | Also about the song playing and the one after it, once each in a page, as each comes up; a song of a split file through its file |
-  | *All missing* | Also about every Track it may be asked about, at once when chosen, and about each that becomes one: a sweep runs a few seconds after a scan, a Download, a Track added, or a Job's end, and every hour besides |
+    | Mode           | Asks                                                                                                                                                                                                           |
+    | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | _Manually_     | Only when someone chooses _Find details online_, _Find on MusicBrainz_, or _Suggest details with AI_ in a Track's menu or its details                                                                          |
+    | _Next to play_ | Also about the song playing and the one after it, once each in a page, as each comes up; a song of a split file through its file                                                                               |
+    | _All missing_  | Also about every Track it may be asked about, at once when chosen, and about each that becomes one: a sweep runs a few seconds after a scan, a Download, a Track added, or a Job's end, and every hour besides |
 
-  Every mode keeps the site's stop, the day between asks of one subject, and the
-  lane's pace, so finding all asks one Track at a time. A sweep that fails is
-  logged, and the next goes ahead. Settings says how many Tracks the enricher
-  may be asked about now.
+    Every mode keeps the site's stop, the day between asks of one subject, and the
+    lane's pace, so finding all asks one Track at a time. A sweep that fails is
+    logged, and the next goes ahead. Settings says how many Tracks the enricher
+    may be asked about now.
+
 - **The song's cover shows a lookup as it goes,** from the Job's events on the
   page's event stream. A spinner shows while it is asked; a clock shows while it
   waits for Online. A check shows for a few seconds once it is done. A warning
@@ -257,7 +258,7 @@ config file turns them on, since each contacts a site or a provider.
 - **The core checks an answer** like the household's input. Values are checked
   as the household's are and recorded under the enricher's origin, replacing that
   origin's earlier values for the Track. The video's text is read by the same
-  parser as a sidecar or a paste, as the `video` origin, so *Edit details* shows
+  parser as a sidecar or a paste, as the `video` origin, so _Edit details_ shows
   the text that was read; the cover is recorded as the origin's `cover`.
 - **Which Tracks are asked for.** For `bilibili-details`, a Track with a video id
   (its Bilibili Source, or a Library file named for a `BV` id), that is not a
@@ -285,19 +286,19 @@ config file turns them on, since each contacts a site or a provider.
   no proxy, since neither is the household's Bilibili route.
 - **The first refusal stops the enricher.** When the site refuses a request (an
   HTTP 403 or 412, or one of its risk-control codes, such as 352 or 412, in
-  yt-dlp's error, MusicBrainz's 403, or the AI provider's 401 or 403), the Job
-  fails as *refused*, every Job of that enricher that
+  yt-dlp's error, MusicBrainz's 403, or a 401 or 403 from every AI provider), the Job
+  fails as _refused_, every Job of that enricher that
   hasn't started fails with a message saying why, and nothing more is asked until
   an admin resets it in Settings. The stopped state is kept in the database. A
   Job retried while the enricher is stopped fails without asking. A video that
   doesn't exist, or is private, fails that Track's Job alone.
 - **A segment is never enriched;** its album file is.
 
-| Enricher | Origin | Reads | State |
-| --- | --- | --- | --- |
-| `bilibili-details` | `video` | The video's text and cover through yt-dlp, for a video with an id | Built |
-| `musicbrainz` | `musicbrainz` | The MusicBrainz API and the Cover Art Archive, at most once a second | Built |
-| `ai-details` | `ai`, suggestions only | An AI model of the household's choice, with the household's key | Built |
+| Enricher           | Origin                 | Reads                                                                | State |
+| ------------------ | ---------------------- | -------------------------------------------------------------------- | ----- |
+| `bilibili-details` | `video`                | The video's text and cover through yt-dlp, for a video with an id    | Built |
+| `musicbrainz`      | `musicbrainz`          | The MusicBrainz API and the Cover Art Archive, at most once a second | Built |
+| `ai-details`       | `ai`, suggestions only | An AI model of the household's choice, with the household's key      | Built |
 
 - **The site enricher is its own plugin,** not part of `bilibili`, so its faults
   never stop Downloads. It reuses the Bilibili plugin's yt-dlp wrapper and info
@@ -306,7 +307,7 @@ config file turns them on, since each contacts a site or a provider.
   the text without one.
 - **Each enricher stops on its own:** MusicBrainz refusing a request leaves
   `bilibili-details` running, and the reverse.
-- **The AI enricher only suggests:** its values show in *Edit details* for the
+- **The AI enricher only suggests:** its values show in _Edit details_ for the
   household to take, never as shown values, since it reads the same text the
   parser does.
 
@@ -329,20 +330,20 @@ library would add nothing.
   known, with every character Lucene reads as syntax escaped; Chinese and Japanese
   text passes through unchanged.
 
-  ```text
-  recording:"過食性\:アイドル症候群" AND artist:"GUMI\/MAYU" AND release:"ケビョウニンゲン"
-  release:"生如夏花" AND artist:"朴树"                 a long file, searched as a release
-  ```
+    ```text
+    recording:"過食性\:アイドル症候群" AND artist:"GUMI\/MAYU" AND release:"ケビョウニンゲン"
+    release:"生如夏花" AND artist:"朴树"                 a long file, searched as a release
+    ```
 
-  When nothing passes the match with the album, a song is searched once more by
-  title and artist alone, since the album shown may be no release's, such as a
-  video's playlist name.
+    When nothing passes the match with the album, a song is searched once more by
+    title and artist alone, since the album shown may be no release's, such as a
+    video's playlist name.
 
 - **The match.** A candidate scores at least 90 and, when both lengths are known,
   has a length within 5 seconds of the Track's. Candidates rank by score, then a
   release whose title is the shown album (ignoring case and the width of
   characters), then an official release, then the earliest date, which picks an
-  original over a reissue, such as *OK Computer* of 1997 over one of 2016. No
+  original over a reissue, such as _OK Computer_ of 1997 over one of 2016. No
   candidate is an answer with no values, and counts as asked, not as a failure.
 - **What it records,** under the `musicbrainz` origin, from a release lookup with
   `inc=recordings+artist-credits+media+genres`: title, artist, album, album
@@ -373,11 +374,14 @@ library would add nothing.
 
 `ai-details` asks an AI model what a Track's video text says, and records the
 answer as suggestions. It never changes what a Track shows: the household takes a
-suggestion with one click in *Edit details*, or loads a suggested song list in the
+suggestion with one click in _Edit details_, or loads a suggested song list in the
 songs editor.
 
-- **The provider is the household's choice,** set by an admin in Settings → AI: a
-  base URL, a model, and a key. One hand-written client on `requests` speaks the
+- **The providers are the household's choice,** set by an admin in Settings → AI:
+  each a base URL, a model, and a key, up to 5, in the order they are asked. Each
+  saved provider is a card that opens to its address and model as read-only fields,
+  with _Change model_, _Replace key_, and _Remove_, which keep its place; a drag
+  handle or the up and down buttons reorder the cards. One hand-written client on `requests` speaks the
   OpenAI chat protocol, so it works unchanged with DeepSeek, OpenAI, Anthropic's
   compatible endpoint, and a local Ollama; the section offers each as a preset
   that fills the base URL and a model. It sends `POST {base_url}/chat/completions`
@@ -386,14 +390,18 @@ songs editor.
   answer, and uses nothing only some providers accept: no JSON schema, no tools,
   no streaming. A base URL is `http` or `https` with no login, query, or fragment,
   and `http` only for an address on the machine itself.
-- **The key is a secret.** It is kept in the Keychain, as logins and proxies are,
-  and the database keeps only whether there is one. The API takes it as a secret
-  and never answers it, so Settings shows that a key is set and can replace or
-  remove it. It reaches the Job process in memory with the Job's start, in the one
-  header of the request, never in a Job's request, a log, a message, or an error;
-  every message of a Job is redacted of it again. A refused setting answers 422
-  without repeating what was sent. A provider on the machine itself, such as
-  Ollama, needs no key.
+- **A key is a secret.** It is kept in the Keychain, as logins and proxies are,
+  under a name of its own that the provider's row keeps; the provider set up when
+  only one could be keeps `ai:key`, so no migration touches the Keychain. The API
+  takes a key as a secret and never answers it, so a card shows only that a key is
+  set. Removing a provider removes its row, then deletes its key; a key a crash
+  leaves behind is named by no row and read by nothing. Every key reaches the Job
+  process in memory with the Job's start, each in the one header of its request,
+  never in a Job's request, a log, a message, or an error; every message of a Job
+  is redacted of each again. A refused setting answers 422 without repeating what
+  was sent. A provider on the machine itself, such as Ollama, needs no key. A
+  provider whose key the Keychain no longer holds is skipped and marked _Key
+  missing_ on its card.
 - **What is sent.** Only the Track's video text (title, description, and chapters,
   wherever the text came from), its file's name, its length, and the details it
   shows. The description is cut to its first 6,000 characters, and Settings says
@@ -408,13 +416,18 @@ songs editor.
   for once more, showing the model its own answer and the fields that failed; if
   that fails too, the Job fails as an invalid answer, and the Track counts as asked.
   An answer cut off at its length bound, or empty, is invalid at once.
-- **Failures.** A 401 or 403 means the key or the account is wrong: the enricher
-  stops, as a site's refusal stops one, with a message to check the key, and an
-  admin resets it in Settings once it is fixed. A 429 or 5xx is waited out as long
-  as `Retry-After` says (5 seconds without it), up to 3 tries and at most 30
-  seconds a wait, and then fails the Job as a network failure, which waits and
-  tries again later. A timeout or lost connection is a network failure. Another
-  4xx is an invalid answer that says to check the base URL and the model.
+- **Failures, and the next provider.** A provider that can't be reached, stays
+  busy, refuses the key (401 or 403), or answers with nothing to use (another 4xx,
+  or an answer invalid even when asked again) is passed over, and the next is
+  asked. A 429 or 5xx is waited out as long as `Retry-After` says (5 seconds
+  without it), up to 3 tries and at most 30 seconds a wait, only by the last
+  provider; one with another after it is passed over at once. When none answers, a
+  refusal by every provider stops the enricher, as a site's refusal stops one,
+  until an admin resets it; any that couldn't be reached or stayed busy makes it a
+  network failure, which waits and tries again later; otherwise the Job fails as
+  an invalid answer. Why each provider passed over failed is kept on its row, with
+  when, until it answers again, and its card shows it, such as _Key refused 2 hr.
+  ago_, so a broken first provider shows rather than hiding behind the next.
 - **Which Tracks are asked for.** A Track that has video text, from the site, a
   file beside it, or the household, and is not a segment, once the provider is set
   up. Asked once a day per Track and text: the subject kept is a hash of the
@@ -423,10 +436,10 @@ songs editor.
   replaced whole by the next suggestion, so an answer that suggests nothing clears
   the last. A suggested song list is kept apart, one per Track, only when it is a
   song list the songs editor accepts. Both go with the Track.
-- **Where they show.** *Edit details* offers each suggested value beside its field
-  with *Use*, which copies it into the household's edit, to be saved or not; a
+- **Where they show.** _Edit details_ offers each suggested value beside its field
+  with _Use_, which copies it into the household's edit, to be saved or not; a
   suggestion equal to what the box holds is not offered. The songs editor fills
-  its rows from a suggested list with its *AI* button, which asks the AI when it
+  its rows from a suggested list with its _AI_ button, which asks the AI when it
   has suggested none; see [Segments](Segments.md#the-web-client). Neither the web client's
   `shownOf` nor the server's precedence includes the `ai` origin; both are checked
   against the same cases.
@@ -435,24 +448,26 @@ songs editor.
 
 ## What the API shows
 
-| Route | Who | Does |
-| --- | --- | --- |
-| `GET /api/tracks/{id}/details` | Signed in | Every field's shown value and origin, each origin's value, and the video's text read |
-| `PUT /api/tracks/{id}/details` | Signed in | The household's values for the Track, replacing its earlier ones |
-| `POST /api/tracks/details` | Signed in | Sets the given household values on many Tracks |
-| `POST /api/tracks/{id}/video-text` | Signed in | Reads a pasted title and description as the `video` origin; answers the details and the songs listed |
-| `GET /api/covers/{id}` | Signed in | A cover's image |
-| `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body; answers the details |
-| `DELETE /api/tracks/{id}/cover` | Signed in | Drops the household's cover, so the next origin's shows |
-| `GET /api/enrichers/{name}` | Signed in | Whether the enricher is on, why the site stopped it if it did, its mode, and the Tracks it may be asked about |
-| `POST /api/enrichers/{name}/tracks/{id}` | Signed in | Queues the Track's Job, or returns the one already active; 409 with why when the Track is not eligible |
-| `PUT /api/enrichers/{name}/mode` | Admin | Sets the mode, `manual`, `next`, or `all`; answers the enricher, and with `all` queues every eligible Track first |
-| `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |
-| `POST /api/enrichers/{name}/reset` | Admin | Lets a stopped enricher be asked again; 204, also when it was not stopped |
-| `GET /api/ai` | Admin | The provider's base URL, model, and whether it has a key, or null; the presets; how much of a description is sent |
-| `PUT /api/ai` | Admin | Sets the base URL and model, and the key when one is given; 422 never repeats the body |
-| `DELETE /api/ai/key` | Admin | Forgets the key and keeps the base URL and model |
-| `DELETE /api/ai` | Admin | Forgets the provider and its key; 204, also when none was set |
+| Route                                    | Who       | Does                                                                                                                                     |
+| ---------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/tracks/{id}/details`           | Signed in | Every field's shown value and origin, each origin's value, and the video's text read                                                     |
+| `PUT /api/tracks/{id}/details`           | Signed in | The household's values for the Track, replacing its earlier ones                                                                         |
+| `POST /api/tracks/details`               | Signed in | Sets the given household values on many Tracks                                                                                           |
+| `POST /api/tracks/{id}/video-text`       | Signed in | Reads a pasted title and description as the `video` origin; answers the details and the songs listed                                     |
+| `GET /api/covers/{id}`                   | Signed in | A cover's image                                                                                                                          |
+| `PUT /api/tracks/{id}/cover`             | Signed in | The household's cover, as the request body; answers the details                                                                          |
+| `DELETE /api/tracks/{id}/cover`          | Signed in | Drops the household's cover, so the next origin's shows                                                                                  |
+| `GET /api/enrichers/{name}`              | Signed in | Whether the enricher is on, why the site stopped it if it did, its mode, and the Tracks it may be asked about                            |
+| `POST /api/enrichers/{name}/tracks/{id}` | Signed in | Queues the Track's Job, or returns the one already active; 409 with why when the Track is not eligible                                   |
+| `PUT /api/enrichers/{name}/mode`         | Admin     | Sets the mode, `manual`, `next`, or `all`; answers the enricher, and with `all` queues every eligible Track first                        |
+| `POST /api/enrichers/{name}/find-all`    | Admin     | Queues every eligible Track and answers how many                                                                                         |
+| `POST /api/enrichers/{name}/reset`       | Admin     | Lets a stopped enricher be asked again; 204, also when it was not stopped                                                                |
+| `GET /api/ai`                            | Admin     | The providers in order: each one's id, base URL, model, whether it has a key, and why it last failed; the presets; the limits            |
+| `POST /api/ai/providers`                 | Admin     | Adds a provider after the others, with its key when it needs one; 409 for one set up already or one too many; 422 never repeats the body |
+| `PUT /api/ai/providers/{id}/key`         | Admin     | Replaces the provider's key, keeping its place                                                                                           |
+| `PUT /api/ai/providers/{id}/model`       | Admin     | Asks another model of the provider, keeping its place and key                                                                            |
+| `PUT /api/ai/order`                      | Admin     | Asks the providers in the order of the ids given; 409 when they are not every provider once                                              |
+| `DELETE /api/ai/providers/{id}`          | Admin     | Forgets the provider and deletes its key; 204, also when it is gone                                                                      |
 
 Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 `genre`.
@@ -461,9 +476,9 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
 
 1. **Lengths:** read a fragmented file's length from its fragments.
 2. **Details and origins:** `track_value`, the one writer, the migration, and
-   *Edit details*, with many Tracks at once.
+   _Edit details_, with many Tracks at once.
 3. **Covers,** with embedded and beside-the-file images.
-4. **The video's text:** the parser, *Paste the video's details*, and
+4. **The video's text:** the parser, _Paste the video's details_, and
    `<name>.info.json` beside the file.
 5. **Segments:** see [Segments](Segments.md).
 6. **The site enricher** for Bilibili, **MusicBrainz,** and **AI,** all built.
@@ -489,14 +504,15 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
   queueing for admins only. The Bilibili plugin is read against a real video's
   recorded yt-dlp answer, with its network at a fake of yt-dlp. The MusicBrainz
   client runs over a fake `requests` transport that answers from recorded
-  MusicBrainz answers (a real search and lookup for *Let Down* by *Radiohead*, and
+  MusicBrainz answers (a real search and lookup for _Let Down_ by _Radiohead_, and
   two made by hand for 朴树's 生如夏花), with a fake clock for its pauses: query
   escaping, ranking, the length window and the score floor, the cover present,
   absent, oversized, and not an image, a 503 waited out and then failing, and a 403
   stopping the enricher. The AI client runs over a fake `requests` transport as well:
   the request body and URL for each provider's base URL, a key only in the header,
   an answer valid, invalid then valid, and invalid twice, one cut off, a 401 and a
-  429 and a lost connection, and a key never in a message or a log. In real Jobs,
+  429 and a lost connection, each passing over to the next provider, and no key
+  ever in a message or a log. In real Jobs,
   the suggestion is recorded and shown nowhere, replaced by the next, and a
   refused key stops the enricher. No test contacts a site, MusicBrainz, or a model.
 
@@ -509,7 +525,7 @@ Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
   AI has just been asked about.
 - **Counting what a provider charges.** Settings does not show a spend.
 - **Choosing among close MusicBrainz matches:** the best candidate is taken; the
-  household corrects a wrong one in *Edit details*. A long file's songs are not
+  household corrects a wrong one in _Edit details_. A long file's songs are not
   matched one by one to the release's tracks.
 - **Reading each part of a multi-part video:** the site's text describes the
   whole video, so after one part is asked, the others are left alone for a day.

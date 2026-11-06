@@ -41,7 +41,9 @@ function open(
     "GET /api/enrichers/musicbrainz": {
       body: enricherOf("musicbrainz", [1, 2, 3]),
     },
-    "GET /api/ai": { body: { provider: null, presets: [], max_description: 6000 } },
+    "GET /api/ai": {
+      body: { providers: [], presets: [], max_providers: 5, max_description: 6000 },
+    },
     "GET /api/enrichers/ai-details": {
       body: enricherOf("ai-details", [1]),
     },
@@ -106,12 +108,12 @@ describe("the Bilibili section", () => {
 });
 
 describe("the AI section", () => {
-  it("is the admin's, with the provider and the suggestion for every Track", async () => {
+  it("is the admin's, with the providers and the suggestion for every Track", async () => {
     open(true);
 
     const ai = within(screen.getByRole("region", { name: "AI" }));
 
-    expect(await ai.findByLabelText("Base URL")).toBeInTheDocument();
+    expect(await ai.findByText("No AI provider is set up.")).toBeInTheDocument();
     expect(await ai.findByText("1 Track can be given suggestions.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go to AI" })).toBeInTheDocument();
   });

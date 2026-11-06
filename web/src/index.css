@@ -3156,30 +3156,217 @@ dialog.modal::backdrop {
   }
 }
 
-/* Editing a file's songs: a row each, its start narrow, its title widest. */
+/*
+ * Editing a file's songs, in place of its details: the way back and the ways to fill
+ * the rows above, then a row each, its start narrow, its title widest.
+ */
 
-.edit-songs .card {
-  width: min(44rem, calc(100vw - 2rem));
-  max-height: min(48rem, 90dvh);
-
-  /* On the title instead, so the player stays at the card's very top as the rows scroll. */
+.edit-details .songs-card {
+  /* On the heading instead, so the player stays at the card's very top as the rows scroll. */
   padding-top: 0;
 }
 
-.edit-songs #edit-songs-title {
+.songs-heading {
   padding-top: 1.25rem;
 }
 
-.edit-songs .detail-input {
+.songs-title:focus {
+  outline: none;
+}
+
+button.songs-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: auto;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+button.songs-back:hover {
+  color: var(--ink);
+}
+
+.songs-panel .detail-input {
   height: 2.4rem;
   margin: 0;
   padding-block: 0;
 }
 
-.edit-songs textarea.detail-input {
-  height: auto;
-  padding-block: 0.4rem;
-  resize: vertical;
+/* The way from the details to the songs, under the ways to look the song up. */
+.edit-details .songs-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.9rem;
+  text-align: start;
+}
+
+.edit-details .songs-entry:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.songs-entry-label {
+  flex: 1;
+}
+
+/* The ways to fill the rows: a list typed, the video's list, or the AI's. */
+.songs-fill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.75rem;
+}
+
+.songs-panel .fill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.8rem;
+}
+
+.songs-panel .fill-button:hover:not(:disabled),
+.songs-panel .fill-button.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.songs-fill-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* A song list typed as text, its lines numbered and checked as it is typed. */
+.list-editor {
+  margin: 0 0 0.75rem;
+}
+
+.list-editor-text .cm-editor {
+  max-height: 22rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.list-editor-text .cm-editor.cm-focused {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.list-editor-text .cm-scroller {
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+.list-editor-text .cm-gutters {
+  border-right: 1px solid var(--line);
+  border-radius: 0.6rem 0 0 0.6rem;
+  background: transparent;
+  color: var(--muted);
+}
+
+.list-editor-text .cm-content {
+  caret-color: var(--accent);
+}
+
+.list-editor-text .cm-placeholder {
+  color: var(--muted);
+}
+
+.list-editor-text .cm-tooltip {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.list-editor-text .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.list-time {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.list-dash,
+.list-artist {
+  color: var(--muted);
+}
+
+.list-editor-status {
+  min-height: 1.4rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+}
+
+.list-editor-status .error {
+  color: #d1495b;
+}
+
+.list-problems {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: #d1495b;
+  font-size: 0.82rem;
+}
+
+.list-problem {
+  margin: 0;
+  list-style: none;
+}
+
+.list-editor-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.list-editor-button {
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+/* A button that reads as a link, such as a problem's line. */
+button.link-button {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .song-rows {
@@ -3246,8 +3433,12 @@ button.song-handle {
   gap: 0.1rem;
 }
 
-.edit-songs .songs-found,
-.edit-songs .songs-add {
+/* The song playing, or being checked: its button stops it. */
+.song-row-buttons .icon.on {
+  color: var(--accent);
+}
+
+.songs-panel .songs-add {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -3263,18 +3454,23 @@ button.song-handle {
   font-size: 0.85rem;
 }
 
-.edit-songs .dialog-button {
+.songs-panel .dialog-button {
   width: auto;
   margin: 0;
   padding: 0 1rem;
   height: 2.6rem;
 }
 
-.edit-songs .songs-unsplit {
+/* While the list is typed, its own buttons stand for the dialog's. */
+.songs-panel .dialog-buttons[hidden] {
+  display: none;
+}
+
+.songs-panel .songs-unsplit {
   margin-right: auto;
 }
 
-.edit-songs .error {
+.songs-panel .error {
   margin: 0;
   color: #d1495b;
   font-size: 0.9rem;
@@ -3316,7 +3512,7 @@ button.song-handle {
 }
 
 @media (width < 22rem) {
-  /* Too narrow for the artist beside five buttons: the buttons take a line of their own. */
+  /* Too narrow for the artist beside six buttons: the buttons take a line of their own. */
   .song-row {
     grid-template-areas:
       "handle start title"

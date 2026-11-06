@@ -115,16 +115,36 @@ both read its full length.
 - **A split file gives way to its songs** in Songs, Artists, Albums, Downloaded,
   and search, so the songs make up its album there; a Playlist that held the file
   before it was split still plays it whole.
-- ***Split into songs…*** on a file's menu, and ***Edit songs…*** on any of its
-  songs, open the editor: a row per song with its start, such as `3:12` or
+- **The songs are edited beside the details:** *Edit details* has a way to
+  them, *Split into songs* or *11 songs*, which shows the songs editor in place
+  of the details, with *Details* to go back to what was typed there. ***Split
+  into songs…*** on a file's menu, and ***Edit songs…*** on any of its songs,
+  open the same dialog on the songs, and leaving them closes it.
+- **The rows are the songs:** a row per song with its start, such as `3:12` or
   `1:07:40`, its title, and its artist; add, remove, and move rows, by dragging
-  a row's handle or with its buttons; start from a list found in the video's
-  details, or ***Paste a list***, which the server reads. Saving says first how
-  many songs it removes with their ratings and plays, and so does ***Unsplit***.
-- **Listening in the editor:** a row's ***Listen*** plays the file in the dialog
-  from that row's start, unsaved or not, and pauses the music playing;
+  a row's handle or with its buttons. Saving says first how many songs it
+  removes with their ratings and plays, and so does ***Unsplit***.
+- **Ways to fill the rows sit above them,** each a small button:
+  - ***List*** opens the rows as text, one song a line, in CodeMirror, loaded
+    only when opened: lines are numbered, each time and artist is colored, the
+    Library's artists are offered after a dash, and the server checks the list
+    as it is typed with `POST …/songs/check`, so each line that is no song is
+    marked and listed with why, and a problem chosen moves to its line. The
+    parser is the paste's, so what checks clean is what the server takes.
+  - **The video's list**, one button per list found in its details.
+  - ***AI*** uses the list the AI suggested, or, with none yet, asks the AI
+    about the file as *Suggest details with AI* does, says so while it runs,
+    and fills the rows once it answers.
+- **A list filled in keeps each song it still names:** a song with the same
+  title, folded, or else starting at the same time, keeps its id, so filling
+  from a list after editing the text loses no ratings or plays. What filled the
+  rows is said beside the buttons, such as *11 songs from the AI*.
+- **Listening in the editor:** a row's ***Play*** plays just that song, from its
+  start to where the next starts, and pauses the music playing; its ***Check***
+  plays its first five seconds and its last five, or a song of ten seconds or
+  less whole, to hear where it starts and ends; pressing either again stops it.
   ***Start here*** then takes the row's start from where the file is playing, to
-  the millisecond. The dialog's player is its own, so the queue is untouched; a
+  the millisecond. The editor's player is its own, so the queue is untouched; a
   Download not yet here says it is being prepared.
 
 ## What the API shows
@@ -134,6 +154,7 @@ both read its full length.
 | `GET /api/tracks/{id}/songs` | Signed in | The album file's songs, with ids and ends, its length, whether to check them, and the lists found |
 | `PUT /api/tracks/{id}/songs` | Signed in | The household's rows, by id; answers the segment Tracks |
 | `POST /api/tracks/{id}/songs/read` | Signed in | The songs a pasted list names, or the first line that isn't one |
+| `POST /api/tracks/{id}/songs/check` | Signed in | The songs a list names as it is typed, and every problem, each with its line: no time, no title, too long, a start before or within a second of the one above or past the file's end; or too few or too many songs |
 | `DELETE /api/tracks/{id}/songs` | Signed in | Unsplits the file |
 | `POST /api/tracks/{id}/playback` | Signed in | Now answers a segment's `start_ms` and `end_ms` |
 
@@ -144,6 +165,12 @@ Tracks in every list gain `segment_of`, the album file's id, and `split`.
 - **The list check and the parser** with a corpus of pasted lists, and a
   Hypothesis property that a list's segments tile the file without a gap or an
   overlap.
+- **Checking a list as it is typed:** every problem with its line, and a
+  Hypothesis property that a list checks clean exactly when it reads as a list.
+- **The editor** in Vitest: filling from each source keeping the songs still
+  named, the AI asked and answering, a song played to its end, a check jumping
+  to the last five seconds; and one Playwright run that types a list in
+  CodeMirror against the real check and fills the rows.
 - **Saving rows:** a first split, a song inserted in the middle keeping every
   other song's ratings, a delete, a move, a retime, unsplitting, a rescan within
   and past a second, and removing the Library.

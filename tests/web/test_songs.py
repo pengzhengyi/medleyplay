@@ -179,6 +179,44 @@ def test_a_pasted_text_of_no_song_list_answers_why(
     assert "Line 1" in response.text
 
 
+def test_checking_a_list_as_typed_answers_its_songs_and_each_line_s_problems(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    response = client.post(
+        f"/api/tracks/{album}/songs/check",
+        json={"text": "00:00 Intro\nNight Drive\n2:00:00 Encore"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "songs": [
+            {"start_ms": 0, "title": "Intro", "artist": ""},
+            {"start_ms": 7_200_000, "title": "Encore", "artist": ""},
+        ],
+        "problems": [
+            {"line": 2, "message": "This line has no time, such as 3:12."},
+            {"line": 3, "message": "This starts after the file ends, at 1:00:00."},
+        ],
+    }
+
+
+def test_checking_a_list_for_a_song_of_another_file_is_refused(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+    song = client.put(f"/api/tracks/{album}/songs", json={"rows": TWO_SONGS}).json()["songs"][0]
+
+    response = client.post(
+        f"/api/tracks/{song['track_id']}/songs/check", json={"text": "00:00 A\n03:12 B"}
+    )
+
+    assert response.status_code == 409
+
+
 def test_a_save_naming_the_songs_it_saw_is_refused_once_they_changed(
     client: TestClient, catalog: CatalogService
 ) -> None:

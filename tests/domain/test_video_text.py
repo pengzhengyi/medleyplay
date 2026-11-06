@@ -13,8 +13,10 @@ from medleyplay.domain.video_text import (
     MAX_LINE,
     MAX_SONGS,
     Chapter,
+    LineProblem,
     Song,
     VideoText,
+    check_song_list,
     check_songs,
     read_song_list,
     read_video,
@@ -540,6 +542,78 @@ def test_a_pasted_list_of_the_most_songs_is_accepted() -> None:
     assert len(read_song_list(text)) == MAX_SONGS
 
 
+# --- Checking a list as it is typed -------------------------------------------
+
+
+def test_checking_a_good_list_gives_its_songs_and_no_problems() -> None:
+    text = """\
+00:00 Intro
+1. 03:12 Night Drive - Blue Room
+"""
+
+    checked = check_song_list(text)
+
+    assert checked.songs == (Song(0, "Intro"), Song(192_000, "Night Drive", "Blue Room"))
+    assert checked.problems == ()
+
+
+def test_checking_a_list_names_every_line_that_is_not_a_song() -> None:
+    text = f"""\
+00:00 Intro
+Night Drive
+03:12
+07:40 Blue Room
+09:00 {"x" * MAX_LINE}
+"""
+
+    assert check_song_list(text).problems == (
+        LineProblem(2, "This line has no time, such as 3:12."),
+        LineProblem(3, "This line has no title."),
+        LineProblem(5, "This line is too long for a song."),
+    )
+
+
+def test_checking_a_list_names_a_song_starting_before_or_just_after_the_one_above() -> None:
+    text = """\
+00:00 Intro
+05:00 Night Drive
+03:00 Blue Room
+03:00 Encore
+"""
+
+    assert check_song_list(text).problems == (
+        LineProblem(3, "This starts before the song above."),
+        LineProblem(4, "This starts less than a second after the song above."),
+    )
+
+
+def test_checking_a_list_names_a_song_starting_after_the_file_ends() -> None:
+    text = """\
+00:00 Intro
+09:00 Night Drive
+"""
+
+    assert check_song_list(text, length_ms=300_000).problems == (
+        LineProblem(2, "This starts after the file ends, at 5:00."),
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("00:00 Intro", "A song list has at least 2 songs."),
+        (
+            "\n".join(f"{n // 60}:{n % 60:02} Song {n}" for n in range(MAX_SONGS + 1)),
+            f"A song list has at most {MAX_SONGS} songs.",
+        ),
+    ],
+)
+def test_checking_a_list_of_too_few_or_too_many_songs_says_so_of_the_whole_list(
+    text: str, message: str
+) -> None:
+    assert check_song_list(text).problems == (LineProblem(None, message),)
+
+
 # --- Checking a song list ----------------------------------------------------
 
 
@@ -663,6 +737,20 @@ def test_a_pasted_list_is_accepted_or_refused_never_something_else(text: str) ->
         return
 
     check_songs(songs)
+
+
+@given(text=video_texts)
+def test_a_list_checks_clean_exactly_when_it_reads_as_a_song_list(text: str) -> None:
+    try:
+        read = read_song_list(text)
+    except InvalidInputError:
+        read = None
+
+    checked = check_song_list(text)
+
+    assert (checked.problems == ()) == (read is not None)
+    if read is not None:
+        assert checked.songs == read
 
 
 words = st.text(st.characters(categories=["L"]), min_size=1, max_size=12)

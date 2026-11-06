@@ -5,7 +5,7 @@
 import { CloudSlashIcon, KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { type Account, type Track, api } from "../api";
+import { AI_ENRICHER, type Account, type Track, api } from "../api";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
 import { useStation } from "../library/useStation";
@@ -19,7 +19,7 @@ import { AddFile } from "./AddFile";
 import { AddLink } from "./AddLink";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { EditDetails } from "./EditDetails";
-import { EditSongs } from "./EditSongs";
+import { type AiAsk, SongsEditor } from "./EditSongs";
 import { Nav } from "./Nav";
 import { NowPlaying } from "./NowPlaying";
 import { PlayerBar } from "./PlayerBar";
@@ -52,6 +52,11 @@ export function Library({
   const library = useLibrary(onSignedOut);
   const byId = library.tracks;
   const tracks = useMemo(() => [...byId.values()], [byId]);
+  // The artists a typed song list offers, each once.
+  const artists = useMemo(
+    () => [...new Set(tracks.map((track) => track.artist.trim()).filter((name) => name !== ""))],
+    [tracks],
+  );
   const [player, audio] = usePlayer(byId, onSignedOut);
   const station = useStation(player, tracks, account.id, library.favoriteGroups);
   // On a narrow screen the queue opens over the page, from the player.
@@ -73,9 +78,10 @@ export function Library({
   // The song being added to Playlists, while its dialog is open, and what was last done.
   const [adding, setAdding] = useState<Track | undefined>(undefined);
   // The song whose details are being edited, while its dialog is open.
-  const [editing, setEditing] = useState<Track | undefined>(undefined);
-  // The album file whose songs are being edited: a song's own file, or the file chosen.
-  const [splitting, setSplitting] = useState<Track | undefined>(undefined);
+  // The Track whose details are edited, and whether the dialog opens on its file's songs.
+  const [editing, setEditing] = useState<
+    { readonly track: Track; readonly songs: boolean } | undefined
+  >(undefined);
   // The link or code being added from Bilibili, and the Track whose file is being added by hand.
   const [linking, setLinking] = useState<string | undefined>(undefined);
   const [filing, setFiling] = useState<Track | undefined>(undefined);
@@ -134,7 +140,9 @@ export function Library({
       library.setRating(track.id, rating);
     },
     onAddToPlaylist: setAdding,
-    onEditDetails: setEditing,
+    onEditDetails: (track: Track) => {
+      setEditing({ track, songs: false });
+    },
     canFind: (lookup: Lookup, track: Track) =>
       library.findable.get(lookup.enricher)?.has(track.id) ?? false,
     // The song's cover shows the lookup as it goes; screen readers hear it asked.
@@ -154,8 +162,53 @@ export function Library({
     },
     onAddFile: setFiling,
     onEditSongs: (track: Track) => {
-      setSplitting(track.segment_of === null ? track : byId.get(track.segment_of));
+      const file = track.segment_of === null ? track : byId.get(track.segment_of);
+      if (file !== undefined) {
+        setEditing({ track: file, songs: true });
+      }
     },
+  };
+  /** The way to the songs of `track`'s file from its details, and the editor to show. */
+  const songsOf = (track: Track) => {
+    const file = track.segment_of === null ? track : byId.get(track.segment_of);
+    if (file === undefined) {
+      return undefined;
+    }
+    const count = tracks.filter((each) => each.segment_of === file.id).length;
+    const ai = LOOKUPS.find((lookup) => lookup.enricher === AI_ENRICHER);
+    const asked = library.lookups.get(file.id);
+    const askAi: AiAsk = {
+      can: ai !== undefined && actions.canFind(ai, file),
+      state: asked?.enricher === AI_ENRICHER ? asked.state : undefined,
+      message: asked?.message ?? "",
+      ask: () => {
+        if (ai !== undefined) {
+          actions.onFind(ai, file);
+        }
+      },
+    };
+    return {
+      label: file.split && count > 0 ? `${String(count)} songs` : "Split into songs",
+      editor: (
+        <SongsEditor
+          album={file}
+          load={api.songs}
+          check={api.checkSongList}
+          artists={artists}
+          ai={askAi}
+          loadAudio={api.playback}
+          onListen={player.pause}
+          onSave={async (rows, known) => {
+            await library.saveSongs(file.id, rows, known);
+            setNotice(`Saved the songs of “${file.title}”.`);
+          }}
+          onUnsplit={async () => {
+            await library.unsplit(file.id);
+            setNotice(`“${file.title}” plays whole again.`);
+          }}
+        />
+      ),
+    };
   };
   const addTo = async (track: Track, ids: readonly string[], newNames: readonly string[]) => {
     await library.addToPlaylists(track, ids, newNames);
@@ -377,43 +430,25 @@ export function Library({
           }}
         />
       )}
-      {splitting !== undefined && (
-        <EditSongs
-          album={splitting}
-          load={api.songs}
-          readList={async (trackId, text) => (await api.readSongList(trackId, text)).songs}
-          loadAudio={api.playback}
-          onListen={player.pause}
-          onSave={async (rows, known) => {
-            await library.saveSongs(splitting.id, rows, known);
-            setNotice(`Saved the songs of “${splitting.title}”.`);
-          }}
-          onUnsplit={async () => {
-            await library.unsplit(splitting.id);
-            setNotice(`“${splitting.title}” plays whole again.`);
-          }}
-          onClose={() => {
-            setSplitting(undefined);
-          }}
-        />
-      )}
       {editing !== undefined && (
         <EditDetails
-          track={editing}
+          track={editing.track}
           load={api.details}
           onSave={async (values) => {
-            await library.saveDetails(editing.id, values);
-            setNotice(`Saved the details of “${editing.title}”.`);
+            await library.saveDetails(editing.track.id, values);
+            setNotice(`Saved the details of “${editing.track.title}”.`);
           }}
-          onReadVideo={(text) => library.readVideoText(editing.id, text)}
-          onSetCover={(image) => library.setCover(editing.id, image)}
-          onRemoveCover={() => library.removeCover(editing.id)}
-          findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing))}
-          lookup={library.lookups.get(editing.id)}
+          onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
+          onSetCover={(image) => library.setCover(editing.track.id, image)}
+          onRemoveCover={() => library.removeCover(editing.track.id)}
+          findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing.track))}
+          lookup={library.lookups.get(editing.track.id)}
           online={library.mode?.online !== false}
           onFind={(lookup) => {
-            actions.onFind(lookup, editing);
+            actions.onFind(lookup, editing.track);
           }}
+          songs={songsOf(editing.track)}
+          startOnSongs={editing.songs}
           onClose={() => {
             setEditing(undefined);
           }}

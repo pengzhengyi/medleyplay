@@ -30,7 +30,13 @@ from medleyplay.domain.segments import (
     plan_split,
     segment_locator,
 )
-from medleyplay.domain.video_text import Song, read_song_list, read_video
+from medleyplay.domain.video_text import (
+    ListCheck,
+    Song,
+    check_song_list,
+    read_song_list,
+    read_video,
+)
 from medleyplay.persistence.schema import SegmentRow, SourceRow, TrackRow
 
 
@@ -153,6 +159,15 @@ class SongsService:
         with self._units() as db:
             _album_file(db, track_id)
         return read_song_list(text)
+
+    def check_list(self, track_id: TrackId, text: str) -> ListCheck:
+        """Return the songs a list typed for the file names, with each line's problems.
+
+        A song starting at or after the file's end, when its length is known, is one.
+        """
+        with self._units() as db:
+            length_ms = _album_file(db, track_id).duration_ms
+        return check_song_list(text, length_ms=length_ms)
 
     def unsplit(self, track_id: TrackId) -> int:
         """Remove every song of the file, with its Track; return how many there were."""

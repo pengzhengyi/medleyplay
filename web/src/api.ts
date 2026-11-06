@@ -92,6 +92,13 @@ export interface Song {
   readonly artist: string;
 }
 
+/** What a song list says as it is typed: the songs its lines name, and every problem. */
+export interface ListCheck {
+  readonly songs: readonly Song[];
+  /** Why a line is no song, or with `line` `null`, why the list isn't one. */
+  readonly problems: readonly { readonly line: number | null; readonly message: string }[];
+}
+
 /** A song of a split file: its id, its Track, and where it ends, if known. */
 export interface SplitSong extends Song {
   readonly id: number;
@@ -532,9 +539,9 @@ export const api = {
   /** Make `rows` the file's songs: each kept by its id, the others new, the rest removed. */
   saveSongs: (trackId: number, rows: readonly SongRowIn[], known: readonly number[]) =>
     call<Songs>("PUT", `/api/tracks/${String(trackId)}/songs`, { rows, known }),
-  /** Read a song list pasted for the file; refused with the first line that isn't a song. */
-  readSongList: (trackId: number, text: string) =>
-    call<{ songs: Song[] }>("POST", `/api/tracks/${String(trackId)}/songs/read`, { text }),
+  /** Check a song list as it is typed, each problem on its line. */
+  checkSongList: (trackId: number, text: string) =>
+    call<ListCheck>("POST", `/api/tracks/${String(trackId)}/songs/check`, { text }),
   /** Remove every song of the file, with its Track. */
   unsplit: (trackId: number) =>
     call<{ removed: number }>("DELETE", `/api/tracks/${String(trackId)}/songs`),

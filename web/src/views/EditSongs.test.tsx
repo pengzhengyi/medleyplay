@@ -1,11 +1,21 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, type PlaybackAnswer, type Song, type SongRowIn, type Songs } from "../api";
+import { EditorView } from "@codemirror/view";
+
+import {
+  ApiError,
+  type ListCheck,
+  type PlaybackAnswer,
+  type Song,
+  type SongRowIn,
+  type Songs,
+} from "../api";
 import { fakeMedia } from "../testing/media";
-import { splitSongsOf, trackOf } from "../testing/server";
-import { EditSongs } from "./EditSongs";
+import { detailsOf, splitSongsOf, trackOf } from "../testing/server";
+import { EditDetails } from "./EditDetails";
+import { type AiAsk, SongsEditor } from "./EditSongs";
 
 /** *Bremen*, a whole album uploaded as one video. */
 const BREMEN = trackOf(104, "BV1dm4y1s7ak", { split: true });
@@ -33,6 +43,13 @@ const LISTED: readonly Song[] = [
   { start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "ハチ" },
 ];
 
+/** The AI, set up and never asked about the file. */
+const AI_UNASKED: AiAsk = { can: true, state: undefined, message: "", ask: vi.fn() };
+
+/**
+ * Open *Bremen*'s details on its songs, as its menu's *Edit songs…* does, its file
+ * holding `songs`; the AI is as `ai` says, and `answerAi` shows it as it goes later.
+ */
 async function renderEditor(
   songs: Songs = SPLIT,
   {
@@ -40,32 +57,71 @@ async function renderEditor(
       Promise.resolve(),
     ),
     onUnsplit = vi.fn<() => Promise<void>>(() => Promise.resolve()),
-    readList = vi.fn<(trackId: number, text: string) => Promise<readonly Song[]>>(() =>
-      Promise.resolve(LISTED),
+    check = vi.fn<(trackId: number, text: string) => Promise<ListCheck>>(() =>
+      Promise.resolve({ songs: LISTED, problems: [] }),
     ),
     loadAudio = vi.fn<(trackId: number) => Promise<PlaybackAnswer>>(() =>
       Promise.resolve(BREMEN_AUDIO),
     ),
     onListen = vi.fn(),
+    ai = AI_UNASKED,
   } = {},
 ) {
   const onClose = vi.fn();
-  const { unmount } = render(
-    <EditSongs
-      album={BREMEN}
-      load={() => Promise.resolve(songs)}
-      readList={readList}
-      loadAudio={loadAudio}
-      onListen={onListen}
-      onSave={onSave}
-      onUnsplit={onUnsplit}
+  const load = vi.fn<(trackId: number) => Promise<Songs>>(() => Promise.resolve(songs));
+  const dialogOf = (asked: AiAsk) => (
+    <EditDetails
+      track={BREMEN}
+      load={() => Promise.resolve(detailsOf(104))}
+      onSave={() => Promise.resolve()}
+      onReadVideo={() => Promise.reject(new Error("No video in this test."))}
+      onSetCover={() => Promise.reject(new Error("No cover in this test."))}
+      onRemoveCover={() => Promise.reject(new Error("No cover in this test."))}
+      findable={[]}
+      lookup={undefined}
+      online
+      onFind={vi.fn()}
+      songs={{
+        label: "3 songs",
+        editor: (
+          <SongsEditor
+            album={BREMEN}
+            load={load}
+            check={check}
+            artists={["ハチ"]}
+            ai={asked}
+            loadAudio={loadAudio}
+            onListen={onListen}
+            onSave={onSave}
+            onUnsplit={onUnsplit}
+          />
+        ),
+      }}
+      startOnSongs
       onClose={onClose}
-    />,
+    />
   );
+  const { rerender, unmount } = render(dialogOf(ai));
   const dialog = screen.getByRole("dialog");
   await within(dialog).findByRole("button", { name: "Add a song" });
   const media = fakeMedia(audioOf(dialog));
-  return { dialog, media, onSave, onUnsplit, readList, loadAudio, onListen, onClose, unmount };
+  /** Show the editor as the page would once the AI's lookup is `asked`. */
+  const answerAi = (asked: AiAsk) => {
+    rerender(dialogOf(asked));
+  };
+  return {
+    dialog,
+    media,
+    load,
+    onSave,
+    onUnsplit,
+    check,
+    loadAudio,
+    onListen,
+    onClose,
+    unmount,
+    answerAi,
+  };
 }
 
 function audioOf(dialog: HTMLElement): HTMLAudioElement {
@@ -96,14 +152,16 @@ function listeningNote(dialog: HTMLElement): HTMLElement {
 }
 
 const box = (dialog: HTMLElement, name: string) => within(dialog).getByRole("textbox", { name });
-const press = (dialog: HTMLElement, name: string | RegExp) =>
-  userEvent.click(within(dialog).getByRole("button", { name }));
+const press = (dialog: HTMLElement, name: string | RegExp | HTMLElement) =>
+  userEvent.click(
+    name instanceof HTMLElement ? name : within(dialog).getByRole("button", { name }),
+  );
 
 describe("editing a file's songs", () => {
   it("shows each song's start, title, and artist", async () => {
     const { dialog } = await renderEditor();
 
-    expect(dialog).toHaveAccessibleName("Edit songs");
+    expect(dialog).toHaveAccessibleName("Songs");
     expect(box(dialog, "Start of song 2")).toHaveValue("4:12");
     expect(box(dialog, "Title of song 2")).toHaveValue("ゴーゴー幽霊船");
     expect(box(dialog, "Start of song 3")).toHaveValue("8:00");
@@ -113,8 +171,8 @@ describe("editing a file's songs", () => {
     const { dialog, onSave, onClose } = await renderEditor(splitSongsOf(104, [], [LISTED]));
 
     expect(dialog).toHaveAccessibleName("Split into songs");
-    await press(dialog, "Use the 2 songs from the video's details");
-    await press(dialog, "Save");
+    await press(dialog, "Fill from the video's 2 songs");
+    await press(dialog, "Save songs");
 
     expect(onSave).toHaveBeenCalledExactlyOnceWith(
       [
@@ -126,12 +184,13 @@ describe("editing a file's songs", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("splits a file from the list the AI suggested, as new songs", async () => {
+  it("splits a file from the list the AI suggested, saying where the songs came from", async () => {
     const { dialog, onSave } = await renderEditor(splitSongsOf(104, [], [], LISTED));
 
-    await press(dialog, "Use the 2 songs the AI suggested");
-    await press(dialog, "Save");
+    await press(dialog, "Fill with AI");
+    await press(dialog, "Save songs");
 
+    expect(within(dialog).getByText("2 songs from the AI")).toHaveRole("status");
     expect(onSave).toHaveBeenCalledExactlyOnceWith(
       [
         { id: null, start_ms: 0, title: "アイネクライネ", artist: "" },
@@ -141,35 +200,94 @@ describe("editing a file's songs", () => {
     );
   });
 
-  it("offers the list the AI suggested for a file already split, replacing its rows when used", async () => {
-    const { dialog } = await renderEditor({ ...SPLIT, suggested: LISTED });
+  it("keeps each song the AI's list still names when it fills a file already split", async () => {
+    const { dialog, onSave } = await renderEditor({ ...SPLIT, suggested: LISTED });
 
-    await press(dialog, "Use the 2 songs the AI suggested");
+    await press(dialog, "Fill with AI");
+    const filled = [(box(dialog, "Artist of song 2") as HTMLInputElement).value];
+    const third = within(dialog).queryByRole("textbox", { name: "Title of song 3" });
+    await press(dialog, "Save songs");
+    await press(dialog, "Save and remove 1 song");
 
-    expect(box(dialog, "Title of song 1")).toHaveValue("アイネクライネ");
-    expect(box(dialog, "Artist of song 2")).toHaveValue("ハチ");
-    expect(within(dialog).queryByRole("textbox", { name: "Title of song 3" })).toBeNull();
-  });
-
-  it("offers no AI list when the AI suggested none", async () => {
-    const { dialog } = await renderEditor();
-
-    expect(within(dialog).queryByRole("button", { name: /the AI suggested/u })).toBeNull();
-  });
-
-  it("reads a pasted list into its rows", async () => {
-    const { dialog, readList } = await renderEditor(splitSongsOf(104, []));
-
-    await userEvent.click(within(dialog).getByText("Paste a list"));
-    await userEvent.click(box(dialog, "Song list"));
-    await userEvent.paste("00:00 アイネクライネ\n04:12 ゴーゴー幽霊船 - ハチ");
-    await press(dialog, "Read the list");
-
-    expect(readList).toHaveBeenCalledExactlyOnceWith(
-      104,
-      "00:00 アイネクライネ\n04:12 ゴーゴー幽霊船 - ハチ",
+    expect(filled).toEqual(["ハチ"]);
+    expect(third).toBeNull();
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      [
+        { id: 1, start_ms: 0, title: "アイネクライネ", artist: "" },
+        { id: 2, start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "ハチ" },
+      ],
+      [1, 2, 3],
     );
-    expect(box(dialog, "Artist of song 2")).toHaveValue("ハチ");
+  });
+
+  it("asks the AI when it has suggested nothing, and fills the songs once it answers", async () => {
+    const ask = vi.fn();
+    const unsplit = splitSongsOf(104, []);
+    const { dialog, load, answerAi } = await renderEditor(unsplit, {
+      ai: { ...AI_UNASKED, ask },
+    });
+
+    await press(dialog, "Fill with AI");
+    answerAi({ ...AI_UNASKED, ask, state: "running" });
+    const asking = within(dialog).getByText("Asking the AI…");
+    load.mockResolvedValue({ ...unsplit, suggested: LISTED });
+    answerAi({ ...AI_UNASKED, ask, state: "succeeded" });
+
+    expect(ask).toHaveBeenCalledOnce();
+    expect(asking).toHaveRole("status");
+    expect(await within(dialog).findByText("2 songs from the AI")).toBeInTheDocument();
+    expect(box(dialog, "Title of song 2")).toHaveValue("ゴーゴー幽霊船");
+  });
+
+  it("says when the AI found no song list", async () => {
+    const { dialog, answerAi } = await renderEditor(splitSongsOf(104, []));
+
+    await press(dialog, "Fill with AI");
+    answerAi({ ...AI_UNASKED, state: "succeeded" });
+
+    expect(await within(dialog).findByText("The AI found no song list for this file.")).toHaveRole(
+      "status",
+    );
+  });
+
+  it("can't ask an AI that isn't set up, and says where to set one up", async () => {
+    const { dialog } = await renderEditor(SPLIT, { ai: { ...AI_UNASKED, can: false } });
+
+    const button = within(dialog).getByRole("button", { name: "Fill with AI" });
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription("Set up an AI provider in Settings to ask it");
+  });
+
+  it("types the songs as a list, starting from the rows, and keeps the songs it still names", async () => {
+    const check = vi.fn((_: number, text: string) =>
+      Promise.resolve<ListCheck>({
+        songs: text.includes("ハチ") ? LISTED : [],
+        problems: text.includes("ハチ") ? [] : [{ line: null, message: "Not yet." }],
+      }),
+    );
+    const { dialog, onSave } = await renderEditor(SPLIT, { check });
+
+    await press(dialog, "Fill from a list");
+    const text = await within(dialog).findByRole("textbox", { name: "Song list" });
+    const view = EditorView.findFromDOM(text);
+    const typed = view?.state.doc.toString();
+    act(() => {
+      view?.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: "0:00 アイネクライネ\n4:12 ゴーゴー幽霊船 - ハチ",
+        },
+      });
+    });
+    await press(dialog, await within(dialog).findByRole("button", { name: "Use these 2 songs" }));
+    await press(dialog, "Save songs");
+    await press(dialog, "Save and remove 1 song");
+
+    expect(typed).toBe("0:00 アイネクライネ\n4:12 ゴーゴー幽霊船\n8:00 Last");
+    expect(check).toHaveBeenLastCalledWith(104, "0:00 アイネクライネ\n4:12 ゴーゴー幽霊船 - ハチ");
+    expect(onSave.mock.calls[0]?.[0].map((row) => row.id)).toEqual([1, 2]);
   });
 
   it("keeps each song by its id when its row is moved and renamed", async () => {
@@ -179,7 +297,7 @@ describe("editing a file's songs", () => {
     await userEvent.clear(box(dialog, "Start of song 2"));
     await userEvent.type(box(dialog, "Start of song 2"), "3:00");
     await userEvent.type(box(dialog, "Title of song 2"), " (Reprise)");
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     expect(onSave).toHaveBeenCalledExactlyOnceWith(
       [
@@ -195,7 +313,7 @@ describe("editing a file's songs", () => {
     const { dialog, onSave } = await renderEditor();
 
     await press(dialog, "Remove “Last”");
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     expect(onSave).not.toHaveBeenCalled();
     expect(
@@ -220,7 +338,7 @@ describe("editing a file's songs", () => {
 
     await press(dialog, "Add a song");
     await userEvent.type(box(dialog, "Start of song 4"), "8:75");
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     expect(within(dialog).getByRole("alert")).toHaveTextContent("Song 4 starts at no time");
     expect(onSave).not.toHaveBeenCalled();
@@ -235,7 +353,7 @@ describe("editing a file's songs", () => {
       ),
     });
 
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("song 2 breaks that");
     expect(onClose).not.toHaveBeenCalled();
@@ -252,10 +370,10 @@ describe("the songs editor's guards", () => {
   it("asks again after any edit made once it said what saving removes", async () => {
     const { dialog, onSave } = await renderEditor();
     await press(dialog, "Remove “Last”");
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     await userEvent.type(box(dialog, "Title of song 1"), "!");
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     expect(onSave).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("button", { name: "Save and remove 1 song" })).toBeVisible();
@@ -269,7 +387,7 @@ describe("the songs editor's guards", () => {
       ]),
     );
 
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     expect(onSave.mock.calls[0]?.[0][1]?.start_ms).toBe(192_500);
   });
@@ -279,7 +397,7 @@ describe("the songs editor's guards", () => {
 
     await userEvent.clear(box(dialog, "Start of song 3"));
     await userEvent.type(box(dialog, "Start of song 3"), "2:00:00");
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
 
     expect(within(dialog).getByRole("alert")).toHaveTextContent(
       "Song 3 starts after the file ends",
@@ -289,10 +407,56 @@ describe("the songs editor's guards", () => {
 });
 
 describe("listening in the songs editor", () => {
+  it("plays just a song, from its start to where the next starts", async () => {
+    const { dialog, media } = await renderEditor();
+    await press(dialog, "Play song 2");
+    await waitFor(() => {
+      expect(audioOf(dialog).paused).toBe(false);
+    });
+    const pressed = within(dialog).getByRole("button", { name: "Play song 2" });
+
+    const playingThen = pressed.getAttribute("aria-pressed");
+    act(() => {
+      media.playTo(480);
+    });
+
+    expect(playingThen).toBe("true");
+    expect(audioOf(dialog).paused).toBe(true);
+    expect(pressed).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("checks a song by ear: its first five seconds, then its last five", async () => {
+    const { dialog, media } = await renderEditor();
+    await press(dialog, "Check song 2 by ear");
+    await waitFor(() => {
+      expect(audioOf(dialog).paused).toBe(false);
+    });
+
+    const from = audioOf(dialog).currentTime;
+    media.playTo(257);
+    const jumped = audioOf(dialog).currentTime;
+    media.playTo(480);
+
+    expect([from, jumped]).toEqual([252, 475]);
+    expect(audioOf(dialog).paused).toBe(true);
+  });
+
+  it("stops a song playing when it is pressed again", async () => {
+    const { dialog } = await renderEditor();
+    await press(dialog, "Play song 2");
+    await waitFor(() => {
+      expect(audioOf(dialog).paused).toBe(false);
+    });
+
+    await press(dialog, "Play song 2");
+
+    expect(audioOf(dialog).paused).toBe(true);
+  });
+
   it("plays the file from a song's start, pausing the music playing", async () => {
     const { dialog, loadAudio, onListen } = await renderEditor();
 
-    await press(dialog, "Listen from song 2");
+    await press(dialog, "Play song 2");
 
     await waitFor(() => {
       expect(audioOf(dialog).paused).toBe(false);
@@ -305,7 +469,7 @@ describe("listening in the songs editor", () => {
 
   it("starts a song where the file is playing, to the millisecond", async () => {
     const { dialog, media, onSave } = await renderEditor();
-    await press(dialog, "Listen from song 2");
+    await press(dialog, "Play song 2");
     await waitFor(() => {
       expect(audioOf(dialog).paused).toBe(false);
     });
@@ -314,7 +478,7 @@ describe("listening in the songs editor", () => {
     await press(dialog, "Start song 3 here");
 
     expect(box(dialog, "Start of song 3")).toHaveValue("5:00");
-    await press(dialog, "Save");
+    await press(dialog, "Save songs");
     expect(onSave.mock.calls[0]?.[0][2]).toMatchObject({ start_ms: 300_500 });
   });
 
@@ -325,7 +489,7 @@ describe("listening in the songs editor", () => {
       ),
     });
 
-    await press(dialog, "Listen from song 1");
+    await press(dialog, "Play song 1");
 
     await waitFor(() => {
       expect(listeningNote(dialog)).toHaveTextContent(
@@ -340,8 +504,8 @@ describe("listening in the songs editor", () => {
       loadAudio: vi.fn(() => answer.promise),
     });
 
-    await press(dialog, "Listen from song 2");
-    await press(dialog, "Listen from song 3");
+    await press(dialog, "Play song 2");
+    await press(dialog, "Play song 3");
     answer.give(BREMEN_AUDIO);
 
     await waitFor(() => {
@@ -359,7 +523,7 @@ describe("listening in the songs editor", () => {
     });
     const audio = audioOf(dialog);
 
-    await press(dialog, "Listen from song 2");
+    await press(dialog, "Play song 2");
     unmount();
     answer.give(BREMEN_AUDIO);
     await Promise.resolve();
@@ -371,7 +535,7 @@ describe("listening in the songs editor", () => {
 
   it("stops the file when it closes", async () => {
     const { dialog, media, unmount } = await renderEditor();
-    await press(dialog, "Listen from song 2");
+    await press(dialog, "Play song 2");
     await waitFor(() => {
       expect(audioOf(dialog).paused).toBe(false);
     });
@@ -386,7 +550,7 @@ describe("listening in the songs editor", () => {
   it("forgets what it said about listening once the songs are edited", async () => {
     const { dialog } = await renderEditor();
     await userEvent.clear(box(dialog, "Start of song 2"));
-    await press(dialog, "Listen from song 2");
+    await press(dialog, "Play song 2");
     expect(listeningNote(dialog)).toHaveTextContent(/Song 2 starts at no time/);
 
     await userEvent.type(box(dialog, "Start of song 2"), "4:12");

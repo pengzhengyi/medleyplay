@@ -29,6 +29,7 @@ MAX_VIDEO_TITLE: Final = 1_000
 MAX_VIDEO_DESCRIPTION: Final = 20_000
 MAX_CHAPTERS: Final = 1_000
 MAX_SUGGESTED_SONGS: Final = 300
+MAX_AI_PROVIDERS: Final = 5
 
 type FieldName = Annotated[str, StringConstraints(max_length=32)]
 """The name of one of a Track's details, such as `title`."""
@@ -64,15 +65,36 @@ class VideoText(_Model):
 
 
 class AiEndpoint(_Model):
-    """The AI provider an enricher asks: where it is, which model to ask, and the key.
+    """An AI provider an enricher asks: which it is, where, which model to ask, and the key.
 
-    The provider speaks the OpenAI chat protocol. `key` is `None` for one that needs
-    none, such as a local Ollama.
+    The provider speaks the OpenAI chat protocol. `id` names it in what the enricher
+    answers, and `key` is `None` for one that needs none, such as a local Ollama.
     """
 
+    id: Annotated[str, StringConstraints(max_length=64)] = ""
     base_url: Annotated[str, StringConstraints(max_length=256)]
     model: Annotated[str, StringConstraints(max_length=128)]
     key: Annotated[str, StringConstraints(max_length=512)] | None = Field(default=None, repr=False)
+
+
+class AiFailureKind(StrEnum):
+    """Why an AI provider gave no answer to use."""
+
+    UNREACHABLE = "unreachable"
+    """It couldn't be reached, or something else answered in its place."""
+    BUSY = "busy"
+    """It stayed busy or kept failing."""
+    REFUSED = "refused"
+    """It refused the key or the account."""
+    UNUSABLE = "unusable"
+    """It answered, but not with what was asked: a wrong model or address, or a bad answer."""
+
+
+class AiFailure(_Model):
+    """An AI provider that was asked and gave no answer to use, and why."""
+
+    provider: Annotated[str, StringConstraints(max_length=64)]
+    kind: AiFailureKind
 
 
 class EnrichTrack(_Model):
@@ -85,7 +107,8 @@ class EnrichTrack(_Model):
     into songs, which is asked about as a release, never as one recording. A cover
     goes into `folder`, an empty folder the caller owns. `proxy` is the household's
     proxy for the site, or `None`. `text` is the Track's video text, for an enricher
-    that reads it, and `ai` the provider an enricher that asks an AI model asks.
+    that reads it, and `ai` the providers an enricher that asks an AI model asks, the
+    first first, each next one when the one before fails.
     """
 
     video: VideoId | None = None
@@ -96,7 +119,9 @@ class EnrichTrack(_Model):
     folder: str
     proxy: ProxyUrl | None = Field(default=None, repr=False)
     text: VideoText | None = Field(default=None, repr=False)
-    ai: AiEndpoint | None = Field(default=None, repr=False)
+    ai: Annotated[tuple[AiEndpoint, ...], Field(max_length=MAX_AI_PROVIDERS)] = Field(
+        default=(), repr=False
+    )
 
 
 class EnrichStatus(StrEnum):
@@ -125,7 +150,9 @@ class Enriched(_Model):
     With `OK`, `values` are details by field name, and `video_text` is the video's
     own text for the core to read instead of values; an answer holds one or the other.
     `songs` is a song list the enricher suggests, beside the values. `cover` is the
-    bare name of an image the enricher wrote into the folder.
+    bare name of an image the enricher wrote into the folder. An enricher that asks AI
+    providers names in `ai_answered` the one whose answer it used, and lists in
+    `ai_failures` each one asked before it that gave none.
     """
 
     status: EnrichStatus = EnrichStatus.OK
@@ -134,6 +161,8 @@ class Enriched(_Model):
     video_text: VideoText | None = None
     songs: Annotated[tuple[SuggestedSong, ...], Field(max_length=MAX_SUGGESTED_SONGS)] = ()
     cover: Annotated[str, StringConstraints(max_length=255)] | None = None
+    ai_answered: Annotated[str, StringConstraints(max_length=64)] | None = None
+    ai_failures: Annotated[tuple[AiFailure, ...], Field(max_length=MAX_AI_PROVIDERS)] = ()
 
     @model_validator(mode="after")
     def _one_kind_of_answer(self) -> "Enriched":

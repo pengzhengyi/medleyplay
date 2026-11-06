@@ -1,6 +1,6 @@
-"""The AI provider the household sets up: where it is, which model to ask, and the key.
+"""The AI providers the household sets up: where each is, which model to ask, and the key.
 
-The provider speaks the OpenAI chat protocol, as DeepSeek, OpenAI, Anthropic, and a
+A provider speaks the OpenAI chat protocol, as DeepSeek, OpenAI, Anthropic, and a
 local Ollama all do, so a household chooses one with a base URL and a model:
 
 ```text
@@ -9,12 +9,15 @@ OpenAI      https://api.openai.com/v1         gpt-4o-mini
 Ollama      http://127.0.0.1:11434/v1         llama3.2
 ```
 
-The key is a secret, so the Keychain keeps it and the catalog keeps only whether
-there is one. Nothing here reaches a network, and no reason repeats what was typed.
+The household keeps up to `MAX_PROVIDERS`, in order: a Job asks the first, and the
+next when one fails. A key is a secret, so the Keychain keeps it and the catalog
+keeps only the name it is kept under. Nothing here reaches a network, and no reason
+repeats what was typed.
 """
 
 import ipaddress
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Final, NoReturn
 from urllib.parse import urlsplit
 
@@ -31,9 +34,26 @@ MAX_DESCRIPTION: Final = 6_000
 MAX_CHAPTERS: Final = MAX_SONGS
 """The most chapters sent: as many as a song list holds."""
 MAX_CHAPTER_TITLE: Final = 200
+MAX_PROVIDERS: Final = 5
+"""The most providers kept; a Job reads the key of each from the Keychain."""
 KEY_SECRET: Final = "ai:key"  # noqa: S105 -- the name of a Keychain item, not a key
-"""The name the provider's key is kept under in the Keychain."""
+"""The name the key of a provider set up when only one could be is kept under."""
 _LOOPBACK_NAMES: Final = frozenset({"localhost"})
+
+
+class ProviderFailure(StrEnum):
+    """Why a provider last gave no answer to use."""
+
+    UNREACHABLE = "unreachable"
+    """It couldn't be reached, or something else answered in its place."""
+    BUSY = "busy"
+    """It stayed busy or kept failing."""
+    REFUSED = "refused"
+    """It refused the key or the account."""
+    UNUSABLE = "unusable"
+    """It answered, but not with what was asked: a wrong model or address, or a bad answer."""
+    KEY_MISSING = "key_missing"
+    """Its key is no longer in the Keychain, so it isn't asked until the key is replaced."""
 
 
 @dataclass(frozen=True)
@@ -51,6 +71,11 @@ PRESETS: Final = (
     Preset("Anthropic", "https://api.anthropic.com/v1", "claude-haiku-5-5"),
     Preset("Ollama", "http://127.0.0.1:11434/v1", "llama3.2"),
 )
+
+
+def key_secret(provider_id: str) -> str:
+    """Return the name the key of the provider `provider_id` is kept under in the Keychain."""
+    return f"{KEY_SECRET}:{provider_id}"
 
 
 def check_base_url(text: str) -> str:

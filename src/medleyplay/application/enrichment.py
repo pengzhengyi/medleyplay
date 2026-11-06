@@ -25,13 +25,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock, details
-from medleyplay.application.ai import is_set_up
+from medleyplay.application.ai import is_set_up, record_answers
 from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account, AccountId
-from medleyplay.domain.ai import cut_text
+from medleyplay.domain.ai import ProviderFailure, cut_text
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
 from medleyplay.domain.enrichers import (
@@ -143,6 +143,7 @@ def _complete(
     if enricher.subject is Subject.VIDEO and _text_is_owned(db, track_id):
         return
     if enricher.origin is Origin.AI:
+        _record_providers(db, found, now)
         _record_suggestion(db, track_id, found, now)
         return
     cover = _keep_cover(found, covers_folder)
@@ -156,6 +157,12 @@ def _complete(
         values[Field.COVER] = cover
     if values:
         details.record(db, track_id, enricher.origin, values, now)
+
+
+def _record_providers(db: Session, found: EnrichedTrack, now: datetime) -> None:
+    """Note which AI provider answered, and why each asked before it didn't."""
+    failures = [(each.provider, ProviderFailure(each.kind.value)) for each in found.ai_failures]
+    record_answers(db, found.ai_answered, failures, now)
 
 
 def _record_suggestion(db: Session, track_id: TrackId, found: EnrichedTrack, now: datetime) -> None:

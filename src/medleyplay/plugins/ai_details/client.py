@@ -5,9 +5,10 @@ Ollama all accept: a model, messages, JSON mode, temperature 0, and a bound on t
 answer. The key goes in the `Authorization` header and nowhere else, and no message
 the client raises holds the key, the request, or the provider's own words.
 
-A 429 or a 5xx is the provider being busy or failing, so the client waits as long as
-`Retry-After` says, a few times, and then gives up as a network failure. A 401 or a 403
-means the key or the account is wrong, which is a refusal.
+A 429 or a 5xx is the provider being busy or failing, so a patient client waits as
+long as `Retry-After` says, a few times, and then gives up as a network failure; an
+impatient one gives up at once, for a caller with another provider to ask. A 401 or a
+403 means the key or the account is wrong, which is a refusal.
 """
 
 import time
@@ -53,6 +54,10 @@ class UnusableAnswerError(Exception):
     """The provider answered, but not with a reply the client can use."""
 
 
+class BusyError(NetworkError):
+    """The provider stayed busy or kept failing."""
+
+
 class ChatClient:
     """Asks a provider's chat for one reply, waiting out a busy provider."""
 
@@ -64,12 +69,15 @@ class ChatClient:
         self._session.headers["User-Agent"] = USER_AGENT
         self._sleep = sleep
 
-    def complete(self, endpoint: AiEndpoint, messages: Sequence[Message]) -> str:
+    def complete(
+        self, endpoint: AiEndpoint, messages: Sequence[Message], *, patient: bool = True
+    ) -> str:
         """Return what the model says in answer to `messages`, as text.
 
         Raise `RefusedError` for a key or an account the provider refuses,
         `UnusableAnswerError` for a reply that was cut off, empty, or no chat reply,
-        and `NetworkError` for a provider that can't be reached or stays busy.
+        `BusyError` for a provider that stays busy, or is busy once when not `patient`,
+        and `NetworkError` for one that can't be reached.
         """
         body: dict[str, JsonValue] = {
             "model": endpoint.model,
@@ -80,11 +88,12 @@ class ChatClient:
         }
         headers = {"Authorization": f"Bearer {endpoint.key}"} if endpoint.key else {}
         url = f"{endpoint.base_url.rstrip('/')}/chat/completions"
-        for attempt in range(1, MAX_ATTEMPTS + 1):
+        attempts = MAX_ATTEMPTS if patient else 1
+        for attempt in range(1, attempts + 1):
             response = self._post(url, body, headers)
             if not _is_busy(response):
                 return _reply_of(response)
-            self._wait_out(response, attempt)
+            self._wait_out(response, attempt, attempts)
         raise _too_busy()  # pragma: no cover -- the last attempt raises in `_wait_out`
 
     def _post(
@@ -100,9 +109,9 @@ class ChatClient:
             message = f"The AI provider couldn't be reached: {type(error).__name__}."
             raise NetworkError(message) from None
 
-    def _wait_out(self, response: requests.Response, attempt: int) -> None:
+    def _wait_out(self, response: requests.Response, attempt: int, attempts: int) -> None:
         wait = _retry_after(response)
-        if wait > MAX_WAIT or attempt == MAX_ATTEMPTS:
+        if wait > MAX_WAIT or attempt == attempts:
             raise _too_busy()
         self._sleep(wait)
 
@@ -112,8 +121,8 @@ def _is_busy(response: requests.Response) -> bool:
     return status == HTTPStatus.TOO_MANY_REQUESTS or status >= HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-def _too_busy() -> NetworkError:
-    return NetworkError("The AI provider was too busy to answer.")
+def _too_busy() -> BusyError:
+    return BusyError("The AI provider was too busy to answer.")
 
 
 def _retry_after(response: requests.Response) -> float:

@@ -15,6 +15,9 @@ KEY = "sk-4f9a1c7e5b2d"
 DEEPSEEK = "https://api.deepseek.com"
 CHAT = f"{DEEPSEEK}/chat/completions"
 """Where the chat of the DeepSeek endpoint is asked."""
+OLLAMA = "http://127.0.0.1:11434/v1"
+OLLAMA_CHAT = f"{OLLAMA}/chat/completions"
+"""Where the chat of a local Ollama is asked."""
 
 
 class AiEndpointFactory:
@@ -23,17 +26,17 @@ class AiEndpointFactory:
     @staticmethod
     def deepseek(*, key: str | None = KEY) -> AiEndpoint:
         """Return DeepSeek's `deepseek-flash`, with `key`."""
-        return AiEndpoint(base_url=DEEPSEEK, model="deepseek-flash", key=key)
+        return AiEndpoint(id="deepseek", base_url=DEEPSEEK, model="deepseek-flash", key=key)
 
     @staticmethod
     def at(base_url: str, *, key: str | None = KEY) -> AiEndpoint:
-        """Return a provider at `base_url`, asking the model `m`."""
-        return AiEndpoint(base_url=base_url, model="m", key=key)
+        """Return a provider at `base_url`, asking the model `m`, named by its address."""
+        return AiEndpoint(id=base_url, base_url=base_url, model="m", key=key)
 
     @staticmethod
     def ollama() -> AiEndpoint:
         """Return a local Ollama, which needs no key."""
-        return AiEndpoint(base_url="http://127.0.0.1:11434/v1", model="llama3.2")
+        return AiEndpoint(id="ollama", base_url=OLLAMA, model="llama3.2")
 
 
 class ChatReplyFactory:

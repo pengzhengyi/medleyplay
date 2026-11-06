@@ -202,20 +202,25 @@ class EnricherAskRow(Base):
     asked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
-class AiSettingRow(Base):
-    """The AI provider the household set up; its key, if it has one, is in the Keychain.
+class AiProviderRow(Base):
+    """An AI provider the household set up; its key, if it has one, is in the Keychain.
 
-    The only row has id 1.
+    Jobs ask the providers by `position`, lowest first. `key_secret` is the name the
+    key is kept under, or `None` for a provider that needs none, and `failure` is why
+    the provider last gave no answer, at `failed_at`, until it answers again.
     """
 
-    __tablename__ = "ai_setting"
-    __table_args__ = (CheckConstraint("id = 1", name="single"),)
+    __tablename__ = "ai_provider"
+    __table_args__ = (UniqueConstraint("base_url", "model"),)
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    position: Mapped[int] = mapped_column()
     base_url: Mapped[str] = mapped_column(String(256))
     model: Mapped[str] = mapped_column(String(128))
-    has_key: Mapped[bool] = mapped_column()
+    key_secret: Mapped[str | None] = mapped_column(String(64))
     saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    failure: Mapped[str | None] = mapped_column(String(16))
+    failed_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
 
 class AiSuggestionRow(Base):

@@ -345,7 +345,7 @@ def test_the_ai_migration_adds_the_provider_and_the_suggested_song_lists(tmp_pat
     engine = make_engine(database_url(tmp_path))
     _migrate_to(engine, "0019")
 
-    migrate(engine)
+    _migrate_to(engine, "0020")
 
     with engine.connect() as connection:
         tables = set(
@@ -357,7 +357,7 @@ def test_the_ai_migration_adds_the_provider_and_the_suggested_song_lists(tmp_pat
 
 def test_the_provider_has_one_row_only(tmp_path: Path) -> None:
     engine = make_engine(database_url(tmp_path))
-    migrate(engine)
+    _migrate_to(engine, "0022")
     insert = text(
         "INSERT INTO ai_setting (id, base_url, model, has_key, saved_at)"
         " VALUES (:id, 'https://api.deepseek.com', 'deepseek-flash', 1,"
@@ -367,6 +367,84 @@ def test_the_provider_has_one_row_only(tmp_path: Path) -> None:
     with engine.begin() as connection, pytest.raises(IntegrityError):
         connection.execute(insert, {"id": 2})
     engine.dispose()
+
+
+def _set_up_deepseek_before_several(connection: Connection, *, has_key: bool) -> None:
+    """Keep the one provider of revision 0022: DeepSeek's `deepseek-flash`, its key as asked."""
+    connection.execute(
+        text(
+            "INSERT INTO ai_setting (id, base_url, model, has_key, saved_at)"
+            " VALUES (1, 'https://api.deepseek.com', 'deepseek-flash', :has_key,"
+            " '2026-11-06 00:00:00.000000')"
+        ),
+        {"has_key": has_key},
+    )
+
+
+@pytest.mark.parametrize(("has_key", "secret"), [(True, "ai:key"), (False, None)])
+def test_the_provider_set_up_before_several_becomes_the_first_with_its_key_where_it_was(
+    tmp_path: Path, has_key: bool, secret: str | None
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0022")
+    with engine.begin() as connection:
+        _set_up_deepseek_before_several(connection, has_key=has_key)
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text("SELECT position, base_url, model, key_secret, failure FROM ai_provider")
+        ).all()
+        tables = set(
+            connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+        )
+    engine.dispose()
+    assert [tuple(row) for row in rows] == [
+        (0, "https://api.deepseek.com", "deepseek-flash", secret, None)
+    ]
+    assert "ai_setting" not in tables
+
+
+def test_one_address_and_model_is_one_provider(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    insert = text(
+        "INSERT INTO ai_provider (id, position, base_url, model, saved_at)"
+        " VALUES (:id, :id, 'https://api.deepseek.com', 'deepseek-flash',"
+        " '2026-11-06 00:00:00.000000')"
+    )
+
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        connection.execute(insert, {"id": "1"})
+        connection.execute(insert, {"id": "2"})
+    engine.dispose()
+
+
+def test_undoing_the_providers_migration_keeps_the_first_with_a_key_only_under_the_old_name(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    insert = text(
+        "INSERT INTO ai_provider (id, position, base_url, model, key_secret, saved_at)"
+        " VALUES (:id, :position, 'https://api.deepseek.com', :model, :secret,"
+        " '2026-11-06 00:00:00.000000')"
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            insert, {"id": "b", "position": 1, "model": "second", "secret": "ai:key"}
+        )
+        connection.execute(
+            insert, {"id": "a", "position": 0, "model": "first", "secret": "ai:key:a"}
+        )
+
+    _migrate_to(engine, "0022", down=True)
+
+    with engine.connect() as connection:
+        rows = connection.execute(text("SELECT id, model, has_key FROM ai_setting")).all()
+    engine.dispose()
+    assert [tuple(row) for row in rows] == [(1, "first", 0)]
 
 
 def test_removing_a_track_removes_the_song_list_suggested_for_it(tmp_path: Path) -> None:

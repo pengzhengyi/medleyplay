@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from medleyplay.config import ConfigError
+from medleyplay.domain.ai import key_secret
 from medleyplay.server import (
     AlreadyRunningError,
     PluginSource,
@@ -167,9 +168,11 @@ def test_the_built_services_keep_the_ai_providers_key_in_the_secrets_they_are_gi
     secrets = MemorySecrets()
     services = build_services(engine, tmp_path, secrets=secrets)
 
-    services.ai.save(AccountFactory.admin(), "https://api.deepseek.com", "deepseek-flash", KEY)
+    added = services.ai.add(
+        AccountFactory.admin(), "https://api.deepseek.com", "deepseek-flash", KEY
+    )
 
-    assert secrets.items == {"ai:key": KEY}
+    assert secrets.items == {key_secret(added.id): KEY}
     engine.dispose()
 
 

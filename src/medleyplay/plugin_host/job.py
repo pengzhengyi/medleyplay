@@ -87,8 +87,8 @@ class JobContext:
     """A copy of the login the Job was given, readable by its owner alone, or `None`."""
     proxy: str | None = field(default=None, repr=False)
     """The household's proxy for the Job's site, or `None`; held in memory only."""
-    ai: AiEndpoint | None = field(default=None, repr=False)
-    """The AI provider the Job is lent, key included, or `None`; held in memory only."""
+    ai: tuple[AiEndpoint, ...] = field(default=(), repr=False)
+    """The AI providers the Job is lent, in order, keys included; held in memory only."""
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
 
     def report(self, fraction: float | None = None, message: str = "") -> None:

@@ -292,9 +292,9 @@ class EnrichTrackFactory:
 
     @staticmethod
     def night_drive_video(
-        folder: Path, ai: AiEndpoint | None, *, text: VideoText | None = None
+        folder: Path, *ai: AiEndpoint, text: VideoText | None = None
     ) -> EnrichTrack:
-        """Return the ask about a Track whose video text names a song, for the AI.
+        """Return the ask about a Track whose video text names a song, for the providers `ai`.
 
         ```text
         video title "【MV】Night Drive / Blue Room", file BV1dm4y1s7ak.m4a, 4:59

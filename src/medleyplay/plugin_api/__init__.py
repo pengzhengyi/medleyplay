@@ -14,8 +14,11 @@ plugin = Plugin(api_version=1, register=register)
 from medleyplay.plugin_api.covers import MAX_COVER_BYTES, is_cover_image
 from medleyplay.plugin_api.enrichers import (
     ENRICH_TRACK,
+    MAX_AI_PROVIDERS,
     TRACK_ENRICHER,
     AiEndpoint,
+    AiFailure,
+    AiFailureKind,
     Chapter,
     Enriched,
     EnrichStatus,
@@ -102,6 +105,7 @@ __all__ = [
     "LIBRARY_BACKEND",
     "LIST_FILES",
     "LOCATE_FILE",
+    "MAX_AI_PROVIDERS",
     "MAX_COVER_BYTES",
     "READ_TAGS",
     "READ_VIDEO",
@@ -110,6 +114,8 @@ __all__ = [
     "TAG_READER",
     "TRACK_ENRICHER",
     "AiEndpoint",
+    "AiFailure",
+    "AiFailureKind",
     "AudioQuality",
     "AuthError",
     "Canonical",

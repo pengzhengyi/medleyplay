@@ -313,7 +313,7 @@ def test_the_ai_enricher_asks_about_no_track_until_the_provider_is_set_up(
 
     before = enrichers_client.get(f"/api/enrichers/{AI_NAME}").json()
     refused = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}")
-    enrichers_client.put("/api/ai", json=PROVIDER)
+    enrichers_client.post("/api/ai/providers", json=PROVIDER)
     after = enrichers_client.get(f"/api/enrichers/{AI_NAME}").json()
 
     assert (before["available"], before["eligible"]) == (True, [])
@@ -325,7 +325,7 @@ def test_asking_the_ai_about_a_track_queues_a_job_that_suggests_its_details(
     enrichers_client: TestClient, enriching: Enriching
 ) -> None:
     set_up_as_alice(enrichers_client)
-    enrichers_client.put("/api/ai", json=PROVIDER)
+    enrichers_client.post("/api/ai/providers", json=PROVIDER)
     track_id = enriching.add_track_with_text("Night Drive")
 
     response = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}")

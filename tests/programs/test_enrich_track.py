@@ -16,7 +16,9 @@ PROXY = "socks5h://127.0.0.1:7890"
 LET_DOWN = (ShownDetail(field="title", value="Let Down", origin="files"),)
 
 
-def _context(tmp_path: Path, proxy: str | None = None, ai: AiEndpoint | None = None) -> JobContext:
+def _context(
+    tmp_path: Path, proxy: str | None = None, ai: tuple[AiEndpoint, ...] = ()
+) -> JobContext:
     """A Job's context in this process, asking the test plugin `reader`."""
     work_dir = tmp_path / "work"
     work_dir.mkdir()
@@ -165,7 +167,7 @@ def test_the_text_and_the_file_name_and_the_jobs_provider_reach_the_enricher(
 ) -> None:
     ai = AiEndpoint(base_url="https://api.deepseek.com", model="deepseek-flash", key="sk-1234")
 
-    found = run(_suggest("Echo", "x" * 40), _context(tmp_path, ai=ai))
+    found = run(_suggest("Echo", "x" * 40), _context(tmp_path, ai=(ai,)))
 
     assert found.values["album"] == (
         "provider=https://api.deepseek.com deepseek-flash key=True text=40 0 file=BV1dm4y1s7ak.m4a"

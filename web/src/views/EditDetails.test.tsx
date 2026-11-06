@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { type ReactNode, useContext } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type Details, type VideoRead, type VideoText } from "../api";
@@ -7,6 +8,7 @@ import { LOOKUPS, type Lookup } from "../library/lookups";
 import type { TrackLookup } from "../library/useLibrary";
 import { ALBUM_FILE_ORIGINS, TAGGED_ORIGINS, detailsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
+import { SongsControlsContext } from "./songsControls";
 
 const ALBUM_FILE = trackOf(7, "ケビョウニンゲン");
 
@@ -25,6 +27,8 @@ async function renderDialog(
     lookup?: TrackLookup;
     /** The details read again once a lookup is done. */
     reloaded?: Details;
+    /** The way to the songs of the song's file. */
+    songs?: { readonly label: string; readonly editor: ReactNode };
   } = {},
 ) {
   const onClose = vi.fn();
@@ -44,6 +48,7 @@ async function renderDialog(
       lookup={lookup}
       online
       onFind={onFind}
+      songs={more.songs}
       onClose={onClose}
     />
   );
@@ -744,5 +749,46 @@ describe("looking a song up from its details", () => {
         name: "Looking up on MusicBrainz failed: MusicBrainz didn't answer.",
       }),
     ).toBeVisible();
+  });
+});
+
+/** A stand-in for the songs editor: its heading, and its way back. */
+function SongsStandIn() {
+  const { headingId, onBack } = useContext(SongsControlsContext);
+  return (
+    <form>
+      <h2 id={headingId} tabIndex={-1}>
+        Songs
+      </h2>
+      <button type="button" onClick={onBack}>
+        Details
+      </button>
+    </form>
+  );
+}
+
+describe("the songs of a song's file", () => {
+  it("open in place of the details, and the way back keeps what was typed", async () => {
+    const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
+      songs: { label: "11 songs", editor: <SongsStandIn /> },
+    });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Title" }), "!");
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "11 songs" }));
+    const named = dialog.getAttribute("aria-labelledby");
+    const heading = within(dialog).getByRole("heading", { name: "Songs" });
+    const focused = document.activeElement;
+    await userEvent.click(within(dialog).getByRole("button", { name: "Details" }));
+
+    expect(named).toBe(heading.id);
+    expect(focused).toBe(heading);
+    expect(within(dialog).getByRole("textbox", { name: "Title" })).toHaveValue("ケビョウニンゲン!");
+    expect(within(dialog).getByRole("button", { name: "11 songs" })).toHaveFocus();
+  });
+
+  it("are not offered when the dialog has no way to them", async () => {
+    const { dialog } = await renderDialog();
+
+    expect(within(dialog).queryByRole("button", { name: /songs/u })).not.toBeInTheDocument();
   });
 });

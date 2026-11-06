@@ -418,8 +418,9 @@ songs editor.
   song list the songs editor accepts. Both go with the Track.
 - **Where they show.** *Edit details* offers each suggested value beside its field
   with *Use*, which copies it into the household's edit, to be saved or not; a
-  suggestion equal to what the box holds is not offered. The songs editor offers a
-  suggested list as *Use the N songs the AI suggested*. Neither the web client's
+  suggestion equal to what the box holds is not offered. The songs editor fills
+  its rows from a suggested list with its *AI* button, which asks the AI when it
+  has suggested none; see [Segments](Segments.md#the-web-client). Neither the web client's
   `shownOf` nor the server's precedence includes the `ai` origin; both are checked
   against the same cases.
 - **Its own lane.** Jobs of `ai-details` run one at a time, at least 2 seconds

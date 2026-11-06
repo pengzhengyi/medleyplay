@@ -1,12 +1,15 @@
 /**
- * @file Splitting one long file into its songs, or editing the songs it is split into.
+ * @file The songs a long file is split into, edited in place of its details.
  *
- * A row per song: where it starts, its title, and its artist. Rows can be added,
- * removed, and moved, by dragging or with the buttons, filled from a song list found
- * in the video's details, or read from a pasted list. The file plays in the dialog
- * from any row's start, and a row's start can be taken from where it is playing. A row keeps its song by id, so a song moved, renamed, or
- * retimed keeps its ratings and plays; saving says first how many songs it would
- * remove with theirs, and so does unsplitting.
+ * The rows are the songs: where each starts, its title, and its artist. Rows can be
+ * added, removed, and moved, by dragging or with the buttons. Beside them, ways to
+ * fill them: a list typed as text, the list found in the video's details, or one
+ * the AI suggests, asked for here. A list filled in keeps each song it still names,
+ * so a song retimed, moved, or renamed in place keeps its ratings and plays; saving
+ * says first how many songs it would remove with theirs, and so does unsplitting.
+ *
+ * Each row plays just its song, or its first and last five seconds to check where
+ * it starts and ends; a row's start can be taken from where the file is playing.
  */
 
 import {
@@ -31,18 +34,39 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  CaretLeftIcon,
+  CircleNotchIcon,
   DotsSixVerticalIcon,
+  EarIcon,
   MapPinIcon,
   PlayIcon,
   PlusIcon,
+  SparkleIcon,
+  StopIcon,
+  TextAlignLeftIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
-import { type SubmitEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type SubmitEvent,
+  Suspense,
+  lazy,
+  useCallback,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
-import type { PlaybackAnswer, Song, SongRowIn, Songs, Track } from "../api";
+import type { ListCheck, PlaybackAnswer, Song, SongRowIn, Songs, Track } from "../api";
 import { newId } from "../ids";
+import { checkParts, endOf, keptIds, listTextOf } from "../library/songList";
 import { formatStart, parseStart } from "../library/songTimes";
-import { Modal } from "./Modal";
+import type { TrackLookup } from "../library/useLibrary";
+import { OriginTag } from "./OriginTag";
+import { SongsControlsContext } from "./songsControls";
+
+const ListEditor = lazy(() => import("./ListEditor"));
 
 /** A row as the editor holds it: the start as typed, and the song it keeps, if any. */
 interface Row {
@@ -55,10 +79,24 @@ interface Row {
   readonly artist: string;
 }
 
+/** What a row's file is playing: just its song, or a check of each end. */
+interface Playing {
+  readonly key: string;
+  readonly mode: "song" | "check";
+}
+
+/** The AI asked for a song list, as far as its lookup has gone. */
+export interface AiAsk {
+  /** Whether the AI can be asked about the file now. */
+  readonly can: boolean;
+  /** How the lookup asked last goes, if the AI's. */
+  readonly state: TrackLookup["state"] | undefined;
+  readonly message: string;
+  readonly ask: () => void;
+}
+
 /** The most songs a file is split into, as the server keeps them. */
 const MAX_SONGS = 300;
-/** The longest list to paste, as the server reads it. */
-const MAX_LIST = 100_000;
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 const INSTRUCTIONS = {
@@ -67,55 +105,88 @@ const INSTRUCTIONS = {
 };
 
 /**
- * Edit the songs `album`'s file is split into, read with `load`; `onSave` sends the
- * rows, `readList` reads a pasted list, and `onUnsplit` removes every song.
+ * Edit the songs `album`'s file is split into, read with `load`; `check` checks a
+ * list as it is typed, `onSave` sends the rows, and `onUnsplit` removes every song.
  * `loadAudio` says how the file plays, and `onListen` quiets other music as it does.
+ * The dialog it is shown in gives its heading's id, its way back, and what follows a
+ * save, and hears while it must stay open.
  */
-export function EditSongs({
+export function SongsEditor({
   album,
   load,
-  readList,
+  check,
+  artists,
+  ai,
   loadAudio,
   onListen,
   onSave,
   onUnsplit,
-  onClose,
 }: {
   readonly album: Track;
   readonly load: (trackId: number) => Promise<Songs>;
-  readonly readList: (trackId: number, text: string) => Promise<readonly Song[]>;
+  readonly check: (trackId: number, text: string) => Promise<ListCheck>;
+  /** The artists a typed list offers after a dash. */
+  readonly artists: readonly string[];
+  readonly ai: AiAsk;
   readonly loadAudio: (trackId: number) => Promise<PlaybackAnswer>;
   readonly onListen: () => void;
   /** Save `rows`, refused when the file's songs are no longer the `known` ones the editor saw. */
   readonly onSave: (rows: readonly SongRowIn[], known: readonly number[]) => Promise<void>;
   readonly onUnsplit: () => Promise<void>;
-  readonly onClose: () => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const close = () => {
-    dialog.current?.close();
-  };
+  const { headingId, onBack, onLock, onDone } = useContext(SongsControlsContext);
   const [songs, setSongs] = useState<Songs | undefined>(undefined);
   const [rows, setRows] = useState<readonly Row[]>([]);
-  const [pasted, setPasted] = useState("");
+  const [typing, setTyping] = useState(false);
+  const [fillNote, setFillNote] = useState("");
+  const [askedAi, setAskedAi] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // Set once saving or unsplitting has said what it removes, so the next press goes ahead.
   const [confirming, setConfirming] = useState<"save" | "unsplit" | undefined>(undefined);
   const audio = useRef<HTMLAudioElement | null>(null);
-  // The file stops when the dialog goes.
-  const holdAudio = useCallback((element: HTMLAudioElement) => {
-    audio.current = element;
-    return () => {
-      element.pause();
-      audio.current = null;
-    };
+  // The parts left to play of what is playing, and which row's it is.
+  const plan = useRef<{ key: string; parts: { from: number; to: number }[] } | null>(null);
+  const [playing, setPlaying] = useState<Playing | undefined>(undefined);
+  const stopPlan = useCallback(() => {
+    plan.current = null;
+    setPlaying(undefined);
   }, []);
+  // The file stops when the editor goes, and a part stops where it ends.
+  const holdAudio = useCallback(
+    (element: HTMLAudioElement) => {
+      audio.current = element;
+      const onTime = () => {
+        const left = plan.current;
+        const [part, next] = left?.parts ?? [];
+        if (left === null || part === undefined || element.currentTime * 1000 < part.to) {
+          return;
+        }
+        if (next === undefined) {
+          stopPlan();
+          element.pause();
+        } else {
+          left.parts.shift();
+          seek(element, next.from / 1000);
+        }
+      };
+      element.addEventListener("timeupdate", onTime);
+      // Paused from its own controls, or at its end: nothing plays any more.
+      element.addEventListener("pause", stopPlan);
+      return () => {
+        element.removeEventListener("timeupdate", onTime);
+        element.removeEventListener("pause", stopPlan);
+        element.pause();
+        audio.current = null;
+      };
+    },
+    [stopPlan],
+  );
   const [heard, setHeard] = useState(false);
   const [audioNote, setAudioNote] = useState("");
-  // Each Listen's number, so only the latest seeks and plays.
+  // Each play's number, so only the latest seeks and plays.
   const listening = useRef(0);
-  // The file's answer while it is asked for, so Listens pressed meanwhile ask once.
+  // The file's answer while it is asked for, so plays pressed meanwhile ask once.
   const asking = useRef<Promise<PlaybackAnswer> | null>(null);
   // While a song is dragged, Escape puts it back rather than closing the dialog.
   const [dragging, setDragging] = useState(false);
@@ -124,6 +195,10 @@ export function EditSongs({
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  useEffect(() => {
+    onLock(busy || dragging);
+  }, [busy, dragging, onLock]);
 
   useEffect(() => {
     let open = true;
@@ -151,6 +226,54 @@ export function EditSongs({
     setError("");
     setAudioNote("");
   };
+  /** Fill the rows from `list`, keeping each song it still names, and say where it came from. */
+  const fill = (list: readonly Song[], from: string) => {
+    const ids = keptIds(
+      rows.map((row) => ({ id: row.id, title: row.title, startMs: startOf(row) })),
+      list,
+    );
+    edit(list.map((song, index) => rowOf(song, ids[index] ?? null)));
+    setFillNote(`${songCount(list.length)} ${from}`);
+  };
+
+  // The AI's list, once the lookup asked here is done: the file's songs are read again.
+  const aiDone = askedAi && (ai.state === "succeeded" || ai.state === "failed");
+  const takeAiAnswer = useEffectEvent((loaded: Songs) => {
+    setAskedAi(false);
+    setSongs(loaded);
+    if (loaded.suggested.length > 0) {
+      fill(loaded.suggested, "from the AI");
+    } else {
+      setFillNote(
+        ai.state === "failed"
+          ? `The AI couldn't say: ${ai.message}`
+          : "The AI found no song list for this file.",
+      );
+    }
+  });
+  useEffect(() => {
+    if (!aiDone) {
+      return undefined;
+    }
+    let open = true;
+    load(album.id).then(
+      (loaded) => {
+        if (open) {
+          takeAiAnswer(loaded);
+        }
+      },
+      (failure: unknown) => {
+        if (open) {
+          setAskedAi(false);
+          setFillNote(messageOf(failure));
+        }
+      },
+    );
+    return () => {
+      open = false;
+    };
+  }, [aiDone, album.id, load]);
+
   const change = (key: string, field: "start" | "title" | "artist", value: string) => {
     edit(rows.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
   };
@@ -161,10 +284,6 @@ export function EditSongs({
       next.splice(to, 0, moving);
       edit(next);
     }
-  };
-  // A list found or pasted starts over: its songs are new, and the rows' songs go.
-  const startFrom = (list: readonly Song[]) => {
-    edit(list.map((song) => rowOf(song, null)));
   };
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -178,10 +297,12 @@ export function EditSongs({
     }
   };
 
-  const listen = async (startMs: number) => {
+  /** Play `parts` of the file, one after another, as row `key`'s `mode`. */
+  const listen = async (parts: { from: number; to: number }[], now: Playing) => {
     const turn = ++listening.current;
     const element = audio.current;
-    if (element === null) {
+    const [first] = parts;
+    if (element === null || first === undefined) {
       return;
     }
     setAudioNote("");
@@ -210,17 +331,39 @@ export function EditSongs({
           setHeard(true);
         }
       }
-      seek(element, startMs / 1000);
+      seek(element, first.from / 1000);
+      plan.current = { key: now.key, parts: [...parts] };
+      setPlaying(now);
       await element.play();
       if (turn === listening.current) {
         onListen();
       }
     } catch (failure) {
-      // A newer file or the dialog closing stopped this play, which isn't a fault.
+      // A newer file or the editor closing stopped this play, which isn't a fault.
       if (!(failure instanceof DOMException && failure.name === "AbortError")) {
+        stopPlan();
         setAudioNote(messageOf(failure));
       }
     }
+  };
+  /** Play row `index` as `mode`, or stop it when it is playing so already. */
+  const play = (index: number, mode: Playing["mode"]) => {
+    const row = rows[index];
+    if (row === undefined) {
+      return;
+    }
+    if (playing?.key === row.key && playing.mode === mode) {
+      audio.current?.pause();
+      return;
+    }
+    const starts = rows.map(startOf);
+    const from = starts[index];
+    if (from === undefined) {
+      setAudioNote(`Song ${String(index + 1)} starts at no time; write it as 3:12 or 1:07:40.`);
+      return;
+    }
+    const to = endOf(starts, index, songs?.length_ms ?? null) ?? Number.POSITIVE_INFINITY;
+    void listen(mode === "song" ? [{ from, to }] : checkParts(from, to), { key: row.key, mode });
   };
   const startHere = (key: string) => {
     const element = audio.current;
@@ -256,6 +399,7 @@ export function EditSongs({
   const split = (songs?.songs.length ?? 0) > 0;
   const kept = new Set(rows.flatMap((row) => (row.id === null ? [] : [row.id])));
   const removing = songs?.songs.filter((song) => !kept.has(song.id)).length ?? 0;
+  const thinking = askedAi && !aiDone;
 
   const save = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -270,7 +414,7 @@ export function EditSongs({
     }
     void run(async () => {
       await onSave(sent, songs?.songs.map((song) => song.id) ?? []);
-      close();
+      onDone();
     });
   };
   const unsplit = () => {
@@ -280,103 +424,127 @@ export function EditSongs({
     }
     void run(async () => {
       await onUnsplit();
-      close();
+      onDone();
     });
   };
 
   return (
-    <Modal
-      ref={dialog}
-      className="edit-songs"
-      labelledBy="edit-songs-title"
-      describedBy="edit-songs-file"
-      locked={busy || dragging}
-      onClose={onClose}
-    >
-      <form className="card" onSubmit={save}>
-        <h2 id="edit-songs-title">{split ? "Edit songs" : "Split into songs"}</h2>
-        <p id="edit-songs-file" className="edit-details-song">
-          {album.title}
+    <form className="songs-panel" onSubmit={save}>
+      <header className="songs-heading">
+        <button type="button" className="songs-back" onClick={onBack}>
+          <CaretLeftIcon weight="bold" aria-hidden />
+          Details
+        </button>
+        <h2 id={headingId} className="songs-title" tabIndex={-1}>
+          {split ? "Songs" : "Split into songs"}
+        </h2>
+        <p className="edit-details-song">{album.title}</p>
+      </header>
+      {songs === undefined && error === "" && (
+        <p className="empty" role="status">
+          Reading the songs…
         </p>
-        {songs === undefined && error === "" && (
-          <p className="empty" role="status">
-            Reading the songs…
-          </p>
-        )}
-        {songs !== undefined && (
-          <>
-            {songs.needs_check && (
-              <p className="songs-note">
-                The file's length changed since it was split; check where each song starts.
-              </p>
-            )}
+      )}
+      {songs !== undefined && (
+        <>
+          {songs.needs_check && (
+            <p className="songs-note">
+              The file's length changed since it was split; check where each song starts.
+            </p>
+          )}
+          <div className="songs-fill">
+            <button
+              type="button"
+              className={typing ? "fill-button on" : "fill-button"}
+              aria-label="Fill from a list"
+              aria-pressed={typing}
+              disabled={busy}
+              title="Type or paste the songs as a list"
+              onClick={() => {
+                setTyping((open) => !open);
+              }}
+            >
+              <TextAlignLeftIcon aria-hidden /> List
+            </button>
             {songs.found.map((list, index) => (
               <button
                 key={index}
                 type="button"
-                className="secondary outline songs-found"
+                className="fill-button"
                 disabled={busy}
+                aria-label={`Fill from the video's ${songCount(list.length)}`}
+                title={`The ${songCount(list.length)} the video's details list`}
                 onClick={() => {
-                  startFrom(list);
+                  setTyping(false);
+                  fill(list, "from the video");
                 }}
               >
-                {`Use the ${String(list.length)} songs from the video's details`}
+                <OriginTag origin="video" full="From the video" /> {list.length}
               </button>
             ))}
-            {songs.suggested.length > 0 && (
-              <button
-                type="button"
-                className="secondary outline songs-found"
-                disabled={busy}
-                onClick={() => {
-                  startFrom(songs.suggested);
+            <button
+              type="button"
+              className="fill-button"
+              disabled={busy || thinking || (songs.suggested.length === 0 && !ai.can)}
+              aria-label="Fill with AI"
+              aria-busy={thinking}
+              title={
+                songs.suggested.length > 0
+                  ? `The ${songCount(songs.suggested.length)} the AI suggested`
+                  : ai.can
+                    ? "Ask the AI for the songs"
+                    : "Set up an AI provider in Settings to ask it"
+              }
+              onClick={() => {
+                setTyping(false);
+                if (songs.suggested.length > 0) {
+                  fill(songs.suggested, "from the AI");
+                } else {
+                  setFillNote("");
+                  setAskedAi(true);
+                  ai.ask();
+                }
+              }}
+            >
+              {thinking ? (
+                <CircleNotchIcon className="spin" aria-hidden />
+              ) : (
+                <SparkleIcon aria-hidden />
+              )}{" "}
+              AI
+            </button>
+            <span className="songs-fill-note" role="status">
+              {thinking ? "Asking the AI…" : fillNote}
+            </span>
+          </div>
+          {typing && (
+            <Suspense fallback={<p className="empty">Opening the list…</p>}>
+              <ListEditor
+                initial={listTextOf(rows)}
+                check={(text) => check(album.id, text)}
+                artists={artists}
+                onUse={(list) => {
+                  setTyping(false);
+                  fill(list, "from the list");
                 }}
-              >
-                {`Use the ${String(songs.suggested.length)} songs the AI suggested`}
-              </button>
-            )}
-            <details className="paste-video">
-              <summary className="paste-video-summary">Paste a list</summary>
-              <div className="paste-video-body">
-                <label htmlFor="songs-list" className="detail-label">
-                  Song list
-                </label>
-                <textarea
-                  id="songs-list"
-                  className="detail-input"
-                  rows={5}
-                  maxLength={MAX_LIST}
-                  placeholder={"00:00 Intro\n03:12 Night Drive - Blue Room"}
-                  value={pasted}
-                  onChange={(event) => {
-                    setPasted(event.currentTarget.value);
-                  }}
-                />
-                <button
-                  type="button"
-                  className="secondary paste-video-read"
-                  disabled={busy || pasted.trim() === ""}
-                  onClick={() =>
-                    void run(async () => {
-                      startFrom(await readList(album.id, pasted));
-                    })
-                  }
-                >
-                  Read the list
-                </button>
-              </div>
-            </details>
-            <audio
-              ref={holdAudio}
-              className="songs-audio"
-              controls
-              preload="metadata"
-              hidden={!heard}
-            />
-            {/* On the page while empty, so a screen reader hears what it comes to say. */}
-            <p className="songs-note songs-audio-note" role="status">
-              {audioNote}
-            </p>
+                onCancel={() => {
+                  setTyping(false);
+                }}
+              />
+            </Suspense>
+          )}
+          <audio
+            ref={holdAudio}
+            className="songs-audio"
+            controls
+            preload="metadata"
+            hidden={!heard || typing}
+          />
+          {/* On the page while empty, so a screen reader hears what it comes to say. */}
+          <p className="songs-note songs-audio-note" role="status">
+            {audioNote}
+          </p>
+          <div hidden={typing}>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -406,6 +574,7 @@ export function EditSongs({
                       first={index === 0}
                       last={index === rows.length - 1}
                       heard={heard}
+                      playing={playing?.key === row.key ? playing.mode : undefined}
                       onChange={(field, value) => {
                         change(row.key, field, value);
                       }}
@@ -415,16 +584,8 @@ export function EditSongs({
                       onRemove={() => {
                         edit(rows.filter((each) => each.key !== row.key));
                       }}
-                      onListen={() => {
-                        const start =
-                          row.start === row.loaded.text ? row.loaded.ms : parseStart(row.start);
-                        if (start === undefined) {
-                          setAudioNote(
-                            `Song ${String(index + 1)} starts at no time; write it as 3:12 or 1:07:40.`,
-                          );
-                        } else {
-                          void listen(start);
-                        }
+                      onPlay={(mode) => {
+                        play(index, mode);
                       }}
                       onStartHere={() => {
                         startHere(row.key);
@@ -444,59 +605,59 @@ export function EditSongs({
             >
               <PlusIcon aria-hidden /> Add a song
             </button>
-          </>
-        )}
-        {confirming !== undefined && (
-          <p className="songs-note" role="status">
-            {confirming === "save"
-              ? `Saving removes ${songCount(removing)}, with their ratings and plays.`
-              : `Unsplitting removes ${songCount(songs?.songs.length ?? 0)}, with their ratings and plays.`}
-          </p>
-        )}
-        {error !== "" && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-        <footer className="dialog-buttons">
-          {split && (
-            <button
-              type="button"
-              className="secondary outline dialog-button songs-unsplit"
-              disabled={busy}
-              onClick={unsplit}
-            >
-              {confirming === "unsplit"
-                ? `Unsplit and remove ${songCount(songs?.songs.length ?? 0)}`
-                : "Unsplit"}
-            </button>
-          )}
+          </div>
+        </>
+      )}
+      {confirming !== undefined && (
+        <p className="songs-note" role="status">
+          {confirming === "save"
+            ? `Saving removes ${songCount(removing)}, with their ratings and plays.`
+            : `Unsplitting removes ${songCount(songs?.songs.length ?? 0)}, with their ratings and plays.`}
+        </p>
+      )}
+      {error !== "" && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <footer className="dialog-buttons" hidden={typing}>
+        {split && (
           <button
             type="button"
-            className="secondary outline dialog-button"
+            className="secondary outline dialog-button songs-unsplit"
             disabled={busy}
-            onClick={close}
+            onClick={unsplit}
           >
-            Cancel
+            {confirming === "unsplit"
+              ? `Unsplit and remove ${songCount(songs?.songs.length ?? 0)}`
+              : "Unsplit"}
           </button>
-          <button
-            type="submit"
-            className="dialog-button"
-            disabled={songs === undefined || busy}
-            aria-busy={busy}
-          >
-            {confirming === "save" ? `Save and remove ${songCount(removing)}` : "Save"}
-          </button>
-        </footer>
-      </form>
-    </Modal>
+        )}
+        <button
+          type="button"
+          className="secondary outline dialog-button"
+          disabled={busy}
+          onClick={onBack}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="dialog-button"
+          disabled={songs === undefined || busy || typing}
+          aria-busy={busy}
+        >
+          {confirming === "save" ? `Save and remove ${songCount(removing)}` : "Save songs"}
+        </button>
+      </footer>
+    </form>
   );
 }
 
 /**
  * One song's row: a handle to drag it, its start, title, and artist, and buttons to
- * listen from its start, start it where the file is playing (once it has been
- * `heard`), and move or remove it.
+ * play just it or check each end, start it where the file is playing (once it has
+ * been `heard`), and move or remove it.
  */
 function SongRow({
   row,
@@ -504,10 +665,11 @@ function SongRow({
   first,
   last,
   heard,
+  playing,
   onChange,
   onMove,
   onRemove,
-  onListen,
+  onPlay,
   onStartHere,
 }: {
   readonly row: Row;
@@ -515,10 +677,12 @@ function SongRow({
   readonly first: boolean;
   readonly last: boolean;
   readonly heard: boolean;
+  /** How the row's song is playing, if it is. */
+  readonly playing: Playing["mode"] | undefined;
   readonly onChange: (field: "start" | "title" | "artist", value: string) => void;
   readonly onMove: (by: -1 | 1) => void;
   readonly onRemove: () => void;
-  readonly onListen: () => void;
+  readonly onPlay: (mode: Playing["mode"]) => void;
   readonly onStartHere: () => void;
 }) {
   const named = row.title.trim() === "" ? `song ${String(place)}` : `“${row.title}”`;
@@ -577,12 +741,27 @@ function SongRow({
       <span className="song-row-buttons">
         <button
           type="button"
-          className="icon"
-          aria-label={`Listen from song ${String(place)}`}
-          title="Listen from here"
-          onClick={onListen}
+          className={playing === "song" ? "icon on" : "icon"}
+          aria-label={`Play song ${String(place)}`}
+          aria-pressed={playing === "song"}
+          title={playing === "song" ? "Stop" : "Play just this song"}
+          onClick={() => {
+            onPlay("song");
+          }}
         >
-          <PlayIcon aria-hidden />
+          {playing === "song" ? <StopIcon aria-hidden /> : <PlayIcon aria-hidden />}
+        </button>
+        <button
+          type="button"
+          className={playing === "check" ? "icon on" : "icon"}
+          aria-label={`Check song ${String(place)} by ear`}
+          aria-pressed={playing === "check"}
+          title={playing === "check" ? "Stop" : "Hear its first and last 5 seconds"}
+          onClick={() => {
+            onPlay("check");
+          }}
+        >
+          {playing === "check" ? <StopIcon aria-hidden /> : <EarIcon aria-hidden />}
         </button>
         <button
           type="button"
@@ -626,6 +805,11 @@ function SongRow({
   );
 }
 
+/** Where `row` starts, to the millisecond while its text is as loaded, or nothing for no time. */
+function startOf(row: Row): number | undefined {
+  return row.start === row.loaded.text ? row.loaded.ms : parseStart(row.start);
+}
+
 function rowOf(song: Song, id: number | null, start = formatStart(song.start_ms)): Row {
   return {
     key: newId(),
@@ -641,7 +825,7 @@ function rowOf(song: Song, id: number | null, start = formatStart(song.start_ms)
 function rowsIn(rows: readonly Row[], lengthMs: number | null): SongRowIn[] | string {
   const sent: SongRowIn[] = [];
   for (const [index, row] of rows.entries()) {
-    const start = row.start === row.loaded.text ? row.loaded.ms : parseStart(row.start);
+    const start = startOf(row);
     const song = `Song ${String(index + 1)}`;
     if (start === undefined) {
       return `${song} starts at no time; write it as 3:12 or 1:07:40.`;

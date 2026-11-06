@@ -12,16 +12,29 @@
  * found, keeping the household's own. A lookup asked from beside the cover runs as
  * from the song's menu; once it is done, the details are read again, keeping what
  * was typed.
+ *
+ * The songs a long file is split into are edited in the same dialog, in place of
+ * the details, with a way back that keeps what was typed in them.
  */
 
 import {
+  CaretRightIcon,
   CircleNotchIcon,
   DownloadSimpleIcon,
   MusicNotesIcon,
+  ScissorsIcon,
   TrashIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react";
-import { type SubmitEvent, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type SubmitEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   type Detail,
@@ -52,6 +65,7 @@ import type { TrackLookup } from "../library/useLibrary";
 import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { ORIGIN_TAGS } from "./originTags";
+import { type SongsControls, SongsControlsContext } from "./songsControls";
 import { STATUS_ICONS } from "./statusIcons";
 
 /** How long text may be, as the server keeps it. */
@@ -71,10 +85,14 @@ const MAX_DESCRIPTION = 20_000;
 /** The largest cover the server takes, checked before an image is sent. */
 const MAX_COVER_BYTES = 10 * 1024 * 1024;
 
+const SONGS_TITLE = "edit-songs-title";
+
 /**
  * Edit `track`'s details, read with `load`; `onSave` sends the household's values
  * changed, `null` dropping one, and `onReadVideo` a video's pasted text. `onFind`
  * asks one of the lookups `findable`, and `lookup` is how the last one asked goes.
+ * `songs` opens the songs of its file in place of the details, first when
+ * `startOnSongs`.
  */
 export function EditDetails({
   track,
@@ -87,6 +105,8 @@ export function EditDetails({
   lookup,
   online,
   onFind,
+  songs,
+  startOnSongs = false,
   onClose,
 }: {
   readonly track: Track;
@@ -100,6 +120,9 @@ export function EditDetails({
   /** Whether medleyplay is Online, so a lookup asked runs now. */
   readonly online: boolean;
   readonly onFind: (lookup: Lookup) => void;
+  /** The way to its file's songs: what it is called, and the editor, which the dialog controls. */
+  readonly songs?: { readonly label: string; readonly editor: ReactNode } | undefined;
+  readonly startOnSongs?: boolean;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -115,6 +138,41 @@ export function EditDetails({
   const [covering, setCovering] = useState(false);
   const [coverError, setCoverError] = useState("");
   const [error, setError] = useState("");
+  const [panel, setPanel] = useState<"details" | "songs">(
+    startOnSongs && songs !== undefined ? "songs" : "details",
+  );
+  const [songsLocked, setSongsLocked] = useState(false);
+  const songsEntry = useRef<HTMLButtonElement>(null);
+  // Focus follows the swap: to the songs' heading, and back to the way to them.
+  const swapped = useRef(false);
+  useEffect(() => {
+    if (!swapped.current) {
+      swapped.current = true;
+      return;
+    }
+    if (panel === "songs") {
+      document.getElementById(SONGS_TITLE)?.focus();
+    } else {
+      songsEntry.current?.focus();
+    }
+  }, [panel]);
+  const leaveSongs = useCallback(() => {
+    if (startOnSongs) {
+      dialog.current?.close();
+    } else {
+      setSongsLocked(false);
+      setPanel("details");
+    }
+  }, [startOnSongs]);
+  const controls = useMemo<SongsControls>(
+    () => ({
+      headingId: SONGS_TITLE,
+      onBack: leaveSongs,
+      onLock: setSongsLocked,
+      onDone: leaveSongs,
+    }),
+    [leaveSongs],
+  );
 
   useEffect(() => {
     let open = true;
@@ -215,12 +273,17 @@ export function EditDetails({
     <Modal
       ref={dialog}
       className="edit-details"
-      labelledBy="edit-details-title"
+      labelledBy={panel === "songs" ? SONGS_TITLE : "edit-details-title"}
       describedBy="edit-details-song"
-      locked={saving || reading || covering}
+      locked={saving || reading || covering || songsLocked}
       onClose={onClose}
     >
-      <form className="card" onSubmit={(event) => void save(event)}>
+      {panel === "songs" && songs !== undefined && (
+        <div className="card songs-card">
+          <SongsControlsContext value={controls}>{songs.editor}</SongsControlsContext>
+        </div>
+      )}
+      <form className="card" hidden={panel === "songs"} onSubmit={(event) => void save(event)}>
         <h2 id="edit-details-title">Edit details</h2>
         <p id="edit-details-song" className="edit-details-song">
           {track.title}
@@ -249,6 +312,21 @@ export function EditDetails({
                 onRemove={() => void changeCover(onRemoveCover)}
               />
               <LookupBar findable={findable} lookup={lookup} online={online} onFind={onFind} />
+              {songs !== undefined && (
+                <button
+                  ref={songsEntry}
+                  type="button"
+                  className="songs-entry"
+                  disabled={saving || reading || covering}
+                  onClick={() => {
+                    setPanel("songs");
+                  }}
+                >
+                  <ScissorsIcon aria-hidden />
+                  <span className="songs-entry-label">{songs.label}</span>
+                  <CaretRightIcon aria-hidden />
+                </button>
+              )}
               <PasteVideo
                 read={details.video_text}
                 busy={saving || reading || covering}

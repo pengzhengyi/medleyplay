@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Track } from "../api";
 import { trackOf } from "../testing/server";
+import { favoriteGroupsOf } from "./favoriteGroups";
 import {
   albumShelves,
   canSuggest,
@@ -35,6 +36,23 @@ describe("taste", () => {
     expect(tasteOf(trackOf(1, "a", { rating: 5 }))).toBe(1);
     expect(tasteOf(trackOf(1, "a", { rating: 1 }))).toBe(-1);
     expect(tasteOf(trackOf(1, "a", { play_count: 9 }))).toBeCloseTo(Math.log(10) / 4);
+  });
+
+  it("likes a song by a favorite artist or from a favorite album a half more, once", () => {
+    const favorites = favoriteGroupsOf({
+      artists: [{ name: "朴树" }],
+      albums: [{ artist: "朴树", name: "生如夏花" }],
+    });
+
+    const byArtist = tasteOf(song(1, "朴树", "我去2000年"), favorites);
+    const onAlbumByArtist = tasteOf(song(2, "朴树", "生如夏花"), favorites);
+    const byAlbumArtist = tasteOf(
+      song(3, "Guest", "生如夏花", { album_artist: "朴树" }),
+      favorites,
+    );
+    const other = tasteOf(song(4, "许巍", "时光·漫步"), favorites);
+
+    expect([byArtist, onAlbumByArtist, byAlbumArtist, other]).toEqual([0.5, 0.5, 0.5, 0]);
   });
 });
 
@@ -188,6 +206,15 @@ describe("my station", () => {
 
     for (let run = 0; run < 20; run += 1) {
       expect([1, 2]).toContain(stationSeed(liked, seeded(run))?.id);
+    }
+  });
+
+  it("starts from a favorite artist's song when no song is liked yet", () => {
+    const songs = [song(1, "A", "a"), song(2, "朴树", "b"), song(3, "C", "c")];
+    const favorites = favoriteGroupsOf({ artists: [{ name: "朴树" }], albums: [] });
+
+    for (let run = 0; run < 20; run += 1) {
+      expect(stationSeed(songs, seeded(run), favorites)?.id).toBe(2);
     }
   });
 

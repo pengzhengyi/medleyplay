@@ -8,6 +8,7 @@ import {
   ApiError,
   type Detail,
   type Details,
+  type FavoritesRead,
   type AddedPart,
   type Job,
   type JobEvent,
@@ -24,6 +25,8 @@ import {
   uploadFile,
 } from "../api";
 import { newId } from "../ids";
+import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
+import { fold } from "./views";
 import { LOOKUPS } from "./lookups";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
@@ -62,6 +65,10 @@ export interface Library {
    */
   readonly lookups: ReadonlyMap<number, TrackLookup>;
   readonly setFavorite: (id: number, favorite: boolean) => void;
+  /** The artists and albums the Account favorited. */
+  readonly favoriteGroups: FavoriteGroups;
+  readonly setArtistFavorite: (name: string, favorite: boolean) => void;
+  readonly setAlbumFavorite: (artist: string, name: string, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
   /**
    * Change the household's values for the Track, `null` dropping one; the Track then
@@ -149,6 +156,11 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [mode, setMode] = useState<Mode | null>(null);
   const [findable, setFindable] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
   const [lookups, setLookups] = useState<ReadonlyMap<number, TrackLookup>>(new Map());
+  const [favoriteGroups, setFavoriteGroups] = useState<FavoriteGroups>(NO_FAVORITES);
+  // The latest favorite written, so an older answer can't land after it, and how many
+  // are unanswered, so a reload can't undo one the server hasn't answered yet.
+  const favoriteWrites = useRef(0);
+  const favoritesUnanswered = useRef(0);
   // Each lookup's Job, and each Track's latest, so an older Job's end can't land after it.
   const trackOfJob = useRef(new Map<number, number>());
   const jobOfTrack = useRef(new Map<number, number>());
@@ -238,6 +250,16 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.playlists().then(setPlaylists, (failure: unknown) => {
         onFailure(failure);
       });
+      api.favorites().then(
+        (read) => {
+          if (favoritesUnanswered.current === 0) {
+            setFavoriteGroups(favoriteGroupsOf(read));
+          }
+        },
+        () => {
+          // Without them, no artist or album shows a heart until one is given.
+        },
+      );
       api.mode().then(setMode, () => {
         // Without the Mode, the page shows nothing about it until the stream says.
       });
@@ -344,6 +366,45 @@ export function useLibrary(onSignedOut: () => void): Library {
     );
   };
 
+  /** Show `key` favorited or not at once, then as the server answers, or as it was if refused. */
+  const writeFavorite = (
+    group: keyof FavoriteGroups,
+    key: string,
+    favorite: boolean,
+    send: Promise<FavoritesRead>,
+  ) => {
+    const seq = ++favoriteWrites.current;
+    const toggle = (on: boolean) => {
+      setFavoriteGroups((now) => {
+        const keys = new Set(now[group]);
+        if (on) {
+          keys.add(key);
+        } else {
+          keys.delete(key);
+        }
+        return { ...now, [group]: keys };
+      });
+    };
+    setError("");
+    toggle(favorite);
+    favoritesUnanswered.current += 1;
+    send
+      .finally(() => {
+        favoritesUnanswered.current -= 1;
+      })
+      .then(
+        (read) => {
+          if (favoriteWrites.current === seq) {
+            setFavoriteGroups(favoriteGroupsOf(read));
+          }
+        },
+        (failure: unknown) => {
+          toggle(!favorite);
+          failed(failure);
+        },
+      );
+  };
+
   return {
     tracks: tracksOf(store),
     playlists,
@@ -380,6 +441,18 @@ export function useLibrary(onSignedOut: () => void): Library {
     setFavorite: (id, favorite) => {
       setError("");
       write(id, "favorite", favorite, api.setFavorite(id, favorite));
+    },
+    favoriteGroups,
+    setArtistFavorite: (name, favorite) => {
+      writeFavorite("artists", fold(name.trim()), favorite, api.setArtistFavorite(name, favorite));
+    },
+    setAlbumFavorite: (artist, name, favorite) => {
+      writeFavorite(
+        "albums",
+        albumKey(artist, name),
+        favorite,
+        api.setAlbumFavorite(artist, name, favorite),
+      );
     },
     setRating: (id, rating) => {
       setError("");

@@ -732,3 +732,65 @@ describe("adding music by link and by file", () => {
     });
   });
 });
+
+describe("favorite artists and albums", () => {
+  it("loads them with the Tracks, matched as the Library names them", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro", { artist: "朴树" })]),
+      "GET /api/favorites": {
+        body: { artists: [{ name: "朴树" }], albums: [{ artist: "朴树", name: "生如夏花" }] },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    await waitFor(() => {
+      expect(result.current.favoriteGroups.artists.has("朴树")).toBe(true);
+    });
+    expect(result.current.favoriteGroups.albums.has("朴树\n生如夏花")).toBe(true);
+  });
+
+  it("favorites an artist at once, then shows what the server keeps", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro", { artist: "朴树" })]),
+      "PUT /api/artists/favorite": { body: { artists: [{ name: "朴树" }], albums: [] } },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    act(() => {
+      result.current.setArtistFavorite("朴树", true);
+    });
+    const atOnce = result.current.favoriteGroups.artists.has("朴树");
+
+    expect(atOnce).toBe(true);
+    await waitFor(() => {
+      expect(calls).toContain("PUT /api/artists/favorite");
+    });
+    expect(result.current.favoriteGroups.artists.has("朴树")).toBe(true);
+  });
+
+  it("takes an album's heart back, saying why, when the server refuses", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "PUT /api/albums/favorite": {
+        status: 422,
+        body: { detail: "An album's name must be 1-512 characters." },
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    act(() => {
+      result.current.setAlbumFavorite("朴树", "生如夏花", true);
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe("An album's name must be 1-512 characters.");
+    });
+    expect(result.current.favoriteGroups.albums.size).toBe(0);
+  });
+});

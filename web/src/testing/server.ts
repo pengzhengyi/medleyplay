@@ -173,6 +173,7 @@ export function signedIn(
     "GET /api/me": { body: ALICE },
     "GET /api/tracks": { body: tracks },
     "GET /api/playlists": { body: playlists },
+    "GET /api/favorites": { body: { artists: [], albums: [] } },
     "GET /api/features": { body: features },
     "GET /api/mode": { body: modeOf() },
     ...preferencesOf(),

@@ -8,12 +8,21 @@ import { Fragment, type ReactNode, useMemo } from "react";
 import type { Mode, Playlist, Track } from "../api";
 import { formatLength } from "../format";
 import {
+  type FavoriteGroups,
+  albumKey,
+  canFavorite,
+  favoriteSongsSuggesting,
+  isFavoriteAlbum,
+  isFavoriteArtist,
+} from "../library/favoriteGroups";
+import {
   type Album,
   type Artist,
   albumsOf,
   artistsOf,
   downloadedOf,
   favoritesOf,
+  fold,
   search,
   songsOf,
   tracksOfAlbum,
@@ -21,6 +30,7 @@ import {
 } from "../library/views";
 import { type Route, hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { FavoriteHeart } from "./FavoriteHeart";
 import type { Station } from "../library/useStation";
 import { RadioView } from "./RadioView";
 import { SettingsView } from "./SettingsView";
@@ -48,6 +58,10 @@ export interface ViewProps {
   /** The station playing, and a way to start one. */
   readonly station: Station;
   readonly accountId: number;
+  /** The artists and albums the Account favorited, and ways to change them. */
+  readonly favorites: FavoriteGroups;
+  readonly onFavoriteArtist: (name: string, favorite: boolean) => void;
+  readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
 }
 
 /** The view `route` names; each route is a view of its own, opening with no filters on. */
@@ -75,37 +89,70 @@ function viewOf(given: ViewProps) {
           station={props.station}
           onPlayAll={props.actions.onPlayAll}
           accountId={props.accountId}
+          favorites={props.favorites}
         />
       );
     case "artists":
-      return <Artists tracks={props.tracks} />;
-    case "artist":
+      return <Artists tracks={props.tracks} favorites={props.favorites} />;
+    case "artist": {
+      const songs = tracksOfArtist(props.tracks, route.name);
       return (
         <Songs
           title={route.name || UNKNOWN_ARTIST}
           back={{ view: "artists" }}
           backLabel="Artists"
+          heart={
+            canFavorite(route.name) && (
+              <FavoriteHeart
+                kind="artist"
+                name={route.name}
+                favorite={isFavoriteArtist(props.favorites, route.name)}
+                onChange={(favorite) => {
+                  props.onFavoriteArtist(route.name, favorite);
+                }}
+                loved={favoriteSongsSuggesting(songs)}
+                suggestionKey={`${String(props.accountId)}:artist:${fold(route.name.trim())}`}
+              />
+            )
+          }
           {...props}
           empty={<p className="empty">No songs by this artist are in your Library now.</p>}
         >
-          {tracksOfArtist(props.tracks, route.name)}
+          {songs}
         </Songs>
       );
+    }
     case "albums":
-      return <Albums tracks={props.tracks} />;
-    case "album":
+      return <Albums tracks={props.tracks} favorites={props.favorites} />;
+    case "album": {
+      const songs = tracksOfAlbum(props.tracks, route.artist, route.name);
       return (
         <Songs
           title={route.name || UNKNOWN_ALBUM}
           subtitle={route.artist || UNKNOWN_ARTIST}
           back={{ view: "albums" }}
           backLabel="Albums"
+          heart={
+            canFavorite(route.name) && (
+              <FavoriteHeart
+                kind="album"
+                name={route.name}
+                favorite={isFavoriteAlbum(props.favorites, route.artist, route.name)}
+                onChange={(favorite) => {
+                  props.onFavoriteAlbum(route.artist, route.name, favorite);
+                }}
+                loved={favoriteSongsSuggesting(songs)}
+                suggestionKey={`${String(props.accountId)}:album:${albumKey(route.artist, route.name)}`}
+              />
+            )
+          }
           {...props}
           empty={<p className="empty">No songs from this album are in your Library now.</p>}
         >
-          {tracksOfAlbum(props.tracks, route.artist, route.name)}
+          {songs}
         </Songs>
       );
+    }
     case "downloaded":
       return (
         <Songs
@@ -144,6 +191,7 @@ function Songs({
   subtitle,
   back,
   backLabel,
+  heart,
   children,
   empty,
   playingId,
@@ -153,12 +201,20 @@ function Songs({
   readonly subtitle?: string | undefined;
   readonly back?: Route;
   readonly backLabel?: string;
+  /** A heart beside the title, for an artist or album that can be a favorite. */
+  readonly heart?: ReactNode;
   readonly children: readonly Track[];
   readonly empty: ReactNode;
 }) {
   return (
     <>
-      <ViewHeading title={title} subtitle={subtitle} back={back} backLabel={backLabel}>
+      <ViewHeading
+        title={title}
+        subtitle={subtitle}
+        back={back}
+        backLabel={backLabel}
+        heart={heart}
+      >
         {children.length > 0 && formatLength(children.length, durationOf(children))}
       </ViewHeading>
       <TrackTable tracks={children} playingId={playingId} actions={actions} empty={empty} />
@@ -171,12 +227,14 @@ function ViewHeading({
   subtitle,
   back,
   backLabel,
+  heart,
   children,
 }: {
   readonly title: string;
   readonly subtitle?: string | undefined;
   readonly back?: Route | undefined;
   readonly backLabel?: string | undefined;
+  readonly heart?: ReactNode;
   readonly children?: ReactNode;
 }) {
   return (
@@ -187,33 +245,58 @@ function ViewHeading({
           {backLabel}
         </a>
       )}
-      <h2 className="section">{title}</h2>
+      {heart === undefined || heart === false ? (
+        <h2 className="section">{title}</h2>
+      ) : (
+        <div className="view-title">
+          <h2 className="section">{title}</h2>
+          {heart}
+        </div>
+      )}
       {subtitle !== undefined && <p className="subtitle">{subtitle}</p>}
       {children !== undefined && children !== false && <p className="meta">{children}</p>}
     </header>
   );
 }
 
-function Artists({ tracks }: { readonly tracks: readonly Track[] }) {
+function Artists({
+  tracks,
+  favorites,
+}: {
+  readonly tracks: readonly Track[];
+  readonly favorites: FavoriteGroups;
+}) {
   const artists = useMemo(() => artistsOf(tracks), [tracks]);
   return (
     <>
       <ViewHeading title="Artists">
         {artists.length > 0 && `${String(artists.length)} artists`}
       </ViewHeading>
-      {artists.length === 0 ? <NoMusic /> : <ArtistList artists={artists} />}
+      {artists.length === 0 ? <NoMusic /> : <ArtistList artists={artists} favorites={favorites} />}
     </>
   );
 }
 
-function ArtistList({ artists }: { readonly artists: readonly Artist[] }) {
+function ArtistList({
+  artists,
+  favorites,
+}: {
+  readonly artists: readonly Artist[];
+  readonly favorites: FavoriteGroups;
+}) {
   return (
     <ul className="groups" aria-label="Artists">
       {artists.map((artist) => (
-        <li key={artist.name}>
+        <li
+          key={artist.name}
+          className={isFavoriteArtist(favorites, artist.name) ? "favorite" : ""}
+        >
           <a href={hrefOf({ view: "artist", name: artist.name })}>
-            <span className="avatar" aria-hidden>
-              {initialOf(artist.name)}
+            <span className="tile-frame">
+              <span className="avatar" aria-hidden>
+                {initialOf(artist.name)}
+              </span>
+              {isFavoriteArtist(favorites, artist.name) && <FavoriteBadge />}
             </span>
             <span className="group-name">{artist.name || UNKNOWN_ARTIST}</span>
             <span className="group-meta">{formatLength(artist.count, artist.durationMs)}</span>
@@ -224,35 +307,63 @@ function ArtistList({ artists }: { readonly artists: readonly Artist[] }) {
   );
 }
 
-function Albums({ tracks }: { readonly tracks: readonly Track[] }) {
+function Albums({
+  tracks,
+  favorites,
+}: {
+  readonly tracks: readonly Track[];
+  readonly favorites: FavoriteGroups;
+}) {
   const albums = useMemo(() => albumsOf(tracks), [tracks]);
   return (
     <>
       <ViewHeading title="Albums">
         {albums.length > 0 && `${String(albums.length)} albums`}
       </ViewHeading>
-      {albums.length === 0 ? <NoMusic /> : <AlbumList albums={albums} />}
+      {albums.length === 0 ? <NoMusic /> : <AlbumList albums={albums} favorites={favorites} />}
     </>
   );
 }
 
-function AlbumList({ albums }: { readonly albums: readonly Album[] }) {
+function AlbumList({
+  albums,
+  favorites,
+}: {
+  readonly albums: readonly Album[];
+  readonly favorites: FavoriteGroups;
+}) {
   return (
     <ul className="groups" aria-label="Albums">
-      {albums.map((album) => (
-        <li key={`${album.artist}\n${album.name}`}>
-          <a href={hrefOf({ view: "album", artist: album.artist, name: album.name })}>
-            <Cover cover={album.cover} className="cover-tile">
-              {initialOf(album.name)}
-            </Cover>
-            <span className="group-name">{album.name || UNKNOWN_ALBUM}</span>
-            <span className="group-meta">
-              {album.artist || UNKNOWN_ARTIST}, {formatLength(album.count, album.durationMs)}
-            </span>
-          </a>
-        </li>
-      ))}
+      {albums.map((album) => {
+        const favorite = isFavoriteAlbum(favorites, album.artist, album.name);
+        return (
+          <li key={`${album.artist}\n${album.name}`} className={favorite ? "favorite" : ""}>
+            <a href={hrefOf({ view: "album", artist: album.artist, name: album.name })}>
+              <span className="tile-frame">
+                <Cover cover={album.cover} className="cover-tile">
+                  {initialOf(album.name)}
+                </Cover>
+                {favorite && <FavoriteBadge />}
+              </span>
+              <span className="group-name">{album.name || UNKNOWN_ALBUM}</span>
+              <span className="group-meta">
+                {album.artist || UNKNOWN_ARTIST}, {formatLength(album.count, album.durationMs)}
+              </span>
+            </a>
+          </li>
+        );
+      })}
     </ul>
+  );
+}
+
+/** A favorite artist's or album's mark on its tile. */
+function FavoriteBadge() {
+  return (
+    <span className="favorite-badge" title="Favorite">
+      <HeartIcon weight="fill" aria-hidden />
+      <span className="visually-hidden">Favorite</span>
+    </span>
   );
 }
 
@@ -360,13 +471,13 @@ function SearchResults({ query, ...props }: ViewProps & { readonly query: string
       {found.artists.length > 0 && (
         <section aria-label="Artists found">
           <h3 className="found">Artists</h3>
-          <ArtistList artists={found.artists} />
+          <ArtistList artists={found.artists} favorites={props.favorites} />
         </section>
       )}
       {found.albums.length > 0 && (
         <section aria-label="Albums found">
           <h3 className="found">Albums</h3>
-          <AlbumList albums={found.albums} />
+          <AlbumList albums={found.albums} favorites={props.favorites} />
         </section>
       )}
       {found.tracks.length > 0 && (

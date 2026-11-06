@@ -33,6 +33,7 @@ from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.web.app import create_app
@@ -373,6 +374,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         songs=songs,
         covers=covers,
         enrichment=enrichment,
+        sweeper=EnrichmentSweeper(enrichment),
         ai=ai,
     )
 

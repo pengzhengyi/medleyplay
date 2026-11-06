@@ -3,10 +3,11 @@
 from datetime import datetime
 
 from fastapi import APIRouter, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from medleyplay.application.enrichment import EnricherState
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.enrichers import EnricherMode
 from medleyplay.web.deps import EnrichmentDep, JobsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 from medleyplay.web.jobs import JobOut
@@ -31,6 +32,8 @@ class EnricherOut(BaseModel):
     """Set after the site refused a request; nothing is asked until an admin resets it."""
     eligible: list[int]
     """The Tracks it may be asked about now; none while it is stopped or turned off."""
+    mode: EnricherMode
+    """When the household has it asked: `manual`, `next` for the songs coming up, or `all`."""
 
     @classmethod
     def of(cls, state: EnricherState, eligible: list[TrackId]) -> "EnricherOut":
@@ -45,7 +48,16 @@ class EnricherOut(BaseModel):
             available=state.available,
             stopped=stopped,
             eligible=list(eligible) if state.available else [],
+            mode=state.mode,
         )
+
+
+class ModeIn(BaseModel):
+    """When the household has the enricher asked."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: EnricherMode
 
 
 class QueuedOut(BaseModel):
@@ -76,6 +88,15 @@ def find_details(
 def find_details_for_all(name: str, me: SignedInAccount, enrichment: EnrichmentDep) -> QueuedOut:
     """Queue the enricher for every eligible Track, and say how many; admins only."""
     return QueuedOut(queued=enrichment.find_details_for_all(me, name))
+
+
+@router.put("/{name}/mode")
+def set_mode(
+    name: str, body: ModeIn, me: SignedInAccount, enrichment: EnrichmentDep
+) -> EnricherOut:
+    """Choose when the enricher is asked; admins only. Finding all queues every Track at once."""
+    state = enrichment.set_mode(me, name, body.mode)
+    return EnricherOut.of(state, enrichment.eligible(name))
 
 
 @router.post("/{name}/reset", status_code=status.HTTP_204_NO_CONTENT)

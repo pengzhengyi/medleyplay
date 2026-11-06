@@ -45,6 +45,17 @@ BILIBILI_FILE_NAME: Final = re.compile(r"BV[0-9A-Za-z]{10}")
 """A file named for its video: `BV1dm4y1s7ak.m4a`."""
 
 
+class EnricherMode(StrEnum):
+    """When an enricher is asked about a Track, as the household chose for it."""
+
+    MANUAL = "manual"
+    """Only when someone chooses to, from a Track's menu or its details."""
+    NEXT = "next"
+    """For the songs a page is about to play, as each comes up."""
+    ALL = "all"
+    """For every Track it may be asked about, at once and whenever another becomes one."""
+
+
 class Subject(StrEnum):
     """What an enricher is asked about."""
 

@@ -25,6 +25,7 @@ from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import NotSignedInError
 
@@ -54,6 +55,7 @@ class Services:
     songs: SongsService
     covers: CoverService
     enrichment: EnrichmentService
+    sweeper: EnrichmentSweeper
     ai: AiService
 
 

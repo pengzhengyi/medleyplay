@@ -92,6 +92,28 @@ test("a large Library keeps only the rows on screen in the page", async ({ page 
   expect(await page.locator("table.tracks tbody tr:not(.spacer)").count()).toBeLessThan(100);
 });
 
+test("scrolling Up next past its end leaves the page where it is", async ({ page }) => {
+  await page.route("**/api/tracks", (route) => route.fulfill({ json: manySongs(200) }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Song 1", exact: true }).click();
+  const queue = page.getByRole("region", { name: "Up next" });
+  await expect(queue.getByRole("listitem")).toHaveCount(199);
+  const atEnd = () =>
+    queue.evaluate((panel) => panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 1);
+
+  await queue.hover();
+  await page.mouse.wheel(0, 100_000);
+  await expect.poll(atEnd).toBe(true);
+  await page.mouse.wheel(0, 2_000);
+  // A scroll over the songs moves the page by its own amount, and only once the one
+  // over Up next is done with.
+  await page.getByRole("button", { name: "Song 5", exact: true }).hover();
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(400);
+});
+
 test("a song's menu adds it to a new Playlist, and then another song to the same one", async ({
   page,
 }) => {

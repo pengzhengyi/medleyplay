@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AiProvider, AiSetting, Enricher } from "../api";
-import { type Routes, serve } from "../testing/server";
+import { type Routes, enricherOf, serve } from "../testing/server";
 import { AiSettings } from "./AiSettings";
 
 const KEY = "sk-4f9a1c7e5b2d";
@@ -31,12 +31,7 @@ const settingOf = (provider: AiProvider | null): AiSetting => ({
 });
 
 /** The AI enricher on, not stopped, and able to be asked about the Tracks `eligible`. */
-const running = (eligible: readonly number[]): Enricher => ({
-  name: "ai-details",
-  available: true,
-  stopped: null,
-  eligible,
-});
+const running = (eligible: readonly number[]): Enricher => enricherOf("ai-details", eligible);
 
 function open(provider: AiProvider | null, routes: Routes = {}, enricher = running([1, 2])) {
   const onChanged = vi.fn();
@@ -234,19 +229,6 @@ describe("the AI suggestions", () => {
     open(DEEPSEEK, {}, running([1, 2, 3]));
 
     expect(await screen.findByText("3 Tracks can be given suggestions.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Suggest for all" })).toBeEnabled();
-  });
-
-  it("queues every Track and says how many were queued", async () => {
-    const user = userEvent.setup();
-    const { calls } = open(DEEPSEEK, {
-      "POST /api/enrichers/ai-details/find-all": { body: { queued: 2 } },
-    });
-
-    await user.click(await screen.findByRole("button", { name: "Suggest for all" }));
-
-    expect(await screen.findByText("Queued 2 Tracks.")).toBeInTheDocument();
-    expect(calls).toContain("POST /api/enrichers/ai-details/find-all");
   });
 
   it("says suggestions only suggest, and are asked for once a day per text", async () => {
@@ -269,7 +251,6 @@ describe("the AI suggestions", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Stopped after the AI provider refused a request: The AI provider refused the key or the account (401). Check the key. Nothing more is asked until it is reset.",
     );
-    expect(screen.getByRole("button", { name: "Suggest for all" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled();
   });
 

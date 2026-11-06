@@ -3526,6 +3526,44 @@ button.song-handle {
   }
 }
 
+/* When an enricher is asked: three choices on a line, and what the chosen one does. */
+.enricher-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  border: none;
+}
+
+.enricher-mode legend {
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.enricher-mode-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.enricher-mode-radio {
+  margin: 0;
+}
+
+.enricher-mode-does {
+  flex-basis: 100%;
+}
+
+button.enricher-reset {
+  width: auto;
+  margin: 0 0 0 0.25rem;
+  padding: 0.2rem 0.75rem;
+  font-size: 0.85rem;
+}
+
 /* What was just done, above the player for a moment. */
 
 .notice {

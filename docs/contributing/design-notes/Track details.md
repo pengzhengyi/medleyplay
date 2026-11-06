@@ -227,12 +227,19 @@ harm the core, and each is turned on or off like any plugin. `bilibili-details`,
 `musicbrainz`, and `ai-details` are built and, like `bilibili`, are off until the
 config file turns them on, since each contacts a site or a provider.
 
-- **Nothing runs by itself.** An enricher contacts its site only when someone
-  asks: *Find details online*, *Find on MusicBrainz*, or *Suggest details with AI*
-  in a Track's menu, for any signed-in Account, or *Find details for all* in
-  Settings → Bilibili, *Find on MusicBrainz for all* in Settings → MusicBrainz, and
-  *Suggest for all* in Settings → AI, for admins, which queue every eligible Track
-  and say how many they queued. There is no scheduled or automatic run.
+- **Each enricher has a mode, manual by default,** which an admin chooses in its
+  part of Settings and the household keeps:
+
+  | Mode | Asks |
+  | --- | --- |
+  | *Manually* | Only when someone chooses *Find details online*, *Find on MusicBrainz*, or *Suggest details with AI* in a Track's menu or its details |
+  | *Next to play* | Also about the song playing and the one after it, once each in a page, as each comes up; a song of a split file through its file |
+  | *All missing* | Also about every Track it may be asked about, at once when chosen, and about each that becomes one: a sweep runs a few seconds after a scan, a Download, a Track added, or a Job's end, and every hour besides |
+
+  Every mode keeps the site's stop, the day between asks of one subject, and the
+  lane's pace, so finding all asks one Track at a time. A sweep that fails is
+  logged, and the next goes ahead. Settings says how many Tracks the enricher
+  may be asked about now.
 - **The song's cover shows a lookup as it goes,** from the Job's events on the
   page's event stream. A spinner shows while it is asked; a clock shows while it
   waits for Online. A check shows for a few seconds once it is done. A warning
@@ -437,8 +444,9 @@ songs editor.
 | `GET /api/covers/{id}` | Signed in | A cover's image |
 | `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body; answers the details |
 | `DELETE /api/tracks/{id}/cover` | Signed in | Drops the household's cover, so the next origin's shows |
-| `GET /api/enrichers/{name}` | Signed in | Whether the enricher is on, why the site stopped it if it did, and the Tracks it may be asked about |
+| `GET /api/enrichers/{name}` | Signed in | Whether the enricher is on, why the site stopped it if it did, its mode, and the Tracks it may be asked about |
 | `POST /api/enrichers/{name}/tracks/{id}` | Signed in | Queues the Track's Job, or returns the one already active; 409 with why when the Track is not eligible |
+| `PUT /api/enrichers/{name}/mode` | Admin | Sets the mode, `manual`, `next`, or `all`; answers the enricher, and with `all` queues every eligible Track first |
 | `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |
 | `POST /api/enrichers/{name}/reset` | Admin | Lets a stopped enricher be asked again; 204, also when it was not stopped |
 | `GET /api/ai` | Admin | The provider's base URL, model, and whether it has a key, or null; the presets; how much of a description is sent |

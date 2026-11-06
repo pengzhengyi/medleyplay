@@ -169,6 +169,12 @@ export const MUSICBRAINZ_ENRICHER = "musicbrainz";
 export const AI_ENRICHER = "ai-details";
 
 /** An enricher: whether it can be asked, whether the site stopped it, and for which Tracks. */
+/**
+ * When the household has an enricher asked: only when someone chooses, for the songs
+ * a page is about to play, or for every Track it may be asked about.
+ */
+export type EnricherMode = "manual" | "next" | "all";
+
 export interface Enricher {
   readonly name: string;
   /** Its plugin is on. */
@@ -177,6 +183,7 @@ export interface Enricher {
   readonly stopped: { readonly at: string; readonly reason: string } | null;
   /** The Tracks it may be asked about now; none while it is stopped or turned off. */
   readonly eligible: readonly number[];
+  readonly mode: EnricherMode;
 }
 
 /** A site's proxy as the server shows it: its address, never its login. */
@@ -582,11 +589,11 @@ export const api = {
   /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */
   findDetails: (name: string, trackId: number) =>
     call<Job>("POST", `/api/enrichers/${name}/tracks/${String(trackId)}`),
-  /** Queue the enricher for every Track it may be asked about; admins only. */
-  findDetailsForAll: (name: string) =>
-    call<{ queued: number }>("POST", `/api/enrichers/${name}/find-all`),
   /** Let a stopped enricher be asked again; admins only. */
   resetEnricher: (name: string) => call<undefined>("POST", `/api/enrichers/${name}/reset`),
+  /** Choose when the enricher is asked; admins only. Finding all queues every Track at once. */
+  setEnricherMode: (name: string, mode: EnricherMode) =>
+    call<Enricher>("PUT", `/api/enrichers/${name}/mode`, { mode }),
   /** Look up the video a link or a bare `BV` or `av` code names. */
   lookUpLink: (link: string) => call<LinkLookup>("POST", "/api/links/lookup", { link }),
   /** Add the chosen parts of a link's video as Tracks, and start downloading them. */

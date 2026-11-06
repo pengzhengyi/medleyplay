@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MeteredNetwork, Mode, Settings, Storage } from "../api";
-import { type Routes, modeOf, modeSettingsOf, serve } from "../testing/server";
+import { type Routes, enricherOf, modeOf, modeSettingsOf, serve } from "../testing/server";
 import { SettingsView } from "./SettingsView";
 
 const GB = 1_000_000_000;
@@ -36,14 +36,14 @@ function open(
     "GET /api/storage": { body: USING_2 },
     "GET /api/proxies/bilibili": { body: null },
     "GET /api/enrichers/bilibili-details": {
-      body: { name: "bilibili-details", available: true, stopped: null, eligible: [1, 2] },
+      body: enricherOf("bilibili-details", [1, 2]),
     },
     "GET /api/enrichers/musicbrainz": {
-      body: { name: "musicbrainz", available: true, stopped: null, eligible: [1, 2, 3] },
+      body: enricherOf("musicbrainz", [1, 2, 3]),
     },
     "GET /api/ai": { body: { provider: null, presets: [], max_description: 6000 } },
     "GET /api/enrichers/ai-details": {
-      body: { name: "ai-details", available: true, stopped: null, eligible: [1] },
+      body: enricherOf("ai-details", [1]),
     },
     ...modeSettingsOf(mode, metered),
     ...routes,
@@ -83,14 +83,14 @@ describe("the Bilibili section", () => {
     expect(screen.getByRole("button", { name: "Go to Bilibili" })).toBeInTheDocument();
   });
 
-  it("also holds the video details, which an admin queues for every Track", async () => {
+  it("also holds the video details, for which an admin chooses when they are asked", async () => {
     open(true);
 
     const bilibili = within(screen.getByRole("region", { name: "Bilibili" }));
 
     expect(bilibili.getByRole("heading", { name: "Video details" })).toBeInTheDocument();
     expect(await bilibili.findByText("2 Tracks can have their details found.")).toBeInTheDocument();
-    expect(bilibili.getByRole("button", { name: "Find details for all" })).toBeEnabled();
+    expect(bilibili.getByRole("radio", { name: "Manually" })).toBeChecked();
   });
 
   it("is not shown to a member, who never asks for the proxy", async () => {
@@ -137,7 +137,7 @@ describe("the MusicBrainz section", () => {
     expect(
       await musicbrainz.findByText("3 Tracks can be found on MusicBrainz."),
     ).toBeInTheDocument();
-    expect(musicbrainz.getByRole("button", { name: "Find on MusicBrainz for all" })).toBeEnabled();
+    expect(musicbrainz.getByRole("radio", { name: "Manually" })).toBeChecked();
     expect(screen.getByRole("button", { name: "Go to MusicBrainz" })).toBeInTheDocument();
   });
 

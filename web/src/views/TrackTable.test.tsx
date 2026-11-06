@@ -58,6 +58,37 @@ describe("the song table", () => {
     expect(actions.onPlay).toHaveBeenCalledWith(TRACKS, 2);
   });
 
+  it("plays a Track from anywhere on its row, as from its title", async () => {
+    const { actions } = renderTable();
+    const outro = screen.getByRole("row", { name: /Outro/u });
+
+    await userEvent.click(within(outro).getByRole("cell", { name: "1:30" }));
+
+    expect(actions.onPlay).toHaveBeenCalledWith(TRACKS, 2);
+  });
+
+  it("leaves a row's own buttons to do only what they do", async () => {
+    const { actions } = renderTable();
+    const outro = screen.getByRole("row", { name: /Outro/u });
+
+    await userEvent.click(within(outro).getByRole("button", { name: "Favorite Outro" }));
+    await userEvent.click(within(outro).getByRole("button", { name: "2 stars" }));
+    await userEvent.click(within(outro).getByRole("group", { name: "Rate Outro" }));
+
+    expect(actions.onFavorite).toHaveBeenCalledWith(TRACKS[2], false);
+    expect(actions.onRate).toHaveBeenCalledWith(TRACKS[2], 2);
+    expect(actions.onPlay).not.toHaveBeenCalled();
+  });
+
+  it("doesn't play a Track that can't play from its row", async () => {
+    const { actions } = renderTable();
+    const longRoad = screen.getByRole("row", { name: /Long Road/u });
+
+    await userEvent.click(within(longRoad).getByRole("cell", { name: "10:00" }));
+
+    expect(actions.onPlay).not.toHaveBeenCalled();
+  });
+
   it("queues a Track next or last", async () => {
     const { actions } = renderTable();
 

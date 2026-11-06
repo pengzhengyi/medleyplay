@@ -95,6 +95,12 @@ no router package.
   page; the rows above and below are spacer rows hidden from screen readers,
   and the table states `aria-rowcount`, the Tracks and the header row, with
   `aria-rowindex` on each row, so a screen reader counts every Track.
+- **A click anywhere on a song's row plays it,** with the songs shown queued
+  around it, as its title button does. A click on the row's own controls (the
+  heart, the stars, the queue buttons, the menu, a link) does only what that
+  control does, and a click that ends selecting text plays nothing. The title
+  stays the control for the keyboard and screen readers, so the row itself
+  isn't a second tab stop.
 - **Columns:** favorite, title, artist, album, time, rating, plays, and added,
   and album artist, year, and genre, hidden at first.
   Each sorts by a button in its header, which states `aria-sort`: a click sorts

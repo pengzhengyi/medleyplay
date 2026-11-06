@@ -508,6 +508,22 @@ export function TrackTable({
                 aria-rowindex={item.index + 2}
                 className={track.availability === "ok" ? undefined : "unplayable"}
                 aria-current={track.id === playingId ? "true" : undefined}
+                // A click on the row plays its song, as its title does; the title stays the
+                // control for the keyboard and screen readers.
+                onClick={(event) => {
+                  const target = event.target as Element;
+                  if (
+                    track.availability !== "ok" ||
+                    // A menu or dialog the row opens is elsewhere on the page.
+                    !event.currentTarget.contains(target) ||
+                    target.closest(OWN_CONTROLS) !== null ||
+                    // A click that ends selecting text is for the text.
+                    (window.getSelection()?.toString() ?? "") !== ""
+                  ) {
+                    return;
+                  }
+                  playFrom(table, row);
+                }}
               >
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className={cell.column.id}>
@@ -558,6 +574,27 @@ const meta = (table: { readonly options: { readonly meta?: Meta } }): Meta => {
   return found;
 };
 
+type SongRow = Row<typeof features, Track>;
+
+/** Play `row`'s song, with the songs shown queued around it in their order. */
+function playFrom(
+  table: {
+    readonly options: { readonly meta?: Meta };
+    readonly getRowModel: () => { readonly rows: readonly SongRow[] };
+  },
+  row: SongRow,
+) {
+  // A group's row is no song; the songs are the rows shown under the groups.
+  const shown = table.getRowModel().rows.filter((each) => !each.getIsGrouped());
+  meta(table).actions.onPlay(
+    shown.map((each) => each.original),
+    shown.indexOf(row),
+  );
+}
+
+/** What on a row does its own thing when clicked, rather than playing the row's song. */
+const OWN_CONTROLS = "button, a, input, select, textarea, label, summary, .stars";
+
 const COLUMNS: Column[] = [
   {
     id: "favorite",
@@ -599,12 +636,7 @@ const COLUMNS: Column[] = [
             type="button"
             className="title"
             onClick={() => {
-              // A group's row is no song; the songs are the rows shown under the groups.
-              const shown = table.getRowModel().rows.filter((each) => !each.getIsGrouped());
-              actions.onPlay(
-                shown.map((each) => each.original),
-                shown.indexOf(row),
-              );
+              playFrom(table, row);
             }}
             disabled={!playable}
           >

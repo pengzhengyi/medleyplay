@@ -262,6 +262,32 @@ class TrackStateRow(Base):
     last_played_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
 
+class FavoriteArtistRow(Base):
+    """An artist one Account favorited, kept by its folded name while it is a favorite."""
+
+    __tablename__ = "favorite_artist"
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
+    )
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512))
+
+
+class FavoriteAlbumRow(Base):
+    """An album one Account favorited, kept by its folded artist and name while it is one."""
+
+    __tablename__ = "favorite_album"
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
+    )
+    artist_key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    album_key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    artist: Mapped[str] = mapped_column(String(512))
+    album: Mapped[str] = mapped_column(String(512))
+
+
 class PlayRow(Base):
     """One play of a Track by an Account, under an id the Account's client chose."""
 

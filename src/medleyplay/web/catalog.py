@@ -8,11 +8,13 @@ from pydantic import AwareDatetime, BaseModel, Field
 
 from medleyplay.application.rule_schema import RulesIn, rules_document, to_rules
 from medleyplay.domain.catalog import (
+    MAX_FAVORITE_NAME_LENGTH,
     MAX_PLAYLIST_LENGTH,
     MAX_RATING,
     MIN_RATING,
     Availability,
     Builtin,
+    Favorites,
     Playlist,
     PlaylistId,
     Track,
@@ -93,6 +95,51 @@ class FavoriteIn(BaseModel):
     favorite: bool
 
 
+class ArtistFavoriteIn(BaseModel):
+    """Whether an artist is a favorite, named as the Library names it."""
+
+    name: str = Field(max_length=MAX_FAVORITE_NAME_LENGTH)
+    favorite: bool
+
+
+class AlbumFavoriteIn(BaseModel):
+    """Whether an album is a favorite, by its album artist, else its artist, maybe blank."""
+
+    artist: str = Field(max_length=MAX_FAVORITE_NAME_LENGTH)
+    name: str = Field(max_length=MAX_FAVORITE_NAME_LENGTH)
+    favorite: bool
+
+
+class FavoriteArtistOut(BaseModel):
+    """A favorite artist, by the name it was favorited under."""
+
+    name: str
+
+
+class FavoriteAlbumOut(BaseModel):
+    """A favorite album, by the names it was favorited under."""
+
+    artist: str
+    name: str
+
+
+class FavoritesOut(BaseModel):
+    """The artists and albums you favorited."""
+
+    artists: list[FavoriteArtistOut]
+    albums: list[FavoriteAlbumOut]
+
+    @classmethod
+    def of(cls, favorites: Favorites) -> "FavoritesOut":
+        """Return `favorites` as the API sends them."""
+        return cls(
+            artists=[FavoriteArtistOut(name=name) for name in favorites.artists],
+            albums=[
+                FavoriteAlbumOut(artist=album.artist, name=album.name) for album in favorites.albums
+            ],
+        )
+
+
 class RatingIn(BaseModel):
     """A rating in stars, or `null` to clear it."""
 
@@ -171,6 +218,30 @@ def set_favorite(
     """Mark or unmark a Track as your favorite."""
     track = catalog.set_favorite(me.id, TrackId(track_id), favorite=body.favorite)
     return TrackOut.of(track)
+
+
+@router.get("/favorites")
+def get_favorites(me: SignedInAccount, catalog: CatalogDep) -> FavoritesOut:
+    """Return the artists and albums you favorited."""
+    return FavoritesOut.of(catalog.favorites(me.id))
+
+
+@router.put("/artists/favorite")
+def set_artist_favorite(
+    body: ArtistFavoriteIn, me: SignedInAccount, catalog: CatalogDep
+) -> FavoritesOut:
+    """Mark or unmark an artist as your favorite, and return your favorites."""
+    catalog.set_artist_favorite(me.id, body.name, favorite=body.favorite)
+    return FavoritesOut.of(catalog.favorites(me.id))
+
+
+@router.put("/albums/favorite")
+def set_album_favorite(
+    body: AlbumFavoriteIn, me: SignedInAccount, catalog: CatalogDep
+) -> FavoritesOut:
+    """Mark or unmark an album as your favorite, and return your favorites."""
+    catalog.set_album_favorite(me.id, body.artist, body.name, favorite=body.favorite)
+    return FavoritesOut.of(catalog.favorites(me.id))
 
 
 @router.put("/tracks/{track_id}/rating")

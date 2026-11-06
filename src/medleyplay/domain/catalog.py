@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Final, NewType
 
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.domain.rules import Favorite, Match, Rules
+from medleyplay.domain.rules import Favorite, Match, Rules, fold
 
 TrackId = NewType("TrackId", int)
 SourceId = NewType("SourceId", int)
@@ -18,6 +18,7 @@ MIN_RATING: Final = 1
 MAX_RATING: Final = 5
 MAX_PLAYLIST_NAME_LENGTH: Final = 128
 MAX_PLAYLIST_LENGTH: Final = 10_000
+MAX_FAVORITE_NAME_LENGTH: Final = 512
 
 
 class Builtin(StrEnum):
@@ -178,3 +179,36 @@ def check_playlist_length(track_ids: tuple[TrackId, ...]) -> None:
     if len(track_ids) > MAX_PLAYLIST_LENGTH:
         message = f"A Playlist holds at most {MAX_PLAYLIST_LENGTH} entries."
         raise InvalidInputError(message)
+
+
+@dataclass(frozen=True)
+class FavoriteAlbum:
+    """An album an Account favorited, under its album artist, or its artist when blank."""
+
+    artist: str
+    name: str
+
+
+@dataclass(frozen=True)
+class Favorites:
+    """The artists and albums an Account favorited, by the names it favorited them under.
+
+    The client matches them to its artists and albums, so a name that no longer
+    matches stays until it is unfavorited.
+    """
+
+    artists: tuple[str, ...]
+    albums: tuple[FavoriteAlbum, ...]
+
+
+def favorite_name(raw: str, *, what: str, blank: bool = False) -> tuple[str, str]:
+    """Return a favorite's name without surrounding spaces, and the key it is kept under.
+
+    The key is the name folded as rules compare text, so a name differing only in
+    case or width is the same favorite. A blank name is refused unless `blank`.
+    """
+    name = raw.strip()
+    if (name == "" and not blank) or len(name) > MAX_FAVORITE_NAME_LENGTH:
+        message = f"{what} must be 1-{MAX_FAVORITE_NAME_LENGTH} characters."
+        raise InvalidInputError(message)
+    return name, fold(name)

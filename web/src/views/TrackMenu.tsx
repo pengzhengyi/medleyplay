@@ -1,5 +1,6 @@
 /**
- * @file A song's menu: its less frequent actions, behind a "…" button.
+ * @file A song's menu, its less frequent actions behind a "…" button, and the menu
+ * of other ways to play behind a caret.
  *
  * The one module that knows Radix's dropdown menu, which handles the keyboard,
  * the focus, and keeping the menu on screen; the rest of the client hands it a
@@ -7,6 +8,7 @@
  */
 
 import {
+  CaretDownIcon,
   DotsThreeIcon,
   ListPlusIcon,
   MicrophoneStageIcon,
@@ -159,6 +161,50 @@ export function TrackMenu({
               Add the file yourself…
             </Item>
           )}
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+/** A way to play, as a menu item names it. */
+export interface PlayWay {
+  readonly label: string;
+  readonly icon: ReactNode;
+  readonly onSelect: () => void;
+}
+
+/** A caret beside a button, whose menu offers other ways to do what the button does. */
+export function MoreWays({
+  label,
+  ways,
+  disabled,
+}: {
+  /** What the caret is called, such as *More ways to play*. */
+  readonly label: string;
+  readonly ways: readonly PlayWay[];
+  readonly disabled: boolean;
+}) {
+  return (
+    <Menu.Root modal={false}>
+      <Menu.Trigger asChild>
+        <button
+          type="button"
+          className="more-ways"
+          aria-label={label}
+          title={label}
+          disabled={disabled}
+        >
+          <CaretDownIcon weight="bold" aria-hidden />
+        </button>
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content className="track-menu" align="start" sideOffset={4} collisionPadding={8}>
+          {ways.map((way) => (
+            <Item key={way.label} icon={way.icon} onSelect={way.onSelect}>
+              {way.label}
+            </Item>
+          ))}
         </Menu.Content>
       </Menu.Portal>
     </Menu.Root>

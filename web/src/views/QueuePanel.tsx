@@ -3,6 +3,8 @@
  *
  * A Track is dragged by its handle, with a pointer or a finger; from the
  * keyboard, Space picks it up, the arrow keys move it, and Space drops it.
+ * Songs of one split file queued one after another show under a row naming the
+ * file and where they start in it, such as *3 of 11*, to fold away or remove at once.
  */
 
 import {
@@ -24,14 +26,17 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { DotsSixVerticalIcon, XIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, DotsSixVerticalIcon, XIcon } from "@phosphor-icons/react";
+import { useMemo, useState } from "react";
 
 import type { Track } from "../api";
 import { formatQueueLength } from "../format";
+import { songsByFile } from "../library/playOrder";
 import { type Entry, upNext } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { useNow } from "../useNow";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 const INSTRUCTIONS = {
@@ -55,6 +60,13 @@ export function QueuePanel({
 }) {
   const entries = upNext(player.queue);
   const now = useNow();
+  const songsIn = useMemo(() => songsByFile([...tracks.values()]), [tracks]);
+  // The split files whose songs are folded away, by the file's id.
+  const [folded, setFolded] = useState<ReadonlySet<number>>(new Set());
+  const rows = rowsOf(entries, tracks);
+  const shown = rows.flatMap((row) =>
+    row.kind === "album" && folded.has(row.fileId) ? [] : row.entries,
+  );
   const sensors = useSensors(
     // A few pixels of movement first, so a tap on the handle isn't a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -126,20 +138,54 @@ export function QueuePanel({
           onDragEnd={drop}
         >
           <SortableContext
-            items={entries.map((entry) => entry.key)}
+            items={shown.map((entry) => entry.key)}
             strategy={verticalListSortingStrategy}
           >
             <ol>
-              {entries.map((entry) => (
-                <QueueItem
-                  key={entry.key}
-                  entry={entry}
-                  track={tracks.get(entry.trackId)}
-                  onRemove={() => {
-                    player.remove(entry.key);
-                  }}
-                />
-              ))}
+              {rows.map((row) => {
+                const items = (inAlbum: boolean) =>
+                  row.entries.map((entry) => (
+                    <QueueItem
+                      key={entry.key}
+                      entry={entry}
+                      track={tracks.get(entry.trackId)}
+                      inAlbum={inAlbum}
+                      onRemove={() => {
+                        player.remove(entry.key);
+                      }}
+                    />
+                  ));
+                if (row.kind === "entry") {
+                  return items(false);
+                }
+                const songs = songsIn.get(row.fileId) ?? [];
+                const first = songs.findIndex((song) => song.id === row.entries[0]?.trackId);
+                const isFolded = folded.has(row.fileId);
+                return [
+                  <AlbumRow
+                    key={`album:${row.entries[0]?.key ?? ""}`}
+                    file={tracks.get(row.fileId)}
+                    place={first + 1}
+                    count={songs.length}
+                    folded={isFolded}
+                    onFold={() => {
+                      setFolded((was) => {
+                        const next = new Set(was);
+                        if (!next.delete(row.fileId)) {
+                          next.add(row.fileId);
+                        }
+                        return next;
+                      });
+                    }}
+                    onRemove={() => {
+                      for (const entry of row.entries) {
+                        player.remove(entry.key);
+                      }
+                    }}
+                  />,
+                  ...(isFolded ? [] : items(true)),
+                ];
+              })}
             </ol>
           </SortableContext>
         </DndContext>
@@ -148,13 +194,95 @@ export function QueuePanel({
   );
 }
 
+/** A queued entry on its own, or songs of one split file queued one after another. */
+type Row =
+  | { readonly kind: "entry"; readonly entries: readonly [Entry] }
+  | { readonly kind: "album"; readonly fileId: number; readonly entries: readonly Entry[] };
+
+/** Return `entries` as rows: two or more songs of one file in a row are one album's. */
+function rowsOf(entries: readonly Entry[], tracks: ReadonlyMap<number, Track>): Row[] {
+  const rows: Row[] = [];
+  let run: Entry[] = [];
+  let runFile: number | null = null;
+  const end = () => {
+    if (runFile !== null && run.length > 1) {
+      rows.push({ kind: "album", fileId: runFile, entries: run });
+    } else {
+      rows.push(...run.map((entry): Row => ({ kind: "entry", entries: [entry] })));
+    }
+    run = [];
+  };
+  for (const entry of entries) {
+    const file = tracks.get(entry.trackId)?.segment_of ?? null;
+    if (file === null || file !== runFile) {
+      end();
+    }
+    runFile = file;
+    run.push(entry);
+  }
+  end();
+  return rows;
+}
+
+/** The row naming a split file whose songs follow, where they start in it, and how many it has. */
+function AlbumRow({
+  file,
+  place,
+  count,
+  folded,
+  onFold,
+  onRemove,
+}: {
+  readonly file: Track | undefined;
+  /** The place in the file of the first song queued, from 1. */
+  readonly place: number;
+  readonly count: number;
+  readonly folded: boolean;
+  readonly onFold: () => void;
+  readonly onRemove: () => void;
+}) {
+  const title = file?.title ?? "An album no longer here";
+  const where = `${String(place)} of ${String(count)}`;
+  return (
+    <li className="queue-album" aria-label={`${title}, ${where}`}>
+      <button
+        type="button"
+        className="icon fold"
+        aria-expanded={!folded}
+        aria-label={`${folded ? "Show" : "Hide"} the songs of ${title}`}
+        title={folded ? "Show its songs" : "Hide its songs"}
+        onClick={onFold}
+      >
+        <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
+      </button>
+      <KindMark kind="album" />
+      <span className="album-title">{title}</span>
+      <span className="album-place" title={`From song ${where}`}>
+        {where}
+      </span>
+      <button
+        type="button"
+        className="icon remove"
+        aria-label={`Remove the rest of ${title}`}
+        title="Remove the rest of the album"
+        onClick={onRemove}
+      >
+        <XIcon weight="bold" aria-hidden />
+      </button>
+    </li>
+  );
+}
+
 function QueueItem({
   entry,
   track,
+  inAlbum,
   onRemove,
 }: {
   readonly entry: Entry;
   readonly track: Track | undefined;
+  /** Whether it shows under its album's row. */
+  readonly inAlbum: boolean;
   readonly onRemove: () => void;
 }) {
   const {
@@ -170,7 +298,9 @@ function QueueItem({
   return (
     <li
       ref={setNodeRef}
-      className={isDragging ? "dragging" : undefined}
+      className={
+        [inAlbum ? "in-album" : "", isDragging ? "dragging" : ""].join(" ").trim() || undefined
+      }
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       <button
@@ -185,6 +315,7 @@ function QueueItem({
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
       <Cover cover={track?.cover ?? null} className="thumb" />
+      {track !== undefined && <KindMark kind={track.kind} />}
       <span className="entry-title">{title}</span>
       <span className="entry-artist">{track?.artist}</span>
       <button

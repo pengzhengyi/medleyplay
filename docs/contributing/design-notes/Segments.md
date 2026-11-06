@@ -38,8 +38,9 @@
   the album file's Source. A segment Source has no file of its own; removing the
   album file's Source removes its segments, and their Tracks with them.
 - **The file keeps its own Track,** the *album file*. Once split it is marked
-  `split`: Songs, Artists, Albums, search, and smart playlists show its segments
-  instead, and a Playlist that held it before it was split still plays it whole.
+  `split` and is an album; see [Track details](Track%20details.md#the-details).
+  Artists, Albums, search, and smart playlists show its segments
+  instead, the Library shows them folded under it, and a Playlist that held it before it was split still plays it whole.
 - **A segment Track is a Track like any other:** its own favorite, rating,
   plays, place in Playlists and the queue, and details. Its length is its end
   less its start, and it was added when its album file was.
@@ -112,9 +113,11 @@ both read its full length.
 
 ## The web client
 
-- **A split file gives way to its songs** in Songs, Artists, Albums, Downloaded,
-  and search, so the songs make up its album there; a Playlist that held the file
-  before it was split still plays it whole.
+- **A split file gives way to its songs** in Artists, Albums, Downloaded, and
+  search, so the songs make up its album there; a Playlist that held the file
+  before it was split still plays it whole. The Library lists the file itself,
+  with its songs folded under it; see
+  [Web client](Web%20client.md#the-library).
 - **The songs are edited beside the details:** *Edit details* has a way to
   them, *Split into songs* or *11 songs*, which shows the songs editor in place
   of the details, with *Details* to go back to what was typed there. ***Split

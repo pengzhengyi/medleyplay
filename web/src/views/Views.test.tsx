@@ -57,7 +57,7 @@ const songs = () =>
   screen
     .getAllByRole("row")
     .slice(1)
-    .map((row) => within(row).getAllByRole("button")[1]?.textContent);
+    .map((row) => row.querySelector("button.title")?.textContent);
 
 afterEach(() => {
   history.replaceState(null, "", "/");
@@ -66,11 +66,11 @@ afterEach(() => {
 });
 
 describe("the views", () => {
-  it("opens on Songs, marked in the navigation", async () => {
+  it("opens on the Library, marked in the navigation", async () => {
     open("");
 
     expect(await screen.findByRole("button", { name: "Melt" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Songs" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
   });
 
   it("lists the artists, and opens one's songs, with a way back", async () => {
@@ -96,6 +96,19 @@ describe("the views", () => {
       await screen.findByRole("link", { name: /Supercell.*ryo, 2 songs/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /空想.*Various, 1 song/ })).toBeInTheDocument();
+  });
+
+  it("plays every album whole, one after another, from Albums", async () => {
+    open("#/albums");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Play every album" }));
+
+    const queue = screen.getByRole("region", { name: "Up next" });
+    expect(
+      within(queue)
+        .getAllByRole("listitem")
+        .map((item) => item.querySelector(".entry-title")?.textContent),
+    ).toEqual(["Shiver", "クジラ"]);
   });
 
   it("opens each view with no filters on, whatever the last view had", async () => {
@@ -351,8 +364,16 @@ describe("a file split into songs", () => {
   ];
   const routes = () => signedIn(SPLIT, [playlistOf("p1", "Whole", [104, 1])]);
 
-  it("gives way to its songs among the Library's songs", async () => {
+  it("is an item of the Library, its songs folded under it", async () => {
     open("", routes());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Show the songs of Bremen" }));
+
+    expect(songs()).toEqual(["Bremen", "Intro", "Melt"]);
+  });
+
+  it("gives way to its songs among an artist's songs", async () => {
+    open("#/artist?name=The%20Band", routes());
 
     expect(await screen.findByRole("button", { name: "Intro" })).toBeInTheDocument();
     expect(songs()).toEqual(["Intro", "Melt"]);

@@ -5,8 +5,9 @@ import { type Route, hrefOf, routeOf } from "./routes";
 
 describe("routes", () => {
   it.each<[string, Route]>([
-    ["", { view: "songs" }],
-    ["#/songs", { view: "songs" }],
+    ["", { view: "library" }],
+    ["#/library", { view: "library" }],
+    ["#/songs", { view: "library" }],
     ["#/artists", { view: "artists" }],
     ["#/artist?name=ryo", { view: "artist", name: "ryo" }],
     ["#/albums", { view: "albums" }],
@@ -20,9 +21,9 @@ describe("routes", () => {
     expect(routeOf(hash)).toEqual(route);
   });
 
-  it("goes back to the Songs for a route it doesn't know", () => {
-    expect(routeOf("#/nowhere")).toEqual({ view: "songs" });
-    expect(routeOf("#/artist")).toEqual({ view: "songs" });
+  it("goes back to the Library for a route it doesn't know", () => {
+    expect(routeOf("#/nowhere")).toEqual({ view: "library" });
+    expect(routeOf("#/artist")).toEqual({ view: "library" });
   });
 
   it.each<Route>([

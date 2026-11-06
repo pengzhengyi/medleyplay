@@ -46,7 +46,6 @@ export function seedOf(text: string): number {
   return hash >>> 0;
 }
 
-const LONGEST_SONG_MS = 20 * 60_000;
 /** A title that is a Bilibili video's id, as a Track not yet described has. */
 const UNNAMED = /^BV[0-9A-Za-z]{10}$/u;
 const HOUR_MS = 3_600_000;
@@ -80,7 +79,7 @@ export function canSuggest(track: Track): boolean {
     track.availability === "ok" &&
     (track.site === null || track.downloaded) &&
     !track.split &&
-    (track.segment_of !== null || (track.duration_ms ?? 0) <= LONGEST_SONG_MS) &&
+    track.kind === "song" &&
     (track.rating === null || track.rating >= 3)
   );
 }

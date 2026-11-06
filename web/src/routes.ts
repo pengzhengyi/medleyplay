@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 
 /** A view and what it shows. */
 export type Route =
-  | { readonly view: "songs" }
+  | { readonly view: "library" }
   | { readonly view: "radio" }
   | { readonly view: "artists" }
   | { readonly view: "artist"; readonly name: string }
@@ -21,15 +21,18 @@ export type Route =
   | { readonly view: "search"; readonly query: string }
   | { readonly view: "settings" };
 
-const SONGS: Route = { view: "songs" };
+const LIBRARY: Route = { view: "library" };
 
-/** Return the route `hash` names, or the Songs for one it doesn't. */
+/**
+ * Return the route `hash` names, or the Library for one it doesn't, such as `#/songs`,
+ * as the Library was once called.
+ */
 export function routeOf(hash: string): Route {
   const [path = "", query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
   const params = new URLSearchParams(query);
   const name = params.get("name");
   switch (path) {
-    case "songs":
+    case "library":
     case "radio":
     case "artists":
     case "albums":
@@ -38,19 +41,19 @@ export function routeOf(hash: string): Route {
     case "settings":
       return { view: path };
     case "artist":
-      return name === null ? SONGS : { view: "artist", name };
+      return name === null ? LIBRARY : { view: "artist", name };
     case "album": {
       const artist = params.get("artist");
-      return name === null || artist === null ? SONGS : { view: "album", artist, name };
+      return name === null || artist === null ? LIBRARY : { view: "album", artist, name };
     }
     case "playlist": {
       const id = params.get("id");
-      return id === null ? SONGS : { view: "playlist", id };
+      return id === null ? LIBRARY : { view: "playlist", id };
     }
     case "search":
       return { view: "search", query: params.get("q") ?? "" };
     default:
-      return SONGS;
+      return LIBRARY;
   }
 }
 

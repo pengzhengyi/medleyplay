@@ -792,3 +792,49 @@ describe("the songs of a song's file", () => {
     expect(within(dialog).queryByRole("button", { name: /songs/u })).not.toBeInTheDocument();
   });
 });
+
+describe("the kind", () => {
+  it("says a song no one named is guessed one from its length", async () => {
+    const { dialog } = await renderDialog();
+
+    const kind = within(dialog).getByRole("radiogroup", { name: "Kind" });
+    expect(within(kind).getByRole("radio", { name: "Song" })).toBeChecked();
+    expect(within(kind).getByText("Guessed from its length")).toBeVisible();
+  });
+
+  it("saves the album the household calls it", async () => {
+    const { dialog, onSave } = await renderDialog();
+
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Album" }));
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledWith({ kind: "album" });
+  });
+
+  it("guesses again once the household's word is dropped", async () => {
+    const { dialog, onSave } = await renderDialog({
+      ...detailsOf(7, { kind: "album" }),
+      kind: { value: "album", reason: "named" },
+    });
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Guess again" }));
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledWith({ kind: null });
+  });
+
+  it.each([
+    ["split", "Album", "Split into songs, so an album"],
+    ["segment", "Song", "A song of an album file"],
+  ] as const)("can't be changed for a file %s, saying why", async (reason, checked, why) => {
+    const { dialog } = await renderDialog({
+      ...detailsOf(7),
+      kind: { value: checked === "Album" ? "album" : "song", reason },
+    });
+
+    const kind = within(dialog).getByRole("radiogroup", { name: "Kind" });
+    expect(within(kind).getByRole("radio", { name: checked })).toBeChecked();
+    expect(within(kind).getByRole("radio", { name: "Song" })).toBeDisabled();
+    expect(within(kind).getByText(why)).toBeVisible();
+  });
+});

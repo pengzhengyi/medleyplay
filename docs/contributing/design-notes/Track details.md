@@ -41,6 +41,7 @@ and lets the household's word win.
 | `year` | a year | 2014 |
 | `genre` | text | Vocaloid |
 | `cover` | a cover's id; see [Covers](#covers) | `9f2c…` |
+| `kind` | `song`, or `album` for a whole album in one file | album |
 
 - **Text** is at most 512 characters, trimmed. The household's value outside these
   rules is refused; a value read from a file or a site is cut to fit instead, and
@@ -49,6 +50,26 @@ and lets the household's word win.
   smart playlists, and the Albums and Artists views read it as they do now.
 - **A song list,** the songs inside a long file, is kept the same way; see
   [Segments](Segments.md).
+- **A Track's kind** says whether it is one song or one file holding a whole
+  album: two values only, with no releases, EPs, or singles to tell apart. The
+  question is whether someone picks it as a whole; a live set or a compilation in
+  one file is an album. The household may name it; otherwise it is worked out
+  when read, so it never goes stale as a file's length becomes known or its
+  songs change:
+
+  | The Track | Its kind | Why |
+  | --- | --- | --- |
+  | A song of a split file | song | `segment` |
+  | A split file | album | `split` |
+  | Named by an origin | as named | `named` |
+  | Any other, 20 minutes or longer | album | `length` |
+  | Any other, shorter or of unknown length | song | `length` |
+
+  The Track's row keeps only a kind an origin names, and the API answers the kind
+  worked out. Calling a split file a song, or giving a song of one a kind, is
+  refused; splitting a file forgets the household's word that it was a song, so
+  unsplitting it guesses again. A split file's kind never reaches its songs, as
+  its album fields do.
 
 ## Origins and precedence
 
@@ -469,8 +490,9 @@ songs editor.
 | `PUT /api/ai/order` | Admin | Asks the providers in the order of the ids given; 409 when they are not every provider once |
 | `DELETE /api/ai/providers/{id}` | Admin | Forgets the provider and deletes its key; 204, also when it is gone |
 
-Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`, and
-`genre`.
+Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`,
+`genre`, and `kind`. The details answer `kind` as its value and why: `named`,
+`split`, `segment`, or `length`.
 
 ## Build order
 

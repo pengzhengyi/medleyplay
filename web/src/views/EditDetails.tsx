@@ -21,10 +21,12 @@ import {
   CaretRightIcon,
   CircleNotchIcon,
   DownloadSimpleIcon,
+  MusicNoteSimpleIcon,
   MusicNotesIcon,
   ScissorsIcon,
   TrashIcon,
   UploadSimpleIcon,
+  VinylRecordIcon,
 } from "@phosphor-icons/react";
 import {
   type ReactNode,
@@ -39,6 +41,8 @@ import {
 import {
   type Detail,
   type Details,
+  type Kind,
+  type KindReason,
   type Origin,
   type Track,
   type VideoRead,
@@ -131,6 +135,8 @@ export function EditDetails({
   };
   const [details, setDetails] = useState<Details | undefined>(undefined);
   const [own, setOwn] = useState<Own>({});
+  // The kind chosen, `null` to guess it again, or `undefined` while unchanged.
+  const [kind, setKind] = useState<Kind | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
   const [readNote, setReadNote] = useState("");
@@ -221,7 +227,7 @@ export function EditDetails({
     if (details === undefined) {
       return;
     }
-    const changes = changesOf(details, own);
+    const changes = { ...changesOf(details, own), ...kindChange(details, kind) };
     if (Object.keys(changes).length === 0) {
       close();
       return;
@@ -341,6 +347,7 @@ export function EditDetails({
               />
             </div>
             <div className="edit-details-fields">
+              <KindChoice details={details} chosen={kind} onChoose={setKind} />
               <fieldset className="detail-group">
                 <legend>Song</legend>
                 {boxes("song")}
@@ -377,6 +384,78 @@ export function EditDetails({
         </footer>
       </form>
     </Modal>
+  );
+}
+
+/** What choosing `chosen` changes of the household's kind, if anything. */
+function kindChange(details: Details, chosen: Kind | null | undefined): { kind?: Kind | null } {
+  const had = details.origins.household?.kind ?? null;
+  return chosen === undefined || chosen === had ? {} : { kind: chosen };
+}
+
+const KIND_WHY: Readonly<Record<KindReason, string>> = {
+  named: "",
+  split: "Split into songs, so an album",
+  segment: "A song of an album file",
+  length: "Guessed from its length",
+};
+
+/**
+ * Whether the Track is a song or an album in one file, and why. A split file is an
+ * album and each of its songs a song, so neither can be changed.
+ */
+function KindChoice({
+  details,
+  chosen,
+  onChoose,
+}: {
+  readonly details: Details;
+  readonly chosen: Kind | null | undefined;
+  readonly onChoose: (kind: Kind | null) => void;
+}) {
+  const fixed = details.kind.reason === "split" || details.kind.reason === "segment";
+  const shown = chosen ?? details.kind.value;
+  // Whether the household's word will be kept, so it can be dropped for the guess again.
+  const named =
+    chosen === undefined ? details.origins.household?.kind !== undefined : chosen !== null;
+  return (
+    <fieldset className="kind-choice" role="radiogroup" aria-label="Kind" disabled={fixed}>
+      {(["song", "album"] as const).map((each) => (
+        <label key={each} className={shown === each ? "kind-option on" : "kind-option"}>
+          <input
+            className="kind-input"
+            type="radio"
+            name="kind"
+            value={each}
+            checked={shown === each}
+            onChange={() => {
+              onChoose(each);
+            }}
+          />
+          {each === "song" ? (
+            <MusicNoteSimpleIcon aria-hidden />
+          ) : (
+            <VinylRecordIcon weight="fill" aria-hidden />
+          )}
+          {each === "song" ? "Song" : "Album"}
+        </label>
+      ))}
+      {named && !fixed ? (
+        <button
+          type="button"
+          className="text"
+          onClick={() => {
+            onChoose(null);
+          }}
+        >
+          Guess again
+        </button>
+      ) : (
+        <span className="hint">
+          {chosen === null ? "Guessed when saved" : KIND_WHY[details.kind.reason]}
+        </span>
+      )}
+    </fieldset>
   );
 }
 

@@ -24,6 +24,18 @@ export function formatLength(count: number, durationMs: number): string {
   return `${songs}, ${length}`;
 }
 
+/**
+ * Write how many albums and songs the Library's items hold and how long they play,
+ * such as `2 albums, 12 songs, 1 hr 40 min`; with no album, as `formatLength` does.
+ */
+export function formatLibraryLength(albums: number, songs: number, durationMs: number): string {
+  const length = formatLength(songs, durationMs);
+  if (albums === 0) {
+    return length;
+  }
+  return `${albums === 1 ? "1 album" : `${String(albums)} albums`}, ${length}`;
+}
+
 const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
 const dayAndClock = new Intl.DateTimeFormat(undefined, {
   weekday: "short",

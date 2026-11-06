@@ -1,5 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 
+import type { Track } from "../src/api";
+
 /** Wait for the server to answer a save of a Track's `what`. */
 const saved = (page: Page, what: "favorite" | "rating") =>
   page.waitForResponse((response) => response.url().endsWith(`/${what}`) && response.ok());
@@ -58,8 +60,8 @@ test("sorting by time plays from the sorted order", async ({ page }) => {
   await expect(queue).toHaveText([/Alpha/, /Bravo/, /Delta/]);
 });
 
-/** A Library of `count` songs, "Song 1" on, by 40 artists over 90 albums. */
-function manySongs(count: number) {
+/** A Library of `count` songs, "Song 1" on, by 40 artists over 90 albums, as the server lists them. */
+function manySongs(count: number): Track[] {
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     title: `Song ${String(i + 1)}`,
@@ -76,6 +78,14 @@ function manySongs(count: number) {
     last_played_at: null,
     availability: "ok",
     downloaded: false,
+    download_failed: false,
+    track_number: null,
+    disc_number: null,
+    site: null,
+    segment_of: null,
+    split: false,
+    kind: "song",
+    cover: null,
   }));
 }
 

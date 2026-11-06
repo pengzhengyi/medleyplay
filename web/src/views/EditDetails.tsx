@@ -9,15 +9,24 @@
  *
  * A video's title and description, pasted, are read by the server at once as the
  * `video` origin, as a file beside the audio would be; the boxes then show what it
- * found, keeping the household's own.
+ * found, keeping the household's own. A lookup asked from beside the cover runs as
+ * from the song's menu; once it is done, the details are read again, keeping what
+ * was typed.
  */
 
-import { MusicNotesIcon } from "@phosphor-icons/react";
+import {
+  CircleNotchIcon,
+  DownloadSimpleIcon,
+  MusicNotesIcon,
+  TrashIcon,
+  UploadSimpleIcon,
+} from "@phosphor-icons/react";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 
 import {
   type Detail,
   type Details,
+  type Origin,
   type Track,
   type VideoRead,
   type VideoText,
@@ -38,7 +47,12 @@ import {
   shownOf,
   suggestionOf,
 } from "../library/details";
+import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
+import type { TrackLookup } from "../library/useLibrary";
 import { Modal } from "./Modal";
+import { OriginTag } from "./OriginTag";
+import { ORIGIN_TAGS } from "./originTags";
+import { STATUS_ICONS } from "./statusIcons";
 
 /** How long text may be, as the server keeps it. */
 const MAX_TEXT = 512;
@@ -59,7 +73,8 @@ const MAX_COVER_BYTES = 10 * 1024 * 1024;
 
 /**
  * Edit `track`'s details, read with `load`; `onSave` sends the household's values
- * changed, `null` dropping one, and `onReadVideo` a video's pasted text.
+ * changed, `null` dropping one, and `onReadVideo` a video's pasted text. `onFind`
+ * asks one of the lookups `findable`, and `lookup` is how the last one asked goes.
  */
 export function EditDetails({
   track,
@@ -68,6 +83,10 @@ export function EditDetails({
   onReadVideo,
   onSetCover,
   onRemoveCover,
+  findable,
+  lookup,
+  online,
+  onFind,
   onClose,
 }: {
   readonly track: Track;
@@ -76,6 +95,11 @@ export function EditDetails({
   readonly onReadVideo: (text: VideoText) => Promise<VideoRead>;
   readonly onSetCover: (image: Blob) => Promise<Details>;
   readonly onRemoveCover: () => Promise<Details>;
+  readonly findable: readonly Lookup[];
+  readonly lookup: TrackLookup | undefined;
+  /** Whether medleyplay is Online, so a lookup asked runs now. */
+  readonly online: boolean;
+  readonly onFind: (lookup: Lookup) => void;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -111,6 +135,28 @@ export function EditDetails({
       open = false;
     };
   }, [track.id, load]);
+
+  // A lookup done has new details: read them again, keeping what was typed.
+  const done = lookup?.state === "succeeded";
+  useEffect(() => {
+    if (!done) {
+      return;
+    }
+    let open = true;
+    load(track.id).then(
+      (loaded) => {
+        if (open) {
+          setDetails(loaded);
+        }
+      },
+      () => {
+        // The details shown stay; the next opening reads them again.
+      },
+    );
+    return () => {
+      open = false;
+    };
+  }, [done, track.id, load]);
 
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -185,42 +231,48 @@ export function EditDetails({
           </p>
         )}
         {details !== undefined && (
-          <>
-            <CoverBox
-              details={details}
-              busy={saving || reading || covering}
-              covering={covering}
-              error={coverError}
-              onChoose={(image) => {
-                if (image.size > MAX_COVER_BYTES) {
-                  setCoverError("A cover is at most 10 MiB.");
-                } else {
-                  void changeCover(() => onSetCover(image));
-                }
-              }}
-              onRemove={() => void changeCover(onRemoveCover)}
-            />
-            <PasteVideo
-              read={details.video_text}
-              busy={saving || reading || covering}
-              reading={reading}
-              note={readNote}
-              error={readError}
-              onEdit={() => {
-                setReadNote("");
-                setReadError("");
-              }}
-              onRead={(text) => void readVideo(text)}
-            />
-            <fieldset className="detail-group">
-              <legend>Song</legend>
-              {boxes("song")}
-            </fieldset>
-            <fieldset className="detail-group">
-              <legend>Album</legend>
-              {boxes("album")}
-            </fieldset>
-          </>
+          <div className="edit-details-body">
+            <div className="edit-details-side">
+              <CoverBox
+                title={track.title}
+                details={details}
+                busy={saving || reading || covering}
+                covering={covering}
+                error={coverError}
+                onChoose={(image) => {
+                  if (image.size > MAX_COVER_BYTES) {
+                    setCoverError("A cover is at most 10 MiB.");
+                  } else {
+                    void changeCover(() => onSetCover(image));
+                  }
+                }}
+                onRemove={() => void changeCover(onRemoveCover)}
+              />
+              <LookupBar findable={findable} lookup={lookup} online={online} onFind={onFind} />
+              <PasteVideo
+                read={details.video_text}
+                busy={saving || reading || covering}
+                reading={reading}
+                note={readNote}
+                error={readError}
+                onEdit={() => {
+                  setReadNote("");
+                  setReadError("");
+                }}
+                onRead={(text) => void readVideo(text)}
+              />
+            </div>
+            <div className="edit-details-fields">
+              <fieldset className="detail-group">
+                <legend>Song</legend>
+                {boxes("song")}
+              </fieldset>
+              <fieldset className="detail-group">
+                <legend>Album</legend>
+                {boxes("album")}
+              </fieldset>
+            </div>
+          </div>
         )}
         {error !== "" && (
           <p className="error" role="alert">
@@ -250,8 +302,13 @@ export function EditDetails({
   );
 }
 
-/** The cover shown and where it came from, with the household's own to upload or remove. */
+/**
+ * The cover shown, large, and where it came from. Over it, on hover or focus, and
+ * always on a touch screen: save it as an image, choose another, or remove the
+ * household's own.
+ */
 function CoverBox({
+  title,
   details,
   busy,
   covering,
@@ -259,6 +316,8 @@ function CoverBox({
   onChoose,
   onRemove,
 }: {
+  /** The song's title, which names a saved image. */
+  readonly title: string;
   readonly details: Details;
   readonly busy: boolean;
   /** Whether the household's cover is being saved or removed. */
@@ -270,70 +329,134 @@ function CoverBox({
   const shown = details.shown.cover;
   const yours = details.origins.household?.cover !== undefined;
   const cover = typeof shown?.value === "string" && shown.value !== "" ? shown.value : undefined;
+  const choose = cover === undefined ? "Add a cover" : "Replace the cover";
   return (
     <div className="cover-box">
-      <span className="cover cover-box-image">
-        {cover === undefined ? (
-          <MusicNotesIcon weight="duotone" aria-hidden />
-        ) : (
-          <img src={coverUrl(cover)} alt="Cover" />
-        )}
-      </span>
-      <div className="cover-box-actions">
-        <small
-          className={
-            yours ? "detail-origin cover-box-origin yours" : "detail-origin cover-box-origin"
-          }
-        >
-          {shown === undefined
-            ? "No cover"
-            : !yours
-              ? `From ${ORIGIN_LABELS[shown.origin]}`
-              : cover === undefined
-                ? "None, as you chose"
-                : "Yours"}
-        </small>
-        <label
-          className={
-            busy ? "secondary outline cover-upload disabled" : "secondary outline cover-upload"
-          }
-        >
-          Upload a cover…
-          <input
-            type="file"
-            className="visually-hidden"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={busy}
-            onChange={(event) => {
-              const chosen = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (chosen !== undefined) {
-                onChoose(chosen);
-              }
-            }}
-          />
-        </label>
-        {yours && (
-          <button
-            type="button"
-            className="secondary outline cover-remove"
-            disabled={busy}
-            onClick={onRemove}
-          >
-            Remove your cover
-          </button>
-        )}
+      <div className="cover-frame">
+        <span className="cover cover-box-image">
+          {cover === undefined ? (
+            <MusicNotesIcon weight="duotone" aria-hidden />
+          ) : (
+            <img src={coverUrl(cover)} alt="Cover" />
+          )}
+        </span>
+        <div className="cover-tools">
+          {cover !== undefined && (
+            <a
+              className="cover-tool"
+              href={coverUrl(cover)}
+              download={title}
+              aria-label="Save the cover image"
+              title="Save image"
+            >
+              <DownloadSimpleIcon weight="bold" aria-hidden />
+            </a>
+          )}
+          <label className={busy ? "cover-tool disabled" : "cover-tool"} title={choose}>
+            <UploadSimpleIcon weight="bold" aria-hidden />
+            <span className="visually-hidden">{choose}</span>
+            <input
+              type="file"
+              className="visually-hidden"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={busy}
+              onChange={(event) => {
+                const chosen = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (chosen !== undefined) {
+                  onChoose(chosen);
+                }
+              }}
+            />
+          </label>
+          {yours && (
+            <button
+              type="button"
+              className="cover-tool"
+              disabled={busy}
+              aria-label="Remove your cover"
+              title="Remove your cover"
+              onClick={onRemove}
+            >
+              <TrashIcon weight="bold" aria-hidden />
+            </button>
+          )}
+        </div>
         {covering && (
-          <small className="cover-box-status" role="status">
-            Saving the cover…
-          </small>
-        )}
-        {error !== "" && (
-          <p className="error" role="alert">
-            {error}
-          </p>
+          <span className="cover-saving" role="status" aria-label="Saving the cover…">
+            <CircleNotchIcon weight="bold" className="spin" aria-hidden />
+          </span>
         )}
       </div>
+      {shown === undefined ? (
+        <small className="detail-origin">No cover</small>
+      ) : yours && cover === undefined ? (
+        <small className="detail-origin yours">None, as you chose</small>
+      ) : (
+        <OriginTag
+          origin={yours ? "household" : shown.origin}
+          full={yours ? "Yours" : `From ${ORIGIN_LABELS[shown.origin]}`}
+        />
+      )}
+      {error !== "" && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The lookups the song may be asked about, each a button with the site's mark, and
+ * beside them how the one asked last goes.
+ */
+function LookupBar({
+  findable,
+  lookup,
+  online,
+  onFind,
+}: {
+  readonly findable: readonly Lookup[];
+  readonly lookup: TrackLookup | undefined;
+  readonly online: boolean;
+  readonly onFind: (lookup: Lookup) => void;
+}) {
+  // The one asked stays offered while it runs, though the song isn't findable meanwhile.
+  const offered = LOOKUPS.filter(
+    (each) => findable.includes(each) || each.enricher === lookup?.enricher,
+  );
+  const status = coverStatusOf(lookup, online);
+  const running = status?.kind === "looking" || status?.kind === "waiting";
+  if (offered.length === 0) {
+    return null;
+  }
+  return (
+    <div className="lookup-bar">
+      <div className="lookup-buttons">
+        {offered.map((each) => (
+          <button
+            key={each.enricher}
+            type="button"
+            className="lookup-button"
+            title={each.label}
+            aria-label={each.label}
+            disabled={running}
+            onClick={() => {
+              onFind(each);
+            }}
+          >
+            <each.icon weight="bold" aria-hidden />
+            <span aria-hidden>{each.short}</span>
+          </button>
+        ))}
+      </div>
+      {status !== undefined && (
+        <p className={`lookup-status ${status.kind}`} role="status" aria-label={status.label}>
+          <span className="lookup-mark">{STATUS_ICONS[status.kind]}</span>
+          <span aria-hidden>{status.label}</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -462,10 +585,11 @@ function DetailBox({
   const typed = boxText(details, own, name);
   const yours = name in settle(details, own);
   const origin = originOf(details, own, field);
+  const described = origin === undefined ? undefined : `${id}-origin`;
   const range = RANGES[name];
   const suggestion = suggestionOf(details, name);
   return (
-    <div className={`detail detail-${kind}`}>
+    <div className={`detail detail-${kind} detail-${name}`}>
       <label htmlFor={id} className="detail-label">
         {label}
       </label>
@@ -478,30 +602,38 @@ function DetailBox({
         max={range?.[1]}
         maxLength={kind === "text" ? MAX_TEXT : undefined}
         value={typed}
-        aria-describedby={origin === "" ? undefined : `${id}-origin`}
+        aria-describedby={described}
         onChange={(event) => {
           onChange({ ...own, [name]: event.currentTarget.value });
         }}
       />
-      {origin !== "" && (
-        <small id={`${id}-origin`} className={yours ? "detail-origin yours" : "detail-origin"}>
-          {origin}
-        </small>
-      )}
-      <div className="detail-alternatives" role="group" aria-label={`Other values for ${label}`}>
-        {alternativesOf(details, name, typed).map(({ value, origin: from }) => (
-          <button
-            key={from}
-            type="button"
-            className="detail-alternative"
-            aria-label={`Use “${value}”, from ${ORIGIN_LABELS[from]}`}
-            onClick={() => {
-              onChange({ ...own, [name]: value });
-            }}
-          >
-            {value}
-          </button>
+      {origin !== undefined &&
+        (origin.from === undefined ? (
+          <small id={described} className={yours ? "detail-origin yours" : "detail-origin"}>
+            {origin.text}
+          </small>
+        ) : (
+          <OriginTag id={described} origin={origin.from} full={origin.text} />
         ))}
+      <div className="detail-alternatives" role="group" aria-label={`Other values for ${label}`}>
+        {alternativesOf(details, name, typed).map(({ value, origin: from }) => {
+          const Mark = ORIGIN_TAGS[from].icon;
+          return (
+            <button
+              key={from}
+              type="button"
+              className="detail-alternative"
+              aria-label={`Use “${value}”, from ${ORIGIN_LABELS[from]}`}
+              title={`From ${ORIGIN_LABELS[from]}`}
+              onClick={() => {
+                onChange({ ...own, [name]: value });
+              }}
+            >
+              <Mark weight="bold" aria-hidden />
+              {value}
+            </button>
+          );
+        })}
       </div>
       {suggestion !== undefined && suggestion !== typed.trim() && (
         <div
@@ -526,23 +658,35 @@ function DetailBox({
   );
 }
 
-/** Return where `field`'s box gets its value, as the dialog says it. */
-function originOf(details: Details, own: Own, field: DetailField): string {
+/**
+ * Return where `field`'s box gets its value, as the dialog says it, with the origin
+ * its tag shows; nothing when no origin gives it.
+ */
+function originOf(
+  details: Details,
+  own: Own,
+  field: DetailField,
+): { readonly text: string; readonly from?: Origin } | undefined {
   const { name, kind } = field;
   const shows = previewOf(details, own)[name];
   if (name in settle(details, own)) {
     if (kind === "number" && own[name]?.trim() === "") {
-      return shows === undefined
-        ? "Left empty"
-        : `Left empty, so ${String(shows.value)} from ${ORIGIN_LABELS[shows.origin]} shows`;
+      return {
+        text:
+          shows === undefined
+            ? "Left empty"
+            : `Left empty, so ${String(shows.value)} from ${ORIGIN_LABELS[shows.origin]} shows`,
+      };
     }
-    return "Yours";
+    return { text: "Yours", from: "household" };
   }
   if (shows !== undefined) {
-    return `From ${ORIGIN_LABELS[shows.origin]}`;
+    return { text: `From ${ORIGIN_LABELS[shows.origin]}`, from: shows.origin };
   }
   // An album field another origin gives, hidden because the household's album differs.
-  return shownOf(foundOf(details))[name] === undefined ? "" : "Hidden, as your album differs";
+  return shownOf(foundOf(details))[name] === undefined
+    ? undefined
+    : { text: "Hidden, as your album differs" };
 }
 
 function messageOf(failure: unknown): string {

@@ -13,6 +13,8 @@ export interface Lookup {
   readonly enricher: string;
   /** The menu item's words. */
   readonly label: string;
+  /** A word for it beside its mark, as on Edit details' button. */
+  readonly short: string;
   /** Says the Track `title` is being asked about. */
   readonly notice: (title: string) => string;
   /** What the Track's row says it is doing, such as `Looking up on MusicBrainz`. */
@@ -25,6 +27,7 @@ export const LOOKUPS: readonly Lookup[] = [
   {
     enricher: DETAILS_ENRICHER,
     label: "Find details online",
+    short: "Bilibili",
     notice: (title) => `Looking up “${title}” on Bilibili.`,
     doing: "Looking up on Bilibili",
     icon: GlobeIcon,
@@ -32,6 +35,7 @@ export const LOOKUPS: readonly Lookup[] = [
   {
     enricher: MUSICBRAINZ_ENRICHER,
     label: "Find on MusicBrainz",
+    short: "MusicBrainz",
     notice: (title) => `Looking up “${title}” on MusicBrainz.`,
     doing: "Looking up on MusicBrainz",
     icon: MusicNotesIcon,
@@ -39,6 +43,7 @@ export const LOOKUPS: readonly Lookup[] = [
   {
     enricher: AI_ENRICHER,
     label: "Suggest details with AI",
+    short: "AI",
     notice: (title) => `Asking the AI about “${title}”.`,
     doing: "Asking the AI",
     icon: SparkleIcon,

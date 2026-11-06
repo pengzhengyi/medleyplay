@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type Details, type VideoRead, type VideoText } from "../api";
+import { LOOKUPS, type Lookup } from "../library/lookups";
+import type { TrackLookup } from "../library/useLibrary";
 import { ALBUM_FILE_ORIGINS, TAGGED_ORIGINS, detailsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
 
@@ -14,29 +16,58 @@ async function renderDialog(
   onReadVideo = vi.fn<(text: VideoText) => Promise<VideoRead>>(() =>
     Promise.reject(new Error("No video read in this test.")),
   ),
-  covers: {
+  more: {
     onSetCover?: (image: Blob) => Promise<Details>;
     onRemoveCover?: () => Promise<Details>;
+    /** The lookups the song may be asked about now. */
+    findable?: readonly Lookup[];
+    /** The lookup last asked about the song. */
+    lookup?: TrackLookup;
+    /** The details read again once a lookup is done. */
+    reloaded?: Details;
   } = {},
 ) {
   const onClose = vi.fn();
-  render(
+  const onFind = vi.fn<(lookup: Lookup) => void>();
+  const load = vi.fn(() => Promise.resolve(details));
+  const dialogOf = (lookup: TrackLookup | undefined) => (
     <EditDetails
       track={ALBUM_FILE}
-      load={() => Promise.resolve(details)}
+      load={load}
       onSave={onSave}
       onReadVideo={onReadVideo}
-      onSetCover={covers.onSetCover ?? (() => Promise.reject(new Error("No cover in this test.")))}
+      onSetCover={more.onSetCover ?? (() => Promise.reject(new Error("No cover in this test.")))}
       onRemoveCover={
-        covers.onRemoveCover ?? (() => Promise.reject(new Error("No cover in this test.")))
+        more.onRemoveCover ?? (() => Promise.reject(new Error("No cover in this test.")))
       }
+      findable={more.findable ?? []}
+      lookup={lookup}
+      online
+      onFind={onFind}
       onClose={onClose}
-    />,
+    />
   );
+  const { rerender } = render(dialogOf(more.lookup));
   const dialog = screen.getByRole("dialog", { name: "Edit details" });
   await within(dialog).findByRole("textbox", { name: "Title" });
-  return { dialog, onSave, onClose };
+  /** Show the dialog as the page would once the song's lookup is `lookup`. */
+  const lookUp = (lookup: TrackLookup) => {
+    if (more.reloaded !== undefined) {
+      load.mockResolvedValue(more.reloaded);
+    }
+    rerender(dialogOf(lookup));
+  };
+  return { dialog, onSave, onClose, onFind, load, lookUp };
 }
+
+/** The lookup that asks MusicBrainz. */
+const MUSICBRAINZ = ((): Lookup => {
+  const found = LOOKUPS.find((lookup) => lookup.enricher === "musicbrainz");
+  if (found === undefined) {
+    throw new Error("No lookup asks MusicBrainz.");
+  }
+  return found;
+})();
 
 const NUMBERS = new Set(["Track", "Disc", "Year"]);
 
@@ -73,6 +104,17 @@ const useSuggested = (dialog: HTMLElement, value: string) =>
   );
 
 describe("editing a song's details", () => {
+  it("tags where each value came from in a word or two, saying it in full on hover", async () => {
+    const { dialog } = await renderDialog();
+
+    const tag = document.getElementById(
+      box(dialog, "Title").getAttribute("aria-describedby") ?? "",
+    );
+    expect(tag).toHaveClass("origin-tag");
+    expect(tag).toHaveAttribute("title", "From the video");
+    expect(tag?.textContent).toContain("BV");
+  });
+
   it("shows each detail's value and where it came from", async () => {
     const { dialog } = await renderDialog();
 
@@ -245,6 +287,10 @@ describe("editing a song's details", () => {
         onReadVideo={vi.fn()}
         onSetCover={vi.fn()}
         onRemoveCover={vi.fn()}
+        findable={[]}
+        lookup={undefined}
+        online
+        onFind={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -449,7 +495,7 @@ describe("editing a song's details", () => {
       const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7, { cover: COVER })));
       const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, { onSetCover });
 
-      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), PNG);
+      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), PNG);
 
       expect(onSetCover).toHaveBeenCalledExactlyOnceWith(PNG);
       expect(await within(dialog).findByRole("img", { name: "Cover" })).toHaveAttribute(
@@ -457,6 +503,23 @@ describe("editing a song's details", () => {
         `/api/covers/${COVER}`,
       );
       expect(within(dialog).getByText("Yours")).toBeInTheDocument();
+    });
+
+    it("offers the cover shown to save as an image, or to replace", async () => {
+      const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7, { cover: COVER })));
+      const { dialog } = await renderDialog(
+        detailsOf(7, {}, { video: { cover: COVER } }),
+        undefined,
+        undefined,
+        { onSetCover },
+      );
+
+      const saveImage = within(dialog).getByRole("link", { name: "Save the cover image" });
+      await userEvent.upload(within(dialog).getByLabelText("Replace the cover"), PNG);
+
+      expect(saveImage).toHaveAttribute("href", `/api/covers/${COVER}`);
+      expect(saveImage).toHaveAttribute("download");
+      expect(onSetCover).toHaveBeenCalledExactlyOnceWith(PNG);
     });
 
     it("removes the household's cover", async () => {
@@ -478,7 +541,7 @@ describe("editing a song's details", () => {
         type: "image/png",
       });
 
-      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), large);
+      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), large);
 
       expect(onSetCover).not.toHaveBeenCalled();
       expect(within(dialog).getByRole("alert")).toHaveTextContent("at most 10 MiB");
@@ -489,11 +552,11 @@ describe("editing a song's details", () => {
         onSetCover: () => new Promise<never>(() => undefined),
       });
 
-      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), PNG);
+      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), PNG);
 
       expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
       expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
-      expect(within(dialog).getByText("Saving the cover…")).toBeInTheDocument();
+      expect(within(dialog).getByRole("status", { name: "Saving the cover…" })).toBeVisible();
     });
 
     it("says the household chose no cover over a found one", async () => {
@@ -511,7 +574,7 @@ describe("editing a song's details", () => {
           Promise.reject(new ApiError(422, "A cover is a JPEG, PNG, or WebP image.")),
       });
 
-      await userEvent.upload(within(dialog).getByLabelText("Upload a cover…"), PNG);
+      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), PNG);
 
       expect(await within(dialog).findByRole("alert")).toHaveTextContent("JPEG, PNG, or WebP");
     });
@@ -625,5 +688,61 @@ describe("the AI's suggestions", () => {
     expect(
       within(dialog).getByRole("group", { name: "The AI's suggestion for Artist" }),
     ).toHaveTextContent("The AI suggests “GUMI”");
+  });
+});
+
+describe("looking a song up from its details", () => {
+  it("asks the lookup chosen, beside the cover", async () => {
+    const { dialog, onFind } = await renderDialog(detailsOf(7), undefined, undefined, {
+      findable: [MUSICBRAINZ],
+    });
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Find on MusicBrainz" }));
+
+    expect(onFind).toHaveBeenCalledExactlyOnceWith(MUSICBRAINZ);
+  });
+
+  it("offers no lookup the song can't be asked about", async () => {
+    const { dialog } = await renderDialog();
+
+    expect(within(dialog).queryByRole("button", { name: "Find on MusicBrainz" })).toBeNull();
+  });
+
+  it("says how the lookup goes beside it, and can't ask again meanwhile", async () => {
+    const { dialog, lookUp } = await renderDialog(detailsOf(7), undefined, undefined, {
+      findable: [MUSICBRAINZ],
+    });
+
+    lookUp({ enricher: "musicbrainz", state: "running", message: "" });
+
+    expect(within(dialog).getByRole("status", { name: "Looking up on MusicBrainz" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Find on MusicBrainz" })).toBeDisabled();
+  });
+
+  it("reads the details again once the lookup is done, keeping what was typed", async () => {
+    const { dialog, lookUp, load } = await renderDialog(detailsOf(7), undefined, undefined, {
+      findable: [MUSICBRAINZ],
+      reloaded: detailsOf(7, {}, { ...ALBUM_FILE_ORIGINS, musicbrainz: { album: "Re:Start" } }),
+    });
+    await userEvent.type(box(dialog, "Genre"), "Vocaloid");
+
+    lookUp({ enricher: "musicbrainz", state: "succeeded", message: "" });
+
+    expect(await within(dialog).findByDisplayValue("Re:Start")).toBe(box(dialog, "Album"));
+    expect(box(dialog, "Genre")).toHaveValue("Vocaloid");
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("says why a lookup failed beside it", async () => {
+    const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
+      findable: [MUSICBRAINZ],
+      lookup: { enricher: "musicbrainz", state: "failed", message: "MusicBrainz didn't answer." },
+    });
+
+    expect(
+      within(dialog).getByRole("status", {
+        name: "Looking up on MusicBrainz failed: MusicBrainz didn't answer.",
+      }),
+    ).toBeVisible();
   });
 });

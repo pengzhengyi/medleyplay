@@ -122,6 +122,7 @@
     "pyproject",
     "pytest",
     "pytestmark",
+    "qrcode",
     "Radiohead",
     "RDONLY",
     "RDWR",

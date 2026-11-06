@@ -584,6 +584,8 @@ export const api = {
     }),
   /** Forget the provider's key and keep its address and model; admins only. */
   removeAiKey: () => call<AiProvider>("DELETE", "/api/ai/key"),
+  /** Where another device on the network can reach the server: addresses, then names. */
+  addresses: () => call<{ addresses: string[] }>("GET", "/api/addresses"),
   /** The enricher's state, and the Tracks it may be asked about. */
   enricher: (name: string) => call<Enricher>("GET", `/api/enrichers/${name}`),
   /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */

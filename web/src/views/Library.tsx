@@ -2,7 +2,13 @@
  * @file The signed-in page: the views, the search, the queue, and the player.
  */
 
-import { CloudSlashIcon, KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosphor-icons/react";
+import {
+  CloudSlashIcon,
+  DeviceMobileSpeakerIcon,
+  KeyboardIcon,
+  SignOutIcon,
+  WaveformIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AI_ENRICHER, type Account, type Track, api } from "../api";
@@ -20,6 +26,7 @@ import { AddFile } from "./AddFile";
 import { AddLink } from "./AddLink";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { EditDetails } from "./EditDetails";
+import { ListenOnDevice } from "./ListenOnDevice";
 import { type AiAsk, SongsEditor } from "./EditSongs";
 import { Nav } from "./Nav";
 import { NowPlaying } from "./NowPlaying";
@@ -92,6 +99,8 @@ export function Library({
   // Said to screen readers only: what the page shows where it happens, such as a lookup.
   const [said, setSaid] = useFading("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
+  // Whether the guide to listening on another device is open.
+  const [listening, setListening] = useState(false);
   // The header stays at the top, so what else stays there sits under it, however tall it is.
   const top = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -319,6 +328,17 @@ export function Library({
         <ThemeSwitch />
         <button
           type="button"
+          className="icon listen-button"
+          aria-label="Listen on your device"
+          title="Listen on your device"
+          onClick={() => {
+            setListening(true);
+          }}
+        >
+          <DeviceMobileSpeakerIcon weight="regular" aria-hidden />
+        </button>
+        <button
+          type="button"
           className="icon keys-button"
           aria-label="Keyboard shortcuts"
           {...hintOf("Keyboard shortcuts", keys.help)}
@@ -454,6 +474,15 @@ export function Library({
           startOnSongs={editing.songs}
           onClose={() => {
             setEditing(undefined);
+          }}
+        />
+      )}
+      {listening && (
+        <ListenOnDevice
+          username={account.username}
+          load={api.addresses}
+          onClose={() => {
+            setListening(false);
           }}
         />
       )}

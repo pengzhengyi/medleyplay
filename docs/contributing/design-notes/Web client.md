@@ -19,6 +19,7 @@
 - [Search](#search)
 - [Favorites and ratings](#favorites-and-ratings)
 - [Settings](#settings)
+- [Listening on another device](#listening-on-another-device)
 - [Layout](#layout)
 - [Testing](#testing)
 - [Left for later](#left-for-later)
@@ -325,6 +326,23 @@ Each section folds under its heading, a button that says whether it is open;
 which are folded is kept per browser. A bar of the section names stays under the header as the page scrolls:
 choosing one opens that section, scrolls to it, and moves focus to its heading,
 and its last button folds or opens them all.
+
+## Listening on another device
+
+- ***Listen on your device*** in the header opens a guide: the address to open
+  on a phone, as a QR code to scan with its camera and as text with *Copy*, and
+  the steps around it: join the same Wi-Fi, sign in as the same Account, and
+  add it to the Home Screen.
+- **The address is the server's on the network,** from `GET /api/addresses`:
+  the names it answers to that another device can open, its IPv4 addresses
+  first, then dotted names such as `mac-mini.local`, all on this page's port.
+  Where the page itself was opened comes first when that is not this machine
+  alone, since it already works. With several, each can be chosen; with none,
+  the guide says to connect the computer to the phone's Wi-Fi.
+- **The QR code is drawn as one SVG path,** dark on light in either theme, from
+  [uqr](https://github.com/unjs/uqr)'s matrix, which only `qr.ts` imports. It
+  was chosen over lean-qr and `qrcode-generator`, which encoded as well in a
+  spike; each address the spike tried was decoded back by jsQR.
 
 ## Layout
 

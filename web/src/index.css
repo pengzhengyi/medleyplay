@@ -3564,6 +3564,128 @@ button.enricher-reset {
   font-size: 0.85rem;
 }
 
+/* Listening on another device: the code to scan beside the steps, or above them on a phone. */
+.listen .card {
+  width: min(40rem, calc(100vw - 2rem));
+}
+
+.listen-body {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.listen-code {
+  margin: 0;
+  text-align: center;
+}
+
+.listen-code-image {
+  display: block;
+  width: 100%;
+  border-radius: 0.75rem;
+}
+
+/* Dark on light in either theme, as a camera reads it best. */
+.listen-code-light {
+  fill: #fff;
+}
+
+.listen-code-dark {
+  fill: #000;
+}
+
+.listen-code figcaption {
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.listen-steps {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+}
+
+.listen-step {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  gap: 0.6rem;
+  margin: 0;
+  list-style: none;
+}
+
+.listen-step-icon {
+  margin-top: 0.15rem;
+  color: var(--accent);
+  font-size: 1.25rem;
+}
+
+.listen-steps em {
+  font-style: normal;
+  font-weight: 600;
+}
+
+.listen-address {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+.listen-address code {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+}
+
+.listen-copied {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.listen-others {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.listen-other {
+  margin: 0;
+  list-style: none;
+}
+
+button.listen-choice {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.8rem;
+}
+
+button.listen-choice.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@media (width <= 36rem) {
+  .listen-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .listen-code {
+    width: min(11rem, 100%);
+    margin-inline: auto;
+  }
+}
+
 /* What was just done, above the player for a moment. */
 
 .notice {

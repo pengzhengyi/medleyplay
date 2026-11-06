@@ -29,6 +29,7 @@ from medleyplay.domain.errors import (
 )
 from medleyplay.web import (
     accounts,
+    addresses,
     ai,
     catalog,
     covers,
@@ -91,9 +92,12 @@ def create_app(
     request's Origin against its Host blocks other sites' pages from using a
     signed-in browser.
     """
+    hosts = tuple(allowed_hosts)
     app = FastAPI(title="medleyplay", version=__version__, lifespan=lifespan)
     app.state.services = services
+    app.state.allowed_hosts = hosts
     app.include_router(accounts.router)
+    app.include_router(addresses.router)
     app.include_router(catalog.router)
     app.include_router(downloads.router)
     app.include_router(plugins.router)
@@ -117,7 +121,7 @@ def create_app(
     app.add_exception_handler(RequestValidationError, _handle_invalid_request)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.middleware("http")(_refuse_cross_origin_writes)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(hosts))
     return app
 
 

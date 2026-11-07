@@ -5,12 +5,13 @@
 import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
 import {
+  type AddedPart,
+  api,
   ApiError,
   type Detail,
   type Details,
   type EnricherMode,
   type FavoritesRead,
-  type AddedPart,
   type Job,
   type JobEvent,
   type LinkLookup,
@@ -20,10 +21,10 @@ import {
   type SongRowIn,
   type Track,
   type TrackDownload,
+  uploadFile,
   type VideoRead,
   type VideoText,
-  api,
-  uploadFile,
+  type WaitingDevice,
 } from "../api";
 import { newId } from "../ids";
 import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
@@ -53,6 +54,8 @@ export interface Library {
   readonly mode: Mode | null;
   /** Show the Mode a check of the network came to, before the stream says it. */
   readonly modeChecked: (mode: Mode) => void;
+  /** The devices waiting for an admin's answer, oldest first; none for a member. */
+  readonly waitingDevices: readonly WaitingDevice[];
   /** The Tracks each enricher may be asked about now, by the enricher's name. */
   readonly findable: ReadonlyMap<string, ReadonlySet<number>>;
   /** Ask the enrichers again which Tracks they may be asked about, as after one is set up. */
@@ -161,6 +164,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [providers, setProviders] = useState<readonly string[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
+  const [waitingDevices, setWaitingDevices] = useState<readonly WaitingDevice[]>([]);
   const [findable, setFindable] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
   const [modes, setModes] = useState<ReadonlyMap<string, EnricherMode>>(new Map());
   const [lookups, setLookups] = useState<ReadonlyMap<number, TrackLookup>>(new Map());
@@ -289,7 +293,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       },
     );
     document.addEventListener("visibilitychange", onShown);
-    const stopListening = listen(load, setMode, onJob);
+    const stopListening = listen(load, setMode, onJob, setWaitingDevices);
     return () => {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
@@ -422,6 +426,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     error,
     mode,
     modeChecked: setMode,
+    waitingDevices,
     findable,
     refreshFindable: loadFindable,
     reloadTracks,
@@ -538,12 +543,14 @@ function listed(playlists: readonly Playlist[]): Playlist[] {
  * Call `load` when the event stream (re)connects, which may have missed changes,
  * a moment after a scan or a Download finishes, and when the Mode goes Online or
  * Offline, which changes what can play; tell `onMode` each Mode the stream sends,
- * and `onJob` each Job. Return what stops listening.
+ * `onJob` each Job, and `onWaitingDevices` the devices waiting for an answer, which
+ * only an admin's stream sends. Return what stops listening.
  */
 function listen(
   load: () => void,
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
+  onWaitingDevices: (waiting: readonly WaitingDevice[]) => void,
 ): () => void {
   if (typeof EventSource === "undefined") {
     return () => undefined;
@@ -566,6 +573,10 @@ function listen(
     }
     online = mode.online;
     onMode(mode);
+  });
+  events.addEventListener("devices", (event: MessageEvent<string>) => {
+    const { waiting } = JSON.parse(event.data) as { waiting: readonly WaitingDevice[] };
+    onWaitingDevices(waiting);
   });
   events.addEventListener("job", (event: MessageEvent<string>) => {
     const job = JSON.parse(event.data) as JobEvent;

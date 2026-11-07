@@ -10,6 +10,7 @@ from medleyplay.application.ai import AiService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
+from medleyplay.application.devices import DeviceService
 from medleyplay.application.enrichment import EnrichmentService
 from medleyplay.application.events import Events
 from medleyplay.application.jobs import JobService
@@ -27,9 +28,11 @@ from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.devices import DeviceId
 from medleyplay.domain.errors import NotSignedInError
 
 SESSION_COOKIE: Final = "medleyplay_session"
+DEVICE_COOKIE: Final = "medleyplay_device"
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,12 @@ class Services:
     enrichment: EnrichmentService
     sweeper: EnrichmentSweeper
     ai: AiService
+    devices: DeviceService
+
+
+def services_of(request: Request) -> Services:
+    """Return the services of the app answering `request`."""
+    return _services(request)
 
 
 def _services(request: Request) -> Services:
@@ -147,6 +156,15 @@ def _ai(services: Annotated[Services, Depends(_services)]) -> AiService:
     return services.ai
 
 
+def _devices(services: Annotated[Services, Depends(_services)]) -> DeviceService:
+    return services.devices
+
+
+def _this_device(request: Request) -> DeviceId | None:
+    device_id = getattr(request.state, "device_id", None)
+    return None if device_id is None else DeviceId(device_id)
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -167,7 +185,11 @@ SongsDep = Annotated[SongsService, Depends(_songs)]
 CoversDep = Annotated[CoverService, Depends(_covers)]
 EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
 AiDep = Annotated[AiService, Depends(_ai)]
+DevicesDep = Annotated[DeviceService, Depends(_devices)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
+DeviceToken = Annotated[str | None, Cookie(alias=DEVICE_COOKIE, include_in_schema=False)]
+ThisDevice = Annotated[DeviceId | None, Depends(_this_device)]
+"""The allowed device making the request, as the device check found it; None for the host."""
 
 
 def _signed_in(accounts: AccountsDep, token: SessionToken = None) -> Account:

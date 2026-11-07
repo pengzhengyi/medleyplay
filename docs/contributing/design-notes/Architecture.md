@@ -227,6 +227,9 @@ tool behind them.
   cookie; with the Host and Origin checks, this covers cross-site requests.
   Repeated failed sign-ins are throttled. Signing out ends the session at once,
   and *Sign out everywhere* ends them all.
+- **Before signing in, a device is let in**: the host always, another device
+  as the household chooses, by asking an admin first by default. See
+  [Devices](Devices.md).
 - **Shared by the household:** Libraries, Tracks, Sources, Downloads, Jobs, the
   storage limit, and the Mode. The *Downloads* tab shows who asked for each.
 - **Each Account's own:** favorites, ratings, play history, playlists, smart

@@ -1,6 +1,8 @@
 """The Accounts API: first-time setup, signing in and out, and managing Accounts."""
 
-from fastapi import APIRouter, Response, status
+import logging
+
+from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel, Field
 
 from medleyplay.application.accounts import SESSION_IDLE_TIMEOUT, NewAccount, SignedIn
@@ -8,11 +10,16 @@ from medleyplay.domain.accounts import MAX_PASSWORD_LENGTH, Account, AccountId, 
 from medleyplay.web.deps import (
     SESSION_COOKIE,
     AccountsDep,
+    DevicesDep,
     LinkedDep,
     SessionToken,
     SignedInAccount,
+    ThisDevice,
 )
+from medleyplay.web.devices import give_cookie, visit_of
 from medleyplay.web.ids import RowId
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["accounts"])
 
@@ -76,16 +83,37 @@ def setup_status(accounts: AccountsDep) -> SetupStatus:
 
 
 @router.post("/setup", status_code=status.HTTP_201_CREATED)
-def set_up(body: AccountIn, response: Response, accounts: AccountsDep) -> AccountOut:
-    """Create the first Account, as an admin, and sign it in; refused once set up."""
-    signed_in = accounts.create_first_admin(body.to_new_account())
+def set_up(
+    body: AccountIn,
+    request: Request,
+    response: Response,
+    accounts: AccountsDep,
+    devices: DevicesDep,
+) -> AccountOut:
+    """Create the first Account, as an admin, and sign it in; refused once set up.
+
+    A device other than the host that sets up is allowed. Should allowing it
+    fail, its session still lets it in the next time it asks.
+    """
+    visit = visit_of(request, None)
+    signed_in = accounts.create_first_admin(
+        body.to_new_account(), from_before_devices=not visit.host
+    )
+    if not visit.host:
+        user_agent = request.headers.get("user-agent", "")
+        try:
+            give_cookie(response, devices.ask(visit, user_agent, session_token=signed_in.token))
+        except Exception:  # noqa: BLE001 -- the household is set up; the device is allowed later
+            _log.exception("Allowing the device that set up failed")
     return _with_cookie(response, signed_in)
 
 
 @router.post("/session")
-def sign_in(body: Credentials, response: Response, accounts: AccountsDep) -> AccountOut:
-    """Sign in, setting the session cookie."""
-    return _with_cookie(response, accounts.sign_in(body.username, body.password))
+def sign_in(
+    body: Credentials, response: Response, accounts: AccountsDep, this: ThisDevice
+) -> AccountOut:
+    """Sign in on this device, setting the session cookie."""
+    return _with_cookie(response, accounts.sign_in(body.username, body.password, device_id=this))
 
 
 @router.delete("/session", status_code=status.HTTP_204_NO_CONTENT)

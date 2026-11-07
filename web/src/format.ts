@@ -61,6 +61,24 @@ export function formatTimeLeft(ms: number): string {
     : `${String(hours)} hr ${String(minutes % 60)} min`;
 }
 
+const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+
+/**
+ * Write how long ago something was seen, `now` being the time to count from:
+ * `Just now`, `5 min ago`, `3 hr ago`, or its day, such as `Nov 7`.
+ */
+export function formatSeen(at: number, now: number): string {
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) {
+    return "Just now";
+  }
+  if (minutes < 60) {
+    return `${String(minutes)} min ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${String(hours)} hr ago` : day.format(at);
+}
+
 const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
 const dayAndClock = new Intl.DateTimeFormat(undefined, {
   weekday: "short",

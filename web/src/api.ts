@@ -296,6 +296,54 @@ export interface Storage {
 }
 
 /** What the admin chose: decide from the network, or always Online or Offline. */
+/**
+ * What this device is to the server: the host itself, a device the household
+ * allowed, one let in without asking, one waiting for an answer, or one refused.
+ */
+export type Presence = "host" | "allowed" | "admitted" | "waiting" | "refused";
+
+/** This device as the server sees it; `code` is shown while it waits. */
+export interface DeviceInfo {
+  readonly presence: Presence;
+  readonly label: string;
+  readonly code: string | null;
+}
+
+/** Return whether a device may use medleyplay now. */
+export function letIn(device: DeviceInfo): boolean {
+  return device.presence !== "waiting" && device.presence !== "refused";
+}
+
+/** What the household chose for new devices: ask first, allow all, or block them. */
+export type Admission = "ask" | "everyone" | "known";
+
+/** A device waiting for an admin's answer, with the code it shows. */
+export interface WaitingDevice {
+  readonly id: string;
+  readonly label: string;
+  readonly address: string;
+  readonly code: string;
+  readonly since: string;
+}
+
+/** A device the household allowed; `this_device` marks the one asking. */
+export interface AllowedDevice {
+  readonly id: string;
+  readonly label: string;
+  readonly address: string;
+  readonly allowed_at: string;
+  readonly last_seen_at: string;
+  readonly this_device: boolean;
+}
+
+/** The choice for new devices, its revision, and the waiting and allowed devices. */
+export interface Devices {
+  readonly admission: Admission;
+  readonly revision: number;
+  readonly waiting: readonly WaitingDevice[];
+  readonly allowed: readonly AllowedDevice[];
+}
+
 export type ModeSetting = "auto" | "online" | "offline";
 
 /** Why the Mode is what it is. */
@@ -445,15 +493,42 @@ export interface TrackDownload {
   readonly backend: string | null;
 }
 
-/** A request the server refused; `status` is its HTTP status. */
+/** A request the server refused; `status` is its HTTP status, and `code` names why, if it says. */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly code: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/** The codes of a request refused because this device isn't let in. */
+const DEVICE_REFUSALS: ReadonlySet<string> = new Set(["device_waiting", "device_refused"]);
+const deviceListeners = new Set<() => void>();
+
+/**
+ * Call `listener` whenever the server refuses a request because this device
+ * isn't let in, as when an admin removes it; return what stops listening.
+ */
+export function onDeviceRefused(listener: () => void): () => void {
+  deviceListeners.add(listener);
+  return () => {
+    deviceListeners.delete(listener);
+  };
+}
+
+/** Return the error a refused response stands for, telling who listens if it is the device. */
+async function refusalOf(response: Response): Promise<ApiError> {
+  const { detail, code } = await reasonOf(response);
+  if (code !== null && DEVICE_REFUSALS.has(code)) {
+    for (const listener of deviceListeners) {
+      listener();
+    }
+  }
+  return new ApiError(response.status, detail, code);
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -464,7 +539,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   }
   const response = await fetch(path, init);
   if (!response.ok) {
-    throw new ApiError(response.status, await detailOf(response));
+    throw await refusalOf(response);
   }
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
@@ -473,18 +548,21 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 async function send<T>(method: string, path: string, image: Blob): Promise<T> {
   const response = await fetch(path, { method, credentials: "same-origin", body: image });
   if (!response.ok) {
-    throw new ApiError(response.status, await detailOf(response));
+    throw await refusalOf(response);
   }
   return (await response.json()) as T;
 }
 
 /** Say why the server refused: its own words, each check a request failed, or its status. */
-async function detailOf(response: Response): Promise<string> {
+async function reasonOf(
+  response: Response,
+): Promise<{ readonly detail: string; readonly code: string | null }> {
   const status = response.statusText || `The server refused this (${String(response.status)}).`;
   try {
-    const body = (await response.json()) as { detail?: unknown };
+    const body = (await response.json()) as { detail?: unknown; code?: unknown };
+    const code = typeof body.code === "string" ? body.code : null;
     if (typeof body.detail === "string") {
-      return body.detail;
+      return { detail: body.detail, code };
     }
     if (Array.isArray(body.detail)) {
       const checks = body.detail.flatMap((check: unknown) =>
@@ -495,11 +573,11 @@ async function detailOf(response: Response): Promise<string> {
           ? [check.msg]
           : [],
       );
-      return checks.length > 0 ? checks.join("; ") : status;
+      return { detail: checks.length > 0 ? checks.join("; ") : status, code };
     }
-    return status;
+    return { detail: status, code };
   } catch {
-    return status;
+    return { detail: status, code: null };
   }
 }
 
@@ -530,9 +608,7 @@ export function uploadFile(
         resolve(JSON.parse(request.responseText) as TrackDownload);
       } else {
         const answer = new Response(request.responseText, { status: request.status });
-        void detailOf(answer).then((why) => {
-          reject(new ApiError(request.status, why));
-        });
+        void refusalOf(answer).then(reject);
       }
     };
     request.onerror = () => {
@@ -557,6 +633,14 @@ export const api = {
     call<Account>("POST", "/api/session", { username, password }),
   signOut: () => call<undefined>("DELETE", "/api/session"),
   me: () => call<Account>("GET", "/api/me"),
+  device: () => call<DeviceInfo>("GET", "/api/device"),
+  devices: () => call<Devices>("GET", "/api/devices"),
+  saveAdmission: (admission: Admission, revision: number) =>
+    call<Devices>("PUT", "/api/devices/setting", { admission, revision }),
+  allowDevice: (id: string) => call<AllowedDevice>("POST", `/api/devices/${id}/allow`),
+  turnAwayDevice: (id: string) => call<undefined>("POST", `/api/devices/${id}/turn-away`),
+  removeDevice: (id: string) => call<undefined>("DELETE", `/api/devices/${id}`),
+  removeOtherDevices: () => call<undefined>("DELETE", "/api/devices"),
   tracks: () => call<Track[]>("GET", "/api/tracks"),
   track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
   details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),

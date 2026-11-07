@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { Fragment, type ReactNode, useMemo } from "react";
 
-import type { Mode, Playlist, Track } from "../api";
+import type { Mode, Playlist, Track, WaitingDevice } from "../api";
 import { formatLength, formatLibraryLength } from "../format";
 import {
   type FavoriteGroups,
@@ -66,6 +66,8 @@ export interface ViewProps {
   readonly onEnrichersChanged: () => void;
   /** Called after Settings changes how a Track's kind is guessed. */
   readonly onKindsChanged: () => void;
+  /** The devices waiting for an admin's answer. */
+  readonly waitingDevices: readonly WaitingDevice[];
   /** The station playing, and a way to start one. */
   readonly station: Station;
   readonly accountId: number;
@@ -189,6 +191,7 @@ function viewOf(given: ViewProps) {
           onModeChecked={props.onModeChecked}
           onEnrichersChanged={props.onEnrichersChanged}
           onKindsChanged={props.onKindsChanged}
+          waitingDevices={props.waitingDevices}
         />
       );
   }

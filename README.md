@@ -17,6 +17,8 @@ macOS.
 uv run medleyplay serve                    # every interface, port 8000
 uv run medleyplay serve --safe-mode        # with every plugin off, for this run
 uv run medleyplay reset-password <name>    # a lost password; signs the Account out
+uv run medleyplay devices                  # with the server stopped: the allowed devices
+uv run medleyplay devices choose allow-all # … or what happens to new ones
 ```
 
 The server serves the web player, which you build once, and again after

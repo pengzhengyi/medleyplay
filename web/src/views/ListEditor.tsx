@@ -20,6 +20,8 @@ import type { ListCheck, Song } from "../api";
 
 /** How long typing pauses before the list is checked. */
 const CHECK_AFTER_MS = 350;
+/** What an empty list shows, a line each, to say how a list is written. */
+const EXAMPLE = ["0:00 Intro", "3:12 Night Drive - Blue Room"];
 
 const TIME = /^(?:\d{1,2}:)?\d{1,3}:\d{2}(?![\d:])/u;
 const DASH = /^\s+[-–—]\s+|^\s*－\s*/u;
@@ -105,7 +107,13 @@ export default function ListEditor({
       state: EditorState.create({
         doc: initial,
         extensions: [
-          lineNumbers(),
+          // An empty list's example is numbered line by line, so it reads as the lines it shows.
+          lineNumbers({
+            formatNumber: (line, state) =>
+              state.doc.length === 0
+                ? EXAMPLE.map((_, index) => String(index + 1)).join("\n")
+                : String(line),
+          }),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap, ...completionKeymap]),
           songLines,
@@ -125,7 +133,7 @@ export default function ListEditor({
               },
             ],
           }),
-          placeholder("0:00 Intro\n3:12 Night Drive - Blue Room"),
+          placeholder(EXAMPLE.join("\n")),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ "aria-label": "Song list" }),
           EditorView.updateListener.of((update) => {

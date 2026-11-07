@@ -84,6 +84,8 @@ export function SettingsView({
   readonly onKindsChanged: () => void;
 }) {
   const [folded, setFolded] = useState(loadFolded);
+  // One copy for the sections that save the settings, so each saves at the latest revision.
+  const [household, setHousehold] = useState<Settings | undefined>(undefined);
   const fold = (next: ReadonlySet<SectionId>) => {
     setFolded(next);
     keepFolded(next);
@@ -114,8 +116,15 @@ export function SettingsView({
     ),
     "keyboard-shortcuts": <ShortcutSettings />,
     network: <NetworkSettings admin={admin} mode={mode} onModeChecked={onModeChecked} />,
-    kinds: <KindSettings admin={admin} onChanged={onKindsChanged} />,
-    storage: <StorageSettings admin={admin} />,
+    kinds: (
+      <KindSettings
+        admin={admin}
+        settings={household}
+        onSettings={setHousehold}
+        onChanged={onKindsChanged}
+      />
+    ),
+    storage: <StorageSettings admin={admin} settings={household} onSettings={setHousehold} />,
     bilibili: (
       <>
         <BilibiliSettings />
@@ -231,8 +240,16 @@ function bytesOf(draft: Draft): number | null | undefined {
 }
 
 /** What the Downloads hold, and the storage limit. */
-function StorageSettings({ admin }: { readonly admin: boolean }) {
-  const [settings, setSettings] = useState<Settings | undefined>(undefined);
+function StorageSettings({
+  admin,
+  settings,
+  onSettings,
+}: {
+  readonly admin: boolean;
+  /** The household's settings as last read, shared with the other sections that save them. */
+  readonly settings: Settings | undefined;
+  readonly onSettings: (settings: Settings) => void;
+}) {
   const [storage, setStorage] = useState<Storage | undefined>(undefined);
   const [draft, setDraft] = useState<Draft>({ unlimited: true, gb: "" });
   const [preview, setPreview] = useState<Preview | undefined>(undefined);
@@ -247,7 +264,7 @@ function StorageSettings({ admin }: { readonly admin: boolean }) {
   ) => {
     Promise.all([api.settings(), api.storage()]).then(
       ([read, now]) => {
-        setSettings(read);
+        onSettings(read);
         setStorage(now);
         setDraft(draftOf(read));
         setPreview(undefined);

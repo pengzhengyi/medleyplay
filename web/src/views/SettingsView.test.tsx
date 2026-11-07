@@ -470,6 +470,37 @@ describe("the Songs and albums section", () => {
     });
   });
 
+  it("saves the storage limit at the revision saving the album length left", async () => {
+    let kept: Settings = LIMIT_20;
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": () => ({ body: kept }),
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        const next = body as Settings;
+        if (next.revision !== kept.revision) {
+          return { status: 409, body: { detail: "Saved since." } };
+        }
+        kept = { ...next, revision: kept.revision + 1 };
+        return { body: kept };
+      },
+    });
+    await userEvent.click(
+      await kinds().findByRole("checkbox", { name: "Guess that a long file is an album" }),
+    );
+    await userEvent.click(kinds().getByRole("button", { name: "Save" }));
+    await kinds().findByText("Saved.");
+
+    await userEvent.click(storage().getByRole("radio", { name: "No limit" }));
+    await userEvent.click(storage().getByRole("button", { name: "Save" }));
+
+    expect(await storage().findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([
+      { ...LIMIT_20, album_minutes: null },
+      { ...LIMIT_20, storage_limit: null, album_minutes: null, revision: 3 },
+    ]);
+  });
+
   it("says how long a file is guessed an album to a member, who can't change it", async () => {
     open(false);
 

@@ -602,6 +602,30 @@ describe("the Library", () => {
     expect(screen.getByRole("button", { name: "Remove the filter Albums only" })).toBeVisible();
   });
 
+  it("counts the songs of a split file among the songs the Kind filter offers", async () => {
+    renderLibrary();
+
+    await userEvent.click(screen.getByText("Filter"));
+
+    expect(
+      within(screen.getByRole("combobox", { name: "Kind" }))
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["Songs and albums", "Songs (4)", "Albums (2)"]);
+  });
+
+  it("plays a split file the Kind filter keeps as an album as all its songs", async () => {
+    const { actions } = renderLibrary();
+    await userEvent.click(screen.getByText("Filter"));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Kind" }), "album");
+
+    await userEvent.click(screen.getByRole("button", { name: "生如夏花" }));
+
+    const [shown, index] = vi.mocked(actions.onPlay).mock.calls[0] ?? [];
+    expect(idsOf(shown)).toEqual([11, 12, 13, 20]);
+    expect(index).toBe(0);
+  });
+
   it("plays a split file from its first song, its songs one unit among the items", async () => {
     const { actions } = renderLibrary();
 

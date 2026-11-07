@@ -685,8 +685,13 @@ function queueOf(table: Played): Track[] {
     if (!row.original.split) {
       return [row.original];
     }
+    const songs = songsIn.get(row.original.id) ?? [];
+    // A file the filters keep for itself, as an album, plays as all its songs.
+    if (row.subRows.length === 0) {
+      return songs;
+    }
     const kept = new Set(row.subRows.map((song) => song.original.id));
-    return (songsIn.get(row.original.id) ?? []).filter((song) => kept.has(song.id));
+    return songs.filter((song) => kept.has(song.id));
   });
 }
 
@@ -975,9 +980,18 @@ function choicesOf(table: Table): Record<ChoiceField, Choice[]> {
     }
     return [...counts].map(([value, n]) => ({ value, label: value, count: n }));
   };
+  // The songs of a split file count too, as a filter keeps them under their file.
+  const countAll = (column: string, valueOf: (track: Track) => string) => {
+    const counts = new Map<string, number>();
+    for (const row of table.getColumn(column)?.getFacetedRowModel().flatRows ?? []) {
+      const value = valueOf(row.original);
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    return [...counts].map(([value, n]) => ({ value, label: value, count: n }));
+  };
   const byLabel = (a: Choice, b: Choice) => collator.compare(a.label, b.label);
   return {
-    kind: count("kind", (track) => [track.kind])
+    kind: countAll("kind", (track) => track.kind)
       .map((choice) => ({ ...choice, label: choice.value === "album" ? "Albums" : "Songs" }))
       .sort((a, b) => Number(a.value === "album") - Number(b.value === "album")),
     artist: count("artist", (track) => (track.artist ? [track.artist] : [])).sort(byLabel),

@@ -35,12 +35,16 @@ function minutesOf(draft: Draft): number | null | undefined {
 /** Whether a long file is guessed an album, changed by an admin; `onChanged` runs once saved. */
 export function KindSettings({
   admin,
+  settings,
+  onSettings,
   onChanged,
 }: {
   readonly admin: boolean;
+  /** The household's settings as last read, shared with the other sections that save them. */
+  readonly settings: Settings | undefined;
+  readonly onSettings: (settings: Settings) => void;
   readonly onChanged: () => void;
 }) {
-  const [settings, setSettings] = useState<Settings | undefined>(undefined);
   const [draft, setDraft] = useState<Draft>({ guess: true, minutes: "20" });
   const [error, setError] = useState("");
   const notes = useNote();
@@ -52,7 +56,7 @@ export function KindSettings({
   ) => {
     api.settings().then(
       (read) => {
-        setSettings(read);
+        onSettings(read);
         setDraft(draftOf(read));
         then();
       },

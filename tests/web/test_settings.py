@@ -71,3 +71,12 @@ def test_an_admin_turns_off_guessing_albums_from_their_length(client: TestClient
     )
 
     assert saved.json()["album_minutes"] is None
+
+
+def test_saving_without_the_album_length_keeps_the_one_saved(client: TestClient) -> None:
+    set_up_as_alice(client)
+    client.put("/api/settings", json={"storage_limit": None, "album_minutes": None, "revision": 0})
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert (saved.json()["storage_limit"], saved.json()["album_minutes"]) == (TWENTY_GIB, None)

@@ -16,7 +16,10 @@ class SettingsIn(BaseModel):
     removal_order: RemovalOrder = RemovalOrder.LEAST_FAVORITE
     album_minutes: int | None = Field(
         default=ALBUM_MINUTES,
-        description="A file this many minutes or longer is guessed an album; null guesses none.",
+        description=(
+            "A file this many minutes or longer is guessed an album; null guesses none."
+            " Left out, it stays as saved."
+        ),
     )
     revision: int = Field(ge=0)
 
@@ -54,7 +57,11 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
         Settings(
             storage_limit=body.storage_limit,
             removal_order=body.removal_order,
-            album_minutes=body.album_minutes,
+            album_minutes=(
+                body.album_minutes
+                if "album_minutes" in body.model_fields_set
+                else settings.get().album_minutes
+            ),
             revision=body.revision,
         ),
     )

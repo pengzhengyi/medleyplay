@@ -30,6 +30,7 @@ import { type SubmitEvent, useEffect, useEffectEvent, useState } from "react";
 
 import { movedOrder, providerNameOf } from "../aiProviders";
 import { AI_ENRICHER, type AiPreset, type AiProvider, type AiSetting, api } from "../api";
+import { classOf, useNote } from "../useNote";
 import { AiProviderCard } from "./AiProviderCard";
 import { EnricherSettings, type EnricherWords } from "./EnricherSettings";
 
@@ -72,7 +73,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
   const [key, setKey] = useState("");
-  const [note, setNote] = useState("");
+  const notes = useNote();
   const [error, setError] = useState("");
   const sensors = useSensors(
     // A few pixels of movement first, so a tap on the handle isn't a drag.
@@ -86,7 +87,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
   const read = (then = "") => {
     api.ai().then((answer) => {
       setSetting(answer);
-      setNote(then);
+      notes.tell(then);
     }, failed);
   };
   const loadOnOpen = useEffectEvent(() => {
@@ -111,7 +112,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
     setBaseUrl(preset.base_url);
     setModel(preset.model);
     setError("");
-    setNote("");
+    notes.tell("");
   };
   const add = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -123,7 +124,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
         setKey("");
         setAdding(null);
         withProviders([...providers, added]);
-        setNote(`${nameOf(added)} added.`);
+        notes.confirm(`${nameOf(added)} added.`);
         onChanged();
       }, failed);
   };
@@ -142,7 +143,9 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
     api.reorderAi(order).then(
       (saved) => {
         withProviders(saved);
-        setNote(`${nameOf(moved)} moved to ${String(to + 1)} of ${String(providers.length)}.`);
+        notes.confirm(
+          `${nameOf(moved)} moved to ${String(to + 1)} of ${String(providers.length)}.`,
+        );
       },
       (failure: unknown) => {
         failed(failure);
@@ -153,7 +156,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
   const removed = (provider: AiProvider) => {
     setOpened(null);
     withProviders(providers.filter((each) => each.id !== provider.id));
-    setNote(`${nameOf(provider)} removed.`);
+    notes.confirm(`${nameOf(provider)} removed.`);
     onChanged();
   };
 
@@ -337,8 +340,8 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
               </p>
             </form>
           )}
-          <p className="hint" role="status">
-            {note}
+          <p className={classOf(notes.note)} role="status">
+            {notes.note.text}
           </p>
         </>
       )}

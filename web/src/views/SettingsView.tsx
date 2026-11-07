@@ -12,6 +12,7 @@ import { CaretDownIcon } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
+import { classOf, useNote } from "../useNote";
 import { formatBytes } from "../format";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
@@ -229,18 +230,22 @@ function StorageSettings({ admin }: { readonly admin: boolean }) {
   const [storage, setStorage] = useState<Storage | undefined>(undefined);
   const [draft, setDraft] = useState<Draft>({ unlimited: true, gb: "" });
   const [preview, setPreview] = useState<Preview | undefined>(undefined);
-  const [note, setNote] = useState("");
+  const notes = useNote();
   const [error, setError] = useState("");
   const asking = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const reload = (then?: string) => {
+  const reload = (
+    then = () => {
+      notes.tell("");
+    },
+  ) => {
     Promise.all([api.settings(), api.storage()]).then(
       ([read, now]) => {
         setSettings(read);
         setStorage(now);
         setDraft(draftOf(read));
         setPreview(undefined);
-        setNote(then ?? "");
+        then();
       },
       (failure: unknown) => {
         setError(failure instanceof Error ? failure.message : String(failure));
@@ -262,7 +267,7 @@ function StorageSettings({ admin }: { readonly admin: boolean }) {
 
   const change = (next: Draft) => {
     setDraft(next);
-    setNote("");
+    notes.tell("");
     setPreview(undefined);
     clearTimeout(asking.current);
     const bytes = bytesOf(next);
@@ -288,13 +293,17 @@ function StorageSettings({ admin }: { readonly admin: boolean }) {
     setError("");
     api.saveSettings({ ...settings, storage_limit: limit }).then(
       () => {
-        reload("Saved.");
+        reload(() => {
+          notes.confirm("Saved.");
+        });
       },
       (failure: unknown) => {
         if (failure instanceof ApiError && failure.status === 409) {
-          reload(
-            "These settings changed elsewhere, so here they are now. Change them again to save.",
-          );
+          reload(() => {
+            notes.tell(
+              "These settings changed elsewhere, so here they are now. Change them again to save.",
+            );
+          });
           return;
         }
         setError(failure instanceof Error ? failure.message : String(failure));
@@ -370,7 +379,9 @@ function StorageSettings({ admin }: { readonly admin: boolean }) {
               <button type="submit" disabled={!changed}>
                 Save
               </button>
-              {note !== "" && <p className="hint saved">{note}</p>}
+              {notes.note.text !== "" && (
+                <p className={classOf(notes.note, "hint saved")}>{notes.note.text}</p>
+              )}
             </form>
           ) : (
             <p className="hint">

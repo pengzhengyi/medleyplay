@@ -10,6 +10,7 @@ import { useEffect, useEffectEvent, useState } from "react";
 
 import { ApiError, type Mode, type ModeSetting, type ModeSettings, api } from "../api";
 import { SETTINGS, checkable, networkSaid, offlineBecause } from "../mode";
+import { classOf, useNote } from "../useNote";
 import { CheckNetwork } from "./CheckNetwork";
 
 /** The Mode now, and, for an admin, its setting and the metered networks to change. */
@@ -24,16 +25,20 @@ export function NetworkSettings({
 }) {
   const [settings, setSettings] = useState<ModeSettings | undefined>(undefined);
   const [name, setName] = useState("");
-  const [note, setNote] = useState("");
+  const notes = useNote();
   const [error, setError] = useState("");
 
   const failed = (failure: unknown) => {
     setError(failure instanceof Error ? failure.message : String(failure));
   };
-  const reload = (then = "") => {
+  const reload = (
+    then = () => {
+      notes.tell("");
+    },
+  ) => {
     api.modeSettings().then((read) => {
       setSettings(read);
-      setNote(then);
+      then();
     }, failed);
   };
   const loadOnOpen = useEffectEvent(() => {
@@ -51,7 +56,11 @@ export function NetworkSettings({
     setSettings({ ...settings, setting });
     api.saveModeSetting(setting, settings.revision).then(setSettings, (failure: unknown) => {
       if (failure instanceof ApiError && failure.status === 409) {
-        reload("The setting changed elsewhere, so here it is now. Choose again to change it.");
+        reload(() => {
+          notes.tell(
+            "The setting changed elsewhere, so here it is now. Choose again to change it.",
+          );
+        });
         return;
       }
       failed(failure);
@@ -62,7 +71,9 @@ export function NetworkSettings({
     setError("");
     api.markMetered(name.trim()).then(() => {
       setName("");
-      reload("Marked.");
+      reload(() => {
+        notes.confirm("Marked.");
+      });
     }, failed);
   };
   const unmark = (id: number) => {
@@ -167,8 +178,8 @@ export function NetworkSettings({
               </p>
             </>
           )}
-          <p className="hint" role="status">
-            {note}
+          <p className={classOf(notes.note)} role="status">
+            {notes.note.text}
           </p>
         </>
       )}

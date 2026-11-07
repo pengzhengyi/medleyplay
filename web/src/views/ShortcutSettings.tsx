@@ -25,14 +25,7 @@ import {
   saveBindings,
   useBindings,
 } from "../shortcuts";
-
-/** What was last said about a change; `refused` when it didn't happen, or wasn't kept. */
-interface Note {
-  readonly text: string;
-  readonly refused: boolean;
-}
-
-const QUIET: Note = { text: "", refused: false };
+import { classOf, useNote } from "../useNote";
 
 const nameOf = (command: Command) => COMMANDS.find((each) => each.command === command)?.name;
 
@@ -40,20 +33,17 @@ const nameOf = (command: Command) => COMMANDS.find((each) => each.command === co
 export function ShortcutSettings() {
   const bindings = useBindings();
   const [recording, setRecording] = useState<Command | undefined>(undefined);
-  const [note, setNote] = useState<Note>(QUIET);
+  const notes = useNote();
   // Some browsers click a button as Space comes up, so the release of a press taken is kept too.
   const taken = useRef<string | undefined>(undefined);
   const defaults = changesOf(bindings) === null;
 
   /** Use `next` from now on, saying `said`, or why the server didn't keep it. */
   const save = (next: Bindings, said: string) => {
-    setNote({ text: said, refused: false });
+    notes.confirm(said);
     saveBindings(next).catch((failure: unknown) => {
       const reason = failure instanceof Error ? failure.message : String(failure);
-      setNote({
-        text: `The server didn't keep them: ${reason}. This browser has them until it does.`,
-        refused: true,
-      });
+      notes.refuse(`The server didn't keep them: ${reason}. This browser has them until it does.`);
     });
   };
 
@@ -62,7 +52,7 @@ export function ShortcutSettings() {
       event.preventDefault();
       event.stopPropagation();
       setRecording(undefined);
-      setNote(QUIET);
+      notes.tell("");
       return;
     }
     const keys = bindingOf(event.nativeEvent);
@@ -75,23 +65,17 @@ export function ShortcutSettings() {
     event.stopPropagation();
     taken.current = event.code;
     if (belongsToBrowser(keys)) {
-      setNote({ text: `The browser keeps ${labelOf(keys)}. Press other keys.`, refused: true });
+      notes.refuse(`The browser keeps ${labelOf(keys)}. Press other keys.`);
       return;
     }
     const added = addKeys(bindings, command, keys);
     if ("taken" in added) {
-      setNote({
-        text: `${labelOf(keys)} is already ${nameOf(added.taken) ?? ""}. Press other keys.`,
-        refused: true,
-      });
+      notes.refuse(`${labelOf(keys)} is already ${nameOf(added.taken) ?? ""}. Press other keys.`);
       return;
     }
     setRecording(undefined);
     if ("full" in added) {
-      setNote({
-        text: `${nameOf(command) ?? ""} has ${String(MAX_KEYS)} keys; remove one first.`,
-        refused: true,
-      });
+      notes.refuse(`${nameOf(command) ?? ""} has ${String(MAX_KEYS)} keys; remove one first.`);
       return;
     }
     save(added.bindings, `${nameOf(command) ?? ""} now also has ${labelOf(keys)}.`);
@@ -134,7 +118,7 @@ export function ShortcutSettings() {
                 aria-label={waiting ? `Press keys to add to ${name}` : `Add keys to ${name}`}
                 onClick={() => {
                   setRecording(command);
-                  setNote(QUIET);
+                  notes.tell("");
                 }}
                 onKeyDown={(event) => {
                   if (waiting) {
@@ -159,8 +143,8 @@ export function ShortcutSettings() {
           );
         })}
       </ul>
-      <p className={note.refused ? "hint refused" : "hint saved"} role="status">
-        {note.text}
+      <p className={classOf(notes.note, "hint saved")} role="status">
+        {notes.note.text}
       </p>
       <button
         type="button"

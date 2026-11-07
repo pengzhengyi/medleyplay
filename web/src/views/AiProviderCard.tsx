@@ -21,6 +21,7 @@ import { type SubmitEvent, useId, useState } from "react";
 
 import { FAILURE_WORDS, agoOf, isLocal } from "../aiProviders";
 import { type AiProvider, api } from "../api";
+import { classOf, useNote } from "../useNote";
 import { useNow } from "../useNow";
 
 type Editing = "model" | "key" | "remove" | null;
@@ -56,7 +57,7 @@ export function AiProviderCard({
   const [model, setModel] = useState(provider.model);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("");
+  const notes = useNote();
   const [error, setError] = useState("");
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition } =
     useSortable({ id: provider.id });
@@ -74,7 +75,7 @@ export function AiProviderCard({
     setModel(provider.model);
     setKey("");
     setError("");
-    setNote("");
+    notes.tell("");
   };
   const run = (call: Promise<AiProvider | undefined>, then: (saved?: AiProvider) => void) => {
     setBusy(true);
@@ -97,7 +98,7 @@ export function AiProviderCard({
         onChanged(saved);
       }
       setEditing(null);
-      setNote("Model saved.");
+      notes.confirm("Model saved.");
     });
   };
   const saveKey = (event: SubmitEvent<HTMLFormElement>) => {
@@ -108,7 +109,7 @@ export function AiProviderCard({
       }
       setKey("");
       setEditing(null);
-      setNote("Key saved.");
+      notes.confirm("Key saved.");
     });
   };
   const remove = () => {
@@ -338,8 +339,8 @@ export function AiProviderCard({
           </p>
         )}
         {error !== "" && <p role="alert">{error}</p>}
-        <p className="hint" role="status">
-          {note}
+        <p className={classOf(notes.note)} role="status">
+          {notes.note.text}
         </p>
       </div>
     </li>

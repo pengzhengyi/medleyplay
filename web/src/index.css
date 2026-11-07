@@ -2415,6 +2415,31 @@ button.icon.heart.on:hover,
   color: var(--accent);
 }
 
+/* Playing on the computer, the button says so in a word, in the accent. */
+.player .play-on {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  width: auto;
+}
+
+.player .play-on.on {
+  padding-inline: 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.play-on-where {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.play-on-choice {
+  display: flex;
+  flex-direction: column;
+}
+
 .player .status {
   display: flex;
   align-items: center;

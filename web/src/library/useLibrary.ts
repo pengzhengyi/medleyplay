@@ -18,6 +18,8 @@ import {
   type Mode,
   type PartChoice,
   type Playlist,
+  type RemoteCommand,
+  type RemoteEvent,
   type SongRowIn,
   type Track,
   type TrackDownload,
@@ -27,6 +29,8 @@ import {
   type WaitingDevice,
 } from "../api";
 import { newId } from "../ids";
+import { PAGE_ID } from "../page";
+import type { Speaker } from "../player/remote";
 import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
 import { fold } from "./views";
 import { LOOKUPS } from "./lookups";
@@ -56,6 +60,10 @@ export interface Library {
   readonly modeChecked: (mode: Mode) => void;
   /** The devices waiting for an admin's answer, oldest first; none for a member. */
   readonly waitingDevices: readonly WaitingDevice[];
+  /** The computer playing for this Account, as it last reported, or `null` while none does. */
+  readonly speaker: Speaker | null;
+  /** Call `listener` with each command a remote sends while this page plays for the Account. */
+  readonly onCommand: (listener: (command: RemoteCommand) => void) => () => void;
   /** The Tracks each enricher may be asked about now, by the enricher's name. */
   readonly findable: ReadonlyMap<string, ReadonlySet<number>>;
   /** Ask the enrichers again which Tracks they may be asked about, as after one is set up. */
@@ -165,6 +173,14 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [waitingDevices, setWaitingDevices] = useState<readonly WaitingDevice[]>([]);
+  const [speaker, setSpeaker] = useState<Speaker | null>(null);
+  const commandListeners = useRef(new Set<(command: RemoteCommand) => void>());
+  const onCommand = useCallback((listener: (command: RemoteCommand) => void) => {
+    commandListeners.current.add(listener);
+    return () => {
+      commandListeners.current.delete(listener);
+    };
+  }, []);
   const [findable, setFindable] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
   const [modes, setModes] = useState<ReadonlyMap<string, EnricherMode>>(new Map());
   const [lookups, setLookups] = useState<ReadonlyMap<number, TrackLookup>>(new Map());
@@ -293,7 +309,11 @@ export function useLibrary(onSignedOut: () => void): Library {
       },
     );
     document.addEventListener("visibilitychange", onShown);
-    const stopListening = listen(load, setMode, onJob, setWaitingDevices);
+    const stopListening = listen(load, setMode, onJob, setWaitingDevices, setSpeaker, (command) => {
+      for (const listener of commandListeners.current) {
+        listener(command);
+      }
+    });
     return () => {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
@@ -427,6 +447,8 @@ export function useLibrary(onSignedOut: () => void): Library {
     mode,
     modeChecked: setMode,
     waitingDevices,
+    speaker,
+    onCommand,
     findable,
     refreshFindable: loadFindable,
     reloadTracks,
@@ -543,19 +565,23 @@ function listed(playlists: readonly Playlist[]): Playlist[] {
  * Call `load` when the event stream (re)connects, which may have missed changes,
  * a moment after a scan or a Download finishes, and when the Mode goes Online or
  * Offline, which changes what can play; tell `onMode` each Mode the stream sends,
- * `onJob` each Job, and `onWaitingDevices` the devices waiting for an answer, which
- * only an admin's stream sends. Return what stops listening.
+ * `onJob` each Job, `onWaitingDevices` the devices waiting for an answer, which
+ * only an admin's stream sends, `onSpeaker` the computer playing for the Account,
+ * and `onCommand` each command for this page while it is that computer. Return what
+ * stops listening.
  */
 function listen(
   load: () => void,
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
   onWaitingDevices: (waiting: readonly WaitingDevice[]) => void,
+  onSpeaker: (speaker: Speaker | null) => void,
+  onCommand: (command: RemoteCommand) => void,
 ): () => void {
   if (typeof EventSource === "undefined") {
     return () => undefined;
   }
-  const events = new EventSource("/api/events");
+  const events = new EventSource(`/api/events?page=${PAGE_ID}`);
   let settling: ReturnType<typeof setTimeout> | undefined;
   let connected = false;
   let online: boolean | undefined;
@@ -577,6 +603,17 @@ function listen(
   events.addEventListener("devices", (event: MessageEvent<string>) => {
     const { waiting } = JSON.parse(event.data) as { waiting: readonly WaitingDevice[] };
     onWaitingDevices(waiting);
+  });
+  events.addEventListener("remote", (event: MessageEvent<string>) => {
+    const { page, state, age_ms } = JSON.parse(event.data) as RemoteEvent;
+    onSpeaker(
+      page === null || state === null
+        ? null
+        : { page, state, reportedAt: Date.now() - (age_ms ?? 0) },
+    );
+  });
+  events.addEventListener("command", (event: MessageEvent<string>) => {
+    onCommand(JSON.parse(event.data) as RemoteCommand);
   });
   events.addEventListener("job", (event: MessageEvent<string>) => {
     const job = JSON.parse(event.data) as JobEvent;

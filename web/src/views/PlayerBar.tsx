@@ -6,6 +6,7 @@
  */
 
 import { QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
@@ -27,6 +28,7 @@ export function PlayerBar({
   queueOpen,
   onToggleQueue,
   onOpenNowPlaying,
+  playOn,
 }: {
   readonly player: Player;
   readonly track: Track | undefined;
@@ -36,6 +38,8 @@ export function PlayerBar({
   readonly queueOpen: boolean;
   readonly onToggleQueue: () => void;
   readonly onOpenNowPlaying: () => void;
+  /** Where the music plays, chosen beside the queue, on a page that isn't on the computer. */
+  readonly playOn?: ReactNode;
 }) {
   const { status, position, duration } = player;
   const keys = useBindings();
@@ -76,7 +80,9 @@ export function PlayerBar({
         >
           <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />
         </button>
+        {playOn}
         {status.kind === "preparing" && <span className="note">Preparing…</span>}
+        {status.kind === "blocked" && <span className="note">{status.message}</span>}
         {status.kind === "failed" && (
           <span className="note failed" role="alert">
             <WarningCircleIcon weight="fill" aria-hidden />

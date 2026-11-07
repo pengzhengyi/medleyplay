@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../api";
+import { PAGE_ID } from "../page";
 import {
   detailsOf,
   downloadOf,
@@ -9,43 +10,12 @@ import {
   playlistOf,
   serve,
   signedIn,
+  speakerStateOf,
   trackOf,
 } from "../testing/server";
+import { FakeEventSource, stream } from "../testing/events";
 import { FakeUploads } from "../testing/uploads";
 import { useLibrary } from "./useLibrary";
-
-/** A stand-in for the event stream: the test sends the events the server would. */
-class FakeEventSource {
-  static last: FakeEventSource | undefined;
-  readonly listeners = new Map<string, ((event: MessageEvent<string>) => void)[]>();
-  closed = false;
-
-  constructor(readonly url: string) {
-    FakeEventSource.last = this;
-  }
-
-  addEventListener(name: string, listener: (event: MessageEvent<string>) => void): void {
-    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
-  }
-
-  close(): void {
-    this.closed = true;
-  }
-
-  send(name: string, data: unknown = {}): void {
-    for (const listener of this.listeners.get(name) ?? []) {
-      listener(new MessageEvent(name, { data: JSON.stringify(data) }));
-    }
-  }
-}
-
-const stream = () => {
-  const found = FakeEventSource.last;
-  if (found === undefined) {
-    throw new Error("The Library didn't open the event stream.");
-  }
-  return found;
-};
 
 /** How many times the page asked for the Tracks. */
 const asked = (calls: readonly string[]) =>
@@ -139,6 +109,64 @@ describe("the Library", () => {
       expect(result.current.error).toBe("No Track has the id 1.");
     });
     expect(result.current.tracks.get(1)?.favorite).toBe(false);
+  });
+});
+
+describe("remote play", () => {
+  it("names this page on the event stream", () => {
+    serve(signedIn([]));
+
+    renderHook(() => useLibrary(vi.fn()));
+
+    expect(stream().url).toBe(`/api/events?page=${PAGE_ID}`);
+  });
+
+  it("knows the computer playing for the Account, and when it reported by this page's clock", () => {
+    serve(signedIn([]));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 10, 8, 20, 0, 3));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    act(() => {
+      stream().send("remote", { page: "host-page-0001", state: speakerStateOf(), age_ms: 3000 });
+    });
+
+    expect(result.current.speaker).toEqual({
+      page: "host-page-0001",
+      state: speakerStateOf(),
+      reportedAt: Date.UTC(2026, 10, 8, 20, 0, 0),
+    });
+  });
+
+  it("forgets the computer once it stops playing for the Account", () => {
+    serve(signedIn([]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    act(() => {
+      stream().send("remote", { page: "host-page-0001", state: speakerStateOf(), age_ms: 0 });
+    });
+
+    act(() => {
+      stream().send("remote", { page: null, state: null, age_ms: null });
+    });
+
+    expect(result.current.speaker).toBeNull();
+  });
+
+  it("tells each command for this page to whoever listens, until they stop", () => {
+    serve(signedIn([]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    const heard = vi.fn();
+    const stop = result.current.onCommand(heard);
+
+    act(() => {
+      stream().send("command", { kind: "next" });
+    });
+    stop();
+    act(() => {
+      stream().send("command", { kind: "pause" });
+    });
+
+    expect(heard.mock.calls).toEqual([[{ kind: "next" }]]);
   });
 });
 

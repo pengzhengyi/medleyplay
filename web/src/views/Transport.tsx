@@ -22,6 +22,9 @@ import type { Player } from "../player/usePlayer";
 import { hintOf, useBindings } from "../shortcuts";
 import { REPEATS, shuffleSaid } from "./playModes";
 
+/** What the player may be doing for its play button to work. */
+const PLAYABLE_NOW = new Set(["playing", "paused", "blocked"]);
+
 /** Shuffle, Previous, Play or Pause, Next, and Repeat, for `track` playing in `player`. */
 export function Transport({
   player,
@@ -66,7 +69,7 @@ export function Transport({
         aria-label={playing ? "Pause" : "Play"}
         {...hintOf(playing ? "Pause" : "Play", keys.toggle)}
         onClick={player.toggle}
-        disabled={status.kind !== "playing" && status.kind !== "paused"}
+        disabled={!PLAYABLE_NOW.has(status.kind)}
       >
         {status.kind === "preparing" ? (
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />

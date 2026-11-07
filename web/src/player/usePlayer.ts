@@ -31,7 +31,17 @@ export type Status =
   | { readonly kind: "preparing" }
   | { readonly kind: "playing" }
   | { readonly kind: "paused" }
+  /** The browser refused to start playing until someone presses play. */
+  | { readonly kind: "blocked"; readonly message: string }
   | { readonly kind: "failed"; readonly message: string };
+
+/** What plays, to play on elsewhere: the queue, how far into its entry, and whether it counted. */
+export interface Handoff {
+  readonly queue: Queue;
+  readonly seconds: number;
+  /** Whether the play of the current entry has already been counted. */
+  readonly counted: boolean;
+}
 
 /** The player as the page sees it. */
 export interface Player {
@@ -68,6 +78,10 @@ export interface Player {
   /** Change the volume, and turn the sound back on. */
   readonly setVolume: (volume: number) => void;
   readonly setMuted: (muted: boolean) => void;
+  /** What plays now, to play on elsewhere; nothing while nothing is queued. */
+  readonly handoff: () => Handoff | undefined;
+  /** Play `handoff`'s queue from its second, playing or paused. */
+  readonly take: (handoff: Handoff, playing: boolean) => void;
 }
 
 /** What the page shows about one entry of the queue. */
@@ -82,7 +96,7 @@ const MAX_PREPARE_ATTEMPTS = 3;
 const RESTART_AFTER = 3;
 const SAVE_EVERY = 5;
 const FINISHED_JOB = new Set(["succeeded", "failed", "cancelled"]);
-const PAUSING_ERRORS = new Set(["AbortError", "NotAllowedError"]);
+const PAUSING_ERRORS = new Set(["AbortError"]);
 /** How near a song's start the file may already be for it to play on without a seek, in seconds. */
 const IN_PLACE = 0.25;
 /** The plays the server will never accept, so retrying them is pointless. */
@@ -133,6 +147,9 @@ export function usePlayer(
   // A restored queue starts paused at its saved position, once its Track's metadata loads.
   const restore = useRef<number | undefined>(undefined);
   const resumeAt = useRef<number | undefined>(undefined);
+  // A queue taken from elsewhere plays on, or pauses, from its second; its play may have counted.
+  const takenPlaying = useRef(false);
+  const takenCounted = useRef(false);
   const listening = useRef<{ play: Play; time: PlayTime; counted: boolean } | undefined>(undefined);
   const lastSaved = useRef(0);
   // The current song's stretch of its file, the timer that ends it, and the entry last ended.
@@ -206,6 +223,10 @@ export function usePlayer(
     const restoring = restore.current;
     restore.current = undefined;
     resumeAt.current = restoring;
+    const playOn = restoring === undefined || takenPlaying.current;
+    const counted = takenCounted.current;
+    takenPlaying.current = false;
+    takenCounted.current = false;
     void (async () => {
       try {
         const answer = await answerFor(trackId, ahead.current, () => {
@@ -229,25 +250,31 @@ export function usePlayer(
           return;
         }
         listen(trackId);
+        if (counted && listening.current !== undefined) {
+          listening.current.counted = true;
+        }
         const song = stretchOf(answer);
         stretch.current = song;
         if (playsFrom(element, answer.audio_url)) {
-          // A song of the file already loaded: play on, from its start.
-          if (Math.abs(element.currentTime - song.start) > IN_PLACE) {
-            element.currentTime = song.start;
+          // A song of the file already loaded: play on, from its start or the second taken.
+          const from =
+            restoring === undefined ? song.start : fileTimeOf(song, restoring, element.duration);
+          resumeAt.current = undefined;
+          if (Math.abs(element.currentTime - from) > IN_PLACE) {
+            element.currentTime = from;
           }
           // Playing on fires no `play` event, so the new entry says it is playing itself.
           show(key, {
             duration: lengthOf(song, element.duration),
             ...(element.paused ? {} : { status: { kind: "playing" } }),
           });
-          if (element.paused) {
+          if (element.paused && playOn) {
             await element.play();
           }
           return;
         }
         element.src = answer.audio_url;
-        if (restoring === undefined) {
+        if (playOn) {
           await element.play();
         } else {
           show(key, { status: { kind: "paused" } });
@@ -595,6 +622,29 @@ export function usePlayer(
       saveVolume(within);
     },
     setMuted,
+    handoff: () =>
+      key === undefined
+        ? undefined
+        : {
+            queue,
+            seconds: shown?.position ?? 0,
+            counted: listening.current?.counted ?? false,
+          },
+    take: (handoff, playing) => {
+      const taking = current(handoff.queue);
+      dispatch({ type: "restore", queue: handoff.queue });
+      if (taking !== undefined && taking.key === key) {
+        // The entry already playing here: only its second and whether it plays change.
+        seek(handoff.seconds);
+        if (playing === audio.current?.paused) {
+          toggle();
+        }
+        return;
+      }
+      restore.current = handoff.seconds;
+      takenPlaying.current = playing;
+      takenCounted.current = handoff.counted;
+    },
   };
   return [player, audio];
 }
@@ -604,7 +654,10 @@ function failureOf(error: unknown): Status | undefined {
   if (error instanceof ApiError && error.status === 401) {
     return undefined;
   }
-  // `play()` refused before a tap, or interrupted by a pause, leaves the Track paused.
+  // `play()` refused before anyone pressed play waits for a press; interrupted, it pauses.
+  if (error instanceof DOMException && error.name === "NotAllowedError") {
+    return { kind: "blocked", message: "Press play to start." };
+  }
   if (error instanceof DOMException && PAUSING_ERRORS.has(error.name)) {
     return { kind: "paused" };
   }

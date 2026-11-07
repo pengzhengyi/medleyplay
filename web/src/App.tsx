@@ -17,6 +17,8 @@ import { SignIn } from "./views/SignIn";
 export function App() {
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
   const [keptOut, setKeptOut] = useState<DeviceInfo | null>(null);
+  // Whether this page is on the computer medleyplay runs on, so it plays for the Account.
+  const [onHost, setOnHost] = useState(false);
 
   const askWhoIsSignedIn = () => {
     api.me().then(setAccount, () => {
@@ -24,6 +26,7 @@ export function App() {
     });
   };
   const answered = (device: DeviceInfo) => {
+    setOnHost(device.presence === "host");
     if (letIn(device)) {
       setKeptOut(null);
       askWhoIsSignedIn();
@@ -54,6 +57,7 @@ export function App() {
   return (
     <Library
       account={account}
+      onHost={onHost}
       onSignedOut={() => {
         setAccount(null);
       }}

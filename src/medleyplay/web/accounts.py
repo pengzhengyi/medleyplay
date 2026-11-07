@@ -1,5 +1,7 @@
 """The Accounts API: first-time setup, signing in and out, and managing Accounts."""
 
+import logging
+
 from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel, Field
 
@@ -16,6 +18,8 @@ from medleyplay.web.deps import (
 )
 from medleyplay.web.devices import give_cookie, visit_of
 from medleyplay.web.ids import RowId
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["accounts"])
 
@@ -88,13 +92,19 @@ def set_up(
 ) -> AccountOut:
     """Create the first Account, as an admin, and sign it in; refused once set up.
 
-    A device other than the host that sets up is allowed.
+    A device other than the host that sets up is allowed. Should allowing it
+    fail, its session still lets it in the next time it asks.
     """
-    signed_in = accounts.create_first_admin(body.to_new_account())
     visit = visit_of(request, None)
+    signed_in = accounts.create_first_admin(
+        body.to_new_account(), from_before_devices=not visit.host
+    )
     if not visit.host:
         user_agent = request.headers.get("user-agent", "")
-        give_cookie(response, devices.allow_first(visit, user_agent, session_token=signed_in.token))
+        try:
+            give_cookie(response, devices.ask(visit, user_agent, session_token=signed_in.token))
+        except Exception:  # noqa: BLE001 -- the household is set up; the device is allowed later
+            _log.exception("Allowing the device that set up failed")
     return _with_cookie(response, signed_in)
 
 

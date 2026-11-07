@@ -8,8 +8,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from medleyplay.web import events as events_api
 from medleyplay.web.app import create_app
-from medleyplay.web.deps import Services
+from medleyplay.web.deps import DEVICE_COOKIE, Services
 from tests.conftest import TEST_HOST
 from tests.support.api import ALICE_SETUP, HOST_PEER, add_bob, set_up_as_alice, sign_in
 from tests.support.factories import PASSWORD
@@ -198,11 +199,54 @@ def test_the_phone_that_sets_up_is_allowed(phone: TestClient) -> None:
     assert phone.get("/api/me").json()["username"] == "alice"
 
 
-def test_a_forwarded_request_from_loopback_is_not_the_host(
-    alice_on_host: TestClient,
+def test_a_phone_that_sets_up_is_still_signed_in_when_allowing_it_fails(
+    phone: TestClient, services: Services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    response = alice_on_host.get("/api/me", headers={"X-Forwarded-For": "192.168.1.23"})
+    def fail(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise RuntimeError
 
+    monkeypatch.setattr(services.devices, "ask", fail)
+
+    response = phone.post("/api/setup", json=ALICE_SETUP)
+
+    assert response.status_code == 201
+    monkeypatch.undo()
+    assert phone.get("/api/device").json()["presence"] == "allowed"
+    assert phone.get("/api/me").json()["username"] == "alice"
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Forwarded",
+        "X-Forwarded-For",
+        "X-Forwarded-Host",
+        "X-Forwarded-Proto",
+        "X-Real-IP",
+        "Via",
+        "CF-Connecting-IP",
+        "True-Client-IP",
+    ],
+)
+def test_a_forwarded_request_from_loopback_is_not_the_host(
+    alice_on_host: TestClient, header: str
+) -> None:
+    response = alice_on_host.get("/api/me", headers={header: "192.168.1.23"})
+
+    assert response.json()["code"] == "device_waiting"
+
+
+@pytest.mark.parametrize("path", ["/openapi.json", "/docs", "/redoc"])
+def test_the_api_description_is_refused_to_a_waiting_phone(
+    alice_on_host: TestClient, phone: TestClient, path: str
+) -> None:
+    del alice_on_host  # set up
+    waiting_phone(phone)
+
+    response = phone.get(path)
+
+    assert response.status_code == 403
     assert response.json()["code"] == "device_waiting"
 
 
@@ -214,6 +258,42 @@ def test_allow_all_lets_a_new_phone_sign_in(alice_on_host: TestClient, phone: Te
 
     assert phone.get("/api/device").json()["presence"] == "admitted"
     assert alice_on_host.get("/api/devices").json()["allowed"] == []
+
+
+def test_leaving_allow_all_on_a_phone_keeps_that_phone_in(
+    alice_on_host: TestClient, phone: TestClient
+) -> None:
+    revision = alice_on_host.get("/api/devices").json()["revision"]
+    alice_on_host.put("/api/devices/setting", json={"admission": "everyone", "revision": revision})
+    sign_in(phone, "alice")
+
+    response = phone.put(
+        "/api/devices/setting", json={"admission": "ask", "revision": revision + 1}
+    )
+
+    assert response.status_code == 200, response.text
+    assert DEVICE_COOKIE in response.cookies
+    assert [d["this_device"] for d in response.json()["allowed"]] == [True]
+    assert phone.get("/api/me").json()["username"] == "alice"
+
+
+def test_a_phone_event_stream_ends_once_the_phone_is_no_longer_let_in(
+    alice_on_host: TestClient, phone: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(events_api, "SESSION_CHECK_SECONDS", 0.05)
+    revision = alice_on_host.get("/api/devices").json()["revision"]
+    alice_on_host.put("/api/devices/setting", json={"admission": "everyone", "revision": revision})
+    sign_in(phone, "alice")
+
+    with phone.stream("GET", "/api/events") as stream:
+        lines = stream.iter_lines()
+        assert next(lines) == "event: ready"
+        alice_on_host.put(
+            "/api/devices/setting", json={"admission": "known", "revision": revision + 1}
+        )
+        list(lines)  # returns once the stream ends
+
+    assert phone.get("/api/me").json()["code"] == "device_refused"
 
 
 def test_a_stale_choice_answers_409(alice_on_host: TestClient) -> None:

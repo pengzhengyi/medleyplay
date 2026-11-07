@@ -2,13 +2,14 @@
 
 import itertools
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import timedelta
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application.accounts import SESSION_IDLE_TIMEOUT, AccountService
+from medleyplay.application.accounts import SESSION_IDLE_TIMEOUT, AccountService, SignedIn
 from medleyplay.application.devices import (
     MAX_WAITING,
     MAX_WAITING_FROM_ONE_ADDRESS,
@@ -75,6 +76,31 @@ def allowed_phone(devices: DeviceService, alice: Account, address: str = "192.16
     waiting = devices.devices(alice).waiting
     devices.allow(alice, waiting[-1].id)
     return asked
+
+
+def alice_signs_in(accounts: AccountService) -> SignedIn:
+    """Alice signs in on a device that isn't recorded, as one let in by Allow all."""
+    admin = NewAccountFactory.admin()
+    return accounts.sign_in(admin.username, admin.password)
+
+
+class CommitFailedError(Exception):
+    """The database refused to commit."""
+
+
+@contextmanager
+def failing_commits(units: sessionmaker[Session]) -> Iterator[None]:
+    """Every commit fails while inside, as when the disk is full."""
+
+    def fail(session: Session) -> None:
+        del session
+        raise CommitFailedError
+
+    event.listen(units, "before_commit", fail)
+    try:
+        yield
+    finally:
+        event.remove(units, "before_commit", fail)
 
 
 class TestAsking:
@@ -240,6 +266,18 @@ class TestAnswering:
         assert (during, after) == (Presence.REFUSED, Presence.WAITING)
         assert devices.admit(phone(token)) == (Verdict.WAITING, None)
 
+    def test_an_allow_that_fails_to_save_leaves_the_device_waiting(
+        self, devices: DeviceService, alice: Account, units: sessionmaker[Session]
+    ) -> None:
+        token = asked_from_phone(devices).token
+        waiting_id = devices.devices(alice).waiting[0].id
+
+        with failing_commits(units), pytest.raises(CommitFailedError):
+            devices.allow(alice, waiting_id)
+
+        assert devices.admit(phone(token)) == (Verdict.WAITING, None)
+        assert [w.id for w in devices.devices(alice).waiting] == [waiting_id]
+
     def test_answering_a_device_no_longer_waiting_is_not_found(
         self, devices: DeviceService, alice: Account
     ) -> None:
@@ -340,15 +378,15 @@ class TestUpgrading:
 
 
 class TestSettingUp:
-    def test_the_device_that_sets_up_is_allowed_with_its_session(
+    def test_the_device_that_sets_up_is_allowed_with_its_session_when_it_asks(
         self, devices: DeviceService, accounts: AccountService, units: sessionmaker[Session]
     ) -> None:
-        signed_in = accounts.create_first_admin(NewAccountFactory.admin())
+        signed_in = accounts.create_first_admin(NewAccountFactory.admin(), from_before_devices=True)
 
-        enrolled = devices.allow_first(phone(), SAFARI_ON_IPHONE, session_token=signed_in.token)
+        asked = devices.ask(phone(), SAFARI_ON_IPHONE, session_token=signed_in.token)
 
-        assert devices.admit(phone(enrolled.token)) == (Verdict.ADMITTED, enrolled.device_id)
-        assert _session_device(units) == enrolled.device_id
+        assert devices.admit(phone(asked.token)) == (Verdict.ADMITTED, asked.device_id)
+        assert _session_device(units) == asked.device_id
 
 
 class TestRemoving:
@@ -393,6 +431,17 @@ class TestRemoving:
 
         assert [d.id for d in devices.devices(alice).allowed] == [mine]
 
+    def test_a_remove_that_fails_to_save_keeps_the_device_in(
+        self, devices: DeviceService, alice: Account, units: sessionmaker[Session]
+    ) -> None:
+        token = allowed_phone(devices, alice).token
+        device_id = devices.devices(alice).allowed[0].id
+
+        with failing_commits(units), pytest.raises(CommitFailedError):
+            devices.remove(alice, device_id, by=None)
+
+        assert devices.admit(phone(token)) == (Verdict.ADMITTED, device_id)
+
     def test_removing_a_device_already_gone_does_nothing(
         self, devices: DeviceService, alice: Account
     ) -> None:
@@ -413,6 +462,73 @@ class TestTheChoice:
 
         with pytest.raises(ConflictError):
             devices.put_admission(alice, Admission.KNOWN, revision)
+
+    def test_a_change_that_fails_to_save_changes_nothing(
+        self, devices: DeviceService, alice: Account, units: sessionmaker[Session]
+    ) -> None:
+        revision = devices.devices(alice).revision
+
+        with failing_commits(units), pytest.raises(CommitFailedError):
+            devices.put_admission(alice, Admission.KNOWN, revision)
+
+        listed = devices.devices(alice)
+        assert (listed.admission, listed.revision) == (Admission.ASK, revision)
+
+    @pytest.mark.parametrize(
+        ("admission", "then"),
+        [(Admission.EVERYONE, Presence.ADMITTED), (Admission.KNOWN, Presence.REFUSED)],
+    )
+    def test_choosing_not_to_ask_answers_every_waiting_device(
+        self, devices: DeviceService, alice: Account, admission: Admission, then: Presence
+    ) -> None:
+        token = asked_from_phone(devices).token
+        told: list[None] = []
+        devices.listen(lambda: told.append(None))
+
+        saved = devices.put_admission(alice, admission, devices.devices(alice).revision)
+
+        assert saved.view.waiting == ()
+        assert told == [None]
+        assert asked_from_phone(devices, phone(token)).presence is then
+
+    def test_leaving_allow_all_allows_the_device_making_the_change_with_its_session(
+        self,
+        devices: DeviceService,
+        alice: Account,
+        accounts: AccountService,
+        units: sessionmaker[Session],
+    ) -> None:
+        devices.put_admission(alice, Admission.EVERYONE, devices.devices(alice).revision)
+        on_phone = alice_signs_in(accounts)
+
+        saved = devices.put_admission(
+            alice,
+            Admission.ASK,
+            devices.devices(alice).revision,
+            this=phone(),
+            user_agent=SAFARI_ON_IPHONE,
+            session_token=on_phone.token,
+        )
+
+        assert saved.allowed is not None
+        assert saved.allowed.token is not None
+        assert devices.admit(phone(saved.allowed.token)) == (
+            Verdict.ADMITTED,
+            saved.allowed.device_id,
+        )
+        assert [(d.id, d.label) for d in saved.view.allowed] == [
+            (saved.allowed.device_id, "Safari on iPhone")
+        ]
+        assert _session_device(units, any_device=True) == saved.allowed.device_id
+
+    def test_leaving_allow_all_on_the_host_allows_no_device(
+        self, devices: DeviceService, alice: Account
+    ) -> None:
+        devices.put_admission(alice, Admission.EVERYONE, devices.devices(alice).revision)
+
+        saved = devices.put_admission(alice, Admission.ASK, devices.devices(alice).revision)
+
+        assert (saved.allowed, saved.view.allowed) == (None, ())
 
     def test_only_an_admin_changes_it(
         self, devices: DeviceService, alice: Account, accounts: AccountService

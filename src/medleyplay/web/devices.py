@@ -1,8 +1,9 @@
 """The devices API, and the check that admits each request before anything else answers it.
 
-A request under `/api` from a device the household hasn't let in is refused
-with `403`, code `device_waiting` or `device_refused`; `GET /api/device`, where
-a device asks, and the web client's files answer it still.
+A request under `/api`, or for the API's description, from a device the
+household hasn't let in is refused with `403`, code `device_waiting` or
+`device_refused`; `GET /api/device`, where a device asks, and the web client's
+files answer it still.
 """
 
 from collections.abc import Awaitable, Callable
@@ -37,7 +38,19 @@ router = APIRouter(prefix="/api", tags=["devices"])
 DEVICE_COOKIE_DAYS: Final = 400
 """The longest a browser keeps a cookie."""
 ASK_PATH: Final = "/api/device"
-_FORWARDING_HEADERS: Final = ("forwarded", "x-forwarded-for", "via")
+_DESCRIPTION_PATHS: Final = frozenset({"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"})
+"""FastAPI's description of the API, which shows a device what it could ask."""
+_FORWARDING_HEADERS: Final = (
+    "forwarded",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-real-ip",
+    "via",
+    "cf-connecting-ip",
+    "true-client-ip",
+)
+"""Headers a proxy adds; a request carrying one came through a proxy, so isn't the host's."""
 _REFUSALS: Final = {
     Verdict.WAITING: (
         "device_waiting",
@@ -140,9 +153,8 @@ async def admit_devices(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     """Refuse a request under `/api` from a device not let in; note the device it comes from."""
-    path = request.url.path
     request.state.device_id = None
-    if path == ASK_PATH or not (path == "/api" or path.startswith("/api/")):
+    if not _checked(request.url.path):
         return await call_next(request)
     devices = services_of(request).devices
     visit = visit_of(request, request.cookies.get(DEVICE_COOKIE))
@@ -153,6 +165,12 @@ async def admit_devices(
         return JSONResponse({"detail": detail, "code": code}, status_code=status.HTTP_403_FORBIDDEN)
     request.state.device_id = device_id
     return await call_next(request)
+
+
+def _checked(path: str) -> bool:
+    if path == ASK_PATH:
+        return False
+    return path == "/api" or path.startswith("/api/") or path in _DESCRIPTION_PATHS
 
 
 def give_cookie(response: Response, asked: Asked) -> None:
@@ -195,11 +213,34 @@ def list_devices(me: SignedInAccount, devices: DevicesDep, this: ThisDevice) -> 
 
 
 @router.put("/devices/setting")
-def put_admission(
-    body: AdmissionIn, me: SignedInAccount, devices: DevicesDep, this: ThisDevice
+def put_admission(  # noqa: PLR0913 -- the change, and the device making it
+    body: AdmissionIn,
+    request: Request,
+    response: Response,
+    *,
+    me: SignedInAccount,
+    devices: DevicesDep,
+    this: ThisDevice,
+    token: DeviceToken = None,
+    session: SessionToken = None,
 ) -> DevicesOut:
-    """Change the choice read at `revision`; a stale revision answers 409. Admins only."""
-    return DevicesOut.of(devices.put_admission(me, body.admission, body.revision), this)
+    """Change the choice read at `revision`; a stale revision answers 409. Admins only.
+
+    Leaving Allow all from a device not yet allowed allows it, giving it its
+    cookie, so the change doesn't shut it out.
+    """
+    saved = devices.put_admission(
+        me,
+        body.admission,
+        body.revision,
+        this=visit_of(request, token),
+        user_agent=request.headers.get("user-agent", ""),
+        session_token=session,
+    )
+    if saved.allowed is None:
+        return DevicesOut.of(saved.view, this)
+    give_cookie(response, saved.allowed)
+    return DevicesOut.of(saved.view, saved.allowed.device_id)
 
 
 @router.post("/devices/{device_id}/allow")

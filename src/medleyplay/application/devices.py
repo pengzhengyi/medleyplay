@@ -2,8 +2,10 @@
 
 The choice and the allowed devices are kept in memory, written through to the
 database on every change, so admitting a request reads no table; one server
-process owns the database. Devices waiting for an answer, or turned away, live
-only in memory: forgotten on restart, they ask again.
+process owns the database. A change commits to the database first and only then
+changes memory, so a failed commit changes nothing. Devices waiting for an
+answer, or turned away, live only in memory: forgotten on restart, they ask
+again.
 
 ```text
 GET /api/device -> ask: host | allowed | admitted | waiting (with a code) | refused
@@ -113,6 +115,14 @@ class DevicesView:
     allowed: tuple[Device, ...]
 
 
+@dataclass(frozen=True)
+class AdmissionSaved:
+    """The devices after a change of the choice; `allowed` is the device making it, if allowed."""
+
+    view: DevicesView
+    allowed: Asked | None = None
+
+
 @dataclass
 class _Known:
     """What memory holds, guarded by the service's lock."""
@@ -147,6 +157,9 @@ class DeviceService:
         self._new_code = new_code
         self._new_id = new_id
         self._lock = threading.Lock()
+        """Guards memory; held only briefly, never while the database writes."""
+        self._writing = threading.Lock()
+        """Lets one change at a time commit to the database and then change memory."""
         self._known: _Known | None = None
         self._set_up = False
         self._listeners: list[Callable[[], None]] = []
@@ -196,6 +209,9 @@ class DeviceService:
         with self._lock:
             known = self._load()
             hashed = None if visit.token is None else hash_token(visit.token)
+            if hashed is not None and hashed in known.allowed:  # allowed since it was admitted
+                device = known.allowed[hashed]
+                return Asked(Presence.ALLOWED, device.label, device.id)
             if verdict is Verdict.REFUSED or self._full(known, visit.address, hashed):
                 return Asked(Presence.REFUSED, label)
             if hashed is not None and hashed in known.waiting:
@@ -218,57 +234,88 @@ class DeviceService:
         from_address = sum(w.address == address for w in known.waiting.values())
         return len(known.waiting) >= MAX_WAITING or from_address >= MAX_WAITING_FROM_ONE_ADDRESS
 
-    def allow_first(self, visit: Visit, user_agent: str, *, session_token: str) -> Asked:
-        """Allow the device that set the household up, and link its new session to it."""
-        token = self._new_token()
-        with self._units.begin() as db:
-            session = db.scalars(
-                select(SessionRow).where(SessionRow.token_hash == hash_token(session_token))
-            ).one()
-            with self._lock:
-                known = self._load()
-                device = self._insert(db, hash_token(token), label_of(user_agent), visit.address)
-                session.device_id = device.id
-                known.allowed[hash_token(token)] = device
-        return Asked(Presence.ALLOWED, device.label, device.id, token=token)
-
     def devices(self, caller: Account) -> DevicesView:
         """Return the choice and the devices; admins only."""
         _require_admin(caller)
         with self._lock:
             return self._view(self._load())
 
-    def put_admission(self, caller: Account, admission: Admission, revision: int) -> DevicesView:
-        """Change the choice read at `revision`; a stale one conflicts. Admins only."""
+    def put_admission(
+        self,
+        caller: Account,
+        admission: Admission,
+        revision: int,
+        *,
+        this: Visit | None = None,
+        user_agent: str = "",
+        session_token: str | None = None,
+    ) -> AdmissionSaved:
+        """Change the choice read at `revision`; a stale one conflicts. Admins only.
+
+        `this` is the device making the change, None for the host. Leaving Allow
+        all allows it, with its session, so the change can't shut it out. Any
+        choice but Ask first answers the waiting devices: they are admitted or
+        refused when they next ask.
+        """
         _require_admin(caller)
-        with self._units.begin() as db, self._lock:
-            known = self._load()
-            changed = known.document.model_copy(update={"admission": admission})
-            if revision != known.revision or (
-                changed != known.document and not _save(db, changed, revision, self._clock())
-            ):
-                message = "The choice for new devices changed since you read it; read it again."
-                raise ConflictError(message)
-            if changed != known.document:
+        with self._writing:
+            with self._lock:
+                known = self._load()
+                current = known.document
+                hashed = None if this is None or this.token is None else hash_token(this.token)
+                recorded = hashed is not None and hashed in known.allowed
+                kept_in = this is None or this.host or recorded
+            if revision != known.revision:
+                raise _stale_choice()
+            changed = current.model_copy(update={"admission": admission})
+            if changed == current:
+                with self._lock:
+                    return AdmissionSaved(self._view(known))
+            enrolling = this is not None and admission is not Admission.EVERYONE and not kept_in
+            token = self._new_token() if enrolling else None
+            with self._units.begin() as db:
+                if not _save(db, changed, revision, self._clock()):
+                    raise _stale_choice()
+                device = None
+                if this is not None and token is not None:
+                    device = self._insert(db, hash_token(token), label_of(user_agent), this.address)
+                    _link_session(db, session_token, device.id)
+            with self._lock:
                 known.document, known.revision = changed, revision + 1
-            return self._view(known)
+                answered = admission is not Admission.ASK and bool(known.waiting)
+                if answered:
+                    known.waiting.clear()
+                if device is not None and token is not None:
+                    known.allowed[hash_token(token)] = device
+                view = self._view(known)
+        if answered:
+            self._tell()
+        allowed = (
+            None
+            if device is None
+            else Asked(Presence.ALLOWED, device.label, device.id, token=token)
+        )
+        return AdmissionSaved(view, allowed)
 
     def allow(self, caller: Account, waiting_id: DeviceId) -> Device:
         """Allow a waiting device; admins only."""
         _require_admin(caller)
-        with self._units.begin() as db, self._lock:
-            known = self._load()
-            hashed, waiting = self._waiting(known, waiting_id)
-            device = self._insert(db, hashed, waiting.label, waiting.address, waiting.id)
-            del known.waiting[hashed]
-            known.allowed[hashed] = device
+        with self._writing:
+            with self._lock:
+                hashed, waiting = self._waiting(self._load(), waiting_id)
+            with self._units.begin() as db:
+                device = self._insert(db, hashed, waiting.label, waiting.address, waiting.id)
+            with self._lock:
+                known = self._load()
+                known.waiting.pop(hashed, None)
+                known.allowed[hashed] = device
         self._tell()
         return device
 
     def turn_away(self, caller: Account, waiting_id: DeviceId) -> None:
         """Refuse a waiting device for a day; admins only."""
         _require_admin(caller)
-        with self._lock:
+        with self._writing, self._lock:
             known = self._load()
             hashed, _ = self._waiting(known, waiting_id)
             del known.waiting[hashed]
@@ -295,38 +342,46 @@ class DeviceService:
         self._forget(lambda device: device.id != by)
 
     def _forget(self, chosen: Callable[[Device], bool]) -> None:
-        with self._units.begin() as db, self._lock:
-            known = self._load()
-            gone = {hashed: d for hashed, d in known.allowed.items() if chosen(d)}
-            if gone:
+        with self._writing:
+            with self._lock:
+                known = self._load()
+                gone = {hashed: d for hashed, d in known.allowed.items() if chosen(d)}
+            if not gone:
+                return
+            with self._units.begin() as db:
                 # Each device's sessions go with it, by the foreign key.
                 db.execute(delete(DeviceRow).where(DeviceRow.id.in_([d.id for d in gone.values()])))
-            for hashed in gone:
-                del known.allowed[hashed]
+            with self._lock:
+                for hashed in gone:
+                    known.allowed.pop(hashed, None)
 
     def _enroll_from_before(
         self, visit: Visit, label: str, session_token: str | None
     ) -> Asked | None:
-        """Allow a browser signed in before devices began, and link its session to it."""
+        """Allow a browser signed in before devices were checked, and link its session to it.
+
+        That is a session from before the upgrade, or the one that set the
+        household up from a device other than the host.
+        """
         if session_token is None:
             return None
         now = self._clock()
-        with self._units.begin() as db:
-            session = db.scalars(
-                select(SessionRow).where(
-                    SessionRow.token_hash == hash_token(session_token),
-                    SessionRow.from_before_devices,
-                    SessionRow.device_id.is_(None),
-                )
-            ).one_or_none()
-            if session is None or now - session.last_seen_at > SESSION_IDLE_TIMEOUT:
-                return None
-            token = self._new_token()
-            with self._lock:
-                known = self._load()
+        with self._writing:
+            with self._units.begin() as db:
+                session = db.scalars(
+                    select(SessionRow).where(
+                        SessionRow.token_hash == hash_token(session_token),
+                        SessionRow.from_before_devices,
+                        SessionRow.device_id.is_(None),
+                    )
+                ).one_or_none()
+                if session is None or now - session.last_seen_at > SESSION_IDLE_TIMEOUT:
+                    return None
+                token = self._new_token()
                 device = self._insert(db, hash_token(token), label, visit.address)
                 session.device_id = device.id
-                known.allowed[hash_token(token)] = device
+            with self._lock:
+                self._load().allowed[hash_token(token)] = device
         return Asked(Presence.ALLOWED, label, device.id, token=token)
 
     def _is_set_up(self) -> bool:
@@ -439,6 +494,19 @@ def _require_admin(caller: Account) -> None:
     if not caller.is_admin:
         message = "Only an admin can answer devices or change who may connect."
         raise ForbiddenError(message)
+
+
+def _stale_choice() -> ConflictError:
+    return ConflictError("The choice for new devices changed since you read it; read it again.")
+
+
+def _link_session(db: Session, session_token: str | None, device_id: DeviceId) -> None:
+    if session_token is not None:
+        db.execute(
+            update(SessionRow)
+            .where(SessionRow.token_hash == hash_token(session_token))
+            .values(device_id=device_id)
+        )
 
 
 def _to_device(row: DeviceRow) -> Device:

@@ -98,11 +98,13 @@ class AccountService:
         with self._units() as db:
             return bool(db.scalar(select(exists().select_from(AccountRow))))
 
-    def create_first_admin(self, new: NewAccount, *, device_id: DeviceId | None = None) -> SignedIn:
-        """Create the household's first Account as an admin, and sign it in on `device_id`.
+    def create_first_admin(self, new: NewAccount, *, from_before_devices: bool = False) -> SignedIn:
+        """Create the household's first Account as an admin, and sign it in.
 
         Only one caller can ever succeed: the insert itself checks that no Account
         exists, so two simultaneous first registrations can't both become admin.
+        `from_before_devices` marks the session as started before devices were
+        checked, so the device it is on is allowed when it asks.
         """
         username, display_name = parse_username(new.username), parse_display_name(new.display_name)
         check_password(new.password)
@@ -122,7 +124,7 @@ class AccountService:
                 raise ConflictError(message)
             row = db.scalars(select(AccountRow).where(AccountRow.username == username)).one()
             ensure_builtin_playlists(db, self._clock(), AccountId(row.id))
-            return self._start_session(db, row, device_id)
+            return self._start_session(db, row, None, from_before_devices=from_before_devices)
 
     def create_account(self, caller: Account, new: NewAccount) -> Account:
         """Create an Account; only an admin may, and only with several Accounts turned on."""
@@ -247,7 +249,14 @@ class AccountService:
             row.password_hash = self._hasher.hash(password)
             db.execute(delete(SessionRow).where(SessionRow.account_id == row.id))
 
-    def _start_session(self, db: Session, row: AccountRow, device_id: DeviceId | None) -> SignedIn:
+    def _start_session(
+        self,
+        db: Session,
+        row: AccountRow,
+        device_id: DeviceId | None,
+        *,
+        from_before_devices: bool = False,
+    ) -> SignedIn:
         token = self._new_token()
         now = self._clock()
         db.add(
@@ -255,6 +264,7 @@ class AccountService:
                 account_id=row.id,
                 token_hash=hash_token(token),
                 device_id=device_id,
+                from_before_devices=from_before_devices,
                 created_at=now,
                 last_seen_at=now,
             )

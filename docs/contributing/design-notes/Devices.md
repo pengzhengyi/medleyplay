@@ -36,7 +36,8 @@
   turned away, is kept in memory and forgotten on restart; it simply asks
   again.
 - **No change cuts off the device making it.** An admin on a phone can't
-  remove that phone from that phone.
+  remove that phone from that phone, and leaving *Allow all* from it allows
+  it.
 
 ## Who is admitted
 
@@ -53,18 +54,24 @@ what is known of the device:
 
 - **Allow all opens the door and records nothing.** Its devices aren't added
   to the list, so changing back to *Ask first* asks each of them, a guest's
-  phone included.
+  phone included. The one device that isn't asked is the one making the
+  change: it is allowed then, with its session, and given its cookie.
+- **A choice other than *Ask first* answers every waiting device.** The list
+  of waiting devices empties; each is admitted or refused when it next asks.
 - **Before the first account exists there is nothing to protect**, and the
   household may set up from a phone; the device that sets up is allowed.
 - **Upgrading keeps everyone in.** The upgrade marks each session it finds, and
   a browser holding one is allowed the first time it asks, so a server with no
   screen isn't locked out by the upgrade. Sessions idle out after 30 days, so
-  this ends by itself.
+  this ends by itself. Setting up from a device other than the host marks its
+  session the same way, so should allowing it fail, it is allowed when it next
+  asks.
 
 A request that isn't admitted gets `403` with code `device_waiting` or
 `device_refused`. What still answers: the web client's files, so a waiting
 device can say it is waiting, and `GET /api/device`, its own state. Every other
-path under `/api`, sign-in included, is refused.
+path under `/api`, sign-in included, is refused, as is the API's description
+at `/openapi.json`, `/docs`, and `/redoc`.
 
 The check is a middleware that runs after the Host check and before the Origin
 check.
@@ -80,9 +87,9 @@ a new interface or a new DHCP lease changes nothing.
   as `::ffff:192.168.1.5`, is unwrapped first.
 - **Forwarding headers are ignored.** The server runs with Uvicorn's
   `proxy_headers` off, so `X-Forwarded-For` never becomes the peer, and a
-  request carrying `Forwarded`, `X-Forwarded-For`, or `Via` is never the host:
-  behind a proxy on the host, every request would otherwise come from
-  loopback.
+  request carrying a header a proxy adds, as `Forwarded`, `X-Forwarded-For`,
+  `X-Real-IP`, or `Via`, is never the host: behind a proxy on the host, every
+  request would otherwise come from loopback.
 
 ## A device
 
@@ -106,14 +113,17 @@ the same host does nothing.
 - **A session belongs to the device it signed in on.** Removing a device ends
   its sessions, and with them its event stream within 15 seconds, so allowing
   it again later means signing in again. The host's sessions belong to no
-  device.
+  device. The stream also checks every 15 seconds that its device is still
+  admitted, so one let in by *Allow all* stops hearing once the choice changes.
 - **The label is a guess for people**, worked out from the User-Agent in a few
   lines: the browser (Edge, Chrome, Firefox, Safari) and the system (iPhone,
   iPad, Android, Mac, Windows, Linux). Nothing decides on it.
 - **`last_seen_at` is written at most once a minute** for a device, so
   admitting a request reads memory without writing to the database. The
   service keeps the choice and the allowed devices in memory, written through
-  on every change; one server process owns the database.
+  on every change; one server process owns the database. A change commits
+  first and then changes memory, one change at a time, so a failed commit
+  changes nothing and admitting a request never waits on a write.
 
 ## Asking and answering
 
@@ -133,7 +143,10 @@ phone: GET /api/device says allowed ──> the sign-in form
   ask again on every poll.
 - **Waiting is bounded.** At most 10 devices wait, at most 3 from one address,
   each for at most an hour. A device that would be one too many is refused
-  until a place frees, rather than pushing out one already waiting.
+  until a place frees, rather than pushing out one already waiting. A device
+  on the LAN that changes its address and clears its cookies can fill the
+  places; then new devices are refused, the host and allowed devices are not,
+  and turning the waiting ones away frees them.
 
 ## Settings and the API
 
@@ -184,13 +197,16 @@ session's.
   frees a place; a device turned away stays refused for a day; `last_seen_at`
   is written at most once a minute; a pre-upgrade session is allowed; removing
   a device ends its sessions; removing the device making the request is
-  refused; a stale revision conflicts.
+  refused; a stale revision conflicts; leaving *Allow all* allows the device
+  making the change; a commit that fails changes nothing.
 - **Persistence:** the upgrade marks the sessions it finds, and undoing it
   keeps them.
 - **Web:** through the app with test clients whose addresses are set: the host
   is admitted without a cookie; a phone waits, is allowed, and signs in; the
-  client's files answer a waiting device; a forwarded request from loopback is
-  not the host; an admin's event stream names the waiting devices.
+  client's files answer a waiting device and the API's description doesn't; a
+  request from loopback carrying any forwarding header is not the host; an
+  admin's event stream names the waiting devices; a phone's stream ends once
+  it is no longer admitted.
 - **Client:** the waiting screen, the header pill, and the Settings section,
   with a stand-in server. The browser tests run on the host, so they never see
   the waiting screen; it is checked with the stand-in only.

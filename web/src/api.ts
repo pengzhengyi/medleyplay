@@ -38,6 +38,8 @@ export interface Track {
   readonly split: boolean;
   /** Whether the Track is a song or a whole album in one file. */
   readonly kind: Kind;
+  /** Why it is that kind: settled, as named or split, or guessed. */
+  readonly kind_reason: KindReason;
   /** The cover shown, by name, served at `coverUrl(cover)`. */
   readonly cover: string | null;
 }
@@ -47,9 +49,15 @@ export type Kind = "song" | "album";
 
 /**
  * Why a Track is the kind it is: an origin names it, its file is split, it is a song of
- * a split file, or it is guessed from its file's length.
+ * a split file, it is guessed from its file's length, or, the household guessing none,
+ * no one named it, so it is a song.
  */
-export type KindReason = "named" | "split" | "segment" | "length";
+export type KindReason = "named" | "split" | "segment" | "length" | "default";
+
+/** Return whether a Track's kind is settled, rather than guessed or assumed. */
+export function kindSettled(reason: KindReason): boolean {
+  return reason === "named" || reason === "split" || reason === "segment";
+}
 
 /** Return where the cover named `cover` is served. */
 export function coverUrl(cover: string): string {
@@ -247,6 +255,8 @@ export interface Settings {
   /** The most the Downloads and cache may use, in bytes, or `null` for no limit. */
   readonly storage_limit: number | null;
   readonly removal_order: "least_favorite";
+  /** A file this many minutes or longer is guessed an album; `null` guesses none. */
+  readonly album_minutes: number | null;
   readonly revision: number;
 }
 

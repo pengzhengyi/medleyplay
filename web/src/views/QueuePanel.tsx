@@ -34,9 +34,11 @@ import { formatQueueLength } from "../format";
 import { songsByFile } from "../library/playOrder";
 import { type Entry, upNext } from "../player/queue";
 import type { Player } from "../player/usePlayer";
+import type { SleepTimer } from "../player/useSleepTimer";
 import { useNow } from "../useNow";
 import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
+import { SleepTimerMenu } from "./SleepTimerMenu";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 const INSTRUCTIONS = {
@@ -47,11 +49,14 @@ const INSTRUCTIONS = {
 /** What plays after the current Track. */
 export function QueuePanel({
   player,
+  sleep,
   tracks,
   id = "queue",
   announceIn,
 }: {
   readonly player: Player;
+  /** The sleep timer, set from the panel's header. */
+  readonly sleep: SleepTimer;
   readonly tracks: ReadonlyMap<number, Track>;
   /** The panel's id, for a second panel on the page such as Now Playing's. */
   readonly id?: string;
@@ -111,6 +116,7 @@ export function QueuePanel({
     <section id={id} className="queue" aria-label="Up next" tabIndex={-1}>
       <header>
         <h2>Up next</h2>
+        <SleepTimerMenu timer={sleep} container={announceIn} />
         <button
           type="button"
           className="text"
@@ -255,7 +261,7 @@ function AlbumRow({
       >
         <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
       </button>
-      <KindMark kind="album" />
+      <KindMark kind="album" reason="split" />
       <span className="album-title">{title}</span>
       <span className="album-place" title={`From song ${where}`}>
         {where}
@@ -315,7 +321,7 @@ function QueueItem({
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
       <Cover cover={track?.cover ?? null} className="thumb" />
-      {track !== undefined && <KindMark kind={track.kind} />}
+      {track !== undefined && <KindMark kind={track.kind} reason={track.kind_reason} />}
       <span className="entry-title">{title}</span>
       <span className="entry-artist">{track?.artist}</span>
       <button

@@ -764,6 +764,35 @@ button.text:hover:not(:disabled) {
   border-radius: 999px;
 }
 
+/* Songs and albums: whether a long file is guessed an album, and from how long. */
+.kind-guess {
+  display: grid;
+  justify-items: start;
+  gap: 0.6rem;
+}
+
+.kind-guess-check,
+.kind-guess-minutes {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.kind-guess-minutes input {
+  width: 6rem;
+  height: auto;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+}
+
+.kind-guess button[type="submit"] {
+  width: auto;
+  margin: 0;
+  padding: 0.45rem 1.4rem;
+  border-radius: 999px;
+}
+
 .mode-now p {
   margin-bottom: 0.4rem;
 }
@@ -1502,6 +1531,11 @@ button.text:hover:not(:disabled) {
   font-size: 0.95rem;
 }
 
+/* A guessed kind is an outline, a settled one solid; a guess also sits back a little. */
+.kind-mark.guessed {
+  opacity: 0.75;
+}
+
 /* The Library: a split file's caret, and its songs under it, set in. */
 .fold-slot {
   display: inline-grid;
@@ -1993,6 +2027,19 @@ button.icon.heart.on:hover,
   align-items: center;
   justify-content: space-between;
   padding: 0 0.5rem 0.5rem;
+}
+
+/* The sleep timer sits beside Clear; once set, its moon and the time left are in jade. */
+.queue header .sleep-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue header .sleep-timer.on {
+  color: var(--accent);
 }
 
 .queue h2 {
@@ -2736,6 +2783,18 @@ button.icon.heart.on:hover,
 }
 
 /* A song's menu: a card of icons and words, drawn over the page. */
+
+.track-menu-label {
+  padding: 0.35rem 0.7rem 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.track-menu-separator {
+  height: 1px;
+  margin: 0.3rem 0.35rem;
+  background: var(--line);
+}
 
 .track-menu {
   z-index: 10;

@@ -15,10 +15,11 @@ from medleyplay.application import Clock
 from medleyplay.application.changes import OnChange
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
-from medleyplay.domain.settings import RemovalOrder, Settings
+from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings
 from medleyplay.persistence.schema import SettingRow
 
 SETTINGS_ROW: Final = 1
+MAX_ALBUM_MINUTES: Final = 600
 
 
 class SettingsDocument(BaseModel):
@@ -29,6 +30,7 @@ class SettingsDocument(BaseModel):
     version: Literal[1] = 1
     storage_limit: int | None = Field(default=None, ge=0)
     removal_order: RemovalOrder = RemovalOrder.LEAST_FAVORITE
+    album_minutes: int | None = Field(default=ALBUM_MINUTES, ge=1, le=MAX_ALBUM_MINUTES)
 
 
 class SettingsService:
@@ -58,7 +60,9 @@ class SettingsService:
             raise ForbiddenError(message)
         try:
             document = SettingsDocument(
-                storage_limit=settings.storage_limit, removal_order=settings.removal_order
+                storage_limit=settings.storage_limit,
+                removal_order=settings.removal_order,
+                album_minutes=settings.album_minutes,
             ).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
@@ -106,4 +110,9 @@ def read_settings(db: Session) -> Settings:
     if row is None:
         return Settings()
     document = SettingsDocument.model_validate(row.document)
-    return Settings(document.storage_limit, document.removal_order, row.revision)
+    return Settings(
+        storage_limit=document.storage_limit,
+        removal_order=document.removal_order,
+        album_minutes=document.album_minutes,
+        revision=row.revision,
+    )

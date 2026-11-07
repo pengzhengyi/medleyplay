@@ -20,6 +20,7 @@ from medleyplay.application.details import record as record_details
 from medleyplay.application.downloads import DOWNLOAD_KIND
 from medleyplay.application.rule_schema import read_rules, rules_document
 from medleyplay.application.segments import album_file_of
+from medleyplay.application.settings import read_settings
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import (
@@ -42,7 +43,7 @@ from medleyplay.domain.catalog import (
     source_availability,
     track_availability,
 )
-from medleyplay.domain.details import Field, Kind, Origin, Value, kind_of
+from medleyplay.domain.details import LONGEST_SONG_MS, Field, Kind, Origin, Value, kind_of
 from medleyplay.domain.downloads import download_target
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import JobState
@@ -148,6 +149,7 @@ class CatalogService:
             failed = _download_failed(db, sites, downloaded)
             segment_of = album_file_of(db)
             split = set(segment_of.values())
+            album_from_ms = read_settings(db).album_from_ms
             # A song is downloaded, or failed to download, as its album file is.
             downloaded |= {song for song, album in segment_of.items() if album in downloaded}
             failed |= {song for song, album in segment_of.items() if album in failed}
@@ -161,6 +163,7 @@ class CatalogService:
                     site=sites[track.id].kind if track.id in sites else None,
                     segment_of=segment_of.get(TrackId(track.id)),
                     split=track.id in split,
+                    album_from_ms=album_from_ms,
                 )
                 for track, state in rows
             ]
@@ -181,6 +184,7 @@ class CatalogService:
             )
             sites = _site_sources(db, SourceRow.track_id == looked_at)
             failed = _download_failed(db, sites, downloaded)
+            album_from_ms = read_settings(db).album_from_ms
         return _to_track(
             *found,
             available[track_id],
@@ -189,6 +193,7 @@ class CatalogService:
             site=sites[track_id].kind if track_id in sites else None,
             segment_of=segment_of.get(track_id),
             split=track_id in segment_of.values(),
+            album_from_ms=album_from_ms,
         )
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
@@ -564,7 +569,15 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     site: str | None = None,
     segment_of: int | None = None,
     split: bool = False,
+    album_from_ms: int | None = LONGEST_SONG_MS,
 ) -> Track:
+    kind = kind_of(
+        None if track.kind is None else Kind(track.kind),
+        duration_ms=track.duration_ms,
+        split=split,
+        segment=segment_of is not None,
+        album_from_ms=album_from_ms,
+    )
     return Track(
         id=TrackId(track.id),
         details=TrackDetails(
@@ -590,12 +603,8 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         site=site,
         segment_of=None if segment_of is None else TrackId(segment_of),
         split=split,
-        kind=kind_of(
-            None if track.kind is None else Kind(track.kind),
-            duration_ms=track.duration_ms,
-            split=split,
-            segment=segment_of is not None,
-        ).kind,
+        kind=kind.kind,
+        kind_reason=kind.reason,
     )
 
 

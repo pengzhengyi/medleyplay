@@ -40,6 +40,27 @@ export function formatLibraryLength(albums: number, songs: number, durationMs: n
   return `${albums === 1 ? "1 album" : `${String(albums)} albums`}, ${length}`;
 }
 
+/** Write a length of minutes in words, such as `30 minutes` or `1 hour 30 minutes`. */
+export function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const inHours = hours === 0 ? "" : hours === 1 ? "1 hour" : `${String(hours)} hours`;
+  const inMinutes = rest === 0 ? "" : rest === 1 ? "1 minute" : `${String(rest)} minutes`;
+  return [inHours, inMinutes].filter(Boolean).join(" ");
+}
+
+/** Write the time left, rounded up to whole minutes, such as `29 min` or `1 hr 30 min`. */
+export function formatTimeLeft(ms: number): string {
+  const minutes = Math.max(1, Math.ceil(ms / 60_000));
+  const hours = Math.floor(minutes / 60);
+  if (hours === 0) {
+    return `${String(minutes)} min`;
+  }
+  return minutes % 60 === 0
+    ? `${String(hours)} hr`
+    : `${String(hours)} hr ${String(minutes % 60)} min`;
+}
+
 const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
 const dayAndClock = new Intl.DateTimeFormat(undefined, {
   weekday: "short",

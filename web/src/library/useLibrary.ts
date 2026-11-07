@@ -57,6 +57,8 @@ export interface Library {
   readonly findable: ReadonlyMap<string, ReadonlySet<number>>;
   /** Ask the enrichers again which Tracks they may be asked about, as after one is set up. */
   readonly refreshFindable: () => void;
+  /** Ask for the Tracks again, as after a setting changes what they show. */
+  readonly reloadTracks: () => void;
   /** When the household has each enricher asked, once the server has said. */
   readonly modes: ReadonlyMap<string, EnricherMode>;
   /**
@@ -422,6 +424,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     modeChecked: setMode,
     findable,
     refreshFindable: loadFindable,
+    reloadTracks,
     modes,
     lookups,
     find: async (enricher, id) => {

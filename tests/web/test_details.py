@@ -187,6 +187,45 @@ def test_a_tracks_details_say_its_kind_and_why(client: TestClient, catalog: Cata
     assert body["kind"] == {"value": "song", "reason": "length"}
 
 
+def test_a_track_says_its_kind_was_guessed_from_its_length(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.album_file())
+
+    body = client.get(f"/api/tracks/{track_id}").json()
+
+    assert (body["kind"], body["kind_reason"]) == ("album", "length")
+
+
+def test_a_long_file_is_a_song_once_the_household_guesses_no_albums(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.album_file())
+    client.put("/api/settings", json={"storage_limit": None, "album_minutes": None, "revision": 0})
+
+    listed = client.get("/api/tracks").json()[0]
+    details = client.get(f"/api/tracks/{track_id}/details").json()
+
+    assert (listed["kind"], listed["kind_reason"]) == ("song", "default")
+    assert details["kind"] == {"value": "song", "reason": "default"}
+
+
+def test_a_file_is_guessed_an_album_from_the_length_the_household_set(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = catalog.add_track(
+        SourceKeyFactory.bilibili(), TrackDetailsFactory.album_file(duration_ms=12 * 60_000)
+    )
+    client.put("/api/settings", json={"storage_limit": None, "album_minutes": 10, "revision": 0})
+
+    body = client.get(f"/api/tracks/{track_id}").json()
+
+    assert (body["kind"], body["kind_reason"]) == ("album", "length")
+
+
 def test_the_household_calls_a_track_an_album(client: TestClient, catalog: CatalogService) -> None:
     set_up_as_alice(client)
     track_id = _one_track(catalog)

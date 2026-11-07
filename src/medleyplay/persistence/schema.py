@@ -71,8 +71,28 @@ class AccountRow(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class DeviceRow(Base):
+    """A browser other than the host's that the household allowed.
+
+    Its id is random, so an answer meant for a device since removed can't reach
+    another; only a SHA-256 hash of its cookie's token is kept.
+    """
+
+    __tablename__ = "device"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(64))
+    address: Mapped[str] = mapped_column(String(64))
+    allowed_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class SessionRow(Base):
-    """A signed-in browser; only a SHA-256 hash of its token is kept."""
+    """A signed-in browser; only a SHA-256 hash of its token is kept.
+
+    `device_id` is the device it signed in on, None on the host's own browser.
+    """
 
     __tablename__ = "session"
 
@@ -81,6 +101,9 @@ class SessionRow(Base):
         ForeignKey("account.id", ondelete="CASCADE"), index=True
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    device_id: Mapped[str | None] = mapped_column(
+        ForeignKey("device.id", ondelete="CASCADE"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     last_seen_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
@@ -510,6 +533,21 @@ class ModeSettingRow(Base):
     """The Mode's setting and the metered networks, as one document; the only row has id 1."""
 
     __tablename__ = "mode_setting"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="single"),
+        CheckConstraint("revision >= 1", name="revision"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document: Mapped[dict[str, object]] = mapped_column(JSON)
+    revision: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class DeviceSettingRow(Base):
+    """Which devices the household admits, as one document; the only row has id 1."""
+
+    __tablename__ = "device_setting"
     __table_args__ = (
         CheckConstraint("id = 1", name="single"),
         CheckConstraint("revision >= 1", name="revision"),

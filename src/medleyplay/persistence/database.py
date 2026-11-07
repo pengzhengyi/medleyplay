@@ -14,9 +14,14 @@ BUSY_TIMEOUT_MS: Final = 5_000
 MIGRATIONS: Final = "medleyplay.persistence:migrations"
 
 
+def database_path(data_dir: Path) -> Path:
+    """Return where the database lives inside the data folder."""
+    return data_dir / "medleyplay.sqlite3"
+
+
 def database_url(data_dir: Path) -> str:
     """Return the URL of the database inside the data folder."""
-    return f"sqlite:///{data_dir / 'medleyplay.sqlite3'}"
+    return f"sqlite:///{database_path(data_dir)}"
 
 
 def make_engine(url: str) -> Engine:

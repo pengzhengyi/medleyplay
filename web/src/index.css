@@ -1137,6 +1137,44 @@ button.text:hover:not(:disabled) {
   font-weight: 600;
 }
 
+/* The pencil sits quietly beside the name; it shows fully when pointed at or focused. */
+.device-name button.device-rename {
+  width: auto;
+  margin: 0;
+  padding: 0.2rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.device-name button.device-rename:focus-visible,
+.device-list li:hover .device-name button.device-rename {
+  color: var(--accent);
+}
+
+.device-rename-form {
+  flex-wrap: wrap;
+  font-weight: 400;
+}
+
+.device-rename-form input {
+  width: min(16rem, 100%);
+  margin: 0;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.95rem;
+}
+
+.device-rename-form button {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.device-rename-form [role="alert"] {
+  flex-basis: 100%;
+}
+
 .device-tag {
   padding: 0.05rem 0.5rem;
   border-radius: 999px;

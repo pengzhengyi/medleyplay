@@ -87,6 +87,7 @@ class DeviceRow(Base):
     address: Mapped[str] = mapped_column(String(64))
     allowed_at: Mapped[datetime] = mapped_column(UtcDateTime)
     last_seen_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    name: Mapped[str | None] = mapped_column(String(40))
 
 
 class SessionRow(Base):

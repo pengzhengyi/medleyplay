@@ -2435,9 +2435,25 @@ button.icon.heart.on:hover,
   font-weight: 600;
 }
 
+/* Pico draws [role="group"] as a row of joined buttons; this one is a plain list. */
+.play-on-group {
+  display: block;
+  width: auto;
+  box-shadow: none;
+}
+
+.play-on-item {
+  min-width: 14rem;
+}
+
 .play-on-choice {
   display: flex;
   flex-direction: column;
+}
+
+.play-on-mark {
+  margin-left: auto;
+  color: var(--accent);
 }
 
 .player .status {

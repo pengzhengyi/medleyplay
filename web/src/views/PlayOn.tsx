@@ -3,7 +3,7 @@
  * computer medleyplay runs on.
  */
 
-import { DesktopIcon, DeviceMobileIcon, SpeakerHifiIcon } from "@phosphor-icons/react";
+import { CheckIcon, DesktopIcon, DeviceMobileIcon, SpeakerHifiIcon } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 
 /** Where the music plays: on this device, or on the computer. */
@@ -45,21 +45,32 @@ export function PlayOn({
           <Menu.Content className="track-menu" align="end" sideOffset={4} collisionPadding={8}>
             <Menu.Label className="device-asking">Play on</Menu.Label>
             <Menu.RadioGroup
+              className="play-on-group"
               value={on}
               onValueChange={(value) => {
                 onChoose(value === "computer" ? "computer" : "here");
               }}
             >
-              <Menu.RadioItem className="track-menu-item" value="here">
+              <Menu.RadioItem className="track-menu-item play-on-item" value="here">
                 <DeviceMobileIcon aria-hidden />
                 This device
+                <Menu.ItemIndicator className="play-on-mark">
+                  <CheckIcon weight="bold" aria-hidden />
+                </Menu.ItemIndicator>
               </Menu.RadioItem>
-              <Menu.RadioItem className="track-menu-item" value="computer" disabled={!available}>
+              <Menu.RadioItem
+                className="track-menu-item play-on-item"
+                value="computer"
+                disabled={!available}
+              >
                 <DesktopIcon aria-hidden />
                 <span className="play-on-choice">
                   The computer
                   {!available && <span className="hint">Open medleyplay on the computer</span>}
                 </span>
+                <Menu.ItemIndicator className="play-on-mark">
+                  <CheckIcon weight="bold" aria-hidden />
+                </Menu.ItemIndicator>
               </Menu.RadioItem>
             </Menu.RadioGroup>
           </Menu.Content>

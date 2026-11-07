@@ -521,6 +521,46 @@ class TestTheChoice:
         ]
         assert _session_device(units, any_device=True) == saved.allowed.device_id
 
+    def test_a_change_made_under_ask_first_allows_no_device(
+        self, devices: DeviceService, alice: Account, accounts: AccountService
+    ) -> None:
+        on_phone = alice_signs_in(accounts)
+
+        saved = devices.put_admission(
+            alice,
+            Admission.KNOWN,
+            devices.devices(alice).revision,
+            this=phone(),
+            user_agent=SAFARI_ON_IPHONE,
+            session_token=on_phone.token,
+        )
+
+        assert (saved.allowed, saved.view.allowed) == (None, ())
+
+    def test_leaving_allow_all_keeps_a_session_on_the_device_it_signed_in_on(
+        self,
+        devices: DeviceService,
+        alice: Account,
+        accounts: AccountService,
+        units: sessionmaker[Session],
+    ) -> None:
+        allowed_phone(devices, alice)
+        first = devices.devices(alice).allowed[0].id
+        admin = NewAccountFactory.admin()
+        on_phone = accounts.sign_in(admin.username, admin.password, device_id=first)
+        devices.put_admission(alice, Admission.EVERYONE, devices.devices(alice).revision)
+
+        devices.put_admission(
+            alice,
+            Admission.ASK,
+            devices.devices(alice).revision,
+            this=phone(),
+            user_agent=SAFARI_ON_IPHONE,
+            session_token=on_phone.token,
+        )
+
+        assert _session_device(units, any_device=True) == first
+
     def test_leaving_allow_all_on_the_host_allows_no_device(
         self, devices: DeviceService, alice: Account
     ) -> None:

@@ -271,7 +271,11 @@ class DeviceService:
             if changed == current:
                 with self._lock:
                     return AdmissionSaved(self._view(known))
-            enrolling = this is not None and admission is not Admission.EVERYONE and not kept_in
+            enrolling = (
+                current.admission is Admission.EVERYONE
+                and admission is not Admission.EVERYONE
+                and not kept_in
+            )
             token = self._new_token() if enrolling else None
             with self._units.begin() as db:
                 if not _save(db, changed, revision, self._clock()):
@@ -501,10 +505,14 @@ def _stale_choice() -> ConflictError:
 
 
 def _link_session(db: Session, session_token: str | None, device_id: DeviceId) -> None:
+    """Link a session that belongs to no device to `device_id`; one on a device stays there."""
     if session_token is not None:
         db.execute(
             update(SessionRow)
-            .where(SessionRow.token_hash == hash_token(session_token))
+            .where(
+                SessionRow.token_hash == hash_token(session_token),
+                SessionRow.device_id.is_(None),
+            )
             .values(device_id=device_id)
         )
 

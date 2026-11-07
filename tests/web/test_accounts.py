@@ -27,8 +27,11 @@ def test_setting_up_creates_an_admin_and_signs_the_browser_in(client: TestClient
 def test_the_session_cookie_is_http_only_and_same_site_lax(client: TestClient) -> None:
     response = client.post("/api/setup", json=ALICE_SETUP)
 
-    cookie = response.headers["set-cookie"].lower()
-    assert cookie.startswith("medleyplay_session=")
+    cookie = next(
+        c.lower()
+        for c in response.headers.get_list("set-cookie")
+        if c.startswith("medleyplay_session=")
+    )
     assert "httponly" in cookie
     assert "samesite=lax" in cookie
     assert PASSWORD not in cookie

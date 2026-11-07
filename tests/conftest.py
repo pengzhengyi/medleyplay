@@ -16,6 +16,7 @@ from medleyplay.application.ai import AiService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
+from medleyplay.application.devices import DeviceService
 from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.enrichment import EnrichKind, EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
@@ -146,6 +147,13 @@ def songs(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) ->
 @pytest.fixture
 def covers(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> CoverService:
     return CoverService(units, clock, tmp_path / "data" / "covers")
+
+
+@pytest.fixture
+def devices(
+    units: sessionmaker[Session], clock: FakeClock, accounts: AccountService
+) -> DeviceService:
+    return DeviceService(units, clock, accounts)
 
 
 @pytest.fixture
@@ -352,6 +360,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     covers: CoverService,
     enrichment: EnrichmentService,
     ai: AiService,
+    devices: DeviceService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -376,6 +385,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         enrichment=enrichment,
         sweeper=EnrichmentSweeper(enrichment),
         ai=ai,
+        devices=devices,
     )
 
 

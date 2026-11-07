@@ -579,6 +579,60 @@ def test_undoing_the_kind_migration_forgets_every_kind_the_household_named(
     assert (fields, titles) == (["title"], ["Bremen"])
 
 
+def test_upgrading_marks_every_session_as_started_before_devices(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0024")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO account (id, username, display_name, password_hash, role, created_at)"
+                " VALUES (1, 'alice', 'Alice', 'x', 'admin', '2026-11-07 00:00:00.000000')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO session (account_id, token_hash, created_at, last_seen_at)"
+                " VALUES (1, :hash, '2026-11-07 00:00:00.000000', '2026-11-07 00:00:00.000000')"
+            ),
+            {"hash": "0" * 64},
+        )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        sessions = connection.execute(
+            text("SELECT device_id, from_before_devices FROM session")
+        ).all()
+    engine.dispose()
+    assert [tuple(s) for s in sessions] == [(None, 1)]
+
+
+def test_undoing_the_devices_migration_keeps_every_session(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO account (id, username, display_name, password_hash, role, created_at)"
+                " VALUES (1, 'alice', 'Alice', 'x', 'admin', '2026-11-07 00:00:00.000000')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO session (account_id, token_hash, created_at, last_seen_at)"
+                " VALUES (1, :hash, '2026-11-07 00:00:00.000000', '2026-11-07 00:00:00.000000')"
+            ),
+            {"hash": "0" * 64},
+        )
+
+    _migrate_to(engine, "0024", down=True)
+
+    with engine.connect() as connection:
+        sessions = connection.scalars(text("SELECT account_id FROM session")).all()
+    engine.dispose()
+    assert sessions == [1]
+
+
 _FAVORITE = {"field": "favorite", "op": "is", "value": True}
 
 

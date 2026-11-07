@@ -96,10 +96,15 @@ def is_host(peer: str, local: str, *, forwarded: bool) -> bool:
     if forwarded:
         return False
     try:
-        peer_address, local_address = _unwrapped(peer), _unwrapped(local)
+        peer_address = _unwrapped(peer)
     except ValueError:
         return False
-    return peer_address.is_loopback or peer_address == local_address
+    if peer_address.is_loopback:
+        return True
+    try:
+        return peer_address == _unwrapped(local)
+    except ValueError:
+        return False
 
 
 def _unwrapped(address: str) -> IPv4Address | IPv6Address:

@@ -1,4 +1,4 @@
-"""Events: telling every open browser when a Job or the Mode changes, as it happens.
+"""Events: telling every open browser when a Job, the Mode, or the waiting devices change.
 
 The runner and the services publish a Job's id after they commit, and the Mode
 service publishes `MODE` when the Mode changes, from any thread; each
@@ -24,13 +24,15 @@ from medleyplay.domain.jobs import JobId
 
 MODE: Final = "mode"
 """The event that the Mode changed."""
+DEVICES: Final = "devices"
+"""The event that a device started waiting for an answer, or was answered."""
 MAX_QUEUED: Final = 64
 PROGRESS_INTERVAL: Final = 0.25
 """At most four progress events a second for one Job."""
 
 
-type Event = JobId | Literal["mode"]
-"""A Job that changed, or `MODE`."""
+type Event = JobId | Literal["mode", "devices"]
+"""A Job that changed, `MODE`, or `DEVICES`."""
 
 
 class SubscriptionEndedError(Exception):
@@ -111,6 +113,12 @@ class Events:
         with self._lock:
             subscriptions = tuple(self._subscriptions)
         self._offer(subscriptions, MODE, progress=False)
+
+    def publish_devices(self) -> None:
+        """Tell every subscriber the waiting devices changed; callable from any thread."""
+        with self._lock:
+            subscriptions = tuple(self._subscriptions)
+        self._offer(subscriptions, DEVICES, progress=False)
 
     @contextlib.asynccontextmanager
     async def subscribe(self) -> AsyncIterator[Subscription]:

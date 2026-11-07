@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Final, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session, sessionmaker
@@ -53,17 +53,12 @@ _log = logging.getLogger(__name__)
 
 
 class DeviceDocument(BaseModel):
-    """The household's choice as stored, version 1.
-
-    `sessions_from_before` is when devices began: a browser signed in before it
-    is allowed the first time it asks.
-    """
+    """The household's choice as stored, version 1."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     version: Literal[1] = 1
     admission: Admission = Admission.ASK
-    sessions_from_before: AwareDatetime | None = None
 
 
 class Presence(StrEnum):
@@ -223,13 +218,18 @@ class DeviceService:
         from_address = sum(w.address == address for w in known.waiting.values())
         return len(known.waiting) >= MAX_WAITING or from_address >= MAX_WAITING_FROM_ONE_ADDRESS
 
-    def allow_first(self, visit: Visit, user_agent: str) -> Asked:
-        """Allow the device setting the household up, before its first account exists."""
+    def allow_first(self, visit: Visit, user_agent: str, *, session_token: str) -> Asked:
+        """Allow the device that set the household up, and link its new session to it."""
         token = self._new_token()
-        with self._units.begin() as db, self._lock:
-            known = self._load()
-            device = self._insert(db, hash_token(token), label_of(user_agent), visit.address)
-            known.allowed[hash_token(token)] = device
+        with self._units.begin() as db:
+            session = db.scalars(
+                select(SessionRow).where(SessionRow.token_hash == hash_token(session_token))
+            ).one()
+            with self._lock:
+                known = self._load()
+                device = self._insert(db, hash_token(token), label_of(user_agent), visit.address)
+                session.device_id = device.id
+                known.allowed[hash_token(token)] = device
         return Asked(Presence.ALLOWED, device.label, device.id, token=token)
 
     def devices(self, caller: Account) -> DevicesView:
@@ -259,7 +259,7 @@ class DeviceService:
         with self._units.begin() as db, self._lock:
             known = self._load()
             hashed, waiting = self._waiting(known, waiting_id)
-            device = self._insert(db, hashed, waiting.label, waiting.address)
+            device = self._insert(db, hashed, waiting.label, waiting.address, waiting.id)
             del known.waiting[hashed]
             known.allowed[hashed] = device
         self._tell()
@@ -310,17 +310,13 @@ class DeviceService:
         """Allow a browser signed in before devices began, and link its session to it."""
         if session_token is None:
             return None
-        with self._lock:
-            since = self._load().document.sessions_from_before
-        if since is None:
-            return None
         now = self._clock()
         with self._units.begin() as db:
             session = db.scalars(
                 select(SessionRow).where(
                     SessionRow.token_hash == hash_token(session_token),
+                    SessionRow.from_before_devices,
                     SessionRow.device_id.is_(None),
-                    SessionRow.created_at < since,
                 )
             ).one_or_none()
             if session is None or now - session.last_seen_at > SESSION_IDLE_TIMEOUT:
@@ -394,9 +390,11 @@ class DeviceService:
         except Exception:  # noqa: BLE001 -- when it was last seen mustn't refuse a request
             _log.exception("Recording when a device was last seen failed")
 
-    def _insert(self, db: Session, hashed: str, label: str, address: str) -> Device:
+    def _insert(
+        self, db: Session, hashed: str, label: str, address: str, device_id: DeviceId | None = None
+    ) -> Device:
         now = self._clock()
-        device = Device(DeviceId(self._new_id()), label, address, now, now)
+        device = Device(device_id or DeviceId(self._new_id()), label, address, now, now)
         db.add(
             DeviceRow(
                 id=device.id,

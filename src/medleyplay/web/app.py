@@ -1,4 +1,4 @@
-"""The FastAPI app: its routers, domain errors as HTTP statuses, and the Host and Origin checks."""
+"""The FastAPI app: its routers, domain errors as HTTP statuses, and the request checks."""
 
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AbstractAsyncContextManager
@@ -34,6 +34,7 @@ from medleyplay.web import (
     catalog,
     covers,
     details,
+    devices,
     downloads,
     enrichers,
     events,
@@ -88,9 +89,9 @@ def create_app(
 
     The web client built into `client_dir` is served at every path outside `/api`.
 
-    Checking the Host header blocks DNS rebinding; checking a state-changing
-    request's Origin against its Host blocks other sites' pages from using a
-    signed-in browser.
+    Checking the Host header blocks DNS rebinding; checking the device admits
+    only those the household let in; checking a state-changing request's Origin
+    against its Host blocks other sites' pages from using a signed-in browser.
     """
     hosts = tuple(allowed_hosts)
     app = FastAPI(title="medleyplay", version=__version__, lifespan=lifespan)
@@ -117,10 +118,13 @@ def create_app(
     app.include_router(covers.router)
     app.include_router(enrichers.router)
     app.include_router(storage.router)
+    app.include_router(devices.router)
     app.mount("/", client_app(client_dir))
     app.add_exception_handler(RequestValidationError, _handle_invalid_request)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
+    # The last added runs first: the Host check, then the device check, then the Origin check.
     app.middleware("http")(_refuse_cross_origin_writes)
+    app.middleware("http")(devices.admit_devices)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(hosts))
     return app
 

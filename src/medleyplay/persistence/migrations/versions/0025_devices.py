@@ -6,7 +6,6 @@ Create Date: 2026-11-07 18:00:00.000000
 """
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -20,7 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Apply this revision; new devices ask first, and browsers signed in now are let in."""
+    """Apply this revision; browsers signed in now are let in the first time they ask."""
     op.create_table(
         "device",
         sa.Column("id", sa.String(length=16), nullable=False),
@@ -32,7 +31,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_device")),
         sa.UniqueConstraint("token_hash", name=op.f("uq_device_token_hash")),
     )
-    device_setting = op.create_table(
+    op.create_table(
         "device_setting",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("document", sa.JSON(), nullable=False),
@@ -44,27 +43,17 @@ def upgrade() -> None:
     )
     with op.batch_alter_table("session") as session:
         session.add_column(sa.Column("device_id", sa.String(length=16), nullable=True))
+        session.add_column(
+            sa.Column(
+                "from_before_devices", sa.Boolean(), server_default=sa.text("0"), nullable=False
+            )
+        )
         session.create_index(op.f("ix_session_device_id"), ["device_id"])
         session.create_foreign_key(
             op.f("fk_session_device_id_device"), "device", ["device_id"], ["id"], ondelete="CASCADE"
         )
-    # A session started before now signed in before devices existed; it is let in when it asks.
-    now = datetime.now(UTC)
-    op.bulk_insert(
-        device_setting,
-        [
-            {
-                "id": 1,
-                "document": {
-                    "version": 1,
-                    "admission": "ask",
-                    "sessions_from_before": now.isoformat(),
-                },
-                "revision": 1,
-                "updated_at": now,
-            }
-        ],
-    )
+    # Every browser signed in now signed in before devices were checked.
+    op.execute("UPDATE session SET from_before_devices = 1")
 
 
 def downgrade() -> None:
@@ -72,6 +61,7 @@ def downgrade() -> None:
     with op.batch_alter_table("session") as session:
         session.drop_constraint(op.f("fk_session_device_id_device"), type_="foreignkey")
         session.drop_index(op.f("ix_session_device_id"))
+        session.drop_column("from_before_devices")
         session.drop_column("device_id")
     op.drop_table("device_setting")
     op.drop_table("device")

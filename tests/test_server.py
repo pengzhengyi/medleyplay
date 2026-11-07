@@ -21,7 +21,7 @@ from medleyplay.server import (
     open_database,
 )
 from tests.support.ai import KEY
-from tests.support.api import set_up_as_alice, sign_in
+from tests.support.api import HOST_PEER, set_up_as_alice, sign_in
 from tests.support.factories import AccountFactory
 from tests.support.fakes import MemorySecrets
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS
@@ -93,7 +93,7 @@ def test_the_built_app_gives_an_account_without_favorites_its_favorites_as_it_st
     with closing(sqlite3.connect(tmp_path / "medleyplay.sqlite3")) as database, database:
         database.execute("DELETE FROM playlist")
 
-    with TestClient(build_app(settings)) as client:
+    with TestClient(build_app(settings), client=HOST_PEER) as client:
         sign_in(client, "alice")
         playlists = client.get("/api/playlists").json()
 

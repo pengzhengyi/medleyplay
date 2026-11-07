@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
@@ -26,6 +27,7 @@ from medleyplay.application.changes import Changes
 from medleyplay.application.connectivity import reachable
 from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
+from medleyplay.application.devices import DeviceService
 from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.enrichment import EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
@@ -156,7 +158,6 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     """
     units = make_sessionmaker(engine)
     changes = Changes()
-    hasher = PasswordHash((Argon2Hasher(),))
     available = plugin_names(source.package)
     enabled = () if safe_mode else config.enabled_plugins(available)
     lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
@@ -218,15 +219,16 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     events.listen(sweeper.request)
     # A changed proxy makes a looked-up video's details stale, so they are looked up again.
     proxies.listen(links.forget_lookups)
+    accounts = AccountService(
+        units,
+        PasswordHash((Argon2Hasher(),)),
+        clock,
+        SignInThrottle(clock),
+        multiple_accounts=config.multiple_accounts,
+        on_change=changes.tell,
+    )
     return Services(
-        accounts=AccountService(
-            units,
-            hasher,
-            clock,
-            SignInThrottle(clock),
-            multiple_accounts=config.multiple_accounts,
-            on_change=changes.tell,
-        ),
+        accounts=accounts,
         catalog=catalog,
         plugins=plugins,
         jobs=jobs,
@@ -247,7 +249,17 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         enrichment=enrichment,
         sweeper=sweeper,
         ai=ai,
+        devices=_devices(units, clock, accounts, events),
     )
+
+
+def _devices(
+    units: sessionmaker[Session], clock: Clock, accounts: AccountService, events: Events
+) -> DeviceService:
+    devices = DeviceService(units, clock, accounts)
+    # A device that starts waiting, or is answered, reaches the admins' open browsers.
+    devices.listen(events.publish_devices)
+    return devices
 
 
 def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:  # noqa: B008 -- a frozen value

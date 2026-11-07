@@ -72,6 +72,7 @@ def test_a_device_turned_away_is_refused_unless_all_are_allowed(
         ("192.168.1.5", "192.168.1.5"),
         ("::ffff:192.168.1.5", "192.168.1.5"),
         ("::ffff:192.168.1.5", "::ffff:192.168.1.5"),
+        ("127.0.0.1", "medleyplay.local"),
     ],
 )
 def test_a_connection_from_loopback_or_to_its_own_address_is_the_host(

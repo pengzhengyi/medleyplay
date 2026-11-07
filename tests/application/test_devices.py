@@ -2,13 +2,13 @@
 
 import itertools
 from collections.abc import Iterator
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application.accounts import AccountService
+from medleyplay.application.accounts import SESSION_IDLE_TIMEOUT, AccountService
 from medleyplay.application.devices import (
     MAX_WAITING,
     MAX_WAITING_FROM_ONE_ADDRESS,
@@ -23,7 +23,7 @@ from medleyplay.application.devices import (
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import Admission, DeviceId, Verdict
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
-from medleyplay.persistence.schema import DeviceRow, DeviceSettingRow, SessionRow
+from medleyplay.persistence.schema import DeviceRow, SessionRow
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
 
@@ -304,14 +304,10 @@ class TestAdmitting:
 
 class TestUpgrading:
     def test_a_browser_signed_in_before_devices_existed_is_allowed_when_it_asks(
-        self,
-        devices: DeviceService,
-        accounts: AccountService,
-        units: sessionmaker[Session],
-        clock: FakeClock,
+        self, devices: DeviceService, accounts: AccountService, units: sessionmaker[Session]
     ) -> None:
         signed_in = accounts.create_first_admin(NewAccountFactory.admin())
-        _trust_sessions_from_before(units, clock() + timedelta(seconds=1))
+        _started_before_devices(units)
 
         asked = devices.ask(phone(), SAFARI_ON_IPHONE, session_token=signed_in.token)
 
@@ -319,14 +315,24 @@ class TestUpgrading:
         assert _session_device(units) == asked.device_id
 
     def test_a_browser_signed_in_since_waits(
+        self, devices: DeviceService, accounts: AccountService
+    ) -> None:
+        signed_in = accounts.create_first_admin(NewAccountFactory.admin())
+
+        asked = devices.ask(phone(), SAFARI_ON_IPHONE, session_token=signed_in.token)
+
+        assert asked.presence is Presence.WAITING
+
+    def test_a_session_from_before_that_idled_out_waits(
         self,
         devices: DeviceService,
         accounts: AccountService,
         units: sessionmaker[Session],
         clock: FakeClock,
     ) -> None:
-        _trust_sessions_from_before(units, clock())
         signed_in = accounts.create_first_admin(NewAccountFactory.admin())
+        _started_before_devices(units)
+        clock.advance(SESSION_IDLE_TIMEOUT + timedelta(seconds=1))
 
         asked = devices.ask(phone(), SAFARI_ON_IPHONE, session_token=signed_in.token)
 
@@ -334,16 +340,15 @@ class TestUpgrading:
 
 
 class TestSettingUp:
-    def test_the_device_that_sets_up_is_allowed(
-        self, devices: DeviceService, accounts: AccountService
+    def test_the_device_that_sets_up_is_allowed_with_its_session(
+        self, devices: DeviceService, accounts: AccountService, units: sessionmaker[Session]
     ) -> None:
-        enrolled = devices.allow_first(phone(), SAFARI_ON_IPHONE)
-        alice = accounts.create_first_admin(
-            NewAccountFactory.admin(), device_id=enrolled.device_id
-        ).account
+        signed_in = accounts.create_first_admin(NewAccountFactory.admin())
 
-        assert devices.admit(phone(enrolled.token))[0] is Verdict.ADMITTED
-        assert [d.id for d in devices.devices(alice).allowed] == [enrolled.device_id]
+        enrolled = devices.allow_first(phone(), SAFARI_ON_IPHONE, session_token=signed_in.token)
+
+        assert devices.admit(phone(enrolled.token)) == (Verdict.ADMITTED, enrolled.device_id)
+        assert _session_device(units) == enrolled.device_id
 
 
 class TestRemoving:
@@ -431,8 +436,7 @@ def _session_device(units: sessionmaker[Session], *, any_device: bool = False) -
         return db.scalars(query).first()
 
 
-def _trust_sessions_from_before(units: sessionmaker[Session], moment: datetime) -> None:
-    """Record that devices began at `moment`, as the migration does when upgrading."""
+def _started_before_devices(units: sessionmaker[Session]) -> None:
+    """Mark every session as started before devices were checked, as the upgrade does."""
     with units.begin() as db:
-        row = db.get_one(DeviceSettingRow, 1)
-        row.document = {**row.document, "sessions_from_before": moment.isoformat()}
+        db.execute(update(SessionRow).values(from_before_devices=True))

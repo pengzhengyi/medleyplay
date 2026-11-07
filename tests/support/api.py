@@ -6,6 +6,8 @@ from tests.support.factories import PASSWORD
 
 ALICE_SETUP = {"username": "alice", "display_name": "Alice", "password": PASSWORD}
 BOB = {"username": "bob", "display_name": "Bob", "password": PASSWORD}
+HOST_PEER = ("127.0.0.1", 50000)
+"""A test client's address as the host's own browser, which no device check asks about."""
 
 
 def set_up_as_alice(client: TestClient) -> dict[str, object]:

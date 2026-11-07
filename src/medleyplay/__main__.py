@@ -68,7 +68,8 @@ def _parser() -> argparse.ArgumentParser:
 def _run_server(settings: Settings, host: str, port: int) -> None:  # pragma: no cover
     import uvicorn  # noqa: PLC0415 -- only `serve` needs the server
 
-    uvicorn.run(build_app(settings), host=host, port=port)
+    # Forwarding headers never stand in for the peer: the device check trusts only the connection.
+    uvicorn.run(build_app(settings), host=host, port=port, proxy_headers=False)
 
 
 def _reset_password(settings: Settings, username: str, read_password: ReadPassword) -> int:

@@ -6,6 +6,7 @@ from typing import override
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     Dialect,
@@ -91,7 +92,9 @@ class DeviceRow(Base):
 class SessionRow(Base):
     """A signed-in browser; only a SHA-256 hash of its token is kept.
 
-    `device_id` is the device it signed in on, None on the host's own browser.
+    `device_id` is the device it signed in on, None on the host's own browser;
+    `from_before_devices` marks one started before devices were checked, whose
+    browser is allowed the first time it asks.
     """
 
     __tablename__ = "session"
@@ -103,6 +106,9 @@ class SessionRow(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     device_id: Mapped[str | None] = mapped_column(
         ForeignKey("device.id", ondelete="CASCADE"), index=True
+    )
+    from_before_devices: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("0")
     )
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     last_seen_at: Mapped[datetime] = mapped_column(UtcDateTime)

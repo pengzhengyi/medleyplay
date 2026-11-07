@@ -138,6 +138,14 @@ describe("remote play", () => {
     });
   });
 
+  it("doesn't know whether a computer plays for the Account until the event stream says", () => {
+    serve(signedIn([]));
+
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    expect(result.current.speaker).toBeUndefined();
+  });
+
   it("forgets the computer once it stops playing for the Account", () => {
     serve(signedIn([]));
     const { result } = renderHook(() => useLibrary(vi.fn()));

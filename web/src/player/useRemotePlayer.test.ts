@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SpeakerState } from "../api";
 import { serve, speakerStateOf, trackOf } from "../testing/server";
-import { BLOCKED_ON_THE_COMPUTER, NOT_RESPONDING_MS, type Speaker } from "./remote";
+import {
+  BLOCKED_ON_THE_COMPUTER,
+  NOT_RESPONDING_MS,
+  SHOWN_AT_ONCE_MS,
+  type Speaker,
+  takeOf,
+} from "./remote";
 import { useRemotePlayer } from "./useRemotePlayer";
 
 const NOW = Date.UTC(2026, 10, 8, 20, 0, 0);
@@ -24,11 +30,21 @@ function takingCommands() {
   return sent;
 }
 
-function renderRemote(speaker: Speaker | null) {
-  return renderHook(({ shown }) => useRemotePlayer(shown, vi.fn()), {
+function renderRemote(speaker: Speaker | null, { inUse = true }: { inUse?: boolean } = {}) {
+  return renderHook(({ shown }) => useRemotePlayer(shown, inUse, vi.fn()), {
     initialProps: { shown: speaker },
   });
 }
+
+/** Lemon playing on a phone from 30 s in, to move onto the computer. */
+const LEMON_ON_THE_PHONE = takeOf(
+  {
+    queue: { entries: [{ key: "p1", trackId: 1 }], position: 0, repeat: "off", order: undefined },
+    seconds: 30,
+    counted: false,
+  },
+  true,
+);
 
 beforeEach(() => {
   vi.useFakeTimers({
@@ -96,6 +112,60 @@ describe("a remote's player", () => {
     vi.setSystemTime(NOW + 100);
     rerender({ shown: speakerOf({}, NOW + 100) });
 
+    expect(result.current[0].status).toEqual({ kind: "playing" });
+  });
+
+  it("shows what the computer reports again when no report follows a play for a while", () => {
+    takingCommands();
+    const { result } = renderRemote(speakerOf({ status: "blocked", message: "Press play." }));
+    act(() => {
+      result.current[0].toggle();
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(SHOWN_AT_ONCE_MS + 500);
+    });
+
+    expect(result.current[0].status).toEqual({ kind: "blocked", message: BLOCKED_ON_THE_COMPUTER });
+  });
+
+  it("doesn't count the seconds while not in use, so the page isn't redrawn", () => {
+    let renders = 0;
+    renderHook(() => {
+      renders += 1;
+      return useRemotePlayer(speakerOf(), false, vi.fn());
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(renders).toBe(1);
+  });
+
+  it("moves the music onto the computer after the commands sent before", async () => {
+    const sent = takingCommands();
+    const { result } = renderRemote(speakerOf());
+
+    let moved: Promise<void> | undefined;
+    act(() => {
+      result.current[0].next();
+      moved = result.current[2](LEMON_ON_THE_PHONE);
+    });
+
+    await moved;
+    expect(sent).toEqual([{ kind: "next" }, LEMON_ON_THE_PHONE]);
+  });
+
+  it("says why a move was refused to the one moving, not in the player", async () => {
+    serve({
+      "POST /api/remote/commands": { status: 429, body: { detail: "Too many commands waiting." } },
+    });
+    const { result } = renderRemote(speakerOf());
+
+    const moved = result.current[2](LEMON_ON_THE_PHONE);
+
+    await expect(moved).rejects.toThrow("Too many commands waiting.");
     expect(result.current[0].status).toEqual({ kind: "playing" });
   });
 

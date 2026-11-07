@@ -376,6 +376,8 @@ export interface SpeakerState {
   readonly duration: number | null;
   readonly volume: number;
   readonly muted: boolean;
+  /** Whether the play of the entry playing has been counted. */
+  readonly counted: boolean;
   readonly sleep: { readonly left_ms: number; readonly set_ms_ago: number } | null;
 }
 

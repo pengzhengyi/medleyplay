@@ -39,6 +39,28 @@ def report_playing(**changes: object) -> dict[str, object]:
         "duration": 200.0,
         "volume": 0.8,
         "muted": False,
+        "counted": False,
+    } | changes
+
+
+def take(**changes: object) -> dict[str, object]:
+    """A phone moving what it plays onto the computer, playing the second of two songs:
+
+    ```json
+    {"kind": "take", "entries": [{"key": "a", "track_id": 1}, {"key": "b", "track_id": 2}],
+     "position": 1, "seconds": 30, "playing": true, ...}
+    ```
+    """
+    return {
+        "kind": "take",
+        "entries": [{"key": "a", "track_id": 1}, {"key": "b", "track_id": 2}],
+        "order": None,
+        "position": 1,
+        "repeat": "off",
+        "shuffled": False,
+        "seconds": 30,
+        "playing": True,
+        "counted": False,
     } | changes
 
 
@@ -112,6 +134,18 @@ def test_a_phone_hears_what_the_speaker_plays(host: TestClient, phone: TestClien
     assert heard["age_ms"] == 0
 
 
+def test_a_phone_hears_whether_the_play_on_the_computer_has_counted(
+    host: TestClient, phone: TestClient
+) -> None:
+    with host.stream("GET", f"/api/events?page={HOST_PAGE}"):
+        host.put("/api/remote/report", json=report_playing(counted=True))
+        with phone.stream("GET", "/api/events") as stream:
+            heard = next_event(events_of(stream.iter_lines()), "remote")
+
+    assert isinstance(heard, dict)
+    assert heard["state"]["counted"] is True
+
+
 def test_a_command_from_the_phone_reaches_the_speaker_page(
     host: TestClient, phone: TestClient
 ) -> None:
@@ -143,6 +177,10 @@ def test_a_command_with_nothing_playing_on_the_computer_answers_409(phone: TestC
         {"kind": "seek", "key": "a b", "seconds": 1},
         {"kind": "volume", "volume": 2},
         {"kind": "play", "entries": [], "start": 0},
+        take(position=2),
+        take(entries=[{"key": "a", "track_id": 1}, {"key": "a", "track_id": 2}]),
+        take(shuffled=True, order=["b", "c"]),
+        take(shuffled=True, order=["b"]),
     ],
 )
 def test_a_command_of_the_wrong_shape_answers_422(

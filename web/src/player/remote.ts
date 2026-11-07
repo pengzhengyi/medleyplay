@@ -21,6 +21,10 @@ export const REPORT_ENTRIES = 500;
 export const HEARTBEAT_MS = 20_000;
 /** How long a remote waits for a report before it says the computer isn't responding. */
 export const NOT_RESPONDING_MS = 60_000;
+/** How long a remote shows a play or pause at once, while no report has followed it. */
+export const SHOWN_AT_ONCE_MS = 3000;
+/** The least time between two reports, so a volume dragged on the computer doesn't flood remotes. */
+export const REPORT_EVERY_MS = 150;
 /** How far the speaker's position may drift from what its last report foretold before it reports. */
 export const DRIFT_SECONDS = 2;
 
@@ -52,6 +56,7 @@ export function stateOf(player: Player, sleep: SleepTimer, now: number): Speaker
     duration: player.duration ?? null,
     volume: player.volume,
     muted: player.muted,
+    counted: player.handoff()?.counted ?? false,
     sleep:
       sleep.endsAt === null || sleep.setAt === null
         ? null
@@ -112,7 +117,7 @@ export function handoffOf(speaker: Speaker, now: number): Handoff | undefined {
   const queue = queueOf(speaker.state);
   return current(queue) === undefined
     ? undefined
-    : { queue, seconds: secondsAt(speaker, now), counted: false };
+    : { queue, seconds: secondsAt(speaker, now), counted: speaker.state.counted };
 }
 
 /**

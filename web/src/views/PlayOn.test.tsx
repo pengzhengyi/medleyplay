@@ -87,6 +87,29 @@ describe("Play on", () => {
     expect(sent).toEqual([{ kind: "toggle" }]);
   });
 
+  it("says why the music couldn't move back here, and leaves it on the computer", async () => {
+    serve(
+      phone({
+        "POST /api/remote/commands": {
+          status: 429,
+          body: { detail: "Too many commands waiting." },
+        },
+      }),
+    );
+    render(<App />);
+    const user = userEvent.setup();
+    await screen.findByRole("button", { name: "Play on: this device" });
+    computerPlaysLemon();
+    await user.click(screen.getByRole("button", { name: "Play on: this device" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /The computer/ }));
+
+    await user.click(screen.getByRole("button", { name: "Play on: the computer" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /This device/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Too many commands waiting.");
+    expect(screen.getByRole("button", { name: "Play on: the computer" })).toBeInTheDocument();
+  });
+
   it("plays here again once the computer stops playing for the Account", async () => {
     serve(phone());
     render(<App />);

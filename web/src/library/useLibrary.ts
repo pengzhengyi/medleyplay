@@ -60,8 +60,11 @@ export interface Library {
   readonly modeChecked: (mode: Mode) => void;
   /** The devices waiting for an admin's answer, oldest first; none for a member. */
   readonly waitingDevices: readonly WaitingDevice[];
-  /** The computer playing for this Account, as it last reported, or `null` while none does. */
-  readonly speaker: Speaker | null;
+  /**
+   * The computer playing for this Account, as it last reported, or `null` while none
+   * does; `undefined` until the event stream has said.
+   */
+  readonly speaker: Speaker | null | undefined;
   /** Call `listener` with each command a remote sends while this page plays for the Account. */
   readonly onCommand: (listener: (command: RemoteCommand) => void) => () => void;
   /** The Tracks each enricher may be asked about now, by the enricher's name. */
@@ -173,7 +176,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [waitingDevices, setWaitingDevices] = useState<readonly WaitingDevice[]>([]);
-  const [speaker, setSpeaker] = useState<Speaker | null>(null);
+  const [speaker, setSpeaker] = useState<Speaker | null | undefined>(undefined);
   const commandListeners = useRef(new Set<(command: RemoteCommand) => void>());
   const onCommand = useCallback((listener: (command: RemoteCommand) => void) => {
     commandListeners.current.add(listener);

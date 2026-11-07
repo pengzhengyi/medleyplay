@@ -240,6 +240,7 @@ export function speakerStateOf(change: Partial<SpeakerState> = {}): SpeakerState
     duration: 200,
     volume: 0.8,
     muted: false,
+    counted: false,
     sleep: null,
     ...change,
   };

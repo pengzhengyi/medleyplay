@@ -4,17 +4,19 @@
  *
  * It is a `Player`, so every view works with it unchanged. It shows the computer's
  * last report, counting the seconds on itself, and sends one command at a time, so
- * they arrive in the order they were made. Play and pause show at once, before the
- * computer's next report confirms them; a volume dragged sends at most one command
- * every 150 ms, and the last one always.
+ * they arrive in the order they were made. Play and pause show at once, until the
+ * computer's next report, or for 3 s if none comes; a volume dragged sends at most
+ * one command every 150 ms, and the last one always. It counts the seconds only
+ * while in use.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, type RemoteCommand, type Track, api } from "../api";
 import { EMPTY, current } from "./queue";
 import {
   NOT_RESPONDING_MS,
+  SHOWN_AT_ONCE_MS,
   type Speaker,
   handoffOf,
   queueOf,
@@ -34,13 +36,21 @@ const queuedOf = (track: Track, unitOf?: UnitOf) => ({
 });
 
 /**
- * Play on the computer that `speaker` describes; `onSignedOut` runs when a command
- * finds the session has expired. Returns the player, and the computer's sleep timer.
+ * Send `command` after those sent before; resolve once the computer has it, or reject
+ * with why it couldn't.
+ */
+export type Command = (command: RemoteCommand) => Promise<void>;
+
+/**
+ * Play on the computer that `speaker` describes, counting its seconds while `inUse`;
+ * `onSignedOut` runs when a command finds the session has expired. Returns the
+ * player, the computer's sleep timer, and a way to send a command and hear how it went.
  */
 export function useRemotePlayer(
   speaker: Speaker | null,
+  inUse: boolean,
   onSignedOut: () => void,
-): readonly [Player, SleepTimer] {
+): readonly [Player, SleepTimer, Command] {
   const [now, setNow] = useState(Date.now);
   // What a command made show at once, until a report sent after it.
   const [shown, setShown] = useState<{ readonly at: number; readonly status: Status } | undefined>(
@@ -53,8 +63,9 @@ export function useRemotePlayer(
     next?: number | undefined;
   }>({});
 
+  const counting = inUse && speaker !== null;
   useEffect(() => {
-    if (speaker === null) {
+    if (!counting) {
       return undefined;
     }
     const tick = setInterval(() => {
@@ -63,31 +74,39 @@ export function useRemotePlayer(
     return () => {
       clearInterval(tick);
     };
-  }, [speaker]);
+  }, [counting]);
 
-  const send = (command: RemoteCommand) => {
-    line.current = line.current.then(
-      () =>
-        api.command(command).then(
-          () => {
-            setFailure(undefined);
-          },
-          (error: unknown) => {
-            if (error instanceof ApiError && error.status === 401) {
-              onSignedOut();
-              return;
-            }
-            const message = error instanceof Error ? error.message : String(error);
-            setFailure({ at: Date.now(), message });
-          },
-        ),
+  const command: Command = (sent) => {
+    const delivered = line.current.then(() => api.command(sent));
+    line.current = delivered.then(
       () => undefined,
+      () => undefined,
+    );
+    return delivered.catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 401) {
+        onSignedOut();
+      }
+      throw error;
+    });
+  };
+  /** Send `sent`, saying in the player why it failed. */
+  const send = (sent: RemoteCommand) => {
+    command(sent).then(
+      () => {
+        setFailure(undefined);
+      },
+      (error: unknown) => {
+        if (!(error instanceof ApiError && error.status === 401)) {
+          const message = error instanceof Error ? error.message : String(error);
+          setFailure({ at: Date.now(), message });
+        }
+      },
     );
   };
 
   const reportedAt = speaker?.reportedAt ?? 0;
   const state = speaker?.state;
-  const queue = state === undefined ? EMPTY : queueOf(state);
+  const queue = useMemo(() => (state === undefined ? EMPTY : queueOf(state)), [state]);
   const status: Status = (() => {
     if (speaker === null || state === undefined || current(queue) === undefined) {
       return { kind: "idle" };
@@ -98,7 +117,7 @@ export function useRemotePlayer(
     if (now - reportedAt > NOT_RESPONDING_MS) {
       return { kind: "failed", message: "The computer isn't responding." };
     }
-    if (shown !== undefined && shown.at >= reportedAt) {
+    if (shown !== undefined && shown.at >= reportedAt && now - shown.at < SHOWN_AT_ONCE_MS) {
       return shown.status;
     }
     return statusOf(state);
@@ -214,5 +233,5 @@ export function useRemotePlayer(
       send({ kind: "sleep", minutes: null });
     },
   };
-  return [player, sleep];
+  return [player, sleep, command];
 }

@@ -78,18 +78,26 @@ export function Library({
   const [local, audio] = usePlayer(byId, onSignedOut);
   const localSleep = useSleepTimer(local.pause);
   useSpeaker(onHost, local, localSleep, byId, library.speaker, library.onCommand);
-  const [remote, remoteSleep] = useRemotePlayer(library.speaker, onSignedOut);
   // Where a page that isn't on the computer plays; with the computer gone, it plays here.
   const [playsOn, setPlaysOn] = useState<PlaysOn>("here");
   const [playOnFailed, setPlayOnFailed] = useState("");
-  const canPlayOnComputer = !onHost && library.speaker !== null;
+  const speaker = library.speaker ?? null;
+  const canPlayOnComputer = !onHost && speaker !== null;
   if (playsOn === "computer" && !canPlayOnComputer) {
     setPlaysOn("here");
   }
   const onComputer = playsOn === "computer" && canPlayOnComputer;
+  const [remote, remoteSleep, command] = useRemotePlayer(speaker, onComputer, onSignedOut);
   const player = onComputer ? remote : local;
   const sleep = onComputer ? remoteSleep : localSleep;
-  /** Play on `where`, moving what plays there, as Spotify Connect does. */
+  const playOnFailedFor = (failure: unknown) => {
+    setPlayOnFailed(failure instanceof Error ? failure.message : String(failure));
+  };
+  /**
+   * Play on `where`, moving what plays there, as Spotify Connect does. The device the
+   * music leaves stops only once the computer has the command, so a refusal leaves
+   * the music where it was.
+   */
   const playOn = (where: PlaysOn) => {
     setPlayOnFailed("");
     if (where === playsOn) {
@@ -97,11 +105,14 @@ export function Library({
     }
     if (where === "here") {
       const handoff = remote.status.kind === "playing" ? remote.handoff() : undefined;
-      if (handoff !== undefined) {
-        local.take(handoff, true);
-        remote.pause();
+      if (handoff === undefined) {
+        setPlaysOn("here");
+        return;
       }
-      setPlaysOn("here");
+      command({ kind: "pause" }).then(() => {
+        local.take(handoff, true);
+        setPlaysOn("here");
+      }, playOnFailedFor);
       return;
     }
     const handoff = local.status.kind === "playing" ? local.handoff() : undefined;
@@ -109,16 +120,10 @@ export function Library({
       setPlaysOn("computer");
       return;
     }
-    // This device pauses only once the computer has the music, so a refusal leaves it playing.
-    api.command(takeOf(handoff, true)).then(
-      () => {
-        local.pause();
-        setPlaysOn("computer");
-      },
-      (failure: unknown) => {
-        setPlayOnFailed(failure instanceof Error ? failure.message : String(failure));
-      },
-    );
+    command(takeOf(handoff, true)).then(() => {
+      local.pause();
+      setPlaysOn("computer");
+    }, playOnFailedFor);
   };
   const station = useStation(player, tracks, account.id, library.favoriteGroups);
   // On a narrow screen the queue opens over the page, from the player.

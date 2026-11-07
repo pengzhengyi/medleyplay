@@ -5,10 +5,10 @@ remotes' commands reach the account's event streams as `remote` and `command`
 events (see the events API).
 """
 
-from typing import Annotated, Final, Literal
+from typing import Annotated, Final, Literal, Self
 
 from fastapi import APIRouter, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from medleyplay.application.remote import PageId
 from medleyplay.domain.errors import ForbiddenError
@@ -61,7 +61,8 @@ class ReportIn(_Strict):
     """What the speaker plays: a window of its queue in the order it plays, and how it plays.
 
     `entries` starts at place `offset` of the `total`; `position` is the place
-    of the entry playing, `total` when the queue has finished.
+    of the entry playing, `total` when the queue has finished. `counted` says
+    whether the play of that entry has been counted.
     """
 
     page: Page
@@ -77,6 +78,7 @@ class ReportIn(_Strict):
     duration: Seconds | None
     volume: Annotated[float, Field(ge=0, le=1)]
     muted: bool
+    counted: bool = False
     sleep: SleepIn | None = None
 
 
@@ -194,6 +196,20 @@ class TakeIn(_Command):
     seconds: Seconds
     playing: bool
     counted: bool
+
+    @model_validator(mode="after")
+    def _one_queue(self) -> Self:
+        keys = [entry.key for entry in self.entries]
+        if len(set(keys)) != len(keys):
+            message = "Each entry needs a key of its own."
+            raise ValueError(message)
+        if self.position >= len(keys):
+            message = "The position must name one of the entries."
+            raise ValueError(message)
+        if self.order is not None and sorted(self.order) != sorted(keys):
+            message = "The order must name each entry once."
+            raise ValueError(message)
+        return self
 
 
 type CommandIn = Annotated[

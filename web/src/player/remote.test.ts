@@ -68,6 +68,17 @@ describe("what the computer reports", () => {
 
     expect([state.status, state.message]).toEqual(["blocked", "Press play to start."]);
   });
+
+  it("says whether the play of the entry playing has counted", () => {
+    const player = playerOf();
+    const counted = playerOf({
+      handoff: () => ({ queue: player.queue, seconds: 12.5, counted: true }),
+    });
+
+    const state = stateOf(counted, sleepTimerOf(), NOW);
+
+    expect(state.counted).toBe(true);
+  });
 });
 
 describe("what a remote shows", () => {
@@ -124,6 +135,12 @@ describe("moving the music", () => {
 
     expect(handoff?.queue.entries.map((entry) => entry.key)).toEqual(["a", "b"]);
     expect(handoff?.seconds).toBe(14.5);
+  });
+
+  it("onto this page keeps the computer's count of the play, so it isn't counted twice", () => {
+    const handoff = handoffOf(speakerOf({ counted: true }), NOW);
+
+    expect(handoff?.counted).toBe(true);
   });
 
   it("onto this page takes nothing when the computer has nothing queued", () => {

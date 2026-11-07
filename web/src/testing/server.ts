@@ -188,6 +188,7 @@ export function signedIn(
   features: Features = NO_FEATURES,
 ): Routes {
   return {
+    "GET /api/device": { body: { presence: "host", label: "Safari on Mac", code: null } },
     "GET /api/me": { body: ALICE },
     "GET /api/tracks": { body: tracks },
     "GET /api/playlists": { body: playlists },

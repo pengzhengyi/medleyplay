@@ -7,6 +7,7 @@ import {
   formatLength,
   formatLibraryLength,
   formatQueueLength,
+  formatSeen,
   formatTime,
 } from "./format";
 
@@ -106,5 +107,26 @@ describe("formatTimeLeft", () => {
 
   it("writes a last part of a minute as 1 min", () => {
     expect(formatTimeLeft(5_000)).toBe("1 min");
+  });
+});
+
+describe("formatSeen", () => {
+  const NOW = Date.parse("2026-11-07T18:00:00Z");
+
+  it("says just now within the minute", () => {
+    expect(formatSeen(NOW - 59_000, NOW)).toBe("Just now");
+  });
+
+  it("counts minutes, then hours, back to a day ago", () => {
+    expect(formatSeen(NOW - 5 * 60_000, NOW)).toBe("5 min ago");
+    expect(formatSeen(NOW - 3 * 3_600_000, NOW)).toBe("3 hr ago");
+  });
+
+  it("names the day for anything older", () => {
+    const seen = Date.parse("2026-11-01T12:00:00Z");
+
+    expect(formatSeen(seen, NOW)).toBe(
+      new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(seen),
+    );
   });
 });

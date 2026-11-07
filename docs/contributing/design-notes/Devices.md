@@ -1,7 +1,7 @@
 # Devices
 
 > [!NOTE]
-> **Status: designed.** This note describes which devices may reach the
+> **Status: built.** This note describes which devices may reach the
 > server: the household's choice for new devices, how a new device asks and is
 > answered, and the list of allowed devices in Settings. Signing in, which
 > comes after, is in [Architecture](Architecture.md).
@@ -56,9 +56,10 @@ what is known of the device:
   phone included.
 - **Before the first account exists there is nothing to protect**, and the
   household may set up from a phone; the device that sets up is allowed.
-- **Upgrading keeps everyone in.** A browser signed in before devices existed
-  is allowed the first time it asks, so a server with no screen isn't locked
-  out by the upgrade. Sessions idle out after 30 days, so this ends by itself.
+- **Upgrading keeps everyone in.** The upgrade marks each session it finds, and
+  a browser holding one is allowed the first time it asks, so a server with no
+  screen isn't locked out by the upgrade. Sessions idle out after 30 days, so
+  this ends by itself.
 
 A request that isn't admitted gets `403` with code `device_waiting` or
 `device_refused`. What still answers: the web client's files, so a waiting
@@ -164,13 +165,13 @@ the host or another device.
   screen, so it needs no toast.
 - **Settings has an *Other devices* section**: the choice, then the waiting
   devices and the allowed ones, each with its label, address, and when it was
-  last seen. Allowed devices have Remove, and the list has Remove all. This
-  device is tagged and has no Remove.
+  last seen. Allowed devices have Remove, and the list has Remove all, which
+  asks once more first. This device is tagged and has no Remove.
 
 ## What it protects
 
 The gate keeps out devices the household didn't let in: a guest on the Wi-Fi,
-a neighbour on a shared network. It does not stop an attacker who can read the
+a neighbor on a shared network. It does not stop an attacker who can read the
 LAN's plain HTTP, who could copy an allowed device's cookie as they could a
 session's.
 
@@ -184,12 +185,15 @@ session's.
   is written at most once a minute; a pre-upgrade session is allowed; removing
   a device ends its sessions; removing the device making the request is
   refused; a stale revision conflicts.
-- **Web:** through the app with a test client whose address is set: the host
+- **Persistence:** the upgrade marks the sessions it finds, and undoing it
+  keeps them.
+- **Web:** through the app with test clients whose addresses are set: the host
   is admitted without a cookie; a phone waits, is allowed, and signs in; the
   client's files answer a waiting device; a forwarded request from loopback is
-  not the host.
-- **Client and E2E:** the waiting screen, the header pill, and the Settings
-  section, with a stand-in server.
+  not the host; an admin's event stream names the waiting devices.
+- **Client:** the waiting screen, the header pill, and the Settings section,
+  with a stand-in server. The browser tests run on the host, so they never see
+  the waiting screen; it is checked with the stand-in only.
 
 ## Left for later
 

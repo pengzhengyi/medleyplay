@@ -118,6 +118,16 @@ def get_mode(_: SignedInAccount, mode: ModeDep, jobs: JobsDep) -> ModeOut:
     return ModeOut.of(mode.now(), jobs.held_count())
 
 
+@router.post("/check")
+def check_mode(_: SignedInAccount, mode: ModeDep, jobs: JobsDep) -> ModeOut:
+    """Read the network and check the internet now, and return the Mode it comes to.
+
+    One that reaches the internet is Online at once, without settling. While the
+    setting is Offline, nothing is checked.
+    """
+    return ModeOut.of(mode.check_now(), jobs.held_count())
+
+
 @router.get("/settings")
 def get_mode_settings(_: SignedInAccount, mode: ModeDep) -> ModeSettingsOut:
     """Return the Mode's setting and the metered networks."""

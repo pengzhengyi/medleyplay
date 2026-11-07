@@ -9,8 +9,10 @@ tick: read network -> check if due -> decide -> tell if changed -> wake at the n
 ```
 
 A check is due at the first tick, five minutes after one that reached the
-internet, 30 seconds after one that didn't, on another network, when asked, and
-on leaving the setting Offline. While the setting is Offline, nothing is checked.
+internet, on another network, when asked, and on leaving the setting Offline.
+After one that didn't, the next waits 5 seconds, then twice as long each time
+up to 30, since a network just joined often answers within seconds; another
+network starts again at 5. While the setting is Offline, nothing is checked.
 """
 
 import logging
@@ -46,7 +48,10 @@ from medleyplay.persistence.schema import ModeSettingRow
 NETWORK_POLL: Final = timedelta(seconds=5)
 """How often the network is read."""
 CHECK_WHILE_ONLINE: Final = timedelta(minutes=5)
+FIRST_RETRY: Final = timedelta(seconds=5)
+"""How long after the first failed check the next one runs."""
 CHECK_AFTER_FAILURE: Final = timedelta(seconds=30)
+"""The longest wait between failed checks."""
 MAX_NAME: Final = 64
 MODE_ROW: Final = 1
 _SAVE_ATTEMPTS: Final = 3
@@ -109,6 +114,7 @@ class ModeService:
         self._checked_at: datetime | None = None
         self._next_check: datetime | None = None
         self._check_asked = False
+        self._retry = FIRST_RETRY
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
@@ -186,11 +192,24 @@ class ModeService:
             self._check_asked = True
         self._wake.set()
 
-    def tick(self) -> datetime:
+    def check_now(self) -> ModeView:
+        """Read the network and check the internet now, and return the Mode it comes to.
+
+        Someone asked, having seen the network back, so a check that reaches the
+        internet goes Online at once rather than settling. While the setting is
+        Offline, nothing is checked.
+        """
+        with self._state:
+            self._check_asked = True
+        self.tick(asked=True)
+        return self.now()
+
+    def tick(self, *, asked: bool = False) -> datetime:
         """Read the network, decide, then check the internet if due and decide again.
 
         Going Offline is decided before the check, so it is at once however long
-        the check takes. Return when to tick next.
+        the check takes; `asked` is a check someone asked for. Return when to
+        tick next.
         """
         with self._ticking:
             setting = self.settings()
@@ -198,6 +217,8 @@ class ModeService:
             with self._state:
                 changed_network = _identity(network) != _identity(self._network)
                 self._network = network
+                if changed_network:
+                    self._retry = FIRST_RETRY
                 due = setting.setting is not ModeSetting.OFFLINE and (
                     self._check_asked
                     or self._next_check is None
@@ -215,7 +236,7 @@ class ModeService:
                 self._decide(setting, network)
             elif due:
                 self._run_check()
-                self._decide(setting, network)
+                self._decide(setting, network, asked=asked)
             with self._state:
                 mode, next_check = self._mode, self._next_check
             wakes = [self._clock() + NETWORK_POLL, mode.online_at]
@@ -235,7 +256,11 @@ class ModeService:
         now = self._clock()
         with self._state:
             self._reachable, self._checked_at = reachable, now
-            self._next_check = now + (CHECK_WHILE_ONLINE if reachable else CHECK_AFTER_FAILURE)
+            if reachable:
+                self._next_check, self._retry = now + CHECK_WHILE_ONLINE, FIRST_RETRY
+            else:
+                self._next_check = now + self._retry
+                self._retry = min(2 * self._retry, CHECK_AFTER_FAILURE)
             self._check_asked = asked
 
     def _decide(
@@ -244,11 +269,14 @@ class ModeService:
         network: Network | Unread | None,
         *,
         only_offline: bool = False,
+        asked: bool = False,
     ) -> None:
         with self._state:
             previous = self._mode
             facts = Facts(network, self._reachable)
-            mode = decide(previous, setting.setting, facts, setting.names(), self._clock())
+            mode = decide(
+                previous, setting.setting, facts, setting.names(), self._clock(), asked=asked
+            )
             if only_offline and not (previous.online and not mode.online):
                 return
             self._mode = mode

@@ -60,6 +60,8 @@ export interface ViewProps {
   readonly admin: boolean;
   /** Whether medleyplay may contact music sites now, once the server has said. */
   readonly mode: Mode | null;
+  /** Show the Mode a check of the network came to. */
+  readonly onModeChecked: (mode: Mode) => void;
   /** Called after Settings changes which Tracks an enricher may be asked about. */
   readonly onEnrichersChanged: () => void;
   /** The station playing, and a way to start one. */
@@ -182,6 +184,7 @@ function viewOf(given: ViewProps) {
         <SettingsView
           admin={props.admin}
           mode={props.mode}
+          onModeChecked={props.onModeChecked}
           onEnrichersChanged={props.onEnrichersChanged}
         />
       );

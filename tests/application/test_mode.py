@@ -11,6 +11,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.mode import (
     CHECK_AFTER_FAILURE,
     CHECK_WHILE_ONLINE,
+    FIRST_RETRY,
     NETWORK_POLL,
     ModeDocument,
     ModeService,
@@ -157,6 +158,36 @@ class TestCheckingTheInternet:
         assert internet.checks == 2
         assert mode.now().checked_at == clock()
 
+    def test_tries_again_after_failed_checks_waiting_longer_each_time_up_to_the_longest(
+        self, mode: ModeService, clock: FakeClock, internet: FakeInternet
+    ) -> None:
+        internet.reachable = False
+        start = clock()
+        checked_at: list[timedelta] = []
+
+        for _ in range(70):
+            mode.tick()
+            if mode.now().checked_at == clock():
+                checked_at.append(clock() - start)
+            clock.advance(timedelta(seconds=1))
+
+        assert checked_at == [timedelta(seconds=s) for s in (0, 5, 15, 35, 65)]
+
+    def test_another_network_brings_the_wait_after_a_failed_check_back_to_the_first(
+        self, mode: ModeService, clock: FakeClock, internet: FakeInternet, network: FakeNetwork
+    ) -> None:
+        internet.reachable = False
+        for _ in range(3):
+            mode.tick()
+            clock.advance(CHECK_AFTER_FAILURE)
+        network.network = NetworkFactory.iphone_hotspot()
+        mode.tick()
+        clock.advance(FIRST_RETRY)
+
+        mode.tick()
+
+        assert internet.checks == 5
+
     def test_checks_at_once_on_another_network(
         self, mode: ModeService, internet: FakeInternet, network: FakeNetwork
     ) -> None:
@@ -219,6 +250,50 @@ class TestCheckingTheInternet:
         mode.tick()
 
         assert internet.checks == 2
+
+    def test_a_check_asked_now_that_reaches_the_internet_goes_online_at_once(
+        self, mode: ModeService, internet: FakeInternet, told: list[str]
+    ) -> None:
+        internet.reachable = False
+        mode.tick()
+        internet.reachable = True
+
+        view = mode.check_now()
+
+        assert (view.mode.online, view.mode.reason) == (True, Reason.ONLINE)
+        assert (internet.checks, told) == (2, ["mode", "mode"])
+
+    def test_a_check_asked_now_reads_the_network_again(
+        self, mode: ModeService, network: FakeNetwork
+    ) -> None:
+        network.network = None
+        mode.tick()
+        network.network = NetworkFactory.home_wifi()
+
+        view = mode.check_now()
+
+        assert view.mode.online
+
+    def test_a_check_asked_now_that_cant_reach_the_internet_says_when_it_checked(
+        self, mode: ModeService, clock: FakeClock, internet: FakeInternet
+    ) -> None:
+        internet.reachable = False
+        mode.tick()
+        clock.advance(timedelta(seconds=2))
+
+        view = mode.check_now()
+
+        assert (view.mode.reason, view.checked_at) == (Reason.UNREACHABLE, clock())
+
+    def test_a_check_asked_now_checks_nothing_while_the_setting_is_offline(
+        self, mode: ModeService, accounts: AccountService, internet: FakeInternet
+    ) -> None:
+        alice, _ = _alice_and_bob(accounts)
+        mode.put_setting(alice, ModeSetting.OFFLINE, revision=0)
+
+        view = mode.check_now()
+
+        assert (view.mode.reason, internet.checks) == (Reason.SET_OFFLINE, 0)
 
     def test_checks_nothing_while_the_setting_is_offline(
         self, mode: ModeService, accounts: AccountService, internet: FakeInternet

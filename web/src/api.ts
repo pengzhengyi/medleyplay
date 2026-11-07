@@ -635,6 +635,8 @@ export const api = {
   download: (trackId: number) =>
     call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),
   mode: () => call<Mode>("GET", "/api/mode"),
+  /** Read the network and check the internet now; one reached is Online at once. */
+  checkMode: () => call<Mode>("POST", "/api/mode/check"),
   modeSettings: () => call<ModeSettings>("GET", "/api/mode/settings"),
   saveModeSetting: (setting: ModeSetting, revision: number) =>
     call<ModeSettings>("PUT", "/api/mode/settings", { setting, revision }),

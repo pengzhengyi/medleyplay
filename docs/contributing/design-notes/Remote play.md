@@ -29,7 +29,7 @@
 - **A remote is the same player with another engine.** The page's views take a
   player; on a remote, that player shows what the computer plays and sends what
   the listener does to it. Every view works unchanged.
-- **The server relays and remembers nothing.** It keeps the computer's last
+- **The server relays and stores nothing.** It keeps the computer's last
   report in memory and passes commands on; a restart forgets both, and the
   computer's page reports again when its event stream comes back.
 - **One account, one speaker.** A phone controls the computer only while both
@@ -48,37 +48,49 @@
 ## The speaker
 
 - **Only a page on the host can be the speaker**, as `GET /api/device` says
-  (`host`); the server checks the claim itself.
-- **The page that played last on the host is the speaker.** A host page claims
-  it when its event stream is ready and whenever it starts playing, so of two
-  host tabs, the one the household used last answers.
+  (`host`); the server checks each report itself.
+- **A host page becomes the speaker by reporting**: while it plays, or while it
+  has a queue and the account has no speaker. Of two host tabs, the one the
+  household played on last answers; a tab with nothing queued never reports.
+- **A page is the speaker while one of its event streams is open.** A stream
+  that reconnects keeps it; once the last one ends, it is forgotten, and
+  remotes say so.
 - **It reports on every change it would show**: the queue, which entry plays,
-  playing or paused, shuffle and repeat, the volume, a seek. It doesn't report
-  as the time goes by: a remote counts the seconds itself from the last report.
-- **A browser may refuse to start playing** a page no one has clicked on yet,
-  as Safari does. The speaker then reports it is waiting for a click, and the
-  remote says so beside its play button: *Click once on the computer to let it
-  play*.
-- **A speaker that goes away** — its page closed, its stream ended — is
-  forgotten, and remotes say *The computer isn't playing*.
+  playing or paused, shuffle and repeat, the volume, the sleep timer. It
+  doesn't report as the time goes by: a remote counts the seconds itself. It
+  reports again when its position drifts more than 2 s from what its last
+  report foretold, as after a seek, and every 20 s while it is the speaker.
+- **A report is a window of the queue**, in the order it plays: from 50 entries
+  before the one playing, at most 500, with the queue's length. A queue of
+  thousands costs the same as one of fifty.
+- **A browser may refuse to start playing** a page no one has pressed play on,
+  as Safari does. The speaker then reports it is *blocked*, and the remote says
+  beside its play button: *Click once on the computer to let it play*.
+- **Several accounts signed in on the host** each have their own speaker, and
+  play at once.
 
 ## The remote
 
-- **The remote's player shows the speaker's report**: the queue, the Track
-  playing, its position counted on from when the report was sent, the volume.
-  The remote looks each Track up in its own Library, as the speaker did.
+- **The remote's player shows the speaker's report**: the queue window, the
+  Track playing, its position counted on from when the report was sent, the
+  volume. The remote looks each Track up in its own Library.
 - **What the listener does is a command**, one per action the player has:
-  `play` a list from an entry, `playAll`, `playNext`, `add`, `toggle`,
-  `pause`, `next`, `previous`, `seek`, `move`, `remove`, `clear`, `shuffle`,
-  `repeat`, `volume`, `mute`. A command names Tracks and entries by id and key,
-  never by position, so one sent as the queue changes still means what it
-  meant.
-- **A command is fire and forget.** The speaker's next report shows its
-  result; a command for an entry already gone does nothing. A volume dragged
-  sends at most one command every 150 ms, and the last one always.
+  `play` a list from an entry, `playAll`, `playNext`, `add`, `toggle`, `pause`,
+  `next`, `previous`, `seek`, `move`, `remove`, `clear`, `shuffle`, `repeat`,
+  `volume`, `mute`, `sleep`. A command names Tracks and entries by id and key,
+  never by place; `seek` names the entry it means, and does nothing once
+  another plays. The commands follow the player's actions, not the queue's
+  reducer, since an action such as `next` does more than change the queue.
+- **A remote sends one command at a time**, so they arrive in the order they
+  were made. The speaker's next report shows each result. Play and pause show
+  at once, before that report. A volume dragged sends at most one command
+  every 150 ms, and the last one always.
+- **A refused command says why in the player**: nothing playing on the computer
+  (409), or too many commands waiting (429). With no report for a minute, the
+  player says *The computer isn't responding*.
+- **The sleep timer runs on the speaker**, so it pauses the computer even when
+  the phone's page sleeps; the remote sets it and shows it.
 - **The remote's own audio stays silent** while it plays on the computer.
-- **The sleep timer runs on the remote**, pausing the speaker, while the
-  remote's page is open.
 
 ## Moving the music
 
@@ -86,12 +98,16 @@ Choosing where to play moves what plays, as Spotify Connect does:
 
 ```text
 phone plays, Play on → the computer   phone's queue and second → computer, playing; phone pauses
-computer plays, Play on → this phone  computer's queue and second → phone, playing; computer pauses
+computer plays, Play on → this device  computer's queue window and second → phone, playing; computer pauses
 ```
 
-- **The move is one command, `take`**, carrying the queue and the second to
-  start from. Moving onto a phone happens in that phone's page, from the last
-  report.
+- **The move onto the computer is one command, `take`**, carrying the whole
+  queue, its own order when shuffled, the second to start from, and whether the
+  play of the entry playing has already counted, so it isn't counted twice.
+- **The phone pauses only once the server has passed the command on**, so a
+  computer gone away leaves the phone playing, and *Play on* says why.
+- **Moving onto the phone takes the report's window**, the 500 entries around
+  the one playing.
 - **Nothing playing moves nothing**: choosing the computer while the phone is
   paused or idle just shows what the computer has.
 
@@ -101,52 +117,65 @@ All in memory, in `RemoteService`; nothing is stored.
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `PUT /api/remote/speaker` | a page on the host | Claim the speaker for this account, naming the page |
-| `PUT /api/remote/report` | the speaker | Replace the report; another page answers 409 |
-| `POST /api/remote/commands` | any page of the account | Pass a command to the speaker; none answers 409 |
+| `PUT /api/remote/report` | a page on the host | Report what it plays; answers whether it is the speaker; elsewhere 403 |
+| `POST /api/remote/commands` | any page of the account | Pass a command to the speaker; none answers 409, a full line 429 |
 
 - **A page names itself** with a random id it makes on loading, sent as
-  `?page=` when it opens `GET /api/events`. When that stream ends, a speaker
-  of that name is forgotten.
+  `?page=` when it opens `GET /api/events` and in each report.
 - **The event stream carries two new events** to the account's own streams:
-  `remote`, the report as it stands (or none), sent when the stream opens and
-  whenever it changes, with how long ago it was sent so the remote's clock
-  needn't agree with the computer's; and `command`, sent only to the speaker's
-  stream, one per command, in order.
-- **Commands wait in a short line per speaker**, at most 64; a speaker that
-  falls behind further is forgotten, as a stream that falls behind is.
+  `remote`, the speaker's page and report (or none), sent when the stream
+  opens and whenever the speaker reports, comes, or goes, with how long ago it
+  reported, so the remote's clock needn't agree with the computer's; and
+  `command`, sent only to the speaker's stream, one per command, in order.
+- **Commands wait in a line per speaker**, at most 64. The speaker's stream
+  takes every waiting command whenever it wakes, so a notice of commands
+  waiting may be dropped like progress; a line that is full refuses the next
+  command and leaves the speaker as it is.
 - **Reports and commands are checked for shape** with Pydantic: a known
-  command, ids and keys of the right form, a queue of at most 10,000 entries.
-  The server never interprets them.
+  command, ids and keys of the right form, at most 20,000 entries in a command
+  and 500 in a report, a message of at most 300 characters. The server never
+  interprets them.
 
 ## The web client
 
-- **`usePlayer` is the speaker's engine**, and gains a way to apply commands
-  and to report.
-- **`useRemotePlayer` is the remote's**: it implements the same `Player` from
-  the `remote` event, and sends commands. `Library` uses one or the other,
-  whichever *Play on* names.
-- ***Play on*** is a button in the player, shown only on a page that isn't the
-  host while the account has a speaker: a speaker icon with a menu of *This
-  phone* and *The computer*. The choice is kept per device, in local storage.
+- **`usePlayer` is the speaker's engine.** It gains `handoff`, what plays and
+  whether its play counted, and `take`, playing a queue from a second; a play
+  the browser refuses is the status *blocked*.
+- **`useSpeaker`** reports the host page's player and carries out the commands
+  its stream hears. **`useRemotePlayer`** is the remote's `Player`, from the
+  `remote` event. `Library` uses one or the other, whichever *Play on* names.
+  The rules both share, the report, the window, the count of the seconds, and
+  how a command is carried out, are pure functions in `player/remote.ts`.
+- ***Play on*** is a speaker button in the player, beside *Up next*, on every
+  page that isn't on the host: a menu of *This device* and *The computer*. The
+  computer is offered only while medleyplay plays there, and otherwise says to
+  open it. Playing on the computer, the button says *Computer*. The choice
+  lasts while the page is open; with the speaker gone, the page plays on
+  itself again.
 - **The *Listen on your device* guide** says the phone plays on itself, or on
   the computer with *Play on*.
 
 ## Testing
 
-- **Server:** only a host page claims; only the speaker reports; a command
-  reaches the speaker's stream and no other; one with no speaker answers 409;
-  the speaker is forgotten when its stream ends; a remote's stream hears each
-  report, with its age; another account's stream hears nothing.
-- **Client:** `useRemotePlayer` shows a report, counts the position on, and
-  sends a command for each action; the speaker applies each command and
-  reports each change; *Play on* moves the music both ways; the waiting-for-a-
-  click message.
+- **Server:** a host page that plays becomes the speaker, one with nothing
+  queued never does, and one paused leaves another in place; a page on a
+  phone may not report; a command reaches the speaker's stream and no other,
+  in order; none answers 409 and a full line 429; the speaker stays while a
+  stream reconnects and goes with its last; another account hears nothing;
+  commands and reports of the wrong shape answer 422.
+- **Client:** the report and its window; the remote's queue and its count of
+  the seconds; how each command is carried out; the remote player's commands,
+  one at a time and in order, play and pause at once, the volume's pace, a
+  refusal, *not responding*, *blocked*, and the sleep timer; the speaker's
+  reports, on a change, a seek, and a heartbeat; *Play on* through the page.
 
 ## Left for later
 
 - **A speaker with no page**: the server playing through the computer's own
   audio output, so a server with no screen can be the speaker.
 - **Any device as the speaker**, so a phone can play on a tablet.
-- **The lock screen on a remote**: its controls drive the phone's own audio,
-  which a remote doesn't play.
+- **The lock screen on a remote.** Its controls drive the phone's own audio,
+  which a remote doesn't play, so a phone playing on the computer has no lock
+  screen controls.
+- **Telling a page as soon as it stops being the speaker**, rather than when
+  it next reports.

@@ -217,6 +217,46 @@ class TestComingBackOnline:
         assert mode.online_at == calm + FIRST_WAIT
 
 
+class TestACheckAskedFor:
+    def test_that_reaches_the_internet_goes_online_at_once_without_settling(self) -> None:
+        flapped = decide(online_at_home(), AUTO, on(None), {}, NOW + timedelta(seconds=10))
+
+        mode = decide(
+            flapped,
+            AUTO,
+            on(NetworkFactory.home_wifi()),
+            {},
+            NOW + timedelta(seconds=20),
+            asked=True,
+        )
+
+        assert (mode.online, mode.reason, mode.online_at) == (True, Reason.ONLINE, None)
+
+    def test_that_cant_reach_the_internet_stays_offline(self) -> None:
+        mode = decide(
+            starting(AUTO, NOW),
+            AUTO,
+            on(NetworkFactory.home_wifi(), reachable=False),
+            {},
+            NOW,
+            asked=True,
+        )
+
+        assert (mode.online, mode.reason) == (False, Reason.UNREACHABLE)
+
+    def test_keeps_a_metered_network_offline(self) -> None:
+        mode = decide(
+            starting(AUTO, NOW),
+            AUTO,
+            on(NetworkFactory.iphone_hotspot()),
+            hotspot_marked(),
+            NOW,
+            asked=True,
+        )
+
+        assert (mode.online, mode.reason) == (False, Reason.METERED)
+
+
 class TestTheNetwork:
     @pytest.mark.parametrize(
         ("subnet", "hotspot_like"),

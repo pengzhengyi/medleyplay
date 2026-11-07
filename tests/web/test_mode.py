@@ -144,3 +144,21 @@ def test_removing_a_mark_twice_answers_no_content_both_times(client: TestClient)
 
 def test_the_mode_needs_a_signed_in_account(client: TestClient) -> None:
     assert client.get("/api/mode").status_code == 401
+
+
+def test_any_signed_in_account_checks_the_network_now_and_sees_the_mode_it_comes_to(
+    client: TestClient, mode: ModeService
+) -> None:
+    set_up_as_alice(client)
+    add_bob(client)
+    sign_in(client, "bob")
+    mode.tick()
+
+    response = client.post("/api/mode/check")
+
+    assert response.status_code == 200
+    assert (response.json()["online"], response.json()["reason"]) == (True, "online")
+
+
+def test_checking_the_network_needs_a_signed_in_account(client: TestClient) -> None:
+    assert client.post("/api/mode/check").status_code == 401

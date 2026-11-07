@@ -27,6 +27,14 @@ export function offlineBecause(mode: Mode): string | null {
   }
 }
 
+/**
+ * Return whether checking the network could bring medleyplay Online: it is Offline
+ * on Auto, for a reason other than a network marked metered.
+ */
+export function checkable(mode: Mode): boolean {
+  return !mode.online && mode.setting === "auto" && mode.reason !== "metered";
+}
+
 /** Return the network the server is on, in a sentence. */
 export function networkSaid(mode: Mode): string {
   const { network } = mode;

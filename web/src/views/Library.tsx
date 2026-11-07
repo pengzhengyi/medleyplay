@@ -17,7 +17,7 @@ import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
 import { useStation } from "../library/useStation";
 import { current, repeatAfter, upNext } from "../player/queue";
-import { offlineBecause } from "../mode";
+import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
 import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
@@ -25,6 +25,7 @@ import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddFile } from "./AddFile";
 import { AddLink } from "./AddLink";
 import { AddToPlaylist } from "./AddToPlaylist";
+import { CheckNetwork } from "./CheckNetwork";
 import { EditDetails } from "./EditDetails";
 import { ListenOnDevice } from "./ListenOnDevice";
 import { type AiAsk, SongsEditor } from "./EditSongs";
@@ -69,6 +70,8 @@ export function Library({
   const station = useStation(player, tracks, account.id, library.favoriteGroups);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
+  // When the Mode a check left Offline began, so the header says it is still Offline.
+  const [stillSince, setStillSince] = useState<string | null>(null);
   // The view Now Playing was opened over, while it is open; going to another view closes it.
   const here = hrefOf(route);
   const [nowPlayingOver, setNowPlayingOver] = useState<string | undefined>(undefined);
@@ -314,16 +317,27 @@ export function Library({
         </h1>
         <SearchBox route={route} providers={library.providers} onLookUp={setLinking} />
         {library.mode !== null && !library.mode.online && (
-          <a
-            className="mode-note"
-            href={hrefOf({ view: "settings" })}
-            title="See the network in Settings"
-          >
-            <CloudSlashIcon weight="bold" aria-hidden />
-            <span>
-              Offline<span className="why">: {offlineBecause(library.mode)}</span>
-            </span>
-          </a>
+          <span className="mode-note">
+            <a
+              className="mode-note-link"
+              href={hrefOf({ view: "settings" })}
+              title="See the network in Settings"
+            >
+              <CloudSlashIcon weight="bold" aria-hidden />
+              <span>
+                {stillSince === library.mode.since ? "Still offline" : "Offline"}
+                <span className="why">: {offlineBecause(library.mode)}</span>
+              </span>
+            </a>
+            {checkable(library.mode) && (
+              <CheckNetwork
+                onChecked={(mode) => {
+                  library.modeChecked(mode);
+                  setStillSince(mode.online ? null : mode.since);
+                }}
+              />
+            )}
+          </span>
         )}
         <ThemeSwitch />
         <button
@@ -371,6 +385,7 @@ export function Library({
             actions={actions}
             admin={account.role === "admin"}
             mode={library.mode}
+            onModeChecked={library.modeChecked}
             onEnrichersChanged={library.refreshFindable}
             station={station}
             accountId={account.id}

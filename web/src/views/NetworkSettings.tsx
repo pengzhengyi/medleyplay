@@ -9,16 +9,19 @@
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { ApiError, type Mode, type ModeSetting, type ModeSettings, api } from "../api";
-import { SETTINGS, networkSaid, offlineBecause } from "../mode";
+import { SETTINGS, checkable, networkSaid, offlineBecause } from "../mode";
 import { classOf, useNote } from "../useNote";
+import { CheckNetwork } from "./CheckNetwork";
 
 /** The Mode now, and, for an admin, its setting and the metered networks to change. */
 export function NetworkSettings({
   admin,
   mode,
+  onModeChecked,
 }: {
   readonly admin: boolean;
   readonly mode: Mode | null;
+  readonly onModeChecked: (mode: Mode) => void;
 }) {
   const [settings, setSettings] = useState<ModeSettings | undefined>(undefined);
   const [name, setName] = useState("");
@@ -84,7 +87,7 @@ export function NetworkSettings({
   return (
     <>
       {error !== "" && <p role="alert">{error}</p>}
-      <ModeNow mode={mode} />
+      <ModeNow mode={mode} onChecked={onModeChecked} />
       {settings === undefined ? (
         error === "" && (
           <p className="hint" aria-busy="true">
@@ -184,8 +187,14 @@ export function NetworkSettings({
   );
 }
 
-/** Whether medleyplay is Online or Offline and why, the network, and what waits. */
-function ModeNow({ mode }: { readonly mode: Mode | null }) {
+/** Whether medleyplay is Online or Offline and why, the network, when it was checked, and what waits. */
+function ModeNow({
+  mode,
+  onChecked,
+}: {
+  readonly mode: Mode | null;
+  readonly onChecked: (mode: Mode) => void;
+}) {
   if (mode === null) {
     return (
       <p className="hint" aria-busy="true">
@@ -203,6 +212,14 @@ function ModeNow({ mode }: { readonly mode: Mode | null }) {
         {mode.online_at !== null && `Goes Online at ${timeOf(mode.online_at)} if nothing changes.`}
       </p>
       <p>{networkSaid(mode)}</p>
+      {(mode.checked_at !== null || checkable(mode)) && (
+        <p className="mode-checked">
+          {mode.checked_at !== null && (
+            <span className="hint">Internet last checked at {timeOf(mode.checked_at)}.</span>
+          )}
+          {checkable(mode) && <CheckNetwork said="Check now" onChecked={onChecked} />}
+        </p>
+      )}
       {mode.held_jobs > 0 && <p className="hint">{waiting} for Online.</p>}
     </div>
   );

@@ -69,16 +69,20 @@ Auto is Online when all of these hold, and Offline when any doesn't:
   both are in the config file. Neither is a music site, so the check touches no
   site's defenses. A redirect or another answer is a captive portal, which is
   unreachable.
-- **When the check runs:** every five minutes while Online and quiet; every 30
-  seconds after a failed check; at once when a Download fails for the network,
-  as the plugin classifies it. A site's refusal, such as a block or a login, is
+- **When the check runs:** every five minutes while Online and quiet; at once on
+  another network, and when a Download fails for the network, as the plugin
+  classifies it. After a failed check the next waits 5 seconds, then twice as
+  long each time up to 30, since a network just joined often answers within
+  seconds; another network starts again at 5. A site's refusal, such as a block or a login, is
   never evidence of no internet. While the setting is Offline, nothing is
   checked.
 - **Going Offline takes effect at once;** coming back Online waits until the
   facts have said Online for 30 seconds in a row, doubling after each flap up to
   two minutes and back to 30 seconds after five calm minutes. A flap is the
   facts turning Offline while settling, or within five minutes of going Online. The server starts
-  Offline and waits the same way. A change of the setting takes effect at once.
+  Offline and waits the same way. A change of the setting takes effect at once,
+  as does a check someone asks for that reaches the internet: they saw the
+  network back, so it goes Online without settling.
 - **Elsewhere than macOS,** the network facts are unknown, and Auto goes by the
   connectivity check alone.
 
@@ -136,6 +140,10 @@ Auto is Online when all of these hold, and Offline when any doesn't:
   API. `kind` is `wifi`, `wired`, or `unknown`. `since` is when the Mode last
   changed, and `online_at`, while settling, when it goes Online if nothing
   changes.
+- **`POST /api/mode/check`** reads the network and checks the internet now, for
+  any signed-in Account, and answers the Mode it comes to, as `GET` does; one
+  that reaches the internet is Online at once. While the setting is Offline,
+  nothing is checked.
 - **The event stream sends a `mode` event,** the same body, when a stream opens
   and whenever the Mode changes, so a page that reconnects misses nothing. A
   check that changes only `checked_at` sends none.
@@ -144,11 +152,14 @@ Auto is Online when all of these hold, and Offline when any doesn't:
 
 - **Offline shows in the header,** with the reason, such as *Offline: on a
   metered network*, and leads to the Network settings; a phone shows only
-  *Offline*. Online shows nothing. The page follows the `mode` event, and asks
+  *Offline*. Beside it, on Auto and not on a metered network, a button checks
+  the network now; its icon turns while checking, and a check that stays
+  Offline says *Still offline*. Online shows nothing. The page follows the `mode` event, and asks
   for the Tracks again when the Mode goes Online or Offline, since what can
   play changes.
 - **Settings gains a Network section:** why the Mode is what it is, when a
-  settling Mode goes Online, the network the server is on, and how many
+  settling Mode goes Online, the network the server is on, when the internet
+  was last checked with *Check now* beside it, and how many
   downloads wait. An admin chooses among three settings, saved at once; marks
   the network the server is on metered with a name, told when it looks like a
   phone's hotspot; and removes a mark. A member sees the setting and the marks.

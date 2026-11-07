@@ -51,6 +51,8 @@ export interface Library {
   readonly error: string;
   /** Whether medleyplay may contact music sites now, once the server has said. */
   readonly mode: Mode | null;
+  /** Show the Mode a check of the network came to, before the stream says it. */
+  readonly modeChecked: (mode: Mode) => void;
   /** The Tracks each enricher may be asked about now, by the enricher's name. */
   readonly findable: ReadonlyMap<string, ReadonlySet<number>>;
   /** Ask the enrichers again which Tracks they may be asked about, as after one is set up. */
@@ -417,6 +419,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     loaded: store.loaded,
     error,
     mode,
+    modeChecked: setMode,
     findable,
     refreshFindable: loadFindable,
     modes,

@@ -68,10 +68,13 @@ function keepFolded(folded: ReadonlySet<SectionId>): void {
 export function SettingsView({
   admin,
   mode,
+  onModeChecked,
   onEnrichersChanged,
 }: {
   readonly admin: boolean;
   readonly mode: Mode | null;
+  /** Show the Mode a check of the network came to. */
+  readonly onModeChecked: (mode: Mode) => void;
   /** Called after a setting changes which Tracks an enricher may be asked about. */
   readonly onEnrichersChanged: () => void;
 }) {
@@ -105,7 +108,7 @@ export function SettingsView({
       </>
     ),
     "keyboard-shortcuts": <ShortcutSettings />,
-    network: <NetworkSettings admin={admin} mode={mode} />,
+    network: <NetworkSettings admin={admin} mode={mode} onModeChecked={onModeChecked} />,
     storage: <StorageSettings admin={admin} />,
     bilibili: (
       <>

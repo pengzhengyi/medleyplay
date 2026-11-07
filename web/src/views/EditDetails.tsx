@@ -398,6 +398,7 @@ const KIND_WHY: Readonly<Record<KindReason, string>> = {
   split: "Split into songs, so an album",
   segment: "A song of an album file",
   length: "Guessed from its length",
+  default: "No one named it, so a song",
 };
 
 /**

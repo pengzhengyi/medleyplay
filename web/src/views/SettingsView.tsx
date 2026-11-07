@@ -16,6 +16,7 @@ import { classOf, useNote } from "../useNote";
 import { formatBytes } from "../format";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
+import { KindSettings } from "./KindSettings";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
@@ -31,6 +32,7 @@ const SECTIONS = [
   { id: "appearance", title: "Appearance" },
   { id: "keyboard-shortcuts", title: "Keyboard shortcuts" },
   { id: "network", title: "Network" },
+  { id: "kinds", title: "Songs and albums" },
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
   { id: "musicbrainz", title: "MusicBrainz" },
@@ -70,6 +72,7 @@ export function SettingsView({
   mode,
   onModeChecked,
   onEnrichersChanged,
+  onKindsChanged,
 }: {
   readonly admin: boolean;
   readonly mode: Mode | null;
@@ -77,6 +80,8 @@ export function SettingsView({
   readonly onModeChecked: (mode: Mode) => void;
   /** Called after a setting changes which Tracks an enricher may be asked about. */
   readonly onEnrichersChanged: () => void;
+  /** Called after a setting changes how a Track's kind is guessed. */
+  readonly onKindsChanged: () => void;
 }) {
   const [folded, setFolded] = useState(loadFolded);
   const fold = (next: ReadonlySet<SectionId>) => {
@@ -109,6 +114,7 @@ export function SettingsView({
     ),
     "keyboard-shortcuts": <ShortcutSettings />,
     network: <NetworkSettings admin={admin} mode={mode} onModeChecked={onModeChecked} />,
+    kinds: <KindSettings admin={admin} onChanged={onKindsChanged} />,
     storage: <StorageSettings admin={admin} />,
     bilibili: (
       <>

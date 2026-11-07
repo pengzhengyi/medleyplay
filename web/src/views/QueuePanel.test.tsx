@@ -150,8 +150,14 @@ describe("an album in the queue", () => {
   it("marks an album in one file as an album, and a song as a song", async () => {
     const queue = await playingMelt();
 
-    const marks = within(queue).getAllByRole("img", { name: /^(Song|Album)$/u });
-    expect(marks.map((mark) => mark.title)).toEqual(["Album", "Song", "Song", "Song", "Album"]);
+    const marks = within(queue).getAllByRole("img", { name: /^(Song|Album)/u });
+    expect(marks.map((mark) => mark.title)).toEqual([
+      "Album",
+      "Song",
+      "Song",
+      "Song",
+      "Album, guessed from its length",
+    ]);
   });
 
   it("removes the rest of an album at once", async () => {

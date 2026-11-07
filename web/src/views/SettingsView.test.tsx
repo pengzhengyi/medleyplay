@@ -9,7 +9,12 @@ import { SettingsView } from "./SettingsView";
 const GB = 1_000_000_000;
 
 /** A limit of 20 GB, saved twice before, so at revision 2. */
-const LIMIT_20: Settings = { storage_limit: 20 * GB, removal_order: "least_favorite", revision: 2 };
+const LIMIT_20: Settings = {
+  storage_limit: 20 * GB,
+  removal_order: "least_favorite",
+  album_minutes: 20,
+  revision: 2,
+};
 
 /** 1.5 GB of Downloads and 0.5 GB of prepared copies, under a 20 GB limit. */
 const USING_2: Storage = {
@@ -31,6 +36,7 @@ function open(
   mode: Mode = modeOf(),
   metered: readonly MeteredNetwork[] = [],
   onModeChecked: (mode: Mode) => void = vi.fn(),
+  onKindsChanged: () => void = vi.fn(),
 ) {
   const served = serve({
     "GET /api/settings": { body: LIMIT_20 },
@@ -57,6 +63,7 @@ function open(
       mode={mode}
       onModeChecked={onModeChecked}
       onEnrichersChanged={vi.fn()}
+      onKindsChanged={onKindsChanged}
     />,
   );
   return served;
@@ -77,6 +84,7 @@ const HOTSPOT_MARK: MeteredNetwork = {
 };
 
 const network = () => within(screen.getByRole("region", { name: "Network" }));
+const storage = () => within(screen.getByRole("region", { name: "Downloads and storage" }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -211,9 +219,11 @@ describe("storage settings", () => {
         "Saving removes 2 downloads (600 MB) and 1 prepared copy (80 MB) to fit.",
       ),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(storage().getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Saved.")).toBeInTheDocument();
-    expect(sent).toEqual([{ storage_limit: GB, removal_order: "least_favorite", revision: 2 }]);
+    expect(sent).toEqual([
+      { storage_limit: GB, removal_order: "least_favorite", album_minutes: 20, revision: 2 },
+    ]);
   });
 
   it("saves no limit at all", async () => {
@@ -226,10 +236,12 @@ describe("storage settings", () => {
     });
 
     await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(storage().getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(sent).toEqual([{ storage_limit: null, removal_order: "least_favorite", revision: 2 }]);
+      expect(sent).toEqual([
+        { storage_limit: null, removal_order: "least_favorite", album_minutes: 20, revision: 2 },
+      ]);
     });
   });
 
@@ -239,7 +251,7 @@ describe("storage settings", () => {
     });
     await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
 
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(storage().getByRole("button", { name: "Save" }));
 
     expect(await screen.findByText(/These settings changed elsewhere/)).toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: "Limit in GB" })).toHaveValue(20);
@@ -252,7 +264,7 @@ describe("storage settings", () => {
     await userEvent.clear(size);
 
     expect(screen.getByText("Type a size in GB, such as 20.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(storage().getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });
 
@@ -305,6 +317,7 @@ describe("the Settings sections", () => {
       "Appearance",
       "Keyboard shortcuts",
       "Network",
+      "Songs and albums",
       "Downloads and storage",
       "Bilibili",
       "MusicBrainz",
@@ -405,5 +418,66 @@ describe("the Network section", () => {
     expect(network().getByText("iPhone hotspot")).toBeVisible();
     expect(network().queryByRole("radio")).not.toBeInTheDocument();
     expect(network().queryByRole("button", { name: /Remove/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("the Songs and albums section", () => {
+  const kinds = () => within(screen.getByRole("region", { name: "Songs and albums" }));
+
+  it("lets an admin turn off guessing that a long file is an album, and asks for the Tracks again", async () => {
+    const sent: unknown[] = [];
+    const changed = vi.fn();
+    open(
+      true,
+      {
+        "PUT /api/settings": (body) => {
+          sent.push(body);
+          return { body: { ...LIMIT_20, album_minutes: null, revision: 3 } };
+        },
+      },
+      modeOf(),
+      [],
+      vi.fn(),
+      changed,
+    );
+
+    await userEvent.click(
+      await kinds().findByRole("checkbox", { name: "Guess that a long file is an album" }),
+    );
+    await userEvent.click(kinds().getByRole("button", { name: "Save" }));
+
+    expect(await kinds().findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...LIMIT_20, album_minutes: null }]);
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("lets an admin set how long a file must be to be guessed an album", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, album_minutes: 30, revision: 3 } };
+      },
+    });
+    const minutes = await kinds().findByRole("spinbutton", { name: "Shortest album, in minutes" });
+
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "30");
+    await userEvent.click(kinds().getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ ...LIMIT_20, album_minutes: 30 }]);
+    });
+  });
+
+  it("says how long a file is guessed an album to a member, who can't change it", async () => {
+    open(false);
+
+    expect(
+      await kinds().findByText(
+        /A file 20 minutes or longer is guessed an album\. An admin changes this\./,
+      ),
+    ).toBeVisible();
+    expect(kinds().queryByRole("checkbox")).toBeNull();
   });
 });

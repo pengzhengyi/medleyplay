@@ -98,7 +98,12 @@ Track's kind is decided.
 
 - **Each item is a row,** marked with a note for a song or a record for an
   album, each named *Song* or *Album* for screen readers and in its tooltip; the
-  marks show in every song table and in Up next.
+  marks show in every song table and in Up next. A settled kind has a solid
+  mark; a guessed one an outline, sitting back a little, named *Album, guessed
+  from its length*. Choosing Song or Album in Edit details settles it.
+- **Settings → Songs and albums** says how long a file is guessed an album, 20
+  minutes unless an admin sets another length or turns the guess off; saving
+  asks for the Tracks again, so their kinds show at once.
 - **A split file's songs fold under it,** behind a caret named *Show the songs
   of 生如夏花*, which states `aria-expanded`; its songs are set in under it. The
   table keeps `role="table"` with a disclosure button rather than a treegrid,
@@ -146,7 +151,8 @@ Track's kind is decided.
 - **The header stays in view:** it sticks under the top bar while the songs
   scroll, on a solid band with a rule below it, its names in the ink color.
 - **Filters** are TanStack's own column filters, in a *Filter* panel of native
-  controls, so a phone shows its own pickers: artist, album, genre, and year,
+  controls, so a phone shows its own pickers: kind (songs or albums), artist,
+  album, genre, and year,
   each offering only the values the other filters leave, with how many songs
   each keeps; a rating of at least so many stars, or none; favorites only; and
   only the songs that play now. A genre such as `alternative rock; britpop`

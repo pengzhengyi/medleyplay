@@ -564,14 +564,42 @@ describe("the Library", () => {
     );
   });
 
-  it("marks each item a song or an album", () => {
+  it("marks each item a song or an album, saying when it is a guess", () => {
     renderLibrary();
 
     const kindOf = (title: string) =>
       within(rowOf(screen.getByRole("button", { name: title }))).getByRole("img", {
-        name: /^(Song|Album)$/u,
+        name: /^(Song|Album)/u,
       }).title;
-    expect(["Melt", "生如夏花", "Bremen"].map(kindOf)).toEqual(["Song", "Album", "Album"]);
+    expect(["Melt", "生如夏花", "Bremen"].map(kindOf)).toEqual([
+      "Song, guessed from its length",
+      "Album",
+      "Album, guessed from its length",
+    ]);
+  });
+
+  it("draws a guessed kind apart from a settled one", () => {
+    renderLibrary();
+
+    const markOf = (title: string) =>
+      within(rowOf(screen.getByRole("button", { name: title }))).getByRole("img", {
+        name: /^(Song|Album)/u,
+      });
+    expect(markOf("Bremen")).toHaveClass("guessed");
+    expect(markOf("生如夏花")).not.toHaveClass("guessed");
+  });
+
+  it("keeps only albums when the Kind filter asks for albums", async () => {
+    renderLibrary();
+
+    await userEvent.click(screen.getByText("Filter"));
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Kind" }),
+      screen.getByRole("option", { name: "Albums (2)" }),
+    );
+
+    expect(shownTitles()).toEqual(["生如夏花", "Bremen"]);
+    expect(screen.getByRole("button", { name: "Remove the filter Albums only" })).toBeVisible();
   });
 
   it("plays a split file from its first song, its songs one unit among the items", async () => {

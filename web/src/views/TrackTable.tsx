@@ -141,6 +141,7 @@ const isOn: TrackFilter = (row, id) =>
 
 /** The columns a filter of the panel works on. */
 const FILTER_COLUMNS: Record<FilterField, string> = {
+  kind: "kind",
   artist: "artist",
   album: "album",
   genre: "genre",
@@ -210,7 +211,7 @@ const DEFAULT_LAYOUT: Layout = {
   sizing: {},
 };
 // A column only filters and groups read; it is never shown.
-const NEVER_SHOWN: ColumnVisibilityState = { playable: false };
+const NEVER_SHOWN: ColumnVisibilityState = { playable: false, kind: false };
 
 function savedLayout(): Layout {
   try {
@@ -763,7 +764,7 @@ const COLUMNS: Column[] = [
             <Cover cover={track.cover} className="thumb" />
             <CoverBadge status={actions.statusOf(track)} playing={track.id === playingId} />
           </span>
-          <KindMark kind={track.kind} />
+          <KindMark kind={track.kind} reason={track.kind_reason} />
           <button
             type="button"
             className="title"
@@ -884,6 +885,13 @@ const COLUMNS: Column[] = [
     enableHiding: false,
   },
   {
+    id: "kind",
+    accessorKey: "kind",
+    filterFn: isText,
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
     id: "actions",
     enableSorting: false,
     enableHiding: false,
@@ -969,6 +977,9 @@ function choicesOf(table: Table): Record<ChoiceField, Choice[]> {
   };
   const byLabel = (a: Choice, b: Choice) => collator.compare(a.label, b.label);
   return {
+    kind: count("kind", (track) => [track.kind])
+      .map((choice) => ({ ...choice, label: choice.value === "album" ? "Albums" : "Songs" }))
+      .sort((a, b) => Number(a.value === "album") - Number(b.value === "album")),
     artist: count("artist", (track) => (track.artist ? [track.artist] : [])).sort(byLabel),
     album: count("album", (track) => (track.album ? [track.album] : [])).sort(byLabel),
     genre: count("genre", (track) => genresOf(track.genre)).sort(byLabel),

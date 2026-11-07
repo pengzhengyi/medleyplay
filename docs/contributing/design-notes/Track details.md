@@ -64,6 +64,12 @@ and lets the household's word win.
   | Named by an origin | as named | `named` |
   | Any other, 20 minutes or longer | album | `length` |
   | Any other, shorter or of unknown length | song | `length` |
+  | Any other, with the guess turned off | song | `default` |
+
+  The length is the household's setting `album_minutes`, 20 by default, which
+  an admin changes in *Settings → Songs and albums* or sets to `null` to guess
+  nothing. The first three reasons settle the kind; `length` and `default` are
+  assumptions, which the page draws apart.
 
   The Track's row keeps only a kind an origin names, and the API answers the kind
   worked out. Calling a split file a song, or giving a song of one a kind, is
@@ -491,8 +497,9 @@ songs editor.
 | `DELETE /api/ai/providers/{id}` | Admin | Forgets the provider and deletes its key; 204, also when it is gone |
 
 Tracks in every list gain `cover`, `track_number`, `disc_number`, `year`,
-`genre`, and `kind`. The details answer `kind` as its value and why: `named`,
-`split`, `segment`, or `length`.
+`genre`, `kind`, and `kind_reason`, why it is that kind: `named`, `split`,
+`segment`, `length`, or `default`. The details answer `kind` as its value and
+that reason. `GET /api/settings` gains `album_minutes`.
 
 ## Build order
 

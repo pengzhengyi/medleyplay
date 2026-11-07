@@ -360,6 +360,42 @@ button.text:hover:not(:disabled) {
   text-decoration: underline;
 }
 
+/* Devices waiting to be let in: an accent pill an admin opens to answer them. */
+
+.devices-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.devices-menu-group {
+  display: block;
+  width: auto;
+  box-shadow: none;
+}
+
+.device-asking {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.45rem 0.7rem 0.25rem;
+  font-weight: 600;
+}
+
+.device-asking .hint {
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
 .mode-check {
   display: inline-grid;
   place-items: center;
@@ -1064,6 +1100,84 @@ button.text:hover:not(:disabled) {
   padding: 0.25rem 0.9rem;
   border-radius: 999px;
   font-size: 0.85rem;
+}
+
+/* Other devices: one row each, the label and where it is on the left, its answers on the right. */
+.device-heading {
+  margin: 1.25rem 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.device-list {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.device-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.device-list .hint {
+  grid-column: 1;
+  font-size: 0.85rem;
+}
+
+.device-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.device-tag {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.device-actions {
+  display: inline-flex;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  gap: 0.4rem;
+}
+
+.device-actions button,
+.device-remove-all button {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+/* Pico draws a group as a joined button bar; these groups are a question and its answers. */
+.device-remove-all {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: auto;
+  box-shadow: none;
+}
+
+.device-remove-all > span {
+  flex-basis: 100%;
+}
+
+.device-remove-all > button {
+  flex: none;
 }
 
 /* Artists, albums, and Playlists: tiles, each lifting when pointed at. */
@@ -4695,4 +4809,20 @@ kbd {
 .kind-choice .hint {
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+/* A device waiting to be let in: the sign-in card, with its code large enough to read across a room. */
+
+.device-waiting h2 {
+  margin-bottom: 0.75rem;
+  font-size: 1.15rem;
+}
+
+.device-waiting .device-code {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+  text-align: center;
 }

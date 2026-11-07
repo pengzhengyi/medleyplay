@@ -39,6 +39,7 @@ import { ShortcutList } from "./ShortcutList";
 import { type ShortcutHandlers, Shortcuts } from "./Shortcuts";
 import { REPEATS, shuffleSaid } from "./playModes";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { WaitingDevices } from "./WaitingDevices";
 import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
 
@@ -341,6 +342,7 @@ export function Library({
             )}
           </span>
         )}
+        {account.role === "admin" && <WaitingDevices waiting={library.waitingDevices} />}
         <ThemeSwitch />
         <button
           type="button"
@@ -390,6 +392,7 @@ export function Library({
             onModeChecked={library.modeChecked}
             onEnrichersChanged={library.refreshFindable}
             onKindsChanged={library.reloadTracks}
+            waitingDevices={library.waitingDevices}
             station={station}
             accountId={account.id}
             favorites={library.favoriteGroups}

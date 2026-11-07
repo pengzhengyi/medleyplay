@@ -11,11 +11,20 @@
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
+import {
+  ApiError,
+  type Mode,
+  type Preview,
+  type Settings,
+  type Storage,
+  type WaitingDevice,
+  api,
+} from "../api";
 import { classOf, useNote } from "../useNote";
 import { formatBytes } from "../format";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
+import { DeviceSettings } from "./DeviceSettings";
 import { KindSettings } from "./KindSettings";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
@@ -32,6 +41,7 @@ const SECTIONS = [
   { id: "appearance", title: "Appearance" },
   { id: "keyboard-shortcuts", title: "Keyboard shortcuts" },
   { id: "network", title: "Network" },
+  { id: "devices", title: "Other devices" },
   { id: "kinds", title: "Songs and albums" },
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
@@ -41,8 +51,8 @@ const SECTIONS = [
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
-/** The sections only an admin sees: they run lookups for every Track. */
-const ADMIN_ONLY: ReadonlySet<SectionId> = new Set(["bilibili", "musicbrainz", "ai"]);
+/** The sections only an admin sees: they run lookups for every Track, or let devices in. */
+const ADMIN_ONLY: ReadonlySet<SectionId> = new Set(["devices", "bilibili", "musicbrainz", "ai"]);
 
 const FOLDED = "medleyplay.settings.folded.v1";
 
@@ -73,6 +83,7 @@ export function SettingsView({
   onModeChecked,
   onEnrichersChanged,
   onKindsChanged,
+  waitingDevices = [],
 }: {
   readonly admin: boolean;
   readonly mode: Mode | null;
@@ -82,6 +93,8 @@ export function SettingsView({
   readonly onEnrichersChanged: () => void;
   /** Called after a setting changes how a Track's kind is guessed. */
   readonly onKindsChanged: () => void;
+  /** The devices waiting for an answer, as the event stream last said. */
+  readonly waitingDevices?: readonly WaitingDevice[];
 }) {
   const [folded, setFolded] = useState(loadFolded);
   // One copy for the sections that save the settings, so each saves at the latest revision.
@@ -116,6 +129,7 @@ export function SettingsView({
     ),
     "keyboard-shortcuts": <ShortcutSettings />,
     network: <NetworkSettings admin={admin} mode={mode} onModeChecked={onModeChecked} />,
+    devices: <DeviceSettings waiting={waitingDevices} />,
     kinds: (
       <KindSettings
         admin={admin}

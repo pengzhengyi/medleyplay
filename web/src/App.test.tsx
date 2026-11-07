@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { api } from "./api";
+import { ASK_AGAIN_MS } from "./views/DeviceWaiting";
 import { ALICE, modeOf, serve, signedIn, trackOf } from "./testing/server";
 
 afterEach(() => {
@@ -10,6 +12,49 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("shows a waiting device its code, then the sign-in form once an admin allows it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let allowed = false;
+    serve({
+      "GET /api/device": () => ({
+        body: allowed
+          ? { presence: "allowed", label: "Safari on iPhone", code: null }
+          : { presence: "waiting", label: "Safari on iPhone", code: "4821" },
+      }),
+      "GET /api/me": { status: 401, body: { detail: "Sign in first." } },
+      "GET /api/setup": { body: { set_up: true, multiple_accounts: false } },
+    });
+    render(<App />);
+    const code = await screen.findByLabelText("Code 4821");
+
+    allowed = true;
+    await vi.advanceTimersByTimeAsync(ASK_AGAIN_MS);
+
+    expect(code).toHaveTextContent("4821");
+    expect(await screen.findByRole("form", { name: "Sign in" })).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("shows the waiting screen when a request is refused for the device, as after it is removed", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/device": { body: { presence: "allowed", label: "Safari on iPhone", code: null } },
+    });
+    render(<App />);
+    await screen.findByRole("button", { name: "Night Drive" });
+
+    serve({
+      "GET /api/device": { body: { presence: "waiting", label: "Safari on iPhone", code: "0042" } },
+      "GET /api/tracks": {
+        status: 403,
+        body: { detail: "This device is waiting for approval.", code: "device_waiting" },
+      },
+    });
+    await api.tracks().catch(() => undefined);
+
+    expect(await screen.findByLabelText("Code 0042")).toBeInTheDocument();
+  });
+
   it("shows the Library to a signed-in browser", async () => {
     serve(signedIn([trackOf(1, "Night Drive")]));
 

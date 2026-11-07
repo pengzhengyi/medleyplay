@@ -54,6 +54,7 @@ function open(
     "GET /api/enrichers/ai-details": {
       body: enricherOf("ai-details", [1]),
     },
+    "GET /api/devices": { body: { admission: "ask", revision: 0, waiting: [], allowed: [] } },
     ...modeSettingsOf(mode, metered),
     ...routes,
   });
@@ -120,6 +121,25 @@ describe("the Bilibili section", () => {
     expect(screen.queryByRole("button", { name: "Go to Bilibili" })).toBeNull();
     expect(calls).not.toContain("GET /api/proxies/bilibili");
     expect(calls).not.toContain("GET /api/enrichers/bilibili-details");
+  });
+});
+describe("the Other devices section", () => {
+  it("lets an admin choose what new devices do", async () => {
+    open(true);
+
+    const devices = within(screen.getByRole("region", { name: "Other devices" }));
+
+    expect(await devices.findByRole("radio", { name: /^Ask first/ })).toBeChecked();
+    expect(devices.getByText(/No devices yet/)).toBeInTheDocument();
+  });
+
+  it("is not shown to a member, who never asks for the devices", async () => {
+    const { calls } = open(false);
+
+    await screen.findByText("The storage limit is 20 GB, set by an admin.");
+
+    expect(screen.queryByRole("region", { name: "Other devices" })).toBeNull();
+    expect(calls).not.toContain("GET /api/devices");
   });
 });
 
@@ -317,6 +337,7 @@ describe("the Settings sections", () => {
       "Appearance",
       "Keyboard shortcuts",
       "Network",
+      "Other devices",
       "Songs and albums",
       "Downloads and storage",
       "Bilibili",

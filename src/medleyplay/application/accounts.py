@@ -25,6 +25,7 @@ from medleyplay.domain.accounts import (
     parse_display_name,
     parse_username,
 )
+from medleyplay.domain.devices import DeviceId
 from medleyplay.domain.errors import (
     ConflictError,
     ForbiddenError,
@@ -97,8 +98,8 @@ class AccountService:
         with self._units() as db:
             return bool(db.scalar(select(exists().select_from(AccountRow))))
 
-    def create_first_admin(self, new: NewAccount) -> SignedIn:
-        """Create the household's first Account as an admin, and sign it in.
+    def create_first_admin(self, new: NewAccount, *, device_id: DeviceId | None = None) -> SignedIn:
+        """Create the household's first Account as an admin, and sign it in on `device_id`.
 
         Only one caller can ever succeed: the insert itself checks that no Account
         exists, so two simultaneous first registrations can't both become admin.
@@ -121,7 +122,7 @@ class AccountService:
                 raise ConflictError(message)
             row = db.scalars(select(AccountRow).where(AccountRow.username == username)).one()
             ensure_builtin_playlists(db, self._clock(), AccountId(row.id))
-            return self._start_session(db, row)
+            return self._start_session(db, row, device_id)
 
     def create_account(self, caller: Account, new: NewAccount) -> Account:
         """Create an Account; only an admin may, and only with several Accounts turned on."""
@@ -180,8 +181,10 @@ class AccountService:
         if removed and self._on_change is not None:
             self._on_change("accounts")
 
-    def sign_in(self, username: str, password: str) -> SignedIn:
-        """Check a username and password and start a session.
+    def sign_in(
+        self, username: str, password: str, *, device_id: DeviceId | None = None
+    ) -> SignedIn:
+        """Check a username and password and start a session on `device_id`, None on the host.
 
         Unknown usernames take as long as wrong passwords, so a response's timing
         doesn't reveal which usernames exist.
@@ -201,14 +204,14 @@ class AccountService:
             if updated_hash is not None:
                 row.password_hash = updated_hash
             self._throttle.record_success(name)
-            return self._start_session(db, row)
+            return self._start_session(db, row, device_id)
 
     def authenticate(self, token: str) -> Account:
         """Return the Account a session token belongs to, keeping the session alive."""
         now = self._clock()
         with self._units.begin() as db:
             found = db.scalars(
-                select(SessionRow).where(SessionRow.token_hash == _hash_token(token))
+                select(SessionRow).where(SessionRow.token_hash == hash_token(token))
             ).one_or_none()
             if found is None:
                 raise NotSignedInError
@@ -225,7 +228,7 @@ class AccountService:
     def sign_out(self, token: str) -> None:
         """End one session; ending one that has already ended does nothing."""
         with self._units.begin() as db:
-            db.execute(delete(SessionRow).where(SessionRow.token_hash == _hash_token(token)))
+            db.execute(delete(SessionRow).where(SessionRow.token_hash == hash_token(token)))
 
     def sign_out_everywhere(self, account: Account) -> None:
         """End every session of `account`."""
@@ -244,18 +247,23 @@ class AccountService:
             row.password_hash = self._hasher.hash(password)
             db.execute(delete(SessionRow).where(SessionRow.account_id == row.id))
 
-    def _start_session(self, db: Session, row: AccountRow) -> SignedIn:
+    def _start_session(self, db: Session, row: AccountRow, device_id: DeviceId | None) -> SignedIn:
         token = self._new_token()
         now = self._clock()
         db.add(
             SessionRow(
-                account_id=row.id, token_hash=_hash_token(token), created_at=now, last_seen_at=now
+                account_id=row.id,
+                token_hash=hash_token(token),
+                device_id=device_id,
+                created_at=now,
+                last_seen_at=now,
             )
         )
         return SignedIn(_to_account(row), token)
 
 
-def _hash_token(token: str) -> str:
+def hash_token(token: str) -> str:
+    """Return the SHA-256 of a cookie's token, as it is stored in place of the token."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 

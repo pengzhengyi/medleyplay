@@ -16,6 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.settings import read_settings
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import (
     TEXT_FIELDS,
@@ -242,6 +243,7 @@ def kind_shown_of(db: Session, track: TrackRow) -> KindShown:
         duration_ms=track.duration_ms,
         split=bool(songs_of(db, TrackId(track.id))),
         segment=segment is not None,
+        album_from_ms=read_settings(db).album_from_ms,
     )
 
 

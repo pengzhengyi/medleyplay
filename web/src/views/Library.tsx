@@ -389,6 +389,7 @@ export function Library({
             mode={library.mode}
             onModeChecked={library.modeChecked}
             onEnrichersChanged={library.refreshFindable}
+            onKindsChanged={library.reloadTracks}
             station={station}
             accountId={account.id}
             favorites={library.favoriteGroups}

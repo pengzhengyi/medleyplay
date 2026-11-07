@@ -320,6 +320,20 @@ def test_a_file_no_origin_names_the_kind_of_is_guessed_from_its_length(
     assert kind_of(None, duration_ms=duration_ms) == KindShown(kind, KindReason.LENGTH)
 
 
+def test_a_file_is_guessed_an_album_from_the_length_the_household_set() -> None:
+    ten_minutes = 10 * 60_000
+
+    assert kind_of(None, duration_ms=ten_minutes, album_from_ms=ten_minutes) == KindShown(
+        Kind.ALBUM, KindReason.LENGTH
+    )
+
+
+def test_a_file_no_origin_names_is_a_song_when_the_household_guesses_none() -> None:
+    assert kind_of(None, duration_ms=LONGEST_SONG_MS, album_from_ms=None) == KindShown(
+        Kind.SONG, KindReason.DEFAULT
+    )
+
+
 def test_the_kind_an_origin_names_wins_over_the_guess() -> None:
     assert kind_of(Kind.ALBUM, duration_ms=_SONG_LONG) == KindShown(Kind.ALBUM, KindReason.NAMED)
 

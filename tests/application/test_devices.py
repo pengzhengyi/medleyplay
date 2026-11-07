@@ -22,8 +22,13 @@ from medleyplay.application.devices import (
     Visit,
 )
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.devices import Admission, DeviceId, Verdict
-from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
+from medleyplay.domain.devices import MAX_DEVICE_NAME, Admission, DeviceId, Verdict
+from medleyplay.domain.errors import (
+    ConflictError,
+    ForbiddenError,
+    InvalidInputError,
+    NotFoundError,
+)
 from medleyplay.persistence.schema import DeviceRow, SessionRow
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -450,9 +455,82 @@ class TestRemoving:
         assert devices.devices(alice).allowed == ()
 
 
+class TestNaming:
+    def test_an_admin_names_an_allowed_device(self, devices: DeviceService, alice: Account) -> None:
+        allowed_phone(devices, alice)
+        device_id = devices.devices(alice).allowed[0].id
+
+        devices.rename(alice, device_id, "Mia's phone")
+
+        assert devices.devices(alice).allowed[0].name == "Mia's phone"
+
+    def test_a_name_outlives_a_restart(
+        self,
+        devices: DeviceService,
+        alice: Account,
+        units: sessionmaker[Session],
+        clock: FakeClock,
+        accounts: AccountService,
+    ) -> None:
+        allowed_phone(devices, alice)
+        devices.rename(alice, devices.devices(alice).allowed[0].id, "Mia's phone")
+
+        restarted = DeviceService(units, clock, accounts)
+
+        assert restarted.devices(alice).allowed[0].name == "Mia's phone"
+
+    @pytest.mark.parametrize(("typed", "name"), [("  Mia's phone ", "Mia's phone"), ("   ", None)])
+    def test_a_name_is_trimmed_and_a_blank_one_leaves_the_label(
+        self, devices: DeviceService, alice: Account, typed: str, name: str | None
+    ) -> None:
+        allowed_phone(devices, alice)
+        device_id = devices.devices(alice).allowed[0].id
+        devices.rename(alice, device_id, "Old name")
+
+        devices.rename(alice, device_id, typed)
+
+        assert devices.devices(alice).allowed[0].name == name
+
+    @pytest.mark.parametrize("typed", ["x" * (MAX_DEVICE_NAME + 1), "Mia's\nphone"])
+    def test_a_name_too_long_or_with_control_characters_is_refused(
+        self, devices: DeviceService, alice: Account, typed: str
+    ) -> None:
+        allowed_phone(devices, alice)
+        device_id = devices.devices(alice).allowed[0].id
+
+        with pytest.raises(InvalidInputError):
+            devices.rename(alice, device_id, typed)
+
+    def test_naming_a_device_since_removed_is_not_found(
+        self, devices: DeviceService, alice: Account
+    ) -> None:
+        with pytest.raises(NotFoundError):
+            devices.rename(alice, DeviceId("device9"), "Mia's phone")
+
+    def test_only_an_admin_names_a_device(
+        self, devices: DeviceService, alice: Account, accounts: AccountService
+    ) -> None:
+        bob = accounts.create_account(alice, NewAccountFactory.member())
+        allowed_phone(devices, alice)
+
+        with pytest.raises(ForbiddenError):
+            devices.rename(bob, devices.devices(alice).allowed[0].id, "Bob's now")
+
+
 class TestTheChoice:
     def test_asking_first_by_default(self, devices: DeviceService, alice: Account) -> None:
         assert devices.devices(alice).admission is Admission.ASK
+
+    def test_a_choice_made_at_the_terminal_makes_one_read_before_it_stale(
+        self, devices: DeviceService, alice: Account
+    ) -> None:
+        revision = devices.devices(alice).revision
+
+        devices.terminal_choose(Admission.EVERYONE)
+
+        assert devices.terminal_view().admission is Admission.EVERYONE
+        with pytest.raises(ConflictError):
+            devices.put_admission(alice, Admission.KNOWN, revision)
 
     def test_a_change_at_a_stale_revision_conflicts(
         self, devices: DeviceService, alice: Account

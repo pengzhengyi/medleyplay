@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Name a device** — in Settings → Other devices, an admin names an allowed
+  device, as "Mia's phone"; its label shows beneath.
+- **`medleyplay devices`** — with the server stopped, lists the allowed
+  devices and chooses what happens to new ones, for a server with no screen.
+
 - **Play on the computer** — on a phone, *Play on* in the player turns it into a
   remote for the medleyplay page open on the computer: the computer plays, the
   phone shows its queue and controls it, and choosing either moves what plays,

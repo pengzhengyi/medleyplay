@@ -18,7 +18,12 @@ from enum import StrEnum
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Final, NewType
 
+from medleyplay.domain.errors import InvalidInputError
+
 DeviceId = NewType("DeviceId", str)
+
+MAX_DEVICE_NAME: Final = 40
+"""The longest name the household may give a device."""
 
 _BROWSERS: Final = (
     ("Edg/", "Edge"),
@@ -67,13 +72,34 @@ class Verdict(StrEnum):
 
 @dataclass(frozen=True)
 class Device:
-    """A browser other than the host's that the household allowed, known by its cookie's token."""
+    """A browser other than the host's that the household allowed, known by its cookie's token.
+
+    `name` is what the household calls it, as "Mia's phone"; without one, its
+    `label` says what it is.
+    """
 
     id: DeviceId
     label: str
     address: str
     allowed_at: datetime
     last_seen_at: datetime
+    name: str | None = None
+
+
+def device_name(typed: str) -> str | None:
+    """Return the name `typed` gives a device, trimmed; a blank one gives none.
+
+    A name of more than 40 characters, or one holding a line break or another
+    control character, is refused.
+    """
+    name = typed.strip()
+    if len(name) > MAX_DEVICE_NAME:
+        message = f"A device's name can be at most {MAX_DEVICE_NAME} characters."
+        raise InvalidInputError(message)
+    if not name.isprintable():
+        message = "A device's name can't hold line breaks or other control characters."
+        raise InvalidInputError(message)
+    return name or None
 
 
 def admit(admission: Admission, *, local: bool, set_up: bool, state: DeviceState | None) -> Verdict:

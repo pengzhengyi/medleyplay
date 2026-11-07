@@ -10,7 +10,15 @@ from pathlib import Path
 import pytest
 
 from medleyplay.__main__ import main
-from medleyplay.server import Settings, build_app, build_services, open_database
+from medleyplay.application.devices import Visit
+from medleyplay.domain.devices import Admission
+from medleyplay.server import (
+    Settings,
+    build_app,
+    build_services,
+    hold_instance_lock,
+    open_database,
+)
 from tests.support.factories import PASSWORD, NewAccountFactory
 
 
@@ -157,3 +165,77 @@ def test_reset_password_for_an_unknown_username_fails_with_the_reason(
 
     assert exit_code == 1
     assert "'nobody'" in capsys.readouterr().err
+
+
+SAFARI_ON_IPHONE = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15"
+    " (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1"
+)
+
+
+def _household_with_a_named_phone(data_dir: Path) -> None:
+    """Alice's household, asking first, with one phone allowed and named "Mia's phone"."""
+    engine = open_database(data_dir)
+    services = build_services(engine, data_dir)
+    alice = services.accounts.create_first_admin(NewAccountFactory.admin()).account
+    devices = services.devices
+    devices.ask(Visit(None, "192.168.1.23", host=False), SAFARI_ON_IPHONE, session_token=None)
+    phone = devices.allow(alice, devices.devices(alice).waiting[0].id)
+    devices.rename(alice, phone.id, "Mia's phone")
+    engine.dispose()
+
+
+def _admission_in(data_dir: Path) -> Admission:
+    engine = open_database(data_dir)
+    try:
+        return build_services(engine, data_dir).devices.terminal_view().admission
+    finally:
+        engine.dispose()
+
+
+def test_devices_lists_the_choice_and_each_allowed_device(
+    data_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _household_with_a_named_phone(data_dir)
+
+    exit_code = main(["devices"])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert exit_code == 0
+    assert lines[:2] == [f"Data folder: {data_dir}", "New devices: Ask first"]
+    assert "Mia's phone (Safari on iPhone), 192.168.1.23" in lines[3]
+
+
+def test_devices_choose_allow_all_lets_new_devices_in_and_says_who_can_reach_sign_in(
+    data_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _household_with_a_named_phone(data_dir)
+
+    exit_code = main(["devices", "choose", "allow-all"])
+
+    assert exit_code == 0
+    assert _admission_in(data_dir) is Admission.EVERYONE
+    assert "Anyone on this network can reach the sign-in form" in capsys.readouterr().out
+
+
+def test_devices_refuses_while_a_server_uses_the_data_folder(
+    data_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _household_with_a_named_phone(data_dir)
+
+    with hold_instance_lock(data_dir):
+        exit_code = main(["devices", "choose", "allow-all"])
+
+    assert exit_code == 1
+    assert "ssh -L" in capsys.readouterr().err
+    assert _admission_in(data_dir) is Admission.ASK
+
+
+def test_devices_refuses_a_data_folder_with_no_database(
+    data_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(["devices"])
+
+    assert exit_code == 1
+    assert str(data_dir) in capsys.readouterr().err
+    assert list(data_dir.iterdir()) == []

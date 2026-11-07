@@ -329,6 +329,9 @@ export interface WaitingDevice {
 /** A device the household allowed; `this_device` marks the one asking. */
 export interface AllowedDevice {
   readonly id: string;
+  /** What the household calls it, as "Mia's phone"; `null` while it has no name. */
+  readonly name: string | null;
+  /** What the browser says it is, as "Safari on iPhone". */
   readonly label: string;
   readonly address: string;
   readonly allowed_at: string;
@@ -708,6 +711,8 @@ export const api = {
   saveAdmission: (admission: Admission, revision: number) =>
     call<Devices>("PUT", "/api/devices/setting", { admission, revision }),
   allowDevice: (id: string) => call<AllowedDevice>("POST", `/api/devices/${id}/allow`),
+  renameDevice: (id: string, name: string | null) =>
+    call<AllowedDevice>("PUT", `/api/devices/${id}/name`, { name }),
   turnAwayDevice: (id: string) => call<undefined>("POST", `/api/devices/${id}/turn-away`),
   removeDevice: (id: string) => call<undefined>("DELETE", `/api/devices/${id}`),
   removeOtherDevices: () => call<undefined>("DELETE", "/api/devices"),

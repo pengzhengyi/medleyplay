@@ -37,6 +37,7 @@ from medleyplay.domain.devices import (
     DeviceState,
     Verdict,
     admit,
+    device_name,
     label_of,
 )
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
@@ -240,6 +241,29 @@ class DeviceService:
         with self._lock:
             return self._view(self._load())
 
+    def terminal_view(self) -> DevicesView:
+        """Return the choice and the devices to the host's terminal, which needs no account."""
+        with self._lock:
+            return self._view(self._load())
+
+    def terminal_choose(self, admission: Admission) -> DevicesView:
+        """Change the choice from the host's terminal, while no server runs on the data folder.
+
+        A page that read the choice before conflicts when it next changes it.
+        """
+        with self._writing:
+            with self._lock:
+                known = self._load()
+            changed = known.document.model_copy(update={"admission": admission})
+            if changed == known.document:
+                return self.terminal_view()
+            with self._units.begin() as db:
+                if not _save(db, changed, known.revision, self._clock()):
+                    raise _stale_choice()
+            with self._lock:
+                known.document, known.revision = changed, known.revision + 1
+                return self._view(known)
+
     def put_admission(
         self,
         caller: Account,
@@ -344,6 +368,20 @@ class DeviceService:
         """Forget every allowed device but `by`, the one making the request; admins only."""
         _require_admin(caller)
         self._forget(lambda device: device.id != by)
+
+    def rename(self, caller: Account, device_id: DeviceId, typed: str) -> Device:
+        """Name an allowed device as `typed`; a blank name leaves its label. Admins only."""
+        _require_admin(caller)
+        name = device_name(typed)
+        with self._writing:
+            with self._lock:
+                hashed, device = self._allowed(self._load(), device_id)
+            with self._units.begin() as db:
+                db.execute(update(DeviceRow).where(DeviceRow.id == device_id).values(name=name))
+            named = replace(device, name=name)
+            with self._lock:
+                self._load().allowed[hashed] = named
+        return named
 
     def _forget(self, chosen: Callable[[Device], bool]) -> None:
         with self._writing:
@@ -468,6 +506,14 @@ class DeviceService:
         return device
 
     @staticmethod
+    def _allowed(known: _Known, device_id: DeviceId) -> tuple[str, Device]:
+        for hashed, device in known.allowed.items():
+            if device.id == device_id:
+                return hashed, device
+        message = "That device is no longer allowed; it may have been removed."
+        raise NotFoundError(message)
+
+    @staticmethod
     def _waiting(known: _Known, waiting_id: DeviceId) -> tuple[str, Waiting]:
         for hashed, waiting in known.waiting.items():
             if waiting.id == waiting_id:
@@ -518,7 +564,9 @@ def _link_session(db: Session, session_token: str | None, device_id: DeviceId) -
 
 
 def _to_device(row: DeviceRow) -> Device:
-    return Device(DeviceId(row.id), row.label, row.address, row.allowed_at, row.last_seen_at)
+    return Device(
+        DeviceId(row.id), row.label, row.address, row.allowed_at, row.last_seen_at, row.name
+    )
 
 
 def _save(db: Session, document: DeviceDocument, revision: int, now: datetime) -> bool:

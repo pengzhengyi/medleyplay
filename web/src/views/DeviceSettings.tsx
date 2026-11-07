@@ -6,9 +6,17 @@
  * act at once; Remove all asks once more first.
  */
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { PencilSimpleIcon } from "@phosphor-icons/react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { type Admission, ApiError, type Devices, type WaitingDevice, api } from "../api";
+import {
+  type Admission,
+  type AllowedDevice,
+  ApiError,
+  type Devices,
+  type WaitingDevice,
+  api,
+} from "../api";
 import { formatSeen } from "../format";
 import { useNow } from "../useNow";
 import { classOf, useNote } from "../useNote";
@@ -142,11 +150,9 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
         <ul className="device-list" aria-label="Allowed devices">
           {devices.allowed.map((device) => (
             <li key={device.id}>
-              <span className="device-name">
-                {device.label}
-                {device.this_device && <span className="device-tag">This device</span>}
-              </span>
+              <DeviceName device={device} onRenamed={reload} />
               <span className="hint">
+                {device.name !== null && `${device.label} · `}
                 {device.address} · {formatSeen(Date.parse(device.last_seen_at), now)}
               </span>
               {!device.this_device && (
@@ -154,7 +160,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                   <button
                     type="button"
                     className="secondary outline"
-                    aria-label={`Remove ${device.label} at ${device.address}`}
+                    aria-label={`Remove ${device.name ?? device.label} at ${device.address}`}
                     onClick={() => {
                       act(api.removeDevice(device.id), "Removed.");
                     }}
@@ -207,5 +213,110 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
         {notes.note.text}
       </p>
     </>
+  );
+}
+
+/**
+ * An allowed device's name, or its label while it has none, with a pencil that turns
+ * it into a field: Enter or Save names it, Escape or Cancel leaves it, and a blank
+ * name leaves the label. Why a name was refused shows beside it.
+ */
+function DeviceName({
+  device,
+  onRenamed,
+}: {
+  readonly device: AllowedDevice;
+  readonly onRenamed: () => void;
+}) {
+  const [typed, setTyped] = useState<string | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const pencil = useRef<HTMLButtonElement>(null);
+  // Closing the field gives focus back to the pencil that opened it.
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (typed === undefined && refocus.current) {
+      refocus.current = false;
+      pencil.current?.focus();
+    }
+  }, [typed]);
+  const shown = device.name ?? device.label;
+
+  const stop = () => {
+    refocus.current = true;
+    setTyped(undefined);
+    setError("");
+  };
+
+  if (typed === undefined) {
+    return (
+      <span className="device-name">
+        {shown}
+        {device.this_device && <span className="device-tag">This device</span>}
+        <button
+          ref={pencil}
+          type="button"
+          className="icon device-rename"
+          aria-label={`Rename ${shown}`}
+          title="Rename"
+          onClick={() => {
+            setTyped(device.name ?? "");
+          }}
+        >
+          <PencilSimpleIcon aria-hidden />
+        </button>
+      </span>
+    );
+  }
+  return (
+    <form
+      className="device-name device-rename-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setSaving(true);
+        setError("");
+        api.renameDevice(device.id, typed.trim() === "" ? null : typed).then(
+          () => {
+            setSaving(false);
+            stop();
+            onRenamed();
+          },
+          (failure: unknown) => {
+            setSaving(false);
+            setError(failure instanceof Error ? failure.message : String(failure));
+          },
+        );
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          stop();
+        }
+      }}
+    >
+      <input
+        ref={(input) => {
+          input?.focus();
+        }}
+        aria-label={`Name of ${device.label}`}
+        value={typed}
+        placeholder={device.label}
+        maxLength={40}
+        onChange={(event) => {
+          setTyped(event.target.value);
+        }}
+      />
+      <button type="submit" aria-busy={saving} disabled={saving}>
+        Save
+      </button>
+      <button type="button" className="secondary outline" onClick={stop}>
+        Cancel
+      </button>
+      {error !== "" && (
+        <span role="alert" className="note failed">
+          {error}
+        </span>
+      )}
+    </form>
   );
 }

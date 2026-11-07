@@ -165,6 +165,39 @@ def test_removing_a_phone_signs_it_out_and_makes_it_ask_again(
     assert alice_on_host.get("/api/devices").json()["allowed"] == []
 
 
+def test_an_admin_names_a_phone(alice_on_host: TestClient, phone: TestClient) -> None:
+    device_id = allowed_phone(phone, alice_on_host)
+
+    response = alice_on_host.put(f"/api/devices/{device_id}/name", json={"name": "Mia's phone"})
+    listed = alice_on_host.get("/api/devices").json()["allowed"]
+
+    assert response.status_code == 200, response.text
+    assert response.json()["name"] == "Mia's phone"
+    assert [(d["name"], d["label"]) for d in listed] == [("Mia's phone", "Safari on iPhone")]
+
+
+def test_naming_a_phone_with_none_leaves_its_label(
+    alice_on_host: TestClient, phone: TestClient
+) -> None:
+    device_id = allowed_phone(phone, alice_on_host)
+    alice_on_host.put(f"/api/devices/{device_id}/name", json={"name": "Mia's phone"})
+
+    response = alice_on_host.put(f"/api/devices/{device_id}/name", json={"name": None})
+
+    assert response.json()["name"] is None
+
+
+def test_naming_a_phone_since_removed_answers_404(
+    alice_on_host: TestClient, phone: TestClient
+) -> None:
+    device_id = allowed_phone(phone, alice_on_host)
+    alice_on_host.delete(f"/api/devices/{device_id}")
+
+    response = alice_on_host.put(f"/api/devices/{device_id}/name", json={"name": "Mia's phone"})
+
+    assert response.status_code == 404
+
+
 def test_a_phone_cannot_remove_itself(alice_on_host: TestClient, phone: TestClient) -> None:
     device_id = allowed_phone(phone, alice_on_host)
     sign_in(phone, "alice")

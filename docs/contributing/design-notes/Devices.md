@@ -14,6 +14,7 @@
 - [A device](#a-device)
 - [Asking and answering](#asking-and-answering)
 - [Settings and the API](#settings-and-the-api)
+- [From the host's terminal](#from-the-hosts-terminal)
 - [The web client](#the-web-client)
 - [What it protects](#what-it-protects)
 - [Testing](#testing)
@@ -102,6 +103,7 @@ the same host does nothing.
 | Field | What it is |
 | --- | --- |
 | `id` | Random, so an answer given to a device that was forgotten can't reach another |
+| `name` | What the household calls it, as "Mia's phone"; none until an admin names it |
 | `label` | What the browser says it is, as "Safari on iPhone" |
 | `address` | The address it last connected from |
 | `allowed_at`, `last_seen_at` | When it was allowed, and last connected |
@@ -118,6 +120,10 @@ the same host does nothing.
 - **The label is a guess for people**, worked out from the User-Agent in a few
   lines: the browser (Edge, Chrome, Firefox, Safari) and the system (iPhone,
   iPad, Android, Mac, Windows, Linux). Nothing decides on it.
+- **A name is the household's**, given by an admin once the device is
+  allowed, so Allow stays one click. It is trimmed, at most 40 characters,
+  with no line breaks or other control characters; a blank one clears it, and
+  the label shows again.
 - **`last_seen_at` is written at most once a minute** for a device, so
   admitting a request reads memory without writing to the database. The
   service keeps the choice and the allowed devices in memory, written through
@@ -160,11 +166,44 @@ Mode's settings. Allowed devices are rows in `device`.
 | `PUT /api/devices/setting` | admins | Change the choice read at `revision`; a stale one answers 409 |
 | `POST /api/devices/{id}/allow` | admins | Allow a waiting device |
 | `POST /api/devices/{id}/turn-away` | admins | Refuse a waiting device for a day |
+| `PUT /api/devices/{id}/name` | admins | Name an allowed device, or clear its name with `null`; one removed answers 404 |
 | `DELETE /api/devices/{id}` | admins | Remove an allowed device, ending its sessions |
 | `DELETE /api/devices` | admins | Remove every allowed device but this one |
 
 Removing the device making the request answers 409, saying to remove it from
 the host or another device.
+
+## From the host's terminal
+
+For a server with no screen, the page on the host is one SSH tunnel away:
+`ssh -L 8000:localhost:8000 host`, then `http://localhost:8000`, reaches it
+from loopback, so it is the host, admitted and able to answer devices while
+the server runs. That is the first resort.
+
+`medleyplay devices` covers the rest while the server is stopped:
+
+```text
+medleyplay devices                                    list the choice and the allowed devices
+medleyplay devices choose ask-first|allow-all|block-new-devices
+```
+
+- **It runs only while no server uses the data folder.** It takes the
+  server's lock first, and with a server running says to stop it or use the
+  tunnel. The server keeps the choice and the allowed devices in memory, and
+  waiting devices only there, so changing the database under it would be
+  ignored or undone.
+- **It refuses a data folder with no database**, and names the folder it
+  uses, so a shell without the server's `MEDLEYPLAY_DATA_DIR` can't make and
+  change an empty one.
+- **A choice it makes moves the revision on**, so a Settings page that read
+  the choice before conflicts when it next changes it.
+- **Choosing *Allow all* says what it opens:** anyone on the network can reach
+  the sign-in form until an admin chooses *Ask first*. Leaving *Allow all* from
+  a phone allows that phone, so this, a restart, and one choice in Settings
+  let a household locked out of every browser back in.
+- **It needs no account**, as `medleyplay reset-password` doesn't: whoever can
+  stop the server and write its data folder already owns it. Naming and
+  removing devices stay in Settings.
 
 ## The web client
 
@@ -178,8 +217,11 @@ the host or another device.
   screen, so it needs no toast.
 - **Settings has an *Other devices* section**: the choice, then the waiting
   devices and the allowed ones, each with its label, address, and when it was
-  last seen. Allowed devices have Remove, and the list has Remove all, which
-  asks once more first. This device is tagged and has no Remove.
+  last seen. An allowed device shows its name, with its label beneath, or its
+  label alone; a pencil beside it turns it into a field, which Enter or Save
+  saves and Escape or Cancel leaves, and why a name was refused shows there.
+  Allowed devices have Remove, and the list has Remove all, which asks once
+  more first. This device is tagged and has no Remove.
 
 ## What it protects
 
@@ -198,7 +240,10 @@ session's.
   is written at most once a minute; a pre-upgrade session is allowed; removing
   a device ends its sessions; removing the device making the request is
   refused; a stale revision conflicts; leaving *Allow all* allows the device
-  making the change; a commit that fails changes nothing.
+  making the change; a commit that fails changes nothing; an admin names a
+  device, the name outlives a restart, a blank one leaves the label, and one
+  too long or holding a line break is refused; a choice made at the terminal
+  makes one read before it stale.
 - **Persistence:** the upgrade marks the sessions it finds, and undoing it
   keeps them.
 - **Web:** through the app with test clients whose addresses are set: the host
@@ -206,15 +251,19 @@ session's.
   client's files answer a waiting device and the API's description doesn't; a
   request from loopback carrying any forwarding header is not the host; an
   admin's event stream names the waiting devices; a phone's stream ends once
-  it is no longer admitted.
+  it is no longer admitted; an admin names a phone, clears its name, and
+  naming one removed answers 404.
+- **Command line:** `medleyplay devices` lists the choice and the named
+  device, chooses *Allow all* and says what it opens, and refuses while a
+  server holds the lock or when the folder has no database.
 - **Client:** the waiting screen, the header pill, and the Settings section,
   with a stand-in server. The browser tests run on the host, so they never see
   the waiting screen; it is checked with the stand-in only.
 
 ## Left for later
 
-- A `medleyplay devices` command, for a server with no screen whose every
-  allowed browser has been cleared. Until then, opening the page on the host
-  through an SSH tunnel (`ssh -L 8000:localhost:8000 host`) reaches it from
-  loopback.
-- Naming a device, as "Mia's phone", in place of its label.
+- Pairing from the terminal: `medleyplay devices pair` printing a one-use
+  link that allows the phone opening it, so a locked-out household needn't
+  pass through *Allow all*.
+- Other admins' Settings pages hear of a new name only when they next read
+  the devices.

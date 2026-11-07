@@ -92,9 +92,13 @@ class WaitingOut(BaseModel):
 
 
 class AllowedOut(BaseModel):
-    """An allowed device; `this_device` marks the one making the request."""
+    """An allowed device; `this_device` marks the one making the request.
+
+    `name` is what the household calls it, None while it has no name.
+    """
 
     id: str
+    name: str | None
     label: str
     address: str
     allowed_at: datetime
@@ -106,6 +110,7 @@ class AllowedOut(BaseModel):
         """Return the API view of an allowed device."""
         return cls(
             id=device.id,
+            name=device.name,
             label=device.label,
             address=device.address,
             allowed_at=device.allowed_at,
@@ -131,6 +136,12 @@ class DevicesOut(BaseModel):
             waiting=[WaitingOut.of(w) for w in view.waiting],
             allowed=[AllowedOut.of(d, this_device) for d in view.allowed],
         )
+
+
+class NameIn(BaseModel):
+    """A device's new name; None, or a blank one, leaves its label."""
+
+    name: Annotated[str, Field(max_length=200)] | None
 
 
 class AdmissionIn(BaseModel):
@@ -249,6 +260,18 @@ def allow(
 ) -> AllowedOut:
     """Allow a waiting device; one no longer waiting answers 404. Admins only."""
     return AllowedOut.of(devices.allow(me, DeviceId(device_id)), this)
+
+
+@router.put("/devices/{device_id}/name")
+def rename(
+    device_id: DeviceIdPath,
+    body: NameIn,
+    me: SignedInAccount,
+    devices: DevicesDep,
+    this: ThisDevice,
+) -> AllowedOut:
+    """Name an allowed device; one since removed answers 404. Admins only."""
+    return AllowedOut.of(devices.rename(me, DeviceId(device_id), body.name or ""), this)
 
 
 @router.post("/devices/{device_id}/turn-away", status_code=status.HTTP_204_NO_CONTENT)

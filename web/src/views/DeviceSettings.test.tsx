@@ -11,6 +11,7 @@ const NOW = "2026-11-07T18:00:00Z";
 function allowedOf(id: string, label: string, change: Partial<AllowedDevice> = {}): AllowedDevice {
   return {
     id,
+    name: null,
     label,
     address: "192.168.1.23",
     allowed_at: NOW,
@@ -50,6 +51,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** The household's devices once the iPhone is named "Mia's phone". */
+const WITH_THE_PHONE_NAMED: Devices = {
+  ...HOUSEHOLD,
+  allowed: HOUSEHOLD.allowed.map((device) =>
+    device.id === "bbbbbbbbbbbbbbbb" ? { ...device, name: "Mia's phone" } : device,
+  ),
+};
+
+const iPhoneRow = async () =>
+  (await screen.findByRole("button", { name: "Rename Safari on iPhone" })).closest("li");
+
 describe("DeviceSettings", () => {
   it("shows the choice for new devices", async () => {
     open();
@@ -80,7 +92,7 @@ describe("DeviceSettings", () => {
     const mine = within(allowed).getByText("This device").closest("li");
 
     expect(mine).not.toBeNull();
-    expect(within(mine as HTMLElement).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(mine as HTMLElement).queryByRole("button", { name: /^Remove/ })).toBeNull();
   });
 
   it("removes one allowed device", async () => {
@@ -118,5 +130,64 @@ describe("DeviceSettings", () => {
 
     expect(within(waiting).getByText(/code/)).toHaveTextContent("192.168.1.40 · code 0917");
     expect(calls).toContain("POST /api/devices/fedcba9876543210/allow");
+  });
+
+  it("shows an unnamed device's label once", async () => {
+    open();
+
+    const row = await iPhoneRow();
+
+    expect(row).toHaveTextContent(/^Safari on iPhone192\.168\.1\.23/);
+  });
+
+  it("names a device, showing what it is beneath its name", async () => {
+    const named: unknown[] = [];
+    let household = HOUSEHOLD;
+    serve({
+      "GET /api/devices": () => ({ body: household }),
+      "PUT /api/devices/bbbbbbbbbbbbbbbb/name": (body) => {
+        named.push(body);
+        household = WITH_THE_PHONE_NAMED;
+        return { body: WITH_THE_PHONE_NAMED.allowed[1] };
+      },
+    });
+    render(<DeviceSettings waiting={HOUSEHOLD.waiting} />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Rename Safari on iPhone" }));
+    await user.keyboard("Mia's phone{Enter}");
+
+    const row = (await screen.findByRole("button", { name: "Rename Mia's phone" })).closest("li");
+    expect(named).toEqual([{ name: "Mia's phone" }]);
+    expect(row).toHaveTextContent(/^Mia's phoneSafari on iPhone · 192\.168\.1\.23/);
+  });
+
+  it("leaves a device's name as it was when the rename is cancelled with Escape", async () => {
+    open();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Rename Safari on iPhone" }));
+    await user.keyboard("Mia's phone{Escape}");
+
+    expect(screen.queryByRole("textbox", { name: /Name of/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Rename Safari on iPhone" })).toHaveFocus();
+  });
+
+  it("says beside the device why its name was refused", async () => {
+    open({
+      "PUT /api/devices/bbbbbbbbbbbbbbbb/name": {
+        status: 400,
+        body: { detail: "A device's name can't hold line breaks or other control characters." },
+      },
+    });
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Rename Safari on iPhone" }));
+    await user.keyboard("Mia{Enter}");
+
+    const field = screen.getByRole("textbox", { name: "Name of Safari on iPhone" });
+    expect(
+      await within(field.closest("li") ?? document.body).findByRole("alert"),
+    ).toHaveTextContent("control characters");
   });
 });

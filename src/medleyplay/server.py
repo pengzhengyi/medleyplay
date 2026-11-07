@@ -44,6 +44,7 @@ from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.remote import RemoteService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
@@ -250,6 +251,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         sweeper=sweeper,
         ai=ai,
         devices=_devices(units, clock, accounts, events),
+        remote=_remote(clock, events),
     )
 
 
@@ -260,6 +262,13 @@ def _devices(
     # A device that starts waiting, or is answered, reaches the admins' open browsers.
     devices.listen(events.publish_devices)
     return devices
+
+
+def _remote(clock: Clock, events: Events) -> RemoteService:
+    remote = RemoteService(clock)
+    # Each report reaches the account's open browsers, and each command its speaker.
+    remote.listen(events.publish_remote)
+    return remote
 
 
 def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:  # noqa: B008 -- a frozen value

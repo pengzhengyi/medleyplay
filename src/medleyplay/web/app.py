@@ -14,6 +14,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from medleyplay import __version__
 from medleyplay.domain.errors import (
+    BusyError,
     ConflictError,
     ForbiddenError,
     InvalidInputError,
@@ -47,6 +48,7 @@ from medleyplay.web import (
     plugins,
     preferences,
     proxies,
+    remote,
     settings,
     songs,
     storage,
@@ -63,6 +65,7 @@ _STATUS_OF: Final[tuple[tuple[type[MedleyplayError], int], ...]] = (
     (NotSignedInError, status.HTTP_401_UNAUTHORIZED),
     (SignInRefusedError, status.HTTP_401_UNAUTHORIZED),
     (SignInThrottledError, status.HTTP_429_TOO_MANY_REQUESTS),
+    (BusyError, status.HTTP_429_TOO_MANY_REQUESTS),
     (PluginUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE),
     (KeychainUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE),
     (PluginCallError, status.HTTP_502_BAD_GATEWAY),
@@ -119,6 +122,7 @@ def create_app(
     app.include_router(enrichers.router)
     app.include_router(storage.router)
     app.include_router(devices.router)
+    app.include_router(remote.router)
     app.mount("/", client_app(client_dir))
     app.add_exception_handler(RequestValidationError, _handle_invalid_request)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception

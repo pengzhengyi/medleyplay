@@ -14,6 +14,7 @@ import { type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
 import { albumArtistOf } from "../library/views";
 import type { Player } from "../player/usePlayer";
+import type { SleepTimer } from "../player/useSleepTimer";
 import { canSetVolume } from "../player/volume";
 import { hrefOf } from "../routes";
 import { hintOf, useBindings } from "../shortcuts";
@@ -27,6 +28,7 @@ import { VolumeControl } from "./VolumeControl";
 /** `track`, playing in `player`, over the whole screen; `queueOpen` shows Up next beside it. */
 export function NowPlaying({
   player,
+  sleep,
   track,
   tracks,
   onFavorite,
@@ -36,6 +38,8 @@ export function NowPlaying({
   onClose,
 }: {
   readonly player: Player;
+  /** The sleep timer, set from Up next. */
+  readonly sleep: SleepTimer;
   readonly track: Track;
   readonly tracks: ReadonlyMap<number, Track>;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
@@ -173,6 +177,7 @@ export function NowPlaying({
             <QueuePanel
               id="now-playing-queue"
               player={player}
+              sleep={sleep}
               tracks={tracks}
               announceIn={inside}
             />

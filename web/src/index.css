@@ -2029,6 +2029,19 @@ button.icon.heart.on:hover,
   padding: 0 0.5rem 0.5rem;
 }
 
+/* The sleep timer sits beside Clear; once set, its moon and the time left are in jade. */
+.queue header .sleep-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue header .sleep-timer.on {
+  color: var(--accent);
+}
+
 .queue h2 {
   margin: 0;
   font-size: 1rem;
@@ -2770,6 +2783,18 @@ button.icon.heart.on:hover,
 }
 
 /* A song's menu: a card of icons and words, drawn over the page. */
+
+.track-menu-label {
+  padding: 0.35rem 0.7rem 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.track-menu-separator {
+  height: 1px;
+  margin: 0.3rem 0.35rem;
+  background: var(--line);
+}
 
 .track-menu {
   z-index: 10;

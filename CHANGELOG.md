@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Play on the computer** — on a phone, *Play on* in the player turns it into a
+  remote for the medleyplay page open on the computer: the computer plays, the
+  phone shows its queue and controls it, and choosing either moves what plays,
+  from the same second. The computer's sleep timer can be set from the phone.
 - **The Radio tab** — *My station* plays songs the Account likes and more like
   them, refilling as it plays, and shelves suggest albums: more like the one
   played most lately, not played yet by artists the Account plays, loved albums

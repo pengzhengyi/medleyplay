@@ -19,7 +19,10 @@ import { useStation } from "../library/useStation";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
+import { takeOf } from "../player/remote";
+import { useRemotePlayer } from "../player/useRemotePlayer";
 import { useSleepTimer } from "../player/useSleepTimer";
+import { useSpeaker } from "../player/useSpeaker";
 import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
 import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
@@ -32,6 +35,7 @@ import { ListenOnDevice } from "./ListenOnDevice";
 import { type AiAsk, SongsEditor } from "./EditSongs";
 import { Nav } from "./Nav";
 import { NowPlaying } from "./NowPlaying";
+import { PlayOn, type PlaysOn } from "./PlayOn";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
 import { SearchBox } from "./SearchBox";
@@ -54,9 +58,12 @@ const listFormat = new Intl.ListFormat(undefined, { type: "conjunction" });
 /** Everything a signed-in Account sees. */
 export function Library({
   account,
+  onHost,
   onSignedOut,
 }: {
   readonly account: Account;
+  /** Whether this page is on the computer medleyplay runs on, and so plays for the Account. */
+  readonly onHost: boolean;
   readonly onSignedOut: () => void;
 }) {
   const route = useRoute();
@@ -68,8 +75,56 @@ export function Library({
     () => [...new Set(tracks.map((track) => track.artist.trim()).filter((name) => name !== ""))],
     [tracks],
   );
-  const [player, audio] = usePlayer(byId, onSignedOut);
-  const sleep = useSleepTimer(player.pause);
+  const [local, audio] = usePlayer(byId, onSignedOut);
+  const localSleep = useSleepTimer(local.pause);
+  useSpeaker(onHost, local, localSleep, byId, library.speaker, library.onCommand);
+  // Where a page that isn't on the computer plays; with the computer gone, it plays here.
+  const [playsOn, setPlaysOn] = useState<PlaysOn>("here");
+  const [playOnFailed, setPlayOnFailed] = useState("");
+  const speaker = library.speaker ?? null;
+  const canPlayOnComputer = !onHost && speaker !== null;
+  if (playsOn === "computer" && !canPlayOnComputer) {
+    setPlaysOn("here");
+  }
+  const onComputer = playsOn === "computer" && canPlayOnComputer;
+  const [remote, remoteSleep, command] = useRemotePlayer(speaker, onComputer, onSignedOut);
+  const player = onComputer ? remote : local;
+  const sleep = onComputer ? remoteSleep : localSleep;
+  const playOnFailedFor = (failure: unknown) => {
+    setPlayOnFailed(failure instanceof Error ? failure.message : String(failure));
+  };
+  /**
+   * Play on `where`, moving what plays there, as Spotify Connect does. The device the
+   * music leaves stops only once the computer has the command, so a refusal leaves
+   * the music where it was.
+   */
+  const playOn = (where: PlaysOn) => {
+    setPlayOnFailed("");
+    if (where === playsOn) {
+      return;
+    }
+    if (where === "here") {
+      const handoff = remote.status.kind === "playing" ? remote.handoff() : undefined;
+      if (handoff === undefined) {
+        setPlaysOn("here");
+        return;
+      }
+      command({ kind: "pause" }).then(() => {
+        local.take(handoff, true);
+        setPlaysOn("here");
+      }, playOnFailedFor);
+      return;
+    }
+    const handoff = local.status.kind === "playing" ? local.handoff() : undefined;
+    if (handoff === undefined) {
+      setPlaysOn("computer");
+      return;
+    }
+    command(takeOf(handoff, true)).then(() => {
+      local.pause();
+      setPlaysOn("computer");
+    }, playOnFailedFor);
+  };
   const station = useStation(player, tracks, account.id, library.favoriteGroups);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
@@ -418,6 +473,16 @@ export function Library({
         onOpenNowPlaying={() => {
           setNowPlayingOver(here);
         }}
+        playOn={
+          onHost ? undefined : (
+            <PlayOn
+              on={onComputer ? "computer" : "here"}
+              available={canPlayOnComputer}
+              failed={playOnFailed}
+              onChoose={playOn}
+            />
+          )
+        }
       />
       {linking !== undefined && (
         <AddLink

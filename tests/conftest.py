@@ -32,6 +32,7 @@ from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.sweeper import EnrichmentSweeper
@@ -361,8 +362,12 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     enrichment: EnrichmentService,
     ai: AiService,
     devices: DeviceService,
+    clock: FakeClock,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
+    events = Events()
+    remote = RemoteService(clock)
+    remote.listen(events.publish_remote)
     return Services(
         accounts=accounts,
         catalog=catalog,
@@ -374,7 +379,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         proxies=proxies,
         links=links,
         manual_downloads=manual_downloads,
-        events=Events(),
+        events=events,
         settings=settings,
         policy=policy,
         preferences=preferences,
@@ -386,6 +391,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         sweeper=EnrichmentSweeper(enrichment),
         ai=ai,
         devices=devices,
+        remote=remote,
     )
 
 

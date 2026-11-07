@@ -166,7 +166,10 @@ export function ListenOnDevice({
             ))}
           </ul>
         )}
-        <p className="hint">Music plays from this computer while it is on and on the network.</p>
+        <p className="hint">
+          The phone plays the music itself, or on this computer: choose <strong>Play on</strong> in
+          its player. Either way, keep this computer on and on the network.
+        </p>
         <footer className="dialog-buttons">
           <button
             type="button"

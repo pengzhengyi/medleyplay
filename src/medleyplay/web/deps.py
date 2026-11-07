@@ -24,6 +24,7 @@ from medleyplay.application.plugins import PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.sweeper import EnrichmentSweeper
@@ -61,6 +62,7 @@ class Services:
     sweeper: EnrichmentSweeper
     ai: AiService
     devices: DeviceService
+    remote: RemoteService
 
 
 def services_of(request: Request) -> Services:
@@ -160,6 +162,10 @@ def _devices(services: Annotated[Services, Depends(_services)]) -> DeviceService
     return services.devices
 
 
+def _remote(services: Annotated[Services, Depends(_services)]) -> RemoteService:
+    return services.remote
+
+
 def _this_device(request: Request) -> DeviceId | None:
     device_id = getattr(request.state, "device_id", None)
     return None if device_id is None else DeviceId(device_id)
@@ -186,6 +192,7 @@ CoversDep = Annotated[CoverService, Depends(_covers)]
 EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
 AiDep = Annotated[AiService, Depends(_ai)]
 DevicesDep = Annotated[DeviceService, Depends(_devices)]
+RemoteDep = Annotated[RemoteService, Depends(_remote)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 DeviceToken = Annotated[str | None, Cookie(alias=DEVICE_COOKIE, include_in_schema=False)]
 ThisDevice = Annotated[DeviceId | None, Depends(_this_device)]

@@ -17,6 +17,7 @@ import type {
   Preferences,
   Song,
   Songs,
+  SpeakerState,
   Track,
   TrackDownload,
   VideoText,
@@ -210,6 +211,37 @@ export function modeOf(change: Partial<Mode> = {}): Mode {
     checked_at: "2026-10-27T12:00:00Z",
     online_at: null,
     held_jobs: 0,
+    ...change,
+  };
+}
+
+/**
+ * The computer playing the first of two songs, 12.5 s in, unless `change` says otherwise:
+ *
+ * ```json
+ * {"entries": [{"key": "a", "track_id": 1}, {"key": "b", "track_id": 2}],
+ *  "position": 0, "status": "playing", "seconds": 12.5, "duration": 200}
+ * ```
+ */
+export function speakerStateOf(change: Partial<SpeakerState> = {}): SpeakerState {
+  return {
+    entries: [
+      { key: "a", track_id: 1, unit: null },
+      { key: "b", track_id: 2, unit: null },
+    ],
+    offset: 0,
+    total: 2,
+    position: 0,
+    status: "playing",
+    message: null,
+    shuffled: false,
+    repeat: "off",
+    seconds: 12.5,
+    duration: 200,
+    volume: 0.8,
+    muted: false,
+    counted: false,
+    sleep: null,
     ...change,
   };
 }

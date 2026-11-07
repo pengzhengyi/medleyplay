@@ -377,6 +377,8 @@ and its last button folds or opens them all.
   [uqr](https://github.com/unjs/uqr)'s matrix, which only `qr.ts` imports. It
   was chosen over lean-qr and `qrcode-generator`, which encoded as well in a
   spike; each address the spike tried was decoded back by jsQR.
+- ***Play on*** in the player, on a page that isn't on the computer, plays the
+  music on the computer instead; see [Remote play](<Remote play.md>).
 
 ## Layout
 

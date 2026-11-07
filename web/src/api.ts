@@ -344,6 +344,76 @@ export interface Devices {
   readonly allowed: readonly AllowedDevice[];
 }
 
+/** One entry of a queue as remote play sends it: its key, its Track, and its unit. */
+export interface RemoteEntry {
+  readonly key: string;
+  readonly track_id: number;
+  readonly unit: string | null;
+}
+
+/** A Track to queue on the computer, and the unit it is part of. */
+export interface Queued {
+  readonly track_id: number;
+  readonly unit: string | null;
+}
+
+/**
+ * What the computer plays: a window of its queue in the order it plays, and how.
+ *
+ * `entries` starts at place `offset` of the `total`; `position` is the place of the
+ * entry playing, `total` when the queue has finished.
+ */
+export interface SpeakerState {
+  readonly entries: readonly RemoteEntry[];
+  readonly offset: number;
+  readonly total: number;
+  readonly position: number;
+  readonly status: "idle" | "loading" | "preparing" | "playing" | "paused" | "blocked" | "failed";
+  readonly message: string | null;
+  readonly shuffled: boolean;
+  readonly repeat: "off" | "all" | "one";
+  readonly seconds: number;
+  readonly duration: number | null;
+  readonly volume: number;
+  readonly muted: boolean;
+  /** Whether the play of the entry playing has been counted. */
+  readonly counted: boolean;
+  readonly sleep: { readonly left_ms: number; readonly set_ms_ago: number } | null;
+}
+
+/** The account's speaker as the event stream sends it: its page, its report, and its age. */
+export interface RemoteEvent {
+  readonly page: string | null;
+  readonly state: SpeakerState | null;
+  readonly age_ms: number | null;
+}
+
+/** One thing a remote asks the computer to do. */
+export type RemoteCommand =
+  | { readonly kind: "play"; readonly entries: readonly Queued[]; readonly start: number }
+  | { readonly kind: "playAll"; readonly entries: readonly Queued[]; readonly shuffled: boolean }
+  | { readonly kind: "playNext" | "add"; readonly entry: Queued }
+  | { readonly kind: "toggle" | "pause" | "next" | "previous" | "clear" }
+  | { readonly kind: "seek"; readonly key: string; readonly seconds: number }
+  | { readonly kind: "move"; readonly key: string; readonly to: number }
+  | { readonly kind: "remove"; readonly key: string }
+  | { readonly kind: "shuffle"; readonly on: boolean }
+  | { readonly kind: "repeat"; readonly repeat: "off" | "all" | "one" }
+  | { readonly kind: "volume"; readonly volume: number }
+  | { readonly kind: "mute"; readonly muted: boolean }
+  | { readonly kind: "sleep"; readonly minutes: number | null }
+  | {
+      readonly kind: "take";
+      readonly entries: readonly RemoteEntry[];
+      readonly order: readonly string[] | null;
+      readonly position: number;
+      readonly repeat: "off" | "all" | "one";
+      readonly shuffled: boolean;
+      readonly seconds: number;
+      readonly playing: boolean;
+      readonly counted: boolean;
+    };
+
 export type ModeSetting = "auto" | "online" | "offline";
 
 /** Why the Mode is what it is. */
@@ -641,6 +711,9 @@ export const api = {
   turnAwayDevice: (id: string) => call<undefined>("POST", `/api/devices/${id}/turn-away`),
   removeDevice: (id: string) => call<undefined>("DELETE", `/api/devices/${id}`),
   removeOtherDevices: () => call<undefined>("DELETE", "/api/devices"),
+  report: (page: string, state: SpeakerState) =>
+    call<{ speaker: boolean }>("PUT", "/api/remote/report", { page, ...state }),
+  command: (command: RemoteCommand) => call<undefined>("POST", "/api/remote/commands", { command }),
   tracks: () => call<Track[]>("GET", "/api/tracks"),
   track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
   details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),

@@ -39,8 +39,12 @@ interface Running {
   random: Random;
   /** Every Track the station queued, the seed first. */
   queued: Set<number>;
-  /** How many entries the queue holds once what the station last added is in it. */
-  filledAt: number;
+  /**
+   * The key of the queue's last entry when the station last drew more, while what it
+   * drew hasn't arrived; the last entry, not the length, as a remote shows only part
+   * of the computer's queue.
+   */
+  awaiting: string | undefined;
 }
 
 interface Shown {
@@ -98,7 +102,7 @@ export function useStation(
         own: seed === undefined,
         random,
         queued: new Set(list.map((track) => track.id)),
-        filledAt: list.length,
+        awaiting: undefined,
       };
       store.set({ seed: from, own: seed === undefined });
       player.playList(list, 0);
@@ -131,7 +135,8 @@ export function useStation(
       return;
     }
     // Draw more when few remain, unless what the station last added hasn't arrived yet.
-    if (upNext(queue).length >= REFILL_AT || queue.entries.length < station.filledAt) {
+    const last = queue.entries.at(-1)?.key;
+    if (upNext(queue).length >= REFILL_AT || (last !== undefined && last === station.awaiting)) {
       return;
     }
     const now = new Date();
@@ -157,7 +162,7 @@ export function useStation(
         ];
       }
     }
-    station.filledAt = queue.entries.length + picks.length;
+    station.awaiting = picks.length === 0 ? undefined : last;
     for (const { track } of picks) {
       station.queued.add(track.id);
       add.current(track);

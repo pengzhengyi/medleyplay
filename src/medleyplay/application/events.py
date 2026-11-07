@@ -1,4 +1,4 @@
-"""Events: telling every open browser when a Job, the Mode, or the waiting devices change.
+"""Events: telling every open browser of changes to Jobs, the Mode, devices, and remote play.
 
 The runner and the services publish a Job's id after they commit, and the Mode
 service publishes `MODE` when the Mode changes, from any thread; each
@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Final, Literal
 
+from medleyplay.application.remote import CommandsWaiting, RemoteEvent
 from medleyplay.domain.jobs import JobId
 
 MODE: Final = "mode"
@@ -31,8 +32,8 @@ PROGRESS_INTERVAL: Final = 0.25
 """At most four progress events a second for one Job."""
 
 
-type Event = JobId | Literal["mode", "devices"]
-"""A Job that changed, `MODE`, or `DEVICES`."""
+type Event = JobId | Literal["mode", "devices"] | RemoteEvent
+"""A Job that changed, `MODE`, `DEVICES`, or a change to an account's remote play."""
 
 
 class SubscriptionEndedError(Exception):
@@ -119,6 +120,16 @@ class Events:
         with self._lock:
             subscriptions = tuple(self._subscriptions)
         self._offer(subscriptions, DEVICES, progress=False)
+
+    def publish_remote(self, event: RemoteEvent) -> None:
+        """Tell every subscriber of a change to remote play; callable from any thread.
+
+        Commands waiting is dropped when it doesn't fit, like progress: the
+        speaker's stream takes every waiting command whenever it next wakes.
+        """
+        with self._lock:
+            subscriptions = tuple(self._subscriptions)
+        self._offer(subscriptions, event, progress=isinstance(event, CommandsWaiting))
 
     @contextlib.asynccontextmanager
     async def subscribe(self) -> AsyncIterator[Subscription]:

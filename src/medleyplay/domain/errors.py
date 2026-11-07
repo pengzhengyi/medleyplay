@@ -52,6 +52,10 @@ class SignInThrottledError(MedleyplayError):
         self.retry_after_seconds = retry_after_seconds
 
 
+class BusyError(MedleyplayError):
+    """Too much already waits to be done; try again in a moment."""
+
+
 class KeychainUnavailableError(MedleyplayError):
     """The Keychain didn't answer in time, or refused: it may be locked or asking for access."""
 

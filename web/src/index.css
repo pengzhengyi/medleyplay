@@ -2415,6 +2415,47 @@ button.icon.heart.on:hover,
   color: var(--accent);
 }
 
+/* Playing on the computer, the button says so in a word, in the accent. */
+.player .play-on {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  width: auto;
+}
+
+.player .play-on.on {
+  padding-inline: 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.play-on-where {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Pico draws [role="group"] as a row of joined buttons; this one is a plain list. */
+.play-on-group {
+  display: block;
+  width: auto;
+  box-shadow: none;
+}
+
+.play-on-item {
+  min-width: 14rem;
+}
+
+.play-on-choice {
+  display: flex;
+  flex-direction: column;
+}
+
+.play-on-mark {
+  margin-left: auto;
+  color: var(--accent);
+}
+
 .player .status {
   display: flex;
   align-items: center;

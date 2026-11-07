@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatMinutes,
+  formatTimeLeft,
   formatBytes,
   formatLength,
   formatLibraryLength,
@@ -79,5 +81,30 @@ describe("formatLibraryLength", () => {
 
   it("says only the songs when there is no album", () => {
     expect(formatLibraryLength(0, 3, 600_000)).toBe("3 songs, 10 min");
+  });
+});
+
+describe("formatMinutes", () => {
+  it("writes a sleep timer's choice in words", () => {
+    expect([15, 30, 45, 60, 90, 120].map(formatMinutes)).toEqual([
+      "15 minutes",
+      "30 minutes",
+      "45 minutes",
+      "1 hour",
+      "1 hour 30 minutes",
+      "2 hours",
+    ]);
+  });
+});
+
+describe("formatTimeLeft", () => {
+  it("writes the time left in whole minutes, rounded up", () => {
+    expect(formatTimeLeft(28 * 60_000 + 1)).toBe("29 min");
+    expect(formatTimeLeft(90 * 60_000)).toBe("1 hr 30 min");
+    expect(formatTimeLeft(120 * 60_000)).toBe("2 hr");
+  });
+
+  it("writes a last part of a minute as 1 min", () => {
+    expect(formatTimeLeft(5_000)).toBe("1 min");
   });
 });

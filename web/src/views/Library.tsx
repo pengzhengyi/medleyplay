@@ -19,6 +19,7 @@ import { useStation } from "../library/useStation";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
+import { useSleepTimer } from "../player/useSleepTimer";
 import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
 import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
@@ -67,6 +68,7 @@ export function Library({
     [tracks],
   );
   const [player, audio] = usePlayer(byId, onSignedOut);
+  const sleep = useSleepTimer(player.pause);
   const station = useStation(player, tracks, account.id, library.favoriteGroups);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
@@ -399,7 +401,7 @@ export function Library({
           </p>
         )}
       </main>
-      <QueuePanel player={player} tracks={byId} />
+      <QueuePanel player={player} sleep={sleep} tracks={byId} />
       <PlayerBar
         player={player}
         track={playing}
@@ -445,6 +447,7 @@ export function Library({
       {nowPlaying && (
         <NowPlaying
           player={player}
+          sleep={sleep}
           track={playing}
           tracks={byId}
           onFavorite={actions.onFavorite}

@@ -45,6 +45,7 @@ import {
   StopIcon,
   TextAlignLeftIcon,
   TrashIcon,
+  WarningIcon,
 } from "@phosphor-icons/react";
 import {
   type SubmitEvent,
@@ -60,7 +61,9 @@ import {
 
 import type { ListCheck, PlaybackAnswer, Song, SongRowIn, Songs, Track } from "../api";
 import { newId } from "../ids";
+import { formatLength, formatTime } from "../format";
 import { checkParts, endOf, keptIds, listTextOf } from "../library/songList";
+import { countsDisagree, doubtsOf } from "../library/splitDoubts";
 import { formatStart, parseStart } from "../library/songTimes";
 import type { TrackLookup } from "../library/useLibrary";
 import { OriginTag } from "./OriginTag";
@@ -428,6 +431,24 @@ export function SongsEditor({
     });
   };
 
+  const starts = rows.map(startOf);
+  const doubts = doubtsOf(starts, songs?.length_ms ?? null);
+  const lengthOf = (index: number) => {
+    const start = starts[index] ?? 0;
+    return formatTime(((endOf(starts, index, songs?.length_ms ?? null) ?? start) - start) / 1000);
+  };
+  const disagree =
+    songs === undefined
+      ? null
+      : countsDisagree([
+          ...songs.found
+            .filter((list) => list.length > 0)
+            .map((list) => ({ name: "the video", count: list.length })),
+          ...(songs.suggested.length > 0
+            ? [{ name: "the AI", count: songs.suggested.length }]
+            : []),
+        ]);
+
   return (
     <form className="songs-panel" onSubmit={save}>
       <header className="songs-heading">
@@ -517,6 +538,7 @@ export function SongsEditor({
               {thinking ? "Asking the AI…" : fillNote}
             </span>
           </div>
+          {disagree !== null && <p className="songs-note songs-doubt">{disagree}</p>}
           {typing && (
             <Suspense fallback={<p className="empty">Opening the list…</p>}>
               <ListEditor
@@ -545,6 +567,13 @@ export function SongsEditor({
             {audioNote}
           </p>
           <div hidden={typing}>
+            {doubts.few && rows.length > 1 && (
+              <p className="songs-note songs-doubt">
+                <WarningIcon weight="bold" aria-hidden />
+                {formatLength(rows.length, songs.length_ms ?? 0)}: an album this long usually has
+                more, so a song may be missing.
+              </p>
+            )}
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -574,6 +603,7 @@ export function SongsEditor({
                       first={index === 0}
                       last={index === rows.length - 1}
                       heard={heard}
+                      long={doubts.long.has(index) ? lengthOf(index) : undefined}
                       playing={playing?.key === row.key ? playing.mode : undefined}
                       onChange={(field, value) => {
                         change(row.key, field, value);
@@ -665,6 +695,7 @@ function SongRow({
   first,
   last,
   heard,
+  long,
   playing,
   onChange,
   onMove,
@@ -677,6 +708,8 @@ function SongRow({
   readonly first: boolean;
   readonly last: boolean;
   readonly heard: boolean;
+  /** How long the song is, as `18:30`, when it is so long it may be two. */
+  readonly long: string | undefined;
   /** How the row's song is playing, if it is. */
   readonly playing: Playing["mode"] | undefined;
   readonly onChange: (field: "start" | "title" | "artist", value: string) => void;
@@ -801,6 +834,12 @@ function SongRow({
           <TrashIcon aria-hidden />
         </button>
       </span>
+      {long !== undefined && (
+        <p className="song-doubt">
+          <WarningIcon weight="bold" aria-hidden />
+          {long} long: it may be two songs. Check where the next one starts.
+        </p>
+      )}
     </li>
   );
 }

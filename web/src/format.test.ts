@@ -73,6 +73,12 @@ describe("formatBytes", () => {
   });
 });
 
+describe("formatLength", () => {
+  it("writes whole hours without minutes", () => {
+    expect(formatLength(15, 3_600_000)).toBe("15 songs, 1 hr");
+  });
+});
+
 describe("formatLibraryLength", () => {
   it("counts the albums, then the songs, then how long they all play", () => {
     expect(formatLibraryLength(2, 12, 6_000_000)).toBe("2 albums, 12 songs, 1 hr 40 min");

@@ -142,6 +142,14 @@ both read its full length.
   title, folded, or else starting at the same time, keeps its id, so filling
   from a list after editing the text loses no ratings or plays. What filled the
   rows is said beside the buttons, such as *11 songs from the AI*.
+- **What looks wrong is said, never refused:** by rules of thumb, a song longer
+  than 15 minutes says under its row *24:39 long: it may be two songs*, and when
+  the songs average more than 12 minutes, a note above them says *an album this
+  long usually has more, so a song may be missing*. A live set or a symphony
+  breaks both, so neither stops a save. The lists found are a second opinion of
+  each other: when the video's and the AI's count different songs, the editor
+  says so beside the buttons that fill from them, as *The video lists 12 songs,
+  the AI 4.*
 - **Listening in the editor:** a row's ***Play*** plays just that song, from its
   start to where the next starts, and pauses the music playing; its ***Check***
   plays its first five seconds and its last five, or a song of ten seconds or

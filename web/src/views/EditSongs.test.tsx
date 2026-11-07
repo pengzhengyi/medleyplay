@@ -582,3 +582,43 @@ describe("listening in the songs editor", () => {
     });
   });
 });
+
+describe("what looks wrong with a split", () => {
+  it("warns under a song so long it may be two, and above the songs when too few share the file", async () => {
+    await renderEditor();
+
+    expect(
+      await screen.findByText("52:00 long: it may be two songs. Check where the next one starts."),
+    ).toBeVisible();
+    expect(screen.getByText(/^3 songs, 1 hr: an album this long usually has more/)).toBeVisible();
+  });
+
+  it("warns of nothing when the songs are of usual lengths", async () => {
+    // Fifteen songs, one every four minutes, in an hour-long file.
+    const usual = splitSongsOf(
+      104,
+      Array.from(
+        { length: 15 },
+        (_, index) => [index + 1, index * 240_000, `Song ${String(index + 1)}`] as const,
+      ),
+    );
+
+    await renderEditor(usual);
+
+    expect(await screen.findByRole("textbox", { name: "Title of song 15" })).toBeVisible();
+    expect(screen.queryByText(/may be two songs|may be missing/)).toBeNull();
+  });
+
+  it("says when the video and the AI count different songs, as a second opinion", async () => {
+    const suggested: readonly Song[] = [
+      { start_ms: 0, title: "アイネクライネ", artist: "" },
+      { start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "" },
+      { start_ms: 480_000, title: "Last", artist: "" },
+      { start_ms: 900_000, title: "Encore", artist: "" },
+    ];
+
+    await renderEditor(splitSongsOf(104, [[1, 0, "アイネクライネ"]], [LISTED], suggested));
+
+    expect(await screen.findByText("The video lists 2 songs, the AI 4.")).toBeVisible();
+  });
+});

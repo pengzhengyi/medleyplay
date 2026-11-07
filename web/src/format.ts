@@ -20,7 +20,11 @@ export function formatLength(count: number, durationMs: number): string {
   }
   const hours = Math.floor(minutes / 60);
   const length =
-    hours === 0 ? `${String(minutes)} min` : `${String(hours)} hr ${String(minutes % 60)} min`;
+    hours === 0
+      ? `${String(minutes)} min`
+      : minutes % 60 === 0
+        ? `${String(hours)} hr`
+        : `${String(hours)} hr ${String(minutes % 60)} min`;
   return `${songs}, ${length}`;
 }
 

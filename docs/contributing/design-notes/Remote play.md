@@ -50,16 +50,22 @@
 - **Only a page on the host can be the speaker**, as `GET /api/device` says
   (`host`); the server checks each report itself.
 - **A host page becomes the speaker by reporting**: while it plays, or while it
-  has a queue and the account has no speaker. Of two host tabs, the one the
-  household played on last answers; a tab with nothing queued never reports.
+  has a queue and the account has no speaker. It reports first once its event
+  stream has answered, so a queue it restored on loading plays for the account.
+  Of two host tabs, the one the household played on last answers; a tab doesn't
+  report just because another became the speaker, or the two would take turns.
+  A tab with nothing queued never reports.
 - **A page is the speaker while one of its event streams is open.** A stream
   that reconnects keeps it; once the last one ends, it is forgotten, and
   remotes say so.
 - **It reports on every change it would show**: the queue, which entry plays,
-  playing or paused, shuffle and repeat, the volume, the sleep timer. It
-  doesn't report as the time goes by: a remote counts the seconds itself. It
-  reports again when its position drifts more than 2 s from what its last
-  report foretold, as after a seek, and every 20 s while it is the speaker.
+  playing or paused, shuffle and repeat, the volume, the sleep timer, whether
+  the entry's play has counted. It doesn't report as the time goes by: a remote
+  counts the seconds itself. It reports again when its position drifts more
+  than 2 s from what its last report foretold, as after a seek, and every 20 s
+  while it is the speaker. It sends one report at a time, at most one every
+  150 ms, the latest kept, so a volume dragged on the computer doesn't flood
+  the remotes.
 - **A report is a window of the queue**, in the order it plays: from 50 entries
   before the one playing, at most 500, with the queue's length. A queue of
   thousands costs the same as one of fifty.
@@ -83,8 +89,10 @@
   reducer, since an action such as `next` does more than change the queue.
 - **A remote sends one command at a time**, so they arrive in the order they
   were made. The speaker's next report shows each result. Play and pause show
-  at once, before that report. A volume dragged sends at most one command
-  every 150 ms, and the last one always.
+  at once, until that report, or for 3 s when none comes, as when the
+  computer's browser still won't play. A volume dragged sends at most one
+  command every 150 ms, and the last one always. The remote counts the seconds
+  only while it is in use.
 - **A refused command says why in the player**: nothing playing on the computer
   (409), or too many commands waiting (429). With no report for a minute, the
   player says *The computer isn't responding*.
@@ -104,10 +112,12 @@ computer plays, Play on → this device  computer's queue window and second → 
 - **The move onto the computer is one command, `take`**, carrying the whole
   queue, its own order when shuffled, the second to start from, and whether the
   play of the entry playing has already counted, so it isn't counted twice.
-- **The phone pauses only once the server has passed the command on**, so a
-  computer gone away leaves the phone playing, and *Play on* says why.
+- **The device the music leaves stops only once the server has passed the
+  command on**: the phone pauses after `take`, the computer is asked to pause
+  before the phone plays. A refusal leaves the music where it was, and *Play
+  on* says why. Both commands go in the remote's line, after any sent before.
 - **Moving onto the phone takes the report's window**, the 500 entries around
-  the one playing.
+  the one playing, and whether its play has counted.
 - **Nothing playing moves nothing**: choosing the computer while the phone is
   paused or idle just shows what the computer has.
 
@@ -133,8 +143,9 @@ All in memory, in `RemoteService`; nothing is stored.
   command and leaves the speaker as it is.
 - **Reports and commands are checked for shape** with Pydantic: a known
   command, ids and keys of the right form, at most 20,000 entries in a command
-  and 500 in a report, a message of at most 300 characters. The server never
-  interprets them.
+  and 500 in a report, a message of at most 300 characters; a `take` names
+  each entry once, plays one of them, and orders each once. The server never
+  otherwise interprets them.
 
 ## The web client
 
@@ -159,15 +170,19 @@ All in memory, in `RemoteService`; nothing is stored.
 
 - **Server:** a host page that plays becomes the speaker, one with nothing
   queued never does, and one paused leaves another in place; a page on a
-  phone may not report; a command reaches the speaker's stream and no other,
-  in order; none answers 409 and a full line 429; the speaker stays while a
-  stream reconnects and goes with its last; another account hears nothing;
-  commands and reports of the wrong shape answer 422.
+  phone may not report; a phone hears whether the play has counted; a command
+  reaches the speaker's stream and no other, in order; none answers 409 and a
+  full line 429; the speaker stays while a stream reconnects and goes with its
+  last; another account hears nothing; commands and reports of the wrong
+  shape, a `take` naming an entry twice among them, answer 422.
 - **Client:** the report and its window; the remote's queue and its count of
   the seconds; how each command is carried out; the remote player's commands,
-  one at a time and in order, play and pause at once, the volume's pace, a
-  refusal, *not responding*, *blocked*, and the sleep timer; the speaker's
-  reports, on a change, a seek, and a heartbeat; *Play on* through the page.
+  one at a time and in order, play and pause at once and for a while only,
+  the volume's pace, a refusal, *not responding*, *blocked*, and the sleep
+  timer; the speaker's reports, on a change, a seek, a heartbeat, once its
+  stream answers, not when another tab takes over, and at their pace; a
+  station refilling a queue a remote sees only part of; *Play on* through the
+  page, a refused move among them.
 
 ## Left for later
 

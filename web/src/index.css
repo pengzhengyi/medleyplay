@@ -3905,6 +3905,24 @@ button.link-button {
   border-radius: 0.6rem;
 }
 
+/* What looks wrong with a split: under the song it concerns, or above the songs. */
+.song-doubt {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.25rem;
+  color: var(--caution);
+  font-size: 0.85rem;
+}
+
+.songs-note.songs-doubt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--caution);
+}
+
 .song-row.dragging {
   position: relative;
   z-index: 1;

@@ -1408,7 +1408,8 @@ button.text:hover:not(:disabled) {
   opacity: 0.45;
 }
 
-/* In the Library, Play and Shuffle each have a caret offering to play by album or song. */
+/* In the Library, Play and Shuffle each have a caret offering to play by album or song;
+   elsewhere each stands alone and stays round. */
 .split-button {
   display: inline-flex;
   gap: 1px;

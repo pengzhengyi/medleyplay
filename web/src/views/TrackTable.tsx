@@ -378,7 +378,7 @@ export function TrackTable({
     <>
       <div className="table-tools">
         <div className="play-all">
-          <span className="split-button">
+          <span className={songsIn === undefined ? undefined : "split-button"}>
             <button
               type="button"
               aria-label="Play all"
@@ -398,7 +398,7 @@ export function TrackTable({
               />
             )}
           </span>
-          <span className="split-button secondary">
+          <span className={songsIn === undefined ? undefined : "split-button secondary"}>
             <button
               type="button"
               className="secondary"

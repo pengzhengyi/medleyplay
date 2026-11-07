@@ -42,7 +42,9 @@ npm run e2e      # Playwright against the real server (needs: uv sync, npx playw
 - **Status shows where it happens.** The progress and outcome of an action on a
   song (a lookup, a save) show beside that song, such as a badge on its cover. The
   page-wide notice is for what has no place on screen. Screen readers still hear
-  each action through a `role="status"` region.
+  each action through a `role="status"` region. A confirmation such as *Saved.*
+  fades after a few seconds (`useNote`'s `confirm`); a refusal or a conflict stays
+  until the next note.
 - **Self-evident, in few words.** Follow *Don't Make Me Think*: put a way to fill
   a field beside the field, and follow the conventions people know from other
   apps. Prefer an icon or a short tag to a sentence. Each icon-only control or tag

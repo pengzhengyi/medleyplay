@@ -10,6 +10,7 @@
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { type ProxySetting, api } from "../api";
+import { classOf, useNote } from "../useNote";
 
 const SITE = "bilibili";
 
@@ -18,17 +19,21 @@ export function BilibiliSettings() {
   const [loaded, setLoaded] = useState(false);
   const [proxy, setProxy] = useState<ProxySetting | null>(null);
   const [url, setUrl] = useState("");
-  const [note, setNote] = useState("");
+  const notes = useNote();
   const [error, setError] = useState("");
 
   const failed = (failure: unknown) => {
     setError(failure instanceof Error ? failure.message : String(failure));
   };
-  const reload = (then = "") => {
+  const reload = (
+    then = () => {
+      notes.tell("");
+    },
+  ) => {
     api.proxy(SITE).then((read) => {
       setProxy(read);
       setLoaded(true);
-      setNote(then);
+      then();
     }, failed);
   };
   const loadOnOpen = useEffectEvent(() => {
@@ -42,13 +47,17 @@ export function BilibiliSettings() {
     setError("");
     api.saveProxy(SITE, url.trim()).then(() => {
       setUrl("");
-      reload("Saved.");
+      reload(() => {
+        notes.confirm("Saved.");
+      });
     }, failed);
   };
   const remove = () => {
     setError("");
     api.removeProxy(SITE).then(() => {
-      reload("Removed.");
+      reload(() => {
+        notes.confirm("Removed.");
+      });
     }, failed);
   };
 
@@ -108,8 +117,8 @@ export function BilibiliSettings() {
               Every request to Bilibili goes through it.
             </p>
           </form>
-          <p className="hint" role="status">
-            {note}
+          <p className={classOf(notes.note)} role="status">
+            {notes.note.text}
           </p>
         </>
       )}

@@ -11,6 +11,7 @@
 import { type ReactNode, useEffect, useEffectEvent, useId, useState } from "react";
 
 import { type Enricher, type EnricherMode, api } from "../api";
+import { classOf, useNote } from "../useNote";
 
 /** How one enricher's part of Settings reads. */
 export interface EnricherWords {
@@ -58,17 +59,21 @@ export function EnricherSettings({
 }) {
   const [enricher, setEnricher] = useState<Enricher | null>(null);
   const [saving, setSaving] = useState(false);
-  const [note, setNote] = useState("");
+  const notes = useNote();
   const [error, setError] = useState("");
   const modeHint = useId();
 
   const failed = (failure: unknown) => {
     setError(failure instanceof Error ? failure.message : String(failure));
   };
-  const reload = (then = "") => {
+  const reload = (
+    then = () => {
+      notes.tell("");
+    },
+  ) => {
     api.enricher(words.enricher).then((read) => {
       setEnricher(read);
-      setNote(then);
+      then();
     }, failed);
   };
   const loadOnOpen = useEffectEvent(() => {
@@ -80,13 +85,13 @@ export function EnricherSettings({
 
   const choose = (mode: EnricherMode) => {
     setError("");
-    setNote("");
+    notes.tell("");
     setSaving(true);
     api.setEnricherMode(words.enricher, mode).then(
       (read) => {
         setSaving(false);
         setEnricher(read);
-        setNote("Saved.");
+        notes.confirm("Saved.");
         onChanged();
       },
       (failure: unknown) => {
@@ -98,7 +103,9 @@ export function EnricherSettings({
   const reset = () => {
     setError("");
     api.resetEnricher(words.enricher).then(() => {
-      reload("Reset.");
+      reload(() => {
+        notes.confirm("Reset.");
+      });
     }, failed);
   };
 
@@ -152,8 +159,8 @@ export function EnricherSettings({
           )}
         </>
       )}
-      <p className="hint" role="status">
-        {note}
+      <p className={classOf(notes.note)} role="status">
+        {notes.note.text}
       </p>
     </>
   );

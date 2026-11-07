@@ -605,6 +605,18 @@ button.text:hover:not(:disabled) {
   color: var(--accent);
 }
 
+/* A confirmation fades at the end of its time, then clears. */
+.fading {
+  opacity: 0;
+  transition: opacity 600ms ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fading {
+    transition: none;
+  }
+}
+
 .usage-total {
   margin: 0.75rem 0 0.5rem;
 }

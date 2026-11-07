@@ -15,6 +15,7 @@ from medleyplay.application.mode import (
     NETWORK_POLL,
     ModeDocument,
     ModeService,
+    ModeView,
 )
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
@@ -188,6 +189,45 @@ class TestCheckingTheInternet:
 
         assert internet.checks == 5
 
+    def test_a_check_that_reaches_the_internet_brings_the_wait_after_a_failure_back_to_the_first(
+        self, mode: ModeService, clock: FakeClock, internet: FakeInternet
+    ) -> None:
+        internet.reachable = False
+        for _ in range(3):
+            mode.tick()
+            clock.advance(CHECK_AFTER_FAILURE)
+        internet.reachable = True
+        mode.check_soon()
+        mode.tick()
+        internet.reachable = False
+        mode.check_soon()
+        mode.tick()
+        clock.advance(FIRST_RETRY)
+
+        mode.tick()
+
+        assert internet.checks == 6
+
+    def test_leaving_the_setting_offline_brings_the_wait_after_a_failure_back_to_the_first(
+        self,
+        mode: ModeService,
+        clock: FakeClock,
+        accounts: AccountService,
+        internet: FakeInternet,
+    ) -> None:
+        alice, _ = _alice_and_bob(accounts)
+        internet.reachable = False
+        for _ in range(3):
+            mode.tick()
+            clock.advance(CHECK_AFTER_FAILURE)
+        mode.put_setting(alice, ModeSetting.OFFLINE, revision=0)
+        mode.put_setting(alice, ModeSetting.AUTO, revision=1)
+        clock.advance(FIRST_RETRY)
+
+        mode.tick()
+
+        assert internet.checks == 5
+
     def test_checks_at_once_on_another_network(
         self, mode: ModeService, internet: FakeInternet, network: FakeNetwork
     ) -> None:
@@ -284,6 +324,51 @@ class TestCheckingTheInternet:
         view = mode.check_now()
 
         assert (view.mode.reason, view.checked_at) == (Reason.UNREACHABLE, clock())
+
+    def test_a_check_asked_now_without_a_network_says_so_and_checks_nothing(
+        self, mode: ModeService, internet: FakeInternet, network: FakeNetwork
+    ) -> None:
+        network.network = None
+
+        view = mode.check_now()
+
+        assert (view.mode.reason, internet.checks) == (Reason.NO_NETWORK, 0)
+
+    def test_a_check_asked_while_the_thread_checks_is_answered_by_that_check(
+        self, mode: ModeService, internet: FakeInternet
+    ) -> None:
+        checking, release = threading.Event(), threading.Event()
+
+        def hold() -> None:
+            checking.set()
+            release.wait()
+
+        internet.while_checking = hold
+        ticking = threading.Thread(target=mode.tick)
+        ticking.start()
+        checking.wait()
+        views: list[ModeView] = []
+        asking = threading.Thread(target=lambda: views.append(mode.check_now()))
+        asking.start()
+        release.set()
+        ticking.join()
+        asking.join()
+
+        assert views[0].mode.online
+
+    def test_checks_asked_now_leave_the_wait_after_a_failed_check_as_it_was(
+        self, mode: ModeService, clock: FakeClock, internet: FakeInternet
+    ) -> None:
+        internet.reachable = False
+        mode.tick()
+        clock.advance(timedelta(seconds=1))
+        for _ in range(3):
+            mode.check_now()
+        clock.advance(2 * FIRST_RETRY)
+
+        mode.tick()
+
+        assert internet.checks == 5
 
     def test_a_check_asked_now_checks_nothing_while_the_setting_is_offline(
         self, mode: ModeService, accounts: AccountService, internet: FakeInternet

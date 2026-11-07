@@ -115,12 +115,13 @@ class ModeService:
         self._next_check: datetime | None = None
         self._check_asked = False
         self._retry = FIRST_RETRY
+        self._checks_ended = 0
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
 
     def listen(self, listener: Callable[[], None]) -> None:
-        """Tell `listener`, on the ticking thread, each time the Mode changes from now on."""
+        """Tell `listener`, on the thread that decided, each time the Mode changes from now on."""
         with self._state:
             self._listeners.append(listener)
 
@@ -200,16 +201,17 @@ class ModeService:
         Offline, nothing is checked.
         """
         with self._state:
-            self._check_asked = True
-        self.tick(asked=True)
+            ended = self._checks_ended
+        self.tick(asked_after=ended)
         return self.now()
 
-    def tick(self, *, asked: bool = False) -> datetime:
+    def tick(self, *, asked_after: int | None = None) -> datetime:
         """Read the network, decide, then check the internet if due and decide again.
 
         Going Offline is decided before the check, so it is at once however long
-        the check takes; `asked` is a check someone asked for. Return when to
-        tick next.
+        the check takes. `asked_after` is how many checks had ended when someone
+        asked for one: a check that ended since answers them, and one they ask for
+        leaves the wait after a failed check as it was. Return when to tick next.
         """
         with self._ticking:
             setting = self.settings()
@@ -217,26 +219,31 @@ class ModeService:
             with self._state:
                 changed_network = _identity(network) != _identity(self._network)
                 self._network = network
-                if changed_network:
+                leaving_offline = self._mode.setting is ModeSetting.OFFLINE
+                if changed_network or leaving_offline:
                     self._retry = FIRST_RETRY
-                due = setting.setting is not ModeSetting.OFFLINE and (
-                    self._check_asked
+                # A check that ended after someone asked, as the thread's own, answers them.
+                answered = asked_after is not None and self._checks_ended > asked_after
+                due = setting.setting is not ModeSetting.OFFLINE and not answered
+                due = due and (
+                    asked_after is not None
+                    or self._check_asked
                     or self._next_check is None
                     or self._clock() >= self._next_check
                     or changed_network
-                    or self._mode.setting is ModeSetting.OFFLINE
+                    or leaving_offline
                 )
             # Before a check, only going Offline is decided, so it is at once however
             # long the check takes; a change of setting waits for the facts.
-            self._decide(setting, network, only_offline=due)
+            self._decide(setting, network, only_offline=due, asked=answered)
             if due and network is None:
                 # Without a network there is nothing to reach; check once one comes.
                 with self._state:
                     self._reachable, self._next_check = False, None
                 self._decide(setting, network)
             elif due:
-                self._run_check()
-                self._decide(setting, network, asked=asked)
+                self._run_check(backing_off=asked_after is None)
+                self._decide(setting, network, asked=asked_after is not None)
             with self._state:
                 mode, next_check = self._mode, self._next_check
             wakes = [self._clock() + NETWORK_POLL, mode.online_at]
@@ -244,7 +251,7 @@ class ModeService:
                 wakes.append(next_check)
             return min(wake for wake in wakes if wake is not None)
 
-    def _run_check(self) -> None:
+    def _run_check(self, *, backing_off: bool) -> None:
         try:
             reachable = self._check()
         except Exception:  # noqa: BLE001 -- a check that breaks has not reached the internet
@@ -256,11 +263,13 @@ class ModeService:
         now = self._clock()
         with self._state:
             self._reachable, self._checked_at = reachable, now
+            self._checks_ended += 1
             if reachable:
                 self._next_check, self._retry = now + CHECK_WHILE_ONLINE, FIRST_RETRY
             else:
                 self._next_check = now + self._retry
-                self._retry = min(2 * self._retry, CHECK_AFTER_FAILURE)
+                if backing_off:
+                    self._retry = min(2 * self._retry, CHECK_AFTER_FAILURE)
             self._check_asked = asked
 
     def _decide(

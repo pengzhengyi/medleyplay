@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +29,63 @@ describe("App", () => {
 
     const note = await screen.findByRole("link", { name: "Offline: no network" });
     expect(note).toHaveAttribute("href", "#/settings");
+  });
+
+  it("checks the network from the header, and shows nothing once the check reaches the internet", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/mode": { body: modeOf({ online: false, reason: "unreachable" }) },
+      "POST /api/mode/check": { body: modeOf() },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Check the network" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: /^Offline/ })).not.toBeInTheDocument();
+    });
+    expect(calls).toContain("POST /api/mode/check");
+  });
+
+  it("says Still offline in the header when the check can't reach the internet", async () => {
+    const unreachable = modeOf({
+      online: false,
+      reason: "unreachable",
+      since: "2026-10-27T12:00:00Z",
+    });
+    serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/mode": { body: unreachable },
+      "POST /api/mode/check": { body: { ...unreachable, checked_at: "2026-10-27T12:05:00Z" } },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Check the network" }));
+
+    expect(
+      await screen.findByRole("link", { name: "Still offline: the internet can't be reached" }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["set to Always Offline", modeOf({ setting: "offline", online: false, reason: "set_offline" })],
+    [
+      "on a metered network",
+      modeOf({
+        online: false,
+        reason: "metered",
+        network: { kind: "wifi", metered_as: "Hotspot", hotspot_like: true },
+      }),
+    ],
+  ])("offers no check of the network while %s", async (_, mode) => {
+    serve({ ...signedIn([trackOf(1, "Night Drive")]), "GET /api/mode": { body: mode } });
+
+    render(<App />);
+
+    expect(await screen.findByRole("link", { name: /^Offline/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check the network" })).not.toBeInTheDocument();
   });
 
   it("says nothing in the header while medleyplay is Online", async () => {

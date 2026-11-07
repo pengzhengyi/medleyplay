@@ -30,6 +30,7 @@ function open(
   routes: Routes = {},
   mode: Mode = modeOf(),
   metered: readonly MeteredNetwork[] = [],
+  onModeChecked: (mode: Mode) => void = vi.fn(),
 ) {
   const served = serve({
     "GET /api/settings": { body: LIMIT_20 },
@@ -50,7 +51,14 @@ function open(
     ...modeSettingsOf(mode, metered),
     ...routes,
   });
-  render(<SettingsView admin={admin} mode={mode} onEnrichersChanged={vi.fn()} />);
+  render(
+    <SettingsView
+      admin={admin}
+      mode={mode}
+      onModeChecked={onModeChecked}
+      onEnrichersChanged={vi.fn()}
+    />,
+  );
   return served;
 }
 
@@ -315,6 +323,19 @@ describe("the Network section", () => {
 
     expect(await network().findByText("Offline: on a metered network.")).toBeVisible();
     expect(network().getByText("On Wi-Fi, marked metered as “iPhone hotspot”.")).toBeVisible();
+  });
+
+  it("says when the internet was last checked, and checks it now when asked", async () => {
+    const unreachable = modeOf({ online: false, reason: "unreachable" });
+    const checked = vi.fn();
+    open(false, { "POST /api/mode/check": { body: modeOf() } }, unreachable, [], checked);
+
+    expect(await network().findByText(/^Internet last checked at /)).toBeVisible();
+    await userEvent.click(network().getByRole("button", { name: "Check now" }));
+
+    await waitFor(() => {
+      expect(checked).toHaveBeenCalledWith(modeOf());
+    });
   });
 
   it("says when a settling Mode goes Online, and how many downloads wait", async () => {

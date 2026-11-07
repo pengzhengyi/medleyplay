@@ -139,11 +139,14 @@ def decide(
     facts: Facts,
     metered: Mapping[NetworkKey, str],
     now: datetime,
+    *,
+    asked: bool = False,
 ) -> Mode:
     """Return the Mode now, given the one before and what is known.
 
     `metered` names each network marked metered. Call it again at `online_at`
-    to go Online once the wait is over.
+    to go Online once the wait is over. `asked` is a check someone asked for:
+    the internet it reaches goes Online at once, since they saw the network back.
     """
     network = facts.network if isinstance(facts.network, Network) else None
     key = None if network is None else network.key
@@ -182,8 +185,8 @@ def decide(
         )
         return become(online=False, reason=verdict, flapped=flapped)
 
-    # A change of the setting takes effect at once, as does staying Online.
-    if previous.online or not was_auto:
+    # A change of the setting takes effect at once, as do staying Online and a check asked for.
+    if previous.online or not was_auto or asked:
         return become(online=True, reason=Reason.ONLINE)
     online_at = (
         previous.online_at

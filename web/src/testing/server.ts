@@ -85,6 +85,12 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     segment_of: null,
     split: false,
     kind: "song",
+    kind_reason:
+      change.segment_of !== undefined && change.segment_of !== null
+        ? "segment"
+        : change.split === true
+          ? "split"
+          : "length",
     cover: null,
     ...change,
   };

@@ -255,7 +255,7 @@ function AlbumRow({
       >
         <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
       </button>
-      <KindMark kind="album" />
+      <KindMark kind="album" reason="split" />
       <span className="album-title">{title}</span>
       <span className="album-place" title={`From song ${where}`}>
         {where}
@@ -315,7 +315,7 @@ function QueueItem({
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
       <Cover cover={track?.cover ?? null} className="thumb" />
-      {track !== undefined && <KindMark kind={track.kind} />}
+      {track !== undefined && <KindMark kind={track.kind} reason={track.kind_reason} />}
       <span className="entry-title">{title}</span>
       <span className="entry-artist">{track?.artist}</span>
       <button

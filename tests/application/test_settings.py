@@ -20,7 +20,7 @@ def _alice_and_bob(accounts: AccountService) -> tuple[Account, Account]:
 
 def test_settings_never_saved_have_no_limit_at_revision_zero(settings: SettingsService) -> None:
     assert settings.get() == Settings(
-        storage_limit=None, removal_order=RemovalOrder.LEAST_FAVORITE, revision=0
+        storage_limit=None, removal_order=RemovalOrder.LEAST_FAVORITE, album_minutes=20, revision=0
     )
 
 
@@ -69,3 +69,24 @@ def test_saving_tells_whoever_listens_that_the_settings_changed(
     settings.put(alice, Settings(storage_limit=FIVE_GB, revision=0))
 
     assert changes == ["settings"]
+
+
+@pytest.mark.parametrize("minutes", [30, None], ids=["a length", "no guess"])
+def test_an_admin_sets_how_long_a_file_is_guessed_an_album(
+    settings: SettingsService, accounts: AccountService, minutes: int | None
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    settings.put(alice, Settings(album_minutes=minutes, revision=0))
+
+    assert settings.get().album_minutes == minutes
+
+
+@pytest.mark.parametrize("minutes", [0, 601])
+def test_a_length_for_an_album_outside_1_to_600_minutes_is_refused(
+    settings: SettingsService, accounts: AccountService, minutes: int
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    with pytest.raises(InvalidInputError, match="album_minutes"):
+        settings.put(alice, Settings(album_minutes=minutes, revision=0))

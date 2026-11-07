@@ -64,6 +64,8 @@ export interface ViewProps {
   readonly onModeChecked: (mode: Mode) => void;
   /** Called after Settings changes which Tracks an enricher may be asked about. */
   readonly onEnrichersChanged: () => void;
+  /** Called after Settings changes how a Track's kind is guessed. */
+  readonly onKindsChanged: () => void;
   /** The station playing, and a way to start one. */
   readonly station: Station;
   readonly accountId: number;
@@ -186,6 +188,7 @@ function viewOf(given: ViewProps) {
           mode={props.mode}
           onModeChecked={props.onModeChecked}
           onEnrichersChanged={props.onEnrichersChanged}
+          onKindsChanged={props.onKindsChanged}
         />
       );
   }

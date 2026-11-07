@@ -18,7 +18,8 @@ replaces, so that one's cover stays unless the household gives its own.
 
 A Track's *kind* says whether it is a song or an album: one file holding a
 whole album. An origin may name it; otherwise `kind_of` guesses it from the
-file's length, and a split file is always an album and each of its songs a song.
+file's length, unless the household turned the guess off, and a split file is
+always an album and each of its songs a song.
 """
 
 from collections.abc import Mapping
@@ -34,7 +35,7 @@ MAX_NUMBER: Final = 999
 MIN_YEAR: Final = 1000
 MAX_YEAR: Final = 2999
 LONGEST_SONG_MS: Final = 20 * 60_000
-"""A file this long or longer is guessed to be an album rather than a song."""
+"""A file this long or longer is guessed to be an album, unless the household sets a length."""
 
 
 class Origin(StrEnum):
@@ -95,6 +96,8 @@ class KindReason(StrEnum):
     """It is a song of a split file."""
     LENGTH = "length"
     """Guessed from its file's length; a file of unknown length is a song."""
+    DEFAULT = "default"
+    """No origin names it and the household guesses none, so it is a song."""
 
 
 @dataclass(frozen=True)
@@ -263,12 +266,19 @@ def _first(
 
 
 def kind_of(
-    named: Kind | None, *, duration_ms: int | None, split: bool = False, segment: bool = False
+    named: Kind | None,
+    *,
+    duration_ms: int | None,
+    split: bool = False,
+    segment: bool = False,
+    album_from_ms: int | None = LONGEST_SONG_MS,
 ) -> KindShown:
     """Return a Track's kind from the kind its origins name, if any, and its file.
 
     A song of a split file is a song, and a split file an album, whatever is named;
-    otherwise the named kind wins over a guess from the file's length.
+    otherwise the named kind wins over a guess from the file's length: a file of
+    `album_from_ms` or longer is an album. With `album_from_ms` `None`, nothing
+    is guessed, and a file no origin names is a song.
     """
     if segment:
         return KindShown(Kind.SONG, KindReason.SEGMENT)
@@ -276,5 +286,7 @@ def kind_of(
         return KindShown(Kind.ALBUM, KindReason.SPLIT)
     if named is not None:
         return KindShown(named, KindReason.NAMED)
-    long = duration_ms is not None and duration_ms >= LONGEST_SONG_MS
+    if album_from_ms is None:
+        return KindShown(Kind.SONG, KindReason.DEFAULT)
+    long = duration_ms is not None and duration_ms >= album_from_ms
     return KindShown(Kind.ALBUM if long else Kind.SONG, KindReason.LENGTH)

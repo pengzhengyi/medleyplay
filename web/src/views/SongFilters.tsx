@@ -15,13 +15,14 @@ export interface Choice {
 }
 
 /** The fields a filter keeps one value of. */
-export type ChoiceField = "artist" | "album" | "genre" | "year";
+export type ChoiceField = "kind" | "artist" | "album" | "genre" | "year";
 
 /** A rating filter: at least so many stars, or no rating. */
 export type RatingFilter = 1 | 2 | 3 | 4 | 5 | "unrated";
 
 /** The filters on; a field left out keeps every song. */
 export interface Filters {
+  readonly kind?: string;
   readonly artist?: string;
   readonly album?: string;
   readonly genre?: string;
@@ -34,6 +35,7 @@ export interface Filters {
 export type FilterField = keyof Filters;
 
 const CHOICE_FIELDS: readonly { field: ChoiceField; label: string; any: string }[] = [
+  { field: "kind", label: "Kind", any: "Songs and albums" },
   { field: "artist", label: "Artist", any: "Any artist" },
   { field: "album", label: "Album", any: "Any album" },
   { field: "genre", label: "Genre", any: "Any genre" },
@@ -58,6 +60,8 @@ function describeFilter(field: FilterField, filters: Filters): string {
       return "Favorites only";
     case "playable":
       return "Only songs that play now";
+    case "kind":
+      return filters.kind === "album" ? "Albums only" : "Songs only";
     default:
       return `${CHOICE_FIELDS.find((each) => each.field === field)?.label ?? ""}: ${filters[field] ?? ""}`;
   }
@@ -66,6 +70,7 @@ function describeFilter(field: FilterField, filters: Filters): string {
 /** The fields of `filters` that are on, in the order the panel lists them. */
 function filtersOn(filters: Filters): FilterField[] {
   const order: FilterField[] = [
+    "kind",
     "artist",
     "album",
     "genre",

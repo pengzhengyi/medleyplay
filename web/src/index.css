@@ -764,6 +764,35 @@ button.text:hover:not(:disabled) {
   border-radius: 999px;
 }
 
+/* Songs and albums: whether a long file is guessed an album, and from how long. */
+.kind-guess {
+  display: grid;
+  justify-items: start;
+  gap: 0.6rem;
+}
+
+.kind-guess-check,
+.kind-guess-minutes {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.kind-guess-minutes input {
+  width: 6rem;
+  height: auto;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+}
+
+.kind-guess button[type="submit"] {
+  width: auto;
+  margin: 0;
+  padding: 0.45rem 1.4rem;
+  border-radius: 999px;
+}
+
 .mode-now p {
   margin-bottom: 0.4rem;
 }
@@ -1500,6 +1529,11 @@ button.text:hover:not(:disabled) {
 .kind-mark.kind-album {
   color: var(--accent);
   font-size: 0.95rem;
+}
+
+/* A guessed kind is an outline, a settled one solid; a guess also sits back a little. */
+.kind-mark.guessed {
+  opacity: 0.75;
 }
 
 /* The Library: a split file's caret, and its songs under it, set in. */

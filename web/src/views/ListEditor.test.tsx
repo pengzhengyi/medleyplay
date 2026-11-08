@@ -84,4 +84,22 @@ describe("typing a song list", () => {
     const view = editorView();
     expect(view.state.doc.lineAt(view.state.selection.main.head).number).toBe(3);
   });
+
+  it("numbers each line of the example an empty list shows, and only real lines once typed", () => {
+    const { container } = render(
+      <ListEditor initial="" check={check} artists={[]} onUse={vi.fn()} onCancel={vi.fn()} />,
+    );
+    // The gutter's numbers, but for the hidden one CodeMirror sizes the gutter by.
+    const numbers = () =>
+      [...container.querySelectorAll<HTMLElement>(".cm-lineNumbers .cm-gutterElement")]
+        .filter((element) => element.style.visibility !== "hidden")
+        .map((element) => element.textContent);
+    const empty = numbers();
+
+    act(() => {
+      editorView().dispatch({ changes: { from: 0, insert: "0:00 Intro" } });
+    });
+
+    expect([empty, numbers()]).toEqual([["1\n2"], ["1"]]);
+  });
 });

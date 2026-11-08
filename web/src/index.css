@@ -3892,6 +3892,11 @@ button.songs-back:hover {
   color: var(--muted);
 }
 
+/* An empty list numbers each line of its example, one number under another; CodeMirror's own class names are camelCase. */
+.list-editor-text [class~="cm-lineNumbers"] [class~="cm-gutterElement"] {
+  white-space: pre;
+}
+
 .list-editor-text .cm-tooltip {
   border: 1px solid var(--line);
   border-radius: 0.5rem;

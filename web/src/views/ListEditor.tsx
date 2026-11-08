@@ -12,7 +12,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { type Diagnostic, lintGutter, setDiagnostics } from "@codemirror/lint";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, placeholder } from "@codemirror/view";
+import { EditorView, drawSelection, keymap, lineNumbers, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef, useState } from "react";
 
@@ -115,6 +115,8 @@ export default function ListEditor({
                 : String(line),
           }),
           history(),
+          // CodeMirror draws the caret, so beside the two-line example it stays one line tall.
+          drawSelection(),
           keymap.of([...defaultKeymap, ...historyKeymap, ...completionKeymap]),
           songLines,
           syntaxHighlighting(colors),

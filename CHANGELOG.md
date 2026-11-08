@@ -251,7 +251,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A row's song or album mark changes as soon as its details are saved, not on
   the next reload.
 - An empty song list's two-line example is numbered 1 and 2, so it no longer
-  reads as one line.
+  reads as one line, and its caret is one line tall rather than spanning both.
 - Asking a second lookup about a song, such as *Find on MusicBrainz* while its
   *Find details online* waits, now queues that lookup instead of returning the
   first one's.

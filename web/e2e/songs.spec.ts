@@ -32,3 +32,19 @@ test("a song list typed beside the details is checked line by line, then fills t
   await dialog.getByRole("button", { name: "Details" }).click();
   await expect(dialog.getByRole("textbox", { name: "Title" })).toBeVisible();
 });
+
+test("an empty song list's caret is one line tall, not as tall as the two-line example", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await row(page, "Alpha").getByRole("button", { name: "More actions for Alpha" }).click();
+  await page.getByRole("menuitem", { name: "Edit details…" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Split into songs" }).click();
+  await dialog.getByRole("button", { name: "Fill from a list" }).click();
+
+  const example = await dialog.locator(".cm-placeholder").boundingBox();
+  const caret = await dialog.locator(".cm-cursor-primary").boundingBox();
+
+  expect(caret?.height ?? Infinity).toBeLessThanOrEqual((example?.height ?? 0) / 2 + 1);
+});

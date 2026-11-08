@@ -505,6 +505,34 @@ button.text:hover:not(:disabled) {
   color: var(--ink);
 }
 
+/* What a Rate Your Music import would change, and the buttons that apply or drop it. */
+.ratings-preview {
+  margin: 0.5rem 0 1rem;
+}
+
+.ratings-preview h4 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.ratings-preview ul {
+  margin: 0 0 0.5rem;
+}
+
+.ratings-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.ratings-kept {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Your imported rating of the album shown, and your review, under its heading. */
 .album-rating {
   max-width: 60ch;

@@ -152,7 +152,7 @@ export function RatingsSettings({ onChanged }: { readonly onChanged: () => void 
               </a>
             </details>
           )}
-          <div className="actions">
+          <div className="ratings-preview-actions">
             <button type="button" disabled={busy} aria-busy={busy} onClick={apply}>
               Import
             </button>

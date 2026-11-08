@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.errors import ConflictError, InvalidInputError
+from medleyplay.domain.history import HistoryLength
 from medleyplay.domain.preferences import Preferences
 from medleyplay.persistence.schema import PreferenceRow
 
@@ -34,6 +35,7 @@ class PreferencesDocument(BaseModel):
     shortcuts: dict[_Command, Annotated[list[_Keys], Field(max_length=MAX_KEYS)]] | None = Field(
         default=None, max_length=MAX_COMMANDS
     )
+    history_length: HistoryLength | None = None
 
 
 class PreferencesService:
@@ -60,10 +62,13 @@ class PreferencesService:
         """
         try:
             shortcuts = preferences.shortcuts
-            document = PreferencesDocument(
-                shortcuts=None
-                if shortcuts is None
-                else {command: list(keys) for command, keys in shortcuts.items()}
+            document = PreferencesDocument.model_validate(
+                {
+                    "shortcuts": None
+                    if shortcuts is None
+                    else {command: list(keys) for command, keys in shortcuts.items()},
+                    "history_length": preferences.history_length,
+                }
             ).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
@@ -103,5 +108,6 @@ def _preferences_of(document: PreferencesDocument, revision: int) -> Preferences
         shortcuts=None
         if shortcuts is None
         else {command: tuple(keys) for command, keys in shortcuts.items()},
+        history_length=document.history_length,
         revision=revision,
     )

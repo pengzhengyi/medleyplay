@@ -11,8 +11,10 @@ class Preferences:
     `shortcuts` gives each command the web client names its keys, written as the
     page writes them, such as `shift+right`; `None` leaves every command on the
     page's defaults. The server keeps them without knowing the commands, so a
-    page with a new command needs no change here.
+    page with a new command needs no change here. `history_length` is how many
+    songs History shows; `None` leaves it at the default.
     """
 
     shortcuts: Mapping[str, tuple[str, ...]] | None = None
+    history_length: int | None = None
     revision: int = 0

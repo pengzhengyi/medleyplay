@@ -12,7 +12,7 @@ def test_preferences_never_saved_read_as_no_shortcuts_at_revision_0(client: Test
 
     response = client.get("/api/me/preferences")
 
-    assert response.json() == {"shortcuts": None, "revision": 0}
+    assert response.json() == {"shortcuts": None, "history_length": None, "revision": 0}
 
 
 def test_an_account_saves_its_shortcuts_at_the_revision_read(client: TestClient) -> None:
@@ -20,7 +20,10 @@ def test_an_account_saves_its_shortcuts_at_the_revision_read(client: TestClient)
 
     saved = client.put("/api/me/preferences", json={"shortcuts": PLAY_ON_K, "revision": 0})
 
-    assert (saved.status_code, saved.json()) == (200, {"shortcuts": PLAY_ON_K, "revision": 1})
+    assert (saved.status_code, saved.json()) == (
+        200,
+        {"shortcuts": PLAY_ON_K, "history_length": None, "revision": 1},
+    )
     assert client.get("/api/me/preferences").json() == saved.json()
 
 
@@ -32,7 +35,7 @@ def test_a_member_has_preferences_of_their_own(client: TestClient) -> None:
 
     response = client.get("/api/me/preferences")
 
-    assert response.json() == {"shortcuts": None, "revision": 0}
+    assert response.json() == {"shortcuts": None, "history_length": None, "revision": 0}
 
 
 def test_saving_at_a_revision_saved_since_is_a_conflict(client: TestClient) -> None:
@@ -51,6 +54,34 @@ def test_keys_not_as_the_page_writes_them_are_refused(client: TestClient) -> Non
     response = client.put(
         "/api/me/preferences", json={"shortcuts": {"toggle": ["Space Bar"]}, "revision": 0}
     )
+
+    assert response.status_code == 422
+
+
+def test_an_account_saves_how_many_songs_its_history_shows(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    saved = client.put("/api/me/preferences", json={"history_length": 100, "revision": 0})
+
+    assert saved.json() == {"shortcuts": None, "history_length": 100, "revision": 1}
+
+
+def test_saving_only_the_shortcuts_keeps_the_history_length_and_the_other_way_round(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    client.put("/api/me/preferences", json={"history_length": 100, "revision": 0})
+
+    client.put("/api/me/preferences", json={"shortcuts": PLAY_ON_K, "revision": 1})
+    saved = client.put("/api/me/preferences", json={"history_length": 25, "revision": 2})
+
+    assert saved.json() == {"shortcuts": PLAY_ON_K, "history_length": 25, "revision": 3}
+
+
+def test_a_history_length_the_page_does_not_offer_is_refused(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.put("/api/me/preferences", json={"history_length": 30, "revision": 0})
 
     assert response.status_code == 422
 

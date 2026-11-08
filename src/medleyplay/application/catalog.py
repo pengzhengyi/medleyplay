@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime
 
-from sqlalchemy import ColumnElement, Select, case, delete, func, select
+from sqlalchemy import ColumnElement, Select, case, delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -47,6 +47,7 @@ from medleyplay.domain.community import CommunityRating, RatedAs, shown_rating
 from medleyplay.domain.details import LONGEST_SONG_MS, Field, Kind, Origin, Value, kind_of
 from medleyplay.domain.downloads import download_target
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
+from medleyplay.domain.history import KEPT_FOR, KEPT_PLAYS, Played
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.links import PART_LINKS
@@ -298,13 +299,19 @@ class CatalogService:
                     raise _no_track(track_id)
                 recorded = db.get(PlayRow, (account_id, play_id))
                 if recorded is None:
+                    now = self._clock()
                     db.add(
                         PlayRow(
-                            account_id=account_id, id=play_id, track_id=track_id, played_at=when
+                            account_id=account_id,
+                            id=play_id,
+                            track_id=track_id,
+                            played_at=when,
+                            recorded_at=now,
                         )
                     )
                     db.flush()
                     _count_play(db, account_id, track_id, when)
+                    _forget_old_plays(db, account_id, now)
                     recorded_now = True
                 elif recorded.track_id != track_id:
                     raise _another_track(play_id)
@@ -319,6 +326,31 @@ class CatalogService:
         if recorded_now:
             self._changed("catalog")
         return self.get_track(account_id, track_id)
+
+    def history(self, account_id: AccountId, *, limit: int) -> tuple[Played, ...]:
+        """Return up to `limit` of the Account's plays it hasn't cleared, newest first."""
+        if not 1 <= limit <= KEPT_PLAYS:
+            message = f"History shows 1 to {KEPT_PLAYS} songs, not {limit}."
+            raise InvalidInputError(message)
+        with self._units() as db:
+            rows = db.scalars(
+                select(PlayRow)
+                .where(PlayRow.account_id == account_id, PlayRow.cleared.is_(False))
+                .order_by(PlayRow.played_at.desc(), PlayRow.id)
+                .limit(limit)
+            ).all()
+            return tuple(
+                Played(PlayId(row.id), TrackId(row.track_id), row.played_at) for row in rows
+            )
+
+    def clear_history(self, account_id: AccountId) -> None:
+        """Hide every play the Account made from its History; each still counts once."""
+        with self._units.begin() as db:
+            db.execute(
+                update(PlayRow)
+                .where(PlayRow.account_id == account_id, PlayRow.cleared.is_(False))
+                .values(cleared=True)
+            )
 
     def put_playlist(
         self,
@@ -471,6 +503,24 @@ def _tracks_for(account_id: AccountId) -> Select[TrackRow, TrackStateRow]:
     return select(TrackRow, TrackStateRow).outerjoin(
         TrackStateRow,
         (TrackStateRow.track_id == TrackRow.id) & (TrackStateRow.account_id == account_id),
+    )
+
+
+def _forget_old_plays(db: Session, account_id: AccountId, now: datetime) -> None:
+    # A play is forgotten once it is old enough that it won't be sent again and
+    # History, at its longest, no longer shows it.
+    newest = (
+        select(PlayRow.id)
+        .where(PlayRow.account_id == account_id)
+        .order_by(PlayRow.played_at.desc(), PlayRow.id)
+        .limit(KEPT_PLAYS)
+    )
+    db.execute(
+        delete(PlayRow).where(
+            PlayRow.account_id == account_id,
+            PlayRow.recorded_at < now - KEPT_FOR,
+            PlayRow.id.not_in(newest),
+        )
     )
 
 

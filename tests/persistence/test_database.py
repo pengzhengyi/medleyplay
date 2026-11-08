@@ -669,3 +669,35 @@ def test_migrating_forgets_when_musicbrainz_was_asked_so_it_is_asked_again_for_r
         asked = connection.scalars(text("SELECT enricher FROM enricher_ask")).all()
     engine.dispose()
     assert asked == ["bilibili-details"]
+
+
+def test_upgrading_records_every_play_when_it_was_played_and_clears_none(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0027")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO account (id, username, display_name, password_hash, role, created_at)"
+                " VALUES (1, 'alice', 'Alice', 'x', 'admin', '2026-11-07 00:00:00.000000')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO track (id, title, artist, album, album_artist, genre, added_at)"
+                " VALUES (1, 'Bremen', '', '', '', '', '2026-11-07 00:00:00.000000')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO play (account_id, id, track_id, played_at)"
+                " VALUES (1, :id, 1, '2026-11-07 09:14:00.000000')"
+            ),
+            {"id": uuid.UUID(int=1).hex},
+        )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        plays = connection.execute(text("SELECT recorded_at, cleared FROM play")).all()
+    engine.dispose()
+    assert [tuple(play) for play in plays] == [("2026-11-07 09:14:00.000000", 0)]

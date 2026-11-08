@@ -361,9 +361,14 @@ class FavoriteAlbumRow(Base):
 
 
 class PlayRow(Base):
-    """One play of a Track by an Account, under an id the Account's client chose."""
+    """One play of a Track by an Account, under an id the Account's client chose.
+
+    `recorded_at` is when the server took it, and `cleared` hides it from History
+    while it still marks the id as counted.
+    """
 
     __tablename__ = "play"
+    __table_args__ = (Index("ix_play_account_id_played_at", "account_id", "played_at"),)
 
     account_id: Mapped[int] = mapped_column(
         ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
@@ -371,6 +376,8 @@ class PlayRow(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("track.id", ondelete="CASCADE"), index=True)
     played_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    cleared: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
 
 
 class PlaylistRow(Base):

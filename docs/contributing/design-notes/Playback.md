@@ -13,6 +13,7 @@
 - [Serving audio](#serving-audio)
 - [Preparing a compressed member](#preparing-a-compressed-member)
 - [Recording plays](#recording-plays)
+- [History](#history)
 - [Availability in the Track list](#availability-in-the-track-list)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
@@ -137,6 +138,36 @@ sequenceDiagram
   twice counts twice.
 - **Plays wait in an outbox** in IndexedDB until the server accepts them, so a
   play made while the server is unreachable is recorded later.
+
+## History
+
+- **History lists the songs an Account played,** newest first, in a *History*
+  tab beside *Up next*. A song is there once it counts as played, by the rule
+  above, so a skipped song isn't; a song played twice is there twice. A play a
+  device sends late, after being away, sorts by when it was played. Each row
+  shows the cover, the title and artist, and when: *just now*, *12 min ago*,
+  *9:14 PM* today, *Yesterday 9:14 PM*, *Mon 9:14 PM* within the week, then the
+  date. Clicking a row plays that song now and leaves *Up next* as it is; its
+  button adds the song to the end of *Up next*. A song that can't play now is
+  grayed, as in the Library.
+- **It is the Account's, on every device:** it reads the plays the server
+  recorded, so a phone's plays show on the computer. It loads when the tab
+  opens, when the page is shown again, and after the server accepts a play this
+  page sends.
+- **It shows the last 50 songs,** or as many as the tab's own *Keeps the last …
+  songs* offers: 25, 50, 100, 250, or 500, saved with the Account's preferences.
+- **The server keeps plays a while,** since a play's row is also how a play
+  sent again is known and counted once. It forgets a play only once it was
+  recorded more than 30 days ago and isn't among the Account's newest 500, so
+  the table stays small. Play counts and last played times never change.
+- **Clear** hides every play in History so far, on every device, after a second
+  click to confirm. The plays stay recorded, so one sent again still counts
+  once, until they are forgotten as above. A play another device sends later
+  shows, since it wasn't recorded when History was cleared.
+- **History isn't cleared when the server restarts or the page reloads:** it is
+  the Account's record, as play counts are, and lasts until cleared.
+- **Saving preferences keeps what a page leaves out,** so a page that knows only
+  the shortcuts doesn't reset History's length, and the other way round.
 
 ## Availability in the Track list
 
@@ -291,6 +322,8 @@ and the full views are in [Web client](Web%20client.md).
 | `POST /api/tracks/{id}/playback` | Signed in | Picks a Source; answers ready, preparing, or unplayable |
 | `GET`, `HEAD /api/sources/{id}/audio` | Signed in | Serves a Source's audio, with Range; 404 when it can't play, 409 when it must be prepared first |
 | `PUT /api/plays/{id}` | Signed in | Records a play of a Track under a client UUID |
+| `GET /api/plays?limit=` | Signed in | The Account's History: up to `limit` (at most 500) of its plays, newest first |
+| `DELETE /api/plays` | Signed in | Clears the Account's History |
 | `GET /api/tracks` | Signed in | Each Track now also has its `availability` |
 
 ## Testing
@@ -307,7 +340,9 @@ and the full views are in [Web client](Web%20client.md).
   plays from the cache; two requests at once start one Job; a Source with a
   ready Source and a compressed one plays the ready one.
 - **Plays:** recording twice counts once; the same id with another Track is
-  refused; another Account's ids are its own.
+  refused; another Account's ids are its own. History lists plays newest
+  first; clearing hides them and still counts a play sent again once; a play is
+  forgotten only past 30 days and the newest 500.
 - **Client:** Vitest for the queue reducer, the play-count rule, and the
   components; Playwright against the real server, with a Library of generated
   WAV files, for signing in, playing, seeking, and moving through the queue. A

@@ -288,7 +288,7 @@ describe("what listeners elsewhere rated", () => {
       .getAllByRole("button")
       .map((star) => star.dataset.community);
 
-  it("shows a song you haven't rated as outline stars to the nearest half", () => {
+  it("shows a song you haven't rated in grey stars to the nearest half", () => {
     renderTable([NIGHT_DRIVE]);
 
     expect(parts()).toEqual(["full", "full", "full", "half", "none"]);

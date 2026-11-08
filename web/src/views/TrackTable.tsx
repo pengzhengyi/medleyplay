@@ -1007,8 +1007,8 @@ function choicesOf(table: Table): Record<ChoiceField, Choice[]> {
 }
 
 /**
- * The stars of `track`: your own rating, solid; else what listeners elsewhere rated it,
- * outlined to the nearest half. Choosing a star rates the song yourself.
+ * The stars of `track`: your own rating, in the accent; else what listeners elsewhere
+ * rated it, in grey, to the nearest half. Choosing a star rates the song yourself.
  */
 function RatingStars({
   track,
@@ -1052,11 +1052,11 @@ function RatingStars({
                   track.rating !== null && stars <= track.rating
                     ? "fill"
                     : part === "full"
-                      ? "duotone"
+                      ? "fill"
                       : "light"
                 }
               />
-              {part === "half" && <StarIcon className="star-half" weight="duotone" />}
+              {part === "half" && <StarIcon className="star-half" weight="fill" />}
             </span>
           </button>
         );

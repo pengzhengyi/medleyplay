@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Ratings from MusicBrainz** — a song you haven't rated shows what MusicBrainz's
-  listeners rated it, or its album, as grey outline stars to the nearest half;
+  listeners rated it, or its album, as grey stars to the nearest half;
   hovering says how many voted. Finding the song on MusicBrainz brings them, with
   no extra requests. They only show: rules, downloads, and radio use your own.
 - **Open on RYM** — a Track's menu searches Rate Your Music for the album or

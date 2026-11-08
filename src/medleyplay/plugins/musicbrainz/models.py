@@ -85,11 +85,29 @@ def top_genres(genres: list[Genre], most: int = 3) -> str:
     return "; ".join(genre.name for genre in ranked[:most])
 
 
+class Rating(_Model):
+    """What MusicBrainz's listeners rated something: the mean of their stars, and their number.
+
+    Something nobody rated has no value and no votes.
+    """
+
+    value: float | None = None
+    votes: Annotated[int, Field(alias="votes-count")] = 0
+
+
 class Recording(_Model):
     """The recording a release's track is."""
 
     id: str
     genres: list[Genre] = []
+    rating: Rating = Rating()
+
+
+class ReleaseGroup(_Model):
+    """The release group a release belongs to: every edition of one album."""
+
+    id: str
+    rating: Rating = Rating()
 
 
 class ReleaseTrack(_Model):
@@ -109,7 +127,7 @@ class Medium(_Model):
 
 
 class Release(_Model):
-    """A release looked up with its tracks and artist credits."""
+    """A release looked up with its tracks, artist credits, and release group."""
 
     id: str
     title: str
@@ -118,3 +136,4 @@ class Release(_Model):
     media: list[Medium] = []
     genres: list[Genre] = []
     cover_art_archive: Annotated[CoverArt, Field(alias="cover-art-archive")] = CoverArt()
+    release_group: Annotated[ReleaseGroup | None, Field(alias="release-group")] = None

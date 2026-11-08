@@ -22,6 +22,7 @@ from medleyplay.plugin_api import (
     ENRICH_TRACK,
     MAX_COVER_BYTES,
     AiFailure,
+    CommunityRating,
     EnrichStatus,
     EnrichTrack,
     ShownDetail,
@@ -64,7 +65,8 @@ class EnrichJob(_Model):
 class EnrichedTrack(_Model):
     """What the enricher found: values and songs, or the video's text, and a copy of its cover.
 
-    `ai_answered` and `ai_failures` say which AI provider answered and which failed first.
+    `ratings` are what the site's listeners rated the song and its album. `ai_answered`
+    and `ai_failures` say which AI provider answered and which failed first.
     """
 
     enricher: str
@@ -72,6 +74,7 @@ class EnrichedTrack(_Model):
     values: dict[str, str | int] = {}
     video_text: VideoText | None = None
     songs: tuple[SuggestedSong, ...] = ()
+    ratings: tuple[CommunityRating, ...] = ()
     cover: CoverFile | None = None
     ai_answered: str | None = None
     ai_failures: tuple[AiFailure, ...] = ()
@@ -109,6 +112,7 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
         values=answer.values,
         video_text=answer.video_text,
         songs=answer.songs,
+        ratings=answer.ratings,
         cover=copy,
         ai_answered=answer.ai_answered,
         ai_failures=answer.ai_failures,

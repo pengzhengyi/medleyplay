@@ -5,12 +5,14 @@ household read it through its own proxy: the title, uploader, description, durat
 cover, and formats, trimmed to what medleyplay reads. The signed media URLs are
 replaced by `https://example.invalid/<format id>`, so nothing in it is fetched.
 
-MusicBrainz answers (MusicBrainz data is CC0, free to copy):
+MusicBrainz answers (MusicBrainz's core data is CC0, free to copy; its ratings are
+CC BY-NC-SA 3.0, from MusicBrainz, https://musicbrainz.org):
 
 - `latin-search.json`: the real answer to a recording search for *Let Down* by
   *Radiohead*, as the web service gave it: two recordings, on 55 and 2 releases.
 - `latin-release.json`: the real answer to a release lookup with
-  `inc=genres+recordings+artist-credits+media`, the 1997 original of *OK Computer*.
+  `inc=genres+recordings+artist-credits+media+release-groups+ratings`, the 1997
+  original of *OK Computer*, with its recordings' and release group's ratings.
 - `cjk-release-search.json`: made by hand in the shape of MusicBrainz's release search;
   the album 生如夏花 by 朴树 as its 2003 original and a 2013 reissue, and a compilation
   that scores lower.

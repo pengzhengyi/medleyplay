@@ -14,6 +14,7 @@ from medleyplay.application.enrichment import ENRICH_KIND, enrich_target
 from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
+from medleyplay.domain.community import CommunityRating, RatedAs
 from medleyplay.domain.covers import cover_id
 from medleyplay.domain.details import Field, Origin
 from medleyplay.domain.enrichers import (
@@ -26,11 +27,12 @@ from medleyplay.domain.errors import ConflictError, ForbiddenError
 from medleyplay.domain.jobs import JobState, JobView
 from medleyplay.domain.segments import SongRow
 from medleyplay.domain.video_text import Song, VideoText
-from medleyplay.persistence.schema import EnricherAskRow
+from medleyplay.persistence.schema import CommunityRatingRow, EnricherAskRow
 from tests.support.enrichment import SETTLE, Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
 from tests.support.images import jpeg_image
+from tests.support.plugins.reader import ALBUM_PAGE, SONG_PAGE
 
 NAME = MUSICBRAINZ.name
 
@@ -63,6 +65,12 @@ def _failed(enriching: Enriching, who: Account, track_id: TrackId) -> JobView:
     """Find the Track on MusicBrainz, and wait for the Job to fail."""
     job = enriching.enrichment.find_details(who, track_id, NAME)
     return enriching.wait_for(job.id, JobState.FAILED)
+
+
+def _after_the_pause(enriching: Enriching) -> None:
+    """Let MusicBrainz's pause between two Jobs pass, so the next one runs at once."""
+    enriching.clock.advance(MUSICBRAINZ.spacing)
+    enriching.runner.wake()
 
 
 def _musicbrainz_values(enriching: Enriching, track_id: TrackId) -> dict[Field, str | int]:
@@ -99,6 +107,122 @@ def test_a_song_is_recorded_under_the_musicbrainz_origin_with_every_value_it_giv
         Field.DISC_NUMBER: 1,
         Field.COVER: cover_id(jpeg_image("Let Down")),
     }
+
+
+def test_a_found_song_shows_what_listeners_on_musicbrainz_rated_it(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_song("Rated")
+
+    _found(enriching, alice, track_id)
+
+    track = enriching.catalog.get_track(alice.id, track_id)
+    assert track.community == CommunityRating(NAME, RatedAs.SONG, 4.2, 24, SONG_PAGE)
+    assert track.rating is None
+
+
+def test_a_song_too_few_listeners_rated_shows_its_albums_rating(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_song("FewVotes")
+
+    _found(enriching, alice, track_id)
+
+    track = enriching.catalog.get_track(alice.id, track_id)
+    assert track.community == CommunityRating(NAME, RatedAs.ALBUM, 3.5, 12, ALBUM_PAGE)
+
+
+def test_every_track_in_the_list_shows_its_community_rating(
+    enriching: Enriching, alice: Account
+) -> None:
+    rated, unrated = enriching.add_song("Rated"), enriching.add_song("Let Down")
+    _found(enriching, alice, rated)
+    _after_the_pause(enriching)
+    _found(enriching, alice, unrated)
+
+    shown = {track.id: track.community for track in enriching.catalog.list_tracks(alice.id)}
+
+    assert shown[rated] == CommunityRating(NAME, RatedAs.SONG, 4.2, 24, SONG_PAGE)
+    assert shown[unrated] is None
+
+
+def test_the_songs_inside_a_long_file_show_the_rating_of_the_album_it_is(
+    enriching: Enriching, alice: Account
+) -> None:
+    album_id = _album_file(enriching, "Rated")
+
+    _found(enriching, alice, album_id)
+
+    album = CommunityRating(NAME, RatedAs.ALBUM, 4.55, 89, ALBUM_PAGE)
+    shown = [
+        track.community
+        for track in enriching.catalog.list_tracks(alice.id)
+        if album_id in {track.id, track.segment_of}
+    ]
+    assert shown == [album, album, album]
+
+
+def test_one_song_inside_a_long_file_shows_the_rating_of_the_album_it_is(
+    enriching: Enriching, alice: Account
+) -> None:
+    album_id = _album_file(enriching, "Rated")
+    _found(enriching, alice, album_id)
+    song = next(
+        track for track in enriching.catalog.list_tracks(alice.id) if track.segment_of == album_id
+    )
+
+    shown = enriching.catalog.get_track(alice.id, song.id).community
+
+    assert shown == CommunityRating(NAME, RatedAs.ALBUM, 4.55, 89, ALBUM_PAGE)
+
+
+def test_a_song_inside_a_long_file_found_on_its_own_shows_its_own_rating(
+    enriching: Enriching, alice: Account
+) -> None:
+    album_id = _album_file(enriching, "Rated")
+    _found(enriching, alice, album_id)
+    song = next(
+        track for track in enriching.catalog.list_tracks(alice.id) if track.segment_of == album_id
+    )
+    with enriching.units.begin() as db:
+        db.add(
+            CommunityRatingRow(
+                track_id=song.id,
+                source=NAME,
+                rated_as="song",
+                value=4.2,
+                votes=24,
+                link=SONG_PAGE,
+                found_at=enriching.clock(),
+            )
+        )
+
+    shown = enriching.catalog.get_track(alice.id, song.id).community
+
+    assert shown == CommunityRating(NAME, RatedAs.SONG, 4.2, 24, SONG_PAGE)
+
+
+def test_a_rating_whose_page_is_on_another_site_is_not_kept(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_song("OffSite")
+
+    _found(enriching, alice, track_id)
+
+    assert enriching.catalog.get_track(alice.id, track_id).community is None
+
+
+def test_finding_a_song_again_and_finding_nothing_forgets_its_ratings(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_song("Rated")
+    _found(enriching, alice, track_id)
+    enriching.details.put_household(track_id, {"title": "Nowhere"})
+    _after_the_pause(enriching)
+
+    _found(enriching, alice, track_id)
+
+    assert enriching.catalog.get_track(alice.id, track_id).community is None
 
 
 def test_the_cover_is_stored_once_and_shows_on_the_track(

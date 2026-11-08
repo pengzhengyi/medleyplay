@@ -21,7 +21,7 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock, details
@@ -33,6 +33,7 @@ from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.ai import ProviderFailure, cut_text
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.community import link_is_on
 from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
 from medleyplay.domain.enrichers import (
     ENRICHERS,
@@ -53,6 +54,7 @@ from medleyplay.domain.errors import (
 from medleyplay.domain.jobs import Job, JobId, JobState
 from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import (
+    CommunityRatingRow,
     EnricherAskRow,
     EnricherModeRow,
     EnricherStopRow,
@@ -60,7 +62,7 @@ from medleyplay.persistence.schema import (
     TrackRow,
     VideoTextRow,
 )
-from medleyplay.plugin_api import TRACK_ENRICHER, ShownDetail
+from medleyplay.plugin_api import TRACK_ENRICHER, CommunityRating, RatedAs, ShownDetail
 from medleyplay.plugin_api import Chapter as AskedChapter
 from medleyplay.plugin_api import VideoText as AnsweredText
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob
@@ -142,6 +144,7 @@ def _complete(
         return
     if enricher.subject is Subject.VIDEO and _text_is_owned(db, track_id):
         return
+    _record_ratings(db, track_id, enricher, found.ratings, now)
     if enricher.origin is Origin.AI:
         _record_providers(db, found, now)
         _record_suggestion(db, track_id, found, now)
@@ -157,6 +160,41 @@ def _complete(
         values[Field.COVER] = cover
     if values:
         details.record(db, track_id, enricher.origin, values, now)
+
+
+def _record_ratings(
+    db: Session,
+    track_id: TrackId,
+    enricher: Enricher,
+    ratings: Sequence[CommunityRating],
+    now: datetime,
+) -> None:
+    """Replace what the enricher's site said its listeners rated the Track with its answer.
+
+    A rating whose page is not on the site's own hosts is left out, as is a second
+    rating of the song, or of the album.
+    """
+    db.execute(
+        delete(CommunityRatingRow).where(
+            CommunityRatingRow.track_id == track_id, CommunityRatingRow.source == enricher.name
+        )
+    )
+    kept: dict[RatedAs, CommunityRating] = {}
+    for rating in ratings:
+        if link_is_on(rating.link, enricher.rating_hosts):
+            kept.setdefault(rating.of, rating)
+    db.add_all(
+        CommunityRatingRow(
+            track_id=track_id,
+            source=enricher.name,
+            rated_as=rating.of.value,
+            value=rating.value,
+            votes=rating.votes,
+            link=rating.link,
+            found_at=now,
+        )
+        for rating in kept.values()
+    )
 
 
 def _record_providers(db: Session, found: EnrichedTrack, now: datetime) -> None:

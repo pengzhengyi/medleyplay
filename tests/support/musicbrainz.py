@@ -20,6 +20,10 @@ REISSUE = "d339ba4d-0e44-4d2d-bc7a-b8078c072da9"
 """The 2016 reissue of *OK Computer*, which the recorded release lookup describes."""
 LET_DOWN = "47b02a82-c3bf-4647-b894-dd1c8f608e7f"
 """The recording of *Let Down* the recorded search scores 100."""
+OK_COMPUTER_GROUP = "b1392450-e666-3926-a536-22c65f834433"
+"""The release group of every release of *OK Computer*."""
+SHU_PU_GROUP = "7a1b2c3d-0000-4000-8000-00000000c3d4"
+"""A made-up release group of 生如夏花, for the hand-made answers."""
 SHU_PU = "0f463449-2b8b-4874-88ed-92392d97f955"
 """The 2003 original of 朴树's 生如夏花 in the hand-made answers."""
 
@@ -53,7 +57,8 @@ class MusicBrainzFactory:
 
         The recording is the 1997 original's, with genres: the release's own is *rock*
         (counted once), and *Let Down*'s recording has *alternative rock* (6), *rock*
-        (3), and *britpop*, *post-britpop*, and *punk* (1 each). Here its id and date
+        (3), and *britpop*, *post-britpop*, and *punk* (1 each). Listeners rated *Let
+        Down* 4.2 from 24 votes and the album, its release group, 4.55 from 89. Here its id and date
         are those of `release`, and `front` says whether it has a front cover.
         """
         answer = recorded_answer("latin-release")
@@ -68,13 +73,23 @@ class MusicBrainzFactory:
 
     @staticmethod
     def shu_pu_release(
-        *, front: bool = True, genres: Mapping[str, int] | None = None
+        *,
+        front: bool = True,
+        genres: Mapping[str, int] | None = None,
+        rated: tuple[float, int] | None = None,
     ) -> dict[str, Any]:
-        """Return the hand-made lookup of 生如夏花, with 11 songs, and `genres` by count."""
+        """Return the hand-made lookup of 生如夏花, with 11 songs, and `genres` by count.
+
+        With `rated`, its release group is rated that, from that many votes.
+        """
         answer = recorded_answer("cjk-release")
         answer["cover-art-archive"] = {"front": front, "back": False, "count": int(front)}
         if genres is not None:
             answer["genres"] = [{"name": name, "count": count} for name, count in genres.items()]
+        if rated is not None:
+            value, votes = rated
+            rating = {"value": value, "votes-count": votes}
+            answer["release-group"] = {"id": SHU_PU_GROUP, "rating": rating}
         return answer
 
 

@@ -1,7 +1,8 @@
 # Community info
 
 > [!NOTE]
-> **Status: proposed.** This note describes what medleyplay shows about a song
+> **Status: in part built.** The community rating from MusicBrainz is built, as
+> this note says; the rest is proposed. This note describes what medleyplay shows about a song
 > from what other listeners have said about it: a community rating where the
 > Account gave none, reviews, a short summary of the song or album, and similar
 > songs; and how the household brings in its own Rate Your Music ratings. Each
@@ -86,10 +87,12 @@ Every keyless source here is keyed by something MusicBrainz knows, so the
 
 - **The ids of its match:** the recording, its release group, its artists, and
   the recording's works.
-- **Two more lookups,** at its usual pace of one request a second: the recording
-  with `inc=ratings+work-rels`, and the release group with `inc=ratings+url-rels`.
-  They give the two ratings, and the Wikidata links of the works and the release
-  group. A recording has no Wikidata link of its own.
+- **The ratings come with the release it already looks up** (built): asking for
+  `release-groups+ratings` beside the recordings gives the rating of each
+  recording and of the release group, with no more requests.
+- **Two more lookups** for the Wikidata links (proposed), at its usual pace of
+  one request a second: the recording with `inc=work-rels`, and the release group
+  with `inc=url-rels`. A recording has no Wikidata link of its own.
 - ***Find on MusicBrainz* stays the one question,** asked once a day per Track
   and what it was searched for, as now; there is no second MusicBrainz question
   to keep apart from it.
@@ -113,8 +116,11 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
 - **The ask gains `links`,** the Track's MusicBrainz and Wikidata ids, and
   `shown` keeps the `musicbrainz` origin's values for an enricher that isn't
   `musicbrainz`, since only `musicbrainz` must not ask with its own answer.
-- **The answer gains a `community` part,** beside or instead of values: a
-  rating, reviews, a summary, or similar songs, each in a bounded model, and
+- **The answer gains `ratings`** (built): at most one of the song and one of its
+  album, each a mean out of 5, its votes, and the page that shows it. The core
+  keeps a rating only when its page is on one of the enricher's own hosts.
+- **The answer gains a `community` part** (proposed), beside or instead of
+  values: reviews, a summary, or similar songs, each in a bounded model, and
   `musicbrainz` answers `links` too. The answer's check accepts an answer of
   only a community part.
 - **An enricher may have no origin.** `Enricher.origin` becomes optional, and an
@@ -136,6 +142,9 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
 
 ## Storing what a source found
 
+- **`community_rating`** (built), one row per Track, source, and song or album:
+  the mean, the votes, the page, and when it was found. A source's next answer
+  about the Track replaces its rows, so an answer that finds nothing removes them.
 - **`community_info`,** one row per Track and source: the source, the ids it was
   found for, when it was found, when it expires, and the checked answer as JSON.
   A new answer from that source replaces the row.
@@ -150,7 +159,8 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
 
 - **From MusicBrainz:** the recording's rating when it has at least 3 votes,
   else the release group's with at least 3, labeled *album*. A rating of fewer
-  votes isn't shown.
+  votes isn't shown. A song inside a longer file shows the album file's rating
+  of the album.
 - **Shown only where the Account has no rating of its own,** as outline stars to
   the nearest half, with *MusicBrainz: 4.2 from 37 votes* (or *album: 4.2 …*) on
   hover. Choosing a star sets the Account's own rating, as now.
@@ -255,8 +265,9 @@ keeps Last.fm's for no longer than its terms allow.
 - `GET /api/tracks/{id}/community`: the community rating, summary, reviews, and
   similar songs, each with its source, link, license, and when it was found;
   similar songs carry the Track id of their Library match.
-- The track list gains `community_rating`, `community_votes`, and whether the
-  Account's rating comes from its album.
+- A Track gains `community` (built): the source, whether the song or its album
+  was rated, the mean, the votes, and the page; or `null`. Whether the Account's
+  rating comes from its album is proposed.
 - `POST /api/tracks/{id}/community/find` queues a Job for each source that is on
   and can answer; `POST /api/community/find-all` does it for every eligible
   Track, for admins.
@@ -266,6 +277,7 @@ keeps Last.fm's for no longer than its terms allow.
 ## Migrations
 
 - `track_link`: the Track, the kind of id, the id, and the origin that found it.
+- `community_rating` (built), which also forgets `musicbrainz`'s asked-once rows.
 - `community_info`, as above.
 - `album_rating`: the Account, the album and artist names as exported, the
   stars, and the note.

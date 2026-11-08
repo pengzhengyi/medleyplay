@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from medleyplay.domain.covers import cover_id
-from medleyplay.plugin_api import AiEndpoint, ShownDetail, SuggestedSong, VideoText
+from medleyplay.plugin_api import AiEndpoint, RatedAs, ShownDetail, SuggestedSong, VideoText
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext
 from medleyplay.plugin_host.loader import load_plugins
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob, run
@@ -109,6 +109,18 @@ def test_a_song_is_asked_about_without_a_video_and_its_values_and_cover_are_pass
     assert found.values["album"] == "OK Computer"
     assert found.cover is not None
     assert Path(found.cover.path).read_bytes() == jpeg_image("Let Down")
+
+
+def test_what_listeners_rated_a_song_and_its_album_is_passed_on(tmp_path: Path) -> None:
+    shown = (ShownDetail(field="title", value="Rated", origin="files"),)
+    ask = EnrichJob(enricher="musicbrainz", subject="a key", shown=shown)
+
+    found = run(ask, _context(tmp_path))
+
+    assert [(each.of, each.value, each.votes) for each in found.ratings] == [
+        (RatedAs.SONG, 4.2, 24),
+        (RatedAs.ALBUM, 4.55, 89),
+    ]
 
 
 def test_what_a_track_shows_and_whether_it_is_a_whole_album_reach_the_enricher(

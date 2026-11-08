@@ -646,3 +646,26 @@ def _migrate_to(engine: Engine, revision: str, *, down: bool = False) -> None:
         with connection.begin():
             config.attributes["connection"] = connection
             (command.downgrade if down else command.upgrade)(config, revision)
+
+
+def test_migrating_forgets_when_musicbrainz_was_asked_so_it_is_asked_again_for_ratings(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0026")
+    with engine.begin() as connection:
+        for enricher in ("musicbrainz", "bilibili-details"):
+            connection.execute(
+                text(
+                    "INSERT INTO enricher_ask (enricher, subject, asked_at)"
+                    " VALUES (:enricher, 'a subject', '2026-11-01 00:00:00.000000')"
+                ),
+                {"enricher": enricher},
+            )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        asked = connection.scalars(text("SELECT enricher FROM enricher_ask")).all()
+    engine.dispose()
+    assert asked == ["bilibili-details"]

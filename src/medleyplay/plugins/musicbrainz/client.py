@@ -78,10 +78,14 @@ class MusicBrainzClient:
         return ReleaseSearch.model_validate(found)
 
     def release(self, release_id: str) -> Release | None:
-        """Return the release with its tracks, credits, and genres, or `None` if it is gone."""
+        """Return the release with its tracks, credits, genres, and ratings, or `None` if gone.
+
+        Genres and ratings are asked for once and come for the release's recordings and
+        its release group too.
+        """
         found = self._json(
             f"{API}/release/{release_id}",
-            {"inc": "recordings+artist-credits+media+genres"},
+            {"inc": "recordings+artist-credits+media+genres+release-groups+ratings"},
             missing_ok=True,
         )
         return None if found is None else Release.model_validate(found)

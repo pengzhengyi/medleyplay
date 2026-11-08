@@ -10,6 +10,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Dialect,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -196,6 +197,30 @@ class VideoTextRow(Base):
     chapters: Mapped[list[dict[str, str | int]]] = mapped_column(JSON)
     came_from: Mapped[str] = mapped_column(String(16))
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class CommunityRatingRow(Base):
+    """What listeners on a site rated a Track's song, or its album, as its enricher last found.
+
+    A Track has at most one of each per source; the source's next answer replaces them.
+    """
+
+    __tablename__ = "community_rating"
+    __table_args__ = (
+        CheckConstraint("rated_as IN ('song', 'album')", name="rated_as"),
+        CheckConstraint("value >= 0 AND value <= 5", name="value"),
+        CheckConstraint("votes >= 1", name="votes"),
+    )
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    source: Mapped[str] = mapped_column(String(64), primary_key=True)
+    rated_as: Mapped[str] = mapped_column(String(8), primary_key=True)
+    value: Mapped[float] = mapped_column(Float)
+    votes: Mapped[int] = mapped_column(Integer)
+    link: Mapped[str] = mapped_column(String(2_000))
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class EnricherStopRow(Base):

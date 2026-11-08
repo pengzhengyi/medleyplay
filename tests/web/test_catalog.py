@@ -2,11 +2,14 @@
 
 import json
 import uuid
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.catalog import TrackId
+from medleyplay.persistence.schema import CommunityRatingRow
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
 
@@ -28,6 +31,46 @@ def test_tracks_are_listed_with_your_own_state(client: TestClient, catalog: Cata
     assert [(t["id"], t["title"], t["artist"], t["favorite"]) for t in tracks] == [
         (track_id, "Intro", "The Band", True)
     ]
+
+
+def _rated_by_musicbrainz_listeners(units: sessionmaker[Session], track_id: TrackId) -> None:
+    """Record that MusicBrainz's listeners rated the Track's song 4.2, from 24 votes."""
+    with units.begin() as db:
+        db.add(
+            CommunityRatingRow(
+                track_id=track_id,
+                source="musicbrainz",
+                rated_as="song",
+                value=4.2,
+                votes=24,
+                link="https://musicbrainz.org/recording/47b02a82",
+                found_at=datetime(2026, 11, 8, tzinfo=UTC),
+            )
+        )
+
+
+def test_a_track_shows_what_listeners_elsewhere_rated_it_apart_from_your_rating(
+    client: TestClient, catalog: CatalogService, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    rated, unrated = (
+        _one_track(catalog),
+        catalog.add_track(SourceKeyFactory.bilibili(part=2), TrackDetailsFactory.song("Outro")),
+    )
+    _rated_by_musicbrainz_listeners(units, rated)
+    client.put(f"/api/tracks/{rated}/rating", json={"rating": 2})
+
+    tracks = {track["id"]: track for track in client.get("/api/tracks").json()}
+
+    assert tracks[rated]["rating"] == 2
+    assert tracks[rated]["community"] == {
+        "source": "musicbrainz",
+        "of": "song",
+        "rating": 4.2,
+        "votes": 24,
+        "link": "https://musicbrainz.org/recording/47b02a82",
+    }
+    assert tracks[unrated]["community"] is None
 
 
 def test_a_rating_is_put_as_an_absolute_value_and_can_be_cleared(

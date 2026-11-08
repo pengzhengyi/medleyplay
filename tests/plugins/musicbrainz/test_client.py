@@ -68,7 +68,7 @@ def test_a_release_is_looked_up_with_its_recordings_artist_credits_media_and_gen
 
     assert fake.urls() == [RELEASE]
     assert (fake.parameter("inc"), fake.parameter("fmt")) == (
-        "recordings+artist-credits+media+genres",
+        "recordings+artist-credits+media+genres+release-groups+ratings",
         "json",
     )
 

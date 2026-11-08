@@ -6,16 +6,26 @@ from typing import Any
 import pytest
 import requests
 
-from medleyplay.plugin_api import EnrichStatus, EnrichTrack, NetworkError, ShownDetail
+from medleyplay.plugin_api import (
+    CommunityRating,
+    EnrichStatus,
+    EnrichTrack,
+    NetworkError,
+    RatedAs,
+    ShownDetail,
+)
 from medleyplay.plugin_api.testing import check_track_enricher
 from medleyplay.plugins.musicbrainz.client import API, MusicBrainzClient
 from medleyplay.plugins.musicbrainz.provider import MusicBrainz
 from tests.support.factories import EnrichTrackFactory
 from tests.support.images import gif_image, jpeg_image, oversized_jpeg
 from tests.support.musicbrainz import (
+    LET_DOWN,
+    OK_COMPUTER_GROUP,
     ORIGINAL,
     REISSUE,
     SHU_PU,
+    SHU_PU_GROUP,
     FakeMusicBrainz,
     FakeMusicBrainzFactory,
     MusicBrainzFactory,
@@ -447,6 +457,67 @@ def test_a_song_with_no_genre_anywhere_gives_none(tmp_path: Path) -> None:
     )
 
     assert "genre" not in answer.values
+
+
+def test_a_song_answers_what_listeners_rated_it_and_its_album(tmp_path: Path) -> None:
+    fake = FakeMusicBrainzFactory.knowing_let_down()
+
+    answer = enricher_over(fake).enrich(EnrichTrackFactory.let_down(tmp_path))
+
+    assert answer.ratings == (
+        CommunityRating(
+            of=RatedAs.SONG,
+            value=4.2,
+            votes=24,
+            link=f"https://musicbrainz.org/recording/{LET_DOWN}",
+        ),
+        CommunityRating(
+            of=RatedAs.ALBUM,
+            value=4.55,
+            votes=89,
+            link=f"https://musicbrainz.org/release-group/{OK_COMPUTER_GROUP}",
+        ),
+    )
+
+
+def test_a_song_nobody_rated_answers_only_its_albums_rating(tmp_path: Path) -> None:
+    release = MusicBrainzFactory.ok_computer(front=False)
+    for track in release["media"][0]["tracks"]:
+        track["recording"]["rating"] = {"value": None, "votes-count": 0}
+
+    answer = enricher_over(knowing_the_release(release)).enrich(
+        EnrichTrackFactory.let_down(tmp_path)
+    )
+
+    assert [rating.of for rating in answer.ratings] == [RatedAs.ALBUM]
+
+
+def test_an_album_file_answers_only_its_albums_rating(tmp_path: Path) -> None:
+    fake = FakeMusicBrainzFactory.knowing_shu_pu()
+    fake.answer(
+        f"{API}/release/{SHU_PU}", Reply.json(MusicBrainzFactory.shu_pu_release(rated=(3.5, 4)))
+    )
+
+    answer = enricher_over(fake).enrich(EnrichTrackFactory.album_file(tmp_path))
+
+    assert answer.ratings == (
+        CommunityRating(
+            of=RatedAs.ALBUM,
+            value=3.5,
+            votes=4,
+            link=f"https://musicbrainz.org/release-group/{SHU_PU_GROUP}",
+        ),
+    )
+
+
+def test_an_album_whose_release_names_no_release_group_answers_no_rating(
+    tmp_path: Path,
+) -> None:
+    fake = FakeMusicBrainzFactory.knowing_shu_pu()
+
+    answer = enricher_over(fake).enrich(EnrichTrackFactory.album_file(tmp_path))
+
+    assert answer.ratings == ()
 
 
 def test_an_album_files_release_gives_its_most_counted_genres(tmp_path: Path) -> None:

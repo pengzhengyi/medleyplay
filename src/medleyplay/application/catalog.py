@@ -43,6 +43,7 @@ from medleyplay.domain.catalog import (
     source_availability,
     track_availability,
 )
+from medleyplay.domain.community import CommunityRating, RatedAs, shown_rating
 from medleyplay.domain.details import LONGEST_SONG_MS, Field, Kind, Origin, Value, kind_of
 from medleyplay.domain.downloads import download_target
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
@@ -53,6 +54,7 @@ from medleyplay.domain.playback import PlayId
 from medleyplay.domain.rules import Rules, matches
 from medleyplay.domain.segments import SEGMENT_SOURCE, parse_segment_locator
 from medleyplay.persistence.schema import (
+    CommunityRatingRow,
     DownloadRow,
     FavoriteAlbumRow,
     FavoriteArtistRow,
@@ -150,6 +152,7 @@ class CatalogService:
             segment_of = album_file_of(db)
             split = set(segment_of.values())
             album_from_ms = read_settings(db).album_from_ms
+            community = _community_ratings(db, select(CommunityRatingRow), segment_of)
             # A song is downloaded, or failed to download, as its album file is.
             downloaded |= {song for song, album in segment_of.items() if album in downloaded}
             failed |= {song for song, album in segment_of.items() if album in failed}
@@ -164,6 +167,7 @@ class CatalogService:
                     segment_of=segment_of.get(TrackId(track.id)),
                     split=track.id in split,
                     album_from_ms=album_from_ms,
+                    community=community.get(TrackId(track.id)),
                 )
                 for track, state in rows
             ]
@@ -185,6 +189,10 @@ class CatalogService:
             sites = _site_sources(db, SourceRow.track_id == looked_at)
             failed = _download_failed(db, sites, downloaded)
             album_from_ms = read_settings(db).album_from_ms
+            rated = select(CommunityRatingRow).where(
+                CommunityRatingRow.track_id.in_({track_id, looked_at})
+            )
+            community = _community_ratings(db, rated, segment_of)
         return _to_track(
             *found,
             available[track_id],
@@ -194,6 +202,7 @@ class CatalogService:
             segment_of=segment_of.get(track_id),
             split=track_id in segment_of.values(),
             album_from_ms=album_from_ms,
+            community=community.get(track_id),
         )
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
@@ -559,6 +568,28 @@ def _download_failed(db: Session, sites: Mapping[int, SourceRow], downloaded: se
     }
 
 
+def _community_ratings(
+    db: Session, rated: Select[CommunityRatingRow], segment_of: Mapping[TrackId, TrackId]
+) -> dict[TrackId, CommunityRating]:
+    """Return the community rating each Track shows, of the ratings `rated` selects.
+
+    A song inside a longer file has no ratings of its own until it is found on its
+    own; it shows its album file's rating of the album.
+    """
+    found: dict[TrackId, list[CommunityRating]] = defaultdict(list)
+    for row in db.scalars(rated):
+        found[TrackId(row.track_id)].append(
+            CommunityRating(row.source, RatedAs(row.rated_as), row.value, row.votes, row.link)
+        )
+    for song, album in segment_of.items():
+        found[song] += [rating for rating in found.get(album, []) if rating.of is RatedAs.ALBUM]
+    return {
+        track_id: shown
+        for track_id, ratings in found.items()
+        if (shown := shown_rating(ratings)) is not None
+    }
+
+
 def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog works out for it
     track: TrackRow,
     state: TrackStateRow | None,
@@ -570,6 +601,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     segment_of: int | None = None,
     split: bool = False,
     album_from_ms: int | None = LONGEST_SONG_MS,
+    community: CommunityRating | None = None,
 ) -> Track:
     kind = kind_of(
         None if track.kind is None else Kind(track.kind),
@@ -605,6 +637,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         split=split,
         kind=kind.kind,
         kind_reason=kind.reason,
+        community=community,
     )
 
 

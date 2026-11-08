@@ -33,7 +33,11 @@ long file split into songs:
 | `NoCover` | the values of a song, and no cover |
 | `Remaster` | the values of a song titled *Remaster (2016)* |
 | `Echo` | the album *echo*, naming how it was asked |
+| `Rated` | the values of a song, rated 4.2 from 24 votes, its album 4.55 from 89 |
+| `FewVotes` | the values of a song, rated 5 from 2 votes, its album 3.5 from 12 |
+| `OffSite` | the values of a song, rated 4 from 9 votes on a page of another site |
 | `生如夏花` (a long file) | the album, album artist, year, and a cover |
+| `Rated` (a long file) | the same, and the album rated 4.55 from 89 votes |
 | any other | the values of *Let Down* on *OK Computer*, and a cover |
 
 For `ai-details`, the title of the video text says how it answers:
@@ -62,11 +66,13 @@ from medleyplay.plugin_api import (
     AiFailure,
     AiFailureKind,
     Chapter,
+    CommunityRating,
     Enriched,
     EnrichStatus,
     EnrichTrack,
     NetworkError,
     Plugin,
+    RatedAs,
     Registry,
     SuggestedSong,
     VideoText,
@@ -74,6 +80,21 @@ from medleyplay.plugin_api import (
 from tests.support.images import jpeg_image, oversized_jpeg
 
 RECORDED_TITLE: Final = "【HR 24/48】朴树2003《生如夏花》专辑歌词版"
+SONG_PAGE: Final = "https://musicbrainz.org/recording/47b02a82-c3bf-4647-b894-dd1c8f608e7f"
+ALBUM_PAGE: Final = "https://musicbrainz.org/release-group/b1392450-e666-3926-a536-22c65f834433"
+_RATINGS: Final = {
+    "Rated": (
+        CommunityRating(of=RatedAs.SONG, value=4.2, votes=24, link=SONG_PAGE),
+        CommunityRating(of=RatedAs.ALBUM, value=4.55, votes=89, link=ALBUM_PAGE),
+    ),
+    "FewVotes": (
+        CommunityRating(of=RatedAs.SONG, value=5, votes=2, link=SONG_PAGE),
+        CommunityRating(of=RatedAs.ALBUM, value=3.5, votes=12, link=ALBUM_PAGE),
+    ),
+    "OffSite": (
+        CommunityRating(of=RatedAs.SONG, value=4, votes=9, link="https://example.com/rated"),
+    ),
+}
 
 
 class Reader:
@@ -128,7 +149,8 @@ class Finder:
                 return Enriched(values={"album": _echo(request, shown)})
         if request.whole_album:
             values: dict[str, str | int] = {"album": key, "album_artist": "朴树", "year": 2003}
-            return Enriched(values=values, cover=_cover(folder, key))
+            albums = tuple(each for each in _RATINGS.get(key, ()) if each.of is RatedAs.ALBUM)
+            return Enriched(values=values, ratings=albums, cover=_cover(folder, key))
         title = "Remaster (2016)" if key == "Remaster" else key
         values = {
             "title": title,
@@ -139,7 +161,11 @@ class Finder:
             "track_number": 5,
             "disc_number": 1,
         }
-        return Enriched(values=values, cover=None if key == "NoCover" else _cover(folder, key))
+        return Enriched(
+            values=values,
+            ratings=_RATINGS.get(key, ()),
+            cover=None if key == "NoCover" else _cover(folder, key),
+        )
 
 
 _SUGGESTIONS: Final = {

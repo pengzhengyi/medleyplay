@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final, NewType
 
+from medleyplay.domain.community import CommunityRating
 from medleyplay.domain.details import Kind, KindReason
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.rules import Favorite, Match, Rules, fold
@@ -141,6 +142,8 @@ class Track:
     """Whether the Track is a song or a whole album, named or worked out from its file."""
     kind_reason: KindReason = KindReason.LENGTH
     """Why the Track is its kind, such as a guess from its length."""
+    community: CommunityRating | None = None
+    """What listeners on another site rated the song or its album; it only shows."""
 
 
 @dataclass(frozen=True)

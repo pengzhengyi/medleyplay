@@ -20,12 +20,34 @@ from medleyplay.domain.catalog import (
     Track,
     TrackId,
 )
+from medleyplay.domain.community import CommunityRating, RatedAs
 from medleyplay.domain.details import Kind, KindReason
 from medleyplay.domain.playback import PlayId
 from medleyplay.web.deps import CatalogDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api", tags=["catalog"])
+
+
+class CommunityRatingOut(BaseModel):
+    """What listeners on another site rated a song, or its album, out of 5, and where."""
+
+    source: str = Field(description="The enricher that found it, such as `musicbrainz`.")
+    of: RatedAs = Field(description="Whether the song itself or its album was rated.")
+    rating: float = Field(description="The mean of their stars, out of 5.")
+    votes: int
+    link: str = Field(description="The site's page of what was rated.")
+
+    @classmethod
+    def of_rating(cls, rating: CommunityRating) -> "CommunityRatingOut":
+        """Return the API view of `rating`."""
+        return cls(
+            source=rating.source,
+            of=rating.of,
+            rating=rating.value,
+            votes=rating.votes,
+            link=rating.link,
+        )
 
 
 class TrackOut(BaseModel):
@@ -63,6 +85,9 @@ class TrackOut(BaseModel):
         description="Why it is its kind: named, split, a song of a split file, or a guess."
     )
     cover: str | None = Field(description="The cover shown, served at `/api/covers/{cover}`.")
+    community: CommunityRatingOut | None = Field(
+        description="What listeners elsewhere rated it, if enough did; it only shows."
+    )
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -93,6 +118,9 @@ class TrackOut(BaseModel):
             kind=track.kind,
             kind_reason=track.kind_reason,
             cover=details.cover,
+            community=None
+            if track.community is None
+            else CommunityRatingOut.of_rating(track.community),
         )
 
 

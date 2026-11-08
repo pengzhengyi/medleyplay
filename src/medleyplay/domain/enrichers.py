@@ -75,7 +75,8 @@ class Enricher:
     `spacing` the least time between two of its calls, and `site` the site whose
     proxy its calls go through, or `None` when the household has none for it. `source`
     is what it asks, as a refusal names it, and `uses_ai` says it asks the AI provider,
-    which it does not until an admin has set it up.
+    which it does not until an admin has set it up. `rating_hosts` are the hosts the
+    pages of the ratings it answers may be on; an enricher with none answers no ratings.
     """
 
     name: str
@@ -85,6 +86,7 @@ class Enricher:
     site: str | None
     source: str = "the site"
     uses_ai: bool = False
+    rating_hosts: frozenset[str] = frozenset()
 
     @property
     def lacking(self) -> "Ineligible":
@@ -105,6 +107,7 @@ MUSICBRAINZ: Final = Enricher(
     subject=Subject.WORDS,
     spacing=timedelta(seconds=1),
     site=None,
+    rating_hosts=frozenset({"musicbrainz.org"}),
 )
 AI_DETAILS: Final = Enricher(
     name="ai-details",

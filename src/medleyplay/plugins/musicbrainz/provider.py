@@ -4,13 +4,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
-from medleyplay.plugin_api import Enriched, EnrichStatus, EnrichTrack
+from medleyplay.plugin_api import CommunityRating, Enriched, EnrichStatus, EnrichTrack, RatedAs
 from medleyplay.plugins.musicbrainz import matching
 from medleyplay.plugins.musicbrainz.client import MusicBrainzClient, RefusedError
 from medleyplay.plugins.musicbrainz.matching import Candidate
-from medleyplay.plugins.musicbrainz.models import Release, ReleaseTrack, credited, top_genres
+from medleyplay.plugins.musicbrainz.models import (
+    Rating,
+    Release,
+    ReleaseTrack,
+    credited,
+    top_genres,
+)
 
 COVER_NAME: Final = "cover"
+SITE: Final = "https://musicbrainz.org"
 MAX_TEXT: Final = 512
 YEARS: Final = range(1000, 3000)
 """The years a Track may have."""
@@ -70,9 +77,11 @@ class MusicBrainz:
         if release is None:
             return Enriched()
         values = _release_values(release)
+        ratings = _album_rating(release)
         if chosen.recording is not None:
             values |= _track_values(release, chosen.recording)
-        return Enriched(values=values, cover=self._cover(release, request.folder))
+            ratings = _song_rating(release, chosen.recording) + ratings
+        return Enriched(values=values, ratings=ratings, cover=self._cover(release, request.folder))
 
     def _candidates(self, query: str, duration_ms: int | None) -> list[Candidate]:
         """Return each release of each recording the query finds near the Track's length."""
@@ -103,7 +112,11 @@ class MusicBrainz:
         release = None if chosen is None else self.client.release(chosen.release)
         if release is None:
             return Enriched()
-        return Enriched(values=_release_values(release), cover=self._cover(release, folder))
+        return Enriched(
+            values=_release_values(release),
+            ratings=_album_rating(release),
+            cover=self._cover(release, folder),
+        )
 
     def _cover(self, release: Release, folder: str) -> str | None:
         if not release.cover_art_archive.front:
@@ -136,6 +149,30 @@ def _release_values(release: Release) -> dict[str, str | int]:
     if genre := top_genres(release.genres):
         values["genre"] = genre[:MAX_TEXT]
     return values
+
+
+def _album_rating(release: Release) -> tuple[CommunityRating, ...]:
+    """Return what listeners rated the release's album, its release group, if anyone did."""
+    group = release.release_group
+    if group is None:
+        return ()
+    return _rated(RatedAs.ALBUM, group.rating, f"{SITE}/release-group/{group.id}")
+
+
+def _song_rating(release: Release, recording: str) -> tuple[CommunityRating, ...]:
+    """Return what listeners rated the recording, as the release lists it, if anyone did."""
+    for medium in release.media:
+        for track in medium.tracks:
+            if track.recording.id == recording:
+                link = f"{SITE}/recording/{recording}"
+                return _rated(RatedAs.SONG, track.recording.rating, link)
+    return ()
+
+
+def _rated(of: RatedAs, rating: Rating, link: str) -> tuple[CommunityRating, ...]:
+    if rating.value is None or rating.votes < 1:
+        return ()
+    return (CommunityRating(of=of, value=rating.value, votes=rating.votes, link=link),)
 
 
 def _track_values(release: Release, recording: str) -> dict[str, str | int]:

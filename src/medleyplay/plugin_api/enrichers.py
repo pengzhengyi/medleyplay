@@ -9,7 +9,8 @@ ask      BV1AC4y1L7Yi, shown: title "BV1AC4y1L7Yi" (file_name)
 answer   video text "【HR 24/48】朴树2003《生如夏花》专辑歌词版", cover.jpg
 
 ask      shown: title "Let Down" (files), artist "Radiohead" (files), 4:59
-answer   title, artist, album "OK Computer", year 1997, track number 5, cover.jpg
+answer   title, artist, album "OK Computer", year 1997, track number 5, cover.jpg,
+         ratings: the song 4.2 from 24 votes, the album 4.55 from 89
 ```
 
 An ordinary *no*, such as a video that was removed or the site refusing the request,
@@ -30,6 +31,9 @@ MAX_VIDEO_DESCRIPTION: Final = 20_000
 MAX_CHAPTERS: Final = 1_000
 MAX_SUGGESTED_SONGS: Final = 300
 MAX_AI_PROVIDERS: Final = 5
+MAX_RATINGS: Final = 2
+"""A rating of the song, and one of its album."""
+MAX_LINK: Final = 2_000
 
 type FieldName = Annotated[str, StringConstraints(max_length=32)]
 """The name of one of a Track's details, such as `title`."""
@@ -144,13 +148,33 @@ class SuggestedSong(_Model):
     artist: Annotated[str, StringConstraints(max_length=512)] = ""
 
 
+class RatedAs(StrEnum):
+    """What listeners rated: the song itself, or the album it is on."""
+
+    SONG = "song"
+    ALBUM = "album"
+
+
+class CommunityRating(_Model):
+    """What listeners on a site rated a song or its album: the mean of their stars, out of 5.
+
+    `link` is the site's page of what was rated, where the rating can be read.
+    """
+
+    of: RatedAs
+    value: Annotated[float, Field(ge=0, le=5)]
+    votes: Annotated[int, Field(ge=1)]
+    link: Annotated[str, StringConstraints(max_length=MAX_LINK)]
+
+
 class Enriched(_Model):
     """What the site said, or why it said nothing.
 
     With `OK`, `values` are details by field name, and `video_text` is the video's
     own text for the core to read instead of values; an answer holds one or the other.
     `songs` is a song list the enricher suggests, beside the values. `cover` is the
-    bare name of an image the enricher wrote into the folder. An enricher that asks AI
+    bare name of an image the enricher wrote into the folder. `ratings` are what the
+    site's listeners rated the song and its album, beside the values. An enricher that asks AI
     providers names in `ai_answered` the one whose answer it used, and lists in
     `ai_failures` each one asked before it that gave none.
     """
@@ -161,6 +185,7 @@ class Enriched(_Model):
     video_text: VideoText | None = None
     songs: Annotated[tuple[SuggestedSong, ...], Field(max_length=MAX_SUGGESTED_SONGS)] = ()
     cover: Annotated[str, StringConstraints(max_length=255)] | None = None
+    ratings: Annotated[tuple[CommunityRating, ...], Field(max_length=MAX_RATINGS)] = ()
     ai_answered: Annotated[str, StringConstraints(max_length=64)] | None = None
     ai_failures: Annotated[tuple[AiFailure, ...], Field(max_length=MAX_AI_PROVIDERS)] = ()
 

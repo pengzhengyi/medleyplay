@@ -154,11 +154,12 @@ export function apply(
       }
       return;
     }
+    case "playNow":
     case "playNext":
     case "add": {
       const track = tracks.get(command.entry.track_id);
       if (track !== undefined) {
-        (command.kind === "playNext" ? player.playNext : player.add)(track);
+        player[command.kind](track);
       }
       return;
     }

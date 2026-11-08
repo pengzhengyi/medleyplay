@@ -67,6 +67,27 @@ describe("the queue", () => {
     expect(current(queue)?.trackId).toBe(9);
   });
 
+  it("plays a Track now, leaving what plays next as it was", () => {
+    const queue = reduce(PLAYING_1_OF_3, { type: "playNow", entry: { key: "x", trackId: 9 } });
+
+    expect(current(queue)?.trackId).toBe(9);
+    expect(tracksOf(upNext(queue))).toEqual([2, 3]);
+  });
+
+  it("plays a Track now when nothing is queued", () => {
+    const queue = reduce(EMPTY, { type: "playNow", entry: { key: "x", trackId: 9 } });
+
+    expect(current(queue)?.trackId).toBe(9);
+  });
+
+  it("plays a Track now after a finished queue", () => {
+    const finished: Queue = { ...EMPTY, entries: entries(1), position: 1 };
+
+    const queue = reduce(finished, { type: "playNow", entry: { key: "x", trackId: 9 } });
+
+    expect(current(queue)?.trackId).toBe(9);
+  });
+
   it("adds a Track to the end", () => {
     const queue = reduce(PLAYING_1_OF_3, { type: "add", entry: { key: "x", trackId: 9 } });
 
@@ -417,6 +438,7 @@ describe("any sequence of changes", () => {
       { type: "play", entries: list, start: Math.floor(random() * some), random },
       { type: "playAll", entries: list, shuffled: random() < 0.5, random },
       { type: "playNext", entry },
+      { type: "playNow", entry },
       { type: "add", entry },
       { type: "next" },
       { type: "previous" },

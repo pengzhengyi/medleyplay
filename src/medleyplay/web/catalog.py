@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 from pydantic import AwareDatetime, BaseModel, Field
 
 from medleyplay.application.rule_schema import RulesIn, rules_document, to_rules
@@ -22,6 +23,7 @@ from medleyplay.domain.catalog import (
 )
 from medleyplay.domain.community import CommunityRating, RatedAs
 from medleyplay.domain.details import Kind, KindReason
+from medleyplay.domain.history import DEFAULT_HISTORY_LENGTH, KEPT_PLAYS, Played
 from medleyplay.domain.playback import PlayId
 from medleyplay.web.deps import CatalogDep, SignedInAccount
 from medleyplay.web.ids import RowId
@@ -294,6 +296,35 @@ def record_play(
     """Record a play under an id you choose; sending it again changes nothing."""
     track = catalog.record_play(me.id, PlayId(play_id), TrackId(body.track_id), body.played_at)
     return TrackOut.of(track)
+
+
+class PlayedOut(BaseModel):
+    """A play in your History: its id, its Track, and when it was played."""
+
+    id: uuid.UUID
+    track_id: int
+    played_at: datetime
+
+    @classmethod
+    def of(cls, played: Played) -> "PlayedOut":
+        """Return the API view of `played`."""
+        return cls(id=played.play_id, track_id=played.track_id, played_at=played.played_at)
+
+
+@router.get("/plays")
+def list_history(
+    me: SignedInAccount,
+    catalog: CatalogDep,
+    limit: Annotated[int, Query(ge=1, le=KEPT_PLAYS)] = DEFAULT_HISTORY_LENGTH,
+) -> list[PlayedOut]:
+    """Return your History: up to `limit` of your plays since you last cleared it, newest first."""
+    return [PlayedOut.of(played) for played in catalog.history(me.id, limit=limit)]
+
+
+@router.delete("/plays", status_code=status.HTTP_204_NO_CONTENT)
+def clear_history(me: SignedInAccount, catalog: CatalogDep) -> None:
+    """Clear your History; each play still counts once in the play counts."""
+    catalog.clear_history(me.id)
 
 
 @router.get("/playlists")

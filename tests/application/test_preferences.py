@@ -37,6 +37,26 @@ def test_an_account_saves_its_shortcuts_at_the_revision_read_and_gets_the_next_o
     assert preferences.get(alice.id) == saved
 
 
+def test_an_account_saves_how_many_songs_its_history_shows(
+    preferences: PreferencesService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    saved = preferences.put(alice.id, Preferences(history_length=250, revision=0))
+
+    assert saved == Preferences(history_length=250, revision=1)
+
+
+@pytest.mark.parametrize("length", [0, 30, 1000])
+def test_a_history_length_not_offered_is_refused(
+    preferences: PreferencesService, accounts: AccountService, length: int
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    with pytest.raises(InvalidInputError, match="history_length"):
+        preferences.put(alice.id, Preferences(history_length=length))
+
+
 def test_each_account_keeps_its_own_preferences(
     preferences: PreferencesService, accounts: AccountService
 ) -> None:

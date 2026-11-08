@@ -59,6 +59,7 @@ import type { CoverStatus } from "../library/lookups";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
 import type { UnitOf } from "../player/usePlayer";
 import { Cover } from "./Cover";
+import { WHY } from "./unplayable";
 import {
   type Choice,
   type ChoiceField,
@@ -97,14 +98,6 @@ const features = tableFeatures({
 });
 
 type Column = ColumnDef<typeof features, Track>;
-
-const WHY: Record<string, string> = {
-  offline: "Drive unplugged",
-  waiting_online: "When online",
-  unavailable: "Unavailable",
-  missing: "Missing",
-  cant_play: "Can't play",
-};
 
 const STARS = [1, 2, 3, 4, 5] as const;
 // A row with its cover, as measured; rows are measured once on screen.

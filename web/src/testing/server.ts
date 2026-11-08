@@ -14,7 +14,10 @@ import type {
   Mode,
   ModeSettings,
   Playlist,
+  HistoryLength,
+  Played,
   Preferences,
+  PreferencesChange,
   Song,
   Songs,
   SpeakerState,
@@ -22,6 +25,7 @@ import type {
   TrackDownload,
   VideoText,
 } from "../api";
+import { HISTORY_LENGTHS } from "../api";
 import { type Origins, type Values, shownOf } from "../library/details";
 import { type SavedShortcuts, openAccount } from "../shortcuts";
 
@@ -285,17 +289,52 @@ export function modeSettingsOf(mode: Mode, metered: readonly MeteredNetwork[] = 
 }
 
 /**
- * The routes of a server keeping `shortcuts` for the signed-in Account, which
- * keeps what the page saves, at the next revision.
+ * The routes of a server keeping `shortcuts` and `historyLength` for the signed-in
+ * Account, which keeps what the page saves, and what it leaves out, at the next revision.
  */
-export function preferencesOf(shortcuts: SavedShortcuts = null): Routes {
-  let kept: Preferences = { shortcuts, revision: shortcuts === null ? 0 : 1 };
+export function preferencesOf(
+  shortcuts: SavedShortcuts = null,
+  historyLength: HistoryLength | null = null,
+): Routes {
+  let kept: Preferences = {
+    shortcuts,
+    history_length: historyLength,
+    revision: shortcuts === null && historyLength === null ? 0 : 1,
+  };
   return {
     "GET /api/me/preferences": () => ({ body: kept }),
     "PUT /api/me/preferences": (body) => {
-      const sent = body as Preferences;
-      kept = { shortcuts: sent.shortcuts, revision: sent.revision + 1 };
+      const sent = body as PreferencesChange;
+      if (sent.revision !== kept.revision) {
+        return { status: 409, body: { detail: "The preferences were saved since." } };
+      }
+      kept = {
+        shortcuts: sent.shortcuts === undefined ? kept.shortcuts : sent.shortcuts,
+        history_length:
+          sent.history_length === undefined ? kept.history_length : sent.history_length,
+        revision: sent.revision + 1,
+      };
       return { body: kept };
+    },
+  };
+}
+
+/**
+ * The routes of a server whose History for the signed-in Account holds `plays`, newest
+ * first; it answers up to the length asked for, and clearing empties it.
+ */
+export function historyOf(plays: readonly Played[]): Routes {
+  let kept = plays;
+  return {
+    ...Object.fromEntries(
+      HISTORY_LENGTHS.map((length) => [
+        `GET /api/plays?limit=${String(length)}`,
+        () => ({ body: kept.slice(0, length) }),
+      ]),
+    ),
+    "DELETE /api/plays": () => {
+      kept = [];
+      return { status: 204 };
     },
   };
 }

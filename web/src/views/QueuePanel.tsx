@@ -1,6 +1,8 @@
 /**
  * @file The queue: what plays next, in order, to drag into another order or remove.
  *
+ * Its History tab, beside it, lists what played.
+ *
  * A Track is dragged by its handle, with a pointer or a finger; from the
  * keyboard, Space picks it up, the arrow keys move it, and Space drops it.
  * Songs of one split file queued one after another show under a row naming the
@@ -27,16 +29,18 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { CaretRightIcon, DotsSixVerticalIcon, XIcon } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
 
 import type { Track } from "../api";
 import { formatQueueLength } from "../format";
 import { songsByFile } from "../library/playOrder";
 import { type Entry, upNext } from "../player/queue";
 import type { Player } from "../player/usePlayer";
+import { useHistory } from "../player/useHistory";
 import type { SleepTimer } from "../player/useSleepTimer";
 import { useNow } from "../useNow";
 import { Cover } from "./Cover";
+import { ClearQuestion, HistoryClear, HistoryList } from "./HistoryPanel";
 import { KindMark } from "./KindMark";
 import { SleepTimerMenu } from "./SleepTimerMenu";
 
@@ -46,7 +50,13 @@ const INSTRUCTIONS = {
     "To reorder, press Space to pick the Track up, the arrow keys to move it, and Space again to drop it. Escape puts it back.",
 };
 
-/** What plays after the current Track. */
+type Tab = "queue" | "history";
+const TABS: readonly (readonly [Tab, string])[] = [
+  ["queue", "Up next"],
+  ["history", "History"],
+];
+
+/** What plays after the current Track, and in its History tab, what played. */
 export function QueuePanel({
   player,
   sleep,
@@ -63,6 +73,10 @@ export function QueuePanel({
   /** Where dragging is announced: inside a modal dialog, which leaves the page behind inert. */
   readonly announceIn?: HTMLElement | null;
 }) {
+  const [tab, setTab] = useState<Tab>("queue");
+  const history = useHistory(tab === "history");
+  // Whether History's Clear is asking once more.
+  const [asking, setAsking] = useState(false);
   const entries = upNext(player.queue);
   const now = useNow();
   const songsIn = useMemo(() => songsByFile([...tracks.values()]), [tracks]);
@@ -115,86 +129,138 @@ export function QueuePanel({
   return (
     <section id={id} className="queue" aria-label="Up next" tabIndex={-1}>
       <header>
-        <h2>Up next</h2>
-        <SleepTimerMenu timer={sleep} container={announceIn} />
-        <button
-          type="button"
-          className="text"
-          onClick={player.clear}
-          disabled={entries.length === 0}
-        >
-          Clear
-        </button>
-      </header>
-      {entries.length > 0 && (
-        <p className="queue-length">{formatQueueLength(entries.length, lengthMs, ending)}</p>
-      )}
-      {entries.length === 0 ? (
-        <p className="empty">Nothing queued. Add a Track from the list to play it later.</p>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={MODIFIERS}
-          accessibility={{
-            announcements,
-            screenReaderInstructions: INSTRUCTIONS,
-            ...(announceIn ? { container: announceIn } : {}),
-          }}
-          onDragEnd={drop}
-        >
-          <SortableContext
-            items={shown.map((entry) => entry.key)}
-            strategy={verticalListSortingStrategy}
-          >
-            <ol>
-              {rows.map((row) => {
-                const items = (inAlbum: boolean) =>
-                  row.entries.map((entry) => (
-                    <QueueItem
-                      key={entry.key}
-                      entry={entry}
-                      track={tracks.get(entry.trackId)}
-                      inAlbum={inAlbum}
-                      onRemove={() => {
-                        player.remove(entry.key);
-                      }}
-                    />
-                  ));
-                if (row.kind === "entry") {
-                  return items(false);
+        <div className="queue-tabs" role="tablist" aria-label="Up next or History">
+          {TABS.map(([each, name]) => (
+            <button
+              key={each}
+              type="button"
+              role="tab"
+              id={`${id}-${each}-tab`}
+              aria-selected={tab === each}
+              aria-controls={`${id}-${each}`}
+              tabIndex={tab === each ? 0 : -1}
+              onClick={() => {
+                setTab(each);
+              }}
+              onKeyDown={(event: KeyboardEvent) => {
+                // The arrow keys move between the two tabs, as a tab list's do.
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                  const other = each === "queue" ? "history" : "queue";
+                  setTab(other);
+                  document.getElementById(`${id}-${other}-tab`)?.focus();
                 }
-                const songs = songsIn.get(row.fileId) ?? [];
-                const first = songs.findIndex((song) => song.id === row.entries[0]?.trackId);
-                const isFolded = folded.has(row.fileId);
-                return [
-                  <AlbumRow
-                    key={`album:${row.entries[0]?.key ?? ""}`}
-                    file={tracks.get(row.fileId)}
-                    place={first + 1}
-                    count={songs.length}
-                    folded={isFolded}
-                    onFold={() => {
-                      setFolded((was) => {
-                        const next = new Set(was);
-                        if (!next.delete(row.fileId)) {
-                          next.add(row.fileId);
-                        }
-                        return next;
-                      });
-                    }}
-                    onRemove={() => {
-                      for (const entry of row.entries) {
-                        player.remove(entry.key);
-                      }
-                    }}
-                  />,
-                  ...(isFolded ? [] : items(true)),
-                ];
-              })}
-            </ol>
-          </SortableContext>
-        </DndContext>
+              }}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+        {tab === "queue" ? (
+          <>
+            <SleepTimerMenu timer={sleep} container={announceIn} />
+            <button
+              type="button"
+              className="text"
+              onClick={player.clear}
+              disabled={entries.length === 0}
+            >
+              Clear
+            </button>
+          </>
+        ) : (
+          <HistoryClear
+            history={history}
+            onAsk={() => {
+              setAsking(true);
+            }}
+          />
+        )}
+      </header>
+      {tab === "history" ? (
+        <div role="tabpanel" id={`${id}-history`} aria-labelledby={`${id}-history-tab`}>
+          {asking && (
+            <ClearQuestion
+              history={history}
+              onDone={() => {
+                setAsking(false);
+              }}
+            />
+          )}
+          <HistoryList history={history} player={player} tracks={tracks} />
+        </div>
+      ) : (
+        <div role="tabpanel" id={`${id}-queue`} aria-labelledby={`${id}-queue-tab`}>
+          {entries.length > 0 && (
+            <p className="queue-length">{formatQueueLength(entries.length, lengthMs, ending)}</p>
+          )}
+          {entries.length === 0 ? (
+            <p className="empty">Nothing queued. Add a Track from the list to play it later.</p>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              modifiers={MODIFIERS}
+              accessibility={{
+                announcements,
+                screenReaderInstructions: INSTRUCTIONS,
+                ...(announceIn ? { container: announceIn } : {}),
+              }}
+              onDragEnd={drop}
+            >
+              <SortableContext
+                items={shown.map((entry) => entry.key)}
+                strategy={verticalListSortingStrategy}
+              >
+                <ol>
+                  {rows.map((row) => {
+                    const items = (inAlbum: boolean) =>
+                      row.entries.map((entry) => (
+                        <QueueItem
+                          key={entry.key}
+                          entry={entry}
+                          track={tracks.get(entry.trackId)}
+                          inAlbum={inAlbum}
+                          onRemove={() => {
+                            player.remove(entry.key);
+                          }}
+                        />
+                      ));
+                    if (row.kind === "entry") {
+                      return items(false);
+                    }
+                    const songs = songsIn.get(row.fileId) ?? [];
+                    const first = songs.findIndex((song) => song.id === row.entries[0]?.trackId);
+                    const isFolded = folded.has(row.fileId);
+                    return [
+                      <AlbumRow
+                        key={`album:${row.entries[0]?.key ?? ""}`}
+                        file={tracks.get(row.fileId)}
+                        place={first + 1}
+                        count={songs.length}
+                        folded={isFolded}
+                        onFold={() => {
+                          setFolded((was) => {
+                            const next = new Set(was);
+                            if (!next.delete(row.fileId)) {
+                              next.add(row.fileId);
+                            }
+                            return next;
+                          });
+                        }}
+                        onRemove={() => {
+                          for (const entry of row.entries) {
+                            player.remove(entry.key);
+                          }
+                        }}
+                      />,
+                      ...(isFolded ? [] : items(true)),
+                    ];
+                  })}
+                </ol>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
       )}
     </section>
   );

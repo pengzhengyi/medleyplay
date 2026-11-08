@@ -106,6 +106,32 @@ export function formatQueueLength(
   return `${length}, ending around ${(today ? clock : dayAndClock).format(at)}`;
 }
 
+/**
+ * Write when a song was played, `now` being the time to count from: `Just now`,
+ * `12 min ago`, the time today, `Yesterday 9:14 PM`, `Mon 9:14 PM` within the
+ * week, then the day, such as `Oct 25`.
+ */
+export function formatPlayed(at: number, now: number): string {
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) {
+    return "Just now";
+  }
+  if (minutes < 60) {
+    return `${String(minutes)} min ago`;
+  }
+  const played = new Date(at);
+  const today = new Date(now);
+  const yesterday = new Date(now);
+  yesterday.setDate(today.getDate() - 1);
+  if (played.toDateString() === today.toDateString()) {
+    return clock.format(at);
+  }
+  if (played.toDateString() === yesterday.toDateString()) {
+    return `Yesterday ${clock.format(at)}`;
+  }
+  return now - at < WEEK_MS - 24 * 3_600_000 ? dayAndClock.format(at) : day.format(at);
+}
+
 const UNITS = ["bytes", "KB", "MB", "GB", "TB"] as const;
 
 /** Write `bytes` in the decimal units Finder uses, such as `420 MB` or `3.2 GB`. */

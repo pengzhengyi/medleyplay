@@ -255,6 +255,8 @@ def test_keep_downloaded_of_another_accounts_playlist_answers_404(client: TestCl
 
 
 FIRST_PLAY = "00000000-0000-4000-8000-0000000000a1"
+SECOND_PLAY = "00000000-0000-4000-8000-0000000000a2"
+THIRD_PLAY = "00000000-0000-4000-8000-0000000000a3"
 
 
 def test_a_play_is_put_once_under_your_id_and_answers_the_track(
@@ -270,6 +272,50 @@ def test_a_play_is_put_once_under_your_id_and_answers_the_track(
     assert (first.status_code, again.status_code) == (200, 200)
     assert again.json()["play_count"] == 1
     assert again.json()["availability"] == "ok"
+
+
+def test_history_lists_your_plays_newest_first_up_to_the_limit(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    for play_id, played_at in [
+        (FIRST_PLAY, "2025-12-31T08:00:00Z"),
+        (SECOND_PLAY, "2025-12-31T08:04:00Z"),
+        (THIRD_PLAY, "2025-12-31T08:08:00Z"),
+    ]:
+        client.put(f"/api/plays/{play_id}", json={"track_id": track_id, "played_at": played_at})
+
+    response = client.get("/api/plays", params={"limit": 2})
+
+    assert response.json() == [
+        {"id": THIRD_PLAY, "track_id": track_id, "played_at": "2025-12-31T08:08:00Z"},
+        {"id": SECOND_PLAY, "track_id": track_id, "played_at": "2025-12-31T08:04:00Z"},
+    ]
+
+
+def test_history_beyond_500_songs_answers_422(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.get("/api/plays", params={"limit": 501})
+
+    assert response.status_code == 422
+
+
+def test_clearing_history_empties_it_and_keeps_play_counts(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    client.put(
+        f"/api/plays/{FIRST_PLAY}", json={"track_id": track_id, "played_at": "2026-10-25T08:00:00Z"}
+    )
+
+    cleared = client.delete("/api/plays")
+
+    assert cleared.status_code == 204
+    assert client.get("/api/plays").json() == []
+    assert client.get(f"/api/tracks/{track_id}").json()["play_count"] == 1
 
 
 def test_a_play_id_put_with_another_track_answers_409(

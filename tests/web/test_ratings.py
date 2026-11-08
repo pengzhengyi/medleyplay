@@ -135,3 +135,13 @@ def test_an_import_is_the_importing_accounts_alone(
 
     assert client.get(f"/api/tracks/{track_id}").json()["album_rating"] is None
     assert client.get("/api/ratings/export").text.splitlines()[1:] == []
+
+
+def test_the_import_kept_answers_how_many_albums_it_has(client: TestClient) -> None:
+    set_up_as_alice(client)
+    before = client.get("/api/ratings/import").json()
+    client.post("/api/ratings/import", content=EXPORT_2020.encode(), headers=CSV)
+
+    after = client.get("/api/ratings/import").json()
+
+    assert (before, after) == ({"albums": 0}, {"albums": 3})

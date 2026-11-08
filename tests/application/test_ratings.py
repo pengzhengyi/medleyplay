@@ -269,3 +269,12 @@ def test_the_download_policy_wants_and_keeps_a_song_by_its_album_rating(
     with units() as db:
         wanted = read_snapshot(db, clock.now, None, ["bilibili"], tmp_path).state.wanted
     assert [(each.track_id, each.standing.best_rating) for each in wanted] == [(bremen, 5)]
+
+
+def test_the_import_kept_counts_its_albums(
+    accounts: AccountService, ratings: RatingsService
+) -> None:
+    alice, bob = _alice_and_bob(accounts)
+    ratings.import_ratings(alice.id, EXPORT_2020.encode())
+
+    assert (ratings.imported_albums(alice.id), ratings.imported_albums(bob.id)) == (3, 0)

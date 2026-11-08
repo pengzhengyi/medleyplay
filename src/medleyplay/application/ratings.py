@@ -108,6 +108,11 @@ class RatingsService:
             db.execute(delete(AlbumRatingRow).where(AlbumRatingRow.account_id == account_id))
         self._changed()
 
+    def imported_albums(self, account_id: AccountId) -> int:
+        """Return how many albums the Account's last import rated or reviewed."""
+        with self._units() as db:
+            return _imported(db, account_id)
+
     def album_rating(self, account_id: AccountId, artist: str, album: str) -> AlbumRating | None:
         """Return the Account's imported rating of the Library album `album` by `artist`."""
         with self._units() as db:
@@ -162,11 +167,7 @@ def _summary(
     after = track_facts(db, account_id, AlbumRatings(rated))
     library = LibraryAlbums(library_album_of(track) for track in db.scalars(select(TrackRow)))
     has = [library.has(each) for each in rated]
-    replaced = db.scalar(
-        select(func.count())
-        .select_from(AlbumRatingRow)
-        .where(AlbumRatingRow.account_id == account_id)
-    )
+    replaced = _imported(db, account_id)
     return ImportSummary(
         albums=len(albums),
         matched_albums=sum(has),
@@ -179,8 +180,13 @@ def _summary(
             if not found
         ),
         playlists=_playlist_changes(db, account_id, before, after, now),
-        replaced_albums=replaced or 0,
+        replaced_albums=replaced,
     )
+
+
+def _imported(db: Session, account_id: AccountId) -> int:
+    counted = select(func.count()).select_from(AlbumRatingRow)
+    return db.scalar(counted.where(AlbumRatingRow.account_id == account_id)) or 0
 
 
 def _playlist_changes(

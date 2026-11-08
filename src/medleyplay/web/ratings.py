@@ -93,6 +93,18 @@ async def import_ratings(
     return ImportSummaryOut.of(await run_in_threadpool(ratings.import_ratings, me.id, data))
 
 
+class ImportKeptOut(BaseModel):
+    """The import you keep: how many albums it rated or reviewed, 0 for none."""
+
+    albums: int
+
+
+@router.get("/ratings/import")
+def import_kept(me: SignedInAccount, ratings: RatingsDep) -> ImportKeptOut:
+    """Answer how many albums your last import rated or reviewed."""
+    return ImportKeptOut(albums=ratings.imported_albums(me.id))
+
+
 @router.delete("/ratings/import", status_code=status.HTTP_204_NO_CONTENT)
 def forget_import(me: SignedInAccount, ratings: RatingsDep) -> None:
     """Forget the album ratings you imported; the ratings you gave songs here stay."""

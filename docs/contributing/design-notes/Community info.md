@@ -56,7 +56,9 @@ lists. They are on its site alone, which medleyplay doesn't read (see below).
 - **Rate Your Music is never read by medleyplay.** It has no API (Sonemic's is
   planned, without a date), its staff have said it doesn't allow scripts or
   scraping, and it sits behind bot protection. What it holds of the household's,
-  their own ratings and reviews, comes in through their own export.
+  their own ratings and reviews, comes in through their own export. To read
+  what RYM says, a Track's menu has *Open on RYM*, a search of the site for the
+  album or song that opens in the household's own browser.
 - **One plugin per site,** so each keeps its own pace, its own stopped state,
   and its own switch, as enrichers do now: CritiqueBrainz refusing a request
   leaves Wikipedia running. Wikidata and Wikipedia are one site to medleyplay,

@@ -1,3 +1,4 @@
+// cspell:ignore searchterm
 /**
  * @file A song's menu, its less frequent actions behind a "…" button, and the menu
  * of other ways to play behind a caret.
@@ -8,6 +9,7 @@
  */
 
 import {
+  ArrowSquareOutIcon,
   CaretDownIcon,
   DotsThreeIcon,
   ListPlusIcon,
@@ -27,6 +29,19 @@ import type { Kind, Track } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { albumArtistOf } from "../library/views";
 import { navigate } from "../routes";
+
+/** Rate Your Music's search, which the household's own browser opens; medleyplay never reads the site. */
+const RYM_SEARCH = "https://rateyourmusic.com/search";
+
+/** A search of Rate Your Music for `track`: an album by its album artist and name, a song by its artist and title. */
+function rymSearchOf(track: Track): string {
+  const words =
+    track.kind === "album"
+      ? [albumArtistOf(track), track.album || track.title]
+      : [track.artist, track.title];
+  const query = new URLSearchParams({ searchterm: words.filter(Boolean).join(" ") });
+  return `${RYM_SEARCH}?${query.toString()}`;
+}
 
 /** What a song's menu does besides going to its artist or album. */
 export interface TrackMenuActions {
@@ -118,6 +133,19 @@ export function TrackMenu({
           >
             Go to album
           </Item>
+          <Menu.Item className="track-menu-item" asChild>
+            <a
+              href={rymSearchOf(track)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Search Rate Your Music in a new tab"
+            >
+              <span className="track-menu-icon" aria-hidden>
+                <ArrowSquareOutIcon />
+              </span>
+              Open on RYM
+            </a>
+          </Menu.Item>
           <Menu.Separator className="track-menu-line" />
           <Item
             icon={<PlaylistIcon />}

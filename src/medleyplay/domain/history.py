@@ -15,7 +15,15 @@ DEFAULT_HISTORY_LENGTH: Final = 50
 KEPT_PLAYS: Final = 500
 """How many of an Account's newest plays are always kept, the most History shows."""
 KEPT_FOR: Final = timedelta(days=30)
-"""How long a play is kept once recorded, so a play sent again is known and counted once."""
+"""How long a play is kept once recorded.
+
+A play sent again is then known and counted once, and Insights can count the
+plays of its longest period, which this must cover.
+"""
+
+type PlayCountPeriod = Literal[7, 30]
+"""How many days back Insights can count an Account's plays."""
+PLAY_COUNT_PERIODS: Final[tuple[int, ...]] = get_args(PlayCountPeriod.__value__)
 
 
 @dataclass(frozen=True)

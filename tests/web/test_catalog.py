@@ -318,6 +318,47 @@ def test_clearing_history_empties_it_and_keeps_play_counts(
     assert client.get(f"/api/tracks/{track_id}").json()["play_count"] == 1
 
 
+def test_play_counts_answer_how_often_you_played_each_track_in_the_last_days(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    for play_id, played_at in [
+        (FIRST_PLAY, "2025-12-01T08:00:00Z"),
+        (SECOND_PLAY, "2025-12-30T08:00:00Z"),
+        (THIRD_PLAY, "2025-12-31T08:00:00Z"),
+    ]:
+        client.put(f"/api/plays/{play_id}", json={"track_id": track_id, "played_at": played_at})
+
+    response = client.get("/api/plays/counts", params={"days": 7})
+
+    assert response.json() == [{"track_id": track_id, "plays": 2}]
+
+
+def test_play_counts_leave_out_another_accounts_plays(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    add_bob(client)
+    track_id = _one_track(catalog)
+    client.put(
+        f"/api/plays/{FIRST_PLAY}", json={"track_id": track_id, "played_at": "2025-12-31T08:00:00Z"}
+    )
+    sign_in(client, "bob")
+
+    response = client.get("/api/plays/counts", params={"days": 30})
+
+    assert response.json() == []
+
+
+def test_play_counts_over_90_days_answer_422(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.get("/api/plays/counts", params={"days": 90})
+
+    assert response.status_code == 422
+
+
 def test_a_play_id_put_with_another_track_answers_409(
     client: TestClient, catalog: CatalogService
 ) -> None:

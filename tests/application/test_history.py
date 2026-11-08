@@ -184,3 +184,50 @@ def test_a_play_recorded_within_30_days_is_kept_past_the_newest_500(
     again = catalog.record_play(alice.id, _play(1), first, clock.now - timedelta(days=30))
 
     assert again.play_count == KEPT_PLAYS + 2
+
+
+def test_play_counts_count_each_track_an_account_played_in_the_last_days(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    first, second = _two_tracks(catalog)
+    catalog.record_play(alice.id, _play(1), first, clock.now - timedelta(days=8))
+    catalog.record_play(alice.id, _play(2), first, clock.now - timedelta(days=6))
+    catalog.record_play(alice.id, _play(3), first, clock.now - timedelta(hours=1))
+    catalog.record_play(alice.id, _play(4), second, clock.now)
+
+    counts = catalog.play_counts(alice.id, days=7)
+
+    assert counts == {first: 2, second: 1}
+
+
+def test_play_counts_keep_the_plays_cleared_from_history(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [track_id, _] = _two_tracks(catalog)
+    catalog.record_play(alice.id, _play(1), track_id, clock.now)
+    catalog.clear_history(alice.id)
+
+    counts = catalog.play_counts(alice.id, days=30)
+
+    assert counts == {track_id: 1}
+
+
+def test_play_counts_are_each_accounts_own(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, bob = _alice_and_bob(accounts)
+    [track_id, _] = _two_tracks(catalog)
+    catalog.record_play(alice.id, _play(1), track_id, clock.now)
+
+    assert catalog.play_counts(bob.id, days=30) == {}
+
+
+def test_play_counts_over_a_period_not_offered_are_refused(
+    catalog: CatalogService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    with pytest.raises(InvalidInputError, match="7 or 30 days"):
+        catalog.play_counts(alice.id, days=90)

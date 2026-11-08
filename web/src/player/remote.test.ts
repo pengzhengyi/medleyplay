@@ -191,6 +191,14 @@ describe("the computer carrying out a command", () => {
     expect(player.playList).toHaveBeenCalledWith([TWO], 0, expect.any(Function));
   });
 
+  it("plays a Track now, leaving what plays next as it was", () => {
+    const player = playerOf();
+
+    apply({ kind: "playNow", entry: { track_id: 2, unit: null } }, player, TRACKS, sleepTimerOf());
+
+    expect(player.playNow).toHaveBeenCalledWith(TWO);
+  });
+
   it("seeks only within the entry the remote saw playing", () => {
     const player = playerOf();
 

@@ -164,6 +164,23 @@ def test_a_command_from_the_phone_reaches_the_speaker_page(
     assert command == {"kind": "seek", "key": "a", "seconds": 30.0}
 
 
+def test_a_song_to_play_now_from_the_phone_reaches_the_speaker_page(
+    host: TestClient, phone: TestClient
+) -> None:
+    with host.stream("GET", f"/api/events?page={HOST_PAGE}") as stream:
+        events = events_of(stream.iter_lines())
+        next_event(events, "remote")
+        host.put("/api/remote/report", json=report_playing())
+        play_now = {"kind": "playNow", "entry": {"track_id": 2, "unit": None}}
+
+        response = phone.post("/api/remote/commands", json={"command": play_now})
+
+        command = next_event(events, "command")
+
+    assert response.status_code == 204, response.text
+    assert command == play_now
+
+
 def test_a_command_with_nothing_playing_on_the_computer_answers_409(phone: TestClient) -> None:
     response = phone.post("/api/remote/commands", json={"command": {"kind": "toggle"}})
 

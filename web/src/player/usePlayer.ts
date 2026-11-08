@@ -61,6 +61,8 @@ export interface Player {
   readonly playList: (tracks: readonly Track[], start: number, unitOf?: UnitOf) => void;
   /** Play every Track of `tracks` from the first, in their order or shuffled by unit. */
   readonly playAll: (tracks: readonly Track[], shuffled: boolean, unitOf?: UnitOf) => void;
+  /** Play `track` now, leaving what plays next as it was. */
+  readonly playNow: (track: Track) => void;
   readonly playNext: (track: Track) => void;
   readonly add: (track: Track) => void;
   readonly toggle: () => void;
@@ -587,6 +589,9 @@ export function usePlayer(
       const entries = list.map((track) => entryOf(track, unitOf));
       dispatch({ type: "playAll", entries, shuffled, random: Math.random });
     },
+    playNow: (chosen) => {
+      dispatch({ type: "playNow", entry: entryOf(chosen) });
+    },
     playNext: (chosen) => {
       dispatch({ type: "playNext", entry: entryOf(chosen) });
     },
@@ -714,6 +719,16 @@ async function lookAhead(trackId: number, ahead: Map<number, PlaybackAnswer>): P
   }
 }
 
+const recordedListeners = new Set<() => void>();
+
+/** Call `listener` whenever the server accepts a play this page sent; return how to stop. */
+export function onPlaysRecorded(listener: () => void): () => void {
+  recordedListeners.add(listener);
+  return () => {
+    recordedListeners.delete(listener);
+  };
+}
+
 /** Send every kept play, forgetting those the server accepted or will always refuse. */
 async function sendPlays(only?: Play): Promise<void> {
   const plays = only === undefined ? await keptPlays() : [only];
@@ -721,6 +736,9 @@ async function sendPlays(only?: Play): Promise<void> {
     try {
       await api.recordPlay(play.id, play.trackId, play.playedAt);
       await forgetPlay(play.id);
+      for (const listener of recordedListeners) {
+        listener();
+      }
     } catch (error) {
       if (error instanceof ApiError && REFUSED_PLAY.has(error.status)) {
         await forgetPlay(play.id);

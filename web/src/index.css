@@ -2348,6 +2348,112 @@ button.icon.heart.on:hover,
   opacity: 1;
 }
 
+/* Up next and History head the panel as two tabs; the one shown is raised. */
+.queue-tabs {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.queue-tabs [role="tab"] {
+  margin: 0;
+  padding: 0.2rem 0.6rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.queue-tabs [role="tab"][aria-selected="true"] {
+  background: var(--raised);
+  color: var(--ink);
+}
+
+/* A History row: the song, which plays when clicked, and its Add to Up next. */
+.queue .history-list li {
+  grid-template: "play add" auto / minmax(0, 1fr) auto;
+}
+
+.queue .history-play {
+  display: grid;
+  grid-template:
+    "thumb mark title when" auto
+    "thumb artist artist when" auto / auto auto minmax(0, 1fr) auto;
+  grid-area: play;
+  align-items: center;
+  column-gap: 0.35rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.queue .history-play:disabled {
+  opacity: 0.55;
+}
+
+.queue .played-at {
+  grid-area: when;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.queue .history-list .add {
+  grid-area: add;
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1rem;
+  opacity: 0;
+}
+
+.queue .history-list li:hover .add,
+.queue .history-list li:focus-within .add {
+  opacity: 1;
+}
+
+.queue .history-length {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0 0;
+  padding: 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.queue .history-length select {
+  display: inline-block;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0.1rem 1.75rem 0.1rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.queue .error {
+  color: #d1495b;
+}
+
+.history-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.history-confirm button.danger {
+  color: #d1495b;
+}
+
 /* The player: a deck floating over the page, its position along the top edge. */
 
 .player {
@@ -2741,7 +2847,8 @@ button.icon.heart.on:hover,
   .tracks .actions button,
   .tracks button.heart:not(.on),
   .tracks .stars:not(:has([aria-pressed="true"])) button.star,
-  .queue .remove {
+  .queue .remove,
+  .queue .history-list .add {
     opacity: 1;
   }
 

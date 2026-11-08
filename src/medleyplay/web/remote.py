@@ -109,9 +109,9 @@ class PlayAllIn(_Command):
 
 
 class QueueOneIn(_Command):
-    """Play a Track next, or add it at the end."""
+    """Play a Track now or next, or add it at the end."""
 
-    kind: Literal["playNext", "add"]
+    kind: Literal["playNow", "playNext", "add"]
     entry: QueuedIn
 
 

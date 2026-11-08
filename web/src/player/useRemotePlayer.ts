@@ -167,6 +167,9 @@ export function useRemotePlayer(
     playAll: (tracks, shuffled, unitOf) => {
       send({ kind: "playAll", entries: tracks.map((track) => queuedOf(track, unitOf)), shuffled });
     },
+    playNow: (track) => {
+      send({ kind: "playNow", entry: queuedOf(track) });
+    },
     playNext: (track) => {
       send({ kind: "playNext", entry: queuedOf(track) });
     },

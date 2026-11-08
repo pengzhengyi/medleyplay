@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **History** — a tab beside *Up next* lists the songs you played, newest first,
+  on every device you sign in on. Click one to play it now without changing
+  *Up next*, or add it to the end. It shows the last 50 songs, or 25 to 500 as
+  you choose in the tab, and *Clear* empties it after asking once more; play
+  counts stay.
+
 - **Ratings from MusicBrainz** — a song you haven't rated shows what MusicBrainz's
   listeners rated it, or its album, as grey stars to the nearest half;
   hovering says how many voted. Finding the song on MusicBrainz brings them, with

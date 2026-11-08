@@ -31,6 +31,7 @@ export function playerOf(change: Partial<Player> = {}): Player {
     muted: false,
     playList: vi.fn(),
     playAll: vi.fn(),
+    playNow: vi.fn(),
     playNext: vi.fn(),
     add: vi.fn(),
     toggle: vi.fn(),

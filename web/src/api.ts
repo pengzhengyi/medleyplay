@@ -277,7 +277,26 @@ export interface Settings {
 export interface Preferences {
   /** The keyboard shortcuts changed from the page's defaults, or `null` for none. */
   readonly shortcuts: Readonly<Record<string, readonly string[]>> | null;
+  /** How many songs History shows, or `null` for the default. */
+  readonly history_length: HistoryLength | null;
   readonly revision: number;
+}
+
+/** Preferences to save at the revision read; one left out keeps what was saved. */
+export type PreferencesChange = Partial<Omit<Preferences, "revision">> & {
+  readonly revision: number;
+};
+
+/** How many songs History can show. */
+export const HISTORY_LENGTHS = [25, 50, 100, 250, 500] as const;
+export type HistoryLength = (typeof HISTORY_LENGTHS)[number];
+export const DEFAULT_HISTORY_LENGTH: HistoryLength = 50;
+
+/** A play in the Account's History: its id, its Track, and when it was played. */
+export interface Played {
+  readonly id: string;
+  readonly track_id: number;
+  readonly played_at: string;
 }
 
 /** What a plan at another storage limit would remove. */
@@ -408,7 +427,7 @@ export interface RemoteEvent {
 export type RemoteCommand =
   | { readonly kind: "play"; readonly entries: readonly Queued[]; readonly start: number }
   | { readonly kind: "playAll"; readonly entries: readonly Queued[]; readonly shuffled: boolean }
-  | { readonly kind: "playNext" | "add"; readonly entry: Queued }
+  | { readonly kind: "playNow" | "playNext" | "add"; readonly entry: Queued }
   | { readonly kind: "toggle" | "pause" | "next" | "previous" | "clear" }
   | { readonly kind: "seek"; readonly key: string; readonly seconds: number }
   | { readonly kind: "move"; readonly key: string; readonly to: number }
@@ -765,8 +784,8 @@ export const api = {
     call<Playlist>("PUT", `/api/playlists/${id}`, playlist),
   features: () => call<Features>("GET", "/api/features"),
   preferences: () => call<Preferences>("GET", "/api/me/preferences"),
-  savePreferences: (preferences: Preferences) =>
-    call<Preferences>("PUT", "/api/me/preferences", preferences),
+  savePreferences: (change: PreferencesChange) =>
+    call<Preferences>("PUT", "/api/me/preferences", change),
   settings: () => call<Settings>("GET", "/api/settings"),
   saveSettings: (settings: Settings) => call<Settings>("PUT", "/api/settings", settings),
   storage: (previewLimit?: number) =>
@@ -845,4 +864,6 @@ export const api = {
   job: (jobId: number) => call<Job>("GET", `/api/jobs/${String(jobId)}`),
   recordPlay: (playId: string, trackId: number, playedAt: string) =>
     call<Track>("PUT", `/api/plays/${playId}`, { track_id: trackId, played_at: playedAt }),
+  history: (limit: number) => call<Played[]>("GET", `/api/plays?limit=${String(limit)}`),
+  clearHistory: () => call<undefined>("DELETE", "/api/plays"),
 };

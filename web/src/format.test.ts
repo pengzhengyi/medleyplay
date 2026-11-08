@@ -6,6 +6,7 @@ import {
   formatBytes,
   formatLength,
   formatLibraryLength,
+  formatPlayed,
   formatQueueLength,
   formatSeen,
   formatTime,
@@ -133,6 +134,41 @@ describe("formatSeen", () => {
 
     expect(formatSeen(seen, NOW)).toBe(
       new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(seen),
+    );
+  });
+});
+
+describe("formatPlayed", () => {
+  // Local times, so the day each play falls on doesn't hang on the time zone.
+  const NOW = new Date(2026, 10, 7, 18, 0).getTime();
+  const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
+
+  it("counts minutes within the hour", () => {
+    expect(formatPlayed(NOW - 30_000, NOW)).toBe("Just now");
+    expect(formatPlayed(NOW - 12 * 60_000, NOW)).toBe("12 min ago");
+  });
+
+  it("gives the time today, and yesterday with its name", () => {
+    const thisMorning = new Date(2026, 10, 7, 9, 14).getTime();
+    const lastNight = new Date(2026, 10, 6, 21, 14).getTime();
+
+    expect(formatPlayed(thisMorning, NOW)).toBe(clock.format(thisMorning));
+    expect(formatPlayed(lastNight, NOW)).toBe(`Yesterday ${clock.format(lastNight)}`);
+  });
+
+  it("gives the weekday and time within the week, then the date", () => {
+    const monday = new Date(2026, 10, 2, 21, 14).getTime();
+    const lastMonth = new Date(2026, 9, 25, 21, 14).getTime();
+
+    expect(formatPlayed(monday, NOW)).toBe(
+      new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(monday),
+    );
+    expect(formatPlayed(lastMonth, NOW)).toBe(
+      new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(lastMonth),
     );
   });
 });

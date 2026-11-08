@@ -177,6 +177,7 @@ describe("a remote's player", () => {
     act(() => {
       result.current[0].next();
       result.current[0].add(two);
+      result.current[0].playNow(two);
       result.current[0].seek(30);
     });
 
@@ -184,6 +185,7 @@ describe("a remote's player", () => {
       expect(sent).toEqual([
         { kind: "next" },
         { kind: "add", entry: { track_id: 2, unit: null } },
+        { kind: "playNow", entry: { track_id: 2, unit: null } },
         { kind: "seek", key: "a", seconds: 30 },
       ]);
     });

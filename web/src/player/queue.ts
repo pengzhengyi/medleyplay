@@ -50,6 +50,8 @@ export type QueueAction =
       readonly random: Random;
     }
   | { readonly type: "playNext"; readonly entry: Entry }
+  /** Play `entry` now, ahead of what plays next, which stays as it was. */
+  | { readonly type: "playNow"; readonly entry: Entry }
   | { readonly type: "add"; readonly entry: Entry }
   | { readonly type: "next" }
   | { readonly type: "previous" }
@@ -112,6 +114,11 @@ export function reduce(queue: Queue, action: QueueAction): Queue {
         position: entries.length === 0 ? 0 : position,
         order: order === undefined ? undefined : insert(order, ownPlace ?? 0, action.entry.key),
       };
+    }
+    case "playNow": {
+      const nextUp = reduce(queue, { type: "playNext", entry: action.entry });
+      // A Track playing, the new one follows it; otherwise it is already the one to play.
+      return position < entries.length ? reduce(nextUp, { type: "next" }) : nextUp;
     }
     case "add":
       return {

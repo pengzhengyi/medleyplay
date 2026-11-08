@@ -28,6 +28,7 @@ import { DeviceSettings } from "./DeviceSettings";
 import { KindSettings } from "./KindSettings";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
+import { RatingsSettings } from "./RatingsSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { VideoDetailsSettings } from "./VideoDetailsSettings";
@@ -43,6 +44,7 @@ const SECTIONS = [
   { id: "network", title: "Network" },
   { id: "devices", title: "Other devices" },
   { id: "kinds", title: "Songs and albums" },
+  { id: "ratings", title: "Your ratings" },
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
   { id: "musicbrainz", title: "MusicBrainz" },
@@ -83,6 +85,7 @@ export function SettingsView({
   onModeChecked,
   onEnrichersChanged,
   onKindsChanged,
+  onRatingsChanged = () => undefined,
   waitingDevices = [],
 }: {
   readonly admin: boolean;
@@ -93,6 +96,8 @@ export function SettingsView({
   readonly onEnrichersChanged: () => void;
   /** Called after a setting changes how a Track's kind is guessed. */
   readonly onKindsChanged: () => void;
+  /** Called after your album ratings are imported or forgotten. */
+  readonly onRatingsChanged?: (() => void) | undefined;
   /** The devices waiting for an answer, as the event stream last said. */
   readonly waitingDevices?: readonly WaitingDevice[];
 }) {
@@ -138,6 +143,7 @@ export function SettingsView({
         onChanged={onKindsChanged}
       />
     ),
+    ratings: <RatingsSettings onChanged={onRatingsChanged} />,
     storage: <StorageSettings admin={admin} settings={household} onSettings={setHousehold} />,
     bilibili: (
       <>

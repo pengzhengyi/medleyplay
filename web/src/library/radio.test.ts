@@ -38,6 +38,11 @@ describe("taste", () => {
     expect(tasteOf(trackOf(1, "a", { play_count: 9 }))).toBeCloseTo(Math.log(10) / 4);
   });
 
+  it("reads a song you haven't rated by your rating of its album, and yours first", () => {
+    expect(tasteOf(trackOf(1, "a", { album_rating: 5 }))).toBe(1);
+    expect(tasteOf(trackOf(1, "a", { rating: 1, album_rating: 5 }))).toBe(-1);
+  });
+
   it("likes a song by a favorite artist or from a favorite album a half more, once", () => {
     const favorites = favoriteGroupsOf({
       artists: [{ name: "朴树" }],
@@ -67,6 +72,7 @@ describe("which songs are suggested", () => {
     ["a file split into songs", { split: true }],
     ["a whole album in one file", { kind: "album", duration_ms: 3_600_000 }],
     ["a song rated 2 stars", { rating: 2 }],
+    ["a song of an album rated 2 stars", { album_rating: 2 }],
   ])("never suggests %s", (_, change) => {
     expect(canSuggest(trackOf(1, "a", change))).toBe(false);
   });
@@ -294,6 +300,15 @@ describe("the album shelves", () => {
       song(3, "B", "Gone", { added_at: daysAgo(1), availability: "missing" }),
       song(4, "C", "Disliked", { added_at: daysAgo(1), rating: 1 }),
       song(5, "C", "Disliked", { added_at: daysAgo(1), rating: 2 }),
+    ];
+
+    expect(albumShelves(library, NOW, seeded(1))).toEqual([]);
+  });
+
+  it("never suggests an album you rated low, songs unrated", () => {
+    const library = [
+      song(1, "C", "Disliked", { added_at: daysAgo(1), album_rating: 1 }),
+      song(2, "C", "Disliked", { added_at: daysAgo(1), album_rating: 1 }),
     ];
 
     expect(albumShelves(library, NOW, seeded(1))).toEqual([]);

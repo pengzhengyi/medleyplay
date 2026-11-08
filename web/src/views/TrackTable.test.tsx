@@ -342,6 +342,63 @@ describe("what listeners elsewhere rated", () => {
   });
 });
 
+describe("your rating of a song's album", () => {
+  /** Night Drive, which you haven't rated, on an album you rated 4 stars. */
+  const NIGHT_DRIVE = trackOf(5, "Night Drive", { album_rating: 4 });
+  const group = () => screen.getByRole("group", { name: "Rate Night Drive" });
+  const filled = () =>
+    within(group())
+      .getAllByRole("button")
+      .map((star) => star.dataset.fromAlbum === "true");
+
+  it("shows a song you haven't rated in solid stars, saying they are its album's", () => {
+    renderTable([NIGHT_DRIVE]);
+
+    expect(filled()).toEqual([true, true, true, true, false]);
+    expect(group()).toHaveAccessibleDescription("From your album rating: 4 stars");
+    expect(group()).toHaveAttribute("title", "From your album rating: 4 stars");
+  });
+
+  it("comes before what listeners elsewhere rated it", () => {
+    const heard = { source: "musicbrainz", of: "song", rating: 2, votes: 9, link: "" } as const;
+    renderTable([{ ...NIGHT_DRIVE, community: heard }]);
+
+    expect(
+      within(group())
+        .getAllByRole("button")
+        .map((star) => star.dataset.community),
+    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect(group()).toHaveAccessibleDescription("From your album rating: 4 stars");
+  });
+
+  it("gives way to your own rating of the song", () => {
+    renderTable([{ ...NIGHT_DRIVE, rating: 2 }]);
+
+    expect(filled()).toEqual([false, false, false, false, false]);
+    expect(group()).not.toHaveAttribute("title");
+  });
+
+  it("rates the song alone when a star is chosen, even the album's own", async () => {
+    const { actions } = renderTable([NIGHT_DRIVE]);
+
+    await userEvent.click(within(group()).getByRole("button", { name: "4 stars" }));
+
+    expect(actions.onRate).toHaveBeenCalledWith(NIGHT_DRIVE, 4);
+  });
+
+  it("sorts a song you haven't rated by its album's rating, as your own", async () => {
+    renderTable([
+      trackOf(1, "Yours", { rating: 3 }),
+      trackOf(2, "Album's", { album_rating: 5 }),
+      trackOf(3, "Nobody's"),
+    ]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Rating" }));
+
+    expect(titles()).toEqual(["Nobody's", "Yours", "Album's"]);
+  });
+});
+
 describe("columns", () => {
   it("hides a column, and remembers it in this browser", async () => {
     const { unmount } = renderTable();
@@ -487,7 +544,7 @@ describe("filtering", () => {
   });
 
   it("keeps the songs rated at least the stars chosen, or the unrated ones", async () => {
-    renderTable(LIBRARY);
+    renderTable([...LIBRARY, trackOf(9, "Album's", { album_rating: 4 })]);
     const filters = await openFilters();
     const rating = within(filters).getByLabelText("Rating");
 
@@ -495,7 +552,7 @@ describe("filtering", () => {
     const rated = shownTitles();
     await userEvent.selectOptions(rating, "Unrated");
 
-    expect(rated).toEqual(["Colorful Days", "Let Down"]);
+    expect(rated).toEqual(["Colorful Days", "Let Down", "Album's"]);
     expect(shownTitles()).toEqual(["生如夏花", "Airbag", "New Song"]);
   });
 

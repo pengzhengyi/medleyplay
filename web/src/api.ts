@@ -44,6 +44,8 @@ export interface Track {
   readonly cover: string | null;
   /** What listeners elsewhere rated the song or its album, when enough did; it only shows. */
   readonly community: CommunityRating | null;
+  /** Your rating of its album, from an import; it stands for `rating` when that is `null`. */
+  readonly album_rating: number | null;
 }
 
 /** What listeners on another site rated a song, or the album it is on, out of 5. */
@@ -649,9 +651,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
-/** Send `image` as the request's body, as it is. */
-async function send<T>(method: string, path: string, image: Blob): Promise<T> {
-  const response = await fetch(path, { method, credentials: "same-origin", body: image });
+/** Send `file` as the request's body, as it is. */
+async function send<T>(method: string, path: string, file: Blob): Promise<T> {
+  const response = await fetch(path, { method, credentials: "same-origin", body: file });
   if (!response.ok) {
     throw await refusalOf(response);
   }
@@ -866,4 +868,49 @@ export const api = {
     call<Track>("PUT", `/api/plays/${playId}`, { track_id: trackId, played_at: playedAt }),
   history: (limit: number) => call<Played[]>("GET", `/api/plays?limit=${String(limit)}`),
   clearHistory: () => call<undefined>("DELETE", "/api/plays"),
+  /** What importing a Rate Your Music export would change, changing nothing. */
+  previewRatingsImport: (file: Blob) =>
+    send<RatingsImport>("POST", "/api/ratings/import/preview", file),
+  /** Replace your imported album ratings with a Rate Your Music export's. */
+  importRatings: (file: Blob) => send<RatingsImport>("POST", "/api/ratings/import", file),
+  /** How many albums your last import rated or reviewed, 0 for none. */
+  ratingsImportKept: () => call<{ readonly albums: number }>("GET", "/api/ratings/import"),
+  /** Forget the album ratings you imported; the ratings you gave songs stay. */
+  forgetRatingsImport: () => call<undefined>("DELETE", "/api/ratings/import"),
+  /** Your imported rating and review of the album `album` by `artist`, or `null`. */
+  albumRating: (artist: string, album: string) =>
+    call<AlbumRating | null>(
+      "GET",
+      `/api/album-rating?${new URLSearchParams({ artist, album }).toString()}`,
+    ),
 };
+
+/** Where your ratings download as a CSV file: the songs you rated, then your albums. */
+export const RATINGS_EXPORT_URL = "/api/ratings/export";
+
+/** What importing a Rate Your Music export changes, or changed, for you. */
+export interface RatingsImport {
+  /** The albums the export rates or reviews. */
+  readonly albums: number;
+  /** Of those, the albums the Library has. */
+  readonly matched_albums: number;
+  /** The songs whose rating changes. */
+  readonly songs: number;
+  /** The albums the Library hasn't, in the export's order. */
+  readonly unmatched: readonly { readonly artist: string; readonly album: string }[];
+  /** Your smart playlists songs join or leave. */
+  readonly playlists: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly joining: number;
+    readonly leaving: number;
+  }[];
+  /** The albums of your earlier import this replaces. */
+  readonly replaced_albums: number;
+}
+
+/** Your imported rating of an album, if you rated it, and your review. */
+export interface AlbumRating {
+  readonly stars: number | null;
+  readonly note: string;
+}

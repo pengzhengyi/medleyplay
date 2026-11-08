@@ -98,6 +98,7 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
           : "length",
     cover: null,
     community: null,
+    album_rating: null,
     ...change,
   };
 }

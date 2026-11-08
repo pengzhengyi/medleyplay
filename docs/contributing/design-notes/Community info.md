@@ -2,8 +2,8 @@
 
 > [!NOTE]
 > **Status: in part built.** The community rating from MusicBrainz, and the
-> server's import of Rate Your Music ratings, are built as this note says; the
-> rest is proposed. This note describes what medleyplay shows about a song
+> import of Rate Your Music ratings, are built as this note says; the rest is
+> proposed. This note describes what medleyplay shows about a song
 > from what other listeners have said about it: a community rating where the
 > Account gave none, reviews, a short summary of the song or album, and similar
 > songs; and how the household brings in its own Rate Your Music ratings. Each
@@ -211,8 +211,8 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
 
 <!-- cspell:ignore Hachi -->
 
-- **Settings → Import ratings** takes the CSV a member downloads from their own
-  RYM profile, for the Account signed in. Nothing is sent anywhere.
+- **Settings → Your ratings** (built) takes the CSV a member downloads from their
+  own RYM profile, for the Account signed in. Nothing is sent anywhere.
 - **The file is checked first** (built): at most 5 MiB and 20,000 rows, UTF-8 (a
   byte order mark is dropped), values at most 10,000 characters, and a header the
   reader knows; anything else is refused, naming what was wrong and on which line.
@@ -243,15 +243,17 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
   name other albums. Of several rows alike, the highest rating counts.
 - **RYM's half stars** (its export's 1–10) become stars by halving and rounding
   half up, so 7 (3½ stars) is 4. A 0 is no rating.
-- **The review column** becomes the Account's note on that album, shown in
-  *About this album* to that Account alone.
+- **The review column** becomes the Account's note on that album, shown with its
+  stars under the album page's heading to that Account alone (built), and in
+  *About this album* once that is built.
 - **The Account's rating of a song** is its own rating of the song, else its
   rating of the song's album (`effective_rating`). Rules, `unrated` included,
   and the download policy read it; a song rated from its album no longer counts
   as unrated. A Track carries its own `rating` and its `album_rating` apart, so
-  the client shows a song rated from its album as solid stars marked *From your
-  album rating*; choosing a star rates the song alone, and clearing it falls back
-  to the album's.
+  the client (built, `ratingOf` in `web/src/library/ratings.ts`) shows a song
+  rated from its album as solid stars marked *From your album rating*, and sorts,
+  filters, and scores radio by it; choosing a star rates the song alone, and
+  clearing it falls back to the album's.
 - **The import previews before it applies** (built), since an album rating moves
   songs in and out of smart playlists and changes what may be removed first: how
   many albums it rates or reviews and how many the Library has, how many songs'

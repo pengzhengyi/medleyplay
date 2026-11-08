@@ -545,7 +545,7 @@ def test_an_album_files_release_gives_its_most_counted_genres(tmp_path: Path) ->
     assert answer.values["genre"] == "rock; pop; ballad"
 
 
-def test_a_long_file_that_names_an_album_is_matched_as_a_release(tmp_path: Path) -> None:
+def test_an_album_in_one_file_not_split_is_matched_as_a_release(tmp_path: Path) -> None:
     fake = FakeMusicBrainzFactory.knowing_shu_pu()
 
     answer = enricher_over(fake).enrich(EnrichTrackFactory.long_album_file(tmp_path))
@@ -556,10 +556,10 @@ def test_a_long_file_that_names_an_album_is_matched_as_a_release(tmp_path: Path)
     assert answer.values["year"] == 2003
 
 
-def test_a_file_of_twenty_minutes_is_still_searched_as_a_song(tmp_path: Path) -> None:
+def test_a_long_file_the_household_calls_a_song_is_searched_as_a_song(tmp_path: Path) -> None:
     fake = FakeMusicBrainz().answer(f"{API}/recording", Reply.json({"recordings": []}))
 
-    enricher_over(fake).enrich(EnrichTrackFactory.long_album_file(tmp_path, duration_ms=1_200_000))
+    enricher_over(fake).enrich(EnrichTrackFactory.long_album_file(tmp_path, whole_album=False))
 
     assert set(fake.urls()) == {f"{API}/recording"}
 

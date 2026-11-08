@@ -107,8 +107,10 @@ class EnrichTrack(_Model):
     `video` is the Track's video on its site, or `None` for a Track a site that reads
     no video is asked about. `shown` is what the Track shows now, except the values
     the enricher itself recorded, `duration_ms` its length when known, and `file_name`
-    the name of its file, or empty. `whole_album` says the Track is a long file split
-    into songs, which is asked about as a release, never as one recording. A cover
+    the name of its file, or empty. `whole_album` says the Track is a whole album, by
+    the Kind the household sees: a file split into songs, one named an album, or one
+    long enough to be guessed one. It is asked about as a release, never as one
+    recording. A cover
     goes into `folder`, an empty folder the caller owns. `proxy` is the household's
     proxy for the site, or `None`. `text` is the Track's video text, for an enricher
     that reads it, and `ai` the providers an enricher that asks an AI model asks, the

@@ -1,4 +1,4 @@
-"""Events: telling every open browser of changes to Jobs, the Mode, devices, and remote play.
+"""Events: telling every open browser what changed: Jobs, the Mode, devices, remote play, Tracks.
 
 The runner and the services publish a Job's id after they commit, and the Mode
 service publishes `MODE` when the Mode changes, from any thread; each
@@ -27,13 +27,15 @@ MODE: Final = "mode"
 """The event that the Mode changed."""
 DEVICES: Final = "devices"
 """The event that a device started waiting for an answer, or was answered."""
+TRACKS: Final = "tracks"
+"""The event that every page should read the Tracks again, as a setting changed how they show."""
 MAX_QUEUED: Final = 64
 PROGRESS_INTERVAL: Final = 0.25
 """At most four progress events a second for one Job."""
 
 
-type Event = JobId | Literal["mode", "devices"] | RemoteEvent
-"""A Job that changed, `MODE`, `DEVICES`, or a change to an account's remote play."""
+type Event = JobId | Literal["mode", "devices", "tracks"] | RemoteEvent
+"""A Job that changed, `MODE`, `DEVICES`, `TRACKS`, or a change to an account's remote play."""
 
 
 class SubscriptionEndedError(Exception):
@@ -120,6 +122,18 @@ class Events:
         with self._lock:
             subscriptions = tuple(self._subscriptions)
         self._offer(subscriptions, DEVICES, progress=False)
+
+    def hear_change(self, what: str) -> None:
+        """Tell every subscriber to read the Tracks again when the settings changed.
+
+        The settings decide how a Track shows, such as whether a long file is an
+        album; other changes reach the page that made them, or come as Jobs.
+        """
+        if what != "settings":
+            return
+        with self._lock:
+            subscriptions = tuple(self._subscriptions)
+        self._offer(subscriptions, TRACKS, progress=False)
 
     def publish_remote(self, event: RemoteEvent) -> None:
         """Tell every subscriber of a change to remote play; callable from any thread.

@@ -98,13 +98,14 @@ class Enriching:
         album: str = "",
         *,
         origin: Origin = Origin.FILES,
+        duration_ms: int = 299_000,
     ) -> TrackId:
         """Add a Library file `<title>.m4a` whose tags say `title`, `artist`, and `album`.
 
         The details are recorded as `origin`'s, which are the file's tags unless changed.
         """
         key = SourceKey("library", f"1/Music/{title}.m4a")
-        details = TrackDetails(title=title, artist=artist, album=album, duration_ms=299_000)
+        details = TrackDetails(title=title, artist=artist, album=album, duration_ms=duration_ms)
         return self.catalog.add_track(key, details, origin=origin)
 
     def add_track_with_text(

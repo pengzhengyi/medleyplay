@@ -1,8 +1,8 @@
 """What decides, for each Track, whether an enricher is asked about it.
 
 An enricher that reads videos is asked about a Track's video. One that searches by
-words is asked about the Track's title and artist, or, for a long file split into
-songs, its album: what a Track would be searched for with is kept apart from what the
+words is asked about the Track's title and artist, or, for a Track whose Kind is
+album, its album: what a Track would be searched for with is kept apart from what the
 searched site said before, so its answer doesn't change the question. One that reads
 a Track's video text is asked about the Track alone.
 """
@@ -18,8 +18,9 @@ from sqlalchemy.orm import Session
 
 from medleyplay.application.details import OriginValues, text_of_row
 from medleyplay.application.segments import album_file_of
+from medleyplay.application.settings import read_settings
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.details import Field, Origin
+from medleyplay.domain.details import Field, Kind, Origin, kind_of
 from medleyplay.domain.enrichers import (
     Enricher,
     Subject,
@@ -52,7 +53,7 @@ class Candidate:
     video: str | None
     """The Track's video, when the enricher reads videos and the Track has one."""
     whole_album: bool
-    """The Track is a long file split into songs."""
+    """The Track is a whole album: split into songs, named one, or guessed one from its length."""
 
 
 def candidates(
@@ -70,7 +71,7 @@ def candidates(
             TrackId(i) for i in db.scalars(select(TrackRow.id).where(TrackRow.id.in_(track_ids)))
         }
     segments = set(db.scalars(select(SegmentRow.track_id)))
-    albums = set(album_file_of(db).values())
+    albums = _albums(db, ids, segments)
     if enricher.subject is Subject.VIDEO:
         subjects = {track_id: video_id_of(sources.get(track_id, [])) for track_id in ids}
         videos = subjects
@@ -102,6 +103,26 @@ def candidates(
         file_name = _file_name(sources.get(track_id, []))
         found[track_id] = Candidate(facts, file_name, videos[track_id], track_id in albums)
     return found
+
+
+def _albums(db: Session, ids: set[TrackId], segments: set[int]) -> set[TrackId]:
+    """Return the Tracks among `ids` whose Kind is album, worked out as the Library shows it."""
+    split = set(album_file_of(db).values())
+    album_from_ms = read_settings(db).album_from_ms
+    rows = db.execute(select(TrackRow.id, TrackRow.kind, TrackRow.duration_ms))
+    return {
+        TrackId(track_id)
+        for track_id, named, duration_ms in rows
+        if track_id in ids
+        and kind_of(
+            None if named is None else Kind(named),
+            duration_ms=duration_ms,
+            split=track_id in split,
+            segment=track_id in segments,
+            album_from_ms=album_from_ms,
+        ).kind
+        is Kind.ALBUM
+    }
 
 
 def _key(words: dict[TrackId, OriginValues], track_id: TrackId, *, whole_album: bool) -> str | None:

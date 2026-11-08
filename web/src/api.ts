@@ -301,6 +301,16 @@ export interface Played {
   readonly played_at: string;
 }
 
+/** How many days back Insights can count plays; all time comes from each Track's own count. */
+export const PLAY_COUNT_PERIODS = [7, 30] as const;
+export type PlayCountPeriod = (typeof PLAY_COUNT_PERIODS)[number];
+
+/** How often the Account played a Track over a period, plays cleared from History too. */
+export interface PlayCount {
+  readonly track_id: number;
+  readonly plays: number;
+}
+
 /** What a plan at another storage limit would remove. */
 export interface Preview {
   readonly removals: readonly {
@@ -868,6 +878,8 @@ export const api = {
     call<Track>("PUT", `/api/plays/${playId}`, { track_id: trackId, played_at: playedAt }),
   history: (limit: number) => call<Played[]>("GET", `/api/plays?limit=${String(limit)}`),
   clearHistory: () => call<undefined>("DELETE", "/api/plays"),
+  playCounts: (days: PlayCountPeriod) =>
+    call<PlayCount[]>("GET", `/api/plays/counts?days=${String(days)}`),
   /** What importing a Rate Your Music export would change, changing nothing. */
   previewRatingsImport: (file: Blob) =>
     send<RatingsImport>("POST", "/api/ratings/import/preview", file),

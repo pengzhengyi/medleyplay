@@ -49,6 +49,27 @@ export function formatMinutes(minutes: number): string {
   return [inHours, inMinutes].filter(Boolean).join(" ");
 }
 
+/**
+ * Write about how long was listened to, such as `38 min` or `4 hr 12 min`; from ten
+ * hours on, in whole hours, such as `43 hr`.
+ */
+export function formatListened(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes === 0) {
+    return "Under 1 min";
+  }
+  if (minutes < 60) {
+    return `${String(minutes)} min`;
+  }
+  if (minutes >= 600) {
+    return `${String(Math.round(minutes / 60))} hr`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return minutes % 60 === 0
+    ? `${String(hours)} hr`
+    : `${String(hours)} hr ${String(minutes % 60)} min`;
+}
+
 /** Write the time left, rounded up to whole minutes, such as `29 min` or `1 hr 30 min`. */
 export function formatTimeLeft(ms: number): string {
   const minutes = Math.max(1, Math.ceil(ms / 60_000));

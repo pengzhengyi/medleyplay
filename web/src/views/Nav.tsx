@@ -3,6 +3,7 @@
  */
 
 import {
+  ChartBarIcon,
   DownloadSimpleIcon,
   GearSixIcon,
   type Icon,
@@ -15,7 +16,8 @@ import {
 
 import { type Route, hrefOf } from "../routes";
 
-type Top = "library" | "radio" | "artists" | "albums" | "downloaded" | "playlists" | "settings";
+type Top =
+  "library" | "radio" | "artists" | "albums" | "downloaded" | "playlists" | "insights" | "settings";
 
 const TOPS: readonly { readonly view: Top; readonly label: string; readonly icon: Icon }[] = [
   { view: "library", label: "Library", icon: MusicNotesSimpleIcon },
@@ -24,6 +26,7 @@ const TOPS: readonly { readonly view: Top; readonly label: string; readonly icon
   { view: "albums", label: "Albums", icon: VinylRecordIcon },
   { view: "downloaded", label: "Downloaded", icon: DownloadSimpleIcon },
   { view: "playlists", label: "Playlists", icon: PlaylistIcon },
+  { view: "insights", label: "Insights", icon: ChartBarIcon },
   { view: "settings", label: "Settings", icon: GearSixIcon },
 ];
 

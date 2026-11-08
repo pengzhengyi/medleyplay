@@ -19,6 +19,7 @@ export type Route =
   | { readonly view: "playlists" }
   | { readonly view: "playlist"; readonly id: string }
   | { readonly view: "search"; readonly query: string }
+  | { readonly view: "insights" }
   | { readonly view: "settings" };
 
 const LIBRARY: Route = { view: "library" };
@@ -38,6 +39,7 @@ export function routeOf(hash: string): Route {
     case "albums":
     case "downloaded":
     case "playlists":
+    case "insights":
     case "settings":
       return { view: path };
     case "artist":

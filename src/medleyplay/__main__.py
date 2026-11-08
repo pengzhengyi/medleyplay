@@ -6,7 +6,7 @@ import getpass
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from medleyplay import __version__
 from medleyplay.application.devices import DevicesView
@@ -25,7 +25,14 @@ from medleyplay.server import (
     open_database,
 )
 
+if TYPE_CHECKING:
+    import uvicorn
+    from starlette.types import ASGIApp
+
 type ReadPassword = Callable[[str], str]
+
+SHUTDOWN_GRACE_SECONDS: Final = 5
+"""How long a stopping server waits for open requests, such as a page's event stream, to end."""
 
 _CHOICES: Final = {
     "ask-first": Admission.ASK,
@@ -103,11 +110,25 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_server(settings: Settings, host: str, port: int) -> None:  # pragma: no cover
+def server_config(app: "ASGIApp", host: str, port: int) -> "uvicorn.Config":
+    """How `serve` runs `app`: on `host` and `port`, closing what is still open once stopped."""
     import uvicorn  # noqa: PLC0415 -- only `serve` needs the server
 
     # Forwarding headers never stand in for the peer: the device check trusts only the connection.
-    uvicorn.run(build_app(settings), host=host, port=port, proxy_headers=False)
+    # A page's event stream never ends on its own, so a stopping server would wait for it forever.
+    return uvicorn.Config(
+        app,
+        host=host,
+        port=port,
+        proxy_headers=False,
+        timeout_graceful_shutdown=SHUTDOWN_GRACE_SECONDS,
+    )
+
+
+def _run_server(settings: Settings, host: str, port: int) -> None:  # pragma: no cover
+    import uvicorn  # noqa: PLC0415 -- only `serve` needs the server
+
+    uvicorn.Server(server_config(build_app(settings), host, port)).run()
 
 
 def _reset_password(settings: Settings, username: str, read_password: ReadPassword) -> int:

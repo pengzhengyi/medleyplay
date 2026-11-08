@@ -1,15 +1,21 @@
 """The command line: `python -m medleyplay`."""
 
+import asyncio
 import re
 import runpy
+import socket
 import sys
+import threading
+import time
 from collections.abc import Iterator
 from importlib.metadata import version
 from pathlib import Path
 
 import pytest
+import uvicorn
+from starlette.types import Receive, Scope, Send
 
-from medleyplay.__main__ import main
+from medleyplay.__main__ import SHUTDOWN_GRACE_SECONDS, main, server_config
 from medleyplay.application.devices import Visit
 from medleyplay.domain.devices import Admission
 from medleyplay.server import (
@@ -108,6 +114,37 @@ def test_serve_starts_in_safe_mode_only_when_asked(
 def _build_only(settings: Settings, host: str, port: int) -> None:
     """Build the app as `serve` does, without listening."""
     build_app(settings)
+
+
+async def _endless_stream(scope: Scope, _: Receive, send: Send) -> None:
+    """Answer every request with an event stream that never ends, as a page's `/api/events`."""
+    if scope["type"] != "http":
+        return
+    headers = [(b"content-type", b"text/event-stream")]
+    await send({"type": "http.response.start", "status": 200, "headers": headers})
+    while True:
+        await send({"type": "http.response.body", "body": b": still here\n\n", "more_body": True})
+        await asyncio.sleep(0.1)
+
+
+def test_a_stopping_server_closes_an_open_event_stream_rather_than_wait_for_it() -> None:
+    listener = socket.create_server(("127.0.0.1", 0))
+    server = uvicorn.Server(server_config(_endless_stream, "127.0.0.1", 0))
+    running = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+    running.start()
+    while not server.started:
+        time.sleep(0.01)
+    page = socket.create_connection(listener.getsockname())
+    page.sendall(b"GET /api/events HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    assert page.recv(1024).startswith(b"HTTP/1.1 200")
+
+    stopped_at = time.monotonic()
+    server.should_exit = True
+    running.join(timeout=SHUTDOWN_GRACE_SECONDS + 5)
+
+    page.close()
+    assert not running.is_alive()
+    assert time.monotonic() - stopped_at < SHUTDOWN_GRACE_SECONDS + 2
 
 
 def test_serve_with_an_invalid_config_file_fails_with_the_reason(

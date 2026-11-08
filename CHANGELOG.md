@@ -238,6 +238,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A stopping server no longer waits forever for a page still open in a
+  browser; it closes the page's connection after 5 seconds.
 - A row's song or album mark changes as soon as its details are saved, not on
   the next reload.
 - An empty song list's two-line example is numbered 1 and 2, so it no longer

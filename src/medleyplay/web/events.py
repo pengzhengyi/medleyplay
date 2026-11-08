@@ -11,7 +11,13 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel
 
 from medleyplay.application.devices import Visit
-from medleyplay.application.events import DEVICES, MODE, Event, SubscriptionEndedError
+from medleyplay.application.events import (
+    DEVICES,
+    MODE,
+    TRACKS,
+    Event,
+    SubscriptionEndedError,
+)
 from medleyplay.application.remote import CommandsWaiting, PageId, ReportChanged
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import Verdict
@@ -114,7 +120,7 @@ async def stream_events(  # noqa: PLR0913 -- each service the stream tells of
                     yield ServerSentEvent(data=command, event="command")
 
 
-async def _sent_for(
+async def _sent_for(  # noqa: PLR0911 -- one answer per kind of event
     event: Event | None,
     me: Account,
     *,
@@ -135,6 +141,8 @@ async def _sent_for(
         return ServerSentEvent(data=_remote_out(remote, me), event="remote")
     if event == MODE:
         return ServerSentEvent(data=await _mode_out(mode, jobs), event="mode")
+    if event == TRACKS:
+        return ServerSentEvent(data={}, event="tracks")
     if event == DEVICES:
         return (
             ServerSentEvent(data=await _waiting_out(devices, me), event="devices")

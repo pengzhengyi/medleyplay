@@ -261,6 +261,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Finding a Track on MusicBrainz searches for a whole album when the Track's
+  Kind is album, as the Library shows it, rather than by its own 20-minute
+  rule; a file shorter than the household's album length is searched for as a
+  song. Changing the album length now reaches every open page at once.
 - A song's menu taller than the window scrolls, so its last items can be reached
   on a short screen.
 - A stopping server no longer waits forever for a page still open in a

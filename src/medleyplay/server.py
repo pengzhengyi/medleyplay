@@ -140,7 +140,8 @@ def open_database(data_dir: Path) -> Engine:
     return engine
 
 
-def build_services(  # noqa: PLR0913 -- the database and folder, then settings with defaults
+# One argument for the database and folder, then settings with defaults; a statement a service.
+def build_services(  # noqa: PLR0913, PLR0915
     engine: Engine,
     data_dir: Path,
     clock: Clock = utc_now,
@@ -207,6 +208,8 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
     policy = PolicyService(units, clock, downloads, plugins, data_dir, online=mode.online)
     changes.listen(policy.request)
+    # A setting such as the album length changes how Tracks show on every open page.
+    changes.listen(events.hear_change)
     events.listen(policy.request)
     # Each change of the Mode reaches the open browsers, the runner, and the policy.
     mode.listen(events.publish_mode)

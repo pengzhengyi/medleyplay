@@ -70,7 +70,8 @@ and lets the household's word win.
   The length is the household's setting `album_minutes`, 20 by default, which
   an admin changes in *Settings → Songs and albums* or sets to `null` to guess
   nothing. The first three reasons settle the kind; `length` and `default` are
-  assumptions, which the page draws apart.
+  assumptions, which the page draws apart. Changing the setting sends every open
+  page a `tracks` event over the event stream, and each reads the Tracks again.
 
   The Track's row keeps only a kind an origin names, and the API answers the kind
   worked out. Calling a split file a song, or giving a song of one a kind, is

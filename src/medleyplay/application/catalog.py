@@ -6,7 +6,7 @@ Every command here is idempotent: repeating it leaves the same state as doing it
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import ColumnElement, Select, case, delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert
@@ -48,7 +48,7 @@ from medleyplay.domain.community import CommunityRating, RatedAs, shown_rating
 from medleyplay.domain.details import LONGEST_SONG_MS, Field, Kind, Origin, Value, kind_of
 from medleyplay.domain.downloads import download_target
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
-from medleyplay.domain.history import KEPT_FOR, KEPT_PLAYS, Played
+from medleyplay.domain.history import KEPT_FOR, KEPT_PLAYS, PLAY_COUNT_PERIODS, Played
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.links import PART_LINKS
@@ -347,6 +347,20 @@ class CatalogService:
             return tuple(
                 Played(PlayId(row.id), TrackId(row.track_id), row.played_at) for row in rows
             )
+
+    def play_counts(self, account_id: AccountId, *, days: int) -> dict[TrackId, int]:
+        """Return how often the Account played each Track in the last `days`, cleared plays too."""
+        if days not in PLAY_COUNT_PERIODS:
+            message = f"Plays are counted over 7 or 30 days, not {days}."
+            raise InvalidInputError(message)
+        since = self._clock() - timedelta(days=days)
+        with self._units() as db:
+            rows = db.execute(
+                select(PlayRow.track_id, func.count())
+                .where(PlayRow.account_id == account_id, PlayRow.played_at >= since)
+                .group_by(PlayRow.track_id)
+            ).all()
+            return {TrackId(track_id): plays for track_id, plays in rows}
 
     def clear_history(self, account_id: AccountId) -> None:
         """Hide every play the Account made from its History; each still counts once."""

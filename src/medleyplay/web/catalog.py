@@ -325,6 +325,20 @@ def list_history(
     return [PlayedOut.of(played) for played in catalog.history(me.id, limit=limit)]
 
 
+class PlayCountOut(BaseModel):
+    """How often you played a Track over a period."""
+
+    track_id: int
+    plays: int
+
+
+@router.get("/plays/counts")
+def list_play_counts(me: SignedInAccount, catalog: CatalogDep, days: int) -> list[PlayCountOut]:
+    """Return how often you played each Track in the last 7 or 30 `days`, cleared plays too."""
+    counts = catalog.play_counts(me.id, days=days)
+    return [PlayCountOut(track_id=track_id, plays=plays) for track_id, plays in counts.items()]
+
+
 @router.delete("/plays", status_code=status.HTTP_204_NO_CONTENT)
 def clear_history(me: SignedInAccount, catalog: CatalogDep) -> None:
     """Clear your History; each play still counts once in the play counts."""

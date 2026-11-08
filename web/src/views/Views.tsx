@@ -40,6 +40,7 @@ import { AlbumRatingNote } from "./AlbumRatingNote";
 import { Cover } from "./Cover";
 import { FavoriteHeart } from "./FavoriteHeart";
 import type { Station } from "../library/useStation";
+import { InsightsView } from "./InsightsView";
 import { RadioView } from "./RadioView";
 import { SettingsView } from "./SettingsView";
 import { type TrackActions, TrackTable } from "./TrackTable";
@@ -104,6 +105,8 @@ function viewOf(given: ViewProps) {
           favorites={props.favorites}
         />
       );
+    case "insights":
+      return <InsightsView tracks={given.tracks} onPlay={props.actions.onPlay} />;
     case "artists":
       return <Artists tracks={props.tracks} favorites={props.favorites} />;
     case "artist": {

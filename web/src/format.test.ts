@@ -5,6 +5,7 @@ import {
   formatTimeLeft,
   formatBytes,
   formatLength,
+  formatListened,
   formatLibraryLength,
   formatPlayed,
   formatQueueLength,
@@ -114,6 +115,22 @@ describe("formatTimeLeft", () => {
 
   it("writes a last part of a minute as 1 min", () => {
     expect(formatTimeLeft(5_000)).toBe("1 min");
+  });
+});
+
+describe("formatListened", () => {
+  it("writes under an hour in minutes, and under ten hours in hours and minutes", () => {
+    expect(formatListened(38 * 60_000 + 20_000)).toBe("38 min");
+    expect(formatListened(4 * 3_600_000 + 12 * 60_000)).toBe("4 hr 12 min");
+    expect(formatListened(3 * 3_600_000)).toBe("3 hr");
+  });
+
+  it("writes ten hours or more in whole hours", () => {
+    expect(formatListened(42 * 3_600_000 + 31 * 60_000)).toBe("43 hr");
+  });
+
+  it("writes under half a minute as under a minute", () => {
+    expect(formatListened(20_000)).toBe("Under 1 min");
   });
 });
 

@@ -327,6 +327,11 @@ button.text:hover:not(:disabled) {
   opacity: 0;
 }
 
+.scope label:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .top .account {
   color: var(--muted);
   font-size: 0.9rem;
@@ -5102,4 +5107,231 @@ kbd {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.3em;
   text-align: center;
+}
+
+/* Insights: totals, the top artist and album, and rankings whose rows fill to their share. */
+
+.insights-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-right: 0.75rem;
+}
+
+.insights {
+  display: grid;
+  gap: 1.5rem;
+  margin: 0 0.75rem 2rem;
+}
+
+.insights-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2.5rem;
+  margin: 0;
+}
+
+.insights-totals div {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.insights-totals dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.insights-totals dd {
+  margin: 0;
+  font-size: 1.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.insights-note {
+  margin: -0.75rem 0 0;
+  font-size: 0.82rem;
+}
+
+.insights > .insights-note:last-child {
+  margin-top: 0;
+}
+
+.insights-tops {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+
+.insights-top {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--surface);
+  box-shadow: var(--lift);
+  color: inherit;
+  text-decoration: none;
+}
+
+.insights-top:hover {
+  box-shadow: var(--float);
+}
+
+.insights-cover {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.insights-top-text {
+  display: grid;
+  min-width: 0;
+}
+
+.insights-top-label {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.insights-top-name {
+  overflow: hidden;
+  font-size: 1.2rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insights-rankings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1.5rem;
+}
+
+.insights-ranking h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.insights-bars,
+.insights-songs {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+}
+
+.insights-row {
+  margin: 0;
+  list-style: none;
+}
+
+.insights-bar-link {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  padding: 0.45rem 0.7rem;
+  overflow: hidden;
+  border-radius: 0.7rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.insights-bar-link:hover {
+  background: var(--surface);
+}
+
+.insights-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 0;
+  border-radius: 0.7rem;
+  background: var(--accent-soft);
+}
+
+.insights-bar-name,
+.insights-bar-value {
+  position: relative;
+  z-index: 1;
+}
+
+.insights-bar-name {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insights-bar-artist {
+  margin-left: 0.5rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.insights-bar-value,
+.insights-plays {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.insights-song {
+  display: grid;
+  grid-template:
+    "thumb title plays" auto
+    "thumb artist plays" auto / auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border: none;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.insights-song:disabled {
+  opacity: 0.55;
+}
+
+.insights-song:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.insights-song .thumb {
+  grid-area: thumb;
+}
+
+.insights-song .entry-title,
+.insights-song .entry-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insights-song .entry-title {
+  grid-area: title;
+  font-weight: 500;
+}
+
+.insights-song .entry-artist {
+  grid-area: artist;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.insights-plays {
+  grid-area: plays;
 }

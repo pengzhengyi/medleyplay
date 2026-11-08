@@ -1,3 +1,4 @@
+// cspell:ignore searchterm
 /**
  * @file A song's menu, its less frequent actions behind a "…" button, and the menu
  * of other ways to play behind a caret.

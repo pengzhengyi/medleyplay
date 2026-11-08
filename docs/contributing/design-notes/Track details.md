@@ -53,7 +53,8 @@ and lets the household's word win.
 - **A Track's kind** says whether it is one song or one file holding a whole
   album: two values only, with no releases, EPs, or singles to tell apart. The
   question is whether someone picks it as a whole; a live set or a compilation in
-  one file is an album. The household may name it; otherwise it is worked out
+  one file is an album. The household may name it, as *Mark as album* and
+  *Mark as song* in a Track's menu do; otherwise it is worked out
   when read, so it never goes stale as a file's length becomes known or its
   songs change:
 

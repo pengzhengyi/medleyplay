@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mark as album, Mark as song** — a Track's menu turns a song into an album,
+  or an album into a song, when its kind was guessed wrong.
 - **Name a device** — in Settings → Other devices, an admin names an allowed
   device, as "Mia's phone"; its label shows beneath.
 - **`medleyplay devices`** — with the server stopped, lists the allowed
@@ -236,6 +238,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A row's song or album mark changes as soon as its details are saved, not on
+  the next reload.
 - An empty song list's two-line example is numbered 1 and 2, so it no longer
   reads as one line.
 - Asking a second lookup about a song, such as *Find on MusicBrainz* while its

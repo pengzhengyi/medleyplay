@@ -16,13 +16,14 @@ import {
   PlaylistIcon,
   QueueIcon,
   ScissorsIcon,
+  SwapIcon,
   UploadSimpleIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 
-import type { Track } from "../api";
+import type { Kind, Track } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { albumArtistOf } from "../library/views";
 import { navigate } from "../routes";
@@ -41,6 +42,8 @@ export interface TrackMenuActions {
   readonly onEditSongs: (track: Track) => void;
   /** Add the audio file of a Track downloaded from a site by hand. */
   readonly onAddFile: (track: Track) => void;
+  /** Make `track` a song or an album, for one whose Kind was guessed wrong. */
+  readonly onSetKind: (track: Track, kind: Kind) => void;
 }
 
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
@@ -143,6 +146,17 @@ export function TrackMenu({
               {lookup.label}
             </Item>
           ))}
+          {/* A split file, and each of its songs, has the Kind its split gives it. */}
+          {!track.split && track.segment_of === null && (
+            <Item
+              icon={<SwapIcon />}
+              onSelect={() => {
+                actions.onSetKind(track, track.kind === "song" ? "album" : "song");
+              }}
+            >
+              {track.kind === "song" ? "Mark as album" : "Mark as song"}
+            </Item>
+          )}
           <Item
             icon={<ScissorsIcon />}
             onSelect={() => {

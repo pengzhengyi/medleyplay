@@ -34,6 +34,7 @@ function renderTable(
     onFind: vi.fn(),
     onEditSongs: vi.fn(),
     onAddFile: vi.fn(),
+    onSetKind: vi.fn(),
     onFavorite: vi.fn(),
     onRate: vi.fn(),
   };

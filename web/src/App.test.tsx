@@ -190,6 +190,32 @@ describe("App", () => {
     expect(calls).toContain("POST /api/enrichers/bilibili-details/tracks/1");
   });
 
+  it("marks a song as an album from its menu, and its row shows it at once", async () => {
+    const saved: unknown[] = [];
+    serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "POST /api/tracks/details": (body) => {
+        saved.push(body);
+        return { body: { changed: 1 } };
+      },
+      "GET /api/tracks/1": {
+        body: trackOf(1, "Night Drive", { kind: "album", kind_reason: "named" }),
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Mark as album" }));
+
+    await waitFor(() => {
+      const row = screen.getByRole("row", { name: /Night Drive/u });
+      expect(within(row).getByRole("img", { name: "Album" })).toBeInTheDocument();
+    });
+    expect(screen.getByText("“Night Drive” is now an album.")).toBeVisible();
+    expect(saved).toEqual([{ track_ids: [1], values: { kind: "album" } }]);
+  });
+
   it("offers Find on MusicBrainz in the menu of a Track that can be found there, not of another", async () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive"), trackOf(2, "Melt")]),

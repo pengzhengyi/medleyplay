@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AI_ENRICHER, type Account, type Track, api } from "../api";
+import { AI_ENRICHER, type Account, type Kind, type Track, api } from "../api";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
@@ -234,6 +234,17 @@ export function Library({
       );
     },
     onAddFile: setFiling,
+    // The row's mark shows the new Kind, and the notice says so, as a filter may hide the row.
+    onSetKind: (track: Track, kind: Kind) => {
+      library.saveDetails(track.id, { kind }).then(
+        () => {
+          setNotice(`“${track.title}” is now ${kind === "album" ? "an album" : "a song"}.`);
+        },
+        (failure: unknown) => {
+          setNotice(failure instanceof Error ? failure.message : String(failure));
+        },
+      );
+    },
     onEditSongs: (track: Track) => {
       const file = track.segment_of === null ? track : byId.get(track.segment_of);
       if (file !== undefined) {

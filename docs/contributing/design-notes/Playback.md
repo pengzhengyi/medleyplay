@@ -14,6 +14,7 @@
 - [Preparing a compressed member](#preparing-a-compressed-member)
 - [Recording plays](#recording-plays)
 - [History](#history)
+- [Insights](#insights)
 - [Availability in the Track list](#availability-in-the-track-list)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
@@ -159,7 +160,8 @@ sequenceDiagram
 - **The server keeps plays a while,** since a play's row is also how a play
   sent again is known and counted once. It forgets a play only once it was
   recorded more than 30 days ago and isn't among the Account's newest 500, so
-  the table stays small. Play counts and last played times never change.
+  the table stays small, and every play of the last 30 days is there for
+  Insights. Play counts and last played times never change.
 - **Clear** hides every play in History so far, on every device, after a second
   click to confirm. The plays stay recorded, so one sent again still counts
   once, until they are forgotten as above. A play another device sends later
@@ -168,6 +170,26 @@ sequenceDiagram
   the Account's record, as play counts are, and lasts until cleared.
 - **Saving preferences keeps what a page leaves out,** so a page that knows only
   the shortcuts doesn't reset History's length, and the other way round.
+
+## Insights
+
+- **Insights shows what an Account listened to most,** in a tab of its own:
+  over the last 7 days, the last 30 (the default), or all time. It shows the
+  listening time, plays, and songs played; the top artist and album; the ten
+  artists and albums listened to longest, each row filled to its share of the
+  first; and the ten songs played most, which play as Library rows do.
+- **Listening time is an estimate:** each play counts the song's whole length,
+  since a play is recorded once half the song, or four minutes, has played, and
+  how long it went on isn't. A whole album in one file counts its plays but
+  adds no time, which its length would overstate many times over; nor does a
+  song of unknown length. The page says how many plays weren't timed.
+- **Artists and albums group as the Artists and Albums views do:** names
+  compared folded, an album under its album artist or its artist. A Track with
+  no artist or no album counts in the totals but isn't ranked.
+- **All time reads each Track's play count,** which the page already holds. The
+  last 7 or 30 days ask the server for the Account's plays in that time,
+  cleared ones included, since clearing History hides plays without undoing
+  them; it asks again when the page sends a play or is shown again.
 
 ## Availability in the Track list
 
@@ -324,6 +346,7 @@ and the full views are in [Web client](Web%20client.md).
 | `PUT /api/plays/{id}` | Signed in | Records a play of a Track under a client UUID |
 | `GET /api/plays?limit=` | Signed in | The Account's History: up to `limit` (at most 500) of its plays, newest first |
 | `DELETE /api/plays` | Signed in | Clears the Account's History |
+| `GET /api/plays/counts?days=` | Signed in | How often the Account played each Track in the last 7 or 30 days, cleared plays included |
 | `GET /api/tracks` | Signed in | Each Track now also has its `availability` |
 
 ## Testing
@@ -342,7 +365,9 @@ and the full views are in [Web client](Web%20client.md).
 - **Plays:** recording twice counts once; the same id with another Track is
   refused; another Account's ids are its own. History lists plays newest
   first; clearing hides them and still counts a play sent again once; a play is
-  forgotten only past 30 days and the newest 500.
+  forgotten only past 30 days and the newest 500. Play counts over 7 or 30 days
+  are the Account's own, keep cleared plays, and fit in the 30 days plays are
+  kept.
 - **Client:** Vitest for the queue reducer, the play-count rule, and the
   components; Playwright against the real server, with a Library of generated
   WAV files, for signing in, playing, seeking, and moving through the queue. A

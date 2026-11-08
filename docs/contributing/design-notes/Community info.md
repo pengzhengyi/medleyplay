@@ -300,7 +300,8 @@ keeps Last.fm's for no longer than its terms allow.
   Track, for admins.
 - `POST /api/ratings/import/preview` checks a RYM file, sent as `text/csv`, and
   answers what it would change; `POST /api/ratings/import` applies the same file
-  and answers the same; `DELETE /api/ratings/import` forgets it (built).
+  and answers the same; `GET /api/ratings/import` answers how many albums the
+  import kept has, and `DELETE /api/ratings/import` forgets it (built).
 - `GET /api/album-rating?artist=&album=` answers the Account's imported rating
   and review of a Library album, or `null`; a Track carries `album_rating` (built).
 - `GET /api/ratings/export` downloads the Account's ratings as CSV (built).

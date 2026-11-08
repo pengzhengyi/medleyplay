@@ -20,6 +20,7 @@ function renderMenu(queueing = true, track = MELT, findable: readonly string[] =
     onFind: vi.fn(),
     onEditSongs: vi.fn(),
     onAddFile: vi.fn(),
+    onSetKind: vi.fn(),
   };
   render(<TrackMenu track={track} actions={actions} queueing={queueing} />);
   return actions;
@@ -35,6 +36,39 @@ afterEach(() => {
 });
 
 describe("a song's menu", () => {
+  it("marks a song as an album, for one whose Kind was guessed wrong", async () => {
+    const actions = renderMenu();
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Mark as album" }));
+
+    expect(actions.onSetKind).toHaveBeenCalledWith(MELT, "album");
+  });
+
+  it("marks an album as a song", async () => {
+    const album = { ...MELT, kind: "album" as const, kind_reason: "length" as const };
+    const actions = renderMenu(true, album);
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Mark as song" }));
+
+    expect(actions.onSetKind).toHaveBeenCalledWith(album, "song");
+  });
+
+  it.each([
+    [
+      "a file split into songs",
+      { split: true, kind: "album" as const, kind_reason: "split" as const },
+    ],
+    ["a song of a split file", { segment_of: 9, kind_reason: "segment" as const }],
+  ])("offers no other Kind for %s, which its split settles", async (_, change) => {
+    renderMenu(true, { ...MELT, ...change });
+
+    await open();
+
+    expect(screen.queryByRole("menuitem", { name: /^Mark as/ })).not.toBeInTheDocument();
+  });
+
   it("holds its less frequent actions, each an icon and words", async () => {
     renderMenu();
 
@@ -47,6 +81,7 @@ describe("a song's menu", () => {
       "Go to album",
       "Add to playlist…",
       "Edit details…",
+      "Mark as album",
       "Split into songs…",
     ]);
   });
@@ -64,6 +99,7 @@ describe("a song's menu", () => {
       "Add to playlist…",
       "Edit details…",
       "Find details online",
+      "Mark as album",
       "Split into songs…",
     ]);
   });
@@ -101,6 +137,7 @@ describe("a song's menu", () => {
       "Add to playlist…",
       "Edit details…",
       "Find on MusicBrainz",
+      "Mark as album",
       "Split into songs…",
     ]);
   });
@@ -143,6 +180,7 @@ describe("a song's menu", () => {
       "Add to playlist…",
       "Edit details…",
       "Suggest details with AI",
+      "Mark as album",
       "Split into songs…",
     ]);
   });

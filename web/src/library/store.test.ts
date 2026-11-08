@@ -40,6 +40,15 @@ describe("the Track store", () => {
     expect(tracksOf(covered).get(1)?.cover).toBe("a".repeat(64));
   });
 
+  it("takes a Track's Kind, and why, from the server's answer, so its mark shows it at once", () => {
+    const marked = reduce(LOADED, {
+      type: "details",
+      track: trackOf(1, "Intro", { kind: "album", kind_reason: "named" }),
+    });
+
+    expect(tracksOf(marked).get(1)).toMatchObject({ kind: "album", kind_reason: "named" });
+  });
+
   it("keeps a favorite confirmed since the details were read", () => {
     const favored = reduce(LOADED, {
       type: "answered",

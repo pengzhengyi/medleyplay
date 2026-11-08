@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.album_ratings import album_ratings_of, library_album_of
 from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
 from medleyplay.application.details import record as record_details
@@ -154,6 +155,7 @@ class CatalogService:
             split = set(segment_of.values())
             album_from_ms = read_settings(db).album_from_ms
             community = _community_ratings(db, select(CommunityRatingRow), segment_of)
+            rated = album_ratings_of(db, account_id)
             # A song is downloaded, or failed to download, as its album file is.
             downloaded |= {song for song, album in segment_of.items() if album in downloaded}
             failed |= {song for song, album in segment_of.items() if album in failed}
@@ -169,6 +171,7 @@ class CatalogService:
                     split=track.id in split,
                     album_from_ms=album_from_ms,
                     community=community.get(TrackId(track.id)),
+                    album_rating=rated.stars_of(*library_album_of(track)),
                 )
                 for track, state in rows
             ]
@@ -194,6 +197,7 @@ class CatalogService:
                 CommunityRatingRow.track_id.in_({track_id, looked_at})
             )
             community = _community_ratings(db, rated, segment_of)
+            album_rating = album_ratings_of(db, account_id).stars_of(*library_album_of(found[0]))
         return _to_track(
             *found,
             available[track_id],
@@ -204,6 +208,7 @@ class CatalogService:
             split=track_id in segment_of.values(),
             album_from_ms=album_from_ms,
             community=community.get(track_id),
+            album_rating=album_rating,
         )
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
@@ -652,6 +657,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     split: bool = False,
     album_from_ms: int | None = LONGEST_SONG_MS,
     community: CommunityRating | None = None,
+    album_rating: int | None = None,
 ) -> Track:
     kind = kind_of(
         None if track.kind is None else Kind(track.kind),
@@ -688,6 +694,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         kind=kind.kind,
         kind_reason=kind.reason,
         community=community,
+        album_rating=album_rating,
     )
 
 

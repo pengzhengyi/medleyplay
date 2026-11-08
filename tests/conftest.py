@@ -32,6 +32,7 @@ from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
@@ -128,6 +129,11 @@ def catalog(
 @pytest.fixture
 def settings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> SettingsService:
     return SettingsService(units, clock, changes.append)
+
+
+@pytest.fixture
+def ratings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> RatingsService:
+    return RatingsService(units, clock, changes.append)
 
 
 @pytest.fixture
@@ -362,6 +368,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     enrichment: EnrichmentService,
     ai: AiService,
     devices: DeviceService,
+    ratings: RatingsService,
     clock: FakeClock,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
@@ -392,6 +399,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         ai=ai,
         devices=devices,
         remote=remote,
+        ratings=ratings,
     )
 
 

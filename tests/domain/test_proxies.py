@@ -154,22 +154,48 @@ def test_a_proxy_of_exactly_the_longest_length_is_accepted_and_one_more_is_refus
 _NAMES = st.text(st.characters(codec="utf-8", categories=["L", "N", "P", "S"]), min_size=1)
 
 
+def test_a_login_outside_ascii_counts_as_written_in_the_url_against_the_length() -> None:
+    written = f"http://alice:{'ü' * 250}@127.0.0.1:1"
+
+    with pytest.raises(InvalidInputError, match="at most 512 characters, its login written"):
+        ProxyUrl.parse(written)
+
+
+def test_a_proxy_whose_url_would_pass_the_length_is_refused_when_built() -> None:
+    with pytest.raises(InvalidInputError, match="at most 512"):
+        ProxyUrl(ProxyScheme.HTTP, "0", 1, "0" * 8 + "\u0800" * 200, None)
+
+
+def test_a_login_written_encoded_counts_as_its_canonical_length() -> None:
+    encoded = "%41" * 300
+
+    assert ProxyUrl.parse(f"http://{encoded}@127.0.0.1:1").user == "A" * 300
+
+
 @given(
     scheme=st.sampled_from(list(ProxyScheme)),
     host=st.from_regex(r"[a-z0-9]([a-z0-9-]{0,20}[a-z0-9])?", fullmatch=True),
     port=st.integers(min_value=1, max_value=65535),
     login=st.none() | st.tuples(_NAMES, st.none() | _NAMES),
 )
-def test_a_canonical_proxy_parses_back_to_the_same_parts(
+def test_a_proxy_built_parses_back_to_the_same_parts_or_is_refused_as_too_long(
     scheme: ProxyScheme, host: str, port: int, login: tuple[str, str | None] | None
 ) -> None:
     user, password = login if login is not None else (None, None)
-    built = ProxyUrl(scheme, host, port, user, password)
+    refused: InvalidInputError | None = None
+    try:
+        built = ProxyUrl(scheme, host, port, user, password)
+    except InvalidInputError as error:
+        refused = error
+    if refused is not None:
+        assert "at most 512" in str(refused)
+        return
 
     again = ProxyUrl.parse(built.url)
 
     assert again == built
     assert again.url == built.url
+    assert len(built.url) <= MAX_PROXY_LENGTH
 
 
 @pytest.mark.parametrize("site", ["bilibili"])

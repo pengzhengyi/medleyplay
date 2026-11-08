@@ -250,6 +250,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A proxy whose login is outside ASCII is refused when its URL, written with
+  each such byte as `%XX`, passes 512 characters, rather than being kept and
+  then refused when read back.
 - A song's menu taller than the window scrolls, so its last items can be reached
   on a short screen.
 - A stopping server no longer waits forever for a page still open in a

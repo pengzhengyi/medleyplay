@@ -159,7 +159,7 @@ server that stopped.
 | `GET /api/jobs/{id}` | Signed in | One Job |
 | `POST /api/jobs/{id}/cancel` | The Account that asked, or an admin | Cancels it; idempotent |
 | `POST /api/jobs/{id}/retry` | The Account that asked, or an admin | Submits a failed or cancelled Job again |
-| `GET /api/events` | Signed in | A `job` event each time a Job changes, over SSE; see [Bilibili](Bilibili.md#progress-over-sse) |
+| `GET /api/events` | Signed in | A `job` event each time a Job changes, over SSE; see [Bilibili](Bilibili.md#progress-over-sse). A `tracks` event when a setting changes how Tracks show |
 
 Jobs are shared by the household, so every Account sees them. Each Job kind adds
 its own route to submit one, such as scanning a Library. A kind that needs a

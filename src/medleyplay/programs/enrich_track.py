@@ -48,8 +48,8 @@ class EnrichJob(_Model):
     `subject` is what the enricher is asked about, which is noted as asked once the Job
     has run: the Track's video, or a key made from the Track and what it is searched
     for. `video` is the Track's video, when the enricher reads videos. `shown` is what
-    the Track showed when the Job was queued, and `whole_album` says it is a long file
-    split into songs. `text` is the Track's video text, when the enricher reads it.
+    the Track showed when the Job was queued, and `whole_album` says it is a whole album,
+    by its Kind. `text` is the Track's video text, when the enricher reads it.
     """
 
     enricher: str

@@ -8,6 +8,7 @@ import pytest
 from medleyplay.application.events import (
     MAX_QUEUED,
     MODE,
+    TRACKS,
     Event,
     Events,
     Subscription,
@@ -129,3 +130,15 @@ def test_a_change_of_mode_reaches_every_subscriber_and_no_job_listener() -> None
             return await _drained(subscription)
 
     assert (asyncio.run(scenario()), heard) == ([MODE], [])
+
+
+def test_a_change_of_the_settings_tells_every_page_to_read_the_tracks_again() -> None:
+    events = Events()
+
+    async def scenario() -> list[Event]:
+        async with events.subscribe() as subscription:
+            events.hear_change("catalog")
+            events.hear_change("settings")
+            return await _drained(subscription)
+
+    assert asyncio.run(scenario()) == [TRACKS]

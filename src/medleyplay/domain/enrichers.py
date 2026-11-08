@@ -12,8 +12,8 @@ a song of BV1dm4y1s7ak     its album file is asked instead     not asked
 ```
 
 A Track is searched for by its words when it shows a title and an artist that don't
-come only from its file's name, or, for a long file split into songs, an album and
-its artist; and what it was searched for was not asked in the last day:
+come only from its file's name, or, for a whole album, an album and its artist; and
+what it was searched for was not asked in the last day:
 
 ```text
 title "Let Down" (files), artist "Radiohead" (files)    searched for as a song
@@ -187,7 +187,7 @@ class SearchTerms:
     album: str | None
     album_artist: str | None
     whole_album: bool
-    """The Track is a long file split into songs, searched for as a release."""
+    """The Track is a whole album by its Kind, searched for as a release."""
 
     def key(self, track_id: TrackId) -> str:
         """Return the subject that says this Track was asked about these terms.
@@ -204,8 +204,8 @@ def search_terms(values: Mapping[Origin, Values], *, whole_album: bool) -> Searc
     """Return what the Track is searched for with, or `None` when it shows too little.
 
     The words come from what the Track shows without the enricher's own word and
-    without its file's name. A song needs a title and an artist; a long file split
-    into songs needs an album and, as its artist, the album artist or the artist.
+    without its file's name. A song needs a title and an artist; a whole album
+    needs an album and, as its artist, the album artist or the artist.
     """
     own = {Origin.MUSICBRAINZ, Origin.FILE_NAME}
     kept: dict[Origin, Values] = {o: v for o, v in values.items() if o not in own}

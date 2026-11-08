@@ -189,6 +189,23 @@ def test_a_browser_hears_the_mode_when_the_stream_opens_and_when_it_changes(
     assert (opened["reason"], changed["reason"]) == ("unreachable", "settling")
 
 
+def test_a_browser_hears_when_a_change_of_the_settings_may_change_the_tracks(
+    events_client: TestClient, hub: Events
+) -> None:
+    set_up_as_alice(events_client)
+
+    with events_client.stream("GET", "/api/events") as stream:
+        lines = stream.iter_lines()
+        _ready(lines)
+        hub.hear_change("settings")
+        for line in lines:
+            if line == "event: tracks":
+                break
+        data = next(lines)
+
+    assert data == "data: {}"
+
+
 def test_a_member_hears_another_accounts_job_fail_without_why(
     events_client: TestClient, running: Jobs
 ) -> None:

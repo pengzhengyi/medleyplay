@@ -78,6 +78,22 @@ describe("the Library", () => {
     expect(asked(calls)).toBe(2);
   });
 
+  it("asks for the Tracks again when a change of the settings may change their kinds", async () => {
+    const { calls } = serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    act(() => {
+      stream().send("tracks");
+    });
+
+    await waitFor(() => {
+      expect(asked(calls)).toBe(2);
+    });
+  });
+
   it("closes the event stream when the page goes", async () => {
     serve(signedIn([]));
     const { result, unmount } = renderHook(() => useLibrary(vi.fn()));

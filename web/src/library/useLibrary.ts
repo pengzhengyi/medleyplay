@@ -603,6 +603,10 @@ function listen(
     online = mode.online;
     onMode(mode);
   });
+  events.addEventListener("tracks", () => {
+    // A setting changed how Tracks show, such as which are albums.
+    load();
+  });
   events.addEventListener("devices", (event: MessageEvent<string>) => {
     const { waiting } = JSON.parse(event.data) as { waiting: readonly WaitingDevice[] };
     onWaitingDevices(waiting);

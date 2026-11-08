@@ -70,7 +70,8 @@ and lets the household's word win.
   The length is the household's setting `album_minutes`, 20 by default, which
   an admin changes in *Settings → Songs and albums* or sets to `null` to guess
   nothing. The first three reasons settle the kind; `length` and `default` are
-  assumptions, which the page draws apart.
+  assumptions, which the page draws apart. Changing the setting sends every open
+  page a `tracks` event over the event stream, and each reads the Tracks again.
 
   The Track's row keeps only a kind an origin names, and the API answers the kind
   worked out. Calling a split file a song, or giving a song of one a kind, is
@@ -276,7 +277,7 @@ config file turns them on, since each contacts a site or a provider.
   as the cover is where it happens.
 - **It is asked** with the Track's shown values and their origins (without the
   values the enricher recorded itself), its length, its file's name, whether it
-  is a long file split into songs, its video id when it reads videos, and its
+  is a whole album by its Kind, its video id when it reads videos, and its
   video text when it reads that. It answers with values for any field, or
   with the video's text (title, description, and chapters) in place of parsed
   values, and may write one cover into a folder of the Job's, which it names, as
@@ -348,11 +349,12 @@ library would add nothing.
 - **Which Tracks are searched for.** A Track that is not a segment and shows a
   title and an artist that don't come only from its file's name; a `BV…` file
   name is no search term. It needs no video, and video text the household entered
-  doesn't matter. A long file split into songs is matched as a release, never as
-  one recording, so it needs an album and an artist (its album artist, else its
-  artist); so is a file longer than 20 minutes that shows an album, split or not,
-  since no song is that long. What MusicBrainz itself recorded is no search term, so its answer
-  never changes the question.
+  doesn't matter. A Track whose Kind is album, as the Library shows it (split
+  into songs, named an album, or as long as the household's album length), is
+  matched as a release, never as one recording, so it needs an album and an
+  artist (its album artist, else its artist). Changing its Kind asks about it
+  again. What MusicBrainz itself recorded is no search term, so its answer never
+  changes the question.
 - **The search.** A Lucene query of the shown title, artist, and album when
   known, with every character Lucene reads as syntax escaped; Chinese and Japanese
   text passes through unchanged.

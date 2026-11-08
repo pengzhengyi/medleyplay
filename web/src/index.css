@@ -2378,7 +2378,7 @@ button.icon.heart.on:hover,
 .queue .history-play {
   display: grid;
   grid-template:
-    "thumb mark title when" auto
+    "thumb mark title title" auto
     "thumb artist artist when" auto / auto auto minmax(0, 1fr) auto;
   grid-area: play;
   align-items: center;
@@ -2443,11 +2443,20 @@ button.icon.heart.on:hover,
 }
 
 .history-confirm {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--muted);
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.75rem;
+  background: var(--raised);
+  color: var(--ink);
   font-size: 0.85rem;
+}
+
+.history-confirm span {
+  min-width: 0;
+  margin-right: auto;
 }
 
 .history-confirm button.danger {

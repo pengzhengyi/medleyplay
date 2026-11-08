@@ -166,7 +166,7 @@ describe("History", () => {
 
     await userEvent.click(within(queue).getByRole("button", { name: "Clear" }));
     const asking = within(queue).getByRole("group", { name: "Clear History" });
-    expect(within(asking).getByText("On every device?")).toBeInTheDocument();
+    expect(within(asking).getByText("Clear on every device?")).toBeInTheDocument();
     expect(calls).not.toContain("DELETE /api/plays");
     await userEvent.click(within(asking).getByRole("button", { name: "Clear" }));
 

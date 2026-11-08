@@ -6,7 +6,6 @@
  */
 
 import { ListPlusIcon } from "@phosphor-icons/react";
-import { useState } from "react";
 
 import { HISTORY_LENGTHS, type HistoryLength, type Track } from "../api";
 import { formatPlayed } from "../format";
@@ -112,45 +111,50 @@ export function HistoryList({
   );
 }
 
-/** History's Clear button, which asks once more before it clears every device's History. */
-export function HistoryClear({ history }: { readonly history: History }) {
-  const [asking, setAsking] = useState(false);
-  if (asking) {
-    return (
-      <span className="history-confirm" role="group" aria-label="Clear History">
-        <span>On every device?</span>
-        <button
-          type="button"
-          className="text danger"
-          onClick={() => {
-            setAsking(false);
-            void history.clear();
-          }}
-        >
-          Clear
-        </button>
-        <button
-          type="button"
-          className="text"
-          onClick={() => {
-            setAsking(false);
-          }}
-        >
-          Keep
-        </button>
-      </span>
-    );
-  }
+/** History's Clear button; `onAsk` asks once more before anything is cleared. */
+export function HistoryClear({
+  history,
+  onAsk,
+}: {
+  readonly history: History;
+  readonly onAsk: () => void;
+}) {
   return (
     <button
       type="button"
       className="text"
       disabled={history.plays === undefined || history.plays.length === 0}
-      onClick={() => {
-        setAsking(true);
-      }}
+      onClick={onAsk}
     >
       Clear
     </button>
+  );
+}
+
+/** The question Clear asks, across the panel: clear every device's History, or keep it. */
+export function ClearQuestion({
+  history,
+  onDone,
+}: {
+  readonly history: History;
+  readonly onDone: () => void;
+}) {
+  return (
+    <p className="history-confirm" role="group" aria-label="Clear History">
+      <span>Clear on every device?</span>
+      <button
+        type="button"
+        className="text danger"
+        onClick={() => {
+          onDone();
+          void history.clear();
+        }}
+      >
+        Clear
+      </button>
+      <button type="button" className="text" onClick={onDone}>
+        Keep
+      </button>
+    </p>
   );
 }

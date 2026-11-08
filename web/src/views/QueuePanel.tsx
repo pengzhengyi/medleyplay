@@ -40,7 +40,7 @@ import { useHistory } from "../player/useHistory";
 import type { SleepTimer } from "../player/useSleepTimer";
 import { useNow } from "../useNow";
 import { Cover } from "./Cover";
-import { HistoryClear, HistoryList } from "./HistoryPanel";
+import { ClearQuestion, HistoryClear, HistoryList } from "./HistoryPanel";
 import { KindMark } from "./KindMark";
 import { SleepTimerMenu } from "./SleepTimerMenu";
 
@@ -75,6 +75,8 @@ export function QueuePanel({
 }) {
   const [tab, setTab] = useState<Tab>("queue");
   const history = useHistory(tab === "history");
+  // Whether History's Clear is asking once more.
+  const [asking, setAsking] = useState(false);
   const entries = upNext(player.queue);
   const now = useNow();
   const songsIn = useMemo(() => songsByFile([...tracks.values()]), [tracks]);
@@ -166,11 +168,24 @@ export function QueuePanel({
             </button>
           </>
         ) : (
-          <HistoryClear history={history} />
+          <HistoryClear
+            history={history}
+            onAsk={() => {
+              setAsking(true);
+            }}
+          />
         )}
       </header>
       {tab === "history" ? (
         <div role="tabpanel" id={`${id}-history`} aria-labelledby={`${id}-history-tab`}>
+          {asking && (
+            <ClearQuestion
+              history={history}
+              onDone={() => {
+                setAsking(false);
+              }}
+            />
+          )}
           <HistoryList history={history} player={player} tracks={tracks} />
         </div>
       ) : (

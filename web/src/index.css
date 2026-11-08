@@ -5269,6 +5269,13 @@ kbd {
   white-space: nowrap;
 }
 
+.insights-bar-artist {
+  margin-left: 0.5rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
 .insights-bar-value,
 .insights-plays {
   color: var(--muted);

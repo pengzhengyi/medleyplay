@@ -203,7 +203,12 @@ function Ranking({
         {shown.map((item) => (
           <li key={`${item.artist}\n${item.name}`} className="insights-row">
             <a className="insights-bar-link" href={hrefTo(of, item)}>
-              <span className="insights-bar-name">{item.name}</span>
+              <span className="insights-bar-name">
+                {item.name}
+                {of === "album" && (
+                  <span className="insights-bar-artist">{item.artist || "Unknown artist"}</span>
+                )}
+              </span>
               <span className="insights-bar-value">{listenedOf(item)}</span>
               <span
                 className="insights-bar"

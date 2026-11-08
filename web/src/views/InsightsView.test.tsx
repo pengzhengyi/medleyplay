@@ -123,6 +123,22 @@ describe("InsightsView", () => {
     expect(calls).toEqual(["GET /api/plays/counts?days=30"]);
   });
 
+  it("writes each ranked album's artist, telling apart two albums of one name", async () => {
+    servingPlays([
+      { track_id: 1, plays: 1 },
+      { track_id: 4, plays: 1 },
+    ]);
+
+    renderInsights([...LIBRARY, trackOf(4, "Re:Start", { artist: "Ado", album: "生如夏花" })]);
+
+    const ranking = await screen.findByRole("region", { name: "Top albums" });
+    expect(
+      within(ranking)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["生如夏花朴树About 4 min, 1 play", "生如夏花AdoAbout 3 min, 1 play"]);
+  });
+
   it("says nothing was played in a period with no plays", async () => {
     servingPlays([{ track_id: 1, plays: 1 }], []);
     renderInsights();

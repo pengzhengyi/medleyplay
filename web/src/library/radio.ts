@@ -11,6 +11,8 @@
  * taste    = favorite + (rating − 3) / 2 + log(1 + plays) / 4      (no rating counts as 3)
  *          + 0.5 by a favorite artist or from a favorite album
  * ```
+ *
+ * A song's rating is the Account's own, else its rating of the song's album.
  */
 
 import type { Track } from "../api";
@@ -20,6 +22,7 @@ import {
   isFavoriteAlbum,
   isFavoriteArtist,
 } from "./favoriteGroups";
+import { ratingOf } from "./ratings";
 import { albumArtistOf, fold } from "./views";
 
 /** A number from 0 up to 1, as `Math.random` gives. */
@@ -64,7 +67,7 @@ export function tasteOf(track: Track, favorites: FavoriteGroups = NO_FAVORITES):
     isFavoriteAlbum(favorites, artist, track.album);
   return (
     (track.favorite ? 1 : 0) +
-    ((track.rating ?? 3) - 3) / 2 +
+    ((ratingOf(track) ?? 3) - 3) / 2 +
     Math.log1p(track.play_count) / 4 +
     (inFavoriteGroup ? FAVORITE_GROUP_TASTE : 0)
   );
@@ -80,7 +83,7 @@ export function canSuggest(track: Track): boolean {
     (track.site === null || track.downloaded) &&
     !track.split &&
     track.kind === "song" &&
-    (track.rating === null || track.rating >= 3)
+    (ratingOf(track) ?? 3) >= 3
   );
 }
 
@@ -415,8 +418,8 @@ function albumsOf(tracks: readonly Track[], favorites: FavoriteGroups): Album[] 
     groups.set(key, [...(groups.get(key) ?? []), track]);
   }
   return [...groups].flatMap(([key, songs]) => {
-    const rated = songs.filter((song) => song.rating !== null);
-    const disliked = rated.filter((song) => (song.rating ?? 3) <= 2);
+    const rated = songs.filter((song) => ratingOf(song) !== null);
+    const disliked = rated.filter((song) => (ratingOf(song) ?? 3) <= 2);
     const playable = songs.filter(canSuggest);
     if (playable.length < 2 || disliked.length * 2 > rated.length) {
       return [];

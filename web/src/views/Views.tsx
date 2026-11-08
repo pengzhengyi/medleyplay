@@ -36,6 +36,7 @@ import {
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
 import { type Route, hrefOf } from "../routes";
+import { AlbumRatingNote } from "./AlbumRatingNote";
 import { Cover } from "./Cover";
 import { FavoriteHeart } from "./FavoriteHeart";
 import type { Station } from "../library/useStation";
@@ -66,6 +67,8 @@ export interface ViewProps {
   readonly onEnrichersChanged: () => void;
   /** Called after Settings changes how a Track's kind is guessed. */
   readonly onKindsChanged: () => void;
+  /** Called after Settings imports or forgets your album ratings. */
+  readonly onRatingsChanged?: () => void;
   /** The devices waiting for an admin's answer. */
   readonly waitingDevices: readonly WaitingDevice[];
   /** The station playing, and a way to start one. */
@@ -155,6 +158,7 @@ function viewOf(given: ViewProps) {
               />
             )
           }
+          about={<AlbumRatingNote artist={route.artist} album={route.name} />}
           {...props}
           empty={<p className="empty">No songs from this album are in your Library now.</p>}
         >
@@ -191,6 +195,7 @@ function viewOf(given: ViewProps) {
           onModeChecked={props.onModeChecked}
           onEnrichersChanged={props.onEnrichersChanged}
           onKindsChanged={props.onKindsChanged}
+          onRatingsChanged={props.onRatingsChanged}
           waitingDevices={props.waitingDevices}
         />
       );
@@ -226,6 +231,7 @@ function Songs({
   back,
   backLabel,
   heart,
+  about,
   children,
   empty,
   playingId,
@@ -237,6 +243,8 @@ function Songs({
   readonly backLabel?: string;
   /** A heart beside the title, for an artist or album that can be a favorite. */
   readonly heart?: ReactNode;
+  /** What you said of the artist or album, shown under the heading. */
+  readonly about?: ReactNode;
   readonly children: readonly Track[];
   readonly empty: ReactNode;
 }) {
@@ -251,6 +259,7 @@ function Songs({
       >
         {children.length > 0 && formatLength(children.length, durationOf(children))}
       </ViewHeading>
+      {about}
       <TrackTable tracks={children} playingId={playingId} actions={actions} empty={empty} />
     </>
   );

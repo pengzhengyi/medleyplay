@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Open on RYM** — a Track's menu searches Rate Your Music for the album or
+  song in a new tab. medleyplay itself never reads the site.
 - **Mark as album, Mark as song** — a Track's menu turns a song into an album,
   or an album into a song, when its kind was guessed wrong.
 - **Name a device** — in Settings → Other devices, an admin names an allowed

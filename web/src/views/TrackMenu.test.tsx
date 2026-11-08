@@ -79,6 +79,7 @@ describe("a song's menu", () => {
       "Add to queue",
       "Go to artist",
       "Go to album",
+      "Open on RYM",
       "Add to playlist…",
       "Edit details…",
       "Mark as album",
@@ -96,6 +97,7 @@ describe("a song's menu", () => {
       "Add to queue",
       "Go to artist",
       "Go to album",
+      "Open on RYM",
       "Add to playlist…",
       "Edit details…",
       "Find details online",
@@ -134,6 +136,7 @@ describe("a song's menu", () => {
       "Add to queue",
       "Go to artist",
       "Go to album",
+      "Open on RYM",
       "Add to playlist…",
       "Edit details…",
       "Find on MusicBrainz",
@@ -160,7 +163,7 @@ describe("a song's menu", () => {
     await open();
 
     const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(items.slice(5, 8)).toEqual([
+    expect(items.slice(6, 9)).toEqual([
       "Edit details…",
       "Find details online",
       "Find on MusicBrainz",
@@ -177,6 +180,7 @@ describe("a song's menu", () => {
       "Add to queue",
       "Go to artist",
       "Go to album",
+      "Open on RYM",
       "Add to playlist…",
       "Edit details…",
       "Suggest details with AI",
@@ -230,6 +234,28 @@ describe("a song's menu", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Go to album" }));
 
     expect(location.hash).toBe("#/album?artist=supercell&name=Supercell");
+  });
+
+  it("searches Rate Your Music for the song in a new tab, which medleyplay never reads", async () => {
+    renderMenu();
+
+    await open();
+
+    const link = screen.getByRole("menuitem", { name: "Open on RYM" });
+    expect(link).toHaveAttribute("href", "https://rateyourmusic.com/search?searchterm=ryo+Melt");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("searches Rate Your Music for an album by its album artist and name", async () => {
+    renderMenu(true, { ...MELT, kind: "album", kind_reason: "named" });
+
+    await open();
+
+    expect(screen.getByRole("menuitem", { name: "Open on RYM" })).toHaveAttribute(
+      "href",
+      "https://rateyourmusic.com/search?searchterm=supercell+Supercell",
+    );
   });
 
   it.each([

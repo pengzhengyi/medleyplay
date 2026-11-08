@@ -3006,6 +3006,7 @@ button.icon.heart.on:hover,
   padding: 0.5rem 0.7rem;
   border-radius: 0.6rem;
   color: var(--ink);
+  text-decoration: none;
   cursor: pointer;
   outline: none;
   user-select: none;

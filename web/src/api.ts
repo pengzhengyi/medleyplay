@@ -873,6 +873,8 @@ export const api = {
     send<RatingsImport>("POST", "/api/ratings/import/preview", file),
   /** Replace your imported album ratings with a Rate Your Music export's. */
   importRatings: (file: Blob) => send<RatingsImport>("POST", "/api/ratings/import", file),
+  /** How many albums your last import rated or reviewed, 0 for none. */
+  ratingsImportKept: () => call<{ readonly albums: number }>("GET", "/api/ratings/import"),
   /** Forget the album ratings you imported; the ratings you gave songs stay. */
   forgetRatingsImport: () => call<undefined>("DELETE", "/api/ratings/import"),
   /** Your imported rating and review of the album `album` by `artist`, or `null`. */

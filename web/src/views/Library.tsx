@@ -458,6 +458,7 @@ export function Library({
             onModeChecked={library.modeChecked}
             onEnrichersChanged={library.refreshFindable}
             onKindsChanged={library.reloadTracks}
+            onRatingsChanged={library.reloadTracks}
             waitingDevices={library.waitingDevices}
             station={station}
             accountId={account.id}

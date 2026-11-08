@@ -67,6 +67,8 @@ export interface ViewProps {
   readonly onEnrichersChanged: () => void;
   /** Called after Settings changes how a Track's kind is guessed. */
   readonly onKindsChanged: () => void;
+  /** Called after Settings imports or forgets your album ratings. */
+  readonly onRatingsChanged?: () => void;
   /** The devices waiting for an admin's answer. */
   readonly waitingDevices: readonly WaitingDevice[];
   /** The station playing, and a way to start one. */
@@ -193,6 +195,7 @@ function viewOf(given: ViewProps) {
           onModeChecked={props.onModeChecked}
           onEnrichersChanged={props.onEnrichersChanged}
           onKindsChanged={props.onKindsChanged}
+          onRatingsChanged={props.onRatingsChanged}
           waitingDevices={props.waitingDevices}
         />
       );

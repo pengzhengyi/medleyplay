@@ -339,6 +339,7 @@ describe("the Settings sections", () => {
       "Network",
       "Other devices",
       "Songs and albums",
+      "Your ratings",
       "Downloads and storage",
       "Bilibili",
       "MusicBrainz",

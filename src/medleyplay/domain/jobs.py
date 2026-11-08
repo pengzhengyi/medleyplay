@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final, NewType
 
-from medleyplay.domain.accounts import AccountId
+from medleyplay.domain.accounts import Account, AccountId
 
 JobId = NewType("JobId", int)
 
@@ -51,6 +51,16 @@ class Job:
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+
+def failure_shown_to(job: Job, viewer: Account) -> str:
+    """Return why `job` failed as `viewer` may read it: all of it, or nothing.
+
+    The message may name a path on the server's disk or quote a plugin's error, so
+    it shows to the Account that asked for the Job and to admins; anyone else
+    sees the failure's kind alone.
+    """
+    return job.failure_message if viewer.is_admin or viewer.id == job.requested_by else ""
 
 
 @dataclass(frozen=True)

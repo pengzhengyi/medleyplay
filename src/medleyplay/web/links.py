@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from medleyplay.application.links import Added, Lookup, PartChoice, Reason
+from medleyplay.domain.accounts import Account
 from medleyplay.domain.jobs import JobView
 from medleyplay.plugin_api import BEST_QUALITY
 from medleyplay.web.deps import LinksDep, SignedInAccount
@@ -117,9 +118,9 @@ def look_up(body: LinkIn, me: SignedInAccount, links: LinksDep) -> LookupOut:
 def add(body: AddIn, me: SignedInAccount, links: LinksDep) -> list[AddedOut]:
     """Add the chosen parts as Tracks and start downloading them; adding again adds nothing new."""
     choices = [PartChoice(part.part, part.title, part.artist) for part in body.parts]
-    return [_added(each) for each in links.add(me, body.link, body.quality, choices)]
+    return [_added(each, me) for each in links.add(me, body.link, body.quality, choices)]
 
 
-def _added(added: Added) -> AddedOut:
-    job = None if added.job is None else JobOut.of(JobView(added.job))
+def _added(added: Added, me: Account) -> AddedOut:
+    job = None if added.job is None else JobOut.of(JobView(added.job), me)
     return AddedOut(part=added.part, track_id=added.track_id, source_id=added.source_id, job=job)

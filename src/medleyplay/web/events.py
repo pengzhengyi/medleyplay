@@ -150,7 +150,7 @@ async def _sent_for(  # noqa: PLR0911 -- one answer per kind of event
             else None
         )
     view = await run_in_threadpool(jobs.get_job, event)
-    return ServerSentEvent(data=JobOut.of(view), event="job")
+    return ServerSentEvent(data=JobOut.of(view, me), event="job")
 
 
 async def _mode_out(mode: ModeDep, jobs: JobsDep) -> ModeOut:

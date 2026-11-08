@@ -155,7 +155,7 @@ server that stopped.
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `GET /api/jobs` | Signed in | The newest Jobs first, with state, progress, and outcome |
+| `GET /api/jobs` | Signed in | The newest Jobs first, with state, progress, and outcome; why one failed only to the Account that asked for it and to admins, others seeing the failure's kind |
 | `GET /api/jobs/{id}` | Signed in | One Job |
 | `POST /api/jobs/{id}/cancel` | The Account that asked, or an admin | Cancels it; idempotent |
 | `POST /api/jobs/{id}/retry` | The Account that asked, or an admin | Submits a failed or cancelled Job again |

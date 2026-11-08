@@ -59,7 +59,7 @@ def register_library(
     registered = libraries.register(me, body.name, body.kind, body.path)
     if not registered.created:
         response.status_code = status.HTTP_200_OK
-    scan = None if registered.scan is None else JobOut.of(jobs.get_job(registered.scan.id))
+    scan = None if registered.scan is None else JobOut.of(jobs.get_job(registered.scan.id), me)
     return RegisteredOut(library=LibraryOut.of(registered.library), scan=scan)
 
 
@@ -83,7 +83,7 @@ def scan_library(
     `full` reads every file again, even those that look unchanged.
     """
     job = libraries.scan(me, LibraryId(library_id), full=full)
-    return JobOut.of(jobs.get_job(job.id))
+    return JobOut.of(jobs.get_job(job.id), me)
 
 
 @router.delete("/libraries/{library_id}", status_code=status.HTTP_204_NO_CONTENT)

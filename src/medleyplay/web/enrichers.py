@@ -81,7 +81,7 @@ def find_details(
     The Job waits while the Mode is Offline. Asking again returns the active Job.
     """
     job = enrichment.find_details(me, TrackId(track_id), name)
-    return JobOut.of(jobs.get_job(job.id))
+    return JobOut.of(jobs.get_job(job.id), me)
 
 
 @router.post("/{name}/find-all")

@@ -5,7 +5,8 @@ from datetime import datetime
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from medleyplay.domain.jobs import JobId, JobState, JobView
+from medleyplay.domain.accounts import Account
+from medleyplay.domain.jobs import JobId, JobState, JobView, failure_shown_to
 from medleyplay.web.deps import JobsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
@@ -38,8 +39,8 @@ class JobOut(BaseModel):
     """It needs the network, and waits while the Mode is Offline."""
 
     @classmethod
-    def of(cls, view: JobView) -> "JobOut":
-        """Return the API view of `view`."""
+    def of(cls, view: JobView, viewer: Account) -> "JobOut":
+        """Return the API view of `view` as `viewer` may see it."""
         job, progress = view.job, view.progress
         return cls(
             id=job.id,
@@ -49,7 +50,7 @@ class JobOut(BaseModel):
             requested_by=job.requested_by,
             attempts=job.attempts,
             failure_kind=job.failure_kind,
-            failure_message=job.failure_message,
+            failure_message=failure_shown_to(job, viewer),
             created_at=job.created_at,
             started_at=job.started_at,
             finished_at=job.finished_at,
@@ -59,25 +60,25 @@ class JobOut(BaseModel):
 
 
 @router.get("/jobs")
-def list_jobs(_: SignedInAccount, jobs: JobsDep) -> list[JobOut]:
-    """Return the household's newest Jobs first."""
-    return [JobOut.of(view) for view in jobs.list_jobs()]
+def list_jobs(me: SignedInAccount, jobs: JobsDep) -> list[JobOut]:
+    """Return the household's newest Jobs first; why one failed only to its Account or admins."""
+    return [JobOut.of(view, me) for view in jobs.list_jobs()]
 
 
 @router.get("/jobs/{job_id}")
-def get_job(job_id: RowId, _: SignedInAccount, jobs: JobsDep) -> JobOut:
-    """Return one Job."""
-    return JobOut.of(jobs.get_job(JobId(job_id)))
+def get_job(job_id: RowId, me: SignedInAccount, jobs: JobsDep) -> JobOut:
+    """Return one Job; why it failed only to its Account or admins."""
+    return JobOut.of(jobs.get_job(JobId(job_id)), me)
 
 
 @router.post("/jobs/{job_id}/cancel")
 def cancel_job(job_id: RowId, me: SignedInAccount, jobs: JobsDep) -> JobOut:
     """Cancel a Job; the Account that asked for it, or an admin. Cancelling twice is fine."""
-    return JobOut.of(jobs.cancel(me, JobId(job_id)))
+    return JobOut.of(jobs.cancel(me, JobId(job_id)), me)
 
 
 @router.post("/jobs/{job_id}/retry")
 def retry_job(job_id: RowId, me: SignedInAccount, jobs: JobsDep) -> JobOut:
     """Submit a failed or cancelled Job again, and return the new Job."""
     retried = jobs.retry(me, JobId(job_id))
-    return JobOut.of(jobs.get_job(retried.id))
+    return JobOut.of(jobs.get_job(retried.id), me)

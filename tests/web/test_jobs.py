@@ -1,4 +1,8 @@
-"""The Jobs API: every signed-in Account sees the Jobs; owners and admins change them."""
+"""The Jobs API: every signed-in Account sees the Jobs; owners and admins change them.
+
+Why a Job failed, which may name a path on the server's disk, shows only to the
+Account that asked for it and to admins.
+"""
 
 import dataclasses
 from collections.abc import Iterator
@@ -106,3 +110,37 @@ def test_retrying_a_job_that_has_not_failed_is_a_conflict(
 
     assert jobs_client.post(f"/api/jobs/{job.id}/retry").status_code == 409
     assert AccountId(int(str(alice["id"]))) == job.requested_by
+
+
+def _failed_job_of(running: Jobs, text: str, by: int, target: str) -> int:
+    """Run an echo Job for `by` that fails with `text`, as a path in a plugin's error might."""
+    job = running.submit(EchoJob(text=text, fail="raise"), target=target, by=by)
+    running.wait_for(job.id, JobState.FAILED)
+    return int(job.id)
+
+
+def test_a_failure_says_why_to_whoever_asked_and_to_admins_but_only_its_kind_to_others(
+    jobs_client: TestClient, running: Jobs
+) -> None:
+    alice = int(str(set_up_as_alice(jobs_client)["id"]))
+    bob = add_bob(jobs_client)
+    alices = _failed_job_of(running, "/Users/alice/Music is gone", by=alice, target="echo:1")
+    bobs = _failed_job_of(running, "/Users/bob/Music is gone", by=bob, target="echo:2")
+
+    as_alice = {j["id"]: j for j in jobs_client.get("/api/jobs").json()}
+    sign_in(jobs_client, "bob")
+    as_bob = {j["id"]: j for j in jobs_client.get("/api/jobs").json()}
+    one_as_bob = jobs_client.get(f"/api/jobs/{alices}").json()
+
+    shown = {
+        "admin": [as_alice[each]["failure_message"] for each in (alices, bobs)],
+        "member": [as_bob[each]["failure_message"] for each in (alices, bobs)],
+    }
+    assert shown == {
+        "admin": ["ValueError: /Users/alice/Music is gone", "ValueError: /Users/bob/Music is gone"],
+        "member": ["", "ValueError: /Users/bob/Music is gone"],
+    }
+    assert (one_as_bob["failure_message"], one_as_bob["failure_kind"]) == (
+        "",
+        as_alice[alices]["failure_kind"],
+    )

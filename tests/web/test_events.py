@@ -17,7 +17,7 @@ from medleyplay.web import events as events_api
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import SESSION_COOKIE, Services
 from tests.conftest import TEST_HOST
-from tests.support.api import set_up_as_alice
+from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.fakes import FakeClock, FakeInternet, FakeNetwork
 from tests.support.jobs import Jobs, running_jobs
 from tests.support.programs import EchoJob
@@ -187,3 +187,19 @@ def test_a_browser_hears_the_mode_when_the_stream_opens_and_when_it_changes(
         changed = _next_mode(lines)
 
     assert (opened["reason"], changed["reason"]) == ("unreachable", "settling")
+
+
+def test_a_member_hears_another_accounts_job_fail_without_why(
+    events_client: TestClient, running: Jobs
+) -> None:
+    alice = set_up_as_alice(events_client)
+    add_bob(events_client)
+    sign_in(events_client, "bob")
+
+    with events_client.stream("GET", "/api/events") as stream:
+        lines = stream.iter_lines()
+        _ready(lines)
+        running.submit(EchoJob(text="/Users/alice/Music", fail="raise"), by=int(str(alice["id"])))
+        heard = _job_events(lines, "failed")
+
+    assert (heard[-1]["failure_kind"], heard[-1]["failure_message"]) == ("program", "")

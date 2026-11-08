@@ -261,6 +261,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Why a Job failed, which may name a path on the server's disk, shows only to
+  the Account that asked for the Job and to admins; anyone else sees the kind of
+  failure alone, in the Jobs list and the event stream.
 - A proxy whose login is outside ASCII is refused when its URL, written with
   each such byte as `%XX`, passes 512 characters, rather than being kept and
   then refused when read back.

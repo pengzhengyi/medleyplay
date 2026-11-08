@@ -16,7 +16,7 @@ def rated(artist: str, album: str, stars: int | None = 4, *, localized: str = ""
 
 
 def test_an_album_matches_by_its_artist_and_name_folded() -> None:
-    ratings = AlbumRatings([rated("ハチ", "ＢＲＥＭＥＮ", 5)])  # noqa: RUF001 -- full-width letters, folded
+    ratings = AlbumRatings([rated("ﾊﾁ", "BREMEN", 5)])
 
     assert ratings.stars_of("ハチ", "Bremen") == 5
 

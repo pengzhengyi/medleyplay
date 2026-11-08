@@ -77,8 +77,8 @@ this note is built:
   MusicBrainz matches, ratings of at least 3 votes, reviews, Wikipedia articles,
   and Last.fm similar lists there are, from a script that uses medleyplay's
   clients at their normal pace. A source that answers for few Tracks is left out.
-- **The RYM export:** a member downloads their export, which confirms that it
-  still exists and what its columns are. Without one, the import is left out.
+- **The RYM export:** no member's export was at hand, so the import follows a
+  2020 export's columns; a member's own export confirms they still hold.
 
 ## MusicBrainz ids and ratings
 
@@ -210,33 +210,57 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
 
 - **Settings → Import ratings** takes the CSV a member downloads from their own
   RYM profile, for the Account signed in. Nothing is sent anywhere.
-- **The file is checked first:** at most 5 MiB and 20,000 rows, UTF-8 (a byte
-  order mark is dropped), fields at most 10,000 characters, and a header the
-  reader knows; anything else is rejected, naming what was wrong. The format is
-  no published contract, so the reader is written against the household's own
-  export, kept in `tests/support`.
+- **The file is checked first** (built): at most 5 MiB and 20,000 rows, UTF-8 (a
+  byte order mark is dropped), values at most 10,000 characters, and a header the
+  reader knows; anything else is refused, naming what was wrong and on which line.
+  The format is no published contract. The reader, `domain/rym.py`, follows a
+  2020 export's header and how it writes values, kept as a made-up sample in
+  `tests/support/rym.py`:
+
+  ```text
+  RYM Album, First Name,Last Name,First Name localized, Last Name localized,Title,Release_Date,Rating,Ownership,Purchase Date,Media Type,Review
+  "1001","","\u{30cf}\u{30c1}","","Hachi","Bremen","2015","9","n","","",  ""
+  ```
+
+  Text outside ASCII is written as `\u{...}` escapes and `&` as `&amp;`; the
+  artist's name comes in two parts (*Tony*, *Allen*), with a localized one for a
+  name in another script (*ハチ*, *Hachi*). Control and bidirectional formatting
+  characters are removed; a review keeps its line breaks.
 - **RYM rates releases, not songs,** so an imported rating is the Account's
   rating of an album, kept per Account in `album_rating` with the album and
-  artist names as exported, the standard and the localized. Every row is kept,
-  matched or not, so an album added later matches without importing again.
-- **Matching** compares the album, and the artist with either name, folded as
-  rules compare text; when that finds nothing, it tries again with a trailing
-  edition note in brackets (*(Deluxe Edition)*, *[Disc 1]*) removed from both.
+  artist names as exported, the standard and the localized, and their folded
+  keys. Every rated or reviewed row is kept, matched or not, so an album added
+  later matches without importing again.
+- **Matching** (built, `domain/album_ratings.py`) compares the album, and the
+  artist with either name, folded as rules compare text. A Library album is its
+  album artist, else its artist, and its name, as the Library groups albums.
+  When nothing matches exactly, it tries again with a trailing note in brackets
+  set aside from both, but only a note naming an edition (*(Deluxe Edition)*,
+  *[Disc 1]*, *(初回限定盤B)*): *(Live)*, *(Soundtrack)*, and a romanized title
+  name other albums. Of several rows alike, the highest rating counts.
 - **RYM's half stars** (its export's 1–10) become stars by halving and rounding
   half up, so 7 (3½ stars) is 4. A 0 is no rating.
 - **The review column** becomes the Account's note on that album, shown in
   *About this album* to that Account alone.
 - **The Account's rating of a song** is its own rating of the song, else its
-  rating of the song's album, in one function, `effective_rating`, that rules,
-  the download policy, the table, and sorting all read. A song rated from its
-  album shows solid stars marked *From your album rating*; choosing a star rates
-  the song alone, and clearing it falls back to the album's.
-- **The import previews before it applies,** since an album rating moves songs
-  in and out of smart playlists and changes what may be removed first: how many
-  albums and songs it matches, which albums it doesn't, and how many songs join
-  or leave each smart playlist. Applying it plans downloads again, as a rating
-  change does. Importing again replaces the earlier import, never a rating set in
-  medleyplay. The unmatched albums can be saved as a plain-text list.
+  rating of the song's album (`effective_rating`). Rules, `unrated` included,
+  and the download policy read it; a song rated from its album no longer counts
+  as unrated. A Track carries its own `rating` and its `album_rating` apart, so
+  the client shows a song rated from its album as solid stars marked *From your
+  album rating*; choosing a star rates the song alone, and clearing it falls back
+  to the album's.
+- **The import previews before it applies** (built), since an album rating moves
+  songs in and out of smart playlists and changes what may be removed first: how
+  many albums it rates or reviews and how many the Library has, how many songs'
+  ratings change, which albums the Library hasn't, how many songs join or leave
+  each smart playlist, and how many albums of the earlier import it replaces.
+  Applying it tells the catalog it changed, which plans downloads again, as a
+  rating change does. Importing again replaces the earlier import, never a rating
+  set in medleyplay; an export rating and reviewing no album is refused rather
+  than taking the earlier import away. *Forget the import* takes it away.
+- **Exporting ratings** (built) downloads the Account's ratings as CSV: the songs
+  it rated, then the albums it imported, each with its stars and review. A value
+  a spreadsheet would run as a formula starts with `'`.
 
 ## Showing text and links from other sites
 
@@ -271,16 +295,20 @@ keeps Last.fm's for no longer than its terms allow.
 - `POST /api/tracks/{id}/community/find` queues a Job for each source that is on
   and can answer; `POST /api/community/find-all` does it for every eligible
   Track, for admins.
-- `POST /api/ratings/import/preview` checks a RYM file and answers what it would
-  change; `POST /api/ratings/import` applies the same file.
+- `POST /api/ratings/import/preview` checks a RYM file, sent as `text/csv`, and
+  answers what it would change; `POST /api/ratings/import` applies the same file
+  and answers the same; `DELETE /api/ratings/import` forgets it (built).
+- `GET /api/album-rating?artist=&album=` answers the Account's imported rating
+  and review of a Library album, or `null`; a Track carries `album_rating` (built).
+- `GET /api/ratings/export` downloads the Account's ratings as CSV (built).
 
 ## Migrations
 
 - `track_link`: the Track, the kind of id, the id, and the origin that found it.
 - `community_rating` (built), which also forgets `musicbrainz`'s asked-once rows.
 - `community_info`, as above.
-- `album_rating`: the Account, the album and artist names as exported, the
-  stars, and the note.
+- `album_rating` (built): the Account, the album's id on RYM, the album and
+  artist names as exported and folded, the stars, and the note.
 - The enrich Job target change, and forgetting `musicbrainz`'s asked-once rows.
 
 ## Testing
@@ -294,10 +322,11 @@ keeps Last.fm's for no longer than its terms allow.
   ids' rows; an expired Last.fm row is deleted; a link to another host is
   dropped; control and bidirectional characters are removed; the Last.fm key is
   in no error or log line.
-- **The import:** half stars round as stated, a 0 is skipped, an unknown header,
-  a file over its limits, and a file that isn't UTF-8 are rejected, a byte order
-  mark is accepted, importing twice gives the same ratings, a song's own rating
-  survives an import, and the preview counts what applying changes.
+- **The import** (built): half stars round as stated, a 0 is no rating, an
+  unknown header, a file over its limits, a bad escape, and a file that isn't
+  UTF-8 are refused, a byte order mark and Windows line endings are accepted,
+  importing twice gives the same ratings, a song's own rating survives an import,
+  one Account's import is its own, and the preview answers what applying does.
 
 ## Left for later
 

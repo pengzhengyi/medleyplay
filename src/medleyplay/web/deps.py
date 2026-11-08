@@ -24,6 +24,7 @@ from medleyplay.application.plugins import PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
@@ -63,6 +64,7 @@ class Services:
     ai: AiService
     devices: DeviceService
     remote: RemoteService
+    ratings: RatingsService
 
 
 def services_of(request: Request) -> Services:
@@ -134,6 +136,10 @@ def _preferences(services: Annotated[Services, Depends(_services)]) -> Preferenc
     return services.preferences
 
 
+def _ratings(services: Annotated[Services, Depends(_services)]) -> RatingsService:
+    return services.ratings
+
+
 def _mode(services: Annotated[Services, Depends(_services)]) -> ModeService:
     return services.mode
 
@@ -185,6 +191,7 @@ EventsDep = Annotated[Events, Depends(_events)]
 SettingsDep = Annotated[SettingsService, Depends(_settings)]
 PolicyDep = Annotated[PolicyService, Depends(_policy)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
+RatingsDep = Annotated[RatingsService, Depends(_ratings)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]

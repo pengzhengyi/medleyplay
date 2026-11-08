@@ -226,7 +226,7 @@ def test_the_export_lists_the_songs_rated_then_the_albums_rated(
     catalog.set_rating(alice.id, blue, 3)
     ratings.import_ratings(alice.id, EXPORT_2020.encode())
 
-    exported = ratings.export(alice.id)
+    exported = ratings.export(alice.id).text
 
     assert list(csv.reader(io.StringIO(exported))) == [
         ["Rated", "Artist", "Album", "Title", "Stars", "Review"],
@@ -244,7 +244,7 @@ def test_the_export_keeps_a_spreadsheet_from_running_a_value_as_a_formula(
     alice, _ = _alice_and_bob(accounts)
     ratings.import_ratings(alice.id, export_of(row(title=written)))
 
-    exported = ratings.export(alice.id)
+    exported = ratings.export(alice.id).text
 
     assert list(csv.reader(io.StringIO(exported)))[1][2] == f"'{written.strip()}"
 

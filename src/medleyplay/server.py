@@ -44,6 +44,7 @@ from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.segments import SongsService
@@ -252,6 +253,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         ai=ai,
         devices=_devices(units, clock, accounts, events),
         remote=_remote(clock, events),
+        ratings=RatingsService(units, clock, changes.tell),
     )
 
 

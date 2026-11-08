@@ -1,5 +1,7 @@
 """Reading a Rate Your Music export: its albums, their stars, and the reviews written on them."""
 
+# cspell:ignore Alkaholiks Hachi Suzumu ufffdbum
+
 import pytest
 
 from medleyplay.domain.errors import InvalidInputError, TooLargeError

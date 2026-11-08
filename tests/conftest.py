@@ -368,6 +368,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     enrichment: EnrichmentService,
     ai: AiService,
     devices: DeviceService,
+    ratings: RatingsService,
     clock: FakeClock,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
@@ -398,6 +399,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         ai=ai,
         devices=devices,
         remote=remote,
+        ratings=ratings,
     )
 
 

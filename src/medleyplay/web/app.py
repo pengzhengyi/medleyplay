@@ -48,6 +48,7 @@ from medleyplay.web import (
     plugins,
     preferences,
     proxies,
+    ratings,
     remote,
     settings,
     songs,
@@ -115,6 +116,7 @@ def create_app(
     app.include_router(events.router)
     app.include_router(settings.router)
     app.include_router(preferences.router)
+    app.include_router(ratings.router)
     app.include_router(mode.router)
     app.include_router(details.router)
     app.include_router(songs.router)

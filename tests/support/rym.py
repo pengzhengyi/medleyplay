@@ -4,6 +4,8 @@ The rows are made up for these tests; the header, the quoting, the `\\u{...}` es
 the HTML entities, and the spaces before the review are as the 2020 export writes them.
 """
 
+# cspell:ignore Hachi Suzumu
+
 from typing import Final
 
 HEADER: Final = (

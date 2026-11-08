@@ -12,6 +12,8 @@ name is split in two (*Tony* and *Allen*), and a name in another script comes wi
 localized one (*ハチ* and *Hachi*).
 """
 
+# cspell:ignore Hachi
+
 import csv
 import html
 import io

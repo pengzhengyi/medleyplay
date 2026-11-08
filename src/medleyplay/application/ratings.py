@@ -67,6 +67,14 @@ class AlbumRating:
     note: str
 
 
+@dataclass(frozen=True)
+class RatingsExport:
+    """An Account's ratings as a CSV file, and the name to save it under."""
+
+    file_name: str
+    text: str
+
+
 class RatingsService:
     """Imports and exports each Account's ratings."""
 
@@ -106,7 +114,7 @@ class RatingsService:
             found = album_ratings_of(db, account_id).find(artist, album)
         return None if found is None else AlbumRating(found.stars, found.note)
 
-    def export(self, account_id: AccountId) -> str:
+    def export(self, account_id: AccountId) -> RatingsExport:
         """Return the Account's ratings as CSV: the songs it rated, then the albums it imported.
 
         A value a spreadsheet would run as a formula starts with `'`, which it shows.
@@ -130,7 +138,8 @@ class RatingsService:
             writer.writerow(_cells("song", track.artist, track.album, track.title, rating, ""))
         for row in albums:
             writer.writerow(_cells("album", row.artist, row.album, "", row.stars, row.note))
-        return written.getvalue()
+        name = f"medleyplay-ratings-{self._clock().date().isoformat()}.csv"
+        return RatingsExport(name, written.getvalue())
 
     def _changed(self) -> None:
         if self._on_change is not None:

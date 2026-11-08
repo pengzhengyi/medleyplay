@@ -90,6 +90,9 @@ class TrackOut(BaseModel):
     community: CommunityRatingOut | None = Field(
         description="What listeners elsewhere rated it, if enough did; it only shows."
     )
+    album_rating: int | None = Field(
+        description="Your rating of its album, from an import; it stands for `rating` when unset."
+    )
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -123,6 +126,7 @@ class TrackOut(BaseModel):
             community=None
             if track.community is None
             else CommunityRatingOut.of_rating(track.community),
+            album_rating=track.album_rating,
         )
 
 

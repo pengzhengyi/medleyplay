@@ -58,4 +58,4 @@ def link_is_on(link: str, hosts: frozenset[str]) -> bool:
     except ValueError:
         return False
     host = (parts.hostname or "").lower()
-    return parts.scheme == "https" and not parts.username and host in hosts
+    return parts.scheme == "https" and "@" not in parts.netloc and host in hosts

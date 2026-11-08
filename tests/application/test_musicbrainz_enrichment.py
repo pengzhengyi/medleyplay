@@ -27,7 +27,7 @@ from medleyplay.domain.errors import ConflictError, ForbiddenError
 from medleyplay.domain.jobs import JobState, JobView
 from medleyplay.domain.segments import SongRow
 from medleyplay.domain.video_text import Song, VideoText
-from medleyplay.persistence.schema import EnricherAskRow
+from medleyplay.persistence.schema import CommunityRatingRow, EnricherAskRow
 from tests.support.enrichment import SETTLE, Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -160,6 +160,46 @@ def test_the_songs_inside_a_long_file_show_the_rating_of_the_album_it_is(
         if album_id in {track.id, track.segment_of}
     ]
     assert shown == [album, album, album]
+
+
+def test_one_song_inside_a_long_file_shows_the_rating_of_the_album_it_is(
+    enriching: Enriching, alice: Account
+) -> None:
+    album_id = _album_file(enriching, "Rated")
+    _found(enriching, alice, album_id)
+    song = next(
+        track for track in enriching.catalog.list_tracks(alice.id) if track.segment_of == album_id
+    )
+
+    shown = enriching.catalog.get_track(alice.id, song.id).community
+
+    assert shown == CommunityRating(NAME, RatedAs.ALBUM, 4.55, 89, ALBUM_PAGE)
+
+
+def test_a_song_inside_a_long_file_found_on_its_own_shows_its_own_rating(
+    enriching: Enriching, alice: Account
+) -> None:
+    album_id = _album_file(enriching, "Rated")
+    _found(enriching, alice, album_id)
+    song = next(
+        track for track in enriching.catalog.list_tracks(alice.id) if track.segment_of == album_id
+    )
+    with enriching.units.begin() as db:
+        db.add(
+            CommunityRatingRow(
+                track_id=song.id,
+                source=NAME,
+                rated_as="song",
+                value=4.2,
+                votes=24,
+                link=SONG_PAGE,
+                found_at=enriching.clock(),
+            )
+        )
+
+    shown = enriching.catalog.get_track(alice.id, song.id).community
+
+    assert shown == CommunityRating(NAME, RatedAs.SONG, 4.2, 24, SONG_PAGE)
 
 
 def test_a_rating_whose_page_is_on_another_site_is_not_kept(

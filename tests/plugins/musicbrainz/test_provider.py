@@ -6,6 +6,8 @@ from typing import Any
 import pytest
 import requests
 
+from medleyplay.domain.community import link_is_on
+from medleyplay.domain.enrichers import MUSICBRAINZ
 from medleyplay.plugin_api import (
     CommunityRating,
     EnrichStatus,
@@ -478,6 +480,17 @@ def test_a_song_answers_what_listeners_rated_it_and_its_album(tmp_path: Path) ->
             link=f"https://musicbrainz.org/release-group/{OK_COMPUTER_GROUP}",
         ),
     )
+
+
+def test_the_pages_of_the_ratings_are_on_the_hosts_the_core_trusts_for_musicbrainz(
+    tmp_path: Path,
+) -> None:
+    fake = FakeMusicBrainzFactory.knowing_let_down()
+
+    answer = enricher_over(fake).enrich(EnrichTrackFactory.let_down(tmp_path))
+
+    assert answer.ratings
+    assert all(link_is_on(each.link, MUSICBRAINZ.rating_hosts) for each in answer.ratings)
 
 
 def test_a_song_nobody_rated_answers_only_its_albums_rating(tmp_path: Path) -> None:

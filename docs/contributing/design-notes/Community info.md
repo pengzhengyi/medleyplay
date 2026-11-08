@@ -1,8 +1,9 @@
 # Community info
 
 > [!NOTE]
-> **Status: in part built.** The community rating from MusicBrainz is built, as
-> this note says; the rest is proposed. This note describes what medleyplay shows about a song
+> **Status: in part built.** The community rating from MusicBrainz, and the
+> server's import of Rate Your Music ratings, are built as this note says; the
+> rest is proposed. This note describes what medleyplay shows about a song
 > from what other listeners have said about it: a community rating where the
 > Account gave none, reviews, a short summary of the song or album, and similar
 > songs; and how the household brings in its own Rate Your Music ratings. Each
@@ -207,6 +208,8 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
   built and there is reason to think it helps.
 
 ## Importing the household's own Rate Your Music ratings
+
+<!-- cspell:ignore Hachi -->
 
 - **Settings → Import ratings** takes the CSV a member downloads from their own
   RYM profile, for the Account signed in. Nothing is sent anywhere.

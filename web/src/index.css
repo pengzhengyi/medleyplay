@@ -2108,9 +2108,28 @@ button.icon.heart.on:hover,
   color: var(--accent);
 }
 
+/* A half star is a filled star's left half over an empty one. */
+.star-shape {
+  display: inline-grid;
+}
+
+.star-shape > * {
+  grid-area: 1 / 1;
+}
+
+.star-shape > .star-half {
+  clip-path: inset(0 50% 0 0);
+}
+
 .tracks button.heart:not(.on),
 .tracks .stars:not(:has([aria-pressed="true"])) button.star {
   opacity: 0;
+}
+
+/* What listeners elsewhere rated shows without hovering, in grey, apart from your own. */
+.tracks .stars.heard button.star {
+  color: var(--muted);
+  opacity: 1;
 }
 
 .tracks tr:hover button.heart,

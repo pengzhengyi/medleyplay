@@ -48,7 +48,7 @@ export type StoreAction =
     }
   | { readonly type: "refused"; readonly id: number; readonly field: Field; readonly seq: number };
 
-/** The fields of a Track the household edits, and what follows from them. */
+/** The fields of a Track the household edits, what follows from them, and what a lookup finds. */
 const DETAILS = [
   "title",
   "artist",
@@ -61,6 +61,7 @@ const DETAILS = [
   "cover",
   "kind",
   "kind_reason",
+  "community",
 ] as const satisfies readonly (keyof Track)[];
 
 /** A store before the server has listed any Tracks. */

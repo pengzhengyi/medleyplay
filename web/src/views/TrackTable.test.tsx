@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Track } from "../api";
+import type { CommunityRating, Track } from "../api";
 import type { CoverStatus } from "../library/lookups";
 import { albumUnit, songsByFile } from "../library/playOrder";
 import type { UnitOf } from "../player/usePlayer";
@@ -268,6 +268,77 @@ describe("favorites and ratings", () => {
 
     expect(actions.onRate).toHaveBeenCalledWith(TRACKS[0], 2);
     expect(actions.onRate).toHaveBeenCalledWith(TRACKS[2], null);
+  });
+});
+
+describe("what listeners elsewhere rated", () => {
+  /** What MusicBrainz's listeners rated a song: 3.7, from 24 votes. */
+  const HEARD: CommunityRating = {
+    source: "musicbrainz",
+    of: "song",
+    rating: 3.7,
+    votes: 24,
+    link: "https://musicbrainz.org/recording/47b02a82",
+  };
+  /** Night Drive, which you haven't rated, and which MusicBrainz's listeners have. */
+  const NIGHT_DRIVE = trackOf(5, "Night Drive", { community: HEARD });
+  const stars = () => within(screen.getByRole("group", { name: "Rate Night Drive" }));
+  const parts = () =>
+    stars()
+      .getAllByRole("button")
+      .map((star) => star.dataset.community);
+
+  it("shows a song you haven't rated as outline stars to the nearest half", () => {
+    renderTable([NIGHT_DRIVE]);
+
+    expect(parts()).toEqual(["full", "full", "full", "half", "none"]);
+  });
+
+  it("says who rated it, how highly, and how many voted", () => {
+    renderTable([NIGHT_DRIVE]);
+
+    const group = screen.getByRole("group", { name: "Rate Night Drive" });
+    expect(group).toHaveAccessibleDescription("MusicBrainz: 3.7 from 24 votes");
+    expect(group).toHaveAttribute("title", "MusicBrainz: 3.7 from 24 votes");
+  });
+
+  it("says when the rating is the album's, as too few rated the song", () => {
+    const album = { ...HEARD, of: "album" as const, rating: 4.55, votes: 89 };
+    renderTable([{ ...NIGHT_DRIVE, community: album }]);
+
+    expect(screen.getByRole("group", { name: "Rate Night Drive" })).toHaveAccessibleDescription(
+      "MusicBrainz, the album: 4.6 from 89 votes",
+    );
+  });
+
+  it("shows your own rating instead, once you rate the song", () => {
+    renderTable([{ ...NIGHT_DRIVE, rating: 2 }]);
+
+    expect(parts()).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect(screen.getByRole("group", { name: "Rate Night Drive" })).not.toHaveAttribute("title");
+  });
+
+  it("rates the song yourself when a star is chosen", async () => {
+    const { actions } = renderTable([NIGHT_DRIVE]);
+
+    await userEvent.click(stars().getByRole("button", { name: "5 stars" }));
+
+    expect(actions.onRate).toHaveBeenCalledWith(NIGHT_DRIVE, 5);
+  });
+
+  it("sorts by your own rating, and the songs you haven't rated by what listeners did", async () => {
+    const rated = (id: number, title: string, rating: number) =>
+      trackOf(id, title, { community: { ...HEARD, rating } });
+    renderTable([
+      rated(1, "Low", 2),
+      trackOf(2, "Yours", { rating: 1 }),
+      trackOf(3, "Nobody's"),
+      rated(4, "High", 4.5),
+    ]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Rating" }));
+
+    expect(titles()).toEqual(["Nobody's", "Low", "High", "Yours"]);
   });
 });
 

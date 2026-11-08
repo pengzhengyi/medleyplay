@@ -49,6 +49,20 @@ describe("the Track store", () => {
     expect(tracksOf(marked).get(1)).toMatchObject({ kind: "album", kind_reason: "named" });
   });
 
+  it("takes what listeners elsewhere rated a Track from the server's answer, once it is found", () => {
+    const community = {
+      source: "musicbrainz",
+      of: "song" as const,
+      rating: 4.2,
+      votes: 24,
+      link: "https://musicbrainz.org/recording/47b02a82",
+    };
+
+    const found = reduce(LOADED, { type: "details", track: trackOf(1, "Intro", { community }) });
+
+    expect(tracksOf(found).get(1)?.community).toEqual(community);
+  });
+
   it("keeps a favorite confirmed since the details were read", () => {
     const favored = reduce(LOADED, {
       type: "answered",

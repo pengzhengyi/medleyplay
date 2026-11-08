@@ -42,6 +42,19 @@ export interface Track {
   readonly kind_reason: KindReason;
   /** The cover shown, by name, served at `coverUrl(cover)`. */
   readonly cover: string | null;
+  /** What listeners elsewhere rated the song or its album, when enough did; it only shows. */
+  readonly community: CommunityRating | null;
+}
+
+/** What listeners on another site rated a song, or the album it is on, out of 5. */
+export interface CommunityRating {
+  /** The enricher that found it, such as `musicbrainz`. */
+  readonly source: string;
+  readonly of: "song" | "album";
+  readonly rating: number;
+  readonly votes: number;
+  /** The site's page of what was rated. */
+  readonly link: string;
 }
 
 /** What a Track is: one song, or one file holding a whole album. */

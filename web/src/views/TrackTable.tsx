@@ -1027,7 +1027,7 @@ function RatingStars({
   const shown = ratingOf(track);
   return (
     <fieldset
-      className={heard === null ? "stars" : "stars heard"}
+      className={heard !== null ? "stars heard" : album !== null ? "stars from-album" : "stars"}
       title={said}
       aria-describedby={said === undefined ? undefined : saying}
     >

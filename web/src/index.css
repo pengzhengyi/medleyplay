@@ -2180,6 +2180,12 @@ button.icon.heart.on:hover,
   opacity: 1;
 }
 
+/* Your rating of the album shows as your own does: without hovering, in the accent. */
+.tracks .stars.from-album button.star {
+  color: var(--accent);
+  opacity: 1;
+}
+
 .tracks tr:hover button.heart,
 .tracks tr:focus-within button.heart,
 .tracks tr:hover .stars:not(:has([aria-pressed="true"])) button.star,

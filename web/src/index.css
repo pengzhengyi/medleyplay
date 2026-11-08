@@ -505,6 +505,26 @@ button.text:hover:not(:disabled) {
   color: var(--ink);
 }
 
+/* Your imported rating of the album shown, and your review, under its heading. */
+.album-rating {
+  max-width: 60ch;
+  margin: 0 0 0.75rem 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.album-rating p {
+  margin: 0;
+}
+
+.album-rating .album-review {
+  margin-top: 0.25rem;
+  color: var(--ink);
+  white-space: pre-line;
+}
+
 /* An artist's or album's name, with the heart that favorites it. */
 .view-title {
   display: flex;

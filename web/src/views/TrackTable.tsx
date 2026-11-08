@@ -57,6 +57,7 @@ import type { CommunityRating, Track } from "../api";
 import { formatTime } from "../format";
 import type { CoverStatus } from "../library/lookups";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
+import { ratingOf } from "../library/ratings";
 import type { UnitOf } from "../player/usePlayer";
 import { Cover } from "./Cover";
 import { WHY } from "./unplayable";
@@ -110,9 +111,9 @@ const byText = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, 
   collator.compare(a.getValue<string>(id), b.getValue<string>(id));
 const byNumber = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, id: string) =>
   (a.getValue<number | null>(id) ?? -1) - (b.getValue<number | null>(id) ?? -1);
-/** Your own rating first; the songs you haven't rated by what listeners elsewhere did, below any of yours. */
+/** Your rating first; the songs you haven't rated by what listeners elsewhere did, below any of yours. */
 const ratingKey = (track: Track) =>
-  track.rating ?? (track.community === null ? -2 : track.community.rating / 10 - 1);
+  ratingOf(track) ?? (track.community === null ? -2 : track.community.rating / 10 - 1);
 const byRating = (a: Row<typeof features, Track>, b: Row<typeof features, Track>) =>
   ratingKey(a.original) - ratingKey(b.original);
 
@@ -126,6 +127,9 @@ function heardFrom(community: CommunityRating): string {
   const rating = (Math.round(community.rating * 10) / 10).toFixed(1);
   return `${who}: ${rating} from ${String(community.votes)} votes`;
 }
+
+/** Say a number of stars: `1 star`, `4 stars`. */
+const starsOf = (stars: number) => (stars === 1 ? "1 star" : `${String(stars)} stars`);
 
 /** How much of the star `stars` a rating from elsewhere fills, to the nearest half. */
 function partOf(rating: number, stars: number): "full" | "half" | "none" {
@@ -854,7 +858,7 @@ const COLUMNS: Column[] = [
   },
   {
     id: "rating",
-    accessorKey: "rating",
+    accessorFn: ratingOf,
     sortFn: byRating,
     filterFn: isRated,
     sortDescFirst: false,
@@ -1000,8 +1004,9 @@ function choicesOf(table: Table): Record<ChoiceField, Choice[]> {
 }
 
 /**
- * The stars of `track`: your own rating, in the accent; else what listeners elsewhere
- * rated it, in grey, to the nearest half. Choosing a star rates the song yourself.
+ * The stars of `track`: your own rating, in the accent; else your rating of its album,
+ * in the accent too and said to be the album's; else what listeners elsewhere rated it,
+ * in grey, to the nearest half. Choosing a star rates the song yourself.
  */
 function RatingStars({
   track,
@@ -1010,9 +1015,16 @@ function RatingStars({
   readonly track: Track;
   readonly onRate: (track: Track, rating: number | null) => void;
 }) {
-  const heard = track.rating === null ? track.community : null;
-  const said = heard === null ? undefined : heardFrom(heard);
+  const album = track.rating === null ? track.album_rating : null;
+  const heard = ratingOf(track) === null ? track.community : null;
+  const said =
+    album !== null
+      ? `From your album rating: ${starsOf(album)}`
+      : heard === null
+        ? undefined
+        : heardFrom(heard);
   const saying = useId();
+  const shown = ratingOf(track);
   return (
     <fieldset
       className={heard === null ? "stars" : "stars heard"}
@@ -1032,9 +1044,10 @@ function RatingStars({
             key={stars}
             type="button"
             className="icon star"
-            aria-label={stars === 1 ? "1 star" : `${String(stars)} stars`}
+            aria-label={starsOf(stars)}
             aria-pressed={track.rating === stars}
             data-community={part}
+            data-from-album={album !== null && stars <= album ? "true" : undefined}
             onClick={() => {
               onRate(track, track.rating === stars ? null : stars);
             }}
@@ -1042,7 +1055,7 @@ function RatingStars({
             <span className="star-shape" aria-hidden>
               <StarIcon
                 weight={
-                  track.rating !== null && stars <= track.rating
+                  shown !== null && stars <= shown
                     ? "fill"
                     : part === "full"
                       ? "fill"

@@ -88,6 +88,7 @@ function manySongs(count: number): Track[] {
     kind_reason: "length",
     cover: null,
     community: null,
+    album_rating: null,
   }));
 }
 

@@ -24,6 +24,9 @@ from medleyplay.domain.links import BILIBILI_SOURCE
 PROXY_SITES: Final = frozenset({BILIBILI_SOURCE})
 """The sites whose plugins take a proxy."""
 MAX_PROXY_LENGTH: Final = 512
+"""The longest a proxy's URL is, as `ProxyUrl.url` writes it."""
+_LONGEST_WRITTEN: Final = 3 * MAX_PROXY_LENGTH
+"""The longest a proxy may be as typed: each character of its URL written as `%XX` at most."""
 _HOST: Final = re.compile(r"[a-z0-9]([a-z0-9._-]{0,251}[a-z0-9])?")
 _LOOKS_UP_LOCALLY: Final = frozenset({"socks4", "socks4a", "socks5"})
 _SHORTEST_PASSWORD: Final = 4
@@ -58,7 +61,11 @@ class ProxySummary:
 
 @dataclass(frozen=True)
 class ProxyUrl:
-    """A checked proxy URL; `url` rebuilds it canonically from its parts."""
+    """A checked proxy URL; `url` rebuilds it canonically from its parts.
+
+    The URL is at most `MAX_PROXY_LENGTH` characters as `url` writes it, a login
+    outside ASCII as `%XX` for each byte, so the URL kept always parses back.
+    """
 
     scheme: ProxyScheme
     host: str
@@ -81,6 +88,14 @@ class ProxyUrl:
         host, port = _address(parts.hostname, _port(parts))
         user, password = _login(parts.username, parts.password)
         return cls(scheme, host, port, user, password)
+
+    def __post_init__(self) -> None:
+        """Refuse a proxy whose URL, written canonically, is over its length."""
+        if len(self.url) > MAX_PROXY_LENGTH:
+            _refuse(
+                f"A proxy is at most {MAX_PROXY_LENGTH} characters, its login written as %XX "
+                "for each byte outside ASCII."
+            )
 
     @property
     def url(self) -> str:
@@ -144,7 +159,7 @@ def _basic(user: str, password: str) -> str:
 
 
 def _check_characters(text: str) -> None:
-    if len(text) > MAX_PROXY_LENGTH:
+    if len(text) > _LONGEST_WRITTEN:
         _refuse(f"A proxy is at most {MAX_PROXY_LENGTH} characters long.")
     if any(each.isspace() or not each.isprintable() for each in text):
         _refuse("A proxy has no spaces or control characters.")

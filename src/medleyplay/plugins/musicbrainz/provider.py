@@ -23,8 +23,6 @@ YEARS: Final = range(1000, 3000)
 """The years a Track may have."""
 NUMBERS: Final = range(1, 1000)
 """The numbers a Track or disc may have."""
-LONGEST_SONG_MS: Final = 20 * 60 * 1000
-"""A file longer than this that names an album is the album, though it isn't split."""
 
 
 @dataclass(frozen=True)
@@ -50,13 +48,8 @@ class MusicBrainz:
         request is a refusal; a network failure is raised.
         """
         terms = _terms(request)
-        long_album = (
-            request.duration_ms is not None
-            and request.duration_ms > LONGEST_SONG_MS
-            and terms.album is not None
-        )
         try:
-            if request.whole_album or long_album:
+            if request.whole_album:
                 return self._release_of(terms, request.folder)
             return self._recording_of(terms, request)
         except RefusedError as error:

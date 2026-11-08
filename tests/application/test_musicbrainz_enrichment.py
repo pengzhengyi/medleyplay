@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.enrichment import ENRICH_KIND, enrich_target
 from medleyplay.application.segments import SongsService
+from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
 from medleyplay.domain.community import CommunityRating, RatedAs
@@ -355,6 +357,63 @@ def test_the_ask_leaves_out_what_musicbrainz_itself_said_before(
 
 def test_a_long_file_is_asked_about_as_a_whole_album(enriching: Enriching, alice: Account) -> None:
     track_id = _album_file(enriching, "Echo")
+
+    _found(enriching, alice, track_id)
+
+    assert str(_musicbrainz_values(enriching, track_id)[Field.ALBUM]).startswith("whole_album=True")
+
+
+_FIFTY_MINUTES = 50 * 60 * 1000
+_TWENTY_FIVE_MINUTES = 25 * 60 * 1000
+
+
+def _guessing_albums_from(enriching: Enriching, alice: Account, minutes: int | None) -> None:
+    """Have the household guess a file is an album from `minutes` long, or not guess."""
+    settings = SettingsService(enriching.units, enriching.clock)
+    settings.put(alice, replace(settings.get(), album_minutes=minutes))
+
+
+def test_a_long_file_guessed_an_album_is_asked_about_as_a_whole_album(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_song("Echo", album="Echo", duration_ms=_FIFTY_MINUTES)
+
+    _found(enriching, alice, track_id)
+
+    assert str(_musicbrainz_values(enriching, track_id)[Field.ALBUM]).startswith("whole_album=True")
+
+
+def test_a_file_shorter_than_the_households_album_length_is_asked_about_as_a_song(
+    enriching: Enriching, alice: Account
+) -> None:
+    _guessing_albums_from(enriching, alice, 60)
+    track_id = enriching.add_song("Echo", album="Echo", duration_ms=_TWENTY_FIVE_MINUTES)
+
+    _found(enriching, alice, track_id)
+
+    assert str(_musicbrainz_values(enriching, track_id)[Field.ALBUM]).startswith(
+        "whole_album=False"
+    )
+
+
+def test_a_long_file_is_asked_about_as_a_song_when_the_household_guesses_no_albums(
+    enriching: Enriching, alice: Account
+) -> None:
+    _guessing_albums_from(enriching, alice, None)
+    track_id = enriching.add_song("Echo", album="Echo", duration_ms=_FIFTY_MINUTES)
+
+    _found(enriching, alice, track_id)
+
+    assert str(_musicbrainz_values(enriching, track_id)[Field.ALBUM]).startswith(
+        "whole_album=False"
+    )
+
+
+def test_a_file_named_an_album_is_asked_about_as_a_whole_album_however_long(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_song("Echo", album="Echo")
+    enriching.details.put_household(track_id, {"kind": "album"})
 
     _found(enriching, alice, track_id)
 

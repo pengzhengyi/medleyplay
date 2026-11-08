@@ -16,11 +16,13 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from medleyplay.application.album_ratings import album_ratings_by_account, library_album_of
 from medleyplay.application.downloads import DOWNLOAD_KIND, QUALITY_DETAIL
 from medleyplay.application.rule_schema import read_rules
 from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
+from medleyplay.domain.album_ratings import AlbumRatings, effective_rating
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
 from medleyplay.domain.downloads import MANUAL_BACKEND, download_target, quality_kbps
 from medleyplay.domain.errors import InvalidInputError
@@ -230,9 +232,10 @@ def _standings(db: Session) -> tuple[defaultdict[TrackId, Standing], dict[TrackI
         states[row.track_id].append(row)
     standings: dict[TrackId, Standing] = {}
     durations: dict[TrackId, int | None] = {}
+    album_ratings = album_ratings_by_account(db)
     for track in db.scalars(select(TrackRow)):
         own = states.get(track.id, [])
-        ratings = [each.rating for each in own if each.rating is not None]
+        ratings = _ratings_of(track, own, album_ratings)
         played = [each.last_played_at for each in own if each.last_played_at is not None]
         standings[TrackId(track.id)] = Standing(
             favorite=any(each.favorite for each in own),
@@ -244,6 +247,18 @@ def _standings(db: Session) -> tuple[defaultdict[TrackId, Standing], dict[TrackI
     epoch = datetime.fromtimestamp(0, UTC)
     fallback = Standing(favorite=False, best_rating=None, last_played_at=None, added_at=epoch)
     return defaultdict(lambda: fallback, standings), durations
+
+
+def _ratings_of(
+    track: TrackRow, own: list[TrackStateRow], album_ratings: Mapping[AccountId, AlbumRatings]
+) -> list[int]:
+    """Return each Account's rating of a Track: its own, else its rating of the Track's album."""
+    rated: dict[AccountId, int | None] = {AccountId(each.account_id): each.rating for each in own}
+    for account_id, albums in album_ratings.items():
+        rated[account_id] = effective_rating(
+            rated.get(account_id), albums.stars_of(*library_album_of(track))
+        )
+    return [rating for rating in rated.values() if rating is not None]
 
 
 def _valid_logins(db: Session, now: datetime) -> set[tuple[AccountId, str]]:

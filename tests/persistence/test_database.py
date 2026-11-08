@@ -701,3 +701,15 @@ def test_upgrading_records_every_play_when_it_was_played_and_clears_none(tmp_pat
         plays = connection.execute(text("SELECT recorded_at, cleared FROM play")).all()
     engine.dispose()
     assert [tuple(play) for play in plays] == [("2026-11-07 09:14:00.000000", 0)]
+
+
+def test_undoing_the_album_rating_migration_drops_the_table(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    migrate(engine)
+
+    _migrate_to(engine, "0028", down=True)
+
+    with engine.connect() as connection:
+        tables = connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
+        assert "album_rating" not in tables.all()
+    engine.dispose()

@@ -144,6 +144,8 @@ class Track:
     """Why the Track is its kind, such as a guess from its length."""
     community: CommunityRating | None = None
     """What listeners on another site rated the song or its album; it only shows."""
+    album_rating: int | None = None
+    """The Account's rating of the Track's album, which stands for `rating` when that is unset."""
 
 
 @dataclass(frozen=True)

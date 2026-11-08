@@ -16,6 +16,7 @@ from sqlalchemy import (
     Integer,
     MetaData,
     String,
+    Text,
     TypeDecorator,
     UniqueConstraint,
     Uuid,
@@ -358,6 +359,35 @@ class FavoriteAlbumRow(Base):
     album_key: Mapped[str] = mapped_column(String(512), primary_key=True)
     artist: Mapped[str] = mapped_column(String(512))
     album: Mapped[str] = mapped_column(String(512))
+
+
+class AlbumRatingRow(Base):
+    """An album one Account rated or reviewed elsewhere, as its last import named it.
+
+    Kept whether or not the Library has the album, so one added later takes its
+    rating. The keys are the names folded as `album_ratings` matches them.
+    """
+
+    __tablename__ = "album_rating"
+    __table_args__ = (
+        CheckConstraint("stars IS NULL OR stars BETWEEN 1 AND 5", name="stars"),
+        Index("ix_album_rating_account_id_album_key", "account_id", "album_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("account.id", ondelete="CASCADE"))
+    source_id: Mapped[str] = mapped_column(Text)
+    """The album's id on the site it was rated on."""
+    artist: Mapped[str] = mapped_column(Text)
+    artist_localized: Mapped[str] = mapped_column(Text)
+    album: Mapped[str] = mapped_column(Text)
+    artist_key: Mapped[str] = mapped_column(Text)
+    localized_key: Mapped[str] = mapped_column(Text)
+    album_key: Mapped[str] = mapped_column(Text)
+    plain_key: Mapped[str] = mapped_column(Text)
+    """The album's key with any edition note set aside."""
+    stars: Mapped[int | None]
+    note: Mapped[str] = mapped_column(Text)
 
 
 class PlayRow(Base):

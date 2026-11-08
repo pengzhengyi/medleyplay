@@ -4,6 +4,7 @@ import pytest
 
 from medleyplay.domain.album_ratings import (
     AlbumRatings,
+    LibraryAlbums,
     RatedAlbum,
     edition_removed,
     effective_rating,
@@ -57,10 +58,17 @@ def test_of_two_editions_matched_alike_the_higher_rating_counts() -> None:
     assert ratings.stars_of("A", "Blue") == 4
 
 
-def test_an_album_reviewed_but_not_rated_gives_no_rating() -> None:
-    ratings = AlbumRatings([rated("A", "Blue", None)])
+def test_an_album_reviewed_but_not_rated_gives_no_rating_and_its_review() -> None:
+    reviewed = RatedAlbum.of(
+        artist="A", artist_localized="", album="Blue", stars=None, note="Never finished it."
+    )
+    ratings = AlbumRatings([reviewed])
 
-    assert ratings.stars_of("A", "Blue") is None
+    assert (ratings.stars_of("A", "Blue"), ratings.find("A", "Blue")) == (None, reviewed)
+
+
+def test_an_account_that_rated_no_album_has_no_ratings() -> None:
+    assert (bool(AlbumRatings([])), bool(AlbumRatings([rated("A", "Blue")]))) == (False, True)
 
 
 @pytest.mark.parametrize(
@@ -92,3 +100,14 @@ def test_a_songs_own_rating_comes_before_its_albums(
     own: int | None, album: int | None, effective: int | None
 ) -> None:
     assert effective_rating(own, album) == effective
+
+
+def test_the_library_has_a_rated_album_matched_exactly_or_with_editions_set_aside() -> None:
+    library = LibraryAlbums([("ハチ", "Bremen"), ("スズム", "八日目 (初回限定盤B)"), ("", "Blue")])
+
+    assert [
+        library.has(rated("ハチ", "BREMEN")),
+        library.has(rated("スズム", "八日目 [Deluxe]")),
+        library.has(rated("ハチ", "Diorama")),
+        library.has(rated("", "Blue")),
+    ] == [True, True, False, False]

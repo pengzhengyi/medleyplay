@@ -8,7 +8,6 @@ Edition)* finds *Blue [Remaster]*.
 """
 
 import re
-from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Final, Self
@@ -58,22 +57,26 @@ def effective_rating(own: int | None, album: int | None) -> int | None:
 
 @dataclass(frozen=True)
 class RatedAlbum:
-    """An album an Account rated, by the keys it matches under.
+    """An album an Account rated or reviewed, by the keys it matches under.
 
     `artist_keys` are its artist's names folded, `album_key` its name folded, and
-    `plain_key` its name folded with any edition note set aside.
+    `plain_key` its name folded with any edition note set aside. `stars` is `None`
+    for an album reviewed but not rated; `note` is the review.
     """
 
     artist_keys: frozenset[str]
     album_key: str
     plain_key: str
     stars: int | None
+    note: str = ""
 
     @classmethod
-    def of(cls, *, artist: str, artist_localized: str, album: str, stars: int | None) -> Self:
+    def of(
+        cls, *, artist: str, artist_localized: str, album: str, stars: int | None, note: str = ""
+    ) -> Self:
         """Return the album `album` by `artist`, also known as `artist_localized`."""
         names = {fold(each.strip()) for each in (artist, artist_localized)} - {""}
-        return cls(frozenset(names), *album_keys(album), stars)
+        return cls(frozenset(names), *album_keys(album), stars, note)
 
 
 def album_keys(album: str) -> tuple[str, str]:
@@ -88,27 +91,64 @@ class AlbumRatings:
 
     def __init__(self, rated: Iterable[RatedAlbum]) -> None:
         """Index `rated`; of several albums alike, the highest rating counts."""
-        self._exact: defaultdict[_Key, int] = defaultdict(int)
-        self._plain: defaultdict[_Key, int] = defaultdict(int)
+        self._exact: dict[_Key, RatedAlbum] = {}
+        self._plain: dict[_Key, RatedAlbum] = {}
         for album in rated:
-            if album.stars is None or album.album_key == "":
+            if album.album_key == "":
                 continue
             for artist in album.artist_keys:
-                exact, plain = (artist, album.album_key), (artist, album.plain_key)
-                self._exact[exact] = max(self._exact[exact], album.stars)
-                self._plain[plain] = max(self._plain[plain], album.stars)
-        self._found: dict[tuple[str, str], int | None] = {}
+                _keep_best(self._exact, (artist, album.album_key), album)
+                _keep_best(self._plain, (artist, album.plain_key), album)
+        self._found: dict[tuple[str, str], RatedAlbum | None] = {}
+
+    def __bool__(self) -> bool:
+        """Return whether the Account rated or reviewed any album."""
+        return bool(self._exact)
 
     def stars_of(self, artist: str, album: str) -> int | None:
         """Return the rating of the Library album `album` by `artist`, or `None`."""
+        found = self.find(artist, album)
+        return None if found is None else found.stars
+
+    def find(self, artist: str, album: str) -> RatedAlbum | None:
+        """Return the rated album the Library album `album` by `artist` matches, if any."""
         asked = (artist, album)
         if asked not in self._found:
             self._found[asked] = self._look_up(artist, album)
         return self._found[asked]
 
-    def _look_up(self, artist: str, album: str) -> int | None:
+    def _look_up(self, artist: str, album: str) -> RatedAlbum | None:
         artist_key = fold(artist.strip())
         album_key, plain_key = album_keys(album)
         if artist_key == "" or album_key == "":
             return None
-        return self._exact.get((artist_key, album_key)) or self._plain.get((artist_key, plain_key))
+        exact = self._exact.get((artist_key, album_key))
+        return exact if exact is not None else self._plain.get((artist_key, plain_key))
+
+
+def _keep_best(index: dict[_Key, RatedAlbum], key: _Key, album: RatedAlbum) -> None:
+    kept = index.get(key)
+    if kept is None or (album.stars or 0) > (kept.stars or 0):
+        index[key] = album
+
+
+class LibraryAlbums:
+    """The albums in the Library, to tell which rated albums it has."""
+
+    def __init__(self, albums: Iterable[tuple[str, str]]) -> None:
+        """Index `albums`, each its artist and name."""
+        self._exact: set[_Key] = set()
+        self._plain: set[_Key] = set()
+        for artist, album in albums:
+            artist_key = fold(artist.strip())
+            album_key, plain_key = album_keys(album)
+            if artist_key and album_key:
+                self._exact.add((artist_key, album_key))
+                self._plain.add((artist_key, plain_key))
+
+    def has(self, rated: RatedAlbum) -> bool:
+        """Return whether a Library album matches `rated`, exactly or with editions set aside."""
+        return any(
+            (artist, rated.album_key) in self._exact or (artist, rated.plain_key) in self._plain
+            for artist in rated.artist_keys
+        )

@@ -32,6 +32,7 @@ from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
@@ -128,6 +129,11 @@ def catalog(
 @pytest.fixture
 def settings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> SettingsService:
     return SettingsService(units, clock, changes.append)
+
+
+@pytest.fixture
+def ratings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> RatingsService:
+    return RatingsService(units, clock, changes.append)
 
 
 @pytest.fixture

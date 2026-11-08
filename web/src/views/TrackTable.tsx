@@ -51,9 +51,9 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import type { Track } from "../api";
+import type { CommunityRating, Track } from "../api";
 import { formatTime } from "../format";
 import type { CoverStatus } from "../library/lookups";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
@@ -117,6 +117,28 @@ const byText = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, 
   collator.compare(a.getValue<string>(id), b.getValue<string>(id));
 const byNumber = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, id: string) =>
   (a.getValue<number | null>(id) ?? -1) - (b.getValue<number | null>(id) ?? -1);
+/** Your own rating first; the songs you haven't rated by what listeners elsewhere did, below any of yours. */
+const ratingKey = (track: Track) =>
+  track.rating ?? (track.community === null ? -2 : track.community.rating / 10 - 1);
+const byRating = (a: Row<typeof features, Track>, b: Row<typeof features, Track>) =>
+  ratingKey(a.original) - ratingKey(b.original);
+
+/** Each site that rates songs, as the page names it. */
+const SOURCES: Readonly<Record<string, string>> = { musicbrainz: "MusicBrainz" };
+
+/** How a rating from elsewhere reads: `MusicBrainz: 3.7 from 24 votes`, saying when it is the album's. */
+function heardFrom(community: CommunityRating): string {
+  const site = SOURCES[community.source] ?? community.source;
+  const who = community.of === "album" ? `${site}, the album` : site;
+  const rating = (Math.round(community.rating * 10) / 10).toFixed(1);
+  return `${who}: ${rating} from ${String(community.votes)} votes`;
+}
+
+/** How much of the star `stars` a rating from elsewhere fills, to the nearest half. */
+function partOf(rating: number, stars: number): "full" | "half" | "none" {
+  const halves = Math.round(rating * 2) / 2;
+  return halves >= stars ? "full" : halves >= stars - 0.5 ? "half" : "none";
+}
 
 type TrackFilter = FilterFn<typeof features, Track>;
 
@@ -840,31 +862,12 @@ const COLUMNS: Column[] = [
   {
     id: "rating",
     accessorKey: "rating",
-    sortFn: byNumber,
+    sortFn: byRating,
     filterFn: isRated,
     sortDescFirst: false,
     enableResizing: false,
     cell: ({ row: { original: track }, table }) => (
-      <fieldset className="stars">
-        <legend className="visually-hidden">Rate {track.title}</legend>
-        {STARS.map((stars) => (
-          <button
-            key={stars}
-            type="button"
-            className="icon star"
-            aria-label={stars === 1 ? "1 star" : `${String(stars)} stars`}
-            aria-pressed={track.rating === stars}
-            onClick={() => {
-              meta(table).actions.onRate(track, track.rating === stars ? null : stars);
-            }}
-          >
-            <StarIcon
-              weight={track.rating !== null && stars <= track.rating ? "fill" : "light"}
-              aria-hidden
-            />
-          </button>
-        ))}
-      </fieldset>
+      <RatingStars track={track} onRate={meta(table).actions.onRate} />
     ),
   },
   {
@@ -1001,4 +1004,63 @@ function choicesOf(table: Table): Record<ChoiceField, Choice[]> {
       (a, b) => Number(b.value) - Number(a.value),
     ),
   };
+}
+
+/**
+ * The stars of `track`: your own rating, in the accent; else what listeners elsewhere
+ * rated it, in grey, to the nearest half. Choosing a star rates the song yourself.
+ */
+function RatingStars({
+  track,
+  onRate,
+}: {
+  readonly track: Track;
+  readonly onRate: (track: Track, rating: number | null) => void;
+}) {
+  const heard = track.rating === null ? track.community : null;
+  const said = heard === null ? undefined : heardFrom(heard);
+  const saying = useId();
+  return (
+    <fieldset
+      className={heard === null ? "stars" : "stars heard"}
+      title={said}
+      aria-describedby={said === undefined ? undefined : saying}
+    >
+      <legend className="visually-hidden">Rate {track.title}</legend>
+      {said !== undefined && (
+        <span id={saying} className="visually-hidden">
+          {said}
+        </span>
+      )}
+      {STARS.map((stars) => {
+        const part = heard === null ? undefined : partOf(heard.rating, stars);
+        return (
+          <button
+            key={stars}
+            type="button"
+            className="icon star"
+            aria-label={stars === 1 ? "1 star" : `${String(stars)} stars`}
+            aria-pressed={track.rating === stars}
+            data-community={part}
+            onClick={() => {
+              onRate(track, track.rating === stars ? null : stars);
+            }}
+          >
+            <span className="star-shape" aria-hidden>
+              <StarIcon
+                weight={
+                  track.rating !== null && stars <= track.rating
+                    ? "fill"
+                    : part === "full"
+                      ? "fill"
+                      : "light"
+                }
+              />
+              {part === "half" && <StarIcon className="star-half" weight="fill" />}
+            </span>
+          </button>
+        );
+      })}
+    </fieldset>
+  );
 }

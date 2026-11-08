@@ -93,6 +93,7 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
           ? "split"
           : "length",
     cover: null,
+    community: null,
     ...change,
   };
 }

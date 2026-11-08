@@ -31,7 +31,7 @@
 ## What it offers
 
 - **A community rating** where the Account hasn't rated a song, shown apart
-  from the Account's own: outline stars, with where it came from and how many
+  from the Account's own: grey stars, with where it came from and how many
   votes it has.
 - **About this song:** a short summary of the song or its album, and up to
   three reviews, in Track details and in Now Playing.
@@ -161,7 +161,7 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
   else the release group's with at least 3, labeled *album*. A rating of fewer
   votes isn't shown. A song inside a longer file shows the album file's rating
   of the album.
-- **Shown only where the Account has no rating of its own,** as outline stars to
+- **Shown only where the Account has no rating of its own,** as grey stars to
   the nearest half, with *MusicBrainz: 4.2 from 37 votes* (or *album: 4.2 …*) on
   hover. Choosing a star sets the Account's own rating, as now.
 - **Counts for nothing that acts:** smart-playlist rules, the download policy's

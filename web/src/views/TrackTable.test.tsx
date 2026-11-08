@@ -363,13 +363,11 @@ describe("your rating of a song's album", () => {
     const heard = { source: "musicbrainz", of: "song", rating: 2, votes: 9, link: "" } as const;
     renderTable([{ ...NIGHT_DRIVE, community: heard }]);
 
-    expect(within(group()).getAllByRole("button").map((star) => star.dataset.community)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-    ]);
+    expect(
+      within(group())
+        .getAllByRole("button")
+        .map((star) => star.dataset.community),
+    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
     expect(group()).toHaveAccessibleDescription("From your album rating: 4 stars");
   });
 

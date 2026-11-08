@@ -1055,11 +1055,7 @@ function RatingStars({
             <span className="star-shape" aria-hidden>
               <StarIcon
                 weight={
-                  shown !== null && stars <= shown
-                    ? "fill"
-                    : part === "full"
-                      ? "fill"
-                      : "light"
+                  shown !== null && stars <= shown ? "fill" : part === "full" ? "fill" : "light"
                 }
               />
               {part === "half" && <StarIcon className="star-half" weight="fill" />}

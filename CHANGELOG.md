@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Import your Rate Your Music ratings** — Settings → Your ratings takes the
+  export you download from your Rate Your Music profile and says what importing
+  it changes first: the albums your Library has, the songs that take a new
+  rating, the smart playlists songs join or leave, and the albums it hasn't, as a
+  list to save. A song you haven't rated takes your rating of its album, in solid
+  stars marked *From your album rating*, and rules, downloads, sorting, and radio
+  read it as yours; choosing a star rates the song alone. An album's page shows
+  your stars and review. Importing again replaces the earlier import, and
+  *Forget the import* takes it away. *Export your ratings* downloads the songs
+  and albums you rated as a CSV file. The import follows a 2020 export's columns.
+
 - **History** — a tab beside *Up next* lists the songs you played, newest first,
   on every device you sign in on. Click one to play it now without changing
   *Up next*, or add it to the end. It shows the last 50 songs, or 25 to 500 as

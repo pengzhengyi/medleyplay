@@ -3845,9 +3845,10 @@ dialog.modal::backdrop {
 
 .edit-details .paste-video-read {
   width: auto;
-  height: 2.4rem;
+  max-width: 100%;
+  min-height: 2.4rem;
   margin: 0.4rem 0 0;
-  padding: 0 1rem;
+  padding: 0.35rem 1rem;
   align-self: flex-start;
 }
 
@@ -5065,6 +5066,7 @@ kbd {
 }
 
 .kind-option {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -5082,8 +5084,14 @@ kbd {
   color: var(--accent);
 }
 
+/* Clipped, not only faded: a form's own style shows a disabled radio at half opacity. */
 .kind-input {
   position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
   opacity: 0;
   pointer-events: none;
 }

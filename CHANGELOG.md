@@ -269,6 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In Edit details, the Song and Album choice no longer shows stray round marks
+  below it when the Kind is settled, and *Read details* fits its button.
 - In Safari, scrolling the Library no longer leaps hundreds of pixels at a time,
   which lit another row than the one under the pointer.
 - Finding a Track on MusicBrainz searches for a whole album when the Track's

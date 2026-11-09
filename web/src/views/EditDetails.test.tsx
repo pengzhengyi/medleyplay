@@ -340,7 +340,7 @@ describe("editing a song's details", () => {
     };
 
     const read = (dialog: HTMLElement) =>
-      userEvent.click(within(dialog).getByRole("button", { name: "Read the video's details" }));
+      userEvent.click(within(dialog).getByRole("button", { name: "Read details" }));
 
     it("reads a pasted title and description, and shows what they say", async () => {
       const onReadVideo = vi.fn(() => Promise.resolve(BREMEN_READ));
@@ -402,7 +402,7 @@ describe("editing a song's details", () => {
       await save(dialog);
 
       expect(
-        within(dialog).getByRole("button", { name: "Read the video's details" }),
+        within(dialog).getByRole("button", { name: "Read details" }),
       ).toBeDisabled();
       await userEvent.type(within(dialog).getByRole("textbox", { name: "Video title" }), "{Enter}");
       expect(onReadVideo).not.toHaveBeenCalled();

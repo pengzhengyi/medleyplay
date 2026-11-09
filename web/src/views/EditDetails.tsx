@@ -697,7 +697,7 @@ function PasteVideo({
           aria-busy={reading}
           onClick={submit}
         >
-          Read the video's details
+          Read details
         </button>
         <p className="paste-video-note" role="status">
           {note}

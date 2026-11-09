@@ -42,6 +42,8 @@ export interface Handoff {
   readonly seconds: number;
   /** Whether the play of the current entry has already been counted. */
   readonly counted: boolean;
+  /** That play, with how long it has been listened to, for the page taking it on to go on with. */
+  readonly play?: Play | undefined;
 }
 
 /** The player as the page sees it. */
@@ -151,9 +153,11 @@ export function usePlayer(
   // A queue taken from elsewhere plays on, or pauses, from its second; its play may have counted.
   const takenPlaying = useRef(false);
   const takenCounted = useRef(false);
-  // The current listen: its play, how long it has played, whether it counts, and the time sent.
+  const takenPlay = useRef<Play | undefined>(undefined);
+  // The current listen: its play, how long it has played here and before it was handed
+  // on to this page, whether it counts, and the time sent.
   const listening = useRef<
-    { play: Play; time: PlayTime; counted: boolean; sentMs: number } | undefined
+    { play: Play; time: PlayTime; fromMs: number; counted: boolean; sentMs: number } | undefined
   >(undefined);
   const lastSaved = useRef(0);
   // The current song's stretch of its file, the timer that ends it, and the entry last ended.
@@ -196,7 +200,7 @@ export function usePlayer(
       return;
     }
     const element = audio.current;
-    const playedMs = Math.round(heard.time.playedMs);
+    const playedMs = heard.fromMs + Math.round(heard.time.playedMs);
     const trackMs =
       tracks.get(heard.play.trackId)?.duration_ms ?? (element?.duration ?? Number.NaN) * 1000;
     switch (reportOf(heard, playedMs, trackMs, over)) {
@@ -220,6 +224,7 @@ export function usePlayer(
     listening.current = {
       play: { id: newId(), trackId: forTrack, playedAt: new Date().toISOString() },
       time: new PlayTime(),
+      fromMs: 0,
       counted: false,
       sentMs: 0,
     };
@@ -272,8 +277,10 @@ export function usePlayer(
     resumeAt.current = restoring;
     const playOn = restoring === undefined || takenPlaying.current;
     const counted = takenCounted.current;
+    const carried = takenPlay.current;
     takenPlaying.current = false;
     takenCounted.current = false;
+    takenPlay.current = undefined;
     void (async () => {
       try {
         const answer = await answerFor(trackId, ahead.current, () => {
@@ -299,6 +306,11 @@ export function usePlayer(
         listen(trackId);
         if (counted && listening.current !== undefined) {
           listening.current.counted = true;
+          // The play goes on here, unless a stale report handed on another Track's.
+          if (carried?.trackId === trackId) {
+            const fromMs = carried.listenedMs ?? 0;
+            listening.current = { ...listening.current, play: carried, fromMs, sentMs: fromMs };
+          }
         }
         const song = stretchOf(answer);
         stretch.current = song;
@@ -675,6 +687,7 @@ export function usePlayer(
             queue,
             seconds: shown?.position ?? 0,
             counted: listening.current?.counted ?? false,
+            play: handedPlay(listening.current),
           },
     take: (handoff, playing) => {
       const taking = current(handoff.queue);
@@ -690,6 +703,7 @@ export function usePlayer(
       restore.current = handoff.seconds;
       takenPlaying.current = playing;
       takenCounted.current = handoff.counted;
+      takenPlay.current = handoff.play;
     },
   };
   return [player, audio];
@@ -758,6 +772,15 @@ async function lookAhead(trackId: number, ahead: Map<number, PlaybackAnswer>): P
   } catch {
     // The next Track asks again when its turn comes.
   }
+}
+
+/** Return the play of a counted `listen`, with how long it has been listened to, to hand on. */
+function handedPlay(
+  listen: { play: Play; time: PlayTime; fromMs: number; counted: boolean } | undefined,
+): Play | undefined {
+  return listen?.counted === true
+    ? { ...listen.play, listenedMs: listen.fromMs + Math.round(listen.time.playedMs) }
+    : undefined;
 }
 
 /** Return whether `element` already has the file at `audioUrl` loaded. */

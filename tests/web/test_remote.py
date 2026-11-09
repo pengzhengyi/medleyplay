@@ -146,6 +146,46 @@ def test_a_phone_hears_whether_the_play_on_the_computer_has_counted(
     assert heard["state"]["counted"] is True
 
 
+HANDED_PLAY = {
+    "id": "00000000-0000-4000-8000-0000000000a1",
+    "track_id": 1,
+    "played_at": "2026-11-09T08:00:00Z",
+    "listened_ms": 130_000,
+}
+"""The play of the entry playing, counted and listened to for 2:10, as a page hands it on."""
+
+
+def test_a_phone_hears_the_play_on_the_computer_to_go_on_with(
+    host: TestClient, phone: TestClient
+) -> None:
+    with host.stream("GET", f"/api/events?page={HOST_PAGE}"):
+        host.put("/api/remote/report", json=report_playing(counted=True, play=HANDED_PLAY))
+        with phone.stream("GET", "/api/events") as stream:
+            heard = next_event(events_of(stream.iter_lines()), "remote")
+
+    assert isinstance(heard, dict)
+    assert heard["state"]["play"] == HANDED_PLAY
+
+
+def test_a_queue_taken_with_its_play_reaches_the_speaker_page_with_it(
+    host: TestClient, phone: TestClient
+) -> None:
+    with host.stream("GET", f"/api/events?page={HOST_PAGE}") as stream:
+        events = events_of(stream.iter_lines())
+        next_event(events, "remote")
+        host.put("/api/remote/report", json=report_playing())
+
+        response = phone.post(
+            "/api/remote/commands", json={"command": take(counted=True, play=HANDED_PLAY)}
+        )
+
+        command = next_event(events, "command")
+
+    assert response.status_code == 204, response.text
+    assert isinstance(command, dict)
+    assert command["play"] == HANDED_PLAY
+
+
 def test_a_command_from_the_phone_reaches_the_speaker_page(
     host: TestClient, phone: TestClient
 ) -> None:
@@ -198,6 +238,7 @@ def test_a_command_with_nothing_playing_on_the_computer_answers_409(phone: TestC
         take(entries=[{"key": "a", "track_id": 1}, {"key": "a", "track_id": 2}]),
         take(shuffled=True, order=["b", "c"]),
         take(shuffled=True, order=["b"]),
+        take(play={**HANDED_PLAY, "listened_ms": -1}),
     ],
 )
 def test_a_command_of_the_wrong_shape_answers_422(

@@ -431,7 +431,17 @@ export interface SpeakerState {
   readonly muted: boolean;
   /** Whether the play of the entry playing has been counted. */
   readonly counted: boolean;
+  /** That play, once counted, for the page that takes it on to go on with. */
+  readonly play?: HandedPlay | null;
   readonly sleep: { readonly left_ms: number; readonly set_ms_ago: number } | null;
+}
+
+/** A counted play handed on from one page to another, with how long it has been listened to. */
+export interface HandedPlay {
+  readonly id: string;
+  readonly track_id: number;
+  readonly played_at: string;
+  readonly listened_ms: number;
 }
 
 /** The account's speaker as the event stream sends it: its page, its report, and its age. */
@@ -465,6 +475,7 @@ export type RemoteCommand =
       readonly seconds: number;
       readonly playing: boolean;
       readonly counted: boolean;
+      readonly play?: HandedPlay | null;
     };
 
 export type ModeSetting = "auto" | "online" | "offline";

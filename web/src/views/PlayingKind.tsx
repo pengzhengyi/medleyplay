@@ -7,7 +7,12 @@
  * has got, and those to come. A song in it plays when chosen.
  */
 
-import { CheckIcon, MusicNoteSimpleIcon, VinylRecordIcon } from "@phosphor-icons/react";
+import {
+  CheckIcon,
+  MusicNoteSimpleIcon,
+  ScissorsIcon,
+  VinylRecordIcon,
+} from "@phosphor-icons/react";
 import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 
 import type { Track } from "../api";
@@ -198,18 +203,23 @@ function AlbumSongs({
   if (songs.length === 0) {
     return (
       <>
-        <header className="album-songs-head">
+        <div className="album-songs-unsplit">
+          <span className="album-songs-unsplit-mark" aria-hidden>
+            <ScissorsIcon />
+          </span>
           <strong className="album-songs-name">{name}</strong>
-        </header>
-        <p className="muted">This album is one file, not yet split into its songs.</p>
-        <button
-          type="button"
-          onClick={() => {
-            onEditSongs(track);
-          }}
-        >
-          Split into songs
-        </button>
+          <p>One file, not yet split into its songs.</p>
+          <button
+            type="button"
+            className="album-songs-split"
+            onClick={() => {
+              onEditSongs(track);
+            }}
+          >
+            <ScissorsIcon aria-hidden />
+            Split into songs
+          </button>
+        </div>
       </>
     );
   }

@@ -111,6 +111,15 @@ describe("the queue", () => {
     expect(reduce(finished, { type: "next" })).toEqual(finished);
   });
 
+  it("jumps to an entry, played ones and upcoming ones alike", () => {
+    expect(reduce(PLAYING_2_OF_5, { type: "jump", key: "d" }).position).toBe(3);
+    expect(reduce(PLAYING_2_OF_5, { type: "jump", key: "a" }).position).toBe(0);
+  });
+
+  it("stays where it is when asked to jump to an entry it doesn't have", () => {
+    expect(reduce(PLAYING_2_OF_5, { type: "jump", key: "z" })).toBe(PLAYING_2_OF_5);
+  });
+
   it("goes back to the previous entry, but not before the first", () => {
     const second = reduce(PLAYING_1_OF_3, { type: "next" });
 

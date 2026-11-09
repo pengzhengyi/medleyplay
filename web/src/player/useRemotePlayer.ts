@@ -198,6 +198,11 @@ export function useRemotePlayer(
         send({ kind: "seek", key, seconds: Math.max(0, seconds) });
       }
     },
+    playAt: (key, seconds) => {
+      if (Number.isFinite(seconds)) {
+        send({ kind: "playAt", key, seconds: Math.max(0, seconds) });
+      }
+    },
     move: (key, to) => {
       send({ kind: "move", key, to });
     },

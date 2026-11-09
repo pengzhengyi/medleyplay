@@ -458,6 +458,7 @@ export type RemoteCommand =
   | { readonly kind: "playNow" | "playNext" | "add"; readonly entry: Queued }
   | { readonly kind: "toggle" | "pause" | "next" | "previous" | "clear" }
   | { readonly kind: "seek"; readonly key: string; readonly seconds: number }
+  | { readonly kind: "playAt"; readonly key: string; readonly seconds: number }
   | { readonly kind: "move"; readonly key: string; readonly to: number }
   | { readonly kind: "remove"; readonly key: string }
   | { readonly kind: "shuffle"; readonly on: boolean }

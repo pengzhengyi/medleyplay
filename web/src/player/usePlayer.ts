@@ -74,6 +74,8 @@ export interface Player {
   readonly next: () => void;
   readonly previous: () => void;
   readonly seek: (seconds: number) => void;
+  /** Play the entry `key` from `seconds` into it, playing on, wherever it is in the queue. */
+  readonly playAt: (key: string, seconds: number) => void;
   /** Move an upcoming entry to place `to` among what plays next, 0 being next. */
   readonly move: (key: string, to: number) => void;
   readonly remove: (key: string) => void;
@@ -658,6 +660,15 @@ export function usePlayer(
     next,
     previous,
     seek,
+    playAt: (target, seconds) => {
+      if (target === key) {
+        seek(seconds);
+        return;
+      }
+      restore.current = Math.max(0, seconds);
+      takenPlaying.current = true;
+      dispatch({ type: "jump", key: target });
+    },
     move: (moving, to) => {
       dispatch({ type: "move", key: moving, to });
     },

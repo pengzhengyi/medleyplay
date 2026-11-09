@@ -1559,6 +1559,16 @@ button.text:hover:not(:disabled) {
   border-spacing: 0;
 }
 
+/*
+ * Only the rows on screen are drawn, the rest stand in as spacer rows. A row is
+ * never an anchor for the browser to hold in place while it scrolls: as rows
+ * swap with spacer height, Safari would hold one that is going and leap the page
+ * hundreds of pixels, leaving another row than the one under the pointer lit.
+ */
+.tracks tbody {
+  overflow-anchor: none;
+}
+
 .tracks th.favorite {
   width: 2.75rem;
 }

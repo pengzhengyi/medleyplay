@@ -35,6 +35,8 @@ MAX_CHAPTERS: Final = MAX_SONGS
 """The most chapters sent: as many as a song list holds."""
 MAX_CHAPTER_TITLE: Final = 200
 MAX_PROVIDERS: Final = 5
+MAX_HINT: Final = 500
+"""The longest note a listener adds when asking the AI again."""
 """The most providers kept; a Job reads the key of each from the Keychain."""
 KEY_SECRET: Final = "ai:key"  # noqa: S105 -- the name of a Keychain item, not a key
 """The name the key of a provider set up when only one could be is kept under."""
@@ -149,6 +151,19 @@ def cut_text(text: VideoText) -> VideoText:
         for chapter in text.chapters[:MAX_CHAPTERS]
     )
     return VideoText(text.title, text.description[:MAX_DESCRIPTION], chapters)
+
+
+def check_hint(text: str) -> str:
+    """Return a listener's note to the AI on one line, its control characters gone.
+
+    Every run of white space becomes one space; a note longer than `MAX_HINT`
+    characters is refused.
+    """
+    kept = "".join(each for each in text if each.isspace() or each.isprintable())
+    hint = " ".join(kept.split())
+    if len(hint) > MAX_HINT:
+        _refuse(f"A note to the AI is at most {MAX_HINT} characters.")
+    return hint
 
 
 def redact_key(text: str, key: str | None) -> str:

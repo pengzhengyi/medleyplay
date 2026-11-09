@@ -17,8 +17,13 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.ai import ProviderFailure
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin
-from medleyplay.domain.enrichers import AI_DETAILS, ASK_AGAIN_AFTER
-from medleyplay.domain.errors import ConflictError, ForbiddenError, PluginUnavailableError
+from medleyplay.domain.enrichers import AI_DETAILS, ASK_AGAIN_AFTER, MUSICBRAINZ
+from medleyplay.domain.errors import (
+    ConflictError,
+    ForbiddenError,
+    InvalidInputError,
+    PluginUnavailableError,
+)
 from medleyplay.domain.jobs import JobState, JobView
 from medleyplay.domain.segments import SongRow
 from medleyplay.domain.video_text import Chapter, Song, VideoText
@@ -353,6 +358,48 @@ def test_a_track_is_asked_of_the_ai_once_a_day(
         enriching.enrichment.find_details(alice, track_id, NAME)
     clock.advance(ASK_AGAIN_AFTER)
     assert enriching.enrichment.eligible(NAME) == [track_id, other]
+
+
+def test_asking_the_ai_again_needs_no_wait_of_a_day(enriching: Enriching, alice: Account) -> None:
+    track_id = enriching.add_track_with_text("Night Drive")
+    _suggested(enriching, alice, track_id)
+
+    job = enriching.enrichment.find_details(alice, track_id, NAME, again=True)
+    # The AI is asked a pause apart.
+    enriching.clock.advance(AI_PAUSE)
+    enriching.runner.wake()
+
+    assert enriching.wait_for(job.id, JobState.SUCCEEDED).job.state is JobState.SUCCEEDED
+
+
+def test_a_note_to_the_ai_reaches_it_on_one_line(enriching: Enriching, alice: Account) -> None:
+    track_id = enriching.add_track_with_text("Echo", name="BV1dm4y1s7ak.m4a")
+
+    job = enriching.enrichment.find_details(
+        alice, track_id, NAME, again=True, hint="The 2007 concert.\n22 songs."
+    )
+    enriching.wait_for(job.id, JobState.SUCCEEDED)
+
+    assert str(_suggestion(enriching, track_id)[Field.ALBUM]).endswith(
+        "hint=The 2007 concert. 22 songs."
+    )
+
+
+def test_asking_again_while_the_ai_still_works_on_the_track_is_refused(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_track_with_text("Echo")
+    enriching.enrichment.find_details(alice, track_id, NAME)
+
+    with pytest.raises(ConflictError, match="still working"):
+        enriching.enrichment.find_details(alice, track_id, NAME, again=True, hint="22 songs")
+
+
+def test_only_the_ai_is_asked_again_or_given_a_note(enriching: Enriching, alice: Account) -> None:
+    track_id = enriching.add_track_with_text("Echo")
+
+    with pytest.raises(InvalidInputError, match="Only the AI"):
+        enriching.enrichment.find_details(alice, track_id, MUSICBRAINZ.name, hint="22 songs")
 
 
 def test_pasting_other_text_makes_a_track_eligible_again_at_once(

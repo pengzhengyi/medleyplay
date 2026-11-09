@@ -3,9 +3,10 @@
 from datetime import datetime
 
 from fastapi import APIRouter, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from medleyplay.application.enrichment import EnricherState
+from medleyplay.domain.ai import MAX_HINT
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.enrichers import EnricherMode
 from medleyplay.web.deps import EnrichmentDep, JobsDep, SignedInAccount
@@ -60,6 +61,14 @@ class ModeIn(BaseModel):
     mode: EnricherMode
 
 
+class FindIn(BaseModel):
+    """Ask the AI `again` without waiting a day since it was asked, with a `hint` of your own."""
+
+    again: bool = False
+    # White space is folded before the limit counts, so a note sent may run a little longer.
+    hint: str = Field(default="", max_length=MAX_HINT * 2)
+
+
 class QueuedOut(BaseModel):
     """How many Tracks were queued."""
 
@@ -74,13 +83,20 @@ def get_enricher(name: str, _: SignedInAccount, enrichment: EnrichmentDep) -> En
 
 @router.post("/{name}/tracks/{track_id}")
 def find_details(
-    name: str, track_id: RowId, me: SignedInAccount, enrichment: EnrichmentDep, jobs: JobsDep
+    name: str,
+    track_id: RowId,
+    me: SignedInAccount,
+    enrichment: EnrichmentDep,
+    jobs: JobsDep,
+    body: FindIn | None = None,
 ) -> JobOut:
     """Ask the enricher about one Track; 409 when it is not eligible.
 
-    The Job waits while the Mode is Offline. Asking again returns the active Job.
+    The Job waits while the Mode is Offline. Asking again returns the active Job; asking
+    the AI `again`, or with a `hint`, while it works on the Track answers 409.
     """
-    job = enrichment.find_details(me, TrackId(track_id), name)
+    asked = body or FindIn()
+    job = enrichment.find_details(me, TrackId(track_id), name, again=asked.again, hint=asked.hint)
     return JobOut.of(jobs.get_job(job.id), me)
 
 

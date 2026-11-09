@@ -49,7 +49,8 @@ class EnrichJob(_Model):
     has run: the Track's video, or a key made from the Track and what it is searched
     for. `video` is the Track's video, when the enricher reads videos. `shown` is what
     the Track showed when the Job was queued, and `whole_album` says it is a whole album,
-    by its Kind. `text` is the Track's video text, when the enricher reads it.
+    by its Kind. `text` is the Track's video text, when the enricher reads it, and
+    `hint` a note the listener added when asking the AI again.
     """
 
     enricher: str
@@ -60,6 +61,7 @@ class EnrichJob(_Model):
     file_name: str = ""
     whole_album: bool = False
     text: VideoText | None = None
+    hint: str = ""
 
 
 class EnrichedTrack(_Model):
@@ -97,6 +99,7 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
             proxy=context.proxy,
             text=request.text,
             ai=context.ai,
+            hint=request.hint,
         ),
     )
     if answer.status is EnrichStatus.REFUSED:

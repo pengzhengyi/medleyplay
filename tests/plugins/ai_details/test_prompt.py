@@ -114,3 +114,21 @@ def test_asking_again_keeps_the_first_messages_adds_the_bad_answer_and_names_the
     assert again[3]["role"] == "user"
     assert "year: Input should be greater than or equal to 1000" in again[3]["content"]
     assert "json" in again[3]["content"].lower()
+
+
+def test_a_note_from_the_listener_is_a_message_of_its_own_after_the_videos_text(
+    tmp_path: Path,
+) -> None:
+    messages = asking(_ask(tmp_path, hint="The 2007 concert; it has 22 songs."))
+
+    assert [message["role"] for message in messages] == ["system", "user", "user"]
+    assert messages[2]["content"] == "Note from the listener: The 2007 concert; it has 22 songs."
+
+
+def test_with_no_note_there_is_no_message_for_it(tmp_path: Path) -> None:
+    assert len(asking(_ask(tmp_path, hint=""))) == 2
+
+
+def test_the_system_message_lets_the_listeners_note_name_songs_the_text_does_not() -> None:
+    assert "own message" in SYSTEM
+    assert "what you know" in SYSTEM

@@ -257,25 +257,29 @@ def why_not(
     stopped: bool,
     enricher: Enricher,
     set_up: bool = True,
+    again: bool = False,
 ) -> Ineligible | None:
     """Return why the Track is not asked for now, or `None` when it is.
 
-    `set_up` says whether the AI provider an enricher uses has been set up.
+    `set_up` says whether the AI provider an enricher uses has been set up. Asking the
+    AI `again`, as someone chose to, needs no wait since it was last asked.
     """
     if stopped:
         return Ineligible.STOPPED
     if enricher.uses_ai and not set_up:
         return Ineligible.NOT_SET_UP
-    return _why_not_track(facts, now, enricher)
+    return _why_not_track(facts, now, enricher, again=again and enricher.uses_ai)
 
 
-def _why_not_track(facts: TrackFacts, now: datetime, enricher: Enricher) -> Ineligible | None:
+def _why_not_track(
+    facts: TrackFacts, now: datetime, enricher: Enricher, *, again: bool = False
+) -> Ineligible | None:
     if facts.is_segment:
         return Ineligible.SEGMENT
     if facts.subject is None:
         return enricher.lacking
     if enricher.subject is Subject.VIDEO and facts.text_came_from in {"file", "household"}:
         return Ineligible.HAS_TEXT
-    if facts.asked_at is not None and now - facts.asked_at < ASK_AGAIN_AFTER:
+    if not again and facts.asked_at is not None and now - facts.asked_at < ASK_AGAIN_AFTER:
         return Ineligible.ASKED
     return None

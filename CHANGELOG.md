@@ -269,6 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In Safari, scrolling the Library no longer leaps hundreds of pixels at a time,
+  which lit another row than the one under the pointer.
 - Finding a Track on MusicBrainz searches for a whole album when the Track's
   Kind is album, as the Library shows it, rather than by its own 20-minute
   rule; a file shorter than the household's album length is searched for as a

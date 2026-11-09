@@ -149,6 +149,14 @@ class SeekIn(_Command):
     seconds: Seconds
 
 
+class PlayAtIn(_Command):
+    """Play the entry `key` from `seconds` into it, wherever it is in the queue."""
+
+    kind: Literal["playAt"]
+    key: Key
+    seconds: Seconds
+
+
 class MoveIn(_Command):
     """Move the upcoming entry `key` to place `to` among what plays next."""
 
@@ -239,6 +247,7 @@ type CommandIn = Annotated[
     | QueueOneIn
     | TransportIn
     | SeekIn
+    | PlayAtIn
     | MoveIn
     | RemoveIn
     | ShuffleIn

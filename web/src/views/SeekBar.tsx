@@ -5,6 +5,9 @@
  * follows the pointer and seeks once, where it is let go. The time comes from where
  * the pointer is on the bar, so it lands where it points. Once sent, the bar stays
  * there until the audio reports it has arrived, so it never jumps back first.
+ *
+ * A bar across a whole album marks where each song starts, and names the song
+ * under the pointer as well as the time.
  */
 
 import {
@@ -27,16 +30,25 @@ const ARRIVED = 1;
 /** How long the bar waits for the audio to arrive before showing where it is. */
 const GIVE_UP_MS = 2000;
 
+/** Where a song starts on a bar across a whole album, in seconds, and its title. */
+export interface SeekMark {
+  readonly start: number;
+  readonly title: string;
+}
+
 /** Where `position` is in a Track `duration` seconds long, and `onSeek` to move it. */
 export function SeekBar({
   position,
   duration,
   onSeek,
+  marks,
 }: {
   readonly position: number;
   /** The Track's length in seconds, once known; until then the bar can't move. */
   readonly duration: number | undefined;
   readonly onSeek: (seconds: number) => void;
+  /** Where each song of an album starts, when the bar is across the whole album. */
+  readonly marks?: readonly SeekMark[] | undefined;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   // Where a pressed pointer holds the bar, and where a hovering one points.
@@ -112,6 +124,8 @@ export function SeekBar({
   };
 
   const share = movable ? shown / length : 0;
+  const songAtTime = (seconds: number) => songOf(marks, seconds);
+  const shownSong = songAtTime(shown);
   return (
     <div
       ref={bar}
@@ -122,7 +136,11 @@ export function SeekBar({
       aria-valuemin={0}
       aria-valuemax={Math.round(length)}
       aria-valuenow={Math.round(shown)}
-      aria-valuetext={`${formatTime(shown)} of ${formatTime(duration)}`}
+      aria-valuetext={
+        shownSong === undefined
+          ? `${formatTime(shown)} of ${formatTime(duration)}`
+          : `${shownSong.title}, ${formatTime(shownSong.within)}; ${formatTime(shown)} of ${formatTime(duration)}`
+      }
       aria-disabled={!movable}
       data-held={held === undefined ? undefined : ""}
       style={
@@ -145,15 +163,41 @@ export function SeekBar({
       <span className="seek-track" aria-hidden>
         {pointed !== undefined && held === undefined && movable && <span className="seek-hover" />}
         <span className="seek-fill" />
+        {movable &&
+          marks
+            ?.slice(1)
+            .map((mark) => (
+              <span
+                key={mark.start}
+                className="seek-mark"
+                style={{ "--at": String(mark.start / length) } as CSSProperties}
+              />
+            ))}
       </span>
       <span className="seek-thumb" aria-hidden />
       {tip !== undefined && movable && (
         <span className="seek-tip" aria-hidden>
-          {formatTime(tip)}
+          {tipOf(songAtTime(tip), tip)}
         </span>
       )}
     </div>
   );
+}
+
+/** Return the song of `marks` at `seconds` into the album, and how far into it. */
+function songOf(
+  marks: readonly SeekMark[] | undefined,
+  seconds: number,
+): { readonly title: string; readonly within: number } | undefined {
+  const mark = marks?.findLast((each) => each.start <= seconds) ?? marks?.[0];
+  return mark === undefined
+    ? undefined
+    : { title: mark.title, within: Math.max(0, seconds - mark.start) };
+}
+
+/** Write the tip for `seconds`: the song there and how far into it, or only the time. */
+function tipOf(song: ReturnType<typeof songOf>, seconds: number): string {
+  return song === undefined ? formatTime(seconds) : `${song.title} · ${formatTime(song.within)}`;
 }
 
 /** Return where `key` moves the position, or `undefined` for a key that doesn't move it. */

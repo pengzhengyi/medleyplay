@@ -39,6 +39,7 @@ export function playerOf(change: Partial<Player> = {}): Player {
     next: vi.fn(),
     previous: vi.fn(),
     seek: vi.fn(),
+    playAt: vi.fn(),
     move: vi.fn(),
     remove: vi.fn(),
     clear: vi.fn(),

@@ -274,7 +274,13 @@ export function SongsEditor({
   const takeAiAnswer = useEffectEvent((loaded: Songs) => {
     setAskedAi(false);
     setSongs(loaded);
-    setAiOutcome(ai.state === "failed" ? "failed" : "answered");
+    if (ai.state === "failed") {
+      // The songs stay as they were; any earlier answer is still there to use.
+      setAiOutcome("failed");
+      setFillNote(`The AI couldn't say: ${ai.message}`);
+      return;
+    }
+    setAiOutcome("answered");
     if (loaded.suggested.length > 0 && editedSinceAsking) {
       // Rows changed while it was asked stay; pressing AI uses its songs.
       setFillNote(
@@ -283,11 +289,7 @@ export function SongsEditor({
     } else if (loaded.suggested.length > 0) {
       fill(loaded.suggested, "from the AI");
     } else {
-      setFillNote(
-        ai.state === "failed"
-          ? `The AI couldn't say: ${ai.message}`
-          : "The AI found no song list for this file.",
-      );
+      setFillNote("The AI found no song list for this file.");
     }
   });
   useEffect(() => {
@@ -442,10 +444,10 @@ export function SongsEditor({
   // What the AI button shows of the AI: working on it, its songs in use, or why it failed.
   const aiStatus = thinking
     ? "working"
-    : fromAi
-      ? "answered"
-      : aiOutcome === "failed"
-        ? "failed"
+    : aiOutcome === "failed"
+      ? "failed"
+      : fromAi
+        ? "answered"
         : undefined;
 
   const save = (event: SubmitEvent<HTMLFormElement>) => {

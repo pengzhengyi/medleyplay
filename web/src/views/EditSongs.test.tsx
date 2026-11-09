@@ -293,6 +293,23 @@ describe("editing a file's songs", () => {
     expect(within(dialog).getByText("Asking the AI…")).toHaveRole("status");
   });
 
+  it("says why asking again failed, keeping the songs the AI gave before", async () => {
+    const { dialog, answerAi } = await renderEditor(splitSongsOf(104, [], [], LISTED));
+    await press(dialog, "Fill with AI");
+    await press(dialog, "Ask the AI again");
+    await press(dialog, "Ask again");
+
+    answerAi({ ...AI_UNASKED, state: "failed", message: "DeepSeek refused the key." });
+
+    expect(
+      await within(dialog).findByText("The AI couldn't say: DeepSeek refused the key."),
+    ).toHaveRole("status");
+    expect(within(dialog).getByRole("button", { name: "Ask the AI again" }).dataset.status).toBe(
+      "failed",
+    );
+    expect(box(dialog, "Title of song 2")).toHaveValue("ゴーゴー幽霊船");
+  });
+
   it("keeps songs edited while the AI was asked, and offers its answer instead", async () => {
     const unsplit = splitSongsOf(104, []);
     const { dialog, load, answerAi } = await renderEditor(unsplit);

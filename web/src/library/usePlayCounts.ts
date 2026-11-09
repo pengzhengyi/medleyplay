@@ -1,21 +1,20 @@
 /**
- * @file How often the Account played each Track over a period, for Insights.
+ * @file How often and how long the Account played each Track over a period, for Insights.
  *
- * All time is each Track's own play count, which the page already holds. A
- * shorter period asks the server, again when the page sends a play or is shown again.
+ * It asks the server, and again when the page records a play or is shown again.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { type PlayCountPeriod, type Track, api } from "../api";
-import { onPlaysRecorded } from "../player/usePlayer";
-import { type PlayCounts, allTimePlays } from "./insights";
+import { type PlayCountPeriod, api } from "../api";
+import { onPlaysRecorded } from "../player/plays";
+import type { PlayCounts } from "./insights";
 
 /** All time, or the last 7 or 30 days. */
 export type Period = "all" | PlayCountPeriod;
 
 export interface PeriodPlays {
-  /** How often each Track was played; `undefined` until the counts load. */
+  /** How often and how long each Track was played; `undefined` until the counts load. */
   readonly counts: PlayCounts | undefined;
   /** Why the counts couldn't load, or `""`. */
   readonly failure: string;
@@ -23,25 +22,27 @@ export interface PeriodPlays {
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** How often each of `tracks` was played over `period`. */
-export function usePlayCounts(period: Period, tracks: readonly Track[]): PeriodPlays {
-  const allTime = useMemo(() => allTimePlays(tracks), [tracks]);
+/** How often and how long the Account played each Track over `period`. */
+export function usePlayCounts(period: Period): PeriodPlays {
   const [loaded, setLoaded] = useState<{ period: Period; counts: PlayCounts } | undefined>();
   const [failure, setFailure] = useState("");
   // The latest load asked, so an older answer can't land after it.
   const asked = useRef(0);
 
   useEffect(() => {
-    if (period === "all") {
-      return undefined;
-    }
     const load = () => {
       const ask = ++asked.current;
-      api.playCounts(period).then(
+      api.playCounts(period === "all" ? undefined : period).then(
         (answer) => {
           if (ask === asked.current) {
             setFailure("");
-            setLoaded({ period, counts: new Map(answer.map((row) => [row.track_id, row.plays])) });
+            const counts = new Map(
+              answer.map((row) => [
+                row.track_id,
+                { plays: row.plays, listenedMs: row.listened_ms, timedPlays: row.timed_plays },
+              ]),
+            );
+            setLoaded({ period, counts });
           }
         },
         (error: unknown) => {
@@ -66,8 +67,5 @@ export function usePlayCounts(period: Period, tracks: readonly Track[]): PeriodP
     };
   }, [period]);
 
-  if (period === "all") {
-    return { counts: allTime, failure: "" };
-  }
   return { counts: loaded?.period === period ? loaded.counts : undefined, failure };
 }

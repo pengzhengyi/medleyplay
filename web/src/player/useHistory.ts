@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, DEFAULT_HISTORY_LENGTH, type HistoryLength, type Played, api } from "../api";
-import { onPlaysRecorded } from "./usePlayer";
+import { onPlaysRecorded } from "./plays";
 
 export interface History {
   /** The plays, newest first; `undefined` until they load. */

@@ -5,13 +5,23 @@ remotes' commands reach the account's event streams as `remote` and `command`
 events (see the events API).
 """
 
+import uuid
+from datetime import timedelta
 from typing import Annotated, Final, Literal, Self
 
 from fastapi import APIRouter, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from medleyplay.application.remote import PageId
 from medleyplay.domain.errors import ForbiddenError
+from medleyplay.domain.history import LONGEST_LISTEN
 from medleyplay.web.deps import RemoteDep, SignedInAccount
 from medleyplay.web.devices import visit_of
 
@@ -57,12 +67,21 @@ class SleepIn(_Strict):
     set_ms_ago: Annotated[int, Field(ge=0)]
 
 
+class HandedPlayIn(_Strict):
+    """The play of the entry playing, so the page that takes it on goes on with it."""
+
+    id: uuid.UUID
+    track_id: TrackId
+    played_at: AwareDatetime
+    listened_ms: Annotated[int, Field(ge=0, le=LONGEST_LISTEN // timedelta(milliseconds=1))]
+
+
 class ReportIn(_Strict):
     """What the speaker plays: a window of its queue in the order it plays, and how it plays.
 
     `entries` starts at place `offset` of the `total`; `position` is the place
     of the entry playing, `total` when the queue has finished. `counted` says
-    whether the play of that entry has been counted.
+    whether the play of that entry has been counted, and `play` is that play.
     """
 
     page: Page
@@ -79,6 +98,7 @@ class ReportIn(_Strict):
     volume: Annotated[float, Field(ge=0, le=1)]
     muted: bool
     counted: bool = False
+    play: HandedPlayIn | None = None
     sleep: SleepIn | None = None
 
 
@@ -184,7 +204,7 @@ class TakeIn(_Command):
 
     `entries` are in the order they play; while shuffled, `order` is the queue's
     own order of their keys. `counted` says whether the play of the entry at
-    `position` has already been counted.
+    `position` has already been counted, and `play` is that play.
     """
 
     kind: Literal["take"]
@@ -196,6 +216,7 @@ class TakeIn(_Command):
     seconds: Seconds
     playing: bool
     counted: bool
+    play: HandedPlayIn | None = None
 
     @model_validator(mode="after")
     def _one_queue(self) -> Self:

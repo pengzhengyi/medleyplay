@@ -332,7 +332,47 @@ def test_play_counts_answer_how_often_you_played_each_track_in_the_last_days(
 
     response = client.get("/api/plays/counts", params={"days": 7})
 
-    assert response.json() == [{"track_id": track_id, "plays": 2}]
+    assert response.json() == [
+        {"track_id": track_id, "plays": 2, "listened_ms": 0, "timed_plays": 0}
+    ]
+
+
+def test_a_play_sent_with_its_time_and_then_a_longer_one_counts_the_longest(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    client.put(
+        f"/api/plays/{FIRST_PLAY}",
+        json={"track_id": track_id, "played_at": "2025-12-31T08:00:00Z", "listened_ms": 90_000},
+    )
+
+    noted = client.put(f"/api/plays/{FIRST_PLAY}/listened", json={"listened_ms": 150_000})
+
+    assert noted.status_code == 204
+    assert client.get("/api/plays/counts").json() == [
+        {"track_id": track_id, "plays": 1, "listened_ms": 150_000, "timed_plays": 1}
+    ]
+
+
+def test_a_time_noted_for_an_unknown_play_answers_404(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.put(f"/api/plays/{FIRST_PLAY}/listened", json={"listened_ms": 1_000})
+
+    assert response.status_code == 404
+
+
+def test_a_time_below_zero_answers_422(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    response = client.put(
+        f"/api/plays/{FIRST_PLAY}",
+        json={"track_id": track_id, "played_at": "2025-12-31T08:00:00Z", "listened_ms": -1},
+    )
+
+    assert response.status_code == 422
 
 
 def test_play_counts_leave_out_another_accounts_plays(

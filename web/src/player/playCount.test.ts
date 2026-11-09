@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PlayTime, countsAsPlayed } from "./playCount";
+import { PlayTime, countsAsPlayed, reportOf } from "./playCount";
 
 describe("countsAsPlayed", () => {
   it("counts half of a short Track", () => {
@@ -14,6 +14,32 @@ describe("countsAsPlayed", () => {
 
   it("never counts a Track shorter than 30 seconds", () => {
     expect(countsAsPlayed(29_000, 29_000)).toBe(false);
+  });
+});
+
+describe("reportOf", () => {
+  const THREE_MINUTES = 180_000;
+
+  it("records a play once it counts, and not before", () => {
+    const listen = { counted: false, sentMs: 0 };
+
+    expect(reportOf(listen, 89_000, THREE_MINUTES)).toBeUndefined();
+    expect(reportOf(listen, 90_000, THREE_MINUTES)).toBe("record");
+  });
+
+  it("sends the time again after each further minute of listening", () => {
+    const listen = { counted: true, sentMs: 90_000 };
+
+    expect(reportOf(listen, 149_000, THREE_MINUTES)).toBeUndefined();
+    expect(reportOf(listen, 150_000, THREE_MINUTES)).toBe("update");
+  });
+
+  it("sends a last time when the listen ends with time not yet sent", () => {
+    expect(reportOf({ counted: true, sentMs: 90_000 }, 91_000, THREE_MINUTES, true)).toBe("update");
+    expect(
+      reportOf({ counted: true, sentMs: 90_000 }, 90_000, THREE_MINUTES, true),
+    ).toBeUndefined();
+    expect(reportOf({ counted: false, sentMs: 0 }, 60_000, THREE_MINUTES, true)).toBeUndefined();
   });
 });
 

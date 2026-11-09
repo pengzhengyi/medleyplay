@@ -17,6 +17,33 @@ export function countsAsPlayed(playedMs: number, durationMs: number): boolean {
   return durationMs >= SHORTEST && playedMs >= Math.min(durationMs / 2, ENOUGH);
 }
 
+/** How much more listening, in milliseconds, before a counted play's time is sent again. */
+export const REPORT_EVERY_MS = 60_000;
+
+/** A listen, as far as sending it goes: whether it counts as a play, and the time last sent. */
+export interface Reported {
+  readonly counted: boolean;
+  readonly sentMs: number;
+}
+
+/**
+ * What to send of a listen at `playedMs` into a `durationMs`-long Track: `record`
+ * the play once it counts, then `update` its time after each further minute; once
+ * the listen is `over`, any time not yet sent.
+ */
+export function reportOf(
+  listen: Reported,
+  playedMs: number,
+  durationMs: number,
+  over = false,
+): "record" | "update" | undefined {
+  if (!listen.counted) {
+    return !over && countsAsPlayed(playedMs, durationMs) ? "record" : undefined;
+  }
+  const unsent = playedMs - listen.sentMs;
+  return unsent >= REPORT_EVERY_MS || (over && unsent > 0) ? "update" : undefined;
+}
+
 /**
  * Adds up how long a Track has been playing from its position updates.
  *

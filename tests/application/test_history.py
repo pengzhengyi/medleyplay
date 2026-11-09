@@ -10,7 +10,7 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.domain.history import KEPT_PLAYS, Played
+from medleyplay.domain.history import KEPT_PLAYS, PlayCount, Played
 from medleyplay.domain.playback import PlayId
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock
@@ -198,7 +198,7 @@ def test_play_counts_count_each_track_an_account_played_in_the_last_days(
 
     counts = catalog.play_counts(alice.id, days=7)
 
-    assert counts == {first: 2, second: 1}
+    assert counts == {first: PlayCount(plays=2), second: PlayCount(plays=1)}
 
 
 def test_play_counts_keep_the_plays_cleared_from_history(
@@ -211,7 +211,7 @@ def test_play_counts_keep_the_plays_cleared_from_history(
 
     counts = catalog.play_counts(alice.id, days=30)
 
-    assert counts == {track_id: 1}
+    assert counts == {track_id: PlayCount(plays=1)}
 
 
 def test_play_counts_are_each_accounts_own(
@@ -231,3 +231,16 @@ def test_play_counts_over_a_period_not_offered_are_refused(
 
     with pytest.raises(InvalidInputError, match="7 or 30 days"):
         catalog.play_counts(alice.id, days=90)
+
+
+def test_play_counts_over_all_time_count_every_play_the_account_made(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [track_id, _] = _two_tracks(catalog)
+    catalog.record_play(alice.id, _play(1), track_id, clock.now - timedelta(days=60))
+    catalog.record_play(alice.id, _play(2), track_id, clock.now)
+
+    counts = catalog.play_counts(alice.id, days=None)
+
+    assert counts == {track_id: PlayCount(plays=2)}

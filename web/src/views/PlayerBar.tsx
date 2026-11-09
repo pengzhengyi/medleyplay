@@ -10,10 +10,12 @@ import type { ReactNode } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
+import { playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
+import { PlayingKind } from "./PlayingKind";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { FavoriteButton, Transport } from "./Transport";
@@ -23,6 +25,7 @@ import { VolumeControl } from "./VolumeControl";
 export function PlayerBar({
   player,
   track,
+  tracks,
   onFavorite,
   menuActions,
   queueOpen,
@@ -32,6 +35,7 @@ export function PlayerBar({
 }: {
   readonly player: Player;
   readonly track: Track | undefined;
+  readonly tracks: ReadonlyMap<number, Track>;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
   readonly menuActions: TrackMenuActions;
   /** Whether the queue is open over the page, as it can be on a narrow screen. */
@@ -59,6 +63,19 @@ export function PlayerBar({
           >
             <Cover cover={track.cover} />
           </button>
+        )}
+        {track !== undefined && (
+          <PlayingKind
+            playing={playingOf(player.queue, tracks)}
+            track={track}
+            position={position}
+            moving={status.kind === "playing"}
+            opens="above"
+            onPlaySong={(song) => {
+              player.playAt(song.entry.key, 0);
+            }}
+            onEditSongs={menuActions.onEditSongs}
+          />
         )}
         <div className="names">
           <strong>{track?.title ?? "Nothing playing"}</strong>

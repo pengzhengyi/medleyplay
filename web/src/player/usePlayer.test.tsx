@@ -86,6 +86,27 @@ describe("playing songs inside one file", () => {
     expect(player().position).toBe(2);
   });
 
+  it("plays another song of the file from a second into it, playing on in place", async () => {
+    serve(ANSWERS);
+    const { element, media, player } = renderPlayer([FIRST, SECOND]);
+    act(() => {
+      player().playList([FIRST, SECOND], 0, () => "file:104");
+    });
+    await playing(player, FIRST);
+    act(() => {
+      media.playTo(10);
+    });
+    const second = player().queue.entries[1]?.key ?? "";
+
+    act(() => {
+      player().playAt(second, 5);
+    });
+
+    await playing(player, SECOND);
+    expect(element.currentTime).toBe(35);
+    expect(media.loads).toBe(1);
+  });
+
   it("shows a song's position and length from its own start, and seeks within it", async () => {
     serve(ANSWERS);
     const { element, player } = renderPlayer([SECOND]);

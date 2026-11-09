@@ -149,3 +149,39 @@ describe("the seek bar", () => {
     expect(onSeek).not.toHaveBeenCalled();
   });
 });
+
+describe("a seek bar across a whole album", () => {
+  /** An album of three songs over 100 seconds: 傲慢的上校 from 0, 浮游 from 40, 生如夏花 from 70. */
+  const MARKS = [
+    { start: 0, title: "傲慢的上校" },
+    { start: 40, title: "浮游" },
+    { start: 70, title: "生如夏花" },
+  ];
+
+  function renderAlbumBar(position: number) {
+    render(<SeekBar position={position} duration={100} onSeek={vi.fn()} marks={MARKS} />);
+    const bar = screen.getByRole("slider", { name: "Position" });
+    bar.getBoundingClientRect = () => new DOMRect(0, 0, 200, 12);
+    return bar;
+  }
+
+  it("names the song under the pointer, and how far into it", () => {
+    const bar = renderAlbumBar(10);
+
+    fireEvent.pointerMove(bar, { clientX: 96 });
+
+    expect(tipOf(bar)).toBe("浮游 · 0:08");
+  });
+
+  it("says the song playing, as well as the time on the album", () => {
+    const bar = renderAlbumBar(75);
+
+    expect(bar).toHaveAttribute("aria-valuetext", "生如夏花, 0:05; 1:15 of 1:40");
+  });
+
+  it("marks where each song but the first starts", () => {
+    const bar = renderAlbumBar(10);
+
+    expect(bar.querySelectorAll(".seek-mark")).toHaveLength(2);
+  });
+});

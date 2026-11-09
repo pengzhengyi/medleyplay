@@ -55,6 +55,8 @@ export type QueueAction =
   | { readonly type: "add"; readonly entry: Entry }
   | { readonly type: "next" }
   | { readonly type: "previous" }
+  /** Play the entry `key` now, wherever it is in the queue. */
+  | { readonly type: "jump"; readonly key: string }
   | { readonly type: "move"; readonly key: string; readonly to: number }
   | { readonly type: "remove"; readonly key: string }
   | { readonly type: "clear" }
@@ -102,6 +104,10 @@ export function reduce(queue: Queue, action: QueueAction): Queue {
         position: 0,
         order: action.shuffled ? action.entries.map((entry) => entry.key) : undefined,
       };
+    case "jump": {
+      const to = entries.findIndex((entry) => entry.key === action.key);
+      return to === -1 ? queue : { ...queue, position: to };
+    }
     case "playNext": {
       // In the queue's own order, it follows the Track playing, or ends a finished queue.
       const after = current(queue)?.key;

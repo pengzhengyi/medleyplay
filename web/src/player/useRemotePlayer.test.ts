@@ -179,6 +179,7 @@ describe("a remote's player", () => {
       result.current[0].add(two);
       result.current[0].playNow(two);
       result.current[0].seek(30);
+      result.current[0].playAt("b", 48);
     });
 
     await vi.waitFor(() => {
@@ -187,6 +188,7 @@ describe("a remote's player", () => {
         { kind: "add", entry: { track_id: 2, unit: null } },
         { kind: "playNow", entry: { track_id: 2, unit: null } },
         { kind: "seek", key: "a", seconds: 30 },
+        { kind: "playAt", key: "b", seconds: 48 },
       ]);
     });
   });

@@ -216,6 +216,9 @@ export function apply(
         player.seek(command.seconds);
       }
       return;
+    case "playAt":
+      player.playAt(command.key, command.seconds);
+      return;
     case "move":
       player.move(command.key, command.to);
       return;

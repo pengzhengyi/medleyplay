@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **What plays, as an album or a song** — Now Playing and the player show a
+  record spinning while an album plays and a note swaying for a song, still
+  when paused or for anyone who asked for less motion. Point at or press the
+  record to see the album's songs in the order they play: those played, the
+  one playing and how far it has got, and those to come; choose one to play
+  it. While an album plays, Now Playing's bar spans the whole album, marks
+  where each song starts, and names the song under the pointer.
+
 - **Insights** — a new tab shows what you listened to most over the last 7
   days, the last 30, or all time: about how long you listened, your plays and
   songs, your top artist and album, and the ten artists, albums, and songs you
@@ -269,6 +277,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In Edit details, the Song and Album choice no longer shows stray round marks
+  below it when the Kind is settled, and *Read details* fits its button.
 - In Safari, scrolling the Library no longer leaps hundreds of pixels at a time,
   which lit another row than the one under the pointer.
 - Finding a Track on MusicBrainz searches for a whole album when the Track's

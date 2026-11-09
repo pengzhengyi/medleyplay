@@ -3845,9 +3845,10 @@ dialog.modal::backdrop {
 
 .edit-details .paste-video-read {
   width: auto;
-  height: 2.4rem;
+  max-width: 100%;
+  min-height: 2.4rem;
   margin: 0.4rem 0 0;
-  padding: 0 1rem;
+  padding: 0.35rem 1rem;
   align-self: flex-start;
 }
 
@@ -5141,6 +5142,7 @@ kbd {
 }
 
 .kind-option {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -5158,8 +5160,14 @@ kbd {
   color: var(--accent);
 }
 
+/* Clipped, not only faded: a form's own style shows a disabled radio at half opacity. */
 .kind-input {
   position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
   opacity: 0;
   pointer-events: none;
 }
@@ -5420,4 +5428,246 @@ kbd {
 
 .insights-plays {
   grid-area: plays;
+}
+
+/*
+ * What plays now, as a mark beside its title: a record spinning for an album, a
+ * note swaying like a metronome for a song. Each moves only while the music plays.
+ */
+
+.playing-kind {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.15rem;
+}
+
+.playing-kind-icon.album {
+  animation: record-spin 3.2s linear infinite;
+}
+
+.playing-kind-icon.song {
+  transform-origin: 50% 90%;
+  animation: note-sway 1.6s ease-in-out infinite alternate;
+}
+
+.playing-kind-icon.still {
+  animation-play-state: paused;
+}
+
+button.playing-kind {
+  cursor: pointer;
+}
+
+button.playing-kind:hover,
+button.playing-kind[aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+@keyframes record-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes note-sway {
+  from {
+    transform: rotate(-45deg);
+  }
+
+  to {
+    transform: rotate(45deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playing-kind-icon.album,
+  .playing-kind-icon.song {
+    animation: none;
+  }
+}
+
+/* The album's songs, from its mark: played ones checked, the one playing filling, those to come. */
+
+.playing-kind-frame {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.album-songs {
+  position: absolute;
+  left: 0;
+  z-index: 20;
+  width: min(22rem, calc(100vw - 2rem));
+  max-height: min(26rem, 60vh);
+  padding: 0.75rem;
+  overflow-y: auto;
+  border-radius: 1rem;
+  background: var(--surface);
+  box-shadow: var(--float);
+  color: var(--ink);
+  text-align: left;
+}
+
+/* The gap to the songs is part of them, so the pointer crossing it keeps them open. */
+.album-songs::before {
+  position: absolute;
+  inset: -0.6rem 0;
+  z-index: -1;
+  content: "";
+}
+
+.album-songs.above {
+  bottom: calc(100% + 0.5rem);
+}
+
+.album-songs.below {
+  top: calc(100% + 0.5rem);
+}
+
+.album-songs-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.75rem;
+  margin: 0 0.25rem 0.6rem;
+}
+
+.album-songs-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-songs-time {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.album-songs-bar,
+.album-song-bar {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.album-songs-bar::after,
+.album-song-bar::after {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  content: "";
+  transform: scaleX(var(--played));
+  transform-origin: left;
+}
+
+.album-songs-list {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0;
+}
+
+.album-songs-row {
+  margin: 0;
+  list-style: none;
+}
+
+.album-song {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.album-song:hover {
+  background: var(--raised);
+}
+
+.album-song-place {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.album-song-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-song-length {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.album-song.played {
+  color: var(--muted);
+}
+
+.album-song.played .album-song-place {
+  color: var(--accent);
+}
+
+.album-song.playing {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.album-song.playing .album-song-place,
+.album-song.playing .album-song-length {
+  color: var(--accent);
+}
+
+/* Where each song starts on a bar across a whole album. */
+
+.seek-mark {
+  position: absolute;
+  inset: 0 auto 0 calc(var(--at) * 100%);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--surface);
+}
+
+/* Now Playing's title, after the mark of what plays; the album's songs open over the controls. */
+
+.np-title {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* Over the cover's blur, the songs need a solid ground to read on. */
+.now-playing .album-songs {
+  background: rgb(16 22 20 / 94%);
+  backdrop-filter: blur(24px);
 }

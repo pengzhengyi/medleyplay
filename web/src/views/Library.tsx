@@ -481,6 +481,7 @@ export function Library({
       <PlayerBar
         player={player}
         track={playing}
+        tracks={byId}
         onFavorite={actions.onFavorite}
         menuActions={actions}
         queueOpen={queueOpen}

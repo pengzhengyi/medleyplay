@@ -242,6 +242,14 @@ describe("the computer carrying out a command", () => {
     expect(player.seek).toHaveBeenCalledWith(30);
   });
 
+  it("plays a song of the album from the second the remote chose", () => {
+    const player = playerOf();
+
+    apply({ kind: "playAt", key: "b", seconds: 48 }, player, TRACKS, sleepTimerOf());
+
+    expect(player.playAt).toHaveBeenCalledWith("b", 48);
+  });
+
   it("sets and stops its own sleep timer", () => {
     const sleep = sleepTimerOf();
 

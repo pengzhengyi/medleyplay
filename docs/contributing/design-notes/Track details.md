@@ -438,6 +438,13 @@ songs editor.
   so beside a plain sentence that the video's text goes to the provider. The
   system message names the answer's shape, as a JSON model must be shown it, and
   says the video's text is data, not instructions.
+- **A note from the listener.** Asking the AI again may carry a note of the
+  listener's own, folded to one line and at most 500 characters, such as *the
+  2007 concert, with 22 songs*. It is a message of its own after the video's text,
+  so no text in a video can pass for one. The model follows it on what the music
+  is, and may use what it knows for the songs it names, such as a concert's
+  songs the text doesn't list; it never changes the answer's shape. The note is
+  kept in the Job's request, as the text is, and sent to the provider.
 - **What comes back** is a JSON object whose fields are all optional: a title,
   artist, album, year, and a song list of start, title, and artist. It is checked
   as the household's input is: text of at most 512 characters, a year from 1000 to
@@ -462,6 +469,8 @@ songs editor.
   file beside it, or the household, and is not a segment, once the provider is set
   up. Asked once a day per Track and text: the subject kept is a hash of the
   Track's id and its video text, so pasting better text asks again at once.
+  Someone asking it *again*, with a note or none, needs no wait; asking again
+  while a Job still asks about the Track is refused, rather than the note lost.
 - **Where the suggestions are kept.** The values are the Track's `ai` origin,
   replaced whole by the next suggestion, so an answer that suggests nothing clears
   the last. A suggested song list is kept apart, one per Track, only when it is a
@@ -470,7 +479,9 @@ songs editor.
   with *Use*, which copies it into the household's edit, to be saved or not; a
   suggestion equal to what the box holds is not offered. The songs editor fills
   its rows from a suggested list with its *AI* button, which asks the AI when it
-  has suggested none; see [Segments](Segments.md#the-web-client). Neither the web client's
+  has suggested none, and once its songs are in asks again with a note; a dot on
+  the button shows the AI working, its songs in, or its failure, which the note
+  beside it says in words; see [Segments](Segments.md#the-web-client). Neither the web client's
   `shownOf` nor the server's precedence includes the `ai` origin; both are checked
   against the same cases.
 - **Its own lane.** Jobs of `ai-details` run one at a time, at least 2 seconds

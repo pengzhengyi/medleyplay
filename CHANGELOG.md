@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ask the AI again, with a note** — once the AI's songs fill the songs editor,
+  pressing *AI* opens a field for a note of your own, such as *the 2007 concert,
+  with 22 songs*, and asks again at once, without the wait of a day. A dot on
+  the AI button shows it working, its songs in, or its failure, and the note
+  beside it says why. Songs you change while it works stay as they are.
+
 - **What plays, as an album or a song** — Now Playing and the player show a
   record spinning while an album plays and a note swaying for a song, still
   when paused or for anyone who asked for less motion. Point at or press the

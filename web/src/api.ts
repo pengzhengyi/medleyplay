@@ -305,10 +305,16 @@ export interface Played {
 export const PLAY_COUNT_PERIODS = [7, 30] as const;
 export type PlayCountPeriod = (typeof PLAY_COUNT_PERIODS)[number];
 
-/** How often the Account played a Track over a period, plays cleared from History too. */
+/**
+ * How often the Account played a Track over a period, plays cleared from History
+ * too, and how long it listened: `listened_ms` adds up the `timed_plays` whose
+ * time was measured.
+ */
 export interface PlayCount {
   readonly track_id: number;
   readonly plays: number;
+  readonly listened_ms: number;
+  readonly timed_plays: number;
 }
 
 /** What a plan at another storage limit would remove. */
@@ -874,12 +880,23 @@ export const api = {
   playback: (trackId: number) =>
     call<PlaybackAnswer>("POST", `/api/tracks/${String(trackId)}/playback`),
   job: (jobId: number) => call<Job>("GET", `/api/jobs/${String(jobId)}`),
-  recordPlay: (playId: string, trackId: number, playedAt: string) =>
-    call<Track>("PUT", `/api/plays/${playId}`, { track_id: trackId, played_at: playedAt }),
+  recordPlay: (playId: string, trackId: number, playedAt: string, listenedMs?: number) =>
+    call<Track>("PUT", `/api/plays/${playId}`, {
+      track_id: trackId,
+      played_at: playedAt,
+      listened_ms: listenedMs ?? null,
+    }),
+  /** Note how long a recorded play has been listened to; the longest time sent stays. */
+  noteListened: (playId: string, listenedMs: number) =>
+    call<undefined>("PUT", `/api/plays/${playId}/listened`, { listened_ms: listenedMs }),
   history: (limit: number) => call<Played[]>("GET", `/api/plays?limit=${String(limit)}`),
   clearHistory: () => call<undefined>("DELETE", "/api/plays"),
-  playCounts: (days: PlayCountPeriod) =>
-    call<PlayCount[]>("GET", `/api/plays/counts?days=${String(days)}`),
+  /** How often and how long you played each Track over the last `days`, or all time. */
+  playCounts: (days?: PlayCountPeriod) =>
+    call<PlayCount[]>(
+      "GET",
+      days === undefined ? "/api/plays/counts" : `/api/plays/counts?days=${String(days)}`,
+    ),
   /** What importing a Rate Your Music export would change, changing nothing. */
   previewRatingsImport: (file: Blob) =>
     send<RatingsImport>("POST", "/api/ratings/import/preview", file),

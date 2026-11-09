@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Track } from "../api";
 import { trackOf } from "../testing/server";
-import { allTimePlays, insightsOf } from "./insights";
+import { insightsOf } from "./insights";
 
 const MINUTE = 60_000;
 
@@ -15,11 +15,16 @@ const song = (
   change: Partial<Track> = {},
 ) => trackOf(id, `Song ${String(id)}`, { artist, album, duration_ms: minutes * MINUTE, ...change });
 
-/** How often each Track was played, as `[id, plays]` pairs. */
-const played = (...pairs: [number, number][]) => new Map(pairs);
+/** How often each Track was played before pages measured, as `[id, plays]` pairs. */
+const played = (...pairs: [number, number][]) =>
+  new Map(pairs.map(([id, plays]) => [id, { plays, listenedMs: 0, timedPlays: 0 }]));
+
+/** A Track's `plays`, `timedPlays` of them measured at `minutes` in all. */
+const measured = (id: number, plays: number, timedPlays: number, minutes: number) =>
+  [id, { plays, listenedMs: minutes * MINUTE, timedPlays }] as const;
 
 describe("insightsOf", () => {
-  it("counts a song's listening time as its plays times its length, summed for each artist", () => {
+  it("counts a play from before pages measured as its song's length, summed for each artist", () => {
     const tracks = [
       song(1, "朴树", "生如夏花", 4),
       song(2, "朴树", "生如夏花", 5),
@@ -123,25 +128,43 @@ describe("insightsOf", () => {
     ]);
   });
 
+  it("counts the time measured of a play, not its song's length", () => {
+    const tracks = [song(1, "Ado", "狂言", 4)];
+
+    const insights = insightsOf(tracks, new Map([measured(1, 2, 2, 5)]));
+
+    expect(insights).toMatchObject({ plays: 2, listenedMs: 5 * MINUTE, playsEstimated: 0 });
+  });
+
+  it("adds the length of each play from before pages measured to the time measured", () => {
+    const tracks = [song(1, "Ado", "狂言", 4)];
+
+    const insights = insightsOf(tracks, new Map([measured(1, 3, 1, 2)]));
+
+    expect(insights).toMatchObject({ plays: 3, listenedMs: 10 * MINUTE, playsEstimated: 2 });
+  });
+
+  it("counts the time measured of a whole-album file", () => {
+    const tracks = [song(1, "朴树", "生如夏花", 60, { kind: "album" })];
+
+    const insights = insightsOf(tracks, new Map([measured(1, 1, 1, 52)]));
+
+    expect(insights).toMatchObject({ listenedMs: 52 * MINUTE, playsNotTimed: 0 });
+    expect(insights.albums[0]).toMatchObject({ listenedMs: 52 * MINUTE });
+  });
+
   it("finds nothing when nothing was played", () => {
     const insights = insightsOf([song(1, "Ado", "狂言", 3)], played());
 
     expect(insights).toEqual({
       plays: 0,
       listenedMs: 0,
+      playsEstimated: 0,
       playsNotTimed: 0,
       songs: 0,
       artists: [],
       albums: [],
       topSongs: [],
     });
-  });
-});
-
-describe("allTimePlays", () => {
-  it("takes each played Track's own play count", () => {
-    const tracks = [song(1, "Ado", "狂言", 3, { play_count: 4 }), song(2, "Ado", "狂言", 3)];
-
-    expect(allTimePlays(tracks)).toEqual(played([1, 4]));
   });
 });

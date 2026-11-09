@@ -10,9 +10,10 @@ import { type RefObject, useEffect, useEffectEvent, useReducer, useRef, useState
 
 import { ApiError, type PlaybackAnswer, type Track, api, coverUrl } from "../api";
 import { newId } from "../ids";
-import { PlayTime, countsAsPlayed } from "./playCount";
+import { PlayTime, reportOf } from "./playCount";
+import { recordPlay, sendPlays, updatePlay } from "./plays";
 import { EMPTY, type Entry, type Queue, type Repeat, current, following, reduce } from "./queue";
-import { type Play, forgetPlay, keepPlay, keptPlays, loadQueue, saveQueue } from "./storage";
+import { type Play, loadQueue, saveQueue } from "./storage";
 import {
   type Stretch,
   WHOLE,
@@ -101,8 +102,6 @@ const FINISHED_JOB = new Set(["succeeded", "failed", "cancelled"]);
 const PAUSING_ERRORS = new Set(["AbortError"]);
 /** How near a song's start the file may already be for it to play on without a seek, in seconds. */
 const IN_PLACE = 0.25;
-/** The plays the server will never accept, so retrying them is pointless. */
-const REFUSED_PLAY = new Set([404, 409, 422]);
 
 const UNPLAYABLE: Record<string, string> = {
   offline: "This Track's Library is offline.",
@@ -152,7 +151,10 @@ export function usePlayer(
   // A queue taken from elsewhere plays on, or pauses, from its second; its play may have counted.
   const takenPlaying = useRef(false);
   const takenCounted = useRef(false);
-  const listening = useRef<{ play: Play; time: PlayTime; counted: boolean } | undefined>(undefined);
+  // The current listen: its play, how long it has played, whether it counts, and the time sent.
+  const listening = useRef<
+    { play: Play; time: PlayTime; counted: boolean; sentMs: number } | undefined
+  >(undefined);
   const lastSaved = useRef(0);
   // The current song's stretch of its file, the timer that ends it, and the entry last ended.
   const stretch = useRef<Stretch>(WHOLE);
@@ -184,12 +186,42 @@ export function usePlayer(
   };
   const fail = useEffectEvent(failed);
 
+  /**
+   * Send what is due of the current listen: the play once it counts, then its time
+   * each further minute; once `over`, any time not yet sent.
+   */
+  const report = (over = false) => {
+    const heard = listening.current;
+    if (heard === undefined) {
+      return;
+    }
+    const element = audio.current;
+    const playedMs = Math.round(heard.time.playedMs);
+    const trackMs =
+      tracks.get(heard.play.trackId)?.duration_ms ?? (element?.duration ?? Number.NaN) * 1000;
+    switch (reportOf(heard, playedMs, trackMs, over)) {
+      case "record":
+        heard.counted = true;
+        heard.sentMs = playedMs;
+        void recordPlay({ ...heard.play, listenedMs: playedMs });
+        break;
+      case "update":
+        heard.sentMs = playedMs;
+        void updatePlay(heard.play, playedMs);
+        break;
+      default:
+    }
+  };
+  const reportNow = useEffectEvent(report);
+
   /** Start counting a new play of `forTrack`, the Track now starting from its beginning. */
   const startListening = (forTrack: number) => {
+    report(true);
     listening.current = {
       play: { id: newId(), trackId: forTrack, playedAt: new Date().toISOString() },
       time: new PlayTime(),
       counted: false,
+      sentMs: 0,
     };
   };
   const listen = useEffectEvent(startListening);
@@ -203,6 +235,19 @@ export function usePlayer(
       }
     });
     void sendPlays();
+  }, []);
+
+  // A page put away may be closed without warning, so the time listened so far goes now.
+  useEffect(() => {
+    const whenHidden = () => {
+      if (document.visibilityState === "hidden") {
+        reportNow(true);
+      }
+    };
+    document.addEventListener("visibilitychange", whenHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", whenHidden);
+    };
   }, []);
 
   // Load the current entry whenever it changes; a later load supersedes an earlier one.
@@ -385,14 +430,9 @@ export function usePlayer(
         ending.current = setTimeout(finish, (left * 1000) / element.playbackRate);
       }
     }
-    const heard = listening.current;
-    if (heard !== undefined && !element.paused) {
-      heard.time.update(element.currentTime);
-      const trackMs = tracks.get(heard.play.trackId)?.duration_ms ?? element.duration * 1000;
-      if (!heard.counted && countsAsPlayed(heard.time.playedMs, trackMs)) {
-        heard.counted = true;
-        void keepPlay(heard.play).then(() => sendPlays(heard.play));
-      }
+    if (listening.current !== undefined && !element.paused) {
+      listening.current.time.update(element.currentTime);
+      report();
     }
     if (Math.abs(position - lastSaved.current) >= SAVE_EVERY) {
       lastSaved.current = position;
@@ -428,6 +468,7 @@ export function usePlayer(
         () => {
           clearTimeout(ending.current);
           listening.current?.time.pause();
+          reportNow(true);
           if (!element.ended) {
             show(playingKey.current, { status: { kind: "paused" } });
           }
@@ -716,34 +757,6 @@ async function lookAhead(trackId: number, ahead: Map<number, PlaybackAnswer>): P
     ahead.set(trackId, await api.playback(trackId));
   } catch {
     // The next Track asks again when its turn comes.
-  }
-}
-
-const recordedListeners = new Set<() => void>();
-
-/** Call `listener` whenever the server accepts a play this page sent; return how to stop. */
-export function onPlaysRecorded(listener: () => void): () => void {
-  recordedListeners.add(listener);
-  return () => {
-    recordedListeners.delete(listener);
-  };
-}
-
-/** Send every kept play, forgetting those the server accepted or will always refuse. */
-async function sendPlays(only?: Play): Promise<void> {
-  const plays = only === undefined ? await keptPlays() : [only];
-  for (const play of plays) {
-    try {
-      await api.recordPlay(play.id, play.trackId, play.playedAt);
-      await forgetPlay(play.id);
-      for (const listener of recordedListeners) {
-        listener();
-      }
-    } catch (error) {
-      if (error instanceof ApiError && REFUSED_PLAY.has(error.status)) {
-        await forgetPlay(play.id);
-      }
-    }
   }
 }
 

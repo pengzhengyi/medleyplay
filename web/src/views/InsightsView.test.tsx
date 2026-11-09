@@ -42,11 +42,32 @@ const LIBRARY = [
   }),
 ];
 
-/** Serve `last30` and `last7` as the play counts of the last 30 and 7 days. */
-function servingPlays(last30: readonly PlayCount[], last7: readonly PlayCount[] = []) {
+/** `plays` of a Track all made before pages measured how long they were listened to. */
+const earlier = (trackId: number, plays: number): PlayCount => ({
+  track_id: trackId,
+  plays,
+  listened_ms: 0,
+  timed_plays: 0,
+});
+
+/** `plays` of a Track, each measured, `minutes` in all. */
+const measured = (trackId: number, plays: number, minutes: number): PlayCount => ({
+  track_id: trackId,
+  plays,
+  listened_ms: minutes * MINUTE,
+  timed_plays: plays,
+});
+
+/** Serve the play counts of the last 30 days, the last 7, and all time. */
+function servingPlays(
+  last30: readonly PlayCount[],
+  last7: readonly PlayCount[] = [],
+  allTime: readonly PlayCount[] = [],
+) {
   return serve({
     "GET /api/plays/counts?days=30": { body: last30 },
     "GET /api/plays/counts?days=7": { body: last7 },
+    "GET /api/plays/counts": { body: allTime },
   });
 }
 
@@ -66,10 +87,7 @@ function renderInsights(tracks: readonly Track[] = LIBRARY) {
 
 describe("InsightsView", () => {
   it("opens on the last 30 days, with the time, plays, and songs listened to", async () => {
-    servingPlays([
-      { track_id: 1, plays: 3 },
-      { track_id: 2, plays: 2 },
-    ]);
+    servingPlays([earlier(1, 3), earlier(2, 2)]);
 
     renderInsights();
 
@@ -83,10 +101,7 @@ describe("InsightsView", () => {
   });
 
   it("shows the top artist and album as the most listened, each leading to its page", async () => {
-    servingPlays([
-      { track_id: 1, plays: 3 },
-      { track_id: 3, plays: 2 },
-    ]);
+    servingPlays([earlier(1, 3), earlier(3, 2)]);
 
     renderInsights();
 
@@ -98,10 +113,7 @@ describe("InsightsView", () => {
   });
 
   it("ranks the artists by listening time, each with its time written out", async () => {
-    servingPlays([
-      { track_id: 1, plays: 1 },
-      { track_id: 3, plays: 2 },
-    ]);
+    servingPlays([earlier(1, 1), earlier(3, 2)]);
 
     renderInsights();
 
@@ -113,21 +125,29 @@ describe("InsightsView", () => {
     ).toEqual(["AdoAbout 6 min, 2 plays", "朴树About 4 min, 1 play"]);
   });
 
-  it("counts all time from each song's own play count, asking the server nothing", async () => {
-    const { calls } = servingPlays([]);
+  it("counts all time from the server's totals, with the time each play was listened to", async () => {
+    servingPlays([], [], [measured(3, 20, 50)]);
     renderInsights();
 
     await userEvent.click(screen.getByRole("radio", { name: "All time" }));
 
-    expect(screen.getByRole("link", { name: /Top artist/ })).toHaveTextContent("Ado");
-    expect(calls).toEqual(["GET /api/plays/counts?days=30"]);
+    expect(await screen.findByRole("link", { name: /Top artist/ })).toHaveTextContent(
+      "Top artistAdoAbout 50 min, 20 plays",
+    );
+  });
+
+  it("says how many plays from before listening was measured count the whole song", async () => {
+    servingPlays([earlier(1, 3), measured(3, 2, 5)]);
+
+    renderInsights();
+
+    expect(await screen.findByText(/^Plays from before listening was measured/u)).toHaveTextContent(
+      "Plays from before listening was measured count the whole song: 3 plays. Clearing History doesn't change Insights.",
+    );
   });
 
   it("writes each ranked album's artist, telling apart two albums of one name", async () => {
-    servingPlays([
-      { track_id: 1, plays: 1 },
-      { track_id: 4, plays: 1 },
-    ]);
+    servingPlays([earlier(1, 1), earlier(4, 1)]);
 
     renderInsights([...LIBRARY, trackOf(4, "Re:Start", { artist: "Ado", album: "生如夏花" })]);
 
@@ -140,7 +160,7 @@ describe("InsightsView", () => {
   });
 
   it("says nothing was played in a period with no plays", async () => {
-    servingPlays([{ track_id: 1, plays: 1 }], []);
+    servingPlays([earlier(1, 1)], []);
     renderInsights();
     await screen.findByRole("link", { name: /Top artist/ });
 
@@ -150,11 +170,7 @@ describe("InsightsView", () => {
   });
 
   it("plays a top song, then the top songs after it", async () => {
-    servingPlays([
-      { track_id: 1, plays: 3 },
-      { track_id: 2, plays: 2 },
-      { track_id: 3, plays: 1 },
-    ]);
+    servingPlays([earlier(1, 3), earlier(2, 2), earlier(3, 1)]);
     const onPlay = renderInsights();
 
     await userEvent.click(await screen.findByRole("button", { name: "Play 生如夏花, 2 plays" }));
@@ -169,7 +185,7 @@ describe("InsightsView", () => {
       duration_ms: 60 * MINUTE,
       kind: "album",
     });
-    servingPlays([{ track_id: 9, plays: 2 }]);
+    servingPlays([earlier(9, 2)]);
 
     renderInsights([...LIBRARY, album]);
 

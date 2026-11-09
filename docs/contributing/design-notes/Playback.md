@@ -140,6 +140,30 @@ sequenceDiagram
 - **Plays wait in an outbox** in IndexedDB until the server accepts them, so a
   play made while the server is unreachable is recorded later.
 
+### How long a play was listened to
+
+- **The page measures each play,** by the same position steps that decide it
+  counts, so a seek adds nothing. Only a counted play has a time: listening
+  to a song skipped before it counts isn't kept.
+- **It sends the time with the play,** then again after each further minute of
+  listening, and once more when the listen ends: the next song, a pause, or
+  the page put away. A later time goes to `PUT /api/plays/{id}/listened`,
+  which answers 404 for a play the server doesn't have, so it never counts a
+  play again once that play has been forgotten.
+- **The server keeps the longest time sent,** at most the Track's length, so a
+  time sent again or late changes nothing. Each Track's state adds up the
+  measured time and how many plays have one, so all-time totals outlast the
+  plays pruned after 30 days. The totals grow by how much longer a play became,
+  in statements that take the write lock before they read the play's earlier
+  time, so two devices or a retry can't count it twice.
+- **Sends run one at a time from the outbox,** which forgets a play only once
+  the time the server has is the time kept, so an answer to an older time
+  can't drop a newer one. A killed page loses at most a minute of listening.
+- **Moving the music to another device hands its play on,** with the time
+  listened, and the device taking it goes on with the same play.
+- **Plays recorded before pages measured have no time,** and count their
+  song's length, as Insights explains.
+
 ## History
 
 - **History lists the songs an Account played,** newest first, in a *History*
@@ -178,18 +202,19 @@ sequenceDiagram
   listening time, plays, and songs played; the top artist and album; the ten
   artists and albums listened to longest, each row filled to its share of the
   first; and the ten songs played most, which play as Library rows do.
-- **Listening time is an estimate:** each play counts the song's whole length,
-  since a play is recorded once half the song, or four minutes, has played, and
-  how long it went on isn't. A whole album in one file counts its plays but
-  adds no time, which its length would overstate many times over; nor does a
-  song of unknown length. The page says how many plays weren't timed.
+- **Listening time is what the page measured** of each play, a whole album in
+  one file included. A play from before pages measured counts its song's whole
+  length; a whole album in one file, or a song of unknown length, then counts
+  its play but adds no time, which its length would overstate many times over.
+  The page says how many plays counted their whole song, and how many weren't
+  timed.
 - **Artists and albums group as the Artists and Albums views do:** names
   compared folded, an album under its album artist or its artist. A Track with
   no artist or no album counts in the totals but isn't ranked.
-- **All time reads each Track's play count,** which the page already holds. The
-  last 7 or 30 days ask the server for the Account's plays in that time,
-  cleared ones included, since clearing History hides plays without undoing
-  them; it asks again when the page sends a play or is shown again.
+- **Each period asks the server:** the last 7 or 30 days count the Account's
+  plays in that time, cleared ones included, since clearing History hides plays
+  without undoing them; all time reads each Track's totals. It asks again when
+  the page records a play or is shown again.
 
 ## Availability in the Track list
 
@@ -346,7 +371,8 @@ and the full views are in [Web client](Web%20client.md).
 | `PUT /api/plays/{id}` | Signed in | Records a play of a Track under a client UUID |
 | `GET /api/plays?limit=` | Signed in | The Account's History: up to `limit` (at most 500) of its plays, newest first |
 | `DELETE /api/plays` | Signed in | Clears the Account's History |
-| `GET /api/plays/counts?days=` | Signed in | How often the Account played each Track in the last 7 or 30 days, cleared plays included |
+| `PUT /api/plays/{id}/listened` | Signed in | Notes how long a recorded play was listened to; the longest time stays |
+| `GET /api/plays/counts?days=` | Signed in | How often and how long the Account played each Track in the last 7 or 30 days, cleared plays included, or all time with no `days` |
 | `GET /api/tracks` | Signed in | Each Track now also has its `availability` |
 
 ## Testing

@@ -44,7 +44,13 @@ const LISTED: readonly Song[] = [
 ];
 
 /** The AI, set up and never asked about the file. */
-const AI_UNASKED: AiAsk = { can: true, state: undefined, message: "", ask: vi.fn() };
+const AI_UNASKED: AiAsk = {
+  can: true,
+  state: undefined,
+  message: "",
+  ask: vi.fn(),
+  askAgain: vi.fn(),
+};
 
 /**
  * Open *Bremen*'s details on its songs, as its menu's *Edit songs…* does, its file
@@ -237,6 +243,70 @@ describe("editing a file's songs", () => {
     expect(asking).toHaveRole("status");
     expect(await within(dialog).findByText("2 songs from the AI")).toBeInTheDocument();
     expect(box(dialog, "Title of song 2")).toHaveValue("ゴーゴー幽霊船");
+  });
+
+  it("shows in the AI button that it works, then that its songs are in", async () => {
+    const unsplit = splitSongsOf(104, []);
+    const { dialog, load, answerAi } = await renderEditor(unsplit);
+    const button = within(dialog).getByRole("button", { name: "Fill with AI" });
+
+    await userEvent.click(button);
+    answerAi({ ...AI_UNASKED, state: "running" });
+    const working = button.dataset.status;
+    load.mockResolvedValue({ ...unsplit, suggested: LISTED });
+    answerAi({ ...AI_UNASKED, state: "succeeded" });
+    await within(dialog).findByText("2 songs from the AI");
+
+    expect([
+      working,
+      within(dialog).getByRole("button", { name: "Ask the AI again" }).dataset.status,
+    ]).toEqual(["working", "answered"]);
+  });
+
+  it("shows in the AI button that it failed, and says why", async () => {
+    const { dialog, answerAi } = await renderEditor(splitSongsOf(104, []));
+    const button = within(dialog).getByRole("button", { name: "Fill with AI" });
+
+    await userEvent.click(button);
+    answerAi({ ...AI_UNASKED, state: "failed", message: "The provider refused the key." });
+
+    expect(
+      await within(dialog).findByText("The AI couldn't say: The provider refused the key."),
+    ).toHaveRole("status");
+    expect(button.dataset.status).toBe("failed");
+  });
+
+  it("asks the AI again with a note once its songs are in", async () => {
+    const askAgain = vi.fn();
+    const { dialog } = await renderEditor(splitSongsOf(104, [], [], LISTED), {
+      ai: { ...AI_UNASKED, askAgain },
+    });
+    await press(dialog, "Fill with AI");
+
+    await press(dialog, "Ask the AI again");
+    await userEvent.type(
+      within(dialog).getByRole("textbox", { name: "Anything the AI should know?" }),
+      "It's the 2007 concert, with 22 songs{Enter}",
+    );
+
+    expect(askAgain).toHaveBeenCalledExactlyOnceWith("It's the 2007 concert, with 22 songs");
+    expect(within(dialog).getByText("Asking the AI…")).toHaveRole("status");
+  });
+
+  it("keeps songs edited while the AI was asked, and offers its answer instead", async () => {
+    const unsplit = splitSongsOf(104, []);
+    const { dialog, load, answerAi } = await renderEditor(unsplit);
+    await press(dialog, "Fill with AI");
+    answerAi({ ...AI_UNASKED, state: "running" });
+
+    await press(dialog, "Add a song");
+    load.mockResolvedValue({ ...unsplit, suggested: LISTED });
+    answerAi({ ...AI_UNASKED, state: "succeeded" });
+
+    expect(
+      await within(dialog).findByText("The AI answered with 2 songs: press AI to use them."),
+    ).toHaveRole("status");
+    expect(within(dialog).queryByRole("textbox", { name: "Title of song 2" })).toBeNull();
   });
 
   it("says when the AI found no song list", async () => {

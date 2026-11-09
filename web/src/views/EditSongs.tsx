@@ -96,7 +96,12 @@ export interface AiAsk {
   readonly state: TrackLookup["state"] | undefined;
   readonly message: string;
   readonly ask: () => void;
+  /** Ask the AI again at once, with a note of the listener's, which may be empty. */
+  readonly askAgain: (hint: string) => void;
 }
+
+/** The longest note to the AI, as the server takes it. */
+const MAX_HINT = 500;
 
 /** The most songs a file is split into, as the server keeps them. */
 const MAX_SONGS = 300;
@@ -143,6 +148,14 @@ export function SongsEditor({
   const [typing, setTyping] = useState(false);
   const [fillNote, setFillNote] = useState("");
   const [askedAi, setAskedAi] = useState(false);
+  // Whether the rows are the AI's answer as it gave it, so pressing AI asks again.
+  const [fromAi, setFromAi] = useState(false);
+  // Whether the rows were changed while the AI was asked, so its answer waits to be used.
+  const [editedSinceAsking, setEditedSinceAsking] = useState(false);
+  // The last answer of the AI asked here: shown in its button until it is asked again.
+  const [aiOutcome, setAiOutcome] = useState<"answered" | "failed" | undefined>(undefined);
+  const [askingAgain, setAskingAgain] = useState(false);
+  const [hint, setHint] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // Set once saving or unsplitting has said what it removes, so the next press goes ahead.
@@ -225,6 +238,8 @@ export function SongsEditor({
 
   const edit = (next: readonly Row[]) => {
     setRows(next);
+    setFromAi(false);
+    setEditedSinceAsking(true);
     setConfirming(undefined);
     setError("");
     setAudioNote("");
@@ -237,6 +252,21 @@ export function SongsEditor({
     );
     edit(list.map((song, index) => rowOf(song, ids[index] ?? null)));
     setFillNote(`${songCount(list.length)} ${from}`);
+    setFromAi(from === "from the AI");
+  };
+  /** Ask the AI, at once or `again` with a note, and keep the rows as they are until it answers. */
+  const askAi = (again?: string) => {
+    setTyping(false);
+    setAskingAgain(false);
+    setFillNote("");
+    setAiOutcome(undefined);
+    setAskedAi(true);
+    setEditedSinceAsking(false);
+    if (again === undefined) {
+      ai.ask();
+    } else {
+      ai.askAgain(again);
+    }
   };
 
   // The AI's list, once the lookup asked here is done: the file's songs are read again.
@@ -244,7 +274,13 @@ export function SongsEditor({
   const takeAiAnswer = useEffectEvent((loaded: Songs) => {
     setAskedAi(false);
     setSongs(loaded);
-    if (loaded.suggested.length > 0) {
+    setAiOutcome(ai.state === "failed" ? "failed" : "answered");
+    if (loaded.suggested.length > 0 && editedSinceAsking) {
+      // Rows changed while it was asked stay; pressing AI uses its songs.
+      setFillNote(
+        `The AI answered with ${songCount(loaded.suggested.length)}: press AI to use them.`,
+      );
+    } else if (loaded.suggested.length > 0) {
       fill(loaded.suggested, "from the AI");
     } else {
       setFillNote(
@@ -403,6 +439,14 @@ export function SongsEditor({
   const kept = new Set(rows.flatMap((row) => (row.id === null ? [] : [row.id])));
   const removing = songs?.songs.filter((song) => !kept.has(song.id)).length ?? 0;
   const thinking = askedAi && !aiDone;
+  // What the AI button shows of the AI: working on it, its songs in use, or why it failed.
+  const aiStatus = thinking
+    ? "working"
+    : fromAi
+      ? "answered"
+      : aiOutcome === "failed"
+        ? "failed"
+        : undefined;
 
   const save = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -505,25 +549,29 @@ export function SongsEditor({
             ))}
             <button
               type="button"
-              className="fill-button"
-              disabled={busy || thinking || (songs.suggested.length === 0 && !ai.can)}
-              aria-label="Fill with AI"
+              className="fill-button ai-button"
+              data-status={aiStatus}
+              disabled={busy || thinking || (!fromAi && songs.suggested.length === 0 && !ai.can)}
+              aria-label={fromAi ? "Ask the AI again" : "Fill with AI"}
+              aria-expanded={fromAi ? askingAgain : undefined}
               aria-busy={thinking}
               title={
-                songs.suggested.length > 0
-                  ? `The ${songCount(songs.suggested.length)} the AI suggested`
-                  : ai.can
-                    ? "Ask the AI for the songs"
-                    : "Set up an AI provider in Settings to ask it"
+                fromAi
+                  ? "Ask the AI again, with a note if you like"
+                  : songs.suggested.length > 0
+                    ? `The ${songCount(songs.suggested.length)} the AI suggested`
+                    : ai.can
+                      ? "Ask the AI for the songs"
+                      : "Set up an AI provider in Settings to ask it"
               }
               onClick={() => {
                 setTyping(false);
-                if (songs.suggested.length > 0) {
+                if (fromAi) {
+                  setAskingAgain((open) => !open);
+                } else if (songs.suggested.length > 0) {
                   fill(songs.suggested, "from the AI");
                 } else {
-                  setFillNote("");
-                  setAskedAi(true);
-                  ai.ask();
+                  askAi();
                 }
               }}
             >
@@ -533,11 +581,56 @@ export function SongsEditor({
                 <SparkleIcon aria-hidden />
               )}{" "}
               AI
+              {aiStatus !== undefined && <span className="ai-status" aria-hidden />}
             </button>
             <span className="songs-fill-note" role="status">
               {thinking ? "Asking the AI…" : fillNote}
             </span>
           </div>
+          {askingAgain && (
+            <div className="ai-again">
+              <label htmlFor="ai-again-hint" className="detail-label">
+                Anything the AI should know?
+              </label>
+              <div className="ai-again-row">
+                <input
+                  id="ai-again-hint"
+                  className="detail-input"
+                  value={hint}
+                  maxLength={MAX_HINT}
+                  placeholder="It's the 2007 concert, with 22 songs"
+                  aria-describedby="ai-again-count"
+                  // The field opens on pressing AI, to type the note at once.
+                  autoFocus
+                  onChange={(event) => {
+                    setHint(event.currentTarget.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      askAi(hint);
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setAskingAgain(false);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="ai-again-ask"
+                  onClick={() => {
+                    askAi(hint);
+                  }}
+                >
+                  Ask again
+                </button>
+              </div>
+              <small id="ai-again-count" className="ai-again-count">
+                {`${String(hint.length)} of ${String(MAX_HINT)} characters`}
+              </small>
+            </div>
+          )}
           {disagree !== null && <p className="songs-note songs-doubt">{disagree}</p>}
           {typing && (
             <Suspense fallback={<p className="empty">Opening the list…</p>}>

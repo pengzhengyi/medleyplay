@@ -2,8 +2,9 @@
  * @file What plays now, as Now Playing shows it: a song, or an album and where in it.
  *
  * An album plays as the entries next to each other with the current entry's unit,
- * such as a split file's songs or an album's in Album order, in the order they
- * play; the same album queued twice in a row is two albums, told apart where a
+ * such as a split file's songs or an album's in Album order, or, with no unit,
+ * songs of one split file queued one after another, as Up next shows them, in
+ * the order they play; the same album queued twice in a row is two albums, told apart where a
  * song comes again. A whole album in one file is an album with no songs known. A
  * unit of one song, or of songs with no album named, plays as a song. Each song
  * has its place on the album's timeline, once every song's length is known.
@@ -43,15 +44,20 @@ export function playingOf(queue: Queue, tracks: ReadonlyMap<number, Track>): Pla
   if (now === undefined) {
     return SONG;
   }
-  if (now.unit === undefined) {
-    return tracks.get(now.trackId)?.kind === "album"
+  const playingTrack = tracks.get(now.trackId);
+  if (now.unit === undefined && playingTrack?.segment_of == null) {
+    return playingTrack?.kind === "album"
       ? { kind: "album", songs: [], current: -1, length: undefined }
       : SONG;
   }
-  if (now.unit.startsWith("album:") && tracks.get(now.trackId)?.album === "") {
+  if (now.unit?.startsWith("album:") === true && playingTrack?.album === "") {
     return SONG;
   }
-  const { first, last } = runAround(queue.entries, queue.position);
+  const groupOf = (entry: Entry | undefined) =>
+    entry === undefined
+      ? undefined
+      : (entry.unit ?? `file:${String(tracks.get(entry.trackId)?.segment_of ?? "")}`);
+  const { first, last } = runAround(queue.entries, queue.position, groupOf);
   if (first === last) {
     return SONG;
   }
@@ -77,15 +83,17 @@ export function playingOf(queue: Queue, tracks: ReadonlyMap<number, Track>): Pla
 function runAround(
   entries: readonly Entry[],
   position: number,
+  groupOf: (entry: Entry | undefined) => string | undefined,
 ): { readonly first: number; readonly last: number } {
-  const unit = entries[position]?.unit;
+  const group = groupOf(entries[position]);
+  const inGroup = (place: number) => groupOf(entries[place]) === group;
   let blockStart = position;
-  while (entries[blockStart - 1]?.unit === unit) {
+  while (inGroup(blockStart - 1)) {
     blockStart--;
   }
   let first = blockStart;
   let seen = new Set<number>();
-  for (let place = blockStart; entries[place]?.unit === unit; place++) {
+  for (let place = blockStart; inGroup(place); place++) {
     const trackId = entries[place]?.trackId ?? -1;
     if (seen.has(trackId)) {
       if (place > position) {
@@ -97,7 +105,7 @@ function runAround(
     seen.add(trackId);
   }
   let last = position;
-  while (entries[last + 1]?.unit === unit) {
+  while (inGroup(last + 1)) {
     last++;
   }
   return { first, last };

@@ -50,6 +50,16 @@ describe("playingOf", () => {
     ]);
   });
 
+  it("finds the album of songs of one file queued one after another with no unit", () => {
+    const loose = ENTRIES.map(({ key, trackId }) => ({ key, trackId }));
+
+    expect(playingOf(playing(2, loose), BY_ID)).toMatchObject({
+      kind: "album",
+      current: 2,
+      length: 720,
+    });
+  });
+
   it("takes a song with no unit as a song", () => {
     expect(playingOf(playing(3), BY_ID)).toEqual({ kind: "song" });
   });

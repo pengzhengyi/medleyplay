@@ -1,8 +1,8 @@
 /**
  * @file Insights: what the Account listened to most, over all time or the last days.
  *
- * Listening time is an estimate, so it is written "about"; the footnote says how
- * it is counted. A top song plays when clicked, then the songs below it, as a
+ * Listening time is written "about", since plays from before listening was
+ * measured count their whole song; the footnote says how many did. A top song plays when clicked, then the songs below it, as a
  * Library row does.
  */
 
@@ -47,7 +47,7 @@ export function InsightsView({
   readonly onPlay: (shown: readonly Track[], index: number) => void;
 }) {
   const [period, setPeriod] = useState<Period>(30);
-  const { counts, failure } = usePlayCounts(period, tracks);
+  const { counts, failure } = usePlayCounts(period);
   const insights = useMemo(
     () => (counts === undefined ? undefined : insightsOf(tracks, counts)),
     [tracks, counts],
@@ -144,9 +144,9 @@ export function InsightsView({
             </section>
           )}
           <p className="muted insights-note">
-            {
-              "Times are estimates: each play counts the whole song. Clearing History doesn't change Insights."
-            }
+            {insights.playsEstimated > 0 &&
+              `Plays from before listening was measured count the whole song: ${playsOf(insights.playsEstimated)}. `}
+            {"Clearing History doesn't change Insights."}
           </p>
         </div>
       )}

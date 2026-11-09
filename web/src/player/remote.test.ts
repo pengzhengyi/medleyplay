@@ -35,6 +35,9 @@ function speakerOf(change: Parameters<typeof speakerStateOf>[0] = {}, ago = 0): 
   return { page: "host-page-0001", state: speakerStateOf(change), reportedAt: NOW - ago };
 }
 
+/** The id of a play counted on one page and handed on to another. */
+const PLAY_ID = "00000000-0000-4000-8000-0000000000a1";
+
 describe("what the computer reports", () => {
   it("is its queue in the order it plays, and how it plays", () => {
     const state = stateOf(playerOf(), sleepTimerOf(), NOW);
@@ -127,6 +130,36 @@ describe("moving the music", () => {
       seconds: 40,
       playing: true,
       counted: true,
+      play: null,
+    });
+  });
+
+  it("onto the computer hands on the play counted, with how long it was listened to", () => {
+    const player = playerOf();
+    const play = { id: PLAY_ID, trackId: 1, playedAt: "2026-11-09T08:00:00Z", listenedMs: 130_000 };
+
+    const command = takeOf({ queue: player.queue, seconds: 40, counted: true, play }, true);
+
+    expect(command).toMatchObject({
+      play: { id: PLAY_ID, track_id: 1, played_at: play.playedAt, listened_ms: 130_000 },
+    });
+  });
+
+  it("onto this page goes on with the computer's play", () => {
+    const play = {
+      id: PLAY_ID,
+      track_id: 1,
+      played_at: "2026-11-09T08:00:00Z",
+      listened_ms: 130_000,
+    };
+
+    const handoff = handoffOf(speakerOf({ counted: true, play }), NOW);
+
+    expect(handoff?.play).toEqual({
+      id: PLAY_ID,
+      trackId: 1,
+      playedAt: play.played_at,
+      listenedMs: 130_000,
     });
   });
 

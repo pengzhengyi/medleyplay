@@ -12,9 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Insights** — a new tab shows what you listened to most over the last 7
   days, the last 30, or all time: about how long you listened, your plays and
   songs, your top artist and album, and the ten artists, albums, and songs you
-  played most. Listening time is an estimate, each play counting the whole
-  song; plays of a whole album in one file count but add no time. Clearing
-  History doesn't change Insights.
+  played most. Listening time is measured as you listen, whole albums in one
+  file included, and goes with the music when you move it to another device;
+  plays from before count their whole song. Clearing History doesn't change
+  Insights.
 
 - **Import your Rate Your Music ratings** — Settings → Your ratings takes the
   export you download from your Rate Your Music profile and says what importing

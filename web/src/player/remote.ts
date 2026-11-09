@@ -7,10 +7,11 @@
  * counts the seconds on itself from when the report was sent.
  */
 
-import type { RemoteCommand, RemoteEntry, SpeakerState, Track } from "../api";
+import type { HandedPlay, RemoteCommand, RemoteEntry, SpeakerState, Track } from "../api";
 import type { Entry, Queue } from "./queue";
 import { current } from "./queue";
 import type { Handoff, Player, Status } from "./usePlayer";
+import type { Play } from "./storage";
 import type { SleepTimer } from "./useSleepTimer";
 
 /** How many entries before the one playing a report carries. */
@@ -57,6 +58,7 @@ export function stateOf(player: Player, sleep: SleepTimer, now: number): Speaker
     volume: player.volume,
     muted: player.muted,
     counted: player.handoff()?.counted ?? false,
+    play: wireOf(player.handoff()?.play),
     sleep:
       sleep.endsAt === null || sleep.setAt === null
         ? null
@@ -109,7 +111,32 @@ export function takeOf(handoff: Handoff, playing: boolean): RemoteCommand {
     seconds: handoff.seconds,
     playing,
     counted: handoff.counted,
+    play: wireOf(handoff.play),
   };
+}
+
+/** Return `play` as the server carries it between pages. */
+function wireOf(play: Play | undefined): HandedPlay | null {
+  return play === undefined
+    ? null
+    : {
+        id: play.id,
+        track_id: play.trackId,
+        played_at: play.playedAt,
+        listened_ms: play.listenedMs ?? 0,
+      };
+}
+
+/** Return a play the server carried between pages as this page keeps it. */
+function playOf(play: HandedPlay | null | undefined): Play | undefined {
+  return play === null || play === undefined
+    ? undefined
+    : {
+        id: play.id,
+        trackId: play.track_id,
+        playedAt: play.played_at,
+        listenedMs: play.listened_ms,
+      };
 }
 
 /** Return the speaker's report as a queue to take onto this page, from its second at `now`. */
@@ -117,7 +144,12 @@ export function handoffOf(speaker: Speaker, now: number): Handoff | undefined {
   const queue = queueOf(speaker.state);
   return current(queue) === undefined
     ? undefined
-    : { queue, seconds: secondsAt(speaker, now), counted: speaker.state.counted };
+    : {
+        queue,
+        seconds: secondsAt(speaker, now),
+        counted: speaker.state.counted,
+        play: playOf(speaker.state.play),
+      };
 }
 
 /**
@@ -221,6 +253,7 @@ export function apply(
           },
           seconds: command.seconds,
           counted: command.counted,
+          play: playOf(command.play),
         },
         command.playing,
       );

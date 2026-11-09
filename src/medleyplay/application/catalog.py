@@ -48,7 +48,14 @@ from medleyplay.domain.community import CommunityRating, RatedAs, shown_rating
 from medleyplay.domain.details import LONGEST_SONG_MS, Field, Kind, Origin, Value, kind_of
 from medleyplay.domain.downloads import download_target
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
-from medleyplay.domain.history import KEPT_FOR, KEPT_PLAYS, PLAY_COUNT_PERIODS, Played
+from medleyplay.domain.history import (
+    KEPT_FOR,
+    KEPT_PLAYS,
+    PLAY_COUNT_PERIODS,
+    PlayCount,
+    Played,
+    check_listened,
+)
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.links import PART_LINKS
@@ -289,13 +296,20 @@ class CatalogService:
         return self.get_track(account_id, track_id)
 
     def record_play(
-        self, account_id: AccountId, play_id: PlayId, track_id: TrackId, played_at: datetime
+        self,
+        account_id: AccountId,
+        play_id: PlayId,
+        track_id: TrackId,
+        played_at: datetime,
+        listened_ms: int | None = None,
     ) -> Track:
         """Record that `account_id` played a Track at `played_at`, no later than now.
 
-        The id is the client's own choice, so sending a play again changes nothing;
-        sending its id with another Track is refused.
+        The id is the client's own choice, so sending a play again counts it once;
+        sending its id with another Track is refused. `listened_ms`, how long it has
+        been listened to so far, is noted as `note_listened` notes it.
         """
+        check_listened(listened_ms)
         when = min(played_at, self._clock())
         recorded_now = False
         try:
@@ -328,9 +342,29 @@ class CatalogService:
                 raise
             if raced.track_id != track_id:
                 raise _another_track(play_id) from None
+        if listened_ms is not None:
+            self.note_listened(account_id, play_id, listened_ms)
         if recorded_now:
             self._changed("catalog")
         return self.get_track(account_id, track_id)
+
+    def note_listened(self, account_id: AccountId, play_id: PlayId, listened_ms: int) -> None:
+        """Note that the Account's play `play_id` has been listened to for `listened_ms`.
+
+        The longest time noted stays, so a time sent again or late changes nothing,
+        and a time past the Track's length counts as its length. A play the server
+        doesn't have, or has forgotten, is not found: noting a time never counts a play.
+        """
+        check_listened(listened_ms)
+        with self._units.begin() as db:
+            play = db.get(PlayRow, (account_id, play_id))
+            if play is None:
+                message = f"No play has the id {play_id}."
+                raise NotFoundError(message)
+            track = db.get(TrackRow, play.track_id)
+            length = None if track is None else track.duration_ms
+            heard = listened_ms if length is None else min(listened_ms, length)
+            _note_listened(db, account_id, play_id, TrackId(play.track_id), heard)
 
     def history(self, account_id: AccountId, *, limit: int) -> tuple[Played, ...]:
         """Return up to `limit` of the Account's plays it hasn't cleared, newest first."""
@@ -348,19 +382,45 @@ class CatalogService:
                 Played(PlayId(row.id), TrackId(row.track_id), row.played_at) for row in rows
             )
 
-    def play_counts(self, account_id: AccountId, *, days: int) -> dict[TrackId, int]:
-        """Return how often the Account played each Track in the last `days`, cleared plays too."""
+    def play_counts(self, account_id: AccountId, *, days: int | None) -> dict[TrackId, PlayCount]:
+        """Return how often and how long the Account played each Track it played.
+
+        Over the last `days`, from its plays, cleared ones too; with no `days`, over
+        all time, from each Track's own counts, which outlast the plays.
+        """
+        if days is None:
+            with self._units() as db:
+                states = db.scalars(
+                    select(TrackStateRow).where(
+                        TrackStateRow.account_id == account_id, TrackStateRow.play_count > 0
+                    )
+                ).all()
+                return {
+                    TrackId(state.track_id): PlayCount(
+                        state.play_count, state.listened_ms, state.timed_plays
+                    )
+                    for state in states
+                }
         if days not in PLAY_COUNT_PERIODS:
             message = f"Plays are counted over 7 or 30 days, not {days}."
             raise InvalidInputError(message)
         since = self._clock() - timedelta(days=days)
         with self._units() as db:
             rows = db.execute(
-                select(PlayRow.track_id, func.count())
+                select(
+                    PlayRow.track_id,
+                    func.count(),
+                    func.sum(PlayRow.listened_ms),
+                    func.count(PlayRow.listened_ms),
+                )
                 .where(PlayRow.account_id == account_id, PlayRow.played_at >= since)
                 .group_by(PlayRow.track_id)
             ).all()
-            return {TrackId(track_id): plays for track_id, plays in rows}
+            return {
+                # A sum over no timed plays is NULL.
+                TrackId(track_id): PlayCount(plays, listened or 0, timed)
+                for track_id, plays, listened, timed in rows
+            }
 
     def clear_history(self, account_id: AccountId) -> None:
         """Hide every play the Account made from its History; each still counts once."""
@@ -540,6 +600,42 @@ def _forget_old_plays(db: Session, account_id: AccountId, now: datetime) -> None
             PlayRow.recorded_at < now - KEPT_FOR,
             PlayRow.id.not_in(newest),
         )
+    )
+
+
+def _note_listened(
+    db: Session, account_id: AccountId, play_id: PlayId, track_id: TrackId, listened_ms: int
+) -> None:
+    # The Track's totals change first, by how much longer this play now is, so the
+    # write lock is taken before the play's time is read; a shorter time sent late
+    # changes neither.
+    before = (
+        select(PlayRow.listened_ms)
+        .where(PlayRow.account_id == account_id, PlayRow.id == play_id)
+        .scalar_subquery()
+    )
+    db.execute(
+        update(TrackStateRow)
+        .where(
+            TrackStateRow.account_id == account_id,
+            TrackStateRow.track_id == track_id,
+            before.is_(None) | (before < listened_ms),
+        )
+        .values(
+            listened_ms=TrackStateRow.listened_ms + listened_ms - func.coalesce(before, 0),
+            timed_plays=TrackStateRow.timed_plays + case((before.is_(None), 1), else_=0),
+        )
+        .execution_options(synchronize_session=False)
+    )
+    db.execute(
+        update(PlayRow)
+        .where(
+            PlayRow.account_id == account_id,
+            PlayRow.id == play_id,
+            PlayRow.listened_ms.is_(None) | (PlayRow.listened_ms < listened_ms),
+        )
+        .values(listened_ms=listened_ms)
+        .execution_options(synchronize_session=False)
     )
 
 

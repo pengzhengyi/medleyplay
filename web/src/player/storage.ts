@@ -13,11 +13,15 @@ export interface Saved {
   readonly seconds: number;
 }
 
-/** A play the server hasn't accepted yet. */
+/** A play the server hasn't accepted yet, or whose latest time it hasn't. */
 export interface Play {
   readonly id: string;
   readonly trackId: number;
   readonly playedAt: string;
+  /** How long it has been listened to; missing in a play kept before pages measured. */
+  readonly listenedMs?: number;
+  /** Whether the server has the play, so only its time is left to send. */
+  readonly recorded?: boolean;
 }
 
 const NAME = "medleyplay";
@@ -121,4 +125,66 @@ export async function keptPlays(): Promise<readonly Play[]> {
 /** Forget a play the server accepted. */
 export async function forgetPlay(id: string): Promise<void> {
   await run(OUTBOX, "readwrite", (objects) => objects.delete(id));
+}
+
+/**
+ * Keep a longer time for the kept play `id`, and return it as kept now; a play
+ * not kept, such as one the server accepted, is left so and `undefined` returned.
+ */
+export async function keepPlayTime(id: string, listenedMs: number): Promise<Play | undefined> {
+  return change(id, (kept) =>
+    kept === undefined
+      ? undefined
+      : { ...kept, listenedMs: Math.max(kept.listenedMs ?? 0, listenedMs) },
+  );
+}
+
+/**
+ * Settle a play the server accepted as `sent`: forget it, unless a longer time
+ * was kept since, which then is all that is left to send.
+ */
+export async function settlePlay(sent: Play): Promise<void> {
+  await change(sent.id, (kept) =>
+    kept === undefined || (kept.listenedMs ?? 0) <= (sent.listenedMs ?? 0)
+      ? null
+      : { ...kept, recorded: true },
+  );
+}
+
+/**
+ * Change the kept play `id` in one transaction, so no other change comes between:
+ * `next` returns its new copy, `undefined` to leave it, or `null` to forget it.
+ * Returns the copy kept after.
+ */
+async function change(
+  id: string,
+  next: (kept: Play | undefined) => Play | null | undefined,
+): Promise<Play | undefined> {
+  const db = await database();
+  if (db === undefined) {
+    return undefined;
+  }
+  return new Promise((resolve) => {
+    try {
+      const objects = db.transaction(OUTBOX, "readwrite").objectStore(OUTBOX);
+      const read = objects.get(id) as IDBRequest<Play | undefined>;
+      read.onsuccess = () => {
+        const kept = next(read.result);
+        if (kept === null) {
+          objects.delete(id);
+          resolve(undefined);
+        } else if (kept === undefined) {
+          resolve(read.result);
+        } else {
+          objects.put(kept);
+          resolve(kept);
+        }
+      };
+      read.onerror = () => {
+        resolve(undefined);
+      };
+    } catch {
+      resolve(undefined);
+    }
+  });
 }

@@ -401,9 +401,7 @@ describe("editing a song's details", () => {
       await userEvent.type(box(dialog, "Genre"), "Vocaloid");
       await save(dialog);
 
-      expect(
-        within(dialog).getByRole("button", { name: "Read details" }),
-      ).toBeDisabled();
+      expect(within(dialog).getByRole("button", { name: "Read details" })).toBeDisabled();
       await userEvent.type(within(dialog).getByRole("textbox", { name: "Video title" }), "{Enter}");
       expect(onReadVideo).not.toHaveBeenCalled();
     });

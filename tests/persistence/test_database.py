@@ -713,3 +713,44 @@ def test_undoing_the_album_rating_migration_drops_the_table(tmp_path: Path) -> N
         tables = connection.scalars(text("SELECT name FROM sqlite_master WHERE type = 'table'"))
         assert "album_rating" not in tables.all()
     engine.dispose()
+
+
+def test_upgrading_leaves_earlier_plays_without_a_time_and_every_total_at_none(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0029")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO account (id, username, display_name, password_hash, role, created_at)"
+                " VALUES (1, 'alice', 'Alice', 'x', 'admin', '2026-11-07 00:00:00.000000')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO track (id, title, artist, album, album_artist, genre, added_at)"
+                " VALUES (1, 'Bremen', '', '', '', '', '2026-11-07 00:00:00.000000')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO play (account_id, id, track_id, played_at, recorded_at, cleared)"
+                " VALUES (1, :id, 1, '2026-11-07 09:14:00.000000', '2026-11-07 09:14:00.000000', 0)"
+            ),
+            {"id": uuid.UUID(int=1).hex},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO track_state (account_id, track_id, favorite, play_count)"
+                " VALUES (1, 1, 0, 1)"
+            )
+        )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        plays = connection.scalars(text("SELECT listened_ms FROM play")).all()
+        states = connection.execute(text("SELECT listened_ms, timed_plays FROM track_state")).all()
+    engine.dispose()
+    assert (plays, [tuple(state) for state in states]) == ([None], [(0, 0)])

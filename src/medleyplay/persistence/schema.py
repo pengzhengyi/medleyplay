@@ -315,12 +315,18 @@ class SourceRow(Base):
 
 
 class TrackStateRow(Base):
-    """One Account's favorite, rating, and play history for one Track."""
+    """One Account's favorite, rating, and play history for one Track.
+
+    `listened_ms` adds up how long the plays with a measured time were listened to,
+    `timed_plays` of the `play_count`.
+    """
 
     __tablename__ = "track_state"
     __table_args__ = (
         CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="rating"),
         CheckConstraint("play_count >= 0", name="play_count"),
+        CheckConstraint("listened_ms >= 0", name="listened_ms"),
+        CheckConstraint("timed_plays >= 0", name="timed_plays"),
     )
 
     account_id: Mapped[int] = mapped_column(
@@ -333,6 +339,8 @@ class TrackStateRow(Base):
     rating: Mapped[int | None]
     play_count: Mapped[int] = mapped_column(default=0)
     last_played_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    listened_ms: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    timed_plays: Mapped[int] = mapped_column(default=0, server_default=text("0"))
 
 
 class FavoriteArtistRow(Base):
@@ -394,11 +402,15 @@ class PlayRow(Base):
     """One play of a Track by an Account, under an id the Account's client chose.
 
     `recorded_at` is when the server took it, and `cleared` hides it from History
-    while it still marks the id as counted.
+    while it still marks the id as counted. `listened_ms` is how long it was listened
+    to, as its page measured; `None` for a play recorded before pages measured.
     """
 
     __tablename__ = "play"
-    __table_args__ = (Index("ix_play_account_id_played_at", "account_id", "played_at"),)
+    __table_args__ = (
+        Index("ix_play_account_id_played_at", "account_id", "played_at"),
+        CheckConstraint("listened_ms IS NULL OR listened_ms >= 0", name="listened_ms"),
+    )
 
     account_id: Mapped[int] = mapped_column(
         ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
@@ -408,6 +420,7 @@ class PlayRow(Base):
     played_at: Mapped[datetime] = mapped_column(UtcDateTime)
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
     cleared: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    listened_ms: Mapped[int | None]
 
 
 class PlaylistRow(Base):

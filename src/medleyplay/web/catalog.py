@@ -188,10 +188,20 @@ class RatingIn(BaseModel):
 
 
 class PlayIn(BaseModel):
-    """A play of a Track, and when it started; a time in the future is taken as now."""
+    """A play of a Track, when it started, and how long it has been listened to so far.
+
+    A time in the future is taken as now.
+    """
 
     track_id: RowId
     played_at: AwareDatetime
+    listened_ms: int | None = None
+
+
+class ListenedIn(BaseModel):
+    """How long a play has been listened to so far, in milliseconds."""
+
+    listened_ms: int
 
 
 class PlaylistIn(BaseModel):
@@ -298,8 +308,18 @@ def record_play(
     play_id: uuid.UUID, body: PlayIn, me: SignedInAccount, catalog: CatalogDep
 ) -> TrackOut:
     """Record a play under an id you choose; sending it again changes nothing."""
-    track = catalog.record_play(me.id, PlayId(play_id), TrackId(body.track_id), body.played_at)
+    track = catalog.record_play(
+        me.id, PlayId(play_id), TrackId(body.track_id), body.played_at, body.listened_ms
+    )
     return TrackOut.of(track)
+
+
+@router.put("/plays/{play_id}/listened", status_code=status.HTTP_204_NO_CONTENT)
+def note_listened(
+    play_id: uuid.UUID, body: ListenedIn, me: SignedInAccount, catalog: CatalogDep
+) -> None:
+    """Note how long one of your plays has been listened to; the longest time sent stays."""
+    catalog.note_listened(me.id, PlayId(play_id), body.listened_ms)
 
 
 class PlayedOut(BaseModel):
@@ -326,17 +346,35 @@ def list_history(
 
 
 class PlayCountOut(BaseModel):
-    """How often you played a Track over a period."""
+    """How often you played a Track over a period, and how long you listened.
+
+    `listened_ms` adds up the `timed_plays` whose time was measured.
+    """
 
     track_id: int
     plays: int
+    listened_ms: int
+    timed_plays: int
 
 
 @router.get("/plays/counts")
-def list_play_counts(me: SignedInAccount, catalog: CatalogDep, days: int) -> list[PlayCountOut]:
-    """Return how often you played each Track in the last 7 or 30 `days`, cleared plays too."""
+def list_play_counts(
+    me: SignedInAccount, catalog: CatalogDep, days: int | None = None
+) -> list[PlayCountOut]:
+    """Return how often and how long you played each Track, over 7 or 30 `days` or all time.
+
+    The last days count your plays, cleared ones too; all time, your play counts.
+    """
     counts = catalog.play_counts(me.id, days=days)
-    return [PlayCountOut(track_id=track_id, plays=plays) for track_id, plays in counts.items()]
+    return [
+        PlayCountOut(
+            track_id=track_id,
+            plays=count.plays,
+            listened_ms=count.listened_ms,
+            timed_plays=count.timed_plays,
+        )
+        for track_id, count in counts.items()
+    ]
 
 
 @router.delete("/plays", status_code=status.HTTP_204_NO_CONTENT)

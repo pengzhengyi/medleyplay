@@ -5645,6 +5645,60 @@ button.playing-kind[aria-expanded="true"] {
   color: var(--accent);
 }
 
+/* A whole album in one file: a quiet, centred offer to split it, no wider than it needs. */
+
+.album-songs:has(.album-songs-unsplit) {
+  width: min(16rem, calc(100vw - 2rem));
+}
+
+.album-songs-unsplit {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.25rem 0.25rem;
+  text-align: center;
+}
+
+.album-songs-unsplit-mark {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 0.15rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
+.album-songs-unsplit p {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.album-songs-split {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.album-songs-split:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* Where each song starts on a bar across a whole album. */
 
 .seek-mark {

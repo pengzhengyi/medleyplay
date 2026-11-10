@@ -31,7 +31,7 @@ from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account, AccountId
-from medleyplay.domain.ai import ProviderFailure, cut_text
+from medleyplay.domain.ai import ProviderFailure, check_hint, cut_text
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.community import link_is_on
 from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
@@ -48,6 +48,7 @@ from medleyplay.domain.enrichers import (
 from medleyplay.domain.errors import (
     ConflictError,
     ForbiddenError,
+    InvalidInputError,
     NotFoundError,
     PluginUnavailableError,
 )
@@ -322,14 +323,42 @@ class EnrichmentService:
             if why_not(found.facts, now, stopped=False, enricher=enricher, set_up=set_up) is None
         ]
 
-    def find_details(self, caller: Account, track_id: TrackId, name: str) -> Job:
+    def find_details(
+        self,
+        caller: Account,
+        track_id: TrackId,
+        name: str,
+        *,
+        again: bool = False,
+        hint: str = "",
+    ) -> Job:
         """Queue asking the enricher about the Track, or return the Job already doing it.
 
-        The Track must be eligible; the Job waits while the Mode is Offline.
+        The Track must be eligible; the Job waits while the Mode is Offline. Only the AI
+        is asked `again`, needing no wait since it was last asked, or given a listener's
+        `hint`, which asks again too; while a Job asks it about the Track, that is refused
+        rather than the note lost.
         """
-        return self._submit(enricher_named(name), track_id, caller.id)
+        enricher = enricher_named(name)
+        note = check_hint(hint)
+        if (again or note) and not enricher.uses_ai:
+            message = "Only the AI is asked again or given a note."
+            raise InvalidInputError(message)
+        again = again or bool(note)
+        if again and self._jobs.active(ENRICH_KIND, enrich_target(track_id, enricher.name)):
+            message = "The AI is still working on this Track; ask again once it answers."
+            raise ConflictError(message)
+        return self._submit(enricher, track_id, caller.id, again=again, hint=note)
 
-    def _submit(self, enricher: Enricher, track_id: TrackId, requested_by: AccountId | None) -> Job:
+    def _submit(
+        self,
+        enricher: Enricher,
+        track_id: TrackId,
+        requested_by: AccountId | None,
+        *,
+        again: bool = False,
+        hint: str = "",
+    ) -> Job:
         self._require_available(enricher)
         now = self._clock()
         with self._units() as db:
@@ -345,13 +374,15 @@ class EnrichmentService:
             duration_ms = db.scalar(select(TrackRow.duration_ms).where(TrackRow.id == track_id))
             set_up = is_set_up(db)
             text = details.video_text_of(db, track_id) if enricher.uses_ai else None
-        reason = why_not(found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up)
+        reason = why_not(
+            found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up, again=again
+        )
         if reason is not None:
             raise ConflictError(MESSAGES[reason])
         return self._jobs.submit(
             self._kind,
             enrich_target(track_id, enricher.name),
-            _request(enricher, found, shown_now, duration_ms, text),
+            _request(enricher, found, shown_now, duration_ms, text, hint),
             requested_by,
         )
 
@@ -403,6 +434,7 @@ def _request(
     shown_now: Mapping[Field, Shown],
     duration_ms: int | None,
     text: VideoText | None,
+    hint: str = "",
 ) -> EnrichJob:
     subject = found.facts.subject
     if subject is None:  # pragma: no cover -- an eligible Track has something to ask about
@@ -419,6 +451,7 @@ def _request(
         file_name=found.file_name,
         whole_album=found.whole_album,
         text=None if text is None else _asked_text(text),
+        hint=hint,
     )
 
 

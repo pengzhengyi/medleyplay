@@ -270,6 +270,11 @@ export function Library({
           actions.onFind(ai, file);
         }
       },
+      askAgain: (hint) => {
+        library.find(AI_ENRICHER, file.id, { hint }).catch(() => {
+          // The lookup's state says why, beside the AI button.
+        });
+      },
     };
     return {
       label: file.split && count > 0 ? `${String(count)} songs` : "Split into songs",

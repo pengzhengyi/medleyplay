@@ -234,7 +234,8 @@ def _echo_ai(request: EnrichTrack) -> str:
         or "none"
     )
     words = "none" if text is None else f"{len(text.description)} {len(text.chapters)}"
-    return f"provider={provider} text={words} file={request.file_name or 'none'}"
+    echoed = f"provider={provider} text={words} file={request.file_name or 'none'}"
+    return f"{echoed} hint={request.hint}" if request.hint else echoed
 
 
 def _echo(request: EnrichTrack, shown: dict[str, str | int]) -> str:

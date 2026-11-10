@@ -4,16 +4,19 @@ import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
+from medleyplay import plugin_api
 from medleyplay.domain.ai import (
     MAX_CHAPTER_TITLE,
     MAX_CHAPTERS,
     MAX_DESCRIPTION,
+    MAX_HINT,
     MAX_KEY,
     MAX_MODEL,
     MAX_URL,
     MIN_KEY,
     PRESETS,
     check_base_url,
+    check_hint,
     check_key,
     check_model,
     cut_text,
@@ -235,3 +238,22 @@ def test_the_title_is_never_cut() -> None:
     text = VideoText("t" * 1_000)
 
     assert cut_text(text).title == "t" * 1_000
+
+
+def test_a_hint_keeps_its_words_on_one_line() -> None:
+    hint = check_hint("  The 2007 concert.\n\tIt has 22 songs.  ")
+
+    assert hint == "The 2007 concert. It has 22 songs."
+
+
+def test_a_hint_loses_its_control_characters() -> None:
+    assert check_hint("22\x00 songs\x1b") == "22 songs"
+
+
+def test_a_hint_over_the_limit_is_refused() -> None:
+    with pytest.raises(InvalidInputError, match="500 characters"):
+        check_hint("h" * (MAX_HINT + 1))
+
+
+def test_a_note_to_the_ai_has_one_limit_in_the_core_and_the_plugin_api() -> None:
+    assert MAX_HINT == plugin_api.MAX_HINT

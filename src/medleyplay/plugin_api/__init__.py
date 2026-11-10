@@ -15,6 +15,7 @@ from medleyplay.plugin_api.covers import MAX_COVER_BYTES, is_cover_image
 from medleyplay.plugin_api.enrichers import (
     ENRICH_TRACK,
     MAX_AI_PROVIDERS,
+    MAX_HINT,
     TRACK_ENRICHER,
     AiEndpoint,
     AiFailure,
@@ -109,6 +110,7 @@ __all__ = [
     "LOCATE_FILE",
     "MAX_AI_PROVIDERS",
     "MAX_COVER_BYTES",
+    "MAX_HINT",
     "READ_TAGS",
     "READ_VIDEO",
     "SOURCE_DOWNLOADER",

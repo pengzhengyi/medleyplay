@@ -79,7 +79,8 @@ export interface Library {
    * Ask the enricher about the Track; its details show once the Job has run. The promise
    * rejects with why when the server refuses.
    */
-  readonly find: (enricher: string, id: number) => Promise<void>;
+  /** Ask `enricher` about the Track `id`; the AI may be asked `again`, with a hint. */
+  readonly find: (enricher: string, id: number, again?: { readonly hint: string }) => Promise<void>;
   /**
    * The lookup last asked about each Track, by the Track's id, while its Job runs, a
    * moment after it succeeds, and until it is asked again after it fails.
@@ -457,12 +458,12 @@ export function useLibrary(onSignedOut: () => void): Library {
     reloadTracks,
     modes,
     lookups,
-    find: async (enricher, id) => {
+    find: async (enricher, id, again) => {
       jobOfTrack.current.delete(id);
       setLookup(id, { enricher, state: "queued", message: "" });
       let job: Job;
       try {
-        job = await api.findDetails(enricher, id);
+        job = await api.findDetails(enricher, id, again);
       } catch (failure) {
         if (failure instanceof ApiError && failure.status === 401) {
           onSignedOut();

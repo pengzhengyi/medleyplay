@@ -31,6 +31,8 @@ MAX_VIDEO_DESCRIPTION: Final = 20_000
 MAX_CHAPTERS: Final = 1_000
 MAX_SUGGESTED_SONGS: Final = 300
 MAX_AI_PROVIDERS: Final = 5
+MAX_HINT: Final = 500
+"""The longest note a listener adds when asking the AI."""
 MAX_RATINGS: Final = 2
 """A rating of the song, and one of its album."""
 MAX_LINK: Final = 2_000
@@ -114,7 +116,8 @@ class EnrichTrack(_Model):
     goes into `folder`, an empty folder the caller owns. `proxy` is the household's
     proxy for the site, or `None`. `text` is the Track's video text, for an enricher
     that reads it, and `ai` the providers an enricher that asks an AI model asks, the
-    first first, each next one when the one before fails.
+    first first, each next one when the one before fails. `hint` is a note the listener
+    added when asking the AI, on one line, or empty.
     """
 
     video: VideoId | None = None
@@ -128,6 +131,7 @@ class EnrichTrack(_Model):
     ai: Annotated[tuple[AiEndpoint, ...], Field(max_length=MAX_AI_PROVIDERS)] = Field(
         default=(), repr=False
     )
+    hint: Annotated[str, StringConstraints(max_length=MAX_HINT)] = Field(default="", repr=False)
 
 
 class EnrichStatus(StrEnum):

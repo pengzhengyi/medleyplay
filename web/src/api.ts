@@ -853,8 +853,13 @@ export const api = {
   /** The enricher's state, and the Tracks it may be asked about. */
   enricher: (name: string) => call<Enricher>("GET", `/api/enrichers/${name}`),
   /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */
-  findDetails: (name: string, trackId: number) =>
-    call<Job>("POST", `/api/enrichers/${name}/tracks/${String(trackId)}`),
+  /** Ask the enricher about a Track; the AI may be asked `again`, with a `hint` of yours. */
+  findDetails: (name: string, trackId: number, again?: { readonly hint: string }) =>
+    call<Job>(
+      "POST",
+      `/api/enrichers/${name}/tracks/${String(trackId)}`,
+      again === undefined ? undefined : { again: true, hint: again.hint },
+    ),
   /** Let a stopped enricher be asked again; admins only. */
   resetEnricher: (name: string) => call<undefined>("POST", `/api/enrichers/${name}/reset`),
   /** Choose when the enricher is asked; admins only. Finding all queues every Track at once. */

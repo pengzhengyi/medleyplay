@@ -343,6 +343,12 @@ and the full views are in [Web client](Web%20client.md).
     within a second of it, or for two seconds at most, so it never jumps back
     before moving on. Between the audio's few position updates a second the bar
     glides, unless the system asks for reduced motion.
+  - **While an album of songs plays, the bar spans the album,** in the player and
+    in Now Playing alike, and the time beside it is the album's. It is split into
+    one segment a song, each filled as far as it has played. The segment under
+    the pointer lights up, the tip names its song, and a card of the album's
+    songs shows over the pointer with the song under it ringed. The card only
+    shows: the bar under it takes the click.
   - **The volume** steps a tenth with each of its buttons, and its bar sets it
     once let go. Each browser keeps its own. On iOS, where only the device sets
     the volume, the control doesn't show.

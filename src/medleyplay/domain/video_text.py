@@ -107,7 +107,7 @@ def read_video(text: VideoText) -> Reading:
     """
     songs = _songs_of(text)
     name, named, album_word = _read_title(text.title)
-    artist, year = _year_after(named)
+    artist, year = year_after(named)
     album = album_word or len(songs) >= ALBUM_SONGS
     return Reading(_values(name, artist, year, album=album), songs, album)
 
@@ -322,7 +322,7 @@ def _read_title(raw: str) -> tuple[str, str, bool]:
     return title, artist, album_word
 
 
-def _year_after(artist: str) -> tuple[str, int | None]:
+def year_after(artist: str) -> tuple[str, int | None]:
     """Return an artist's name without a year ending it, and that year, if any."""
     found = _YEAR_AFTER.match(artist)
     if found is None:

@@ -639,3 +639,15 @@ class DeviceSettingRow(Base):
     document: Mapped[dict[str, object]] = mapped_column(JSON)
     revision: Mapped[int] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class TidyKeptRow(Base):
+    """A written artist name the household chose to keep, so tidying no longer offers it.
+
+    `written` is the name exactly as the Tracks show it, as an artist or an album artist.
+    """
+
+    __tablename__ = "tidy_kept"
+
+    written: Mapped[str] = mapped_column(String(512), primary_key=True)
+    kept_at: Mapped[datetime] = mapped_column(UtcDateTime)

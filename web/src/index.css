@@ -5825,3 +5825,127 @@ button.playing-kind[aria-expanded="true"] {
   background: rgb(16 22 20 / 94%);
   backdrop-filter: blur(24px);
 }
+
+/*
+ * Tidying artist names: a capsule beside a view's count, and the list it opens, each
+ * name as written struck through, then its tidy form and year.
+ */
+
+.view-heading .tidy-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0.4rem 0 0;
+  padding: 0.3rem 0.8rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.view-heading .tidy-capsule:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.tidy-lead {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.tidy-list {
+  max-height: min(28rem, 60vh);
+  margin: 0 0 1rem;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.tidy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.tidy-names .card {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+.tidy-names-pair {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.tidy-written {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.tidy-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+  min-width: 0;
+}
+
+.tidy-arrow {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.tidy-name {
+  overflow-wrap: anywhere;
+}
+
+.tidy-year {
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tidy-meta {
+  grid-column: 1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.tidy-field {
+  margin-right: 0.4rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+}
+
+.tidy-actions {
+  display: flex;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  gap: 0.5rem;
+}
+
+.tidy-names .dialog-button {
+  width: auto;
+  height: 2.2rem;
+  margin: 0;
+  padding: 0 0.9rem;
+}
+
+.tidy-row .error {
+  grid-column: 1 / -1;
+  margin: 0.3rem 0 0;
+}

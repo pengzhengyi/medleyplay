@@ -43,6 +43,7 @@ import type { Station } from "../library/useStation";
 import { InsightsView } from "./InsightsView";
 import { RadioView } from "./RadioView";
 import { SettingsView } from "./SettingsView";
+import { TidyNames } from "./TidyNames";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** The route id of Favorites, the Playlist of favorites the server keeps for each Account. */
@@ -213,7 +214,7 @@ function LibraryItems({ tracks, playingId, actions }: ViewProps) {
   const albums = items.filter((track) => track.kind === "album").length;
   return (
     <>
-      <ViewHeading title="Library">
+      <ViewHeading title="Library" aside={<TidyNames version={tracks} />}>
         {items.length > 0 && formatLibraryLength(albums, bySong(played).length, durationOf(played))}
       </ViewHeading>
       <TrackTable
@@ -274,6 +275,7 @@ function ViewHeading({
   back,
   backLabel,
   heart,
+  aside,
   children,
 }: {
   readonly title: string;
@@ -281,6 +283,8 @@ function ViewHeading({
   readonly back?: Route | undefined;
   readonly backLabel?: string | undefined;
   readonly heart?: ReactNode;
+  /** Something to do about the whole view, after its count, such as tidying names. */
+  readonly aside?: ReactNode;
   readonly children?: ReactNode;
 }) {
   return (
@@ -301,6 +305,7 @@ function ViewHeading({
       )}
       {subtitle !== undefined && <p className="subtitle">{subtitle}</p>}
       {children !== undefined && children !== false && <p className="meta">{children}</p>}
+      {aside}
     </header>
   );
 }
@@ -315,7 +320,7 @@ function Artists({
   const artists = useMemo(() => artistsOf(tracks), [tracks]);
   return (
     <>
-      <ViewHeading title="Artists">
+      <ViewHeading title="Artists" aside={<TidyNames version={tracks} />}>
         {artists.length > 0 && `${String(artists.length)} artists`}
       </ViewHeading>
       {artists.length === 0 ? <NoMusic /> : <ArtistList artists={artists} favorites={favorites} />}

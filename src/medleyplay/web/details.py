@@ -1,12 +1,16 @@
-"""The details API: a Track's values and where each came from, and the household's own."""
+"""The details API: a Track's values and where each came from, and the household's own.
+
+It also lists the artist names written with more than the name in them, and tidies
+or keeps each one.
+"""
 
 from collections.abc import Mapping
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 from pydantic import BaseModel, Field, StrictInt, StrictStr
 
-from medleyplay.application.details import DetailsView, VideoRead
+from medleyplay.application.details import DetailsView, NameToTidy, VideoRead
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field as Detail
 from medleyplay.domain.details import Kind, KindReason, Origin, Shown
@@ -15,6 +19,7 @@ from medleyplay.web.deps import DetailsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api/tracks", tags=["details"])
+names_router = APIRouter(prefix="/api/names-to-tidy", tags=["details"])
 
 # Strict, so JSON `true` or `3.0` is refused rather than taken as a whole number.
 type DetailValue = StrictStr | StrictInt
@@ -169,3 +174,62 @@ def read_video_text(
     """Read a video's pasted title and description as the Track's `video` values."""
     read = service.read_video_text(TrackId(track_id), VideoText(body.title, body.description))
     return VideoReadOut.of(read)
+
+
+class NameToTidyOut(BaseModel):
+    """An artist name shown on Tracks with more than the name in it, and its tidy form."""
+
+    written: str = Field(description="The name exactly as the Tracks show it.")
+    name: str = Field(description="The name with the rest taken off.")
+    year: int | None = Field(description="The release year the written name gave, if any.")
+    fields: list[Literal["artist", "album_artist"]] = Field(
+        description="Where the Tracks show it: as the artist, the album artist, or both."
+    )
+    track_ids: list[int] = Field(description="The Tracks showing it, oldest first.")
+    years_differ: int = Field(
+        description="How many of them show another year, which tidying keeps."
+    )
+
+    @classmethod
+    def of(cls, found: NameToTidy) -> "NameToTidyOut":
+        """Return the API view of `found`."""
+        return cls(
+            written=found.written,
+            name=found.tidied.name,
+            year=found.tidied.year,
+            fields=[
+                "artist" if field is Detail.ARTIST else "album_artist" for field in found.fields
+            ],
+            track_ids=list(found.track_ids),
+            years_differ=found.years_differ,
+        )
+
+
+class NamesToTidyOut(BaseModel):
+    """The names to tidy, those on the most Tracks first."""
+
+    names: list[NameToTidyOut]
+
+
+class NameIn(BaseModel):
+    """One artist or album artist name, as the Tracks show it."""
+
+    written: str = Field(min_length=1, max_length=512)
+
+
+@names_router.get("")
+def names_to_tidy(_: SignedInAccount, service: DetailsDep) -> NamesToTidyOut:
+    """Return the artist names with more than the name in them, with their tidy form."""
+    return NamesToTidyOut(names=[NameToTidyOut.of(found) for found in service.names_to_tidy()])
+
+
+@names_router.post("/tidy")
+def tidy_name(body: NameIn, _: SignedInAccount, service: DetailsDep) -> ManyOut:
+    """Show the name's tidy form on every Track showing it, and its year where none shows."""
+    return ManyOut(changed=service.tidy_name(body.written))
+
+
+@names_router.post("/keep", status_code=status.HTTP_204_NO_CONTENT)
+def keep_name(body: NameIn, _: SignedInAccount, service: DetailsDep) -> None:
+    """Keep the name as written, so it is no longer offered for tidying."""
+    service.keep_name(body.written)

@@ -5699,14 +5699,71 @@ button.playing-kind[aria-expanded="true"] {
   color: var(--accent-ink);
 }
 
-/* Where each song starts on a bar across a whole album. */
+/*
+ * A bar across a whole album: one segment a song, apart by a small gap, each filled as
+ * far as it has played. `--from` and `--width` are shares of the album, `--fill` of the song.
+ */
 
-.seek-mark {
+.seek-track.segmented {
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+}
+
+.seek-segment {
   position: absolute;
-  inset: 0 auto 0 calc(var(--at) * 100%);
-  width: 2px;
-  margin-left: -1px;
+  inset: 0 auto 0 calc(var(--from) * 100% + 1.5px);
+  width: max(2px, calc(var(--width) * 100% - 3px));
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background-color 120ms;
+}
+
+.seek-segment[data-pointed] {
+  background: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.seek-segment-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform: scaleX(var(--fill));
+  transform-origin: left;
+  transition: transform 260ms linear;
+}
+
+.seek[data-held] .seek-segment-fill {
+  transition: none;
+}
+
+/* The album's songs over the pointer, above the time; the bar under it takes the click. */
+
+.seek-preview {
+  position: absolute;
+  bottom: calc(100% + 2.4rem);
+  left: clamp(min(10rem, 50%), calc(var(--tip) * 100%), calc(100% - min(10rem, 50%)));
+  z-index: 20;
+  width: min(20rem, 100%);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.album-card {
+  max-height: min(22rem, 50vh);
+  padding: 0.75rem;
+  overflow-y: auto;
+  border-radius: 1rem;
   background: var(--surface);
+  box-shadow: var(--float);
+  color: var(--ink);
+  text-align: left;
+  white-space: normal;
+}
+
+/* The song under the pointer: ringed, so it reads apart from the one playing. */
+.album-song.pointed {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 /* Now Playing's title, after the mark of what plays; the album's songs open over the controls. */
@@ -5721,7 +5778,8 @@ button.playing-kind[aria-expanded="true"] {
 }
 
 /* Over the cover's blur, the songs need a solid ground to read on. */
-.now-playing .album-songs {
+.now-playing .album-songs,
+.now-playing .album-card {
   background: rgb(16 22 20 / 94%);
   backdrop-filter: blur(24px);
 }

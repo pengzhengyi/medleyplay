@@ -1,8 +1,9 @@
 /**
  * @file The player: what is playing, its controls and play modes, and how far it has got.
  *
- * It floats over the bottom of the page; the position runs along its top edge. Its
- * cover opens Now Playing.
+ * It floats over the bottom of the page; the position runs along its top edge, across
+ * the whole album while an album of songs plays, with the album's songs over the
+ * pointer while it hovers. Its cover opens Now Playing.
  */
 
 import { QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
@@ -10,12 +11,12 @@ import type { ReactNode } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
-import { playingOf } from "../player/albumNow";
+import { albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
-import { PlayingKind } from "./PlayingKind";
+import { AlbumCard, PlayingKind } from "./PlayingKind";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { FavoriteButton, Transport } from "./Transport";
@@ -47,9 +48,32 @@ export function PlayerBar({
 }) {
   const { status, position, duration } = player;
   const keys = useBindings();
+  const nowPlaying = playingOf(player.queue, tracks);
+  const timeline = albumTimeline(nowPlaying, position, (song, within) => {
+    player.playAt(song.entry.key, within);
+  });
+  const shownPosition = timeline?.position ?? position;
+  const shownDuration = timeline === undefined ? duration : timeline.length;
   return (
     <section className="player" aria-label="Player">
-      <SeekBar position={position} duration={duration} onSeek={player.seek} />
+      <SeekBar
+        position={shownPosition}
+        duration={shownDuration}
+        onSeek={timeline?.seek ?? player.seek}
+        marks={timeline?.marks}
+        preview={
+          timeline !== undefined && nowPlaying.kind === "album" && track !== undefined
+            ? (seconds) => (
+                <AlbumCard
+                  playing={nowPlaying}
+                  track={track}
+                  position={position}
+                  pointedAt={seconds}
+                />
+              )
+            : undefined
+        }
+      />
       <div className="now">
         {track === undefined ? (
           <Cover cover={null} />
@@ -66,7 +90,7 @@ export function PlayerBar({
         )}
         {track !== undefined && (
           <PlayingKind
-            playing={playingOf(player.queue, tracks)}
+            playing={nowPlaying}
             track={track}
             position={position}
             moving={status.kind === "playing"}
@@ -110,7 +134,7 @@ export function PlayerBar({
           <VolumeControl volume={player.volume} muted={player.muted} onVolume={player.setVolume} />
         )}
         <span className="time">
-          {formatTime(position)} <span aria-hidden>/</span> {formatTime(duration)}
+          {formatTime(shownPosition)} <span aria-hidden>/</span> {formatTime(shownDuration)}
         </span>
       </div>
     </section>

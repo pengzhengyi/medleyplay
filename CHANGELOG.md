@@ -20,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when paused or for anyone who asked for less motion. Point at or press the
   record to see the album's songs in the order they play: those played, the
   one playing and how far it has got, and those to come; choose one to play
-  it. While an album plays, Now Playing's bar spans the whole album, marks
-  where each song starts, and names the song under the pointer.
+  it. While an album plays, the player's bar and Now Playing's span the whole
+  album, split into one segment a song, each filled as far as it has played.
+  Pointing at the bar lights up a song's segment and shows the album's songs
+  over it, the one under the pointer ringed with how far into it you point.
 
 - **Insights** — a new tab shows what you listened to most over the last 7
   days, the last 30, or all time: about how long you listened, your plays and

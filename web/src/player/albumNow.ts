@@ -124,3 +124,44 @@ export function songAt(
   }
   return undefined;
 }
+
+/**
+ * The album playing as one timeline: where it is, its length, each song's start,
+ * and a seek that plays the song the second falls in. `undefined` unless an album
+ * of songs plays and every song's length is known.
+ */
+export function albumTimeline(
+  playing: Playing,
+  position: number,
+  playSong: (song: AlbumSong, within: number) => void,
+):
+  | {
+      readonly position: number;
+      readonly length: number;
+      readonly marks: readonly { readonly start: number; readonly title: string }[];
+      readonly seek: (seconds: number) => void;
+    }
+  | undefined {
+  if (playing.kind !== "album" || playing.length === undefined || playing.songs.length === 0) {
+    return undefined;
+  }
+  const { songs, current, length } = playing;
+  const now = songs[current];
+  if (now === undefined) {
+    return undefined;
+  }
+  // A song's real length can differ a little from its details', so it stays within its own.
+  const within = Math.min(Math.max(position, 0), now.length ?? position);
+  return {
+    position: now.start + within,
+    length,
+    marks: songs.map((song) => ({ start: song.start, title: song.track?.title ?? "" })),
+    seek: (seconds) => {
+      const at = songAt(songs, Math.min(Math.max(seconds, 0), length));
+      const song = at === undefined ? undefined : songs[at.index];
+      if (at !== undefined && song !== undefined) {
+        playSong(song, at.within);
+      }
+    },
+  };
+}

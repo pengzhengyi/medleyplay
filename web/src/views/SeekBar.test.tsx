@@ -179,9 +179,51 @@ describe("a seek bar across a whole album", () => {
     expect(bar).toHaveAttribute("aria-valuetext", "生如夏花, 0:05; 1:15 of 1:40");
   });
 
-  it("marks where each song but the first starts", () => {
+  it("splits into one segment a song, each filled as far as it has played", () => {
+    const bar = renderAlbumBar(50);
+
+    const segments = [...bar.querySelectorAll<HTMLElement>(".seek-segment")];
+    const filled = segments.map((segment) => Number(segment.style.getPropertyValue("--fill")));
+
+    expect(segments.map((segment) => segment.style.getPropertyValue("--width"))).toEqual([
+      "0.4",
+      "0.3",
+      "0.3",
+    ]);
+    expect(filled[0]).toBe(1);
+    expect(filled[1]).toBeCloseTo(1 / 3);
+    expect(filled[2]).toBe(0);
+  });
+
+  it("lights up the segment of the song under the pointer", () => {
     const bar = renderAlbumBar(10);
 
-    expect(bar.querySelectorAll(".seek-mark")).toHaveLength(2);
+    fireEvent.pointerMove(bar, { clientX: 96 });
+
+    const pointed = [...bar.querySelectorAll(".seek-segment")].map((segment) =>
+      segment.hasAttribute("data-pointed"),
+    );
+    expect(pointed).toEqual([false, true, false]);
+  });
+});
+
+describe("a seek bar with a preview", () => {
+  it("shows the preview of the time under the pointer while hovering, and nothing once it leaves", () => {
+    render(
+      <SeekBar
+        position={10}
+        duration={100}
+        onSeek={vi.fn()}
+        preview={(seconds) => <p>{`Preview of ${String(seconds)}`}</p>}
+      />,
+    );
+    const bar = screen.getByRole("slider", { name: "Position" });
+    bar.getBoundingClientRect = () => new DOMRect(0, 0, 200, 12);
+
+    fireEvent.pointerMove(bar, { clientX: 50 });
+
+    expect(bar.querySelector(".seek-preview")).toHaveTextContent("Preview of 25");
+    fireEvent.pointerLeave(bar);
+    expect(bar.querySelector(".seek-preview")).toBeNull();
   });
 });

@@ -5,6 +5,8 @@
  * for less motion. An album's mark opens its songs, in the order they play, when
  * pointed at, focused, or pressed: those played, the one playing and how far it
  * has got, and those to come. A song in it plays when chosen.
+ *
+ * Over an album's seek bar, a card of the same songs lights up the one under the pointer.
  */
 
 import {
@@ -17,7 +19,7 @@ import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
-import type { AlbumSong, Playing } from "../player/albumNow";
+import { type AlbumSong, type Playing, songAt } from "../player/albumNow";
 
 /** How long the songs stay open after the pointer leaves, so it can cross the gap to them. */
 const CLOSE_AFTER_MS = 150;
@@ -184,11 +186,49 @@ function AlbumMark({
   );
 }
 
+/**
+ * The songs of the album playing, for a seek bar's hover: the one under the pointer
+ * lit, with how far into it the pointer is. It only shows; the bar under it takes the click.
+ */
+export function AlbumCard({
+  playing,
+  track,
+  position,
+  pointedAt,
+}: {
+  readonly playing: Extract<Playing, { kind: "album" }>;
+  readonly track: Track;
+  /** How far into the Track playing, in seconds. */
+  readonly position: number;
+  /** The second of the album under the pointer. */
+  readonly pointedAt: number;
+}) {
+  const list = useRef<HTMLDivElement>(null);
+  const pointed = songAt(playing.songs, pointedAt);
+  useEffect(() => {
+    list.current?.querySelector(".pointed")?.scrollIntoView({ block: "nearest" });
+  }, [pointed?.index]);
+  return (
+    <div ref={list} className="album-card" inert>
+      <AlbumSongs
+        playing={playing}
+        track={track}
+        name={track.album === "" ? track.title : track.album}
+        position={position}
+        pointed={pointed}
+        onPlaySong={() => undefined}
+        onEditSongs={() => undefined}
+      />
+    </div>
+  );
+}
+
 function AlbumSongs({
   playing,
   track,
   name,
   position,
+  pointed,
   onPlaySong,
   onEditSongs,
 }: {
@@ -196,6 +236,8 @@ function AlbumSongs({
   readonly track: Track;
   readonly name: string;
   readonly position: number;
+  /** The song under a seek bar's pointer, and how far into it. */
+  readonly pointed?: ReturnType<typeof songAt>;
   readonly onPlaySong: (song: AlbumSong) => void;
   readonly onEditSongs: (track: Track) => void;
 }) {
@@ -246,11 +288,12 @@ function AlbumSongs({
         {songs.map((song, index) => {
           const state = index < current ? "played" : index === current ? "playing" : "pending";
           const title = song.track?.title ?? "A Track no longer here";
+          const pointedHere = pointed?.index === index;
           return (
             <li key={song.entry.key} className="album-songs-row">
               <button
                 type="button"
-                className={`album-song ${state}`}
+                className={pointedHere ? `album-song ${state} pointed` : `album-song ${state}`}
                 aria-current={state === "playing" ? "true" : undefined}
                 aria-label={`${title}, ${STATE_WORDS[state]}`}
                 onClick={() => {
@@ -262,9 +305,11 @@ function AlbumSongs({
                 </span>
                 <span className="album-song-title">{title}</span>
                 <span className="album-song-length">
-                  {state === "playing"
-                    ? `${formatTime(position)} / ${formatTime(song.length)}`
-                    : formatTime(song.length)}
+                  {pointedHere
+                    ? `${formatTime(pointed.within)} / ${formatTime(song.length)}`
+                    : state === "playing"
+                      ? `${formatTime(position)} / ${formatTime(song.length)}`
+                      : formatTime(song.length)}
                 </span>
                 {state === "playing" && song.length !== undefined && (
                   <span

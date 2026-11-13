@@ -5874,24 +5874,34 @@ button.playing-kind[aria-expanded="true"] {
   list-style: none;
 }
 
+.tidy-names .card {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
 .tidy-names-pair {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.3rem 0.5rem;
+  display: grid;
+  gap: 0.15rem;
   min-width: 0;
 }
 
 .tidy-written {
   color: var(--muted);
+  font-size: 0.85rem;
   overflow-wrap: anywhere;
+}
+
+.tidy-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+  min-width: 0;
 }
 
 .tidy-arrow {
   flex: none;
-  align-self: center;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
 .tidy-name {

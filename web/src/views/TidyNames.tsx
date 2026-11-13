@@ -8,7 +8,7 @@
  * Either can be undone in a song's details.
  */
 
-import { ArrowRightIcon, BroomIcon } from "@phosphor-icons/react";
+import { ArrowElbowDownRightIcon, BroomIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, type NameToTidy } from "../api";
@@ -125,9 +125,11 @@ function TidyList({
                 <li key={keyOf(name)} className="tidy-row">
                   <div className="tidy-names-pair">
                     <s className="tidy-written">{name.written}</s>
-                    <ArrowRightIcon className="tidy-arrow" weight="bold" aria-hidden />
-                    <strong className="tidy-name">{name.name}</strong>
-                    {name.year !== null && <span className="tidy-year">{name.year}</span>}
+                    <span className="tidy-result">
+                      <ArrowElbowDownRightIcon className="tidy-arrow" weight="bold" aria-hidden />
+                      <strong className="tidy-name">{name.name}</strong>
+                      {name.year !== null && <span className="tidy-year">{name.year}</span>}
+                    </span>
                   </div>
                   <p className="tidy-meta">
                     {!name.fields.includes("artist") && (

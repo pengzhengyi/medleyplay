@@ -161,6 +161,33 @@ values.
   for [Segments](Segments.md). A paste with no words is refused.
 - **Many Tracks at once:** the same values, such as an album and its artist, can
   be set on several Tracks.
+- **Tidying artist names:** an artist or album artist written with more than the
+  name in it, as a video's uploader often writes it, is offered for tidying. A
+  capsule in the Library's and Artists' headings, *Tidy 11 artist names*, opens
+  the list: each name as written, its tidy form and the year it gave, and how
+  many songs show it, as the artist, the album artist, or both.
+
+  ```text
+  周杰伦2000年发行首张个人            ↳ 周杰伦      2000
+  The Beatles（披头士）2000年发行      ↳ The Beatles 2000
+  ヨルシカ（Yorushika/夜鹿）           ↳ ヨルシカ
+  ```
+
+  - **What is taken off:** a release year written with 年, and all after it,
+    which notes the release (*首张个人*, *EP*, *现场*); a year ending the name,
+    as a video's title has it taken off (*朴树2003*); and a bracketed part at
+    the end holding a script the name isn't written in, Latin against Chinese,
+    Japanese, or Korean, which is a translation, other names, or a note.
+  - **What is left alone:** names whose numbers or brackets are their own,
+    such as *The 1975*, *Sum 41*, *f(x)*, and *ryo(supercell)*; a decade
+    (*2000年代*); and a name tidying would leave with no letters. A name is never
+    split into artists, so *Chinese Football/中国足球乐队* stays one.
+  - ***Tidy*** sets the tidy name as the household's value wherever each song
+    shows the name as written, and the name's year where a song shows none; a
+    song showing another year keeps it, and the list counts those. ***Keep***
+    remembers the name as written, so it isn't offered again. Nothing is tidied
+    without the household choosing it, and a tidied value is cleared in *Edit
+    details* like any other of the household's.
 
 ## What medleyplay reads
 
@@ -575,3 +602,8 @@ that reason. `GET /api/settings` gains `album_minutes`.
 - **Covers in `medleyplay backup`,** which copies only the database.
 - **A folder's `cover.jpg`** for every file in it.
 - **Lyrics,** and naming songs by their audio with AcoustID.
+- **One artist under many names:** *The Beatles*, *披头士*, and *甲壳虫* still
+  count as three artists. Linking each name to one artist, from MusicBrainz's
+  artists and their aliases, with Wikidata's labels for names MusicBrainz lacks,
+  would let the Artists view, favorites, and search treat them as one, while
+  each song keeps the name as written.

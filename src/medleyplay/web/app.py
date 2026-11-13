@@ -119,6 +119,7 @@ def create_app(
     app.include_router(ratings.router)
     app.include_router(mode.router)
     app.include_router(details.router)
+    app.include_router(details.names_router)
     app.include_router(songs.router)
     app.include_router(covers.router)
     app.include_router(enrichers.router)

@@ -10,7 +10,7 @@ come from it as the `album_file` origin.
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Final, Literal
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -35,6 +35,7 @@ from medleyplay.domain.details import (
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
 from medleyplay.domain.segments import ends_of
+from medleyplay.domain.tidy import Tidied, tidy_artist
 from medleyplay.domain.video_text import (
     Chapter,
     Reading,
@@ -47,12 +48,31 @@ from medleyplay.persistence.schema import (
     AiSuggestionRow,
     SegmentRow,
     SourceRow,
+    TidyKeptRow,
     TrackRow,
     TrackValueRow,
     VideoTextRow,
 )
 
 type OriginValues = dict[Origin, dict[Field, Value]]
+
+TIDIED_FIELDS: Final = (Field.ARTIST, Field.ALBUM_ARTIST)
+"""The fields whose names are tidied."""
+
+
+@dataclass(frozen=True)
+class NameToTidy:
+    """An artist name shown on Tracks that has more than the name in it, and its tidy form."""
+
+    written: str
+    """The name exactly as the Tracks show it."""
+    tidied: Tidied
+    fields: tuple[Field, ...]
+    """Where the Tracks show it: as the artist, the album artist, or both."""
+    track_ids: tuple[TrackId, ...]
+    """The Tracks showing it, oldest first."""
+    years_differ: int
+    """How many of them show a year other than the name's, which tidying keeps."""
 
 
 @dataclass(frozen=True)
@@ -401,6 +421,84 @@ class DetailsService:
                 set_household(db, track_id, checked, now)
         self._changed()
         return len(ids)
+
+    def names_to_tidy(self) -> list[NameToTidy]:
+        """Return each artist or album artist name with more than the name in it.
+
+        A name is offered once, with every Track that shows it, unless the household
+        kept it as written; the names on the most Tracks come first.
+        """
+        with self._units() as db:
+            kept = set(db.scalars(select(TidyKeptRow.written)))
+            rows = db.execute(
+                select(TrackRow.id, TrackRow.artist, TrackRow.album_artist, TrackRow.year).order_by(
+                    TrackRow.id
+                )
+            ).all()
+        fields: dict[str, set[Field]] = {}
+        tracks: dict[str, dict[TrackId, int | None]] = {}
+        for track_id, artist, album_artist, year in rows:
+            for field, written in ((Field.ARTIST, artist), (Field.ALBUM_ARTIST, album_artist)):
+                if written and written not in kept:
+                    fields.setdefault(written, set()).add(field)
+                    tracks.setdefault(written, {})[TrackId(track_id)] = year
+        found: list[NameToTidy] = []
+        for written, years in tracks.items():
+            tidied = tidy_artist(written)
+            if tidied is None:
+                continue
+            differ = sum(
+                1
+                for year in years.values()
+                if None not in (year, tidied.year) and year != tidied.year
+            )
+            shown_in = tuple(field for field in TIDIED_FIELDS if field in fields[written])
+            found.append(NameToTidy(written, tidied, shown_in, tuple(years), differ))
+        return sorted(found, key=lambda name: (-len(name.track_ids), name.written))
+
+    def tidy_name(self, written: str) -> int:
+        """Show the tidy form of `written` on every Track showing it; return how many changed.
+
+        Each Track takes the name as the household's value for the artist or album
+        artist showing it, and the name's year too where it shows none. Either every
+        Track changes or none does.
+        """
+        tidied = tidy_artist(written)
+        if tidied is None:
+            message = f"“{written}” has nothing to tidy."
+            raise InvalidInputError(message)
+        now = self._clock()
+        with self._units.begin() as db:
+            tracks = db.scalars(
+                select(TrackRow).where(
+                    (TrackRow.artist == written) | (TrackRow.album_artist == written)
+                )
+            ).all()
+            if not tracks:
+                message = f"No Track shows “{written}” any more."
+                raise NotFoundError(message)
+            for track in tracks:
+                values: dict[Field, Value | None] = {
+                    field: tidied.name
+                    for field, shown_value in (
+                        (Field.ARTIST, track.artist),
+                        (Field.ALBUM_ARTIST, track.album_artist),
+                    )
+                    if shown_value == written
+                }
+                if track.year is None and tidied.year is not None:
+                    values[Field.YEAR] = tidied.year
+                set_household(db, TrackId(track.id), values, now)
+            changed = len(tracks)
+        self._changed()
+        return changed
+
+    def keep_name(self, written: str) -> None:
+        """Keep `written` as it is, so it is no longer offered for tidying."""
+        with self._units.begin() as db:
+            if db.get(TidyKeptRow, written) is None:
+                db.add(TidyKeptRow(written=written, kept_at=self._clock()))
+        self._changed()
 
     def _changed(self) -> None:
         if self._on_change is not None:

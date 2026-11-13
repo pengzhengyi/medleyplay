@@ -105,7 +105,9 @@ Track's kind is decided.
   minutes unless an admin sets another length or turns the guess off; saving
   asks for the Tracks again, so their kinds show at once.
 - **A split file's songs fold under it,** behind a caret named *Show the songs
-  of 生如夏花*, which states `aria-expanded`; its songs are set in under it. The
+  of 生如夏花*, which states `aria-expanded`; its songs are set in under it,
+  with smaller covers, on a guide that runs down from the caret and turns into
+  the last song. The
   table keeps `role="table"` with a disclosure button rather than a treegrid,
   which would promise arrow-key moves between cells. Sorting sorts the songs
   under each file too; a filter keeps a file while it keeps any of its songs,

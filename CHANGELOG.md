@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An album's songs, set in under it** — in the Library, the songs of an open
+  album sit further in, with smaller covers, on a guide that runs down from the
+  album and turns into its last song, so which songs belong to it shows at a
+  glance.
+
 - **Ask the AI again, with a note** — once the AI's songs fill the songs editor,
   pressing *AI* opens a field for a note of your own, such as *the 2007 concert,
   with 22 songs*, and asks again at once, without the wait of a day. A dot on

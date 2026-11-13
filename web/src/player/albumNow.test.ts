@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
 import { trackOf } from "../testing/server";
-import { playingOf, songAt } from "./albumNow";
+import { albumTimeline, playingOf, songAt } from "./albumNow";
 import { EMPTY, type Entry, type Queue } from "./queue";
 
 /**
@@ -138,5 +138,32 @@ describe("songAt", () => {
 
   it("keeps the album's end in its last song", () => {
     expect(songAt(songs, 9999)).toEqual({ index: 2, within: 180 });
+  });
+});
+
+describe("albumTimeline", () => {
+  it("places the song playing on the album's timeline, with where each song starts", () => {
+    const timeline = albumTimeline(playingOf(playing(1), BY_ID), 48, vi.fn());
+
+    expect(timeline?.position).toBe(288);
+    expect(timeline?.length).toBe(720);
+    expect(timeline?.marks).toEqual([
+      { start: 0, title: "傲慢的上校" },
+      { start: 240, title: "浮游" },
+      { start: 540, title: "生如夏花" },
+    ]);
+  });
+
+  it("seeks by playing the song the second falls in, from that far into it", () => {
+    const now = playingOf(playing(0), BY_ID);
+    const playSong = vi.fn();
+
+    albumTimeline(now, 0, playSong)?.seek(600);
+
+    expect(playSong).toHaveBeenCalledWith(now.kind === "album" ? now.songs[2] : undefined, 60);
+  });
+
+  it("is nothing while a song of its own plays", () => {
+    expect(albumTimeline(playingOf(playing(3), BY_ID), 10, vi.fn())).toBeUndefined();
   });
 });

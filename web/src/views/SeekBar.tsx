@@ -6,14 +6,17 @@
  * the pointer is on the bar, so it lands where it points. Once sent, the bar stays
  * there until the audio reports it has arrived, so it never jumps back first.
  *
- * A bar across a whole album marks where each song starts, and names the song
- * under the pointer as well as the time.
+ * A bar across a whole album is split into one segment a song, each filled as far
+ * as it has played; the segment under the pointer lights up, and the tip names its
+ * song as well as the time. A preview, such as the album's songs, can show over the
+ * pointer while it hovers.
  */
 
 import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   useEffect,
   useRef,
   useState,
@@ -42,6 +45,7 @@ export function SeekBar({
   duration,
   onSeek,
   marks,
+  preview,
 }: {
   readonly position: number;
   /** The Track's length in seconds, once known; until then the bar can't move. */
@@ -49,6 +53,8 @@ export function SeekBar({
   readonly onSeek: (seconds: number) => void;
   /** Where each song of an album starts, when the bar is across the whole album. */
   readonly marks?: readonly SeekMark[] | undefined;
+  /** What to show over the pointer for the time under it, while it hovers. */
+  readonly preview?: ((seconds: number) => ReactNode) | undefined;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   // Where a pressed pointer holds the bar, and where a hovering one points.
@@ -160,28 +166,63 @@ export function SeekBar({
       }}
       onKeyDown={onKeyDown}
     >
-      <span className="seek-track" aria-hidden>
-        {pointed !== undefined && held === undefined && movable && <span className="seek-hover" />}
-        <span className="seek-fill" />
-        {movable &&
-          marks
-            ?.slice(1)
-            .map((mark) => (
-              <span
-                key={mark.start}
-                className="seek-mark"
-                style={{ "--at": String(mark.start / length) } as CSSProperties}
-              />
-            ))}
-      </span>
+      {movable && marks !== undefined && marks.length > 0 ? (
+        <span className="seek-track segmented" aria-hidden>
+          {segmentsOf(marks, length).map((segment) => (
+            <span
+              key={segment.start}
+              className="seek-segment"
+              data-pointed={
+                tip !== undefined && tip >= segment.start && tip < segment.end ? "" : undefined
+              }
+              style={
+                {
+                  "--from": String(segment.start / length),
+                  "--width": String((segment.end - segment.start) / length),
+                  "--fill": String(
+                    Math.min(
+                      Math.max((shown - segment.start) / (segment.end - segment.start), 0),
+                      1,
+                    ),
+                  ),
+                } as CSSProperties
+              }
+            >
+              <span className="seek-segment-fill" />
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className="seek-track" aria-hidden>
+          {pointed !== undefined && held === undefined && movable && (
+            <span className="seek-hover" />
+          )}
+          <span className="seek-fill" />
+        </span>
+      )}
       <span className="seek-thumb" aria-hidden />
       {tip !== undefined && movable && (
         <span className="seek-tip" aria-hidden>
           {tipOf(songAtTime(tip), tip)}
         </span>
       )}
+      {pointed !== undefined && held === undefined && movable && preview !== undefined && (
+        <span className="seek-preview" aria-hidden>
+          {preview(pointed)}
+        </span>
+      )}
     </div>
   );
+}
+
+/** Return each song's stretch of the bar, from its start to the next song's, in seconds. */
+function segmentsOf(
+  marks: readonly SeekMark[],
+  length: number,
+): readonly { readonly start: number; readonly end: number }[] {
+  return marks
+    .map((mark, index) => ({ start: mark.start, end: marks[index + 1]?.start ?? length }))
+    .filter((segment) => segment.end > segment.start);
 }
 
 /** Return the song of `marks` at `seconds` into the album, and how far into it. */

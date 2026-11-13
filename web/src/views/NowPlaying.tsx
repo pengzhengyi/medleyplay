@@ -13,16 +13,16 @@ import { useEffect, useRef, useState } from "react";
 import { type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
 import { albumArtistOf } from "../library/views";
-import { type Playing, playingOf, songAt } from "../player/albumNow";
+import { albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import type { SleepTimer } from "../player/useSleepTimer";
 import { canSetVolume } from "../player/volume";
 import { hrefOf } from "../routes";
 import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
-import { PlayingKind } from "./PlayingKind";
+import { AlbumCard, PlayingKind } from "./PlayingKind";
 import { QueuePanel } from "./QueuePanel";
-import { type SeekMark, SeekBar } from "./SeekBar";
+import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { FavoriteButton, Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
@@ -162,6 +162,18 @@ export function NowPlaying({
                 duration={shownDuration}
                 onSeek={timeline?.seek ?? player.seek}
                 marks={timeline?.marks}
+                preview={
+                  timeline !== undefined && nowPlaying.kind === "album"
+                    ? (seconds) => (
+                        <AlbumCard
+                          playing={nowPlaying}
+                          track={track}
+                          position={position}
+                          pointedAt={seconds}
+                        />
+                      )
+                    : undefined
+                }
               />
               <div className="np-times">
                 <span>{formatTime(shownPosition)}</span>
@@ -214,46 +226,3 @@ export function NowPlaying({
     </dialog>
   );
 }
-
-/**
- * The album playing as one timeline: where it is, its length, each song's start,
- * and a seek that plays the song the second falls in. `undefined` unless an album
- * of songs plays and every song's length is known.
- */
-function albumTimeline(
-  playing: Playing,
-  position: number,
-  playSong: (song: AlbumSongOf, within: number) => void,
-):
-  | {
-      readonly position: number;
-      readonly length: number;
-      readonly marks: readonly SeekMark[];
-      readonly seek: (seconds: number) => void;
-    }
-  | undefined {
-  if (playing.kind !== "album" || playing.length === undefined || playing.songs.length === 0) {
-    return undefined;
-  }
-  const { songs, current, length } = playing;
-  const now = songs[current];
-  if (now === undefined) {
-    return undefined;
-  }
-  // A song's real length can differ a little from its details', so it stays within its own.
-  const within = Math.min(Math.max(position, 0), now.length ?? position);
-  return {
-    position: now.start + within,
-    length,
-    marks: songs.map((song) => ({ start: song.start, title: song.track?.title ?? "" })),
-    seek: (seconds) => {
-      const at = songAt(songs, Math.min(Math.max(seconds, 0), length));
-      const song = at === undefined ? undefined : songs[at.index];
-      if (at !== undefined && song !== undefined) {
-        playSong(song, at.within);
-      }
-    },
-  };
-}
-
-type AlbumSongOf = Extract<Playing, { kind: "album" }>["songs"][number];

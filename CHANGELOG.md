@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An album's songs, set in under it** — in the Library, the songs of an open
+  album sit further in, with smaller covers, on a guide that runs down from the
+  album and turns into its last song, so which songs belong to it shows at a
+  glance.
+
 - **Ask the AI again, with a note** — once the AI's songs fill the songs editor,
   pressing *AI* opens a field for a note of your own, such as *the 2007 concert,
   with 22 songs*, and asks again at once, without the wait of a day. A dot on
@@ -20,8 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when paused or for anyone who asked for less motion. Point at or press the
   record to see the album's songs in the order they play: those played, the
   one playing and how far it has got, and those to come; choose one to play
-  it. While an album plays, Now Playing's bar spans the whole album, marks
-  where each song starts, and names the song under the pointer.
+  it. While an album plays, the player's bar and Now Playing's span the whole
+  album, split into one segment a song, each filled as far as it has played.
+  Pointing at the bar lights up a song's segment and shows the album's songs
+  over it, the one under the pointer ringed with how far into it you point.
 
 - **Insights** — a new tab shows what you listened to most over the last 7
   days, the last 30, or all time: about how long you listened, your plays and

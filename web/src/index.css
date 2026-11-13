@@ -1778,8 +1778,43 @@ button.text:hover:not(:disabled) {
   }
 }
 
+/* A song of an album sits in under it, on a guide that runs down from the album's
+   caret and turns into the last song. */
 .tracks .title-cell.child {
-  padding-left: 2.1rem;
+  padding-left: 4rem;
+}
+
+.tracks tr.child td.title {
+  position: relative;
+}
+
+.tracks tr.child td.title::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1.45rem;
+  border-left: 2px solid var(--line);
+  content: "";
+}
+
+.tracks tr.child td.title::after {
+  position: absolute;
+  top: 50%;
+  left: 1.45rem;
+  width: 2.75rem;
+  border-top: 2px solid var(--line);
+  content: "";
+}
+
+.tracks tr.child.last-child td.title::before {
+  bottom: 50%;
+  width: 2.75rem;
+  border-bottom: 2px solid var(--line);
+  border-bottom-left-radius: 0.6rem;
+}
+
+.tracks tr.child.last-child td.title::after {
+  content: none;
 }
 
 .columns-menu {
@@ -2055,6 +2090,13 @@ details.dropdown[open] > summary.filter-summary {
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 1.1rem;
+}
+
+/* An album's song, set in under it, has a smaller cover. */
+.tracks .title-cell.child .cover.thumb {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.4rem;
 }
 
 .tracks button.title {

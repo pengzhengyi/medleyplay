@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AlbumSong, Playing } from "../player/albumNow";
 import { trackOf } from "../testing/server";
-import { PlayingKind } from "./PlayingKind";
+import { AlbumCard, PlayingKind } from "./PlayingKind";
 
 /**
  * 生如夏花 split into three songs, the second playing:
@@ -100,5 +100,19 @@ describe("what plays now", () => {
     await userEvent.click(screen.getByRole("button", { name: "Split into songs" }));
 
     expect(onEditSongs).toHaveBeenCalledWith(file);
+  });
+});
+
+describe("an album's card over its seek bar", () => {
+  it("lists the album's songs, lighting up the one pointed at and how far into it", () => {
+    const { container } = render(
+      <AlbumCard playing={ALBUM} track={PLAYING} position={72} pointedAt={600} />,
+    );
+
+    const pointed = container.querySelectorAll(".album-song.pointed");
+    expect(pointed).toHaveLength(1);
+    expect(pointed[0]).toHaveTextContent("生如夏花");
+    expect(pointed[0]).toHaveTextContent("1:00 / 3:00");
+    expect(container).toHaveTextContent("5:12 of 12:00");
   });
 });

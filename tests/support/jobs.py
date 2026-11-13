@@ -76,7 +76,7 @@ def running_jobs(  # noqa: PLR0913 -- the database and clock, then settings with
     network_failed: Callable[[], None] | None = None,
     proxies: Proxies | None = None,
 ) -> Iterator[Jobs]:
-    """Run Jobs of the `echo` kind with the test plugin `parrot` on, and stop them afterwards.
+    """Run Jobs of the `echo` kind with the test plugin `parrot` on, and stop the runner afterwards.
 
     `online` stands for the Mode, and `network_failed` hears each network failure.
     """
@@ -103,5 +103,6 @@ def running_jobs(  # noqa: PLR0913 -- the database and clock, then settings with
         try:
             yield Jobs(service, runner, echo, clock, completed)
         finally:
-            if start:
-                runner.stop()
+            # Also when the test started the runner itself: a runner left polling would
+            # open a connection on the closed database, which a later test then finalizes.
+            runner.stop()

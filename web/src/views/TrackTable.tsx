@@ -603,9 +603,15 @@ export function TrackTable({
                 data-index={item.index}
                 aria-rowindex={item.index + 2}
                 className={
-                  [row.depth > 0 ? "child" : "", track.availability === "ok" ? "" : "unplayable"]
-                    .join(" ")
-                    .trim() || undefined
+                  [
+                    row.depth > 0 ? "child" : "",
+                    row.depth > 0 && row.getParentRow()?.subRows.at(-1)?.id === row.id
+                      ? "last-child"
+                      : "",
+                    track.availability === "ok" ? "" : "unplayable",
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
                 }
                 aria-current={track.id === playingId ? "true" : undefined}
                 // A click on the row plays its song, as its title does; the title stays the

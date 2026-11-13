@@ -693,6 +693,15 @@ describe("the Library", () => {
     );
   });
 
+  it("sets an album's songs in under it, its guide ending at the last song", async () => {
+    renderLibrary();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show the songs of 生如夏花" }));
+
+    const rows = screen.getAllByRole("button", { name: /^(傲慢的上校|浮游|生如夏花)$/ }).map(rowOf);
+    expect(rows.map((row) => row.className)).toEqual(["", "child", "child", "child last-child"]);
+  });
+
   it("marks each item a song or an album, saying when it is a guess", () => {
     renderLibrary();
 

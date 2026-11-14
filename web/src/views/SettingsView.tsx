@@ -12,7 +12,6 @@ import { BroomIcon, CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react"
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
-  ApiError,
   type Mode,
   type Preview,
   type Settings,
@@ -21,9 +20,10 @@ import {
   api,
   newestOf,
 } from "../api";
-import { AUTO_SAVE_MS, useAutoSave } from "../useAutoSave";
+import { useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
 import { formatBytes } from "../format";
+import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 import { hrefOf } from "../routes";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
@@ -274,6 +274,26 @@ function bytesOf(draft: Draft): number | null | undefined {
   return draft.gb.trim() === "" || !Number.isFinite(gb) || gb < 0 ? undefined : Math.round(gb * GB);
 }
 
+/** A limit to save, and what the person confirmed it removes, if they did. */
+interface Limit {
+  readonly bytes: number | null;
+  readonly confirmed?: Preview | null;
+}
+
+/** A limit waiting for a confirmation, and what it removes: `null` when that is unknown. */
+interface Removing {
+  readonly bytes: number;
+  readonly preview: Preview | null;
+}
+
+const NOTHING_REMOVED: Preview = { removals: [] };
+
+/** Return how many bytes a preview removes; an unknown one, as many as there could be. */
+const sizeOf = (preview: Preview | null): number =>
+  preview === null
+    ? Number.POSITIVE_INFINITY
+    : preview.removals.reduce((total, each) => total + each.size, 0);
+
 /** What the Downloads hold, and the storage limit. */
 function StorageSettings({
   admin,
@@ -288,18 +308,24 @@ function StorageSettings({
   const [storage, setStorage] = useState<Storage | undefined>(undefined);
   const [draft, setDraft] = useState<Draft>({ unlimited: true, gb: "" });
   /** A lower limit waiting to be confirmed: what saving it removes, `null` if unknown. */
-  const [removing, setRemoving] = useState<{ bytes: number; preview: Preview | null }>();
+  const [removing, setRemoving] = useState<Removing>();
   const [error, setError] = useState("");
-  const asking = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const asked = useRef<() => void>(undefined);
+  const field = useRef<HTMLInputElement>(null);
+  const focusing = useRef(false);
   const latest = useRef(settings);
   useEffect(() => {
     if (settings !== undefined) {
       latest.current = newestOf(latest.current, settings);
     }
   }, [settings]);
+  useEffect(() => {
+    if (focusing.current) {
+      focusing.current = false;
+      field.current?.focus();
+    }
+  });
 
-  const reload = (then = () => undefined) => {
+  const reload = () => {
     Promise.all([api.settings(), api.storage()]).then(
       ([read, now]) => {
         const newest = newestOf(latest.current, read);
@@ -308,7 +334,6 @@ function StorageSettings({
         setStorage(now);
         setDraft(draftOf(newest));
         setRemoving(undefined);
-        then();
       },
       (failure: unknown) => {
         setError(failure instanceof Error ? failure.message : String(failure));
@@ -320,91 +345,75 @@ function StorageSettings({
   });
   useEffect(() => {
     loadOnOpen();
-    return () => {
-      clearTimeout(asking.current);
-    };
   }, []);
 
-  const saving = useAutoSave((limit: number | null, notes) => {
+  // A limit that would remove Downloads waits for a confirmation of what it removes; one
+  // confirmed is asked about again if, by the time it saves, it would remove more.
+  const saving = useAutoSave(async ({ bytes, confirmed }: Limit, notes) => {
     const base = latest.current;
-    if (base === undefined || limit === base.storage_limit) {
+    if (base === undefined || bytes === base.storage_limit) {
+      setRemoving(undefined);
       notes.tell("");
-      return Promise.resolve(false);
+      return "unchanged";
     }
-    setError("");
-    setRemoving(undefined);
-    return api.saveSettings({ ...base, storage_limit: limit }).then(
-      (saved) => {
-        latest.current = saved;
-        onSettings(saved);
-        api.storage().then(setStorage, () => {
-          // The usage shown is a moment old; the next visit reads it again.
-        });
-        return true;
-      },
-      (failure: unknown) => {
-        if (failure instanceof ApiError && failure.status === 409) {
-          reload(() => {
-            notes.tell(
-              "These settings changed elsewhere, so here they are now. Change them again to save.",
-            );
-          });
-        } else {
+    try {
+      if (bytes !== null) {
+        const preview = await api.storage(bytes).then(
+          (planned) => planned.preview ?? NOTHING_REMOVED,
+          () => null,
+        );
+        const removes = preview === null || preview.removals.length > 0;
+        if (removes && (confirmed === undefined || sizeOf(preview) > sizeOf(confirmed))) {
+          setRemoving({ bytes, preview });
           notes.tell("");
-          setError(failure instanceof Error ? failure.message : String(failure));
+          return "held";
         }
-        return false;
-      },
-    );
+      }
+      const { outcome, settings: now } = await saveChange(base, { storage_limit: bytes });
+      latest.current = now;
+      onSettings(now);
+      setRemoving(undefined);
+      if (outcome === "conflict") {
+        setDraft(draftOf(now));
+        notes.tell(CHANGED_ELSEWHERE);
+        return "conflict";
+      }
+      api.storage().then(setStorage, () => {
+        // The usage shown is a moment old; the next visit reads it again.
+      });
+      return "saved";
+    } catch (failure) {
+      notes.refuse(notSaved(failure));
+      return "failed";
+    }
   });
 
-  /** Ask what `bytes` would remove: save it if nothing, or wait for a confirmation. */
-  const ask = (bytes: number) => {
-    clearTimeout(asking.current);
-    asked.current = undefined;
-    const confirmBefore = (preview: Preview | null) => {
-      if (asked.current !== settle) {
-        return;
-      }
-      asked.current = undefined;
-      if (preview !== null && preview.removals.length === 0) {
-        saving.now(bytes);
-      } else {
-        setRemoving({ bytes, preview });
-      }
-    };
-    const settle = () => {
-      clearTimeout(asking.current);
-      api.storage(bytes).then(
-        (planned) => {
-          confirmBefore(planned.preview ?? { removals: [] });
-        },
-        () => {
-          confirmBefore(null);
-        },
-      );
-    };
-    asked.current = settle;
-    asking.current = setTimeout(settle, AUTO_SAVE_MS);
-  };
-  const settleNow = () => {
-    asked.current?.();
-  };
-
-  const change = (next: Draft) => {
+  const change = (next: Draft, typed: boolean) => {
     setDraft(next);
     setRemoving(undefined);
-    clearTimeout(asking.current);
-    asked.current = undefined;
     const bytes = bytesOf(next);
-    if (bytes === undefined || bytes === latest.current?.storage_limit) {
+    if (bytes === undefined) {
       saving.cancel();
+    } else if (!saving.busy() && bytes === latest.current?.storage_limit) {
       saving.tell("");
-    } else if (bytes === null) {
-      saving.now(null);
+    } else if (typed) {
+      saving.later({ bytes });
     } else {
+      saving.now({ bytes });
+    }
+  };
+  /** Save what the field holds as it is left, or put back what is saved if it isn't a size. */
+  const leave = () => {
+    const bytes = bytesOf(draft);
+    const saved = latest.current;
+    if (bytes === undefined) {
       saving.cancel();
-      ask(bytes);
+      if (saved !== undefined) {
+        setDraft(draftOf(saved));
+      }
+      saving.refuse("Not saved: type a size in GB, such as 20.");
+    } else if (removing === undefined && (saving.busy() || bytes !== saved?.storage_limit)) {
+      saving.now({ bytes });
     }
   };
 
@@ -425,7 +434,7 @@ function StorageSettings({
               className="limit"
               onSubmit={(event) => {
                 event.preventDefault();
-                settleNow();
+                leave();
               }}
             >
               <fieldset>
@@ -436,7 +445,7 @@ function StorageSettings({
                     name="limit"
                     checked={draft.unlimited}
                     onChange={() => {
-                      change({ ...draft, unlimited: true });
+                      change({ ...draft, unlimited: true }, false);
                     }}
                   />
                   No limit
@@ -447,11 +456,14 @@ function StorageSettings({
                     name="limit"
                     checked={!draft.unlimited}
                     onChange={() => {
-                      change({ unlimited: false, gb: draft.gb === "" ? "20" : draft.gb });
+                      // Choosing a limit opens its size to type; the size is saved, not the choice.
+                      setDraft({ unlimited: false, gb: draft.gb === "" ? "20" : draft.gb });
+                      focusing.current = true;
                     }}
                   />
                   Up to
                   <input
+                    ref={field}
                     type="number"
                     inputMode="decimal"
                     min={0}
@@ -460,23 +472,20 @@ function StorageSettings({
                     value={draft.gb}
                     disabled={draft.unlimited}
                     onChange={(event) => {
-                      change({ unlimited: false, gb: event.currentTarget.value });
+                      change({ unlimited: false, gb: event.currentTarget.value }, true);
                     }}
-                    onBlur={settleNow}
+                    onBlur={leave}
                   />
                   GB
                 </label>
               </fieldset>
-              {bytesOf(draft) === undefined && (
-                <p className="hint">Type a size in GB, such as 20.</p>
-              )}
               {removing !== undefined && (
                 <div className="limit-confirm">
                   <p>{removalText(removing.preview)}</p>
                   <button
                     type="button"
                     onClick={() => {
-                      saving.now(removing.bytes);
+                      saving.now({ bytes: removing.bytes, confirmed: removing.preview });
                     }}
                   >
                     Remove and save

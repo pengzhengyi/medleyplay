@@ -94,8 +94,10 @@ nicknames such as *周董*, and Japanese and Korean names.
 - **Asked once a name is linked:** linking a name to an artist asks Wikidata
   every name the artist goes by, a Job of the kind `find_artist_names` per artist,
   through the plugin point `ArtistNameFinder`, which the plugin `wikipedia`
-  answers. The plugin is off by default, as every plugin that contacts a site is,
-  and is turned on in `medleyplay.toml`. An artist only offered, not linked, is
+  answers. The plugin is on by default, unlike the plugins that read MusicBrainz
+  or Bilibili: Wikidata is an open API that needs no account, and the plugin asks
+  only about linked artists. `[plugins.wikipedia] enabled = false` in
+  `medleyplay.toml` turns it off. An artist only offered, not linked, is
   not asked about, since a name may offer up to ten.
 - **Found by its MusicBrainz id:** Wikidata's search for the item holding the
   id (`haswbstatement:P434=<id>`), then the item's labels and aliases in Chinese,

@@ -37,8 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Wikidata every name the artist goes by, in Chinese, Japanese, Korean, and
   English, for the names MusicBrainz lacks: *甲壳虫乐队* for The Beatles, *周董*
   for 周杰倫. A name a linked artist goes by is then offered that artist at once,
-  and search finds the artist by it. The new plugin `wikipedia` is off by
-  default; turn it on in `medleyplay.toml`.
+  and search finds the artist by it, through the new plugin `wikipedia`, on by
+  default since Wikidata's API is open and needs no account.
 
 - **One artist under many names** — Clean up offers to link the
   Library's artist names to artists MusicBrainz knows: *披头士*, *甲壳虫*, and *The

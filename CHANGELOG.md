@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Previous and Next album** — while an album plays, the player's Previous
+  and Next step by album: back to the album's start once it is a few seconds
+  in, else to the album before, and on to the album after. A smaller pair inside
+  them steps by song within the album, and seeks within a split file playing
+  whole. A song of its own keeps Previous and Next as they were.
+
 - **Edit an album from its page** — an album's page has *Edit details* beside
   its heart. An album that is one file opens *Edit details* on that file, as the
   Library does; an album of songs of their own opens *Edit album*, which sets

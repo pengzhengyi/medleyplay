@@ -28,8 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hover, so a local stand-in's answer isn't taken for another provider's.
 
 - **Clean up** — names to tidy and names to link to one artist now wait on one
-  page under Settings, whose rail item says how many there are, instead of in a
-  row under the Library's and Artists' headings. On a phone, Settings carries
+  page under Insights, whose rail item says how many there are, instead of in a
+  row under the Library's and Artists' headings. On a phone, Insights carries
   the count and links to the page. *Tidy all* sits at the head of its section
   and tidies every name listed at once.
 

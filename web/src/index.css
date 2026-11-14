@@ -1558,7 +1558,7 @@ button.text:hover:not(:disabled) {
   color: var(--accent);
 }
 
-/* Clean up sits under Settings, indented, with how many names wait. */
+/* Clean up sits under Insights, indented, with how many names wait. */
 
 .views li.under .view-link {
   padding-left: 2.4rem;
@@ -6143,7 +6143,7 @@ button.playing-kind[aria-expanded="true"] {
   }
 }
 
-/* A phone's tab bar leaves Clean up out: Settings carries its count, and opens with it. */
+/* A phone's tab bar leaves Clean up out: Insights carries its count, and opens with it. */
 @media (width <= 48rem) {
   .views li.under {
     display: none;

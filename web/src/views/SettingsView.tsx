@@ -8,7 +8,7 @@
  * member sees it and what it holds.
  */
 
-import { BroomIcon, CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
+import { CaretDownIcon } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
@@ -24,7 +24,6 @@ import {
 import { AUTO_SAVE_MS, useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
 import { formatBytes } from "../format";
-import { hrefOf } from "../routes";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
@@ -88,7 +87,6 @@ export function SettingsView({
   onKindsChanged,
   onRatingsChanged = () => undefined,
   waitingDevices = [],
-  toDo = 0,
 }: {
   readonly admin: boolean;
   readonly mode: Mode | null;
@@ -102,9 +100,6 @@ export function SettingsView({
   readonly onRatingsChanged?: (() => void) | undefined;
   /** The devices waiting for an answer, as the event stream last said. */
   readonly waitingDevices?: readonly WaitingDevice[];
-  /** How many names wait to be cleaned up; a phone, with no room for Clean up in its
-   * tab bar, reaches it from here. */
-  readonly toDo?: number;
 }) {
   const [folded, setFolded] = useState(loadFolded);
   // One copy for the sections that save the settings, so each saves at the latest revision.
@@ -167,13 +162,6 @@ export function SettingsView({
       <header className="view-heading">
         <h2 className="section">Settings</h2>
       </header>
-      {toDo > 0 && (
-        <a className="clean-up-link on-phone" href={hrefOf({ view: "clean-up" })}>
-          <BroomIcon className="clean-up-icon" weight="bold" aria-hidden />
-          {`Clean up ${String(toDo)} ${toDo === 1 ? "name" : "names"}`}
-          <CaretRightIcon className="clean-up-go" aria-hidden />
-        </a>
-      )}
       <nav className="settings-toc" aria-label="Settings sections">
         <ul>
           {sections.map(({ id, title }) => (

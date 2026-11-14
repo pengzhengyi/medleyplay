@@ -6,6 +6,7 @@
  * Library row does.
  */
 
+import { BroomIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { useMemo, useState } from "react";
 
 import type { Track } from "../api";
@@ -40,11 +41,15 @@ const listenedOf = ({ listenedMs, plays }: { listenedMs: number; plays: number }
 export function InsightsView({
   tracks,
   onPlay,
+  toDo = 0,
 }: {
   /** Every Track, an album file split into songs too, for the plays from before its split. */
   readonly tracks: readonly Track[];
   /** Play `shown` from its entry `index`. */
   readonly onPlay: (shown: readonly Track[], index: number) => void;
+  /** How many names wait to be cleaned up; a phone, with no room for Clean up in its
+   * tab bar, reaches it from here. */
+  readonly toDo?: number;
 }) {
   const [period, setPeriod] = useState<Period>(30);
   const { counts, failure } = usePlayCounts(period);
@@ -73,6 +78,13 @@ export function InsightsView({
           ))}
         </div>
       </header>
+      {toDo > 0 && (
+        <a className="clean-up-link on-phone" href={hrefOf({ view: "clean-up" })}>
+          <BroomIcon className="clean-up-icon" weight="bold" aria-hidden />
+          {`Clean up ${String(toDo)} ${toDo === 1 ? "name" : "names"}`}
+          <CaretRightIcon className="clean-up-go" aria-hidden />
+        </a>
+      )}
       {failure !== "" && <p className="error">{failure}</p>}
       {insights === undefined && failure === "" && <p className="muted">Loading…</p>}
       {insights?.plays === 0 && <p className="empty">{NOTHING_PLAYED[period]}</p>}

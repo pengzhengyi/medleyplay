@@ -84,10 +84,11 @@ no router package.
   and works out its Tracks from the hearts it already holds, newest added first
   as the server orders them, so a heart counts at once. The server doesn't
   record when a Track became a favorite, so *recently liked* waits for that.
-- **Clean up sits under Settings** in the rail, set in, with how many names
-  wait, rather than as a row in each view those names show in. A phone's tab bar
-  has no room for a ninth tab, so there Settings carries the count, and its page
-  opens with *Clean up 37 names*. Each kind of change is a section headed by its
+- **Clean up sits under Insights** in the rail, set in, with how many names
+  wait, rather than as a row in each view those names show in: both are about
+  the Library itself, where Settings is about how medleyplay behaves. A phone's
+  tab bar has no room for a ninth tab, so there Insights carries the count, and
+  its page opens with *Clean up 37 names*. Each kind of change is a section headed by its
   name, how many wait, and its action for all of them: *Tidy all*, which tidies
   the names listed in one request, and *Look up 24 names*.
 - **Playlists gain songs from a song's menu;** renaming, reordering, and

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import type { NameToTidy } from "../api";
+import { useNamesToTidy } from "../library/useNamesToTidy";
 import { serve } from "../testing/server";
 import { TidyNames } from "./TidyNames";
 
@@ -28,26 +29,33 @@ const BEATLES: NameToTidy = {
   years_differ: 0,
 };
 
-const openList = async () => {
-  await userEvent.click(await screen.findByRole("button", { name: "Tidy 2 names" }));
-  return screen.getByRole("dialog", { name: "Tidy names" });
+/** The section as Clean up shows it: the names read from the server, again after each change. */
+function Listed() {
+  const tidy = useNamesToTidy(undefined);
+  return <TidyNames names={tidy.names} onChanged={tidy.reload} />;
+}
+
+/** Show the section, once it lists the names the server gave. */
+const shown = async () => {
+  render(<Listed />);
+  return screen.findByRole("list", { name: "Names to tidy" });
 };
 
 describe("tidying names", () => {
-  it("offers nothing while every name is tidy", async () => {
+  it("says every name is tidy when none is left", async () => {
     const server = serve({ "GET /api/names-to-tidy": { body: { names: [] } } });
 
-    render(<TidyNames />);
+    render(<Listed />);
 
     await expect.poll(() => server.calls).toContain("GET /api/names-to-tidy");
+    expect(screen.getByText("Every artist and album name is tidy.")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("lists each name as written, its tidy form, its year, and the songs it is on", async () => {
     serve({ "GET /api/names-to-tidy": { body: { names: [JAY, BEATLES] } } });
-    render(<TidyNames />);
 
-    const list = await openList();
+    const list = await shown();
 
     const rows = within(list).getAllByRole("listitem");
     expect(rows[0]).toHaveTextContent("周杰伦2000年发行首张个人");
@@ -68,8 +76,7 @@ describe("tidying names", () => {
         return { body: { changed: 2 } };
       },
     });
-    render(<TidyNames />);
-    const list = await openList();
+    const list = await shown();
 
     await userEvent.click(
       within(list).getByRole("button", { name: "Tidy 周杰伦2000年发行首张个人 to 周杰伦" }),
@@ -88,8 +95,7 @@ describe("tidying names", () => {
         return { status: 204 };
       },
     });
-    render(<TidyNames />);
-    const list = await openList();
+    const list = await shown();
 
     await userEvent.click(
       within(list).getByRole("button", { name: "Keep The Beatles（披头士） as written" }),
@@ -99,29 +105,43 @@ describe("tidying names", () => {
     expect(server.calls).toContain("POST /api/names-to-tidy/keep");
   });
 
-  it("tidies every name at once", async () => {
+  it("tidies every name listed at once, from the top of the list", async () => {
     let names = [JAY, BEATLES];
-    const tidied: unknown[] = [];
+    let sent: unknown;
     serve({
       "GET /api/names-to-tidy": () => ({ body: { names } }),
-      "POST /api/names-to-tidy/tidy": (body) => {
-        tidied.push(body);
-        names = names.filter((name) => name.written !== (body as NameToTidy).written);
-        return { body: { changed: 1 } };
+      "POST /api/names-to-tidy/tidy-all": (body) => {
+        sent = body;
+        names = [];
+        return { body: { changed: 3 } };
       },
     });
-    render(<TidyNames />);
-    const list = await openList();
+    const list = await shown();
 
-    await userEvent.click(within(list).getByRole("button", { name: "Tidy all" }));
+    await userEvent.click(screen.getByRole("button", { name: "Tidy all" }));
 
-    await expect
-      .poll(() => tidied)
-      .toEqual([
+    expect(sent).toEqual({
+      names: [
         { kind: "artist", written: JAY.written },
         { kind: "artist", written: BEATLES.written },
-      ]);
-    await expect.poll(() => within(list).queryAllByRole("listitem")).toHaveLength(0);
+      ],
+    });
+    await expect.poll(() => screen.queryByRole("list")).toBeNull();
+    expect(list).not.toBeInTheDocument();
+  });
+
+  it("says why the names couldn't be tidied at once, above the list", async () => {
+    serve({
+      "GET /api/names-to-tidy": { body: { names: [JAY, BEATLES] } },
+      "POST /api/names-to-tidy/tidy-all": { status: 500, body: { detail: "The server failed." } },
+    });
+    const list = await shown();
+
+    await userEvent.click(screen.getByRole("button", { name: "Tidy all" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The server failed.");
+    expect(list).not.toContainElement(alert);
   });
 
   it("says why a name couldn't be tidied, beside it", async () => {
@@ -132,8 +152,7 @@ describe("tidying names", () => {
         body: { detail: "No Track shows “周杰伦2000年发行首张个人” any more." },
       },
     });
-    render(<TidyNames />);
-    const list = await openList();
+    const list = await shown();
 
     await userEvent.click(
       within(list).getByRole("button", { name: "Tidy 周杰伦2000年发行首张个人 to 周杰伦" }),
@@ -155,9 +174,8 @@ describe("tidying names", () => {
       years_differ: 0,
     };
     serve({ "GET /api/names-to-tidy": { body: { names: [JAY, album] } } });
-    render(<TidyNames />);
 
-    const list = await openList();
+    const list = await shown();
 
     expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent("Album");
   });

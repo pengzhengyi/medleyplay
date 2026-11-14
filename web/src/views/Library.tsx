@@ -18,6 +18,8 @@ import { useLookAhead } from "../library/useLookAhead";
 import { useStation } from "../library/useStation";
 import { linksOf, withLinkedFavorites } from "../library/artistLinks";
 import { useArtistNames } from "../library/useArtistNames";
+import { useNamesToTidy } from "../library/useNamesToTidy";
+import { toDoOf } from "../library/cleanUp";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
@@ -128,6 +130,8 @@ export function Library({
     }, playOnFailedFor);
   };
   const artistNames = useArtistNames(library.tracks);
+  const namesToTidy = useNamesToTidy(library.tracks);
+  const toDo = toDoOf(namesToTidy.names, artistNames.names);
   const links = useMemo(() => linksOf(artistNames.names), [artistNames.names]);
   // A favorite name makes every name linked with it a favorite, for Radio and the views.
   const favorites = useMemo(
@@ -457,7 +461,7 @@ export function Library({
           <SignOutIcon weight="regular" aria-hidden />
         </button>
       </header>
-      <Nav route={route} />
+      <Nav route={route} toDo={toDo} />
       <main>
         {library.error !== "" && <p role="alert">{library.error}</p>}
         {library.loaded ? (
@@ -481,6 +485,8 @@ export function Library({
             onFavoriteAlbum={library.setAlbumFavorite}
             links={links}
             artistNames={artistNames}
+            namesToTidy={namesToTidy}
+            toDo={toDo}
           />
         ) : (
           <p className="empty" aria-busy="true">

@@ -18,6 +18,7 @@ describe("routes", () => {
     ["#/search?q=melt", { view: "search", query: "melt" }],
     ["#/insights", { view: "insights" }],
     ["#/settings", { view: "settings" }],
+    ["#/clean-up", { view: "clean-up" }],
   ])("reads %s", (hash, route) => {
     expect(routeOf(hash)).toEqual(route);
   });

@@ -9,6 +9,15 @@ answer   The Beatles (b10bbbfc-…), UK, Liverpool rock band, score 100;
          also 披头士 (zh), 披頭四 (zh_Hant), Beatles
 ```
 
+Another site may know more names of an artist than the one that found it: asked
+with the artist's MusicBrainz id, a name finder answers with every name it knows the
+artist by.
+
+```text
+ask      b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d
+answer   甲壳虫乐队 (zh), 甲壳虫 (zh), ビートルズ (ja), …
+```
+
 The site refusing the request is a reply, not a failure, so it doesn't count
 against the plugin.
 """
@@ -88,11 +97,42 @@ class ArtistFinder(Protocol):
         ...
 
 
+class FindArtistNames(_Model):
+    """Ask every name the artist `musicbrainz_id` goes by."""
+
+    musicbrainz_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+
+
+class FoundArtistNames(_Model):
+    """Every name a site knows the artist by; none when it doesn't know the artist."""
+
+    status: FindStatus = FindStatus.OK
+    message: Annotated[str, StringConstraints(max_length=500)] = ""
+    aliases: Annotated[tuple[ArtistAlias, ...], Field(max_length=MAX_ALIASES)] = ()
+
+
+class ArtistNameFinder(Protocol):
+    """Finds every name a site knows an artist by."""
+
+    def find(self, request: FindArtistNames) -> FoundArtistNames:
+        """Ask the site which names the artist goes by."""
+        ...
+
+
 ARTIST_FINDER = ExtensionPoint[ArtistFinder]("artist_finder")
 FIND_ARTIST = ARTIST_FINDER.operation(
     "find",
     FindArtist,
     FoundArtists,
+    lambda finder: finder.find,
+    deadline=timedelta(minutes=1),
+)
+
+ARTIST_NAME_FINDER = ExtensionPoint[ArtistNameFinder]("artist_name_finder")
+FIND_ARTIST_NAMES = ARTIST_NAME_FINDER.operation(
+    "find",
+    FindArtistNames,
+    FoundArtistNames,
     lambda finder: finder.find,
     deadline=timedelta(minutes=1),
 )

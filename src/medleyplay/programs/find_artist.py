@@ -1,10 +1,20 @@
-"""The program that asks an artist finder which artists go by a name."""
+"""The programs that ask which artists go by a name, and every name an artist goes by."""
 
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from medleyplay.plugin_api import FIND_ARTIST, MAX_ARTISTS, FindArtist, FindStatus, FoundArtist
+from medleyplay.plugin_api import (
+    FIND_ARTIST,
+    FIND_ARTIST_NAMES,
+    MAX_ALIASES,
+    MAX_ARTISTS,
+    ArtistAlias,
+    FindArtist,
+    FindArtistNames,
+    FindStatus,
+    FoundArtist,
+)
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext, JobProgram
 
 
@@ -56,4 +66,37 @@ def run(request: FindArtistJob, context: JobContext) -> FoundArtistsResult:
 
 FIND_ARTIST_PROGRAM: JobProgram[FindArtistJob, FoundArtistsResult] = JobProgram(
     FindArtistJob, FoundArtistsResult, run
+)
+
+
+class FindArtistNamesJob(_Model):
+    """Ask `finder` every name the artist `artist_id`, a MusicBrainz id, goes by."""
+
+    artist_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    finder: Annotated[str, StringConstraints(max_length=64)] = "wikipedia"
+
+
+class FoundArtistNamesResult(_Model):
+    """Every name the finder knows the artist by; none when it doesn't know it."""
+
+    artist_id: str
+    finder: str
+    aliases: Annotated[tuple[ArtistAlias, ...], Field(max_length=MAX_ALIASES)] = ()
+
+
+def run_names(request: FindArtistNamesJob, context: JobContext) -> FoundArtistNamesResult:
+    """Ask the finder, and fail the Job if the site refuses."""
+    answer = context.call(
+        FIND_ARTIST_NAMES, request.finder, FindArtistNames(musicbrainz_id=request.artist_id)
+    )
+    if answer.status is FindStatus.REFUSED:
+        message = answer.message or "The site refused the request."
+        raise AnswerFailedError(message, kind="refused")
+    return FoundArtistNamesResult(
+        artist_id=request.artist_id, finder=request.finder, aliases=answer.aliases
+    )
+
+
+FIND_ARTIST_NAMES_PROGRAM: JobProgram[FindArtistNamesJob, FoundArtistNamesResult] = JobProgram(
+    FindArtistNamesJob, FoundArtistNamesResult, run_names
 )

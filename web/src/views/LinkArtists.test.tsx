@@ -97,6 +97,21 @@ describe("linking names to artists", () => {
     expect(within(row).getByRole("button", { name: "Link 披头士" })).toBeEnabled();
   });
 
+  it("offers a name an artist already linked goes by that artist, still to look up", async () => {
+    const { list } = await openList(
+      namesOf({
+        ...artistNameOf("甲壳虫乐队"),
+        candidates: [{ artist_id: BEATLES.id, score: 100 }],
+        suggested: BEATLES.id,
+      }),
+    );
+    const row = rowOf(list, "甲壳虫乐队");
+
+    expect(within(row).getByRole("radio", { name: /The Beatles/ })).toBeChecked();
+    expect(within(row).getByRole("button", { name: "Look up 甲壳虫乐队" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Link 甲壳虫乐队" })).toBeEnabled();
+  });
+
   it("links a name to none of the artists found", async () => {
     let sent: unknown;
     serve({
@@ -167,6 +182,14 @@ describe("linking names to artists", () => {
 
     expect(row).toHaveTextContent("The Beatles");
     expect(sent).toEqual({ name: "Beatles" });
+  });
+
+  it("says while Wikidata is asked a linked artist's other names", async () => {
+    const { list } = await openList(
+      namesOf(LOOKED_UP, { ...artistNameOf("Beatles", BEATLES.id), finding: true }),
+    );
+
+    expect(rowOf(list, "Beatles")).toHaveTextContent("Finding its other names on Wikidata…");
   });
 
   it("says why a link failed, beside the name", async () => {

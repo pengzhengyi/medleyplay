@@ -2,7 +2,8 @@
  * @file The Library's artist names, what MusicBrainz knows of them, and their links.
  *
  * They are read again whenever `version` changes, as it does with the Tracks, after
- * a change made here, and every 2 seconds while MusicBrainz is being asked about any.
+ * a change made here, and every 2 seconds while MusicBrainz is being asked about any,
+ * or Wikidata about a linked artist's other names.
  */
 
 import { useEffect, useState } from "react";

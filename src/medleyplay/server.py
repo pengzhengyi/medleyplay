@@ -22,7 +22,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
-from medleyplay.application.artists import ArtistService, find_artist_kind
+from medleyplay.application.artists import (
+    ArtistService,
+    find_artist_kind,
+    find_artist_names_kind,
+)
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.changes import Changes
 from medleyplay.application.connectivity import reachable
@@ -176,12 +180,14 @@ def build_services(  # noqa: PLR0913, PLR0915
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
     enrich = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
     find_artist = find_artist_kind(clock)
+    find_artist_names = find_artist_names_kind(clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,
         download.name: download,
         enrich.name: enrich,
         find_artist.name: find_artist,
+        find_artist_names.name: find_artist_names,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -260,7 +266,9 @@ def build_services(  # noqa: PLR0913, PLR0915
         devices=_devices(units, clock, accounts, events),
         remote=_remote(clock, events),
         ratings=RatingsService(units, clock, changes.tell),
-        artists=ArtistService(units, clock, plugins, jobs, find_artist, changes.tell),
+        artists=ArtistService(
+            units, clock, plugins, jobs, find_artist, find_artist_names, changes.tell
+        ),
     )
 
 

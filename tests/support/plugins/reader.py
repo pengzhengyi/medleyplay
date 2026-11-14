@@ -71,6 +71,7 @@ from typing import Final
 
 from medleyplay.plugin_api import (
     ARTIST_FINDER,
+    ARTIST_NAME_FINDER,
     TRACK_ENRICHER,
     AiFailure,
     AiFailureKind,
@@ -82,8 +83,10 @@ from medleyplay.plugin_api import (
     EnrichStatus,
     EnrichTrack,
     FindArtist,
+    FindArtistNames,
     FindStatus,
     FoundArtist,
+    FoundArtistNames,
     FoundArtists,
     NetworkError,
     Plugin,
@@ -337,12 +340,36 @@ class Artists:
         return FoundArtists()
 
 
+class ArtistNames:
+    """Answers as Wikidata would: The Beatles go by 甲壳虫乐队, ビートルズ, and Beatles too.
+
+    It also gives them *Various*, a name of no one artist, which no real answer gave,
+    so a test can show such a name offers no artist. Wikidata refuses to answer for the
+    tribute band, and knows no other artist.
+    """
+
+    def find(self, request: FindArtistNames) -> FoundArtistNames:
+        if request.musicbrainz_id == BEATLES.id:
+            return FoundArtistNames(
+                aliases=(
+                    ArtistAlias(name="甲壳虫乐队", locale="zh"),
+                    ArtistAlias(name="ビートルズ", locale="ja", primary=True),
+                    ArtistAlias(name="Beatles", locale="en"),
+                    ArtistAlias(name="Various", locale="en"),
+                )
+            )
+        if request.musicbrainz_id == TRIBUTE.id:
+            return FoundArtistNames(status=FindStatus.REFUSED, message="Wikidata refused.")
+        return FoundArtistNames()
+
+
 def register(registry: Registry) -> None:
-    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and a finder."""
+    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and two finders."""
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
     registry.add(TRACK_ENRICHER, "ai-details", Suggester())
     registry.add(ARTIST_FINDER, "musicbrainz", Artists())
+    registry.add(ARTIST_NAME_FINDER, "wikipedia", ArtistNames())
 
 
 plugin = Plugin(api_version=1, register=register)

@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
-import { albumTimeline, playingOf } from "../player/albumNow";
+import { albumSteps, albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { hintOf, useBindings } from "../shortcuts";
@@ -108,7 +108,11 @@ export function PlayerBar({
         {track !== undefined && <FavoriteButton track={track} onFavorite={onFavorite} />}
         {track !== undefined && <TrackMenu track={track} actions={menuActions} queueing={false} />}
       </div>
-      <Transport player={player} track={track} />
+      <Transport
+        player={player}
+        track={track}
+        steps={albumSteps(player.queue, tracks, nowPlaying, position)}
+      />
       <div className="status">
         <button
           type="button"

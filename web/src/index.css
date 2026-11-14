@@ -6194,12 +6194,14 @@ button.playing-kind[aria-expanded="true"] {
 }
 
 .link-tag {
+  flex: none;
   padding: 0 0.45rem;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Under a focused Link, faintly: Enter links it. */

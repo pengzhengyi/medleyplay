@@ -72,6 +72,25 @@ describe("playingOf", () => {
     expect(now).toEqual({ kind: "album", songs: [], current: -1, length: undefined });
   });
 
+  it("takes a whole file playing whole after it was split as an album of its songs, the one under the position playing", () => {
+    const split = new Map([
+      [9, trackOf(9, "生如夏花", { kind: "album", split: true, duration_ms: 720_000 })],
+      ...BY_ID,
+    ]);
+
+    const now = playingOf(playing(0, [{ key: "w", trackId: 9 }]), split, 300);
+
+    expect(now).toMatchObject({ kind: "album", current: 1, length: 720 });
+    expect(
+      now.kind === "album" &&
+        now.songs.map(({ entry, start, from, track }) => [entry.key, start, from, track?.id]),
+    ).toEqual([
+      ["w", 0, 0, 11],
+      ["w", 240, 240, 12],
+      ["w", 540, 540, 13],
+    ]);
+  });
+
   it("keeps the album to the songs next to each other, not another run of its songs", () => {
     const later = [
       ...ENTRIES,
@@ -161,6 +180,21 @@ describe("albumTimeline", () => {
     albumTimeline(now, 0, playSong)?.seek(600);
 
     expect(playSong).toHaveBeenCalledWith(now.kind === "album" ? now.songs[2] : undefined, 60);
+  });
+
+  it("places a whole file playing whole on its own timeline, and seeks within it", () => {
+    const split = new Map([
+      [9, trackOf(9, "生如夏花", { kind: "album", split: true, duration_ms: 720_000 })],
+      ...BY_ID,
+    ]);
+    const now = playingOf(playing(0, [{ key: "w", trackId: 9 }]), split, 300);
+    const playSong = vi.fn();
+
+    const timeline = albumTimeline(now, 300, playSong);
+    timeline?.seek(600);
+
+    expect(timeline?.position).toBe(300);
+    expect(playSong).toHaveBeenCalledWith(now.kind === "album" ? now.songs[2] : undefined, 600);
   });
 
   it("is nothing while a song of its own plays", () => {

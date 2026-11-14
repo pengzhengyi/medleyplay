@@ -67,9 +67,9 @@ export function NowPlaying({
     };
   }, []);
   const close = () => ref.current?.close();
-  const nowPlaying = playingOf(player.queue, tracks);
-  const timeline = albumTimeline(nowPlaying, position, (song, within) => {
-    player.playAt(song.entry.key, within);
+  const nowPlaying = playingOf(player.queue, tracks, position);
+  const timeline = albumTimeline(nowPlaying, position, (song, seconds) => {
+    player.playAt(song.entry.key, seconds);
   });
   const shownPosition = timeline?.position ?? position;
   const shownDuration = timeline === undefined ? duration : timeline.length;
@@ -131,7 +131,7 @@ export function NowPlaying({
                   moving={status.kind === "playing"}
                   opens="below"
                   onPlaySong={(song) => {
-                    player.playAt(song.entry.key, 0);
+                    player.playAt(song.entry.key, song.from);
                   }}
                   onEditSongs={menuActions.onEditSongs}
                 />

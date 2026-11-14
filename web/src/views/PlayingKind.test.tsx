@@ -23,6 +23,7 @@ const SONGS: readonly AlbumSong[] = [
   entry: { key: String.fromCharCode(97 + index), trackId: 11 + index, unit: "file:9" },
   track: trackOf(11 + index, String(title), { album: "生如夏花", segment_of: 9 }),
   start: Number(start),
+  from: 0,
   length: Number(length),
 }));
 const ALBUM: Playing = { kind: "album", songs: SONGS, current: 1, length: 720 };
@@ -64,6 +65,33 @@ describe("what plays now", () => {
         .getAllByRole("button")
         .map((song) => song.getAttribute("aria-label")),
     ).toEqual(["傲慢的上校, played", "浮游, playing now", "生如夏花, to come"]);
+    expect(within(songs).getByRole("button", { current: true })).toHaveTextContent("1:12 / 5:00");
+    expect(songs).toHaveTextContent("5:12 of 12:00");
+  });
+
+  it("opens the songs of a split file playing whole, timed from where each starts in it", async () => {
+    const file = trackOf(9, "生如夏花", { album: "生如夏花", kind: "album", split: true });
+    const whole = SONGS.map((song) => ({
+      ...song,
+      entry: { key: "w", trackId: 9 },
+      from: song.start,
+    }));
+    const playing: Playing = { kind: "album", songs: whole, current: 1, length: 720 };
+    render(
+      <PlayingKind
+        playing={playing}
+        track={file}
+        position={312}
+        moving
+        opens="below"
+        onPlaySong={vi.fn()}
+        onEditSongs={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Album: 生如夏花, song 2 of 3" }));
+
+    const songs = screen.getByRole("region", { name: "Songs of 生如夏花" });
     expect(within(songs).getByRole("button", { current: true })).toHaveTextContent("1:12 / 5:00");
     expect(songs).toHaveTextContent("5:12 of 12:00");
   });

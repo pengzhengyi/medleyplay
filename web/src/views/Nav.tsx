@@ -1,8 +1,8 @@
 /**
  * @file The views to move between: a rail, tabs, or a tab bar, as the width allows.
  *
- * *Clean up* sits under Settings, with how many names wait. A phone's tab bar has no
- * room for it, so there Settings carries the count, and opens with a way to it.
+ * *Clean up* sits under Insights, with how many names wait. A phone's tab bar has no
+ * room for it, so there Insights carries the count, and opens with a way to it.
  */
 
 import {
@@ -45,8 +45,8 @@ const TOPS: readonly {
   { view: "downloaded", label: "Downloaded", icon: DownloadSimpleIcon },
   { view: "playlists", label: "Playlists", icon: PlaylistIcon },
   { view: "insights", label: "Insights", icon: ChartBarIcon },
-  { view: "settings", label: "Settings", icon: GearSixIcon },
   { view: "clean-up", label: "Clean up", icon: BroomIcon, under: true },
+  { view: "settings", label: "Settings", icon: GearSixIcon },
 ];
 
 /** The top view a route belongs to: an artist's Tracks belong to Artists, and so on. */
@@ -73,7 +73,7 @@ export function Nav({ route, toDo = 0 }: { readonly route: Route; readonly toDo?
       <ul>
         {TOPS.map(({ view, label, icon: ViewIcon, under = false }) => {
           const current = view === top;
-          const counted = toDo > 0 && (view === "clean-up" || view === "settings");
+          const counted = toDo > 0 && (view === "clean-up" || view === "insights");
           const waiting = `${String(toDo)} ${toDo === 1 ? "name" : "names"} to clean up`;
           return (
             <li key={view} className={under ? "under" : undefined}>
@@ -87,7 +87,7 @@ export function Nav({ route, toDo = 0 }: { readonly route: Route; readonly toDo?
                 <span>{label}</span>
                 {counted && (
                   <span
-                    className={view === "settings" ? "view-count on-phone" : "view-count"}
+                    className={view === "insights" ? "view-count on-phone" : "view-count"}
                     aria-hidden
                   >
                     {toDo}

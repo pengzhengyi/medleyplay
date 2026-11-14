@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Hold ⌘ for the shortcuts** — holding ⌘ (Ctrl on Windows and Linux) on its
+  own for a second shows the keyboard shortcuts over the page, and letting go
+  hides them. Shortcuts made with the key never show it. Settings turns it off
+  for the browser.
+
 - **Tidy names** — artist and album names written with more than the name in
   them, such as *周杰伦2000年发行首张个人*, *The Beatles（披头士）*, or
   *八日目、雨が止む前に。(初回限定盤B)*, are listed from a capsule in the Library

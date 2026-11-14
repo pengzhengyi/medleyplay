@@ -32,6 +32,7 @@ from medleyplay.web import (
     accounts,
     addresses,
     ai,
+    artists,
     catalog,
     covers,
     details,
@@ -117,6 +118,7 @@ def create_app(
     app.include_router(settings.router)
     app.include_router(preferences.router)
     app.include_router(ratings.router)
+    app.include_router(artists.router)
     app.include_router(mode.router)
     app.include_router(details.router)
     app.include_router(details.names_router)

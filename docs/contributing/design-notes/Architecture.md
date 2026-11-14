@@ -126,6 +126,7 @@ implementation.
 | `LibraryBackend` | Storage protocol | Job, host | List a Library; locate a file's bytes | `fsspec-library` (folder, zip) |
 | `TagReader` | File type | Job | Read tags and artwork; flag protected files | `tinytag-tags` |
 | `TrackEnricher` | Enricher name | Job | Find or suggest a Track's details and cover from a site or an AI model, when asked; see [Track details](Track%20details.md#enrichers) | `bilibili-details`, `musicbrainz`, `ai-details` |
+| `ArtistFinder` | Finder name | Job | Find the artists a site knows by a name, with every name each goes by; see [Artists](Artists.md) | `musicbrainz` |
 
 Plugins implement core-defined extension points only. They add no HTTP routes, no
 tables, and no scheduled tasks; a new kind of feature starts as a new extension

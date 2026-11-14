@@ -83,7 +83,10 @@ ECHO = JobKind(
 - **A kind may have lanes:** the Jobs whose request names the same value in one
   field, such as the enricher a Job asks, run one at a time, and a lane may wait
   a time after one Job ends before the next starts. A lane may also name the site
-  whose proxy its Jobs get. The wait is kept in memory, on the server's clock.
+  whose proxy its Jobs get. Lanes may share a name, across kinds too: every lane
+  sharing it runs as one, so two kinds asking one site, such as finding a Track
+  and finding an artist on MusicBrainz, keep to its pace together. The wait is kept
+  in memory, on the server's clock.
 - **A kind may turn a Job away** with a reason when it is about to start, as an
   enricher the site refused does; the Job then fails as *refused* without running.
   It may also react, in the transaction that fails a Job, to a program failing it

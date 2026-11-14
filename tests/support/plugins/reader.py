@@ -55,6 +55,14 @@ For `ai-details`, the title of the video text says how it answers:
 | `Echo` | the album *echo*, naming the text, each provider, and whether it has a key |
 | `Second` | *Night Drive*, as the last provider, after the first refused |
 | any other | the title *Night Drive*, the artist *Blue Room*, an album, and a year |
+
+The artist finder `musicbrainz` answers by the name asked about:
+
+| Name | Answers |
+| --- | --- |
+| `披头士`, `甲壳虫`, `Beatles` | The Beatles at 100, going by each; a tribute band at 61 |
+| `Refuse` | refused |
+| any other | no artist |
 """
 
 import time
@@ -62,15 +70,21 @@ from pathlib import Path
 from typing import Final
 
 from medleyplay.plugin_api import (
+    ARTIST_FINDER,
     TRACK_ENRICHER,
     AiFailure,
     AiFailureKind,
     AiFailureReason,
+    ArtistAlias,
     Chapter,
     CommunityRating,
     Enriched,
     EnrichStatus,
     EnrichTrack,
+    FindArtist,
+    FindStatus,
+    FoundArtist,
+    FoundArtists,
     NetworkError,
     Plugin,
     RatedAs,
@@ -291,11 +305,44 @@ def _cover(folder: Path, video: str) -> str:
     return "cover"
 
 
+BEATLES: Final = FoundArtist(
+    id="b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+    name="The Beatles",
+    sort_name="Beatles, The",
+    country="GB",
+    score=100,
+    aliases=(
+        ArtistAlias(name="Beatles"),
+        ArtistAlias(name="披头士", locale="zh", primary=True),
+        ArtistAlias(name="甲壳虫", locale="zh"),
+    ),
+)
+TRIBUTE: Final = FoundArtist(
+    id="6a3b5c1e-0000-4000-8000-0000000b0a1d",
+    name="披头士乐队纪念乐团",
+    disambiguation="Beatles tribute band",
+    country="CN",
+    score=61,
+)
+
+
+class Artists:
+    """Answers each scripted name as the table says."""
+
+    def find(self, request: FindArtist) -> FoundArtists:
+        if request.name in {"披头士", "甲壳虫", "Beatles"}:
+            return FoundArtists(artists=(BEATLES, TRIBUTE))
+        if request.name == "Refuse":
+            return FoundArtists(status=FindStatus.REFUSED, message="MusicBrainz refused.")
+        return FoundArtists()
+
+
 def register(registry: Registry) -> None:
-    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`."""
+    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and a finder."""
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
     registry.add(TRACK_ENRICHER, "ai-details", Suggester())
+    registry.add(ARTIST_FINDER, "musicbrainz", Artists())
 
 
 plugin = Plugin(api_version=1, register=register)

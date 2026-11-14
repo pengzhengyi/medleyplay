@@ -657,3 +657,57 @@ class TidyKeptRow(Base):
     kind: Mapped[str] = mapped_column(String(16), primary_key=True)
     written: Mapped[str] = mapped_column(String(512), primary_key=True)
     kept_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class ArtistRow(Base):
+    """An artist a site knows, as it last answered: its id there, names, and country."""
+
+    __tablename__ = "artist"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(Text)
+    sort_name: Mapped[str] = mapped_column(Text)
+    disambiguation: Mapped[str] = mapped_column(Text)
+    country: Mapped[str] = mapped_column(String(8))
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class ArtistAliasRow(Base):
+    """Another name an artist goes by, and its folded `key`, which names are matched by."""
+
+    __tablename__ = "artist_alias"
+    __table_args__ = (Index("ix_artist_alias_key", "key"),)
+
+    artist_id: Mapped[str] = mapped_column(
+        ForeignKey("artist.id", ondelete="CASCADE"), primary_key=True
+    )
+    name: Mapped[str] = mapped_column(String(512), primary_key=True)
+    key: Mapped[str] = mapped_column(String(512))
+    locale: Mapped[str | None] = mapped_column(String(16))
+    primary: Mapped[bool] = mapped_column(Boolean)
+
+
+class ArtistSearchRow(Base):
+    """What a site last answered for a written name: the artists it knows by it, best first.
+
+    `found` lists each artist's id and score; none is an answer too, so the name isn't
+    asked about again until someone asks.
+    """
+
+    __tablename__ = "artist_search"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512))
+    found: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    looked_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class ArtistLinkRow(Base):
+    """The artist the household linked a written name to, or `None` for no artist a site knows."""
+
+    __tablename__ = "artist_link"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512))
+    artist_id: Mapped[str | None] = mapped_column(ForeignKey("artist.id", ondelete="CASCADE"))
+    linked_at: Mapped[datetime] = mapped_column(UtcDateTime)

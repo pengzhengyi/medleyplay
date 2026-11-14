@@ -873,6 +873,11 @@ export const api = {
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */
   tidyName: (kind: NameToTidy["kind"], written: string) =>
     call<{ changed: number }>("POST", "/api/names-to-tidy/tidy", { kind, written }),
+  /** Tidy each of `names` at once, passing over any with nothing left to tidy. */
+  tidyNames: (names: readonly Pick<NameToTidy, "kind" | "written">[]) =>
+    call<{ changed: number }>("POST", "/api/names-to-tidy/tidy-all", {
+      names: names.map(({ kind, written }) => ({ kind, written })),
+    }),
   /** Keep a name as written, so it is no longer offered for tidying. */
   keepName: (kind: NameToTidy["kind"], written: string) =>
     call<undefined>("POST", "/api/names-to-tidy/keep", { kind, written }),

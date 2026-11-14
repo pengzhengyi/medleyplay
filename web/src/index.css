@@ -1550,6 +1550,31 @@ button.text:hover:not(:disabled) {
   color: var(--accent);
 }
 
+/* Clean up sits under Settings, indented, with how many names wait. */
+
+.views li.under .view-link {
+  padding-left: 2.4rem;
+  font-size: 0.92rem;
+}
+
+.views .view-count {
+  min-width: 1.4rem;
+  margin-left: auto;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.views .view-count.on-phone {
+  display: none;
+}
+
 /* The Library: borderless rows, each lit when pointed at. */
 
 .tracks {
@@ -5827,29 +5852,79 @@ button.playing-kind[aria-expanded="true"] {
 }
 
 /*
- * Tidying artist names: a capsule beside a view's count, and the list it opens, each
- * name as written struck through, then its tidy form and year.
+ * Clean up: a section for each kind of change, headed by its name, how many names
+ * wait, and its action for all of them; then the names, as rows.
  */
 
-.view-heading .tidy-capsule {
+.clean-up {
+  display: grid;
+  gap: 2.25rem;
+  max-width: 46rem;
+}
+
+.clean-up-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.clean-up-head h3 {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  width: auto;
-  margin: 0.4rem 0 0;
-  padding: 0.3rem 0.8rem;
-  border: none;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.clean-up-icon {
+  color: var(--accent);
+}
+
+.clean-up-count {
+  min-width: 1.6rem;
+  padding: 0 0.45rem;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
-.view-heading .tidy-capsule:hover {
-  background: var(--accent);
-  color: var(--accent-ink);
+.clean-up-section .dialog-button {
+  width: auto;
+  height: 2.2rem;
+  margin: 0;
+  padding: 0 0.9rem;
 }
+
+/* A phone reaches Clean up from Settings, as its tab bar has no room for it. */
+
+.clean-up-link {
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 0.8rem;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.clean-up-link .clean-up-icon {
+  color: var(--accent);
+}
+
+.clean-up-go {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+/* Tidying names: each name as written struck through, then its tidy form and year. */
 
 .tidy-lead {
   color: var(--muted);
@@ -5857,10 +5932,8 @@ button.playing-kind[aria-expanded="true"] {
 }
 
 .tidy-list {
-  max-height: min(28rem, 60vh);
-  margin: 0 0 1rem;
+  margin: 0;
   padding: 0;
-  overflow-y: auto;
   list-style: none;
 }
 
@@ -5872,10 +5945,6 @@ button.playing-kind[aria-expanded="true"] {
   padding: 0.7rem 0;
   border-bottom: 1px solid var(--line);
   list-style: none;
-}
-
-.tidy-names .card {
-  width: min(36rem, calc(100vw - 2rem));
 }
 
 .tidy-names-pair {
@@ -5936,13 +6005,6 @@ button.playing-kind[aria-expanded="true"] {
   grid-row: 1 / span 2;
   grid-column: 2;
   gap: 0.5rem;
-}
-
-.tidy-names .dialog-button {
-  width: auto;
-  height: 2.2rem;
-  margin: 0;
-  padding: 0 0.9rem;
 }
 
 .tidy-row .error {
@@ -6006,20 +6068,6 @@ button.playing-kind[aria-expanded="true"] {
 
 /* Linking names to artists: each name, then its link or the artists to choose from. */
 
-.view-heading .view-asides {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 0.5rem;
-}
-
-.link-artists .card {
-  width: min(38rem, calc(100vw - 2rem));
-}
-
-.link-all {
-  margin: 0 0 0.75rem;
-}
-
 .link-row {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -6071,4 +6119,39 @@ button.playing-kind[aria-expanded="true"] {
 .link-choice-box {
   flex: none;
   margin: 0;
+}
+
+/* As tabs along the top, Clean up is one more tab. */
+@media (width <= 64rem) {
+  .views li.under .view-link {
+    padding-left: 0.85rem;
+    font-size: inherit;
+  }
+}
+
+/* A phone's tab bar leaves Clean up out: Settings carries its count, and opens with it. */
+@media (width <= 48rem) {
+  .views li.under {
+    display: none;
+  }
+
+  .views .view-link {
+    position: relative;
+  }
+
+  .views .view-count.on-phone {
+    position: absolute;
+    top: 0;
+    left: calc(50% + 0.35rem);
+    display: block;
+    min-width: 1rem;
+    margin: 0;
+    padding: 0 0.25rem;
+    font-size: 0.6rem;
+    line-height: 1rem;
+  }
+
+  .clean-up-link.on-phone {
+    display: flex;
+  }
 }

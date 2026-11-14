@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { Fragment, type ReactNode, useMemo } from "react";
 
-import type { ArtistNames, Mode, Playlist, Track, WaitingDevice } from "../api";
+import type { ArtistNames, Mode, NameToTidy, Playlist, Track, WaitingDevice } from "../api";
 import type { ArtistLinks } from "../library/artistLinks";
 import { formatLength, formatLibraryLength } from "../format";
 import {
@@ -44,8 +44,7 @@ import type { Station } from "../library/useStation";
 import { InsightsView } from "./InsightsView";
 import { RadioView } from "./RadioView";
 import { SettingsView } from "./SettingsView";
-import { LinkArtists } from "./LinkArtists";
-import { TidyNames } from "./TidyNames";
+import { CleanUpView } from "./CleanUpView";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** The route id of Favorites, the Playlist of favorites the server keeps for each Account. */
@@ -86,6 +85,10 @@ export interface ViewProps {
   readonly links?: ArtistLinks;
   /** The Library's artist names and their links, and a way to read them again. */
   readonly artistNames?: { readonly names: ArtistNames; readonly reload: () => void };
+  /** The names to tidy, and a way to read them again; none, unless given. */
+  readonly namesToTidy?: { readonly names: readonly NameToTidy[]; readonly reload: () => void };
+  /** How many names wait to be cleaned up. */
+  readonly toDo?: number;
 }
 
 /** The view `route` names; each route is a view of its own, opening with no filters on. */
@@ -115,14 +118,7 @@ function viewOf(given: ViewProps) {
     case "insights":
       return <InsightsView tracks={given.tracks} onPlay={props.actions.onPlay} />;
     case "artists":
-      return (
-        <Artists
-          tracks={props.tracks}
-          favorites={props.favorites}
-          links={props.links}
-          artistNames={props.artistNames}
-        />
-      );
+      return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
     case "artist": {
       const songs = tracksOfArtist(props.tracks, route.name, props.links);
       return (
@@ -214,6 +210,14 @@ function viewOf(given: ViewProps) {
           onKindsChanged={props.onKindsChanged}
           onRatingsChanged={props.onRatingsChanged}
           waitingDevices={props.waitingDevices}
+          toDo={props.toDo ?? 0}
+        />
+      );
+    case "clean-up":
+      return (
+        <CleanUpView
+          tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
+          artistNames={props.artistNames}
         />
       );
   }
@@ -227,7 +231,7 @@ function LibraryItems({ tracks, playingId, actions }: ViewProps) {
   const albums = items.filter((track) => track.kind === "album").length;
   return (
     <>
-      <ViewHeading title="Library" aside={<TidyNames version={tracks} />}>
+      <ViewHeading title="Library">
         {items.length > 0 && formatLibraryLength(albums, bySong(played).length, durationOf(played))}
       </ViewHeading>
       <TrackTable
@@ -288,7 +292,6 @@ function ViewHeading({
   back,
   backLabel,
   heart,
-  aside,
   children,
 }: {
   readonly title: string;
@@ -296,8 +299,6 @@ function ViewHeading({
   readonly back?: Route | undefined;
   readonly backLabel?: string | undefined;
   readonly heart?: ReactNode;
-  /** Something to do about the whole view, after its count, such as tidying names. */
-  readonly aside?: ReactNode;
   readonly children?: ReactNode;
 }) {
   return (
@@ -318,7 +319,6 @@ function ViewHeading({
       )}
       {subtitle !== undefined && <p className="subtitle">{subtitle}</p>}
       {children !== undefined && children !== false && <p className="meta">{children}</p>}
-      {aside}
     </header>
   );
 }
@@ -327,27 +327,15 @@ function Artists({
   tracks,
   favorites,
   links,
-  artistNames,
 }: {
   readonly tracks: readonly Track[];
   readonly favorites: FavoriteGroups;
   readonly links: ArtistLinks | undefined;
-  readonly artistNames: ViewProps["artistNames"];
 }) {
   const artists = useMemo(() => artistsOf(tracks, links), [tracks, links]);
   return (
     <>
-      <ViewHeading
-        title="Artists"
-        aside={
-          <span className="view-asides">
-            <TidyNames version={tracks} />
-            {artistNames !== undefined && (
-              <LinkArtists names={artistNames.names} onChanged={artistNames.reload} />
-            )}
-          </span>
-        }
-      >
+      <ViewHeading title="Artists">
         {artists.length > 0 && `${String(artists.length)} artists`}
       </ViewHeading>
       {artists.length === 0 ? <NoMusic /> : <ArtistList artists={artists} favorites={favorites} />}

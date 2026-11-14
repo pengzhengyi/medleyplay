@@ -485,27 +485,27 @@ class DetailsService:
         if tidied is None:
             message = f"“{written}” has nothing to tidy."
             raise InvalidInputError(message)
-        now = self._clock()
         with self._units.begin() as db:
-            showing = [getattr(TrackRow, str(field)) == written for field in TIDIED_FIELDS[kind]]
-            tracks = db.scalars(select(TrackRow).where(or_(*showing)).order_by(TrackRow.id)).all()
-            if not tracks:
+            changed = _tidy_in(db, kind, written, tidied, self._clock())
+            if changed == 0:
                 message = f"No Track shows “{written}” any more."
                 raise NotFoundError(message)
-            for track in tracks:
-                origins = shown(values_of(db, TrackId(track.id)))
-                values: dict[Field, Value | None] = {
-                    field: tidied.name
-                    for field in TIDIED_FIELDS[kind]
-                    if getattr(track, str(field)) == written
-                    and origins[field].origin is not Origin.ALBUM_FILE
-                }
-                if not values:
-                    continue
-                if track.year is None and tidied.year is not None:
-                    values[Field.YEAR] = tidied.year
-                set_household(db, TrackId(track.id), values, now)
-            changed = len(tracks)
+        self._changed()
+        return changed
+
+    def tidy_names(self, names: Iterable[tuple[NameKind, str]]) -> int:
+        """Tidy each of `names` as `tidy_name` does, all at once; return how many Tracks show them.
+
+        A name with nothing to tidy, or that no Track shows any more, is passed over, as
+        it may have been tidied since it was offered. Either every Track changes or none.
+        """
+        now = self._clock()
+        changed = 0
+        with self._units.begin() as db:
+            for kind, written in dict.fromkeys(names):
+                tidied = tidy(kind, written)
+                if tidied is not None:
+                    changed += _tidy_in(db, kind, written, tidied, now)
         self._changed()
         return changed
 
@@ -519,6 +519,29 @@ class DetailsService:
     def _changed(self) -> None:
         if self._on_change is not None:
             self._on_change("catalog")
+
+
+def _tidy_in(db: Session, kind: NameKind, written: str, tidied: Tidied, now: datetime) -> int:
+    """Show `tidied` on every Track showing `written` as a name of `kind`; return how many show it.
+
+    A song of a split file showing its file's value follows the file instead.
+    """
+    showing = [getattr(TrackRow, str(field)) == written for field in TIDIED_FIELDS[kind]]
+    tracks = db.scalars(select(TrackRow).where(or_(*showing)).order_by(TrackRow.id)).all()
+    for track in tracks:
+        origins = shown(values_of(db, TrackId(track.id)))
+        values: dict[Field, Value | None] = {
+            field: tidied.name
+            for field in TIDIED_FIELDS[kind]
+            if getattr(track, str(field)) == written
+            and origins[field].origin is not Origin.ALBUM_FILE
+        }
+        if not values:
+            continue
+        if track.year is None and tidied.year is not None:
+            values[Field.YEAR] = tidied.year
+        set_household(db, TrackId(track.id), values, now)
+    return len(tracks)
 
 
 def _rows(

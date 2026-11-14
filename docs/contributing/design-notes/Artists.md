@@ -124,9 +124,9 @@ nicknames such as *周董*, and Japanese and Korean names.
 
 ## The web client
 
-- **A capsule in the Artists heading,** *Link 17 artist names*, shows while any
-  name that may be looked up is not linked, beside the one for tidying names. It
-  opens the list: each name with its songs, most songs first.
+- **A section of Clean up,** *Link artist names*, with how many names that may
+  be looked up are not linked, counted in the rail's *Clean up* with the names to
+  tidy: each name with its songs, most songs first.
 - **Each name says where it stands:** *Look up* for one not looked up yet, with
   *Look up 17 names* above the list for all of them; *Looking it up on
   MusicBrainz…* while it is; *Tidy the name first* for a name that needs it; up to

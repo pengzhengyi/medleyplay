@@ -82,3 +82,23 @@ def test_a_name_with_nothing_to_tidy_is_refused(client: TestClient) -> None:
 
 def test_the_names_to_tidy_are_for_signed_in_accounts(client: TestClient) -> None:
     assert client.get("/api/names-to-tidy").status_code == 401
+
+
+def test_names_are_tidied_at_once(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    jay = _song_by(catalog, JAY)
+    beatles = _song_by(catalog, "The Beatles（披头士）", part=2)  # noqa: RUF001 -- as videos write it
+
+    tidied = client.post(
+        "/api/names-to-tidy/tidy-all",
+        json={
+            "names": [
+                {"kind": "artist", "written": JAY},
+                {"kind": "artist", "written": "The Beatles（披头士）"},  # noqa: RUF001
+            ]
+        },
+    )
+
+    assert tidied.json() == {"changed": 2}
+    assert client.get(f"/api/tracks/{jay}").json()["artist"] == "周杰伦"
+    assert client.get(f"/api/tracks/{beatles}").json()["artist"] == "The Beatles"

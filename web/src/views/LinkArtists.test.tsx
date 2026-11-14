@@ -37,11 +37,11 @@ const LOOKED_UP: ArtistName = {
 
 const namesOf = (...names: ArtistName[]): ArtistNames => ({ names, artists: [BEATLES, TRIBUTE] });
 
-async function openList(names: ArtistNames) {
+/** Show the section listing `names`. */
+function openList(names: ArtistNames) {
   const onChanged = vi.fn();
   render(<LinkArtists names={names} onChanged={onChanged} />);
-  await userEvent.click(screen.getByRole("button", { name: /^Link \d+ artist names?$/ }));
-  return { list: screen.getByRole("dialog", { name: "Link names to artists" }), onChanged };
+  return { list: screen.getByRole("region", { name: /Link artist names/ }), onChanged };
 }
 
 const rowOf = (list: HTMLElement, name: string) =>
@@ -50,23 +50,23 @@ const rowOf = (list: HTMLElement, name: string) =>
     .find((row) => within(row).queryByText(name, { selector: "strong" }) !== null) ?? document.body;
 
 describe("linking names to artists", () => {
-  it("offers nothing when every name is linked or names no one", () => {
-    render(
-      <LinkArtists
-        names={namesOf(artistNameOf("The Beatles", BEATLES.id), {
-          ...artistNameOf("群星"),
-          look_up: "never",
-        })}
-        onChanged={vi.fn()}
-      />,
+  it("counts the names that may be linked and are not, and leaves out names of no one", () => {
+    const { list } = openList(
+      namesOf(LOOKED_UP, artistNameOf("The Beatles", BEATLES.id), {
+        ...artistNameOf("群星"),
+        look_up: "never",
+      }),
     );
 
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      within(list).getByRole("heading", { name: /^Link artist names\s*1$/ }),
+    ).toBeInTheDocument();
+    expect(rowOf(list, "群星")).toBe(document.body);
   });
 
   it("links a name to the artist suggested for it", async () => {
     const server = serve({ "PUT /api/artist-names/link": { status: 204 } });
-    const { list, onChanged } = await openList(namesOf(LOOKED_UP));
+    const { list, onChanged } = openList(namesOf(LOOKED_UP));
     const row = rowOf(list, "披头士");
 
     const suggested = within(row).getByRole("radio", { name: /The Beatles/ });
@@ -77,7 +77,7 @@ describe("linking names to artists", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it("chooses the suggestion once a name looked up while the list is open comes back", async () => {
+  it("chooses the suggestion once a name looked up while the list is open comes back", () => {
     serve({ "PUT /api/artist-names/link": { status: 204 } });
     const onChanged = vi.fn();
     const { rerender } = render(
@@ -86,19 +86,18 @@ describe("linking names to artists", () => {
         onChanged={onChanged}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Link 2 artist names" }));
 
     rerender(
       <LinkArtists names={namesOf(LOOKED_UP, artistNameOf("Blue Room"))} onChanged={onChanged} />,
     );
 
-    const row = rowOf(screen.getByRole("dialog"), "披头士");
+    const row = rowOf(screen.getByRole("region"), "披头士");
     expect(within(row).getByRole("radio", { name: /The Beatles/ })).toBeChecked();
     expect(within(row).getByRole("button", { name: "Link 披头士" })).toBeEnabled();
   });
 
-  it("offers a name an artist already linked goes by that artist, still to look up", async () => {
-    const { list } = await openList(
+  it("offers a name an artist already linked goes by that artist, still to look up", () => {
+    const { list } = openList(
       namesOf({
         ...artistNameOf("甲壳虫乐队"),
         candidates: [{ artist_id: BEATLES.id, score: 100 }],
@@ -120,7 +119,7 @@ describe("linking names to artists", () => {
         return { status: 204 };
       },
     });
-    const { list } = await openList(namesOf(LOOKED_UP));
+    const { list } = openList(namesOf(LOOKED_UP));
 
     await userEvent.click(
       within(rowOf(list, "披头士")).getByRole("button", { name: "None of these for 披头士" }),
@@ -137,7 +136,7 @@ describe("linking names to artists", () => {
         return { body: { asked: 2 } };
       },
     });
-    const { list } = await openList(
+    const { list } = openList(
       namesOf(LOOKED_UP, artistNameOf("Blue Room"), artistNameOf("朴树"), {
         ...artistNameOf("周杰伦2000年发行"),
         look_up: "tidy_first",
@@ -149,8 +148,8 @@ describe("linking names to artists", () => {
     expect(sent).toEqual({ names: ["Blue Room", "朴树"] });
   });
 
-  it("says a name is being looked up, or needs tidying first", async () => {
-    const { list } = await openList(
+  it("says a name is being looked up, or needs tidying first", () => {
+    const { list } = openList(
       namesOf(
         LOOKED_UP,
         { ...artistNameOf("Blue Room"), finding: true },
@@ -173,7 +172,7 @@ describe("linking names to artists", () => {
         return { status: 204 };
       },
     });
-    const { list } = await openList(
+    const { list } = openList(
       namesOf(LOOKED_UP, { ...artistNameOf("Beatles", BEATLES.id), tracks: 1 }),
     );
     const row = rowOf(list, "Beatles");
@@ -184,8 +183,8 @@ describe("linking names to artists", () => {
     expect(sent).toEqual({ name: "Beatles" });
   });
 
-  it("says while Wikidata is asked a linked artist's other names", async () => {
-    const { list } = await openList(
+  it("says while Wikidata is asked a linked artist's other names", () => {
+    const { list } = openList(
       namesOf(LOOKED_UP, { ...artistNameOf("Beatles", BEATLES.id), finding: true }),
     );
 
@@ -199,7 +198,7 @@ describe("linking names to artists", () => {
         body: { detail: "MusicBrainz hasn't named that artist for any name here." },
       },
     });
-    const { list } = await openList(namesOf(LOOKED_UP));
+    const { list } = openList(namesOf(LOOKED_UP));
     const row = rowOf(list, "披头士");
 
     await userEvent.click(within(row).getByRole("button", { name: "Link 披头士" }));

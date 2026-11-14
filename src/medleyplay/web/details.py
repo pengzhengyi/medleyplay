@@ -198,6 +198,8 @@ def read_video_text(
     return VideoReadOut.of(read)
 
 
+MAX_TIDY_ALL: Final = 1000
+"""The most names tidied at once."""
 _FIELD_NAMES: Final[dict[Detail, Literal["artist", "album_artist", "album"]]] = {
     Detail.ARTIST: "artist",
     Detail.ALBUM_ARTIST: "album_artist",
@@ -247,6 +249,12 @@ class NameIn(BaseModel):
     written: str = Field(min_length=1, max_length=512)
 
 
+class NamesIn(BaseModel):
+    """Names to tidy at once, as the list offered them."""
+
+    names: list[NameIn] = Field(min_length=1, max_length=MAX_TIDY_ALL)
+
+
 @names_router.get("")
 def names_to_tidy(_: SignedInAccount, service: DetailsDep) -> NamesToTidyOut:
     """Return the artist names with more than the name in them, with their tidy form."""
@@ -257,6 +265,13 @@ def names_to_tidy(_: SignedInAccount, service: DetailsDep) -> NamesToTidyOut:
 def tidy_name(body: NameIn, _: SignedInAccount, service: DetailsDep) -> ManyOut:
     """Show the name's tidy form on every Track showing it, and its year where none shows."""
     return ManyOut(changed=service.tidy_name(NameKind(body.kind), body.written))
+
+
+@names_router.post("/tidy-all")
+def tidy_names(body: NamesIn, _: SignedInAccount, service: DetailsDep) -> ManyOut:
+    """Tidy each name as `/tidy` does, at once, passing over any with nothing left to tidy."""
+    names = [(NameKind(each.kind), each.written) for each in body.names]
+    return ManyOut(changed=service.tidy_names(names))
 
 
 @names_router.post("/keep", status_code=status.HTTP_204_NO_CONTENT)

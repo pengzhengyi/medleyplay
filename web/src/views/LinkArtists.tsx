@@ -1,26 +1,25 @@
 /**
  * @file Linking the Library's artist names to the artists MusicBrainz knows.
  *
- * A capsule says how many names could be linked, and only shows while some can. It
- * opens the list: each name with its songs, and what is known of it. A name not
- * looked up yet can be, one by one or all at once; a name looked up offers the
- * artists MusicBrainz knows by it, the one going by it exactly chosen already, to
- * link, or none of them. A name an artist already linked goes by offers that artist
- * at once, still to look up if it isn't the one. A linked name says what it is linked to, and can be
- * unlinked; while Wikidata is asked the artist's other names, the row says so. Names
- * linked to one artist count as one artist across the Library.
+ * A section of Clean up: each name with its songs, and what is known of it. A name not
+ * looked up yet can be, one by one or all at once; a name looked up offers the artists
+ * MusicBrainz knows by it, the one going by it exactly chosen already, to link, or
+ * none of them. A name an artist already linked goes by offers that artist at once,
+ * still to look up if it isn't the one. A linked name says what it is linked to, and
+ * can be unlinked; while Wikidata is asked the artist's other names, the row says so.
+ * Names linked to one artist count as one artist across the Library.
  */
 
 import { LinkSimpleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { type ArtistName, type ArtistNames, type KnownArtist, api } from "../api";
-import { Modal } from "./Modal";
+import { unlinkedOf } from "../library/cleanUp";
 
 /** The most artists offered for one name. */
 const OFFERED = 3;
 
-/** The capsule that opens the names to link, and the list it opens. */
+/** The names to link, each with what is known of it, and all to look up at once. */
 export function LinkArtists({
   names,
   onChanged,
@@ -29,55 +28,10 @@ export function LinkArtists({
   /** Called after a change, so the names are read again. */
   readonly onChanged: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const shown = names.names.filter((each) => each.look_up !== "never");
-  const unlinked = shown.filter((each) => each.look_up === "yes" && !each.linked).length;
-  if (unlinked === 0 && !open) {
-    return null;
-  }
-  return (
-    <>
-      {unlinked > 0 && (
-        <button
-          type="button"
-          className="tidy-capsule"
-          title="Count the names one artist goes by as one artist"
-          onClick={() => {
-            setOpen(true);
-          }}
-        >
-          <LinkSimpleIcon weight="bold" aria-hidden />
-          {`Link ${String(unlinked)} artist ${unlinked === 1 ? "name" : "names"}`}
-        </button>
-      )}
-      {open && (
-        <LinkList
-          names={shown}
-          artists={new Map(names.artists.map((artist) => [artist.id, artist]))}
-          onChanged={onChanged}
-          onClose={() => {
-            setOpen(false);
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-function LinkList({
-  names,
-  artists,
-  onChanged,
-  onClose,
-}: {
-  readonly names: readonly ArtistName[];
-  readonly artists: ReadonlyMap<string, KnownArtist>;
-  readonly onChanged: () => void;
-  readonly onClose: () => void;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState("");
-  const toLookUp = names
+  const shown = names.names.filter((each) => each.look_up !== "never");
+  const artists = new Map(names.artists.map((artist) => [artist.id, artist]));
+  const toLookUp = shown
     .filter(
       (each) => each.look_up === "yes" && !each.linked && each.looked_at === null && !each.finding,
     )
@@ -89,33 +43,39 @@ function LinkList({
     });
   };
   return (
-    <Modal ref={dialog} className="link-artists" labelledBy="link-artists-title" onClose={onClose}>
-      <div className="card">
-        <h2 id="link-artists-title">Link names to artists</h2>
-        <p className="tidy-lead">
-          Names linked to one artist count as one artist, each song keeping its name as written.
-          MusicBrainz is asked about each name, a second apart.
-        </p>
+    <section className="clean-up-section" aria-labelledby="link-artists-title">
+      <header className="clean-up-head">
+        <h3 id="link-artists-title">
+          <LinkSimpleIcon className="clean-up-icon" weight="bold" aria-hidden />
+          Link artist names
+          <span className="clean-up-count">{unlinkedOf(names)}</span>
+        </h3>
         {toLookUp.length > 0 && (
-          <p className="link-all">
-            <button
-              type="button"
-              className="dialog-button"
-              onClick={() => {
-                lookUp(toLookUp);
-              }}
-            >
-              {`Look up ${String(toLookUp.length)} ${toLookUp.length === 1 ? "name" : "names"}`}
-            </button>
-          </p>
+          <button
+            type="button"
+            className="dialog-button"
+            onClick={() => {
+              lookUp(toLookUp);
+            }}
+          >
+            {`Look up ${String(toLookUp.length)} ${toLookUp.length === 1 ? "name" : "names"}`}
+          </button>
         )}
-        {error !== "" && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+      </header>
+      <p className="tidy-lead">
+        Names linked to one artist count as one artist, each song keeping its name as written.
+        MusicBrainz is asked about each name, a second apart.
+      </p>
+      {error !== "" && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      {shown.length === 0 ? (
+        <p className="empty">No artist name to link yet.</p>
+      ) : (
         <ul className="tidy-list" aria-label="Artist names">
-          {names.map((each) => (
+          {shown.map((each) => (
             <NameRow
               key={each.key}
               named={each}
@@ -127,17 +87,8 @@ function LinkList({
             />
           ))}
         </ul>
-        <footer className="dialog-buttons">
-          <button
-            type="button"
-            className="secondary outline dialog-button"
-            onClick={() => dialog.current?.close()}
-          >
-            Close
-          </button>
-        </footer>
-      </div>
-    </Modal>
+      )}
+    </section>
   );
 }
 

@@ -191,3 +191,19 @@ def test_a_split_files_songs_follow_their_files_tidied_album(
 
     assert details.details(album).shown[Field.ALBUM] == Shown("Bremen", Origin.HOUSEHOLD)
     assert details.details(first.track_id).shown[Field.ALBUM] == Shown("Bremen", Origin.ALBUM_FILE)
+
+
+def test_tidying_names_at_once_tidies_each_and_skips_any_already_tidy(
+    catalog: CatalogService, details: DetailsService, alice: Account
+) -> None:
+    jay = _song(catalog, 1, artist=JAY)
+    beatles = _song(catalog, 2, artist=BEATLES)
+
+    changed = details.tidy_names(
+        [(NameKind.ARTIST, JAY), (NameKind.ARTIST, BEATLES), (NameKind.ARTIST, "朴树")]
+    )
+
+    assert changed == 2
+    assert catalog.get_track(alice.id, jay).details.artist == "周杰伦"
+    assert catalog.get_track(alice.id, beatles).details.artist == "The Beatles"
+    assert details.names_to_tidy() == []

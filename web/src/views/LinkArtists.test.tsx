@@ -184,6 +184,14 @@ describe("linking names to artists", () => {
     expect(sent).toEqual({ name: "Beatles" });
   });
 
+  it("says while Wikidata is asked a linked artist's other names", async () => {
+    const { list } = await openList(
+      namesOf(LOOKED_UP, { ...artistNameOf("Beatles", BEATLES.id), finding: true }),
+    );
+
+    expect(rowOf(list, "Beatles")).toHaveTextContent("Finding its other names on Wikidata…");
+  });
+
   it("says why a link failed, beside the name", async () => {
     serve({
       "PUT /api/artist-names/link": {

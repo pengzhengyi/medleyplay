@@ -7,7 +7,8 @@
  * artists MusicBrainz knows by it, the one going by it exactly chosen already, to
  * link, or none of them. A name an artist already linked goes by offers that artist
  * at once, still to look up if it isn't the one. A linked name says what it is linked to, and can be
- * unlinked. Names linked to one artist count as one artist across the Library.
+ * unlinked; while Wikidata is asked the artist's other names, the row says so. Names
+ * linked to one artist count as one artist across the Library.
  */
 
 import { LinkSimpleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
@@ -181,6 +182,11 @@ function NameRow({
                 ? "Not on MusicBrainz"
                 : `Linked to ${describe(artists.get(named.artist_id))}`}
             </span>
+            {named.finding && (
+              <span className="link-to">
+                <SpinnerGapIcon className="spin" aria-hidden /> Finding its other names on Wikidata…
+              </span>
+            )}
             <button
               type="button"
               className="secondary outline dialog-button"

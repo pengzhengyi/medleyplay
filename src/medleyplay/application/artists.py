@@ -124,6 +124,8 @@ class ArtistName:
     chose, or `None` for none. `candidates` are what MusicBrainz last answered, at
     `looked_at`, and, for a name not linked, the artists already linked that go by
     it, scored 100; best first, as ids and scores. `suggested` is the one to offer.
+    `finding` says whether MusicBrainz is asked about the name now, or Wikidata about
+    the artist it is linked to.
     """
 
     name: str
@@ -309,7 +311,16 @@ class ArtistService:
             looked_at=None if search is None else search.looked_at,
             candidates=found,
             suggested=suggested(name, candidates),
-            finding=self._jobs.active(FIND_ARTIST_KIND, f"artist:{key}") is not None,
+            finding=self._finding(key, None if link is None else link.artist_id),
+        )
+
+    def _finding(self, key: str, artist_id: str | None) -> bool:
+        """Return whether MusicBrainz is asked about the name, or Wikidata about its artist."""
+        if self._jobs.active(FIND_ARTIST_KIND, f"artist:{key}") is not None:
+            return True
+        target = f"artist-names:{artist_id}"
+        return (
+            artist_id is not None and self._jobs.active(FIND_ARTIST_NAMES_KIND, target) is not None
         )
 
     def _changed(self) -> None:

@@ -70,7 +70,9 @@ class ArtistNameOut(BaseModel):
         description="What MusicBrainz knows, and artists linked that go by the name; best first."
     )
     suggested: str | None = Field(description="The artist going by the name exactly, if one.")
-    finding: bool = Field(description="Whether MusicBrainz is being asked about it now.")
+    finding: bool = Field(
+        description="Whether MusicBrainz is asked about it now, or Wikidata about its artist."
+    )
 
     @classmethod
     def of(cls, named: ArtistName) -> "ArtistNameOut":

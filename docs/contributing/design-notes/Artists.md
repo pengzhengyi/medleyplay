@@ -132,8 +132,9 @@ nicknames such as *周董*, and Japanese and Korean names.
   MusicBrainz…* while it is; *Tidy the name first* for a name that needs it; up to
   three artists found, each with what tells it apart and its country, the
   suggested one chosen already, to *Link* or answer *None of these*; and, once
-  linked, what it is linked to, with *Unlink*. The list reads the names again every
-  2 seconds while any is being looked up.
+  linked, what it is linked to, with *Unlink*, and *Finding its other names on
+  Wikidata…* while Wikidata is asked. The list reads the names again every 2
+  seconds while any is being looked up, or any artist's names asked for.
 - **Linked names are one artist** in the Artists view, named as most of its songs
   write it; on its page, which lists every song of every name linked to it; in
   search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;

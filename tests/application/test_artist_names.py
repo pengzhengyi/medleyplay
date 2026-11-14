@@ -213,6 +213,21 @@ def test_looking_a_name_up_again_keeps_the_names_wikidata_gave(
     assert Alias("甲壳虫乐队", "zh") in enriching.artists.names().artists[BEATLES].aliases
 
 
+def test_a_linked_name_is_finding_while_wikidata_is_asked_about_its_artist(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+    enriching.online.online = False
+
+    enriching.artists.link(alice, "披头士", BEATLES)
+
+    assert _named(enriching, "披头士").finding
+    enriching.online.online = True
+    enriching.finish_every_job()
+    assert not _named(enriching, "披头士").finding
+
+
 def test_wikidata_is_asked_about_an_artist_once(enriching: Enriching, alice: Account) -> None:
     enriching.add_song("Yesterday", artist="披头士")
     enriching.add_song("Help!", artist="甲壳虫")

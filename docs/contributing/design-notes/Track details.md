@@ -163,8 +163,8 @@ values.
   be set on several Tracks.
 - **Tidying names:** an artist, album artist, or album written with more than
   the name in it, as a video's uploader often writes it, is offered for
-  tidying. A capsule in the Library's and Artists' headings, *Tidy 11 names*,
-  opens the list: each name as written, its tidy form and the year it gave, and
+  tidying. A section of Clean up, *Tidy names*, with *Tidy all* at its head,
+  lists each name as written, its tidy form and the year it gave, and
   how many songs show it, as the artist, the album artist, or both, or as the
   album. An artist's name and an album's are offered apart, even when written
   alike.

@@ -37,6 +37,7 @@ function open(
   metered: readonly MeteredNetwork[] = [],
   onModeChecked: (mode: Mode) => void = vi.fn(),
   onKindsChanged: () => void = vi.fn(),
+  toDo = 0,
 ) {
   const served = serve({
     "GET /api/settings": { body: LIMIT_20 },
@@ -65,6 +66,7 @@ function open(
       onModeChecked={onModeChecked}
       onEnrichersChanged={vi.fn()}
       onKindsChanged={onKindsChanged}
+      toDo={toDo}
     />,
   );
   return served;
@@ -89,6 +91,23 @@ const storage = () => within(screen.getByRole("region", { name: "Downloads and s
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("the way to Clean up", () => {
+  it("opens Settings while names wait, for a phone, whose tab bar has no room for it", () => {
+    open(false, {}, modeOf(), [], vi.fn(), vi.fn(), 37);
+
+    expect(screen.getByRole("link", { name: "Clean up 37 names" })).toHaveAttribute(
+      "href",
+      "#/clean-up",
+    );
+  });
+
+  it("is not there while nothing waits", () => {
+    open(false);
+
+    expect(screen.queryByRole("link", { name: /^Clean up/ })).not.toBeInTheDocument();
+  });
 });
 
 describe("the Bilibili section", () => {

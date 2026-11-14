@@ -6142,7 +6142,7 @@ button.playing-kind[aria-expanded="true"] {
   .views .view-count.on-phone {
     position: absolute;
     top: 0;
-    left: calc(50% + 0.35rem);
+    left: calc(50% + 0.1rem);
     display: block;
     min-width: 1rem;
     margin: 0;

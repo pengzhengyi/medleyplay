@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clean up** — names to tidy and names to link to one artist now wait on one
+  page under Settings, whose rail item says how many there are, instead of in a
+  row under the Library's and Artists' headings. On a phone, Settings carries
+  the count and links to the page. *Tidy all* sits at the head of its section
+  and tidies every name listed at once.
+
 - **Wikidata's names for linked artists** — linking a name to an artist asks
   Wikidata every name the artist goes by, in Chinese, Japanese, Korean, and
   English, for the names MusicBrainz lacks: *甲壳虫乐队* for The Beatles, *周董*
@@ -16,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and search finds the artist by it. The new plugin `wikipedia` is off by
   default; turn it on in `medleyplay.toml`.
 
-- **One artist under many names** — the Artists heading offers to link the
+- **One artist under many names** — Clean up offers to link the
   Library's artist names to artists MusicBrainz knows: *披头士*, *甲壳虫*, and *The
   Beatles*, or *Michael Jackson/迈克尔·杰克逊*, each looked up and offered with the
   artist going by it chosen already. Linked names count as one artist in the
@@ -30,8 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Tidy names** — artist and album names written with more than the name in
   them, such as *周杰伦2000年发行首张个人*, *The Beatles（披头士）*, or
-  *八日目、雨が止む前に。(初回限定盤B)*, are listed from a capsule in the Library
-  and Artists headings, each with its tidy form, the year it gave, and the songs
+  *八日目、雨が止む前に。(初回限定盤B)*, are listed on Clean up, each with its
+  tidy form, the year it gave, and the songs
   it is on. *Tidy* sets the name on those songs and the year where a song has
   none; *Keep* leaves a name as written for good.
 

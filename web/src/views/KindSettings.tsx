@@ -8,7 +8,8 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { ApiError, type Settings, api, newestOf } from "../api";
+import { type Settings, api, newestOf } from "../api";
+import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 import { useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
 
@@ -77,44 +78,53 @@ export function KindSettings({
     loadOnOpen();
   }, []);
 
-  const saving = useAutoSave((albumMinutes: number | null, notes) => {
+  const saving = useAutoSave(async (albumMinutes: number | null, notes) => {
     const base = latest.current;
     if (base === undefined || albumMinutes === base.album_minutes) {
       notes.tell("");
-      return Promise.resolve(false);
+      return "unchanged";
     }
-    setError("");
-    return api.saveSettings({ ...base, album_minutes: albumMinutes }).then(
-      (saved) => {
-        latest.current = saved;
-        onSettings(saved);
-        onChanged();
-        return true;
-      },
-      (failure: unknown) => {
-        if (failure instanceof ApiError && failure.status === 409) {
-          reload(() => {
-            notes.tell(
-              "The settings changed elsewhere, so here they are now. Change them again to save.",
-            );
-          });
-        } else {
-          notes.tell("");
-          setError(failure instanceof Error ? failure.message : String(failure));
-        }
-        return false;
-      },
-    );
+    try {
+      const { outcome, settings: now } = await saveChange(base, { album_minutes: albumMinutes });
+      latest.current = now;
+      onSettings(now);
+      if (outcome === "conflict") {
+        setDraft(draftOf(now));
+        notes.tell(CHANGED_ELSEWHERE);
+        return "conflict";
+      }
+      onChanged();
+      return "saved";
+    } catch (failure) {
+      notes.refuse(notSaved(failure));
+      return "failed";
+    }
   });
 
   const change = (next: Draft, typed: boolean) => {
     setDraft(next);
     const minutes = minutesOf(next);
-    if (minutes === undefined || minutes === latest.current?.album_minutes) {
+    if (minutes === undefined) {
       saving.cancel();
+    } else if (!saving.busy() && minutes === latest.current?.album_minutes) {
+      saving.tell("");
     } else if (typed) {
       saving.later(minutes);
     } else {
+      saving.now(minutes);
+    }
+  };
+  /** Save what the field holds as it is left, or put back what is saved if it isn't a length. */
+  const leave = () => {
+    const minutes = minutesOf(draft);
+    const saved = latest.current;
+    if (minutes === undefined) {
+      saving.cancel();
+      if (saved !== undefined) {
+        setDraft(draftOf(saved));
+      }
+      saving.refuse(`Not saved: type whole minutes from 1 to ${String(MAX_MINUTES)}.`);
+    } else if (saving.busy() || minutes !== saved?.album_minutes) {
       saving.now(minutes);
     }
   };
@@ -136,7 +146,7 @@ export function KindSettings({
           className="kind-guess"
           onSubmit={(event) => {
             event.preventDefault();
-            saving.flush();
+            leave();
           }}
         >
           <label className="kind-guess-check">
@@ -163,13 +173,10 @@ export function KindSettings({
               onChange={(event) => {
                 change({ ...draft, minutes: event.target.value }, true);
               }}
-              onBlur={saving.flush}
+              onBlur={leave}
             />
             minutes
           </label>
-          {minutesOf(draft) === undefined && (
-            <p className="hint">Type whole minutes from 1 to {MAX_MINUTES}.</p>
-          )}
         </form>
       ) : (
         <p>

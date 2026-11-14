@@ -6,6 +6,7 @@ import { vi } from "vitest";
 
 import type {
   Account,
+  ArtistName,
   Details,
   Enricher,
   Features,
@@ -440,5 +441,21 @@ export function downloadOf(
     status,
     message,
     backend: status === "downloaded" ? "manual" : null,
+  };
+}
+
+/** A name the Library shows by one Track, linked to `artistId` when one is given, `null` for none. */
+export function artistNameOf(name: string, artistId?: string | null): ArtistName {
+  return {
+    name,
+    key: name.toLowerCase(),
+    tracks: 1,
+    look_up: "yes",
+    linked: artistId !== undefined,
+    artist_id: artistId ?? null,
+    looked_at: null,
+    candidates: [],
+    suggested: null,
+    finding: false,
   };
 }

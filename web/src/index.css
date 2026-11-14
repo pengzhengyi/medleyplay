@@ -6003,3 +6003,68 @@ button.playing-kind[aria-expanded="true"] {
     animation: none;
   }
 }
+
+/* Linking names to artists: each name, then its link or the artists to choose from. */
+
+.view-heading .view-asides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+}
+
+.link-artists .card {
+  width: min(38rem, calc(100vw - 2rem));
+}
+
+.link-all {
+  margin: 0 0 0.75rem;
+}
+
+.link-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.link-row .tidy-names-pair {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.link-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.link-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.link-choices {
+  display: grid;
+  flex: 1 1 18rem;
+  gap: 0.25rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.link-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.link-choice-box {
+  flex: none;
+  margin: 0;
+}

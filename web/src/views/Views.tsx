@@ -11,7 +11,8 @@ import {
 } from "@phosphor-icons/react";
 import { Fragment, type ReactNode, useMemo } from "react";
 
-import type { Mode, Playlist, Track, WaitingDevice } from "../api";
+import type { ArtistNames, Mode, Playlist, Track, WaitingDevice } from "../api";
+import type { ArtistLinks } from "../library/artistLinks";
 import { formatLength, formatLibraryLength } from "../format";
 import {
   type FavoriteGroups,
@@ -43,6 +44,7 @@ import type { Station } from "../library/useStation";
 import { InsightsView } from "./InsightsView";
 import { RadioView } from "./RadioView";
 import { SettingsView } from "./SettingsView";
+import { LinkArtists } from "./LinkArtists";
 import { TidyNames } from "./TidyNames";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
@@ -80,6 +82,10 @@ export interface ViewProps {
   readonly favorites: FavoriteGroups;
   readonly onFavoriteArtist: (name: string, favorite: boolean) => void;
   readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
+  /** Which artist names are one artist, as the household linked them; none, unless given. */
+  readonly links?: ArtistLinks;
+  /** The Library's artist names and their links, and a way to read them again. */
+  readonly artistNames?: { readonly names: ArtistNames; readonly reload: () => void };
 }
 
 /** The view `route` names; each route is a view of its own, opening with no filters on. */
@@ -109,9 +115,16 @@ function viewOf(given: ViewProps) {
     case "insights":
       return <InsightsView tracks={given.tracks} onPlay={props.actions.onPlay} />;
     case "artists":
-      return <Artists tracks={props.tracks} favorites={props.favorites} />;
+      return (
+        <Artists
+          tracks={props.tracks}
+          favorites={props.favorites}
+          links={props.links}
+          artistNames={props.artistNames}
+        />
+      );
     case "artist": {
-      const songs = tracksOfArtist(props.tracks, route.name);
+      const songs = tracksOfArtist(props.tracks, route.name, props.links);
       return (
         <Songs
           title={route.name || UNKNOWN_ARTIST}
@@ -313,14 +326,28 @@ function ViewHeading({
 function Artists({
   tracks,
   favorites,
+  links,
+  artistNames,
 }: {
   readonly tracks: readonly Track[];
   readonly favorites: FavoriteGroups;
+  readonly links: ArtistLinks | undefined;
+  readonly artistNames: ViewProps["artistNames"];
 }) {
-  const artists = useMemo(() => artistsOf(tracks), [tracks]);
+  const artists = useMemo(() => artistsOf(tracks, links), [tracks, links]);
   return (
     <>
-      <ViewHeading title="Artists" aside={<TidyNames version={tracks} />}>
+      <ViewHeading
+        title="Artists"
+        aside={
+          <span className="view-asides">
+            <TidyNames version={tracks} />
+            {artistNames !== undefined && (
+              <LinkArtists names={artistNames.names} onChanged={artistNames.reload} />
+            )}
+          </span>
+        }
+      >
         {artists.length > 0 && `${String(artists.length)} artists`}
       </ViewHeading>
       {artists.length === 0 ? <NoMusic /> : <ArtistList artists={artists} favorites={favorites} />}
@@ -536,7 +563,10 @@ function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
 }
 
 function SearchResults({ query, ...props }: ViewProps & { readonly query: string }) {
-  const found = useMemo(() => search(props.tracks, query), [props.tracks, query]);
+  const found = useMemo(
+    () => search(props.tracks, query, props.links),
+    [props.tracks, query, props.links],
+  );
   if (query.trim() === "") {
     return (
       <>

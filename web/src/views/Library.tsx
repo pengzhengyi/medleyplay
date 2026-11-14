@@ -16,6 +16,8 @@ import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
 import { useStation } from "../library/useStation";
+import { linksOf, withLinkedFavorites } from "../library/artistLinks";
+import { useArtistNames } from "../library/useArtistNames";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
@@ -125,7 +127,14 @@ export function Library({
       setPlaysOn("computer");
     }, playOnFailedFor);
   };
-  const station = useStation(player, tracks, account.id, library.favoriteGroups);
+  const artistNames = useArtistNames(library.tracks);
+  const links = useMemo(() => linksOf(artistNames.names), [artistNames.names]);
+  // A favorite name makes every name linked with it a favorite, for Radio and the views.
+  const favorites = useMemo(
+    () => withLinkedFavorites(library.favoriteGroups, links),
+    [library.favoriteGroups, links],
+  );
+  const station = useStation(player, tracks, account.id, favorites);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
   // When the Mode a check left Offline began, so the header says it is still Offline.
@@ -467,9 +476,11 @@ export function Library({
             waitingDevices={library.waitingDevices}
             station={station}
             accountId={account.id}
-            favorites={library.favoriteGroups}
+            favorites={favorites}
             onFavoriteArtist={library.setArtistFavorite}
             onFavoriteAlbum={library.setAlbumFavorite}
+            links={links}
+            artistNames={artistNames}
           />
         ) : (
           <p className="empty" aria-busy="true">

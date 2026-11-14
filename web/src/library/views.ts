@@ -7,6 +7,7 @@
  */
 
 import type { Track } from "../api";
+import type { ArtistLinks } from "./artistLinks";
 
 /** An artist, with how many Tracks are theirs and how long they play. */
 export interface Artist {
@@ -49,18 +50,48 @@ export function songsOf(tracks: readonly Track[]): Track[] {
 }
 
 /** Return each artist once, sorted by name as people read them, a blank name first. */
-export function artistsOf(tracks: readonly Track[]): Artist[] {
-  return groups(tracks, (track) => track.artist).map(({ name, count, durationMs }) => ({
-    name,
-    count,
-    durationMs,
-  }));
+export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist[] {
+  if (links === undefined) {
+    return groups(tracks, (track) => track.artist).map(({ name, count, durationMs }) => ({
+      name,
+      count,
+      durationMs,
+    }));
+  }
+  // Names linked to one artist are one, named as most of its Tracks write it.
+  const found = new Map<
+    string,
+    { names: Map<string, number>; count: number; durationMs: number }
+  >();
+  for (const track of tracks) {
+    const group = links.groupOf(track.artist);
+    const each = found.get(group) ?? { names: new Map<string, number>(), count: 0, durationMs: 0 };
+    each.names.set(track.artist, (each.names.get(track.artist) ?? 0) + 1);
+    each.count += 1;
+    each.durationMs += track.duration_ms ?? 0;
+    found.set(group, each);
+  }
+  return [...found.values()]
+    .map(({ names, count, durationMs }) => ({
+      name: [...names].reduce((best, next) => (next[1] > best[1] ? next : best))[0],
+      count,
+      durationMs,
+    }))
+    .sort((a, b) => collator.compare(a.name, b.name));
 }
 
 /** Return the Tracks of the artist `name`, compared folded, in the order given. */
-export function tracksOfArtist(tracks: readonly Track[], name: string): Track[] {
-  const key = fold(name);
-  return tracks.filter((track) => fold(track.artist) === key);
+export function tracksOfArtist(
+  tracks: readonly Track[],
+  name: string,
+  links?: ArtistLinks,
+): Track[] {
+  if (links === undefined) {
+    const key = fold(name);
+    return tracks.filter((track) => fold(track.artist) === key);
+  }
+  const group = links.groupOf(name);
+  return tracks.filter((track) => links.groupOf(track.artist) === group);
 }
 
 /** Return each album once, by its artist and then its name. */
@@ -109,8 +140,11 @@ function haystackOf(track: Track): string {
   return found;
 }
 
-/** Return the Tracks, artists, and albums with every word of `query`; a blank query finds none. */
-export function search(tracks: readonly Track[], query: string): Found {
+/**
+ * Return the Tracks, artists, and albums with every word of `query`; a blank query
+ * finds none. An artist is found by any name it goes by, as `links` know them.
+ */
+export function search(tracks: readonly Track[], query: string, links?: ArtistLinks): Found {
   const words = fold(query).split(/\s+/).filter(Boolean);
   if (words.length === 0) {
     return { tracks: [], artists: [], albums: [] };
@@ -118,7 +152,11 @@ export function search(tracks: readonly Track[], query: string): Found {
   const matches = (text: string) => words.every((word) => text.includes(word));
   return {
     tracks: tracks.filter((track) => matches(haystackOf(track))),
-    artists: artistsOf(tracks).filter((artist) => matches(fold(artist.name))),
+    artists: artistsOf(tracks, links).filter(
+      (artist) =>
+        matches(fold(artist.name)) ||
+        (links?.aliasesOf(links.groupOf(artist.name)) ?? []).some((alias) => matches(fold(alias))),
+    ),
     albums: albumsOf(tracks).filter((album) => matches(fold(album.name))),
   };
 }

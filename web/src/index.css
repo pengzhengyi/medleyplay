@@ -5031,8 +5031,46 @@ kbd {
 
 .np-names {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.45rem;
   min-width: 0;
+}
+
+/* One line each: the album and its song, then who sings it; a name wraps whole. */
+.np-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  min-width: 0;
+}
+
+.np-album,
+.np-song,
+.np-artist {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+/* A still mark beside a name, sized as the moving one is. */
+.np-mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+/* The album, then the song in it: the slash reads as a path, album to song. */
+.np-sep {
+  color: var(--muted);
+  font-size: 1.5rem;
+  font-weight: 300;
 }
 
 /* A long title takes two lines before it is cut short; the menu's *Edit details* has it whole. */
@@ -5047,6 +5085,11 @@ kbd {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+}
+
+.now-playing .np-names .np-album-name {
+  font-size: 1.15rem;
+  font-weight: 600;
 }
 
 .now-playing .np-names a {
@@ -5071,12 +5114,33 @@ kbd {
   outline-offset: 2px;
 }
 
-.np-names .np-artist {
+.now-playing .np-names .np-artist-name {
   font-size: 1.1rem;
 }
 
-.np-names .np-album {
-  font-size: 0.95rem;
+/* Each name's heart sits right after it, quiet until given. */
+.now-playing .np-names .np-line button.heart {
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--muted);
+  font-size: 1.15rem;
+}
+
+.now-playing .np-names .np-line button.heart.on {
+  color: var(--accent);
+}
+
+/* The site the Track came from, a small capsule that opens it in a new tab. */
+.now-playing .np-names a.np-video {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  text-decoration: none;
 }
 
 .now-playing .np-seek .seek {
@@ -5860,15 +5924,10 @@ button.playing-kind[aria-expanded="true"] {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-/* Now Playing's title, after the mark of what plays; the album's songs open over the controls. */
-
-.np-title {
+/* Now Playing's names: the album's songs open from its mark, over the controls. */
+.np-where {
   position: relative;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
 }
 
 /* Over the cover's blur, the songs need a solid ground to read on. */

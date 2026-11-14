@@ -12,19 +12,19 @@ import { useEffect, useRef, useState } from "react";
 
 import { type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
-import { albumArtistOf } from "../library/views";
+import type { FavoriteGroups } from "../library/favoriteGroups";
 import { albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import type { SleepTimer } from "../player/useSleepTimer";
 import { canSetVolume } from "../player/volume";
-import { hrefOf } from "../routes";
 import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
-import { AlbumCard, PlayingKind } from "./PlayingKind";
+import { NowPlayingNames } from "./NowPlayingNames";
+import { AlbumCard } from "./PlayingKind";
 import { QueuePanel } from "./QueuePanel";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
-import { FavoriteButton, Transport } from "./Transport";
+import { Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
 
 /** `track`, playing in `player`, over the whole screen; `queueOpen` shows Up next beside it. */
@@ -34,6 +34,9 @@ export function NowPlaying({
   track,
   tracks,
   onFavorite,
+  favorites,
+  onFavoriteArtist,
+  onFavoriteAlbum,
   menuActions,
   queueOpen,
   onToggleQueue,
@@ -45,6 +48,10 @@ export function NowPlaying({
   readonly track: Track;
   readonly tracks: ReadonlyMap<number, Track>;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
+  /** The artists and albums the Account favorited. */
+  readonly favorites: FavoriteGroups;
+  readonly onFavoriteArtist: (name: string, favorite: boolean) => void;
+  readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
   readonly menuActions: TrackMenuActions;
   readonly queueOpen: boolean;
   readonly onToggleQueue: () => void;
@@ -107,7 +114,6 @@ export function NowPlaying({
             <CaretDownIcon weight="bold" aria-hidden />
           </button>
           <span className="np-actions">
-            <FavoriteButton track={track} onFavorite={onFavorite} />
             <TrackMenu
               track={track}
               actions={menuActions}
@@ -122,40 +128,21 @@ export function NowPlaying({
             <div className={status.kind === "playing" ? "np-art" : "np-art resting"}>
               <Cover cover={track.cover} />
             </div>
-            <div className="np-names">
-              <div className="np-title">
-                <PlayingKind
-                  playing={nowPlaying}
-                  track={track}
-                  position={position}
-                  moving={status.kind === "playing"}
-                  opens="below"
-                  onPlaySong={(song) => {
-                    player.playAt(song.entry.key, song.from);
-                  }}
-                  onEditSongs={menuActions.onEditSongs}
-                />
-                <h2>{track.title}</h2>
-              </div>
-              {track.artist !== "" && (
-                <a
-                  className="np-artist"
-                  href={hrefOf({ view: "artist", name: track.artist })}
-                  onClick={close}
-                >
-                  {track.artist}
-                </a>
-              )}
-              {track.album !== "" && (
-                <a
-                  className="np-album"
-                  href={hrefOf({ view: "album", artist: albumArtistOf(track), name: track.album })}
-                  onClick={close}
-                >
-                  {track.album}
-                </a>
-              )}
-            </div>
+            <NowPlayingNames
+              track={track}
+              playing={nowPlaying}
+              position={position}
+              moving={status.kind === "playing"}
+              favorites={favorites}
+              onFavorite={onFavorite}
+              onFavoriteArtist={onFavoriteArtist}
+              onFavoriteAlbum={onFavoriteAlbum}
+              onPlaySong={(song) => {
+                player.playAt(song.entry.key, song.from);
+              }}
+              onEditSongs={menuActions.onEditSongs}
+              onNavigate={close}
+            />
             <div className="np-seek">
               <SeekBar
                 position={shownPosition}

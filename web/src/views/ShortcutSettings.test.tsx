@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { setHoldForShortcuts } from "../holdForShortcuts";
 import { openWithShortcuts, preferencesOf, serve } from "../testing/server";
 import { ShortcutSettings } from "./ShortcutSettings";
 
@@ -132,5 +133,24 @@ describe("changing the keyboard shortcuts", () => {
 
     expect(keysShownFor("Play or pause")).toEqual(["Space", "K"]);
     expect(screen.getByRole("button", { name: "Reset to defaults" })).toBeDisabled();
+  });
+});
+
+describe("showing the shortcuts while the key is held", () => {
+  afterEach(() => {
+    setHoldForShortcuts(true);
+  });
+
+  it("is on, and turns off for this browser alone, without saving to the Account", async () => {
+    const calls = renderSaving();
+    const choice = screen.getByRole("checkbox", { name: /^Show them while .+ is held/ });
+    const before = (choice as HTMLInputElement).checked;
+
+    await userEvent.click(choice);
+
+    expect(before).toBe(true);
+    expect(choice).not.toBeChecked();
+    expect(localStorage.getItem("medleyplay.holdForShortcuts")).toBe("off");
+    expect(calls.filter((call) => !call.startsWith("GET"))).toEqual([]);
   });
 });

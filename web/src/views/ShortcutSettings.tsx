@@ -4,7 +4,7 @@
  * Choosing Add keys waits for keys on that button: the next press, with any
  * modifiers held, joins the command's keys, unless another command has them.
  * Escape, or moving away, adds nothing. The keys are the Account's, so they
- * follow it to any browser.
+ * follow it to any browser. Whether holding ⌘ shows them is each browser's own.
  */
 
 import { XIcon } from "@phosphor-icons/react";
@@ -25,6 +25,8 @@ import {
   saveBindings,
   useBindings,
 } from "../shortcuts";
+import { setHoldForShortcuts, useHoldForShortcuts } from "../holdForShortcuts";
+import { HOLD_LABEL } from "../useHeldModifier";
 import { classOf, useNote } from "../useNote";
 
 const nameOf = (command: Command) => COMMANDS.find((each) => each.command === command)?.name;
@@ -32,6 +34,7 @@ const nameOf = (command: Command) => COMMANDS.find((each) => each.command === co
 /** What the Settings section for the keyboard shortcuts holds. */
 export function ShortcutSettings() {
   const bindings = useBindings();
+  const holding = useHoldForShortcuts();
   const [recording, setRecording] = useState<Command | undefined>(undefined);
   const notes = useNote();
   // Some browsers click a button as Space comes up, so the release of a press taken is kept too.
@@ -84,6 +87,16 @@ export function ShortcutSettings() {
   return (
     <>
       <p className="hint">Keys for the player, kept with your account.</p>
+      <label className="hold-setting">
+        <input
+          type="checkbox"
+          checked={holding}
+          onChange={(event) => {
+            setHoldForShortcuts(event.currentTarget.checked);
+          }}
+        />
+        Show them while {HOLD_LABEL} is held, in this browser
+      </label>
       <ul className="shortcut-settings">
         {COMMANDS.map(({ command, name }) => {
           const waiting = recording === command;

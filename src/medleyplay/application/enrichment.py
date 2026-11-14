@@ -31,7 +31,13 @@ from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account, AccountId
-from medleyplay.domain.ai import ProviderFailure, check_hint, cut_text
+from medleyplay.domain.ai import (
+    ProviderFailed,
+    ProviderFailure,
+    UnusableReason,
+    check_hint,
+    cut_text,
+)
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.community import link_is_on
 from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
@@ -207,7 +213,17 @@ def _record_ratings(
 
 def _record_providers(db: Session, found: EnrichedTrack, now: datetime) -> None:
     """Note which AI provider answered, and why each asked before it didn't."""
-    failures = [(each.provider, ProviderFailure(each.kind.value)) for each in found.ai_failures]
+    failures = [
+        (
+            each.provider,
+            ProviderFailed(
+                ProviderFailure(each.kind.value),
+                None if each.reason is None else UnusableReason(each.reason.value),
+                each.status,
+            ),
+        )
+        for each in found.ai_failures
+    ]
     record_answers(db, found.ai_answered, failures, now)
 
 

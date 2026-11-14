@@ -19,7 +19,7 @@ import {
 } from "@phosphor-icons/react";
 import { type SubmitEvent, useId, useState } from "react";
 
-import { FAILURE_WORDS, agoOf, isLocal } from "../aiProviders";
+import { FAILURE_WORDS, agoOf, fixOf, isLocal } from "../aiProviders";
 import { type AiProvider, api } from "../api";
 import { classOf, useNote } from "../useNote";
 import { useNow } from "../useNow";
@@ -165,7 +165,7 @@ export function AiProviderCard({
             )
           )}
           {failure !== null && (
-            <span className="ai-provider-failure" title={failure.fix}>
+            <span className="ai-provider-failure" title={fixOf(provider)}>
               <WarningCircleIcon weight="fill" aria-hidden />
               {failure.label} {failedAgo}
             </span>
@@ -204,7 +204,7 @@ export function AiProviderCard({
       <div id={bodyId} className="ai-provider-body" hidden={!open}>
         {failure !== null && (
           <p className="ai-provider-why">
-            {failure.label} {failedAgo}. {failure.fix}
+            {failure.label} {failedAgo}. {fixOf(provider)}
           </p>
         )}
         <label className="mark-name">

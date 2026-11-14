@@ -302,6 +302,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Why an AI provider's answer couldn't be used** now shows on its card in
+  Settings, such as *It answered 400: check the model and the base URL* or *Its
+  answer ran out of room before it finished*, and a reasoning model such as
+  DeepSeek has room to think before it answers, rather than being cut off.
+
 - In Edit details, the Song and Album choice no longer shows stray round marks
   below it when the Kind is settled, and *Read details* fits its button.
 - In Safari, scrolling the Library no longer leaps hundreds of pixels at a time,

@@ -96,11 +96,32 @@ class AiFailureKind(StrEnum):
     """It answered, but not with what was asked: a wrong model or address, or a bad answer."""
 
 
+class AiFailureReason(StrEnum):
+    """What was wrong with an answer that couldn't be used, as `AiFailureKind.UNUSABLE` says."""
+
+    REJECTED = "rejected"
+    """It refused the request, with the status given: a wrong model or address."""
+    REDIRECTED = "redirected"
+    """It answered with a redirect, which isn't followed: a wrong address."""
+    CUT_OFF = "cut_off"
+    """The model ran out of room before it finished its answer."""
+    EMPTY = "empty"
+    """The answer was empty, or no chat reply."""
+    NOT_JSON = "not_json"
+    """The answer was not the JSON asked for, even when asked again."""
+
+
 class AiFailure(_Model):
-    """An AI provider that was asked and gave no answer to use, and why."""
+    """An AI provider that was asked and gave no answer to use, and why.
+
+    An unusable answer also says what was wrong with it, and the status of a request
+    the provider refused. Neither is ever free text, so neither can hold the key.
+    """
 
     provider: Annotated[str, StringConstraints(max_length=64)]
     kind: AiFailureKind
+    reason: AiFailureReason | None = None
+    status: Annotated[int, Field(ge=100, le=599)] | None = None
 
 
 class EnrichTrack(_Model):

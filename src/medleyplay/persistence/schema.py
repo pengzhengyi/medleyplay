@@ -279,6 +279,10 @@ class AiProviderRow(Base):
     saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
     failure: Mapped[str | None] = mapped_column(String(16))
     failed_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    failure_reason: Mapped[str | None] = mapped_column(String(16))
+    """What was wrong with an unusable answer, when `failure` says it was unusable."""
+    failure_status: Mapped[int | None]
+    """The status of the request the provider refused, when it refused one."""
 
 
 class AiSuggestionRow(Base):

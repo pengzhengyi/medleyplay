@@ -23,6 +23,8 @@ def _shown(clock: FakeClock, provider_id: str, *, has_key: bool = True) -> dict[
         "saved_at": clock.now.isoformat().replace("+00:00", "Z"),
         "failure": None,
         "failed_at": None,
+        "failure_reason": None,
+        "failure_status": None,
     }
 
 

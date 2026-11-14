@@ -265,7 +265,14 @@ export interface AiProvider {
   /** Why it last gave no answer to use, at `failed_at`, until it answers again. */
   readonly failure: AiFailure | null;
   readonly failed_at: string | null;
+  /** What was wrong with its answer, when it was unusable. */
+  readonly failure_reason: UnusableReason | null;
+  /** The status it refused the request with, when it refused one. */
+  readonly failure_status: number | null;
 }
+
+/** What was wrong with an AI provider's unusable answer. */
+export type UnusableReason = "rejected" | "redirected" | "cut_off" | "empty" | "not_json";
 
 /** A provider to start from. */
 export interface AiPreset {

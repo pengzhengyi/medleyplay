@@ -58,6 +58,31 @@ class ProviderFailure(StrEnum):
     """Its key is no longer in the Keychain, so it isn't asked until the key is replaced."""
 
 
+class UnusableReason(StrEnum):
+    """What was wrong with an unusable answer."""
+
+    REJECTED = "rejected"
+    """It refused the request, with the status kept: a wrong model or address."""
+    REDIRECTED = "redirected"
+    """It answered with a redirect, which isn't followed: a wrong address."""
+    CUT_OFF = "cut_off"
+    """The model ran out of room before it finished its answer."""
+    EMPTY = "empty"
+    """The answer was empty, or no chat reply."""
+    NOT_JSON = "not_json"
+    """The answer was not the JSON asked for, even when asked again."""
+
+
+@dataclass(frozen=True)
+class ProviderFailed:
+    """Why a provider gave no answer to use, and for an unusable one, what was wrong."""
+
+    failure: ProviderFailure
+    reason: UnusableReason | None = None
+    status: int | None = None
+    """The status of a request the provider refused."""
+
+
 @dataclass(frozen=True)
 class Preset:
     """A provider a household can start from: its name, base URL, and a model to ask."""

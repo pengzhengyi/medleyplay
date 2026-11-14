@@ -20,6 +20,27 @@ export const FAILURE_WORDS: Readonly<Record<AiFailure, { label: string; fix: str
   key_missing: { label: "Key missing", fix: "The Keychain no longer holds it; replace the key." },
 };
 
+/** How to fix why the provider last gave no answer, as specific as what was kept allows. */
+export function fixOf(provider: AiProvider): string {
+  if (provider.failure === null) {
+    return "";
+  }
+  switch (provider.failure_reason) {
+    case "rejected":
+      return `It answered ${String(provider.failure_status ?? "with a refusal")}: check the model and the base URL.`;
+    case "redirected":
+      return "It answered with a redirect: check the base URL.";
+    case "cut_off":
+      return "Its answer ran out of room before it finished.";
+    case "empty":
+      return "Its answer was empty: check the model.";
+    case "not_json":
+      return "Its answer wasn't the JSON asked for, even when asked again: try another model.";
+    case null:
+      return FAILURE_WORDS[provider.failure].fix;
+  }
+}
+
 /** The name of the preset whose address the provider has, or else its host. */
 export function providerNameOf(provider: AiProvider, presets: readonly AiPreset[]): string {
   const preset = presets.find((each) => each.base_url === provider.base_url);

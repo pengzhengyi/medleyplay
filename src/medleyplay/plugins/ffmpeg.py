@@ -8,7 +8,7 @@ than failing, so the songs editor can say what snapping needs.
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 -- runs only the ffmpeg program, never a shell
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Final
@@ -38,7 +38,7 @@ type Which = Callable[[str], str | None]
 
 
 def _run(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603 -- the program found on the path, with fixed arguments
+    return subprocess.run(  # noqa: S603  # nosec B603 -- ffmpeg from the path, fixed arguments
         args,
         capture_output=True,
         text=True,

@@ -6204,6 +6204,17 @@ button.playing-kind[aria-expanded="true"] {
   white-space: nowrap;
 }
 
+.link-tag.ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.link-ai-none {
+  flex-basis: 100%;
+  color: var(--accent);
+}
+
 /* Under a focused Link, faintly: Enter links it. */
 .link-hint {
   position: absolute;

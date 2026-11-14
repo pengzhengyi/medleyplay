@@ -18,6 +18,15 @@ ask      b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d
 answer   甲壳虫乐队 (zh), 甲壳虫 (zh), ビートルズ (ja), …
 ```
 
+An artist chooser is asked which of the artists offered a name names, given a few of
+its songs, and answers with one of them, or none, and why:
+
+```text
+ask      GUMI/MAYU, songs: ケビョウニンゲン — ケビョウニンゲン;
+         GUMI (Vocaloid/SynthV, JP), MAYU (Belly dancer, JP), Mayu (vocalist)
+answer   GUMI, "a Vocaloid voice, and the song is a Vocaloid song"
+```
+
 The site refusing the request is a reply, not a failure, so it doesn't count
 against the plugin.
 """
@@ -28,6 +37,7 @@ from typing import Annotated, Final, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from medleyplay.plugin_api.enrichers import AiEndpoint
 from medleyplay.plugin_api.extension import ExtensionPoint
 
 MAX_NAME: Final = 512
@@ -35,6 +45,10 @@ MAX_ARTISTS: Final = 10
 """The most artists a finder answers with."""
 MAX_ALIASES: Final = 100
 """The most other names kept of one artist."""
+MAX_CHOICES: Final = 50
+"""The most names an artist chooser is asked about at once."""
+MAX_SONGS_SHOWN: Final = 8
+"""The most of a name's songs an artist chooser is shown."""
 
 type Name = Annotated[str, StringConstraints(min_length=1, max_length=MAX_NAME)]
 
@@ -119,6 +133,57 @@ class ArtistNameFinder(Protocol):
         ...
 
 
+class ArtistOption(_Model):
+    """An artist a name may name, as it is offered."""
+
+    id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    name: Name
+    disambiguation: Annotated[str, StringConstraints(max_length=MAX_NAME)] = ""
+    country: Annotated[str, StringConstraints(max_length=8)] = ""
+
+
+class NameToChoose(_Model):
+    """A name as Tracks show it, a few of its songs, and the artists it may name."""
+
+    name: Name
+    songs: Annotated[tuple[Name, ...], Field(max_length=MAX_SONGS_SHOWN)] = ()
+    """Some of its songs, each as `title — album`, or its title alone."""
+    options: Annotated[tuple[ArtistOption, ...], Field(min_length=1, max_length=MAX_ARTISTS)]
+
+
+class ChooseArtists(_Model):
+    """Ask which of its options each name names, of the AI providers `ai`, in turn."""
+
+    names: Annotated[tuple[NameToChoose, ...], Field(min_length=1, max_length=MAX_CHOICES)]
+    ai: tuple[AiEndpoint, ...] = Field(default=(), repr=False)
+
+
+class ChosenArtist(_Model):
+    """The option a name names, or `None` for none of them, and why."""
+
+    name: Name
+    artist_id: Annotated[str, StringConstraints(min_length=1, max_length=64)] | None
+    why: Annotated[str, StringConstraints(max_length=300)] = ""
+
+
+class ChosenArtists(_Model):
+    """The choice for each name answered for, and the provider that answered."""
+
+    status: FindStatus = FindStatus.OK
+    message: Annotated[str, StringConstraints(max_length=500)] = ""
+    chosen: Annotated[tuple[ChosenArtist, ...], Field(max_length=MAX_CHOICES)] = ()
+    ai_answered: Annotated[str, StringConstraints(max_length=64)] = ""
+    """The `id` of the provider that answered."""
+
+
+class ArtistChooser(Protocol):
+    """Chooses which artist each name names, among those offered."""
+
+    def choose(self, request: ChooseArtists) -> ChosenArtists:
+        """Answer which option each name names, or none."""
+        ...
+
+
 ARTIST_FINDER = ExtensionPoint[ArtistFinder]("artist_finder")
 FIND_ARTIST = ARTIST_FINDER.operation(
     "find",
@@ -135,4 +200,13 @@ FIND_ARTIST_NAMES = ARTIST_NAME_FINDER.operation(
     FoundArtistNames,
     lambda finder: finder.find,
     deadline=timedelta(minutes=1),
+)
+
+ARTIST_CHOOSER = ExtensionPoint[ArtistChooser]("artist_chooser")
+CHOOSE_ARTISTS = ARTIST_CHOOSER.operation(
+    "choose",
+    ChooseArtists,
+    ChosenArtists,
+    lambda chooser: chooser.choose,
+    deadline=timedelta(minutes=5),
 )

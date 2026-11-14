@@ -14,9 +14,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.artists import (
+    ArtistKinds,
     ArtistService,
     FindArtistKind,
     FindArtistNamesKind,
+    choose_artists_kind,
     find_artist_kind,
     find_artist_names_kind,
 )
@@ -285,7 +287,8 @@ def artists(
     find_kind: FindArtistKind,
     find_names_kind: FindArtistNamesKind,
 ) -> ArtistService:
-    return ArtistService(units, clock, plugins, jobs, find_kind, find_names_kind)
+    kinds = ArtistKinds(find_kind, find_names_kind, choose_artists_kind(clock))
+    return ArtistService(units, clock, plugins, jobs, kinds)
 
 
 @pytest.fixture

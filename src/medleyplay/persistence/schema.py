@@ -748,6 +748,24 @@ class ArtistSearchRow(Base):
     looked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class ArtistRecommendationRow(Base):
+    """The artist an AI model last recommended linking a written name to, and why.
+
+    `artist_id` is `None` when it recommended none of those offered. `model` and `host`
+    are the model that answered and where, as they were then.
+    """
+
+    __tablename__ = "artist_recommendation"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512))
+    artist_id: Mapped[str | None] = mapped_column(ForeignKey("artist.id", ondelete="CASCADE"))
+    why: Mapped[str] = mapped_column(String(300))
+    model: Mapped[str] = mapped_column(String(128))
+    host: Mapped[str] = mapped_column(String(255))
+    answered_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class ArtistLinkRow(Base):
     """The artist the household linked a written name to, or `None` for no artist a site knows."""
 

@@ -90,14 +90,21 @@ def record_answered_by(
 
     A provider no longer set up, or none, leaves the last note as it was.
     """
-    provider = None if provider_id is None else db.get(AiProviderRow, provider_id)
-    if provider is None:
+    named = provider_named(db, provider_id)
+    if named is None:
         return
     row = db.get(AiAnswerRow, track_id) or AiAnswerRow(track_id=track_id)
-    row.model = provider.model
-    row.host = urlsplit(provider.base_url).netloc or provider.base_url
+    row.model, row.host = named
     row.answered_at = now
     db.add(row)
+
+
+def provider_named(db: Session, provider_id: str | None) -> tuple[str, str] | None:
+    """Return the model and host of the provider `provider_id`, or `None` if it isn't set up."""
+    provider = None if provider_id is None else db.get(AiProviderRow, provider_id)
+    if provider is None:
+        return None
+    return provider.model, urlsplit(provider.base_url).netloc or provider.base_url
 
 
 def answered_by_of(db: Session, track_id: TrackId) -> AnsweredBy | None:

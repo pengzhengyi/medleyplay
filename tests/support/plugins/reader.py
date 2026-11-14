@@ -70,6 +70,7 @@ from pathlib import Path
 from typing import Final
 
 from medleyplay.plugin_api import (
+    ARTIST_CHOOSER,
     ARTIST_FINDER,
     ARTIST_NAME_FINDER,
     TRACK_ENRICHER,
@@ -78,6 +79,9 @@ from medleyplay.plugin_api import (
     AiFailureReason,
     ArtistAlias,
     Chapter,
+    ChooseArtists,
+    ChosenArtist,
+    ChosenArtists,
     CommunityRating,
     Enriched,
     EnrichStatus,
@@ -365,13 +369,39 @@ class ArtistNames:
         return FoundArtistNames()
 
 
+class ArtistChoices:
+    """Answers as an AI model might, judging by the songs it is shown.
+
+    A name stands for the option that is The Beatles, unless a song of it is a tribute,
+    when it stands for none. A song *Refused* has the provider refuse the key.
+    """
+
+    def choose(self, request: ChooseArtists) -> ChosenArtists:
+        songs = [song for each in request.names for song in each.songs]
+        if any(song.startswith("Refused") for song in songs):
+            return ChosenArtists(status=FindStatus.REFUSED, message="The key was refused.")
+        chosen = []
+        for each in request.names:
+            beatles = next((one for one in each.options if one.name == "The Beatles"), None)
+            if beatles is None or any("Tribute" in song for song in each.songs):
+                chosen.append(ChosenArtist(name=each.name, artist_id=None, why="A tribute"))
+            else:
+                why = "The Beatles, by its songs"
+                chosen.append(ChosenArtist(name=each.name, artist_id=beatles.id, why=why))
+        return ChosenArtists(chosen=tuple(chosen), ai_answered=request.ai[0].id)
+
+
 def register(registry: Registry) -> None:
-    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and two finders."""
+    """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
+
+    The rest are two artist finders and an artist chooser.
+    """
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
     registry.add(TRACK_ENRICHER, "ai-details", Suggester())
     registry.add(ARTIST_FINDER, "musicbrainz", Artists())
     registry.add(ARTIST_NAME_FINDER, "wikipedia", ArtistNames())
+    registry.add(ARTIST_CHOOSER, "ai-details", ArtistChoices())
 
 
 plugin = Plugin(api_version=1, register=register)

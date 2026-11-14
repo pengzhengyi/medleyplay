@@ -55,7 +55,7 @@ def test_a_finished_job_is_listed_with_its_outcome(jobs_client: TestClient, runn
 
 def test_a_running_job_shows_its_progress(jobs_client: TestClient, running: Jobs) -> None:
     set_up_as_alice(jobs_client)
-    job = running.submit(EchoJob(text="slow", steps=2, step_seconds=1))
+    job = running.submit(EchoJob(text="slow", steps=2, step_seconds=30))
     running.wait_for(job.id, JobState.RUNNING, until=lambda view: view.progress is not None)
 
     progress = jobs_client.get(f"/api/jobs/{job.id}").json()["progress"]

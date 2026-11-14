@@ -375,6 +375,11 @@ export interface Settings {
   readonly revision: number;
 }
 
+/** Return the newer of the settings held and a read of them, so a late answer undoes no save. */
+export function newestOf(held: Settings | undefined, read: Settings): Settings {
+  return held !== undefined && held.revision > read.revision ? held : read;
+}
+
 /** An Account's own preferences, and their revision; 0 if never saved. */
 export interface Preferences {
   /** The keyboard shortcuts changed from the page's defaults, or `null` for none. */

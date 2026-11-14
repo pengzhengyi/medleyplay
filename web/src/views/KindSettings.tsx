@@ -3,12 +3,14 @@
  *
  * A file no one names the kind of is guessed an album when it is at least so many
  * minutes long; an admin sets the length or turns the guess off, and everyone sees it.
+ * Each change saves on its own: the switch at once, the length once typing pauses.
  */
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { ApiError, type Settings, api } from "../api";
-import { classOf, useNote } from "../useNote";
+import { ApiError, type Settings, api, newestOf } from "../api";
+import { useAutoSave } from "../useAutoSave";
+import { classOf } from "../useNote";
 
 const MAX_MINUTES = 600;
 
@@ -47,17 +49,20 @@ export function KindSettings({
 }) {
   const [draft, setDraft] = useState<Draft>({ guess: true, minutes: "20" });
   const [error, setError] = useState("");
-  const notes = useNote();
+  const latest = useRef(settings);
+  useEffect(() => {
+    if (settings !== undefined) {
+      latest.current = newestOf(latest.current, settings);
+    }
+  }, [settings]);
 
-  const reload = (
-    then = () => {
-      notes.tell("");
-    },
-  ) => {
+  const reload = (then = () => undefined) => {
     api.settings().then(
       (read) => {
-        onSettings(read);
-        setDraft(draftOf(read));
+        const newest = newestOf(latest.current, read);
+        latest.current = newest;
+        onSettings(newest);
+        setDraft(draftOf(newest));
         then();
       },
       (failure: unknown) => {
@@ -72,25 +77,19 @@ export function KindSettings({
     loadOnOpen();
   }, []);
 
-  const minutes = minutesOf(draft);
-  const changed =
-    settings !== undefined && minutes !== undefined && minutes !== settings.album_minutes;
-
-  const change = (next: Draft) => {
-    setDraft(next);
-    notes.tell("");
-  };
-  const save = () => {
-    if (settings === undefined || minutes === undefined) {
-      return;
+  const saving = useAutoSave((albumMinutes: number | null, notes) => {
+    const base = latest.current;
+    if (base === undefined || albumMinutes === base.album_minutes) {
+      notes.tell("");
+      return Promise.resolve(false);
     }
     setError("");
-    api.saveSettings({ ...settings, album_minutes: minutes }).then(
-      () => {
-        reload(() => {
-          notes.confirm("Saved.");
-        });
+    return api.saveSettings({ ...base, album_minutes: albumMinutes }).then(
+      (saved) => {
+        latest.current = saved;
+        onSettings(saved);
         onChanged();
+        return true;
       },
       (failure: unknown) => {
         if (failure instanceof ApiError && failure.status === 409) {
@@ -99,11 +98,25 @@ export function KindSettings({
               "The settings changed elsewhere, so here they are now. Change them again to save.",
             );
           });
-          return;
+        } else {
+          notes.tell("");
+          setError(failure instanceof Error ? failure.message : String(failure));
         }
-        setError(failure instanceof Error ? failure.message : String(failure));
+        return false;
       },
     );
+  });
+
+  const change = (next: Draft, typed: boolean) => {
+    setDraft(next);
+    const minutes = minutesOf(next);
+    if (minutes === undefined || minutes === latest.current?.album_minutes) {
+      saving.cancel();
+    } else if (typed) {
+      saving.later(minutes);
+    } else {
+      saving.now(minutes);
+    }
   };
 
   if (settings === undefined) {
@@ -123,7 +136,7 @@ export function KindSettings({
           className="kind-guess"
           onSubmit={(event) => {
             event.preventDefault();
-            save();
+            saving.flush();
           }}
         >
           <label className="kind-guess-check">
@@ -131,7 +144,7 @@ export function KindSettings({
               type="checkbox"
               checked={draft.guess}
               onChange={(event) => {
-                change({ ...draft, guess: event.target.checked });
+                change({ ...draft, guess: event.target.checked }, false);
               }}
             />
             Guess that a long file is an album
@@ -148,15 +161,13 @@ export function KindSettings({
               disabled={!draft.guess}
               aria-label="Shortest album, in minutes"
               onChange={(event) => {
-                change({ ...draft, minutes: event.target.value });
+                change({ ...draft, minutes: event.target.value }, true);
               }}
+              onBlur={saving.flush}
             />
             minutes
           </label>
-          <button type="submit" disabled={!changed}>
-            Save
-          </button>
-          {minutes === undefined && (
+          {minutesOf(draft) === undefined && (
             <p className="hint">Type whole minutes from 1 to {MAX_MINUTES}.</p>
           )}
         </form>
@@ -171,8 +182,8 @@ export function KindSettings({
       <p className="hint">
         A guess shows as an outlined mark; choosing Song or Album in Edit details settles it.
       </p>
-      <p className={classOf(notes.note, "hint saved")} role="status">
-        {notes.note.text}
+      <p className={classOf(saving.note, "hint saved")} role="status">
+        {saving.note.text}
       </p>
     </>
   );

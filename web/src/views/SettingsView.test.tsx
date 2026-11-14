@@ -225,10 +225,10 @@ describe("storage settings", () => {
     expect(
       await screen.findByText("The storage limit is 20 GB, set by an admin."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.queryByRole("spinbutton", { name: "Limit in GB" })).toBeNull();
   });
 
-  it("previews what a lower limit removes, then saves it at the revision read", async () => {
+  it("asks before saving a lower limit that removes Downloads, then saves it at the revision read", async () => {
     const sent: unknown[] = [];
     open(true, {
       "GET /api/storage?limit=1000000000": {
@@ -252,17 +252,60 @@ describe("storage settings", () => {
 
     await userEvent.clear(size);
     await userEvent.type(size, "1");
+    await userEvent.tab();
 
     expect(
       await screen.findByText(
         "Saving removes 2 downloads (600 MB) and 1 prepared copy (80 MB) to fit.",
       ),
     ).toBeInTheDocument();
-    await userEvent.click(storage().getByRole("button", { name: "Save" }));
+    expect(sent).toEqual([]);
+    await userEvent.click(storage().getByRole("button", { name: "Remove and save" }));
     expect(await screen.findByText("Saved.")).toBeInTheDocument();
     expect(sent).toEqual([
       { storage_limit: GB, removal_order: "least_favorite", album_minutes: 20, revision: 2 },
     ]);
+  });
+
+  it("keeps the limit when asked to, removing nothing", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/storage?limit=1000000000": {
+        body: { ...USING_2, preview: { removals: [{ kind: "download", size: 400_000_000 }] } },
+      },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: LIMIT_20 };
+      },
+    });
+    const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    await userEvent.clear(size);
+    await userEvent.type(size, "1");
+    await userEvent.tab();
+
+    await userEvent.click(await storage().findByRole("button", { name: "Keep the limit" }));
+
+    expect(size).toHaveValue(20);
+    expect(storage().queryByRole("button", { name: "Remove and save" })).toBeNull();
+    expect(sent).toEqual([]);
+  });
+
+  it("saves a higher limit on its own once typing pauses", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/storage?limit=30000000000": { body: { ...USING_2, preview: { removals: [] } } },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, storage_limit: 30 * GB, revision: 3 } };
+      },
+    });
+    const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
+
+    await userEvent.clear(size);
+    await userEvent.type(size, "30");
+
+    expect(await storage().findByText("Saved.", {}, { timeout: 3000 })).toBeVisible();
+    expect(sent).toEqual([{ ...LIMIT_20, storage_limit: 30 * GB }]);
   });
 
   it("saves no limit at all", async () => {
@@ -275,7 +318,6 @@ describe("storage settings", () => {
     });
 
     await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
-    await userEvent.click(storage().getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(sent).toEqual([
@@ -288,22 +330,28 @@ describe("storage settings", () => {
     open(true, {
       "PUT /api/settings": { status: 409, body: { detail: "The settings changed." } },
     });
-    await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
 
-    await userEvent.click(storage().getByRole("button", { name: "Save" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
 
     expect(await screen.findByText(/These settings changed elsewhere/)).toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: "Limit in GB" })).toHaveValue(20);
   });
 
-  it("can't save a size that isn't one", async () => {
-    open(true);
+  it("saves no size that isn't one", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: LIMIT_20 };
+      },
+    });
     const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
 
     await userEvent.clear(size);
+    await userEvent.tab();
 
     expect(screen.getByText("Type a size in GB, such as 20.")).toBeInTheDocument();
-    expect(storage().getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(sent).toEqual([]);
   });
 });
 
@@ -465,7 +513,7 @@ describe("the Network section", () => {
 describe("the Songs and albums section", () => {
   const kinds = () => within(screen.getByRole("region", { name: "Songs and albums" }));
 
-  it("lets an admin turn off guessing that a long file is an album, and asks for the Tracks again", async () => {
+  it("saves turning off guessing that a long file is an album at once, and asks for the Tracks again", async () => {
     const sent: unknown[] = [];
     const changed = vi.fn();
     open(
@@ -485,14 +533,13 @@ describe("the Songs and albums section", () => {
     await userEvent.click(
       await kinds().findByRole("checkbox", { name: "Guess that a long file is an album" }),
     );
-    await userEvent.click(kinds().getByRole("button", { name: "Save" }));
 
     expect(await kinds().findByText("Saved.")).toBeVisible();
     expect(sent).toEqual([{ ...LIMIT_20, album_minutes: null }]);
     expect(changed).toHaveBeenCalledOnce();
   });
 
-  it("lets an admin set how long a file must be to be guessed an album", async () => {
+  it("saves how long a file must be to be guessed an album when the field is left", async () => {
     const sent: unknown[] = [];
     open(true, {
       "PUT /api/settings": (body) => {
@@ -504,10 +551,78 @@ describe("the Songs and albums section", () => {
 
     await userEvent.clear(minutes);
     await userEvent.type(minutes, "30");
-    await userEvent.click(kinds().getByRole("button", { name: "Save" }));
+    await userEvent.tab();
 
     await waitFor(() => {
       expect(sent).toEqual([{ ...LIMIT_20, album_minutes: 30 }]);
+    });
+  });
+
+  it("saves a length typed back after a save, at the revision that save left", async () => {
+    let kept: Settings = LIMIT_20;
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": () => ({ body: kept }),
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        kept = { ...(body as Settings), revision: kept.revision + 1 };
+        return { body: kept };
+      },
+    });
+    const minutes = await kinds().findByRole("spinbutton", { name: "Shortest album, in minutes" });
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "25");
+    await userEvent.tab();
+    await kinds().findByText("Saved.");
+
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "20");
+    await userEvent.tab();
+
+    await waitFor(() => {
+      expect(sent).toEqual([
+        { ...LIMIT_20, album_minutes: 25 },
+        { ...LIMIT_20, album_minutes: 20, revision: 3 },
+      ]);
+    });
+  });
+
+  it("keeps the newest settings when another section's first read answers after a save", async () => {
+    let release: (value: undefined) => void = () => undefined;
+    const slow = new Promise<undefined>((resolve) => {
+      release = resolve;
+    });
+    let kept: Settings = LIMIT_20;
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": () => ({ body: kept }),
+      "GET /api/storage": { body: USING_2, after: slow },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        if ((body as Settings).revision !== kept.revision) {
+          return { status: 409, body: { detail: "Saved since." } };
+        }
+        kept = { ...(body as Settings), revision: kept.revision + 1 };
+        return { body: kept };
+      },
+    });
+    const minutes = await kinds().findByRole("spinbutton", { name: "Shortest album, in minutes" });
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "25");
+    await userEvent.tab();
+    await kinds().findByText("Saved.");
+    release(undefined);
+    await storage().findByRole("spinbutton", { name: "Limit in GB" });
+
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "20");
+    await userEvent.tab();
+
+    await waitFor(() => {
+      expect(sent).toEqual([
+        { ...LIMIT_20, album_minutes: 25 },
+        { ...LIMIT_20, album_minutes: 20, revision: 3 },
+      ]);
     });
   });
 
@@ -529,11 +644,9 @@ describe("the Songs and albums section", () => {
     await userEvent.click(
       await kinds().findByRole("checkbox", { name: "Guess that a long file is an album" }),
     );
-    await userEvent.click(kinds().getByRole("button", { name: "Save" }));
     await kinds().findByText("Saved.");
 
     await userEvent.click(storage().getByRole("radio", { name: "No limit" }));
-    await userEvent.click(storage().getByRole("button", { name: "Save" }));
 
     expect(await storage().findByText("Saved.")).toBeVisible();
     expect(sent).toEqual([

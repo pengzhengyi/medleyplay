@@ -4,8 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { hrefOf } from "../routes";
 import {
   type Routes,
+  detailsOf,
   favoritesPlaylistOf,
   lookupOf,
   playlistOf,
@@ -351,7 +353,8 @@ describe("favorite artists and albums", () => {
     const heading = await screen.findByRole("heading", { name: "Unknown album" });
 
     const header = heading.closest("header") ?? document.body;
-    expect(within(header).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(header).queryByRole("button", { name: /^Favorite/ })).not.toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Edit details" })).toBeVisible();
   });
 });
 
@@ -386,5 +389,42 @@ describe("a file split into songs", () => {
       "link",
     );
     expect(links.map((link) => link.textContent)).toContain("Whole2 songs, 13 min");
+  });
+});
+
+describe("editing an album from its page", () => {
+  it("sets what is typed on every song of an album of songs of their own", async () => {
+    const sent: unknown[] = [];
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }), {
+      ...signedIn(LIBRARY),
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 2 } };
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
+    const editor = screen.getByRole("dialog", { name: "Edit album" });
+    await userEvent.type(within(editor).getByRole("textbox", { name: "Genre" }), "J-Pop");
+    await userEvent.click(within(editor).getByRole("button", { name: "Save to 2 songs" }));
+
+    expect(sent).toEqual([{ track_ids: [1, 2], values: { genre: "J-Pop" } }]);
+  });
+
+  it("edits an album that is one split file as that file, in Edit details", async () => {
+    const jay = [
+      trackOf(9, "Jay", { artist: "周杰伦", album: "Jay", kind: "album", split: true }),
+      trackOf(11, "可爱女人", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+      trackOf(12, "完美主义", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+    ];
+    open(hrefOf({ view: "album", artist: "周杰伦", name: "Jay" }), {
+      ...signedIn(jay),
+      "GET /api/tracks/9/details": { body: detailsOf(9) },
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
+
+    const editor = await screen.findByRole("dialog", { name: "Edit details" });
+    expect(within(editor).queryByRole("button", { name: /^Save to/ })).not.toBeInTheDocument();
   });
 });

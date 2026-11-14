@@ -217,6 +217,8 @@ export interface TrackActions extends TrackMenuActions {
   readonly onRate: (track: Track, rating: number | null) => void;
   /** What the Track's cover shows of a lookup asked about it, if any. */
   readonly statusOf: (track: Track) => CoverStatus | undefined;
+  /** Edit the album `songs`, songs of their own, make up; an album that is one file is edited as it. */
+  readonly onEditAlbum?: (songs: readonly Track[]) => void;
 }
 
 /** The columns a browser shows and their widths, as it last left them. */

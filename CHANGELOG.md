@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Edit an album from its page** — an album's page has *Edit details* beside
+  its heart. An album that is one file opens *Edit details* on that file, as the
+  Library does; an album of songs of their own opens *Edit album*, which sets
+  its name, artist, year, and genre on every song at once, and follows the album
+  to its new name.
+
 - **Now Playing names the album, the song, and who sings it** — the album and
   the song in it share the first line, *(disc) Jay / (note) 可爱女人*, and the
   artist the second, each linking to its page with its own heart beside it, so

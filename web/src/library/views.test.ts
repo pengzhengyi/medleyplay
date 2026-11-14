@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { artistNameOf, trackOf } from "../testing/server";
 import { linksOf } from "./artistLinks";
 import {
+  albumFileOf,
   albumsOf,
   artistsOf,
   downloadedOf,
@@ -203,5 +204,45 @@ describe("the songs of the Library", () => {
     const melt = trackOf(1, "Melt");
 
     expect(songsOf([album, first, melt])).toEqual([first, melt]);
+  });
+});
+
+describe("albumFileOf", () => {
+  const file = trackOf(9, "Jay", {
+    album: "Jay",
+    kind: "album",
+    kind_reason: "split",
+    split: true,
+  });
+  const songs = [
+    trackOf(11, "可爱女人", { album: "Jay", segment_of: 9 }),
+    trackOf(12, "完美主义", { album: "Jay", segment_of: 9 }),
+  ];
+  const byId = new Map([file, ...songs].map((track) => [track.id, track]));
+
+  it("is the file an album's songs were split from, with or without the file listed", () => {
+    expect(albumFileOf(songs, byId)).toBe(file);
+    expect(albumFileOf([file, ...songs], byId)).toBe(file);
+  });
+
+  it("is the album itself when it is one file not yet split", () => {
+    const whole = trackOf(5, "Bremen", { album: "Bremen", kind: "album" });
+
+    expect(albumFileOf([whole], new Map([[5, whole]]))).toBe(whole);
+  });
+
+  it("is none for an album of songs of their own", () => {
+    const loose = [
+      trackOf(1, "Melt", { album: "Supercell" }),
+      trackOf(2, "Shiver", { album: "Supercell" }),
+    ];
+
+    expect(albumFileOf(loose, new Map(loose.map((track) => [track.id, track])))).toBeUndefined();
+  });
+
+  it("is none when the songs come from two files", () => {
+    const other = trackOf(13, "龙卷风", { album: "Jay", segment_of: 10 });
+
+    expect(albumFileOf([...songs, other], byId)).toBeUndefined();
   });
 });

@@ -117,6 +117,14 @@ export interface Library {
   ) => Promise<void>;
   /** Remove every song of the file `id`; the Tracks then show the file whole again. */
   readonly unsplit: (id: number) => Promise<void>;
+  /**
+   * Set the household's values on every Track of `ids`, `null` dropping one; all change
+   * or none, and the Tracks then show what was saved.
+   */
+  readonly setDetailsOn: (
+    ids: readonly number[],
+    values: Partial<Record<Detail, string | number | null>>,
+  ) => Promise<void>;
   /** Look up the video a link or bare code names; the promise rejects with why it can't. */
   readonly lookUpLink: (link: string) => Promise<LinkLookup>;
   /**
@@ -512,6 +520,9 @@ export function useLibrary(onSignedOut: () => void): Library {
     },
     unsplit: async (id) => {
       await changeTracks(api.unsplit(id));
+    },
+    setDetailsOn: async (ids, values) => {
+      await changeTracks(api.setDetails(ids, values));
     },
     lookUpLink: (link) => signedOutOn401(api.lookUpLink(link)),
     addLink: async (link, quality, parts) => {

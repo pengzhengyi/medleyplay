@@ -1,10 +1,14 @@
 """The details API: what each origin says about a Track, and the household's own values."""
 
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.catalog import TrackId
+from medleyplay.persistence.schema import AiAnswerRow
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
 
@@ -246,3 +250,39 @@ def test_a_kind_that_is_neither_a_song_nor_an_album_is_refused(
     put = client.put(f"/api/tracks/{track_id}/details", json={"values": {"kind": "single"}})
 
     assert put.status_code == 422
+
+
+def test_a_tracks_details_name_the_ai_model_that_last_answered(
+    client: TestClient, catalog: CatalogService, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    with units.begin() as db:
+        # As an answer of deepseek-chat, asked at DeepSeek's API, leaves the Track.
+        db.add(
+            AiAnswerRow(
+                track_id=track_id,
+                model="deepseek-chat",
+                host="api.deepseek.com",
+                answered_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        )
+
+    details = client.get(f"/api/tracks/{track_id}/details").json()
+
+    assert details["ai_answered_by"] == {
+        "model": "deepseek-chat",
+        "host": "api.deepseek.com",
+        "at": "2026-01-01T00:00:00Z",
+    }
+
+
+def test_a_track_never_asked_of_the_ai_names_no_model(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    details = client.get(f"/api/tracks/{track_id}/details").json()
+
+    assert details["ai_answered_by"] is None

@@ -25,7 +25,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock, details
-from medleyplay.application.ai import is_set_up, record_answers
+from medleyplay.application.ai import is_set_up, record_answered_by, record_answers
 from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
@@ -228,13 +228,16 @@ def _record_providers(db: Session, found: EnrichedTrack, now: datetime) -> None:
 
 
 def _record_suggestion(db: Session, track_id: TrackId, found: EnrichedTrack, now: datetime) -> None:
-    """Record what the AI suggested, in place of its last suggestion; it shows nowhere.
+    """Record what the AI suggested, in place of its last suggestion, and the model that did.
+
+    The suggestion shows nowhere.
 
     An answer that suggests nothing clears the last suggestion.
     """
     details.record(db, track_id, Origin.AI, dict(check_values(found.values)), now)
     songs = [Song(song.start_ms, song.title, song.artist) for song in found.songs]
     details.record_suggested_songs(db, track_id, songs, now)
+    record_answered_by(db, track_id, found.ai_answered, now)
 
 
 def _refuse_start(db: Session, request: object) -> str | None:

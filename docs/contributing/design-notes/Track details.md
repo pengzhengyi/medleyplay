@@ -517,6 +517,13 @@ songs editor.
   replaced whole by the next suggestion, so an answer that suggests nothing clears
   the last. A suggested song list is kept apart, one per Track, only when it is a
   song list the songs editor accepts. Both go with the Track.
+- **Which model answered is kept with them:** the model and the host it was
+  asked at, as they were when it answered (`ai_answer`), so a stand-in's answer
+  isn't taken for DeepSeek's, and changing or removing the provider later leaves
+  it. Keys are never kept here. *Edit details* says *deepseek-chat suggests
+  “GUMI”*, with *Answered by deepseek-chat at api.deepseek.com* on hover, and
+  the songs editor says *12 songs from deepseek-chat*; an answer from before
+  this was kept says *the AI*.
 - **Where they show.** *Edit details* offers each suggested value beside its field
   with *Use*, which copies it into the household's edit, to be saved or not; a
   suggestion equal to what the box holds is not offered. The songs editor fills

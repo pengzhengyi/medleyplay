@@ -17,6 +17,7 @@ repeats what was typed.
 
 import ipaddress
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Final, NoReturn
 from urllib.parse import urlsplit
@@ -81,6 +82,19 @@ class ProviderFailed:
     reason: UnusableReason | None = None
     status: int | None = None
     """The status of a request the provider refused."""
+
+
+@dataclass(frozen=True)
+class AnsweredBy:
+    """The AI model that last answered for a Track, the host it was asked at, and when.
+
+    It is kept as it was when the model answered, so changing or removing the
+    provider later leaves it.
+    """
+
+    model: str
+    host: str
+    at: datetime
 
 
 @dataclass(frozen=True)

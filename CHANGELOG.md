@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Which AI answered** — the AI's suggestions now name the model that gave
+  them, such as *deepseek-chat suggests “GUMI”* in *Edit details* and *12 songs
+  from deepseek-chat* in the songs editor, with the host it was asked at on
+  hover, so a local stand-in's answer isn't taken for another provider's.
+
 - **Clean up** — names to tidy and names to link to one artist now wait on one
   page under Settings, whose rail item says how many there are, instead of in a
   row under the Library's and Artists' headings. On a phone, Settings carries

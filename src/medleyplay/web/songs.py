@@ -10,6 +10,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.segments import SegmentId, SongRow
 from medleyplay.domain.video_text import MAX_SONGS, Song
 from medleyplay.web.deps import SignedInAccount, SongsDep
+from medleyplay.web.details import AnsweredByOut
 from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api/tracks", tags=["songs"])
@@ -76,6 +77,8 @@ class SongsOut(BaseModel):
     found: list[list[ListedSongOut]]
     suggested: list[ListedSongOut]
     """The song list an AI model suggested for the file, or empty."""
+    suggested_by: AnsweredByOut | None
+    """The AI model that last answered for the file, as it was then; none if none has."""
 
     @classmethod
     def of(cls, view: SongsView) -> "SongsOut":
@@ -97,6 +100,7 @@ class SongsOut(BaseModel):
             ],
             found=[[_listed(song) for song in listed] for listed in view.found],
             suggested=[_listed(song) for song in view.suggested],
+            suggested_by=AnsweredByOut.of(view.suggested_by),
         )
 
 

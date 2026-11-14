@@ -66,6 +66,7 @@ import {
 } from "../library/details";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import type { TrackLookup } from "../library/useLibrary";
+import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { ORIGIN_TAGS } from "./originTags";
@@ -797,13 +798,15 @@ function DetailBox({
         <div
           className="detail-suggestion"
           role="group"
-          aria-label={`The AI's suggestion for ${label}`}
+          aria-label={`${aiNameOf(details.ai_answered_by, true)}'s suggestion for ${label}`}
         >
-          <small className="detail-origin">The AI suggests “{suggestion}”</small>
+          <small className="detail-origin" title={answeredOf(details.ai_answered_by)}>
+            {aiNameOf(details.ai_answered_by, true)} suggests “{suggestion}”
+          </small>
           <button
             type="button"
             className="detail-alternative"
-            aria-label={`Use “${suggestion}”, suggested by the AI`}
+            aria-label={`Use “${suggestion}”, suggested by ${aiNameOf(details.ai_answered_by)}`}
             onClick={() => {
               onChange({ ...own, [name]: suggestion });
             }}

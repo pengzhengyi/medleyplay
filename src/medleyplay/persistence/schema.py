@@ -285,6 +285,23 @@ class AiProviderRow(Base):
     """The status of the request the provider refused, when it refused one."""
 
 
+class AiAnswerRow(Base):
+    """The AI model that last answered for a Track, and the host it was asked at, as then.
+
+    It is replaced by the next answer, and left when the provider changes or goes, so
+    the Track still says who answered it.
+    """
+
+    __tablename__ = "ai_answer"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    model: Mapped[str] = mapped_column(String(128))
+    host: Mapped[str] = mapped_column(String(256))
+    answered_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class AiSuggestionRow(Base):
     """The song list an AI model suggested for a Track, replaced by its next suggestion.
 

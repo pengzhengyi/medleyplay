@@ -190,6 +190,18 @@ describe("editing a file's songs", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("says which model suggested the songs, once it is known", async () => {
+    const { dialog } = await renderEditor({
+      ...splitSongsOf(104, [], [], LISTED),
+      suggested_by: { model: "llama3.2", host: "127.0.0.1:11434", at: "2026-11-14T08:00:00Z" },
+    });
+
+    await press(dialog, "Fill with AI");
+
+    expect(within(dialog).getByText("2 songs from llama3.2")).toHaveRole("status");
+    expect(within(dialog).getByRole("button", { name: "Ask the AI again" })).toBeInTheDocument();
+  });
+
   it("splits a file from the list the AI suggested, saying where the songs came from", async () => {
     const { dialog, onSave } = await renderEditor(splitSongsOf(104, [], [], LISTED));
 

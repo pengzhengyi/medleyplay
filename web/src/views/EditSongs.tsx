@@ -66,6 +66,7 @@ import { checkParts, endOf, keptIds, listTextOf } from "../library/songList";
 import { countsDisagree, doubtsOf } from "../library/splitDoubts";
 import { formatStart, parseStart } from "../library/songTimes";
 import type { TrackLookup } from "../library/useLibrary";
+import { aiNameOf } from "../library/aiAnswer";
 import { OriginTag } from "./OriginTag";
 import { SongsControlsContext } from "./songsControls";
 
@@ -244,15 +245,18 @@ export function SongsEditor({
     setError("");
     setAudioNote("");
   };
-  /** Fill the rows from `list`, keeping each song it still names, and say where it came from. */
-  const fill = (list: readonly Song[], from: string) => {
+  /**
+   * Fill the rows from `list`, keeping each song it still names, and say where it came
+   * from; `byAi` says the list is the AI's answer.
+   */
+  const fill = (list: readonly Song[], from: string, byAi = false) => {
     const ids = keptIds(
       rows.map((row) => ({ id: row.id, title: row.title, startMs: startOf(row) })),
       list,
     );
     edit(list.map((song, index) => rowOf(song, ids[index] ?? null)));
     setFillNote(`${songCount(list.length)} ${from}`);
-    setFromAi(from === "from the AI");
+    setFromAi(byAi);
   };
   /** Ask the AI, at once or `again` with a note, and keep the rows as they are until it answers. */
   const askAi = (again?: string) => {
@@ -284,12 +288,12 @@ export function SongsEditor({
     if (loaded.suggested.length > 0 && editedSinceAsking) {
       // Rows changed while it was asked stay; pressing AI uses its songs.
       setFillNote(
-        `The AI answered with ${songCount(loaded.suggested.length)}: press AI to use them.`,
+        `${aiNameOf(loaded.suggested_by, true)} answered with ${songCount(loaded.suggested.length)}: press AI to use them.`,
       );
     } else if (loaded.suggested.length > 0) {
-      fill(loaded.suggested, "from the AI");
+      fill(loaded.suggested, `from ${aiNameOf(loaded.suggested_by)}`, true);
     } else {
-      setFillNote("The AI found no song list for this file.");
+      setFillNote(`${aiNameOf(loaded.suggested_by, true)} found no song list for this file.`);
     }
   });
   useEffect(() => {
@@ -491,7 +495,7 @@ export function SongsEditor({
             .filter((list) => list.length > 0)
             .map((list) => ({ name: "the video", count: list.length })),
           ...(songs.suggested.length > 0
-            ? [{ name: "the AI", count: songs.suggested.length }]
+            ? [{ name: aiNameOf(songs.suggested_by), count: songs.suggested.length }]
             : []),
         ]);
 
@@ -561,7 +565,7 @@ export function SongsEditor({
                 fromAi
                   ? "Ask the AI again, with a note if you like"
                   : songs.suggested.length > 0
-                    ? `The ${songCount(songs.suggested.length)} the AI suggested`
+                    ? `The ${songCount(songs.suggested.length)} ${aiNameOf(songs.suggested_by)} suggested`
                     : ai.can
                       ? "Ask the AI for the songs"
                       : "Set up an AI provider in Settings to ask it"
@@ -571,7 +575,7 @@ export function SongsEditor({
                 if (fromAi) {
                   setAskingAgain((open) => !open);
                 } else if (songs.suggested.length > 0) {
-                  fill(songs.suggested, "from the AI");
+                  fill(songs.suggested, `from ${aiNameOf(songs.suggested_by)}`, true);
                 } else {
                   askAi();
                 }

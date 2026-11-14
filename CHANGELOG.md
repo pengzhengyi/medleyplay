@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Now Playing names the album, the song, and who sings it** — the album and
+  the song in it share the first line, *(disc) Jay / (note) 可爱女人*, and the
+  artist the second, each linking to its page with its own heart beside it, so
+  it is plain whether a heart favorites the song, the album, or the artist. The
+  mark that moves is the one playing as a whole. A Track from a video has a
+  small *Bilibili* link beside the artist.
+
 - **Open on Bilibili** — a Track that came from a Bilibili video, as a file
   named for it (`BV1dm4y1s7ak.m4a`) or a part added by link, has *Open on
   Bilibili* in its menu, which opens the video in a new tab; a song of a split

@@ -8,6 +8,7 @@ import { TidyNames } from "./TidyNames";
 
 /** 周杰伦's first album, written into the artist of two songs with its year. */
 const JAY: NameToTidy = {
+  kind: "artist",
   written: "周杰伦2000年发行首张个人",
   name: "周杰伦",
   year: 2000,
@@ -18,6 +19,7 @@ const JAY: NameToTidy = {
 
 /** The Beatles with their Chinese name, as one album's artist. */
 const BEATLES: NameToTidy = {
+  kind: "artist",
   written: "The Beatles（披头士）",
   name: "The Beatles",
   year: null,
@@ -27,11 +29,11 @@ const BEATLES: NameToTidy = {
 };
 
 const openList = async () => {
-  await userEvent.click(await screen.findByRole("button", { name: "Tidy 2 artist names" }));
-  return screen.getByRole("dialog", { name: "Tidy artist names" });
+  await userEvent.click(await screen.findByRole("button", { name: "Tidy 2 names" }));
+  return screen.getByRole("dialog", { name: "Tidy names" });
 };
 
-describe("tidying artist names", () => {
+describe("tidying names", () => {
   it("offers nothing while every name is tidy", async () => {
     const server = serve({ "GET /api/names-to-tidy": { body: { names: [] } } });
 
@@ -115,7 +117,10 @@ describe("tidying artist names", () => {
 
     await expect
       .poll(() => tidied)
-      .toEqual([{ written: JAY.written }, { written: BEATLES.written }]);
+      .toEqual([
+        { kind: "artist", written: JAY.written },
+        { kind: "artist", written: BEATLES.written },
+      ]);
     await expect.poll(() => within(list).queryAllByRole("listitem")).toHaveLength(0);
   });
 
@@ -137,5 +142,23 @@ describe("tidying artist names", () => {
     const alert = await within(list).findByRole("alert");
     expect(alert).toHaveTextContent("No Track shows");
     expect(within(list).getAllByRole("listitem")[0]).toContainElement(alert);
+  });
+
+  it("marks an album's name as an album's", async () => {
+    const album: NameToTidy = {
+      kind: "album",
+      written: "八日目、雨が止む前に。(初回限定盤B)",
+      name: "八日目、雨が止む前に。",
+      year: null,
+      fields: ["album"],
+      track_ids: [31],
+      years_differ: 0,
+    };
+    serve({ "GET /api/names-to-tidy": { body: { names: [JAY, album] } } });
+    render(<TidyNames />);
+
+    const list = await openList();
+
+    expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent("Album");
   });
 });

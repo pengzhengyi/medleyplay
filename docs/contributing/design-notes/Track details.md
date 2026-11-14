@@ -161,11 +161,13 @@ values.
   for [Segments](Segments.md). A paste with no words is refused.
 - **Many Tracks at once:** the same values, such as an album and its artist, can
   be set on several Tracks.
-- **Tidying artist names:** an artist or album artist written with more than the
-  name in it, as a video's uploader often writes it, is offered for tidying. A
-  capsule in the Library's and Artists' headings, *Tidy 11 artist names*, opens
-  the list: each name as written, its tidy form and the year it gave, and how
-  many songs show it, as the artist, the album artist, or both.
+- **Tidying names:** an artist, album artist, or album written with more than
+  the name in it, as a video's uploader often writes it, is offered for
+  tidying. A capsule in the Library's and Artists' headings, *Tidy 11 names*,
+  opens the list: each name as written, its tidy form and the year it gave, and
+  how many songs show it, as the artist, the album artist, or both, or as the
+  album. An artist's name and an album's are offered apart, even when written
+  alike.
 
   ```text
   周杰伦2000年发行首张个人            ↳ 周杰伦      2000
@@ -174,17 +176,24 @@ values.
   ```
 
   - **What is taken off:** a release year written with 年, and all after it,
-    which notes the release (*首张个人*, *EP*, *现场*); a year ending the name,
-    as a video's title has it taken off (*朴树2003*); and a bracketed part at
+    which notes the release (*首张个人*, *EP*, *现场*); and a bracketed part at
     the end holding a script the name isn't written in, Latin against Chinese,
-    Japanese, or Korean, which is a translation, other names, or a note.
+    Japanese, or Korean, or Chinese after Japanese written with kana, which is a
+    translation, other names, or a note. An artist's name also loses a year
+    ending it, as a video's title has it taken off (*朴树2003*). An album's name
+    also loses a trailing note naming its edition (*(初回限定盤B)*,
+    *(Remastered)*), as album ratings match it, and an uploader's advert after a
+    comma (*，超强音质好听到超乎想象不信进来试试！！！*); a year ending an album's
+    name is its own, as in *1989*.
   - **What is left alone:** names whose numbers or brackets are their own,
     such as *The 1975*, *Sum 41*, *f(x)*, and *ryo(supercell)*; a decade
     (*2000年代*); and a name tidying would leave with no letters. A name is never
     split into artists, so *Chinese Football/中国足球乐队* stays one.
   - ***Tidy*** sets the tidy name as the household's value wherever each song
     shows the name as written, and the name's year where a song shows none; a
-    song showing another year keeps it, and the list counts those. ***Keep***
+    song showing another year keeps it, and the list counts those. A song of a
+    split file showing its file's value is left to follow the file, so a later
+    change to the file still reaches it. ***Keep***
     remembers the name as written, so it isn't offered again. Nothing is tidied
     without the household choosing it, and a tidied value is cleared in *Edit
     details* like any other of the household's.

@@ -29,6 +29,7 @@ def test_the_names_to_tidy_are_listed_with_their_tidy_form(
     assert body == {
         "names": [
             {
+                "kind": "artist",
                 "written": JAY,
                 "name": "周杰伦",
                 "year": 2000,
@@ -44,7 +45,7 @@ def test_a_name_is_tidied_on_its_tracks(client: TestClient, catalog: CatalogServ
     set_up_as_alice(client)
     track_id = _song_by(catalog, JAY)
 
-    tidied = client.post("/api/names-to-tidy/tidy", json={"written": JAY})
+    tidied = client.post("/api/names-to-tidy/tidy", json={"kind": "artist", "written": JAY})
 
     assert tidied.json() == {"changed": 1}
     track = client.get(f"/api/tracks/{track_id}").json()
@@ -57,7 +58,7 @@ def test_a_name_kept_as_written_leaves_the_list(
     set_up_as_alice(client)
     _song_by(catalog, JAY)
 
-    kept = client.post("/api/names-to-tidy/keep", json={"written": JAY})
+    kept = client.post("/api/names-to-tidy/keep", json={"kind": "artist", "written": JAY})
 
     assert kept.status_code == 204
     assert client.get("/api/names-to-tidy").json() == {"names": []}
@@ -66,7 +67,7 @@ def test_a_name_kept_as_written_leaves_the_list(
 def test_tidying_a_name_no_track_shows_is_not_found(client: TestClient) -> None:
     set_up_as_alice(client)
 
-    tidied = client.post("/api/names-to-tidy/tidy", json={"written": JAY})
+    tidied = client.post("/api/names-to-tidy/tidy", json={"kind": "artist", "written": JAY})
 
     assert tidied.status_code == 404
 
@@ -74,7 +75,7 @@ def test_tidying_a_name_no_track_shows_is_not_found(client: TestClient) -> None:
 def test_a_name_with_nothing_to_tidy_is_refused(client: TestClient) -> None:
     set_up_as_alice(client)
 
-    tidied = client.post("/api/names-to-tidy/tidy", json={"written": "The Band"})
+    tidied = client.post("/api/names-to-tidy/tidy", json={"kind": "artist", "written": "The Band"})
 
     assert tidied.status_code == 422
 

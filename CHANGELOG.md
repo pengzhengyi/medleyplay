@@ -14,11 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hides them. Shortcuts made with the key never show it. Settings turns it off
   for the browser.
 
-- **Tidy artist names** — artist names written with more than the name in them,
-  such as *周杰伦2000年发行首张个人* or *The Beatles（披头士）*, are listed from
-  a capsule in the Library and Artists headings, each with its tidy form, the
-  year it gave, and the songs it is on. *Tidy* sets the name on those songs and
-  the year where a song has none; *Keep* leaves a name as written for good.
+- **Tidy names** — artist and album names written with more than the name in
+  them, such as *周杰伦2000年发行首张个人*, *The Beatles（披头士）*, or
+  *八日目、雨が止む前に。(初回限定盤B)*, are listed from a capsule in the Library
+  and Artists headings, each with its tidy form, the year it gave, and the songs
+  it is on. *Tidy* sets the name on those songs and the year where a song has
+  none; *Keep* leaves a name as written for good.
 
 - **An album's songs, set in under it** — in the Library, the songs of an open
   album sit further in, with smaller covers, on a guide that runs down from the

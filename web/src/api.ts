@@ -199,16 +199,18 @@ export interface JobEvent {
 }
 
 /** The enricher that reads a Track's video details and cover from Bilibili. */
-/** An artist name shown on Tracks with more than the name in it, and its tidy form. */
+/** An artist's or album's name shown on Tracks with more than the name in it, tidied. */
 export interface NameToTidy {
+  /** What the name names: an artist or album artist, or an album. */
+  readonly kind: "artist" | "album";
   /** The name exactly as the Tracks show it. */
   readonly written: string;
   /** The name with the rest taken off. */
   readonly name: string;
   /** The release year the written name gave, if any. */
   readonly year: number | null;
-  /** Where the Tracks show it: as the artist, the album artist, or both. */
-  readonly fields: readonly ("artist" | "album_artist")[];
+  /** Where the Tracks show it: as the artist, the album artist, or the album. */
+  readonly fields: readonly ("artist" | "album_artist" | "album")[];
   /** The Tracks showing it, oldest first. */
   readonly track_ids: readonly number[];
   /** How many of them show another year, which tidying keeps. */
@@ -805,13 +807,14 @@ export const api = {
     trackIds: readonly number[],
     values: Partial<Record<Detail, string | number | null>>,
   ) => call<{ changed: number }>("POST", "/api/tracks/details", { track_ids: trackIds, values }),
-  /** The artist names written with more than the name in them, with their tidy form. */
+  /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */
-  tidyName: (written: string) =>
-    call<{ changed: number }>("POST", "/api/names-to-tidy/tidy", { written }),
+  tidyName: (kind: NameToTidy["kind"], written: string) =>
+    call<{ changed: number }>("POST", "/api/names-to-tidy/tidy", { kind, written }),
   /** Keep a name as written, so it is no longer offered for tidying. */
-  keepName: (written: string) => call<undefined>("POST", "/api/names-to-tidy/keep", { written }),
+  keepName: (kind: NameToTidy["kind"], written: string) =>
+    call<undefined>("POST", "/api/names-to-tidy/keep", { kind, written }),
   /** Read a video's pasted title and description as the Track's `video` values. */
   readVideoText: (trackId: number, text: VideoText) =>
     call<VideoRead>("POST", `/api/tracks/${String(trackId)}/video-text`, text),

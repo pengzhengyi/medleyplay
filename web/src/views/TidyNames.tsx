@@ -1,5 +1,5 @@
 /**
- * @file Tidying artist names written with more than the name in them.
+ * @file Tidying artist and album names written with more than the name in them.
  *
  * A capsule says how many names could be tidied, and only shows while some can. It
  * opens the list: each name as written, its tidy form and the year it gave, and how
@@ -50,13 +50,13 @@ export function TidyNames({ version }: { readonly version?: unknown }) {
         <button
           type="button"
           className="tidy-capsule"
-          title="Some artist names have more than the name in them"
+          title="Some artist or album names have more than the name in them"
           onClick={() => {
             setOpen(true);
           }}
         >
           <BroomIcon weight="bold" aria-hidden />
-          {`Tidy ${String(count)} artist ${count === 1 ? "name" : "names"}`}
+          {`Tidy ${String(count)} ${count === 1 ? "name" : "names"}`}
         </button>
       )}
       {open && (
@@ -90,7 +90,9 @@ function TidyList({
 
   const act = async (name: NameToTidy, action: "tidy" | "keep") => {
     try {
-      await (action === "tidy" ? api.tidyName(name.written) : api.keepName(name.written));
+      await (action === "tidy"
+        ? api.tidyName(name.kind, name.written)
+        : api.keepName(name.kind, name.written));
       setErrors((now) => without(now, keyOf(name)));
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : String(failure);
@@ -110,10 +112,10 @@ function TidyList({
   return (
     <Modal ref={dialog} className="tidy-names" labelledBy="tidy-names-title" onClose={onClose}>
       <div className="card">
-        <h2 id="tidy-names-title">Tidy artist names</h2>
+        <h2 id="tidy-names-title">Tidy names</h2>
         <p className="tidy-lead">
-          These names have more than the artist in them. Tidying sets the name on their songs, and
-          the year where a song has none.
+          These artist and album names have more than the name in them. Tidying sets the name on
+          their songs, and the year where a song has none.
         </p>
         {names.length === 0 ? (
           <p className="empty">Every artist name is tidy.</p>
@@ -132,8 +134,8 @@ function TidyList({
                     </span>
                   </div>
                   <p className="tidy-meta">
-                    {!name.fields.includes("artist") && (
-                      <span className="tidy-field">Album artist</span>
+                    {fieldOf(name) !== undefined && (
+                      <span className="tidy-field">{fieldOf(name)}</span>
                     )}
                     {metaOf(name)}
                   </p>
@@ -207,8 +209,16 @@ function metaOf(name: NameToTidy): string {
   return `${songs}, ${String(name.years_differ)} ${keeps} own year`;
 }
 
+/** Say what a name is when it isn't an artist's: an album, or only an album artist. */
+function fieldOf(name: NameToTidy): string | undefined {
+  if (name.kind === "album") {
+    return "Album";
+  }
+  return name.fields.includes("artist") ? undefined : "Album artist";
+}
+
 function keyOf(name: NameToTidy): string {
-  return name.written;
+  return `${name.kind}:${name.written}`;
 }
 
 function without(map: ReadonlyMap<string, string>, key: string): ReadonlyMap<string, string> {

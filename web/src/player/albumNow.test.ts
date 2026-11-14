@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
 import { trackOf } from "../testing/server";
-import { albumTimeline, playingOf, songAt } from "./albumNow";
+import { albumSteps, albumTimeline, playingOf, songAt } from "./albumNow";
 import { EMPTY, type Entry, type Queue } from "./queue";
 
 /**
@@ -199,5 +199,87 @@ describe("albumTimeline", () => {
 
   it("is nothing while a song of its own plays", () => {
     expect(albumTimeline(playingOf(playing(3), BY_ID), 10, vi.fn())).toBeUndefined();
+  });
+});
+
+describe("albumSteps", () => {
+  /** 生如夏花's three songs, then Melt, then the same three songs as a second album. */
+  const TWICE: readonly Entry[] = [
+    ...ENTRIES,
+    { key: "e", trackId: 11, unit: "file:9" },
+    { key: "f", trackId: 12, unit: "file:9" },
+    { key: "g", trackId: 13, unit: "file:9" },
+  ];
+  const stepsAt = (place: number, position: number, entries: readonly Entry[] = TWICE) => {
+    const queue = playing(place, entries);
+    return albumSteps(queue, BY_ID, playingOf(queue, BY_ID, position), position);
+  };
+
+  it("steps to the song after, and to the albums either side, from an album's first song", () => {
+    expect(stepsAt(4, 1)).toEqual({
+      previousSong: { key: "e", seconds: 0 },
+      nextSong: { key: "f", seconds: 0 },
+      previousAlbum: { key: "d", seconds: 0 },
+      nextAlbum: undefined,
+    });
+  });
+
+  it("goes back a song, and to the album's start once the album is a few seconds in", () => {
+    expect(stepsAt(5, 1)).toMatchObject({
+      previousSong: { key: "e", seconds: 0 },
+      nextSong: { key: "g", seconds: 0 },
+      previousAlbum: { key: "e", seconds: 0 },
+    });
+  });
+
+  it("goes back to the start of the song once a few seconds into it", () => {
+    expect(stepsAt(5, 10)).toMatchObject({ previousSong: { key: "f", seconds: 0 } });
+  });
+
+  it("steps from the first album to the song after it", () => {
+    expect(stepsAt(0, 1)).toMatchObject({
+      previousSong: { key: "a", seconds: 0 },
+      previousAlbum: { key: "a", seconds: 0 },
+      nextAlbum: { key: "d", seconds: 0 },
+    });
+  });
+
+  it("steps by song within a split file playing whole, and by album past it", () => {
+    const split = new Map([
+      [9, trackOf(9, "生如夏花", { kind: "album", split: true, duration_ms: 720_000 })],
+      ...BY_ID,
+    ]);
+    const entries = [
+      { key: "w", trackId: 9 },
+      { key: "d", trackId: 7 },
+    ];
+    const queue = playing(0, entries);
+
+    const steps = albumSteps(queue, split, playingOf(queue, split, 300), 300);
+
+    expect(steps).toEqual({
+      previousSong: { key: "w", seconds: 240 },
+      nextSong: { key: "w", seconds: 540 },
+      previousAlbum: { key: "w", seconds: 0 },
+      nextAlbum: { key: "d", seconds: 0 },
+    });
+  });
+
+  it("has no songs to step through in a whole album not yet split", () => {
+    const album = new Map([[5, trackOf(5, "Bremen", { kind: "album", duration_ms: 3_600_000 })]]);
+    const queue = playing(0, [{ key: "a", trackId: 5 }]);
+
+    const steps = albumSteps(queue, album, playingOf(queue, album, 30), 30);
+
+    expect(steps).toEqual({
+      previousSong: undefined,
+      nextSong: undefined,
+      previousAlbum: { key: "a", seconds: 0 },
+      nextAlbum: undefined,
+    });
+  });
+
+  it("is nothing while a song of its own plays", () => {
+    expect(stepsAt(3, 1)).toBeUndefined();
   });
 });

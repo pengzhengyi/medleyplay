@@ -8,6 +8,9 @@
  * shuffle as one: they move together and keep their order.
  */
 
+/** How far into a song, in seconds, Previous starts it again instead of going back one. */
+export const RESTART_AFTER = 3;
+
 /** One place in the queue. */
 export interface Entry {
   readonly key: string;

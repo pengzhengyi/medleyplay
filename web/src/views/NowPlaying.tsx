@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
 import type { FavoriteGroups } from "../library/favoriteGroups";
-import { albumTimeline, playingOf } from "../player/albumNow";
+import { albumSteps, albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import type { SleepTimer } from "../player/useSleepTimer";
 import { canSetVolume } from "../player/volume";
@@ -171,7 +171,11 @@ export function NowPlaying({
                 </span>
               </div>
             </div>
-            <Transport player={player} track={track} />
+            <Transport
+              player={player}
+              track={track}
+              steps={albumSteps(player.queue, tracks, nowPlaying, position)}
+            />
             <div className="np-extras">
               {canSetVolume() && (
                 <VolumeControl

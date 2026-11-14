@@ -13,7 +13,7 @@
 
 import type { Track } from "../api";
 import { songsByFile } from "../library/playOrder";
-import { type Entry, type Queue, current } from "./queue";
+import { type Entry, type Queue, RESTART_AFTER, current } from "./queue";
 
 /** A song of the album playing, and where it starts on the album's timeline. */
 export interface AlbumSong {
@@ -197,4 +197,78 @@ export function albumTimeline(
       }
     },
   };
+}
+
+/** Where a step goes: the entry to play, and the second of it to play from. */
+export interface Step {
+  readonly key: string;
+  readonly seconds: number;
+}
+
+/** Where to step by song and by album; a song step is `undefined` with none to step to. */
+export interface AlbumSteps {
+  readonly previousSong: Step | undefined;
+  readonly nextSong: Step | undefined;
+  readonly previousAlbum: Step;
+  readonly nextAlbum: Step | undefined;
+}
+
+/**
+ * Return where to step from what plays now, `position` seconds into its Track, while an
+ * album plays: by song within it, and by album past it. Back goes to the start of the
+ * song, or of the album, once it is a few seconds in, as Previous does.
+ */
+export function albumSteps(
+  queue: Queue,
+  tracks: ReadonlyMap<number, Track>,
+  playing: Playing,
+  position: number,
+): AlbumSteps | undefined {
+  const now = current(queue);
+  if (playing.kind !== "album" || now === undefined) {
+    return undefined;
+  }
+  const { songs } = playing;
+  const song = songs[playing.current];
+  const startOf = (each: AlbumSong): Step => ({ key: each.entry.key, seconds: each.from });
+  const places = songs.map(({ entry }) => queue.entries.indexOf(entry));
+  const first = songs.length === 0 ? queue.position : Math.min(...places);
+  const last = songs.length === 0 ? queue.position : Math.max(...places);
+  const opening: Step = songs[0] === undefined ? { key: now.key, seconds: 0 } : startOf(songs[0]);
+  const intoSong = song === undefined ? position : position - song.from;
+  const intoAlbum = song === undefined ? position : song.start + intoSong;
+  const before = songs[playing.current - 1];
+  const after = songs[playing.current + 1];
+  const nextEntry = queue.entries[last + 1];
+  const previousEntry = queue.entries[runStart(queue, tracks, first - 1)];
+  return {
+    previousSong:
+      song === undefined
+        ? undefined
+        : intoSong > RESTART_AFTER || before === undefined
+          ? startOf(song)
+          : startOf(before),
+    nextSong: after === undefined ? undefined : startOf(after),
+    previousAlbum:
+      intoAlbum > RESTART_AFTER || previousEntry === undefined
+        ? opening
+        : { key: previousEntry.key, seconds: 0 },
+    nextAlbum: nextEntry === undefined ? undefined : { key: nextEntry.key, seconds: 0 },
+  };
+}
+
+/** Return the first place of the album, or the song of its own, at `place`; -1 for none. */
+function runStart(queue: Queue, tracks: ReadonlyMap<number, Track>, place: number): number {
+  const entry = queue.entries[place];
+  if (entry === undefined) {
+    return -1;
+  }
+  if (entry.unit === undefined && tracks.get(entry.trackId)?.segment_of == null) {
+    return place;
+  }
+  const groupOf = (each: Entry | undefined) =>
+    each === undefined
+      ? undefined
+      : (each.unit ?? `file:${String(tracks.get(each.trackId)?.segment_of ?? "")}`);
+  return runAround(queue.entries, place, groupOf).first;
 }

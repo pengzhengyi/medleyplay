@@ -12,7 +12,16 @@ import { ApiError, type PlaybackAnswer, type Track, api, coverUrl } from "../api
 import { newId } from "../ids";
 import { PlayTime, reportOf } from "./playCount";
 import { recordPlay, sendPlays, updatePlay } from "./plays";
-import { EMPTY, type Entry, type Queue, type Repeat, current, following, reduce } from "./queue";
+import {
+  EMPTY,
+  type Entry,
+  type Queue,
+  RESTART_AFTER,
+  type Repeat,
+  current,
+  following,
+  reduce,
+} from "./queue";
 import { type Play, loadQueue, saveQueue } from "./storage";
 import {
   type Stretch,
@@ -100,7 +109,6 @@ interface View {
 }
 
 const MAX_PREPARE_ATTEMPTS = 3;
-const RESTART_AFTER = 3;
 const SAVE_EVERY = 5;
 const FINISHED_JOB = new Set(["succeeded", "failed", "cancelled"]);
 const PAUSING_ERRORS = new Set(["AbortError"]);

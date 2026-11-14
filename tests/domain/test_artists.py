@@ -7,6 +7,7 @@ from medleyplay.domain.artists import (
     LookUp,
     artist_key,
     may_look_up,
+    queries_for,
     suggested,
 )
 
@@ -65,3 +66,51 @@ def test_two_artists_going_by_the_name_suggest_neither() -> None:
 
 def test_the_sort_name_counts_as_a_name() -> None:
     assert suggested("Beatles, The", [_beatles()]) == BEATLES.id
+
+
+@pytest.mark.parametrize(
+    ("name", "queries"),
+    [
+        ("披头士", ("披头士",)),
+        (
+            "Michael Jackson/迈克尔·杰克逊",
+            ("Michael Jackson/迈克尔·杰克逊", "Michael Jackson", "迈克尔·杰克逊"),
+        ),
+        ("Adele阿黛尔", ("Adele阿黛尔", "Adele", "阿黛尔")),
+        ("逃跑计划Escape Plan", ("逃跑计划Escape Plan", "逃跑计划", "Escape Plan")),
+        ("初音ミク/米津玄師", ("初音ミク/米津玄師", "初音ミク", "米津玄師")),
+        ("AC/DC", ("AC/DC",)),
+        (
+            "Adele/阿黛尔/阿黛儿",
+            ("Adele/阿黛尔/阿黛儿", "Adele", "阿黛尔", "阿黛儿"),
+        ),
+    ],
+    ids=[
+        "one name",
+        "a translation",
+        "glued",
+        "glued the other way",
+        "two artists",
+        "a slash of its own",
+        "three names",
+    ],
+)
+def test_a_name_is_looked_up_whole_and_by_each_of_its_parts(
+    name: str, queries: tuple[str, ...]
+) -> None:
+    assert queries_for(name) == queries
+
+
+def test_the_one_artist_going_by_a_part_is_suggested_for_a_name_of_parts() -> None:
+    jackson = Candidate(
+        Artist("f27ec8db", "Michael Jackson", "Jackson, Michael", "", "US"), 100, ()
+    )
+
+    assert suggested("Michael Jackson/迈克尔·杰克逊", [jackson]) == "f27ec8db"
+
+
+def test_parts_going_by_two_artists_suggest_neither() -> None:
+    miku = Candidate(Artist("a1", "初音ミク", "", "", "JP"), 100, ())
+    other = Candidate(Artist("b2", "米津玄師", "", "", "JP"), 100, ())
+
+    assert suggested("初音ミク/米津玄師", [miku, other]) is None

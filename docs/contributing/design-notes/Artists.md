@@ -48,9 +48,20 @@ keeps the text and counts them as one.
 
 ## Looking a name up
 
-- **One request a name:** MusicBrainz's artist search, by name or alias
-  (`artist:"披头士" OR alias:"披头士"`), answers with up to ten artists, best first,
-  each with a score and its aliases.
+- **A search a name, and one a part:** MusicBrainz's artist search, by name or
+  alias (`artist:"披头士" OR alias:"披头士"`), answers with up to ten artists, best
+  first, each with a score and its aliases. A name written as several is searched
+  whole and by each part, up to four searches: divided by slashes, unless a part
+  is one character or every part is Latin and one is shorter than three (*AC/DC*
+  stays whole), and where a Latin name meets a Chinese or Japanese one with no
+  space. An artist found by several searches is kept once, with its best score.
+
+  ```text
+  Michael Jackson/迈克尔·杰克逊   whole, Michael Jackson, 迈克尔·杰克逊
+  Adele阿黛尔                    whole, Adele, 阿黛尔
+  初音ミク/米津玄師               whole, 初音ミク, 米津玄師
+  ```
+
 - **A Job a name,** of the kind `find_artist`, through the plugin point
   `ArtistFinder`, which the `musicbrainz` plugin answers. Its lane is shared with
   the MusicBrainz enricher's, so the two kinds together keep to one request a
@@ -66,8 +77,9 @@ keeps the text and counts them as one.
   to none, saying it is no artist MusicBrainz knows. A linked name isn't looked up
   again, and an unlinked one is offered again.
 - **One is suggested:** the one artist going by the name exactly, as its name,
-  sort name, or an alias, that MusicBrainz scored 90 or more. Two such artists,
-  or a looser match, suggest none.
+  sort name, or an alias, that MusicBrainz scored 90 or more; or, when none goes
+  by the whole name, the one going by any of its parts. Two such artists, as for a
+  collaboration such as *初音ミク/米津玄師*, or a looser match, suggest none.
 - **Only an artist MusicBrainz named** for a name here can be linked.
 - **Any signed-in Account** may look names up and link them, as any may edit a
   Track's details: the catalog is the household's.

@@ -30,6 +30,7 @@ from medleyplay.domain.artists import (
     LookUp,
     artist_key,
     may_look_up,
+    queries_for,
     suggested,
 )
 from medleyplay.domain.enrichers import MUSICBRAINZ
@@ -173,7 +174,7 @@ class ArtistService:
         for name in wanted:
             if may_look_up(name) is not LookUp.YES or artist_key(name) in linked:
                 continue
-            request = FindArtistJob(name=name[:512], finder=FINDER)
+            request = FindArtistJob(name=name[:512], queries=queries_for(name), finder=FINDER)
             self._jobs.submit(self._kind, find_artist_target(name), request, caller.id)
             asked += 1
         return asked

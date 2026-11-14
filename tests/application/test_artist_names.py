@@ -71,6 +71,17 @@ def test_a_name_looked_up_keeps_what_musicbrainz_knows_and_suggests_the_exact_ma
     assert Alias("甲壳虫", "zh") in enriching.artists.names().artists[BEATLES].aliases
 
 
+def test_a_name_written_as_two_is_found_by_its_parts_and_suggested_as_one_artist(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="Beatles/披头士")
+
+    _looked_up(enriching, alice, "Beatles/披头士")
+
+    named = _named(enriching, "Beatles/披头士")
+    assert (named.candidates, named.suggested) == (((BEATLES, 100), (TRIBUTE, 61)), BEATLES)
+
+
 def test_a_name_naming_no_one_or_needing_tidying_is_not_looked_up(
     enriching: Enriching, alice: Account
 ) -> None:

@@ -6259,7 +6259,7 @@ button.playing-kind[aria-expanded="true"] {
   gap: 0.5rem;
 }
 
-.clean-up-head-actions button {
+.clean-up-head .clean-up-head-actions .dialog-button {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;

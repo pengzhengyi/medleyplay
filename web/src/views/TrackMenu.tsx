@@ -34,12 +34,6 @@ import { navigate } from "../routes";
 /** Rate Your Music's search, which the household's own browser opens; medleyplay never reads the site. */
 const RYM_SEARCH = "https://rateyourmusic.com/search";
 
-/** The name of the site `page` is on, such as *Bilibili*; its host for a site this doesn't know. */
-function siteNameOf(page: string): string {
-  const host = new URL(page).hostname;
-  return host === "bilibili.com" || host.endsWith(".bilibili.com") ? "Bilibili" : host;
-}
-
 /** A search of Rate Your Music for `track`: an album by its album artist and name, a song by its artist and title. */
 function rymSearchOf(track: Track): string {
   const words =

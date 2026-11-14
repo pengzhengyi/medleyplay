@@ -65,8 +65,10 @@ lists. They are on its site alone, which medleyplay doesn't read (see below).
   leaves Wikipedia running. Wikidata and Wikipedia are one site to medleyplay,
   both Wikimedia's, behind one pace. Settings shows them together under
   *Community info*.
-- **All are off by default** (`OFF_BY_DEFAULT`), since each contacts a site, and
-  none goes through a proxy: none is the household's Bilibili route.
+- **All but Wikimedia's are off by default** (`OFF_BY_DEFAULT`), since each
+  contacts a site; the plugin `wikipedia` is on, since Wikimedia's API is open
+  and needs no account. None goes through a proxy: none is the household's
+  Bilibili route.
 
 ## Step 0: measure before building
 

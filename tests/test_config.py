@@ -70,6 +70,14 @@ def test_the_plugin_that_asks_an_ai_model_is_off_by_default_too() -> None:
     ) == ("ai-details",)
 
 
+def test_the_plugin_that_reads_wikidata_is_on_unless_the_file_turns_it_off() -> None:
+    assert Config().enabled_plugins(["wikipedia"]) == ("wikipedia",)
+    assert (
+        Config(plugins={"wikipedia": PluginConfig(enabled=False)}).enabled_plugins(["wikipedia"])
+        == ()
+    )
+
+
 def test_plugins_the_file_names_but_that_dont_exist_are_unknown() -> None:
     config = Config(plugins={"radio": PluginConfig(enabled=False), "zz": PluginConfig()})
 

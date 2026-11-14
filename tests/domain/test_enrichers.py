@@ -22,6 +22,7 @@ from medleyplay.domain.enrichers import (
     search_terms,
     text_subject,
     video_id_of,
+    video_page_of,
     why_not,
 )
 from medleyplay.domain.errors import NotFoundError
@@ -134,6 +135,22 @@ def test_a_bilibili_source_wins_over_a_file_named_for_another_video() -> None:
 
 def test_a_segments_source_names_no_video() -> None:
     assert video_id_of([("segment", "7/12")]) is None
+
+
+def test_a_bilibili_source_links_to_its_part_of_the_video() -> None:
+    page = video_page_of([("bilibili", "BV1Xx41117Tz/p2")])
+
+    assert page == "https://www.bilibili.com/video/BV1Xx41117Tz?p=2"
+
+
+def test_a_library_file_named_for_a_video_links_to_the_video() -> None:
+    page = video_page_of([("library", "3/Music/BV1dm4y1s7ak.m4a")])
+
+    assert page == "https://www.bilibili.com/video/BV1dm4y1s7ak"
+
+
+def test_a_file_named_for_no_video_links_to_none() -> None:
+    assert video_page_of([("library", "3/Music/Night Drive.m4a")]) is None
 
 
 def test_the_bilibili_enricher_is_found_by_its_name() -> None:

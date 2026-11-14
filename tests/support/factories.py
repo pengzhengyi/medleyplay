@@ -51,6 +51,11 @@ class SourceKeyFactory:
         """Return the key of one part of a Bilibili video."""
         return SourceKey("bilibili", f"{video}/p{part}")
 
+    @staticmethod
+    def library_file(path: str = "3/Music/BV1dm4y1s7ak.m4a") -> SourceKey:
+        """Return the key of a file in a Library, by default one named for a Bilibili video."""
+        return SourceKey("library", path)
+
 
 class TrackDetailsFactory:
     """Builds the details a Source reports about its music."""

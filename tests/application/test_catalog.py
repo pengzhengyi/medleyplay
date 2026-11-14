@@ -60,6 +60,22 @@ def test_a_new_track_keeps_every_detail_its_source_gives(
     assert catalog.get_track(alice.id, track_id).details == details
 
 
+def test_a_track_links_to_the_video_its_file_came_from(
+    catalog: CatalogService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    from_video = catalog.add_track(SourceKeyFactory.library_file(), TrackDetailsFactory.song())
+    ripped = catalog.add_track(
+        SourceKeyFactory.library_file("3/Music/Night Drive.m4a"), TrackDetailsFactory.song()
+    )
+
+    tracks = {track.id: track for track in catalog.list_tracks(alice.id)}
+
+    assert tracks[from_video].video == "https://www.bilibili.com/video/BV1dm4y1s7ak"
+    assert tracks[ripped].video is None
+    assert catalog.get_track(alice.id, from_video).video == tracks[from_video].video
+
+
 def test_adding_a_known_source_again_returns_its_track_unchanged(
     catalog: CatalogService, accounts: AccountService
 ) -> None:

@@ -134,6 +134,8 @@ class Track:
     """Whether the Track has no Download, and the last Job downloading it failed."""
     site: str | None = None
     """The kind of the site Source the Track is downloaded from, such as `bilibili`."""
+    video: str | None = None
+    """The page of the video the Track's audio came from, such as a Bilibili video's, if known."""
     segment_of: TrackId | None = None
     """The album file this Track is a song of, if it is one."""
     split: bool = False

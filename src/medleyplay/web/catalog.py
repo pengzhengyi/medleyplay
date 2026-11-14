@@ -80,6 +80,10 @@ class TrackOut(BaseModel):
     site: str | None = Field(
         description="The kind of site its audio is downloaded from, such as `bilibili`, if any."
     )
+    video: str | None = Field(
+        default=None,
+        description="The page of the video the Track's audio came from, if known.",
+    )
     segment_of: int | None = Field(description="The album file this Track is a song of, if any.")
     split: bool = Field(description="Whether this Track's file is split into songs.")
     kind: Kind = Field(description="Whether the Track is a song or a whole album in one file.")
@@ -118,6 +122,7 @@ class TrackOut(BaseModel):
             downloaded=track.downloaded,
             download_failed=track.download_failed,
             site=track.site,
+            video=track.video,
             segment_of=track.segment_of,
             split=track.split,
             kind=track.kind,

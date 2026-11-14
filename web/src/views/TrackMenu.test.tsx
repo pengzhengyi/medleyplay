@@ -247,6 +247,25 @@ describe("a song's menu", () => {
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 
+  it("opens the video a Track came from in a new tab", async () => {
+    renderMenu(true, { ...MELT, video: "https://www.bilibili.com/video/BV1dm4y1s7ak" });
+
+    await open();
+
+    const link = screen.getByRole("menuitem", { name: "Open on Bilibili" });
+    expect(link).toHaveAttribute("href", "https://www.bilibili.com/video/BV1dm4y1s7ak");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("offers no video for a Track that came from none", async () => {
+    renderMenu();
+
+    await open();
+
+    expect(screen.queryByRole("menuitem", { name: /^Open on Bilibili/ })).not.toBeInTheDocument();
+  });
+
   it("searches Rate Your Music for an album by its album artist and name", async () => {
     renderMenu(true, { ...MELT, kind: "album", kind_reason: "named" });
 

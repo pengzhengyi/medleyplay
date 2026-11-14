@@ -33,6 +33,17 @@ def test_tracks_are_listed_with_your_own_state(client: TestClient, catalog: Cata
     ]
 
 
+def test_a_track_names_the_page_of_the_video_it_came_from(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = catalog.add_track(SourceKeyFactory.library_file(), TrackDetailsFactory.song())
+
+    track = client.get(f"/api/tracks/{track_id}").json()
+
+    assert track["video"] == "https://www.bilibili.com/video/BV1dm4y1s7ak"
+
+
 def _rated_by_musicbrainz_listeners(units: sessionmaker[Session], track_id: TrackId) -> None:
     """Record that MusicBrainz's listeners rated the Track's song 4.2, from 24 votes."""
     with units.begin() as db:

@@ -91,6 +91,7 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     downloaded: false,
     download_failed: false,
     site: null,
+    video: null,
     segment_of: null,
     split: false,
     kind: "song",

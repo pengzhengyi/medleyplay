@@ -20,6 +20,7 @@ from medleyplay.domain.ai import (
     MAX_URL,
     PRESETS,
     ProviderFailure,
+    UnusableReason,
 )
 from medleyplay.web.deps import AiDep, SignedInAccount
 
@@ -79,6 +80,10 @@ class ProviderOut(BaseModel):
     failure: ProviderFailure | None
     """Why it last gave no answer to use, until it answers again."""
     failed_at: datetime | None
+    failure_reason: UnusableReason | None
+    """What was wrong with its answer, when it was unusable."""
+    failure_status: int | None
+    """The status it refused the request with, when it refused one."""
 
     @classmethod
     def of(cls, saved: SavedProvider) -> "ProviderOut":
@@ -91,6 +96,8 @@ class ProviderOut(BaseModel):
             saved_at=saved.saved_at,
             failure=saved.failure,
             failed_at=saved.failed_at,
+            failure_reason=saved.failure_reason,
+            failure_status=saved.failure_status,
         )
 
 

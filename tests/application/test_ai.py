@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.ai import AiService, SavedProvider, is_set_up, record_answers
-from medleyplay.domain.ai import MAX_PROVIDERS, ProviderFailure, key_secret
+from medleyplay.domain.ai import MAX_PROVIDERS, ProviderFailed, ProviderFailure, key_secret
 from medleyplay.domain.errors import (
     ConflictError,
     ForbiddenError,
@@ -202,7 +202,9 @@ def test_replacing_the_key_keeps_the_providers_place_and_forgets_how_it_failed(
     deepseek = _add_deepseek(ai)
     _add_ollama(ai)
     with units.begin() as db:
-        record_answers(db, None, [(deepseek.id, ProviderFailure.REFUSED)], clock.now)
+        record_answers(
+            db, None, [(deepseek.id, ProviderFailed(ProviderFailure.REFUSED))], clock.now
+        )
 
     replaced = ai.replace_key(ADMIN, deepseek.id, "sk-replaced1234")
 
@@ -398,12 +400,14 @@ def test_a_provider_that_answers_forgets_how_it_last_failed_and_those_before_it_
 ) -> None:
     deepseek, ollama = _add_deepseek(ai), _add_ollama(ai)
     with units.begin() as db:
-        record_answers(db, None, [(ollama.id, ProviderFailure.BUSY)], clock.now)
+        record_answers(db, None, [(ollama.id, ProviderFailed(ProviderFailure.BUSY))], clock.now)
     clock.advance(timedelta(hours=2))
 
     with units.begin() as db:
-        record_answers(db, ollama.id, [(deepseek.id, ProviderFailure.REFUSED)], clock.now)
-        record_answers(db, None, [("gone", ProviderFailure.REFUSED)], clock.now)
+        record_answers(
+            db, ollama.id, [(deepseek.id, ProviderFailed(ProviderFailure.REFUSED))], clock.now
+        )
+        record_answers(db, None, [("gone", ProviderFailed(ProviderFailure.REFUSED))], clock.now)
 
     shown = {each.id: (each.failure, each.failed_at) for each in ai.providers(ADMIN)}
     assert shown == {deepseek.id: (ProviderFailure.REFUSED, clock.now), ollama.id: (None, None)}

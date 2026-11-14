@@ -65,6 +65,7 @@ from medleyplay.plugin_api import (
     TRACK_ENRICHER,
     AiFailure,
     AiFailureKind,
+    AiFailureReason,
     Chapter,
     CommunityRating,
     Enriched,
@@ -219,6 +220,16 @@ class Suggester:
                 refused = AiFailure(provider=request.ai[0].id, kind=AiFailureKind.REFUSED)
                 return _NIGHT_DRIVE.model_copy(
                     update={"ai_answered": request.ai[-1].id, "ai_failures": (refused,)}
+                )
+            case "Rejected":
+                rejected = AiFailure(
+                    provider=request.ai[0].id,
+                    kind=AiFailureKind.UNUSABLE,
+                    reason=AiFailureReason.REJECTED,
+                    status=400,
+                )
+                return _NIGHT_DRIVE.model_copy(
+                    update={"ai_answered": request.ai[-1].id, "ai_failures": (rejected,)}
                 )
         return _SUGGESTIONS.get(title, _NIGHT_DRIVE)
 

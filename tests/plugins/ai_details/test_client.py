@@ -5,7 +5,7 @@ import json
 import pytest
 import requests
 
-from medleyplay.plugin_api import AiEndpoint, NetworkError
+from medleyplay.plugin_api import AiEndpoint, AiFailureReason, NetworkError
 from medleyplay.plugins.ai_details.client import (
     DEFAULT_WAIT,
     MAX_ATTEMPTS,
@@ -138,10 +138,11 @@ def test_the_request_may_take_the_time_the_client_allows() -> None:
 def test_a_redirect_is_not_followed_so_the_key_goes_nowhere_else() -> None:
     fake = FakeTransport().answer(CHAT, Reply.redirect("https://elsewhere.example/chat"))
 
-    with pytest.raises(UnusableAnswerError, match="redirect"):
+    with pytest.raises(UnusableAnswerError, match="redirect") as caught:
         ask(fake)
 
     assert fake.urls() == [CHAT]
+    assert caught.value.reason is AiFailureReason.REDIRECTED
 
 
 # What is read
@@ -181,11 +182,30 @@ def test_an_answer_that_is_cut_off_or_empty_is_unusable(reply: Reply) -> None:
         ask(FakeAiFactory.answering(reply))
 
 
+def test_an_empty_answer_says_so() -> None:
+    fake = FakeAiFactory.answering(ChatReplyFactory.saying(""))
+
+    with pytest.raises(UnusableAnswerError, match="empty") as caught:
+        ask(fake)
+
+    assert caught.value.reason is AiFailureReason.EMPTY
+
+
+def test_there_is_room_for_a_reasoning_model_to_think_before_it_answers() -> None:
+    fake = FakeAiFactory.answering(SAYS_HI)
+
+    ask(fake)
+
+    assert fake.body()["max_tokens"] >= 16_384
+
+
 def test_an_answer_cut_off_says_the_model_ran_out_of_room() -> None:
     fake = FakeAiFactory.answering(ChatReplyFactory.saying("{", finish_reason="length"))
 
-    with pytest.raises(UnusableAnswerError, match="ran out of room"):
+    with pytest.raises(UnusableAnswerError, match="ran out of room") as caught:
         ask(fake)
+
+    assert caught.value.reason is AiFailureReason.CUT_OFF
 
 
 @pytest.mark.parametrize("status", [400, 404, 422])
@@ -194,8 +214,10 @@ def test_another_refusal_of_the_request_says_to_check_the_address_and_the_model(
 ) -> None:
     fake = FakeAiFactory.answering(Reply(status, body=b'{"error": {"message": "no such model"}}'))
 
-    with pytest.raises(UnusableAnswerError, match=rf"{status}.*base URL and the model"):
+    with pytest.raises(UnusableAnswerError, match=rf"{status}.*base URL and the model") as caught:
         ask(fake)
+
+    assert (caught.value.reason, caught.value.status) == (AiFailureReason.REJECTED, status)
 
 
 def test_an_answer_that_is_not_json_is_a_network_failure() -> None:

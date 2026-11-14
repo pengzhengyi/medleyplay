@@ -20,7 +20,9 @@ from medleyplay.application.secrets import Secrets
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.ai import (
     MAX_PROVIDERS,
+    ProviderFailed,
     ProviderFailure,
+    UnusableReason,
     check_base_url,
     check_key,
     check_model,
@@ -40,7 +42,9 @@ from medleyplay.plugin_api import AiEndpoint
 class SavedProvider:
     """A provider as shown: which it is, where, the model asked, and how it last did.
 
-    `failure` is why it last gave no answer, at `failed_at`, until it answers again.
+    `failure` is why it last gave no answer, at `failed_at`, until it answers again; for
+    an unusable answer, `failure_reason` says what was wrong, and `failure_status` the
+    status of a request it refused.
     The key is never shown, only whether there is one.
     """
 
@@ -51,6 +55,8 @@ class SavedProvider:
     saved_at: datetime
     failure: ProviderFailure | None = None
     failed_at: datetime | None = None
+    failure_reason: UnusableReason | None = None
+    failure_status: int | None = None
 
 
 def is_set_up(db: Session) -> bool:
@@ -61,17 +67,25 @@ def is_set_up(db: Session) -> bool:
 def record_answers(
     db: Session,
     answered: str | None,
-    failures: Iterable[tuple[str, ProviderFailure]],
+    failures: Iterable[tuple[str, ProviderFailed]],
     now: datetime,
 ) -> None:
     """Note that `answered` answered and why each of `failures` didn't; gone ones are skipped."""
-    for provider_id, failure in failures:
+    for provider_id, failed in failures:
         row = db.get(AiProviderRow, provider_id)
         if row is not None:
-            row.failure, row.failed_at = failure, now
+            _note(row, failed, now)
     row = None if answered is None else db.get(AiProviderRow, answered)
     if row is not None:
-        row.failure, row.failed_at = None, None
+        _note(row, None, None)
+
+
+def _note(row: AiProviderRow, failed: ProviderFailed | None, now: datetime | None) -> None:
+    """Note why the provider last gave no answer to use, or `None` once it answers."""
+    row.failure = None if failed is None else failed.failure
+    row.failure_reason = None if failed is None else failed.reason
+    row.failure_status = None if failed is None else failed.status
+    row.failed_at = now
 
 
 class AiService:
@@ -133,7 +147,7 @@ class AiService:
             with self._units.begin() as db:
                 row = _row_of(db, provider_id)
                 row.key_secret, row.saved_at = secret, self._clock()
-                row.failure, row.failed_at = None, None
+                _note(row, None, None)
                 db.flush()
                 return _to_saved(row)
 
@@ -146,7 +160,7 @@ class AiService:
             others = [each for each in _in_order(db) if each.id != provider_id]
             _require_new(others, row.base_url, name)
             row.model, row.saved_at = name, self._clock()
-            row.failure, row.failed_at = None, None
+            _note(row, None, None)
             db.flush()
             return _to_saved(row)
 
@@ -201,7 +215,7 @@ class AiService:
             lent.append(AiEndpoint(id=provider_id, base_url=base_url, model=model, key=key))
         if missing:
             with self._units.begin() as db:
-                failures = [(each, ProviderFailure.KEY_MISSING) for each in missing]
+                failures = [(each, ProviderFailed(ProviderFailure.KEY_MISSING)) for each in missing]
                 record_answers(db, None, failures, self._clock())
         if rows and not lent:
             message = "The AI providers' keys are no longer in the Keychain; replace them."
@@ -235,6 +249,7 @@ def _require_new(rows: Iterable[AiProviderRow], base_url: str, model: str) -> No
 
 def _to_saved(row: AiProviderRow) -> SavedProvider:
     failure = None if row.failure is None else ProviderFailure(row.failure)
+    reason = None if row.failure_reason is None else UnusableReason(row.failure_reason)
     return SavedProvider(
         id=row.id,
         base_url=row.base_url,
@@ -243,6 +258,8 @@ def _to_saved(row: AiProviderRow) -> SavedProvider:
         saved_at=row.saved_at,
         failure=failure,
         failed_at=row.failed_at,
+        failure_reason=reason,
+        failure_status=row.failure_status,
     )
 
 

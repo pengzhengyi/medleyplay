@@ -6259,6 +6259,12 @@ button.playing-kind[aria-expanded="true"] {
   gap: 0.5rem;
 }
 
+.clean-up-head-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .link-row .tidy-names-pair {
   grid-column: 1;
   grid-auto-flow: column;

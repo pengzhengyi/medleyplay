@@ -2691,6 +2691,11 @@ button.icon.heart.on:hover,
   color: var(--ink);
 }
 
+/* While an album plays, the song steps sit inside the album steps, smaller. */
+:is(.player, .now-playing) .controls button.song-step {
+  font-size: 0.85em;
+}
+
 /* A play mode that is on keeps the accent, with a dot beneath. */
 :is(.player, .now-playing) .controls button.mode {
   position: relative;

@@ -1,9 +1,14 @@
 /**
  * @file The playing controls the player and Now Playing share: the play modes, Previous,
  * Play or Pause, Next, and the song's Favorite button.
+ *
+ * While an album plays, Previous and Next step by album, and a smaller pair inside them
+ * steps by song within it; an album with no songs known has only the album steps.
  */
 
 import {
+  CaretLeftIcon,
+  CaretRightIcon,
   CircleNotchIcon,
   HeartIcon,
   PauseIcon,
@@ -17,6 +22,7 @@ import {
 import { useState } from "react";
 
 import type { Track } from "../api";
+import type { AlbumSteps, Step } from "../player/albumNow";
 import { repeatAfter } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { hintOf, useBindings } from "../shortcuts";
@@ -29,15 +35,24 @@ const PLAYABLE_NOW = new Set(["playing", "paused", "blocked"]);
 export function Transport({
   player,
   track,
+  steps,
 }: {
   readonly player: Player;
   readonly track: Track | undefined;
+  /** Where to step by song and by album, while an album plays. */
+  readonly steps?: AlbumSteps | undefined;
 }) {
   const { status, shuffled, repeat } = player;
   // A label that changes on a focused button isn't always read out, so the change is said.
   const [said, setSaid] = useState("");
   const playing = status.kind === "playing";
   const keys = useBindings();
+  const go = (step: Step | undefined) => {
+    if (step !== undefined) {
+      player.playAt(step.key, step.seconds);
+    }
+  };
+  const bySong = steps !== undefined && (steps.previousSong ?? steps.nextSong) !== undefined;
   return (
     <div className="controls">
       <button
@@ -53,16 +68,44 @@ export function Transport({
       >
         <ShuffleIcon weight={shuffled ? "bold" : "regular"} aria-hidden />
       </button>
-      <button
-        type="button"
-        className="icon"
-        aria-label="Previous"
-        {...hintOf("Previous", keys.previous)}
-        onClick={player.previous}
-        disabled={track === undefined}
-      >
-        <SkipBackIcon weight="fill" aria-hidden />
-      </button>
+      {steps === undefined ? (
+        <button
+          type="button"
+          className="icon"
+          aria-label="Previous"
+          {...hintOf("Previous", keys.previous)}
+          onClick={player.previous}
+          disabled={track === undefined}
+        >
+          <SkipBackIcon weight="fill" aria-hidden />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="icon"
+          aria-label="Previous album"
+          title="Previous album"
+          onClick={() => {
+            go(steps.previousAlbum);
+          }}
+        >
+          <SkipBackIcon weight="fill" aria-hidden />
+        </button>
+      )}
+      {bySong && (
+        <button
+          type="button"
+          className="icon song-step"
+          aria-label="Previous song"
+          {...hintOf("Previous song", keys.previous)}
+          onClick={() => {
+            go(steps.previousSong);
+          }}
+          disabled={steps.previousSong === undefined}
+        >
+          <CaretLeftIcon weight="bold" aria-hidden />
+        </button>
+      )}
       <button
         type="button"
         className="icon play"
@@ -79,16 +122,45 @@ export function Transport({
           <PlayIcon weight="fill" aria-hidden />
         )}
       </button>
-      <button
-        type="button"
-        className="icon"
-        aria-label="Next"
-        {...hintOf("Next", keys.next)}
-        onClick={player.next}
-        disabled={track === undefined}
-      >
-        <SkipForwardIcon weight="fill" aria-hidden />
-      </button>
+      {bySong && (
+        <button
+          type="button"
+          className="icon song-step"
+          aria-label="Next song"
+          {...hintOf("Next song", keys.next)}
+          onClick={() => {
+            go(steps.nextSong);
+          }}
+          disabled={steps.nextSong === undefined}
+        >
+          <CaretRightIcon weight="bold" aria-hidden />
+        </button>
+      )}
+      {steps === undefined ? (
+        <button
+          type="button"
+          className="icon"
+          aria-label="Next"
+          {...hintOf("Next", keys.next)}
+          onClick={player.next}
+          disabled={track === undefined}
+        >
+          <SkipForwardIcon weight="fill" aria-hidden />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="icon"
+          aria-label="Next album"
+          title="Next album"
+          onClick={() => {
+            go(steps.nextAlbum);
+          }}
+          disabled={steps.nextAlbum === undefined}
+        >
+          <SkipForwardIcon weight="fill" aria-hidden />
+        </button>
+      )}
       <button
         type="button"
         className={repeat === "off" ? "icon mode" : "icon mode on"}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { agoOf, isLocal, movedOrder, providerNameOf } from "./aiProviders";
+import { agoOf, fixOf, isLocal, movedOrder, providerNameOf } from "./aiProviders";
 import type { AiPreset, AiProvider } from "./api";
 
 const PRESETS: readonly AiPreset[] = [
@@ -19,6 +19,8 @@ const at = (baseUrl: string): AiProvider => ({
   saved_at: "2026-11-06T09:00:00Z",
   failure: null,
   failed_at: null,
+  failure_reason: null,
+  failure_status: null,
 });
 
 describe("a provider's name", () => {
@@ -62,5 +64,32 @@ describe("moving a provider", () => {
   it("puts it at its new place and keeps the others in order", () => {
     expect(movedOrder(["a", "b", "c"], 0, 2)).toEqual(["b", "c", "a"]);
     expect(movedOrder(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
+  });
+});
+
+describe("how to fix a provider's failure", () => {
+  const failed = (change: Partial<AiProvider>): AiProvider => ({
+    ...at("https://api.deepseek.com"),
+    failure: "unusable",
+    failed_at: "2026-11-06T11:00:00Z",
+    ...change,
+  });
+
+  it("says what was wrong with an unusable answer", () => {
+    expect(fixOf(failed({ failure_reason: "cut_off" }))).toBe(
+      "Its answer ran out of room before it finished.",
+    );
+    expect(fixOf(failed({ failure_reason: "rejected", failure_status: 400 }))).toBe(
+      "It answered 400: check the model and the base URL.",
+    );
+  });
+
+  it("falls back to the failure's own advice when nothing more was kept", () => {
+    expect(fixOf(failed({ failure: "refused" }))).toBe("Replace the key.");
+    expect(fixOf(failed({}))).toBe("Check the model.");
+  });
+
+  it("says nothing for a provider that hasn't failed", () => {
+    expect(fixOf(at("https://api.deepseek.com"))).toBe("");
   });
 });

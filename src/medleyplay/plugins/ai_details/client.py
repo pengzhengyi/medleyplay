@@ -20,15 +20,16 @@ from typing import Final, TypedDict
 import requests
 from pydantic import JsonValue
 
-from medleyplay.plugin_api import AiEndpoint, NetworkError
+from medleyplay.plugin_api import AiEndpoint, AiFailureReason, NetworkError
 
 USER_AGENT: Final = (
     f"medleyplay/{version('medleyplay')} ( https://github.com/pengzhengyi/medleyplay )"
 )
 TIMEOUT: Final = (10.0, 90.0)
 """How long, in seconds, one request may take to connect and to answer."""
-MAX_TOKENS: Final = 4_096
-"""The most the model may say: room for a song list of a few hundred songs."""
+MAX_TOKENS: Final = 16_384
+"""The most the model may say: room for a song list of a few hundred songs, after a
+reasoning model's thinking, which counts too."""
 MAX_ATTEMPTS: Final = 3
 """How many times a request is sent while the provider is busy."""
 MAX_WAIT: Final = 30.0
@@ -51,7 +52,16 @@ class RefusedError(Exception):
 
 
 class UnusableAnswerError(Exception):
-    """The provider answered, but not with a reply the client can use."""
+    """The provider answered, but not with a reply the client can use: `reason` says why.
+
+    `status` is the status of a request the provider refused.
+    """
+
+    def __init__(self, message: str, reason: AiFailureReason, status: int | None = None) -> None:
+        """Say `message`, for `reason`."""
+        super().__init__(message)
+        self.reason = reason
+        self.status = status
 
 
 class BusyError(NetworkError):
@@ -140,10 +150,10 @@ def _reply_of(response: requests.Response) -> str:
         raise RefusedError(message)
     if 300 <= status < 400:  # noqa: PLR2004 -- the range of redirects
         message = f"The AI provider answered with a redirect ({status}); check the base URL."
-        raise UnusableAnswerError(message)
+        raise UnusableAnswerError(message, AiFailureReason.REDIRECTED, status)
     if status >= HTTPStatus.BAD_REQUEST:
         message = f"The AI provider answered {status}; check the base URL and the model."
-        raise UnusableAnswerError(message)
+        raise UnusableAnswerError(message, AiFailureReason.REJECTED, status)
     try:
         answer: object = response.json()
     except requests.JSONDecodeError:
@@ -159,10 +169,10 @@ def _content_of(answer: object) -> str:
     content = message.get("content") if isinstance(message, dict) else None
     if choice is not None and choice.get("finish_reason") == "length":
         text = "The AI model ran out of room before it finished its answer."
-        raise UnusableAnswerError(text)
+        raise UnusableAnswerError(text, AiFailureReason.CUT_OFF)
     if not isinstance(content, str) or not content.strip():
         text = "The AI provider's answer was empty."
-        raise UnusableAnswerError(text)
+        raise UnusableAnswerError(text, AiFailureReason.EMPTY)
     return content
 
 

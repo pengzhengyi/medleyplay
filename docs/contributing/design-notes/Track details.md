@@ -453,7 +453,9 @@ songs editor.
   that fills the base URL and a model. It sends `POST {base_url}/chat/completions`
   with the key as a bearer token, the model, a system and a user message,
   `response_format` set to a JSON object, temperature 0, and a bound on the
-  answer, and uses nothing only some providers accept: no JSON schema, no tools,
+  answer of 16,384 tokens, room for a reasoning model's thinking, which counts
+  toward it, as well as a long song list; and uses nothing only some providers
+  accept: no JSON schema, no tools,
   no streaming. A base URL is `http` or `https` with no login, query, or fragment,
   and `http` only for an address on the machine itself.
 - **A key is a secret.** It is kept in the Keychain, as logins and proxies are,
@@ -500,7 +502,11 @@ songs editor.
   network failure, which waits and tries again later; otherwise the Job fails as
   an invalid answer. Why each provider passed over failed is kept on its row, with
   when, until it answers again, and its card shows it, such as *Key refused 2 hr.
-  ago*, so a broken first provider shows rather than hiding behind the next.
+  ago*, so a broken first provider shows rather than hiding behind the next. For
+  an unusable answer, the row also keeps what was wrong, as one of a few fixed
+  reasons (refused with a status, redirected, cut off, empty, or not the JSON
+  asked for) and never the provider's own words, which could hold anything; the
+  card says it, such as *It answered 400: check the model and the base URL*.
 - **Which Tracks are asked for.** A Track that has video text, from the site, a
   file beside it, or the household, and is not a segment, once the provider is set
   up. Asked once a day per Track and text: the subject kept is a hash of the

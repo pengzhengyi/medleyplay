@@ -10,6 +10,7 @@ from medleyplay.plugin_api import (
     AiEndpoint,
     AiFailure,
     AiFailureKind,
+    AiFailureReason,
     Enriched,
     EnrichStatus,
     EnrichTrack,
@@ -269,14 +270,36 @@ def test_the_first_provider_that_answers_is_the_only_one_asked(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(
-    ("first", "kind"),
+    ("first", "failure"),
     [
-        (requests.ConnectionError("down"), AiFailureKind.UNREACHABLE),
-        (Reply(429, {"Retry-After": "1"}), AiFailureKind.BUSY),
-        (Reply(503), AiFailureKind.BUSY),
-        (Reply(401), AiFailureKind.REFUSED),
-        (Reply(404), AiFailureKind.UNUSABLE),
-        (ChatReplyFactory.saying("not json"), AiFailureKind.UNUSABLE),
+        (
+            requests.ConnectionError("down"),
+            AiFailure(provider="deepseek", kind=AiFailureKind.UNREACHABLE),
+        ),
+        (Reply(429, {"Retry-After": "1"}), AiFailure(provider="deepseek", kind=AiFailureKind.BUSY)),
+        (Reply(503), AiFailure(provider="deepseek", kind=AiFailureKind.BUSY)),
+        (Reply(401), AiFailure(provider="deepseek", kind=AiFailureKind.REFUSED)),
+        (
+            Reply(404),
+            AiFailure(
+                provider="deepseek",
+                kind=AiFailureKind.UNUSABLE,
+                reason=AiFailureReason.REJECTED,
+                status=404,
+            ),
+        ),
+        (
+            ChatReplyFactory.saying("{", finish_reason="length"),
+            AiFailure(
+                provider="deepseek", kind=AiFailureKind.UNUSABLE, reason=AiFailureReason.CUT_OFF
+            ),
+        ),
+        (
+            ChatReplyFactory.saying("not json"),
+            AiFailure(
+                provider="deepseek", kind=AiFailureKind.UNUSABLE, reason=AiFailureReason.NOT_JSON
+            ),
+        ),
     ],
     ids=[
         "unreachable",
@@ -284,11 +307,12 @@ def test_the_first_provider_that_answers_is_the_only_one_asked(tmp_path: Path) -
         "failing",
         "a refused key",
         "a wrong model",
+        "an answer cut off",
         "a bad answer",
     ],
 )
 def test_a_provider_that_gives_no_answer_to_use_is_passed_over_for_the_next(
-    tmp_path: Path, first: Reply | Exception, kind: AiFailureKind
+    tmp_path: Path, first: Reply | Exception, failure: AiFailure
 ) -> None:
     fake = _answering(first, ChatReplyFactory.night_drive())
 
@@ -296,7 +320,7 @@ def test_a_provider_that_gives_no_answer_to_use_is_passed_over_for_the_next(
 
     assert answer.values == NIGHT_DRIVE
     assert answer.ai_answered == "ollama"
-    assert answer.ai_failures == (AiFailure(provider="deepseek", kind=kind),)
+    assert answer.ai_failures == (failure,)
 
 
 def test_a_busy_provider_with_another_after_it_is_not_waited_for(tmp_path: Path) -> None:

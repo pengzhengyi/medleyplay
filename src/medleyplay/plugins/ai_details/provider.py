@@ -6,6 +6,7 @@ from medleyplay.plugin_api import (
     AiEndpoint,
     AiFailure,
     AiFailureKind,
+    AiFailureReason,
     Enriched,
     EnrichStatus,
     EnrichTrack,
@@ -29,6 +30,8 @@ class _Failed:
     provider: AiEndpoint
     kind: AiFailureKind
     message: str
+    reason: AiFailureReason | None = None
+    status: int | None = None
 
 
 @dataclass(frozen=True)
@@ -73,8 +76,10 @@ class AiDetails:
             return _Failed(ai, AiFailureKind.BUSY, str(error))
         except NetworkError as error:
             return _Failed(ai, AiFailureKind.UNREACHABLE, str(error))
-        except (UnusableAnswerError, BadAnswerError) as error:
-            return _Failed(ai, AiFailureKind.UNUSABLE, _invalid(error))
+        except UnusableAnswerError as error:
+            return _Failed(ai, AiFailureKind.UNUSABLE, str(error), error.reason, error.status)
+        except BadAnswerError as error:
+            return _Failed(ai, AiFailureKind.UNUSABLE, _invalid(error), AiFailureReason.NOT_JSON)
 
     def _answer(self, ai: AiEndpoint, messages: list[Message], *, patient: bool) -> Answer:
         said = self.client.complete(ai, messages, patient=patient)
@@ -102,10 +107,11 @@ def _message_of(failed: list[_Failed]) -> str:
 
 
 def _failures_of(failed: list[_Failed]) -> tuple[AiFailure, ...]:
-    return tuple(AiFailure(provider=each.provider.id, kind=each.kind) for each in failed)
+    return tuple(
+        AiFailure(provider=each.provider.id, kind=each.kind, reason=each.reason, status=each.status)
+        for each in failed
+    )
 
 
-def _invalid(error: UnusableAnswerError | BadAnswerError) -> str:
-    if isinstance(error, UnusableAnswerError):
-        return str(error)
+def _invalid(error: BadAnswerError) -> str:
     return f"The AI model's answer was not the JSON asked for, even when asked again: {error}."

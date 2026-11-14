@@ -14,7 +14,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.enrichment import ENRICH_KIND, EnrichmentService, enrich_target
 from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.ai import ProviderFailure
+from medleyplay.domain.ai import ProviderFailure, UnusableReason
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin
 from medleyplay.domain.enrichers import AI_DETAILS, ASK_AGAIN_AFTER, MUSICBRAINZ
@@ -235,6 +235,27 @@ def test_a_provider_passed_over_shows_why_and_the_one_that_answered_shows_no_fai
     assert (deepseek.failure, deepseek.failed_at) == (ProviderFailure.REFUSED, clock.now)
     assert (answered.id, answered.failure) == (ollama.id, None)
     assert _suggestion(enriching, track_id) == NIGHT_DRIVE_SUGGESTION
+
+
+def test_a_provider_passed_over_for_an_unusable_answer_shows_what_was_wrong(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, OLLAMA, "llama3.2", None)
+    track_id = enriching.add_track_with_text("Rejected")
+
+    _suggested(enriching, alice, track_id)
+
+    deepseek, answered = enriching.ai.providers(alice)
+    assert (deepseek.failure, deepseek.failure_reason, deepseek.failure_status) == (
+        ProviderFailure.UNUSABLE,
+        UnusableReason.REJECTED,
+        400,
+    )
+    assert (answered.failure, answered.failure_reason, answered.failure_status) == (
+        None,
+        None,
+        None,
+    )
 
 
 def test_the_description_is_cut_before_it_is_sent(enriching: Enriching, alice: Account) -> None:

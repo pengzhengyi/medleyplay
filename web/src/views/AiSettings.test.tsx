@@ -24,6 +24,8 @@ const DEEPSEEK: AiProvider = {
   saved_at: "2026-11-06T12:00:00Z",
   failure: null,
   failed_at: null,
+  failure_reason: null,
+  failure_status: null,
 };
 
 /** A local Ollama, which needs no key. */
@@ -281,6 +283,24 @@ describe("a saved provider", () => {
       "DeepSeek, deepseek-flash, has a key, Key refused 2 hr. ago",
     );
     expect(screen.getByTitle("Replace the key.")).toHaveTextContent("Key refused 2 hr. ago");
+  });
+
+  it("says what was wrong with an answer it couldn't use", async () => {
+    const user = userEvent.setup();
+    open([
+      {
+        ...DEEPSEEK,
+        failure: "unusable",
+        failed_at: DEEPSEEK.saved_at,
+        failure_reason: "cut_off",
+      },
+    ]);
+
+    await openCard(user, "DeepSeek");
+
+    expect(screen.getByText(/^Answer unusable/, { selector: "p" })).toHaveTextContent(
+      "Its answer ran out of room before it finished.",
+    );
   });
 
   it("changes its model in place, keeping its key", async () => {

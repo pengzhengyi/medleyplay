@@ -46,6 +46,7 @@ import {
   TextAlignLeftIcon,
   TrashIcon,
   WarningIcon,
+  WaveformIcon,
 } from "@phosphor-icons/react";
 import {
   type SubmitEvent,
@@ -59,7 +60,7 @@ import {
   useState,
 } from "react";
 
-import type { ListCheck, PlaybackAnswer, Song, SongRowIn, Songs, Track } from "../api";
+import type { ListCheck, PlaybackAnswer, Silences, Song, SongRowIn, Songs, Track } from "../api";
 import { newId } from "../ids";
 import { formatLength, formatTime } from "../format";
 import { checkParts, endOf, keptIds, listTextOf } from "../library/songList";
@@ -67,6 +68,7 @@ import { countsDisagree, doubtsOf } from "../library/splitDoubts";
 import { formatStart, parseStart } from "../library/songTimes";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf } from "../library/aiAnswer";
+import { snapStarts } from "../library/snap";
 import { OriginTag } from "./OriginTag";
 import { SongsControlsContext } from "./songsControls";
 
@@ -101,6 +103,15 @@ export interface AiAsk {
   readonly askAgain: (hint: string) => void;
 }
 
+/** Reads what is known of the gaps in a file's audio, and finds them. */
+export interface SilenceFinder {
+  readonly read: (trackId: number) => Promise<Silences>;
+  readonly find: (trackId: number) => Promise<Silences>;
+}
+
+/** How often the gaps are asked for while they are being found. */
+const GAPS_EVERY_MS = 500;
+
 /** The longest note to the AI, as the server takes it. */
 const MAX_HINT = 500;
 
@@ -127,6 +138,7 @@ export function SongsEditor({
   artists,
   ai,
   loadAudio,
+  silences,
   onListen,
   onSave,
   onUnsplit,
@@ -138,6 +150,8 @@ export function SongsEditor({
   readonly artists: readonly string[];
   readonly ai: AiAsk;
   readonly loadAudio: (trackId: number) => Promise<PlaybackAnswer>;
+  /** Read what is known of the gaps in a file's audio, and find them. */
+  readonly silences: SilenceFinder;
   readonly onListen: () => void;
   /** Save `rows`, refused when the file's songs are no longer the `known` ones the editor saw. */
   readonly onSave: (rows: readonly SongRowIn[], known: readonly number[]) => Promise<void>;
@@ -158,6 +172,10 @@ export function SongsEditor({
   const [askingAgain, setAskingAgain] = useState(false);
   const [hint, setHint] = useState("");
   const [busy, setBusy] = useState(false);
+  const [snapping, setSnapping] = useState(false);
+  // The rows a snap moved, until the next edit, and the rows before it, to undo it.
+  const [snapped, setSnapped] = useState<ReadonlySet<string>>(new Set());
+  const [beforeSnap, setBeforeSnap] = useState<readonly Row[] | undefined>(undefined);
   const [error, setError] = useState("");
   // Set once saving or unsplitting has said what it removes, so the next press goes ahead.
   const [confirming, setConfirming] = useState<"save" | "unsplit" | undefined>(undefined);
@@ -239,6 +257,8 @@ export function SongsEditor({
 
   const edit = (next: readonly Row[]) => {
     setRows(next);
+    setSnapped(new Set());
+    setBeforeSnap(undefined);
     setFromAi(false);
     setEditedSinceAsking(true);
     setConfirming(undefined);
@@ -255,8 +275,44 @@ export function SongsEditor({
       list,
     );
     edit(list.map((song, index) => rowOf(song, ids[index] ?? null)));
-    setFillNote(`${songCount(list.length)} ${from}`);
+    setFillNote(`${songCount(list.length)} ${from}${byAi ? ", starts estimated" : ""}`);
     setFromAi(byAi);
+  };
+  /** Move each start to the gap in the audio nearest it, finding the gaps first if need be. */
+  const snap = async () => {
+    setSnapping(true);
+    setFillNote("Finding the gaps in the audio…");
+    try {
+      const known = await gapsOf(album.id, silences);
+      if (known.state !== "found") {
+        setFillNote(
+          known.state === "no_tool"
+            ? "Snapping needs ffmpeg installed on the server."
+            : "The audio couldn't be read to find its gaps.",
+        );
+        return;
+      }
+      const starts = rows.map(startOf);
+      const next = snapStarts(starts, known.silences);
+      const moved = new Set(rows.filter((_, i) => next[i] !== starts[i]).map((row) => row.key));
+      setBeforeSnap(rows);
+      setSnapped(moved);
+      setRows(
+        rows.map((row, i) => {
+          const start = next[i];
+          return start === undefined || !moved.has(row.key) ? row : startingAt(row, start);
+        }),
+      );
+      setFillNote(
+        moved.size === 0
+          ? "No start had a gap in the audio within half a minute."
+          : `Moved ${String(moved.size)} of ${String(rows.length - 1)} starts to the gaps in the audio.`,
+      );
+    } catch (failure) {
+      setFillNote(messageOf(failure));
+    } finally {
+      setSnapping(false);
+    }
   };
   /** Ask the AI, at once or `again` with a note, and keep the rows as they are until it answers. */
   const askAi = (again?: string) => {
@@ -589,9 +645,39 @@ export function SongsEditor({
               AI
               {aiStatus !== undefined && <span className="ai-status" aria-hidden />}
             </button>
+            <button
+              type="button"
+              className="fill-button"
+              disabled={busy || snapping || rows.length < 2}
+              aria-label="Snap the starts to the gaps in the audio"
+              aria-busy={snapping}
+              title="Move each start to the gap in the audio nearest it, within half a minute"
+              onClick={() => void snap()}
+            >
+              {snapping ? (
+                <CircleNotchIcon className="spin" aria-hidden />
+              ) : (
+                <WaveformIcon aria-hidden />
+              )}{" "}
+              Snap
+            </button>
             <span className="songs-fill-note" role="status">
               {thinking ? "Asking the AI…" : fillNote}
             </span>
+            {beforeSnap !== undefined && !snapping && (
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  setRows(beforeSnap);
+                  setSnapped(new Set());
+                  setBeforeSnap(undefined);
+                  setFillNote("The starts are back where they were.");
+                }}
+              >
+                Undo
+              </button>
+            )}
           </div>
           {askingAgain && (
             <div className="ai-again">
@@ -703,6 +789,7 @@ export function SongsEditor({
                       last={index === rows.length - 1}
                       heard={heard}
                       long={doubts.long.has(index) ? lengthOf(index) : undefined}
+                      snapped={snapped.has(row.key)}
                       playing={playing?.key === row.key ? playing.mode : undefined}
                       onChange={(field, value) => {
                         change(row.key, field, value);
@@ -795,6 +882,7 @@ function SongRow({
   last,
   heard,
   long,
+  snapped,
   playing,
   onChange,
   onMove,
@@ -809,6 +897,8 @@ function SongRow({
   readonly heard: boolean;
   /** How long the song is, as `18:30`, when it is so long it may be two. */
   readonly long: string | undefined;
+  /** Whether the last snap moved its start to a gap in the audio. */
+  readonly snapped: boolean;
   /** How the row's song is playing, if it is. */
   readonly playing: Playing["mode"] | undefined;
   readonly onChange: (field: "start" | "title" | "artist", value: string) => void;
@@ -845,8 +935,10 @@ function SongRow({
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
       <input
-        className="detail-input song-start"
+        className={snapped ? "detail-input song-start snapped" : "detail-input song-start"}
         aria-label={`Start of song ${String(place)}`}
+        aria-description={snapped ? "Moved to the gap in the audio" : undefined}
+        title={snapped ? "Moved to the gap in the audio" : undefined}
         placeholder="0:00"
         value={row.start}
         onChange={(event) => {
@@ -946,6 +1038,26 @@ function SongRow({
 /** Where `row` starts, to the millisecond while its text is as loaded, or nothing for no time. */
 function startOf(row: Row): number | undefined {
   return row.start === row.loaded.text ? row.loaded.ms : parseStart(row.start);
+}
+
+/** Return `row` starting at `ms`, kept to the millisecond while its text stays. */
+function startingAt(row: Row, ms: number): Row {
+  const start = formatStart(ms);
+  return { ...row, start, loaded: { text: start, ms } };
+}
+
+/** Return the file's gaps once found, finding them first, or say why they can't be. */
+async function gapsOf(trackId: number, finder: SilenceFinder): Promise<Silences> {
+  let known = await finder.read(trackId);
+  if (known.state === "found") {
+    return known;
+  }
+  known = await finder.find(trackId);
+  while (known.state === "finding" || known.state === "preparing") {
+    await new Promise((resolve) => setTimeout(resolve, GAPS_EVERY_MS));
+    known = await (known.state === "preparing" ? finder.find(trackId) : finder.read(trackId));
+  }
+  return known;
 }
 
 function rowOf(song: Song, id: number | null, start = formatStart(song.start_ms)): Row {

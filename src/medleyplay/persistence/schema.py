@@ -285,6 +285,25 @@ class AiProviderRow(Base):
     """The status of the request the provider refused, when it refused one."""
 
 
+class SilenceRow(Base):
+    """Where a Track's audio falls quiet, as a silence finder last answered, and how.
+
+    `silences` lists `{"start_ms": int, "end_ms": int}` in order. `length_ms` is the
+    Track's length when they were found: a file whose length changed since must be
+    asked again.
+    """
+
+    __tablename__ = "silence"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(16))
+    silences: Mapped[list[dict[str, int]]] = mapped_column(JSON)
+    length_ms: Mapped[int | None] = mapped_column(Integer)
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class AiAnswerRow(Base):
     """The AI model that last answered for a Track, and the host it was asked at, as then.
 

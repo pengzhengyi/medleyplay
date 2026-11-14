@@ -261,3 +261,26 @@ def test_a_pasted_list_with_an_unknown_field_is_refused(
     )
 
     assert response.status_code == 422
+
+
+def test_a_files_gaps_are_not_known_until_looked_for(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    known = client.get(f"/api/tracks/{album}/silences").json()
+
+    assert known == {"state": "not_found", "silences": []}
+
+
+def test_finding_a_files_gaps_needs_the_ffmpeg_plugin(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    found = client.post(f"/api/tracks/{album}/silences/find")
+
+    assert found.status_code == 409
+    assert "ffmpeg plugin" in found.json()["detail"]

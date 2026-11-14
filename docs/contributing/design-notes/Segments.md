@@ -15,6 +15,7 @@
 - [Splitting a file](#splitting-a-file)
 - [Playing a segment](#playing-a-segment)
 - [The web client](#the-web-client)
+- [Snapping starts to the gaps](#snapping-starts-to-the-gaps)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
 - [Left for later](#left-for-later)
@@ -141,7 +142,8 @@ both read its full length.
 - **A list filled in keeps each song it still names:** a song with the same
   title, folded, or else starting at the same time, keeps its id, so filling
   from a list after editing the text loses no ratings or plays. What filled the
-  rows is said beside the buttons, such as *11 songs from the AI*.
+  rows is said beside the buttons, such as *11 songs from deepseek-chat, starts
+  estimated*: an AI model names the songs well, but guesses where they start.
 - **What looks wrong is said, never refused:** by rules of thumb, a song longer
   than 15 minutes says under its row *24:39 long: it may be two songs*, and when
   the songs average more than 12 minutes, a note above them says *an album this
@@ -158,6 +160,42 @@ both read its full length.
   the millisecond. The editor's player is its own, so the queue is untouched; a
   Download not yet here says it is being prepared.
 
+## Snapping starts to the gaps
+
+A start from a video's text or an AI model is often seconds off; for an album
+uploaded whole, the songs are parted by a second or more of silence, which the
+file itself says exactly. ***Snap***, beside the buttons that fill the rows, moves
+each start to the gap in the audio nearest it:
+
+```text
+Bad, 48 minutes, as the AI guessed     ↳ snapped
+  4:08  The Way You Make Me Feel         4:07.672
+  9:05  Speed Demon                      9:05.774
+ 13:08  Liberian Girl                   13:08     no gap within half a minute: it runs on from Speed Demon
+```
+
+- **Each start but the first** moves to the end of the gap nearest it, within
+  half a minute either way, keeping the songs in order and giving each gap to
+  one song; one with no gap that near stays. Silences closer than a second are
+  one gap, as a fade can break one in two. A moment of silence opening the file
+  never moves the first song.
+- **Only when pressed,** and said in place: the moved starts are outlined, with
+  *Moved to the gap in the audio* as their description, and beside the buttons
+  *Moved 9 of 10 starts to the gaps in the audio*, with ***Undo***. Any edit
+  ends both. A snapped start is kept to the millisecond.
+- **The gaps are found once a file,** by the plugin `ffmpeg`, which runs
+  ffmpeg's `silencedetect` (quieter than -40 dB, half a second or more) over the
+  whole file: about three seconds for an hour of audio. It is a Job of the kind
+  `find_silences`, needing no network, through the plugin point
+  `SilenceFinder`. What it finds is kept with the Track's length then; a file
+  whose length changed is read again. A file that must be copied or downloaded
+  first is prepared as playing it would be, and the editor asks again until it is.
+- **ffmpeg is the server's own,** found on its path, and not installed with
+  medleyplay. Without it the plugin answers so, and the editor says *Snapping
+  needs ffmpeg installed on the server*; a file ffmpeg can't read says so too.
+- **A live recording has few gaps,** applause filling them, so snapping moves
+  little there; *Check* and *Start here* remain the way to place its songs.
+
 ## What the API shows
 
 | Route | Who | Does |
@@ -168,6 +206,8 @@ both read its full length.
 | `POST /api/tracks/{id}/songs/check` | Signed in | The songs a list names as it is typed, and every problem, each with its line: no time, no title, too long, a start before or within a second of the one above or past the file's end; or too few or too many songs |
 | `DELETE /api/tracks/{id}/songs` | Signed in | Unsplits the file |
 | `POST /api/tracks/{id}/playback` | Signed in | Now answers a segment's `start_ms` and `end_ms` |
+| `GET /api/tracks/{id}/silences` | Signed in | What is known of the gaps in the file's audio: found, with each gap; being found; being prepared; not looked for; or not found, as ffmpeg is missing or couldn't read it |
+| `POST /api/tracks/{id}/silences/find` | Signed in | Finds them, unless known or being found; 409 while the `ffmpeg` plugin is off, 422 for a song of a split file |
 
 Tracks in every list gain `segment_of`, the album file's id, and `split`.
 
@@ -187,6 +227,11 @@ Tracks in every list gain `segment_of`, the album file's id, and `split`.
   and past a second, and removing the Library.
 - **Through the segment's Source:** availability, playback, a smart playlist
   that matches songs but not their split album file, and the policy.
+- **Snapping:** the rule in Vitest against the gaps ffmpeg found in an upload
+  of *Bad*; the plugin against its recorded `silencedetect` log, and the real
+  program on two tones a second and a half apart when it is installed; and the
+  service in real Jobs on a WAV of two tones, with ffmpeg and with a path that
+  has none.
 - **The player** in Vitest with a fake media element: ending at the end, playing
   on into the next segment without a reload, seeking within one, the saved
   position, and a play counted by the segment's length; and one Playwright run
@@ -194,5 +239,6 @@ Tracks in every list gain `segment_of`, the album file's id, and `split`.
 
 ## Left for later
 
-- **Snapping starts to silence,** found with ffmpeg, near each start.
+- **Snapping a live recording,** whose gaps are applause, perhaps by dips in
+  loudness rather than silence.
 - **Exporting a split file** as separate files.

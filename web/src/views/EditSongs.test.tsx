@@ -15,7 +15,7 @@ import {
 import { fakeMedia } from "../testing/media";
 import { detailsOf, splitSongsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
-import { type AiAsk, SongsEditor } from "./EditSongs";
+import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
 
 /** *Bremen*, a whole album uploaded as one video. */
 const BREMEN = trackOf(104, "BV1dm4y1s7ak", { split: true });
@@ -52,6 +52,12 @@ const AI_UNASKED: AiAsk = {
   askAgain: vi.fn(),
 };
 
+/** A server that has never looked for the gaps, and can't find them: ffmpeg isn't installed. */
+const NO_GAPS_KNOWN: SilenceFinder = {
+  read: () => Promise.resolve({ state: "not_found", silences: [] }),
+  find: () => Promise.resolve({ state: "no_tool", silences: [] }),
+};
+
 /**
  * Open *Bremen*'s details on its songs, as its menu's *Edit songs…* does, its file
  * holding `songs`; the AI is as `ai` says, and `answerAi` shows it as it goes later.
@@ -71,6 +77,7 @@ async function renderEditor(
     ),
     onListen = vi.fn(),
     ai = AI_UNASKED,
+    silences = NO_GAPS_KNOWN,
   } = {},
 ) {
   const onClose = vi.fn();
@@ -97,6 +104,7 @@ async function renderEditor(
             artists={["ハチ"]}
             ai={asked}
             loadAudio={loadAudio}
+            silences={silences}
             onListen={onListen}
             onSave={onSave}
             onUnsplit={onUnsplit}
@@ -198,7 +206,9 @@ describe("editing a file's songs", () => {
 
     await press(dialog, "Fill with AI");
 
-    expect(within(dialog).getByText("2 songs from llama3.2")).toHaveRole("status");
+    expect(within(dialog).getByText("2 songs from llama3.2, starts estimated")).toHaveRole(
+      "status",
+    );
     expect(within(dialog).getByRole("button", { name: "Ask the AI again" })).toBeInTheDocument();
   });
 
@@ -208,7 +218,7 @@ describe("editing a file's songs", () => {
     await press(dialog, "Fill with AI");
     await press(dialog, "Save songs");
 
-    expect(within(dialog).getByText("2 songs from the AI")).toHaveRole("status");
+    expect(within(dialog).getByText("2 songs from the AI, starts estimated")).toHaveRole("status");
     expect(onSave).toHaveBeenCalledExactlyOnceWith(
       [
         { id: null, start_ms: 0, title: "アイネクライネ", artist: "" },
@@ -253,7 +263,9 @@ describe("editing a file's songs", () => {
 
     expect(ask).toHaveBeenCalledOnce();
     expect(asking).toHaveRole("status");
-    expect(await within(dialog).findByText("2 songs from the AI")).toBeInTheDocument();
+    expect(
+      await within(dialog).findByText("2 songs from the AI, starts estimated"),
+    ).toBeInTheDocument();
     expect(box(dialog, "Title of song 2")).toHaveValue("ゴーゴー幽霊船");
   });
 
@@ -267,7 +279,7 @@ describe("editing a file's songs", () => {
     const working = button.dataset.status;
     load.mockResolvedValue({ ...unsplit, suggested: LISTED });
     answerAi({ ...AI_UNASKED, state: "succeeded" });
-    await within(dialog).findByText("2 songs from the AI");
+    await within(dialog).findByText("2 songs from the AI, starts estimated");
 
     expect([
       working,
@@ -719,5 +731,87 @@ describe("what looks wrong with a split", () => {
     await renderEditor(splitSongsOf(104, [[1, 0, "アイネクライネ"]], [LISTED], suggested));
 
     expect(await screen.findByText("The video lists 2 songs, the AI 4.")).toBeVisible();
+  });
+});
+
+/** The gaps in *Bremen*'s audio: a moment of silence at its start, then one before each song. */
+const BREMEN_GAPS: SilenceFinder = {
+  read: () =>
+    Promise.resolve({
+      state: "found",
+      silences: [
+        { start_ms: 0, end_ms: 600 },
+        { start_ms: 249_000, end_ms: 251_400 },
+        { start_ms: 482_000, end_ms: 483_250 },
+      ],
+    }),
+  find: () => Promise.reject(new Error("The gaps are known already.")),
+};
+
+const startOfSong = (dialog: HTMLElement, place: number) =>
+  within(dialog).getByRole("textbox", { name: `Start of song ${String(place)}` });
+
+describe("snapping the starts to the gaps in the audio", () => {
+  it("moves each start but the first to the gap nearest it, and says so", async () => {
+    const { dialog } = await renderEditor(SPLIT, { silences: BREMEN_GAPS });
+
+    await press(dialog, "Snap the starts to the gaps in the audio");
+
+    expect(startOfSong(dialog, 1)).toHaveValue("0:00");
+    expect(startOfSong(dialog, 2)).toHaveValue("4:11");
+    expect(startOfSong(dialog, 3)).toHaveValue("8:03");
+    expect(startOfSong(dialog, 2)).toHaveAccessibleDescription("Moved to the gap in the audio");
+    expect(within(dialog).getByText("Moved 2 of 2 starts to the gaps in the audio.")).toHaveRole(
+      "status",
+    );
+  });
+
+  it("saves a snapped start to the millisecond", async () => {
+    const { dialog, onSave } = await renderEditor(SPLIT, { silences: BREMEN_GAPS });
+
+    await press(dialog, "Snap the starts to the gaps in the audio");
+    await press(dialog, "Save songs");
+
+    expect(onSave.mock.calls[0]?.[0].map((row) => row.start_ms)).toEqual([0, 251_400, 483_250]);
+  });
+
+  it("puts the starts back as they were", async () => {
+    const { dialog } = await renderEditor(SPLIT, { silences: BREMEN_GAPS });
+    await press(dialog, "Snap the starts to the gaps in the audio");
+
+    await press(dialog, "Undo");
+
+    expect(startOfSong(dialog, 2)).toHaveValue("4:12");
+    expect(startOfSong(dialog, 2)).not.toHaveAccessibleDescription();
+  });
+
+  it("finds the gaps first when they were never looked for", async () => {
+    let found = false;
+    const silences: SilenceFinder = {
+      read: () =>
+        found ? BREMEN_GAPS.read(104) : Promise.resolve({ state: "not_found", silences: [] }),
+      find: () => {
+        found = true;
+        return Promise.resolve({ state: "finding", silences: [] });
+      },
+    };
+    const { dialog } = await renderEditor(SPLIT, { silences });
+
+    await press(dialog, "Snap the starts to the gaps in the audio");
+
+    await waitFor(() => {
+      expect(startOfSong(dialog, 2)).toHaveValue("4:11");
+    });
+  });
+
+  it("says snapping needs ffmpeg when the server has none", async () => {
+    const { dialog } = await renderEditor(SPLIT);
+
+    await press(dialog, "Snap the starts to the gaps in the audio");
+
+    expect(
+      await within(dialog).findByText("Snapping needs ffmpeg installed on the server."),
+    ).toBeInTheDocument();
+    expect(startOfSong(dialog, 2)).toHaveValue("4:12");
   });
 });

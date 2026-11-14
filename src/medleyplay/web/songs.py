@@ -8,8 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 from medleyplay.application.segments import SongsView
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.segments import SegmentId, SongRow
+from medleyplay.domain.silences import Silences, SilenceState
 from medleyplay.domain.video_text import MAX_SONGS, Song
-from medleyplay.web.deps import SignedInAccount, SongsDep
+from medleyplay.web.deps import SignedInAccount, SilencesDep, SongsDep
 from medleyplay.web.details import AnsweredByOut
 from medleyplay.web.ids import RowId
 
@@ -190,3 +191,37 @@ def check_list(
 def unsplit(track_id: RowId, _: SignedInAccount, service: SongsDep) -> RemovedOut:
     """Remove every song of the file, with its Track."""
     return RemovedOut(removed=service.unsplit(TrackId(track_id)))
+
+
+class SilenceOut(BaseModel):
+    """A quiet stretch of a file's audio, from `start_ms` to `end_ms`."""
+
+    start_ms: int
+    end_ms: int
+
+
+class SilencesOut(BaseModel):
+    """What is known of the gaps in a file's audio, and the gaps, in order, once found."""
+
+    state: SilenceState
+    silences: list[SilenceOut]
+
+    @classmethod
+    def of(cls, known: Silences) -> "SilencesOut":
+        """Return the API view of `known`."""
+        return cls(
+            state=known.state,
+            silences=[SilenceOut(start_ms=s.start_ms, end_ms=s.end_ms) for s in known.silences],
+        )
+
+
+@router.get("/{track_id}/silences")
+def silences(track_id: RowId, _: SignedInAccount, service: SilencesDep) -> SilencesOut:
+    """Say what is known of the gaps in the file's audio."""
+    return SilencesOut.of(service.silences(TrackId(track_id)))
+
+
+@router.post("/{track_id}/silences/find")
+def find_silences(track_id: RowId, me: SignedInAccount, service: SilencesDep) -> SilencesOut:
+    """Find the gaps in the file's audio, unless they are known or being found."""
+    return SilencesOut.of(service.find(me, TrackId(track_id)))

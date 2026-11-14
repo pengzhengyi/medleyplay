@@ -43,6 +43,11 @@ from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.silences import (
+    FindSilencesKind,
+    SilenceService,
+    find_silences_kind,
+)
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -217,13 +222,14 @@ def enrich_kind(clock: FakeClock, tmp_path: Path) -> EnrichKind:
 
 
 @pytest.fixture
-def jobs(
+def jobs(  # noqa: PLR0913, PLR0917 -- one argument per Job kind
     units: sessionmaker[Session],
     clock: FakeClock,
     plugins: PluginService,
     enrich_kind: EnrichKind,
     find_kind: FindArtistKind,
     find_names_kind: FindArtistNamesKind,
+    silences_kind: FindSilencesKind,
     tmp_path: Path,
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
@@ -237,6 +243,7 @@ def jobs(
         enrich_kind.name: enrich_kind,
         find_kind.name: find_kind,
         find_names_kind.name: find_names_kind,
+        silences_kind.name: silences_kind,
     }
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
@@ -245,6 +252,23 @@ def jobs(
 @pytest.fixture
 def find_kind(clock: FakeClock) -> FindArtistKind:
     return find_artist_kind(clock)
+
+
+@pytest.fixture
+def silences_kind(clock: FakeClock) -> FindSilencesKind:
+    return find_silences_kind(clock)
+
+
+@pytest.fixture
+def silences(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    silences_kind: FindSilencesKind,
+    playback: PlaybackService,
+) -> SilenceService:
+    return SilenceService(units, clock, plugins, jobs, silences_kind, playback)
 
 
 @pytest.fixture
@@ -397,6 +421,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     mode: ModeService,
     details: DetailsService,
     songs: SongsService,
+    silences: SilenceService,
     covers: CoverService,
     enrichment: EnrichmentService,
     ai: AiService,
@@ -427,6 +452,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         mode=mode,
         details=details,
         songs=songs,
+        silences=silences,
         covers=covers,
         enrichment=enrichment,
         sweeper=EnrichmentSweeper(enrichment),

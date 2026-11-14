@@ -131,6 +131,19 @@ class Unplayable:
 type Playback = Ready | Preparing | Unplayable
 
 
+@dataclass(frozen=True)
+class LocalAudio:
+    """Where a Source's audio is on this machine: the file, and the slice of it that is the audio.
+
+    A file of a Library is where the Library holds it; a Source to copy or download
+    first is its copy in the data folder.
+    """
+
+    path: str
+    offset: int
+    length: int
+
+
 def cache_source_kind(data_dir: Path) -> CacheKind:
     """Return the Job kind that copies a compressed member into the cache in `data_dir`."""
     folder = data_dir / CACHE_FOLDER
@@ -278,6 +291,35 @@ class PlaybackService:
             raise NotFoundError(message)
         return opened
 
+    def local_audio(self, source_id: SourceId) -> LocalAudio | None:
+        """Return where the Source's audio is on this machine, or `None` when it can't play now.
+
+        A Source that must be copied or downloaded first has no audio here until it is.
+        """
+        with self._units() as db:
+            row = db.get(SourceRow, source_id)
+            if row is None:
+                return None
+            source = _source(row, {lib.id: lib for lib in db.scalars(select(LibraryRow))})
+            bilibili = row.kind == BILIBILI_SOURCE
+        if bilibili:
+            name = self._download_name(source_id)
+            audio = None if name is None else self._open_download(source_id)
+            if name is None or audio is None:
+                return None
+            audio.close()
+            return LocalAudio(str(self._downloads.folder / name), 0, audio.length)
+        opened = self._try_open(source)
+        if not isinstance(opened, AudioFile):
+            return None
+        opened.close()
+        with self._locations.lock:
+            remembered = self._locations.known.get(source_id)
+        if remembered is not None:
+            return LocalAudio(remembered.path, remembered.offset, remembered.length)
+        copy = self._cache / cache_name(source.id, source.version, source.path)
+        return LocalAudio(str(copy), 0, opened.length)
+
     def sweep_cache(self) -> None:
         """Remove cache copies of Sources that are gone, or of versions no longer current."""
         if not self._cache.is_dir():
@@ -335,12 +377,15 @@ class PlaybackService:
         message = f"The Source {source_id} must be downloaded first."
         raise ConflictError(message)
 
+    def _download_name(self, source_id: SourceId) -> str | None:
+        with self._units() as db:
+            row = db.get(DownloadRow, source_id)
+            return None if row is None else row.file_name
+
     def _open_download(self, source_id: SourceId) -> AudioFile | None:
         # The name comes from the catalog, never a plugin, and the file must still
         # be a regular file there, not a link.
-        with self._units() as db:
-            row = db.get(DownloadRow, source_id)
-            name = None if row is None else row.file_name
+        name = self._download_name(source_id)
         if name is None:
             return None
         try:

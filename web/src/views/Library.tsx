@@ -36,7 +36,7 @@ import { AddToPlaylist } from "./AddToPlaylist";
 import { CheckNetwork } from "./CheckNetwork";
 import { EditDetails } from "./EditDetails";
 import { ListenOnDevice } from "./ListenOnDevice";
-import { type AiAsk, SongsEditor } from "./EditSongs";
+import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
 import { Nav } from "./Nav";
 import { NowPlaying } from "./NowPlaying";
 import { PlayOn, type PlaysOn } from "./PlayOn";
@@ -60,6 +60,10 @@ const NARROW = "(width <= 64rem)";
 const listFormat = new Intl.ListFormat(undefined, { type: "conjunction" });
 
 /** Everything a signed-in Account sees. */
+
+/** The gaps in a file's audio, as the server knows and finds them. */
+const SILENCES: SilenceFinder = { read: api.silences, find: api.findSilences };
+
 export function Library({
   account,
   onHost,
@@ -299,6 +303,7 @@ export function Library({
           artists={artists}
           ai={askAi}
           loadAudio={api.playback}
+          silences={SILENCES}
           onListen={player.pause}
           onSave={async (rows, known) => {
             await library.saveSongs(file.id, rows, known);

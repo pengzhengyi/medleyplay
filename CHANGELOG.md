@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Snap song starts to the gaps** — the songs editor's *Snap* moves each start
+  to the silence between songs nearest it, within half a minute, so an AI
+  model's or a video's guessed starts land exactly; the moved starts are
+  marked, and *Undo* puts them back. It runs ffmpeg, if installed on the
+  server, once per file, through the new plugin `ffmpeg`. Songs filled from the
+  AI now say their starts are estimated.
+
 - **Which AI answered** — the AI's suggestions now name the model that gave
   them, such as *deepseek-chat suggests “GUMI”* in *Edit details* and *12 songs
   from deepseek-chat* in the songs editor, with the host it was asked at on

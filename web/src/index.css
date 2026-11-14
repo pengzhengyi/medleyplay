@@ -4400,6 +4400,12 @@ button.song-handle {
   margin: 0;
 }
 
+/* A start the last snap moved to a gap in the audio, until the next edit. */
+.song-row .song-start.snapped {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .song-row-buttons {
   display: flex;
   gap: 0.1rem;

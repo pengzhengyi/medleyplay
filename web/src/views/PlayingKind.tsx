@@ -266,7 +266,8 @@ function AlbumSongs({
     );
   }
   const now = songs[current];
-  const played = (now?.start ?? 0) + position;
+  const within = (song: AlbumSong) => position - song.from;
+  const played = now === undefined ? position : now.start + within(now);
   return (
     <>
       <header className="album-songs-head">
@@ -290,7 +291,7 @@ function AlbumSongs({
           const title = song.track?.title ?? "A Track no longer here";
           const pointedHere = pointed?.index === index;
           return (
-            <li key={song.entry.key} className="album-songs-row">
+            <li key={`${song.entry.key}@${String(song.from)}`} className="album-songs-row">
               <button
                 type="button"
                 className={pointedHere ? `album-song ${state} pointed` : `album-song ${state}`}
@@ -308,14 +309,14 @@ function AlbumSongs({
                   {pointedHere
                     ? `${formatTime(pointed.within)} / ${formatTime(song.length)}`
                     : state === "playing"
-                      ? `${formatTime(position)} / ${formatTime(song.length)}`
+                      ? `${formatTime(within(song))} / ${formatTime(song.length)}`
                       : formatTime(song.length)}
                 </span>
                 {state === "playing" && song.length !== undefined && (
                   <span
                     className="album-song-bar"
                     aria-hidden
-                    style={{ "--played": String(position / song.length) } as CSSProperties}
+                    style={{ "--played": String(within(song) / song.length) } as CSSProperties}
                   />
                 )}
               </button>

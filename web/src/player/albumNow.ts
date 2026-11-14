@@ -5,12 +5,14 @@
  * such as a split file's songs or an album's in Album order, or, with no unit,
  * songs of one split file queued one after another, as Up next shows them, in
  * the order they play; the same album queued twice in a row is two albums, told apart where a
- * song comes again. A whole album in one file is an album with no songs known. A
+ * song comes again. A whole album in one file is an album with no songs known, until it is
+ * split: playing on whole, it is then an album of its songs, the one under the position playing. A
  * unit of one song, or of songs with no album named, plays as a song. Each song
  * has its place on the album's timeline, once every song's length is known.
  */
 
 import type { Track } from "../api";
+import { songsByFile } from "../library/playOrder";
 import { type Entry, type Queue, current } from "./queue";
 
 /** A song of the album playing, and where it starts on the album's timeline. */
@@ -19,6 +21,8 @@ export interface AlbumSong {
   readonly track: Track | undefined;
   /** Where it starts, in seconds from the album's start; 0 when a length before it is unknown. */
   readonly start: number;
+  /** Where it starts in the Track that plays it: 0 for a Track of its own, its start in a file playing whole. */
+  readonly from: number;
   /** Its length in seconds, if known. */
   readonly length: number | undefined;
 }
@@ -38,17 +42,20 @@ export type Playing =
 
 const SONG: Playing = { kind: "song" };
 
-/** Return what plays now in `queue`, looking its Tracks up in `tracks`. */
-export function playingOf(queue: Queue, tracks: ReadonlyMap<number, Track>): Playing {
+/** Return what plays now in `queue`, `position` seconds into its Track, looking Tracks up in `tracks`. */
+export function playingOf(queue: Queue, tracks: ReadonlyMap<number, Track>, position = 0): Playing {
   const now = current(queue);
   if (now === undefined) {
     return SONG;
   }
   const playingTrack = tracks.get(now.trackId);
   if (now.unit === undefined && playingTrack?.segment_of == null) {
-    return playingTrack?.kind === "album"
-      ? { kind: "album", songs: [], current: -1, length: undefined }
-      : SONG;
+    if (playingTrack?.kind !== "album") {
+      return SONG;
+    }
+    return playingTrack.split
+      ? wholeFileOf(now, playingTrack, tracks, position)
+      : { kind: "album", songs: [], current: -1, length: undefined };
   }
   if (now.unit?.startsWith("album:") === true && playingTrack?.album === "") {
     return SONG;
@@ -61,18 +68,43 @@ export function playingOf(queue: Queue, tracks: ReadonlyMap<number, Track>): Pla
   if (first === last) {
     return SONG;
   }
-  const { entries, position } = queue;
+  const { entries } = queue;
   let start: number | undefined = 0;
   const songs: AlbumSong[] = [];
   for (const entry of entries.slice(first, last + 1)) {
     const track = tracks.get(entry.trackId);
     const ms = track?.duration_ms ?? undefined;
     const length = ms === undefined ? undefined : ms / 1000;
-    songs.push({ entry, track, start: start ?? 0, length });
+    songs.push({ entry, track, start: start ?? 0, from: 0, length });
     // Past a song of unknown length, no song has a place on the timeline.
     start = start === undefined || length === undefined ? undefined : start + length;
   }
-  return { kind: "album", songs, current: position - first, length: start };
+  return { kind: "album", songs, current: queue.position - first, length: start };
+}
+
+/**
+ * Return a split file playing whole as an album of its songs, in their order, each
+ * starting in the file where the lengths before it end; the song under `position` plays.
+ */
+function wholeFileOf(
+  entry: Entry,
+  file: Track,
+  tracks: ReadonlyMap<number, Track>,
+  position: number,
+): Playing {
+  const ordered = songsByFile([...tracks.values()]).get(file.id) ?? [];
+  let start: number | undefined = 0;
+  const songs: AlbumSong[] = [];
+  for (const track of ordered) {
+    const length = track.duration_ms === null ? undefined : track.duration_ms / 1000;
+    songs.push({ entry, track, start: start ?? 0, from: start ?? 0, length });
+    start = start === undefined || length === undefined ? undefined : start + length;
+  }
+  if (songs.length === 0) {
+    return { kind: "album", songs: [], current: -1, length: undefined };
+  }
+  const at = start === undefined ? undefined : songAt(songs, Math.min(position, start));
+  return { kind: "album", songs, current: at?.index ?? 0, length: start };
 }
 
 /**
@@ -127,13 +159,14 @@ export function songAt(
 
 /**
  * The album playing as one timeline: where it is, its length, each song's start,
- * and a seek that plays the song the second falls in. `undefined` unless an album
- * of songs plays and every song's length is known.
+ * and a seek that plays the song the second falls in, from that many seconds into
+ * the Track that plays it. `undefined` unless an album of songs plays and every
+ * song's length is known.
  */
 export function albumTimeline(
   playing: Playing,
   position: number,
-  playSong: (song: AlbumSong, within: number) => void,
+  playSong: (song: AlbumSong, seconds: number) => void,
 ):
   | {
       readonly position: number;
@@ -151,7 +184,7 @@ export function albumTimeline(
     return undefined;
   }
   // A song's real length can differ a little from its details', so it stays within its own.
-  const within = Math.min(Math.max(position, 0), now.length ?? position);
+  const within = Math.min(Math.max(position - now.from, 0), now.length ?? position);
   return {
     position: now.start + within,
     length,
@@ -160,7 +193,7 @@ export function albumTimeline(
       const at = songAt(songs, Math.min(Math.max(seconds, 0), length));
       const song = at === undefined ? undefined : songs[at.index];
       if (at !== undefined && song !== undefined) {
-        playSong(song, at.within);
+        playSong(song, song.from + at.within);
       }
     },
   };

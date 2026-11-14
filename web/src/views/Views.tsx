@@ -116,7 +116,9 @@ function viewOf(given: ViewProps) {
         />
       );
     case "insights":
-      return <InsightsView tracks={given.tracks} onPlay={props.actions.onPlay} />;
+      return (
+        <InsightsView tracks={given.tracks} onPlay={props.actions.onPlay} toDo={props.toDo ?? 0} />
+      );
     case "artists":
       return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
     case "artist": {
@@ -210,7 +212,6 @@ function viewOf(given: ViewProps) {
           onKindsChanged={props.onKindsChanged}
           onRatingsChanged={props.onRatingsChanged}
           waitingDevices={props.waitingDevices}
-          toDo={props.toDo ?? 0}
         />
       );
     case "clean-up":

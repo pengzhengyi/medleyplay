@@ -79,11 +79,32 @@ async function totalsShown(): Promise<Record<string, string>> {
   );
 }
 
-function renderInsights(tracks: readonly Track[] = LIBRARY) {
+function renderInsights(tracks: readonly Track[] = LIBRARY, toDo = 0) {
   const onPlay = vi.fn();
-  render(<InsightsView tracks={tracks} onPlay={onPlay} />);
+  render(<InsightsView tracks={tracks} onPlay={onPlay} toDo={toDo} />);
   return onPlay;
 }
+
+describe("the way to Clean up", () => {
+  it("opens Insights while names wait, for a phone, whose tab bar has no room for it", () => {
+    servingPlays([]);
+
+    renderInsights(LIBRARY, 37);
+
+    expect(screen.getByRole("link", { name: "Clean up 37 names" })).toHaveAttribute(
+      "href",
+      "#/clean-up",
+    );
+  });
+
+  it("is not there while nothing waits", () => {
+    servingPlays([]);
+
+    renderInsights();
+
+    expect(screen.queryByRole("link", { name: /^Clean up/ })).not.toBeInTheDocument();
+  });
+});
 
 describe("InsightsView", () => {
   it("opens on the last 30 days, with the time, plays, and songs listened to", async () => {

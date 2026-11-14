@@ -847,8 +847,23 @@ button.text:hover:not(:disabled) {
   padding: 0.3rem 0.6rem;
 }
 
-.limit button[type="submit"] {
+/* A lower limit that removes Downloads waits for this confirmation instead of saving. */
+.limit-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.limit-confirm p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.limit-confirm button {
   width: auto;
+  margin: 0;
   padding: 0.45rem 1.4rem;
   border-radius: 999px;
 }
@@ -873,13 +888,6 @@ button.text:hover:not(:disabled) {
   height: auto;
   margin: 0;
   padding: 0.3rem 0.6rem;
-}
-
-.kind-guess button[type="submit"] {
-  width: auto;
-  margin: 0;
-  padding: 0.45rem 1.4rem;
-  border-radius: 999px;
 }
 
 .mode-now p {

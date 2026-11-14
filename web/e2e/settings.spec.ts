@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-test("an admin saves a storage limit, which the server keeps", async ({ page }) => {
+test("a storage limit an admin types saves on its own, and the server keeps it", async ({
+  page,
+}) => {
   await page.goto("/#/settings");
   const storage = page.getByRole("region", { name: "Downloads and storage" });
   const size = storage.getByRole("spinbutton", { name: "Limit in GB" });
 
   await page.getByRole("radio", { name: /Up to/ }).check();
   await size.fill("5");
-  await expect(page.getByText("Nothing needs removing to fit.")).toBeVisible();
-  await storage.getByRole("button", { name: "Save", exact: true }).click();
+  await size.blur();
   await expect(storage.getByText("Saved.")).toBeVisible();
   await page.reload();
 
@@ -16,7 +17,6 @@ test("an admin saves a storage limit, which the server keeps", async ({ page }) 
   await expect(page.getByText(/of 5 GB used/)).toBeVisible();
   // Put the limit back as the other tests expect it.
   await page.getByRole("radio", { name: "No limit" }).check();
-  await storage.getByRole("button", { name: "Save", exact: true }).click();
   await expect(storage.getByText("Saved.")).toBeVisible();
 });
 

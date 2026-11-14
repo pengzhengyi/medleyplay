@@ -77,6 +77,26 @@ describe("linking names to artists", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
+  it("chooses the suggestion once a name looked up while the list is open comes back", async () => {
+    serve({ "PUT /api/artist-names/link": { status: 204 } });
+    const onChanged = vi.fn();
+    const { rerender } = render(
+      <LinkArtists
+        names={namesOf(artistNameOf("披头士"), artistNameOf("Kraftwerk"))}
+        onChanged={onChanged}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Link 2 artist names" }));
+
+    rerender(
+      <LinkArtists names={namesOf(LOOKED_UP, artistNameOf("Kraftwerk"))} onChanged={onChanged} />,
+    );
+
+    const row = rowOf(screen.getByRole("dialog"), "披头士");
+    expect(within(row).getByRole("radio", { name: /The Beatles/ })).toBeChecked();
+    expect(within(row).getByRole("button", { name: "Link 披头士" })).toBeEnabled();
+  });
+
   it("links a name to none of the artists found", async () => {
     let sent: unknown;
     serve({

@@ -154,7 +154,10 @@ function NameRow({
     .map((candidate) => artists.get(candidate.artist_id))
     .filter((artist) => artist !== undefined)
     .slice(0, OFFERED);
-  const [chosen, setChosen] = useState(named.suggested ?? offered[0]?.id ?? "");
+  // Only a choice made here is kept; until one is, the suggestion is chosen, as it
+  // comes once the name has been looked up.
+  const [picked, setPicked] = useState<string | undefined>(undefined);
+  const chosen = picked ?? named.suggested ?? offered[0]?.id ?? "";
   const [error, setError] = useState("");
   const act = (change: Promise<unknown>) => {
     setError("");
@@ -218,7 +221,7 @@ function NameRow({
                       name={`artist-${named.key}`}
                       checked={chosen === artist.id}
                       onChange={() => {
-                        setChosen(artist.id);
+                        setPicked(artist.id);
                       }}
                     />
                     <span>{describe(artist)}</span>

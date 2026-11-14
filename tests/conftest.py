@@ -13,7 +13,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
-from medleyplay.application.artists import ArtistService, FindArtistKind, find_artist_kind
+from medleyplay.application.artists import (
+    ArtistService,
+    FindArtistKind,
+    FindArtistNamesKind,
+    find_artist_kind,
+    find_artist_names_kind,
+)
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
@@ -217,6 +223,7 @@ def jobs(
     plugins: PluginService,
     enrich_kind: EnrichKind,
     find_kind: FindArtistKind,
+    find_names_kind: FindArtistNamesKind,
     tmp_path: Path,
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
@@ -229,6 +236,7 @@ def jobs(
         download.name: download,
         enrich_kind.name: enrich_kind,
         find_kind.name: find_kind,
+        find_names_kind.name: find_names_kind,
     }
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
@@ -240,14 +248,20 @@ def find_kind(clock: FakeClock) -> FindArtistKind:
 
 
 @pytest.fixture
+def find_names_kind(clock: FakeClock) -> FindArtistNamesKind:
+    return find_artist_names_kind(clock)
+
+
+@pytest.fixture
 def artists(
     units: sessionmaker[Session],
     clock: FakeClock,
     plugins: PluginService,
     jobs: JobService,
     find_kind: FindArtistKind,
+    find_names_kind: FindArtistNamesKind,
 ) -> ArtistService:
-    return ArtistService(units, clock, plugins, jobs, find_kind)
+    return ArtistService(units, clock, plugins, jobs, find_kind, find_names_kind)
 
 
 @pytest.fixture

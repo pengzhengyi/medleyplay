@@ -30,9 +30,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from medleyplay.application.connectivity import DEFAULT_CHECKS, Check
 
 CONFIG_FILE: Final = "medleyplay.toml"
-OFF_BY_DEFAULT: Final = frozenset({"ai-details", "bilibili", "bilibili-details", "musicbrainz"})
-"""Plugins that are on only when the file turns them on: the two that read Bilibili, the one
-that reads MusicBrainz, and the one that asks an AI model, since each contacts a site."""
+OFF_BY_DEFAULT: Final = frozenset(
+    {"ai-details", "bilibili", "bilibili-details", "musicbrainz", "wikipedia"}
+)
+"""Plugins that are on only when the file turns them on: the two that read Bilibili, the ones
+that read MusicBrainz and Wikidata, and the one that asks an AI model, since each contacts
+a site."""
 
 
 class ConfigError(Exception):

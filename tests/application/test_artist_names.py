@@ -11,7 +11,7 @@ from medleyplay.application.artists import ArtistName
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import Alias, LookUp
 from medleyplay.domain.errors import NotFoundError
-from medleyplay.domain.jobs import JobState
+from medleyplay.domain.jobs import Job, JobState
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -36,6 +36,17 @@ def enriching(
 def _named(enriching: Enriching, name: str) -> ArtistName:
     """The Library's artist name `name`, as the service lists it."""
     return next(each for each in enriching.artists.names().names if each.name == name)
+
+
+def _linked(enriching: Enriching, alice: Account, name: str, artist_id: str | None) -> None:
+    """Link `name` to `artist_id`, and wait until Wikidata has answered for the artist."""
+    enriching.artists.link(alice, name, artist_id)
+    enriching.finish_every_job()
+
+
+def _names_jobs(enriching: Enriching) -> list[Job]:
+    """The Jobs that asked Wikidata for an artist's names."""
+    return [view.job for view in enriching.jobs.list_jobs() if view.job.kind == "find_artist_names"]
 
 
 def _looked_up(enriching: Enriching, alice: Account, *names: str) -> int:
@@ -115,8 +126,8 @@ def test_names_linked_to_one_artist_name_it_and_are_not_looked_up_again(
     enriching.add_song("Help!", artist="甲壳虫")
     _looked_up(enriching, alice, "披头士", "甲壳虫")
 
-    enriching.artists.link("披头士", BEATLES)
-    enriching.artists.link("甲壳虫", BEATLES)
+    enriching.artists.link(alice, "披头士", BEATLES)
+    enriching.artists.link(alice, "甲壳虫", BEATLES)
 
     assert [(each.linked, each.artist_id) for each in enriching.artists.names().names] == [
         (True, BEATLES),
@@ -125,10 +136,10 @@ def test_names_linked_to_one_artist_name_it_and_are_not_looked_up_again(
     assert enriching.artists.look_up(alice, ["披头士"]) == 0
 
 
-def test_a_name_linked_to_no_artist_says_so(enriching: Enriching) -> None:
+def test_a_name_linked_to_no_artist_says_so(enriching: Enriching, alice: Account) -> None:
     enriching.add_song("Song", artist="Blue Room")
 
-    enriching.artists.link("Blue Room", None)
+    enriching.artists.link(alice, "Blue Room", None)
 
     named = _named(enriching, "Blue Room")
     assert (named.linked, named.artist_id) == (True, None)
@@ -137,7 +148,7 @@ def test_a_name_linked_to_no_artist_says_so(enriching: Enriching) -> None:
 def test_an_unlinked_name_is_offered_again(enriching: Enriching, alice: Account) -> None:
     enriching.add_song("Yesterday", artist="披头士")
     _looked_up(enriching, alice, "披头士")
-    enriching.artists.link("披头士", BEATLES)
+    enriching.artists.link(alice, "披头士", BEATLES)
 
     enriching.artists.unlink("披头士")
 
@@ -146,12 +157,12 @@ def test_an_unlinked_name_is_offered_again(enriching: Enriching, alice: Account)
 
 
 def test_a_name_is_not_linked_to_an_artist_musicbrainz_never_named(
-    enriching: Enriching,
+    enriching: Enriching, alice: Account
 ) -> None:
     enriching.add_song("Yesterday", artist="披头士")
 
     with pytest.raises(NotFoundError):
-        enriching.artists.link("披头士", BEATLES)
+        enriching.artists.link(alice, "披头士", BEATLES)
 
 
 def test_musicbrainz_refusing_a_look_up_fails_its_job(enriching: Enriching, alice: Account) -> None:
@@ -162,3 +173,113 @@ def test_musicbrainz_refusing_a_look_up_fails_its_job(enriching: Enriching, alic
     [job] = [view.job for view in enriching.jobs.list_jobs() if view.job.kind == "find_artist"]
     failed = enriching.wait_for(job.id, JobState.FAILED)
     assert failed.job.failure_kind == "refused"
+
+
+def test_linking_a_name_adds_every_name_wikidata_knows_the_artist_by(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    aliases = enriching.artists.names().artists[BEATLES].aliases
+    assert Alias("甲壳虫乐队", "zh") in aliases
+    assert Alias("ビートルズ", "ja", primary=True) in aliases
+
+
+def test_a_name_both_sites_give_is_kept_once_as_musicbrainz_gives_it(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    aliases = enriching.artists.names().artists[BEATLES].aliases
+    assert [alias for alias in aliases if alias.name == "Beatles"] == [Alias("Beatles")]
+
+
+def test_looking_a_name_up_again_keeps_the_names_wikidata_gave(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    enriching.add_song("Help!", artist="Beatles")
+    _looked_up(enriching, alice, "披头士")
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    _looked_up(enriching, alice, "Beatles")
+
+    assert Alias("甲壳虫乐队", "zh") in enriching.artists.names().artists[BEATLES].aliases
+
+
+def test_wikidata_is_asked_about_an_artist_once(enriching: Enriching, alice: Account) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    enriching.add_song("Help!", artist="甲壳虫")
+    _looked_up(enriching, alice, "披头士", "甲壳虫")
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    _linked(enriching, alice, "甲壳虫", BEATLES)
+    _looked_up(enriching, alice, "Anyone Else")
+
+    assert len(_names_jobs(enriching)) == 1
+
+
+def test_a_name_an_artist_already_linked_goes_by_is_offered_it_without_asking(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    enriching.add_song("Something", artist="甲壳虫乐队")
+    _looked_up(enriching, alice, "披头士")
+
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    named = _named(enriching, "甲壳虫乐队")
+    assert (named.looked_at, named.candidates, named.suggested) == (
+        None,
+        ((BEATLES, 100),),
+        BEATLES,
+    )
+
+
+def test_an_artist_already_linked_is_offered_once_beside_what_musicbrainz_found(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    enriching.add_song("Help!", artist="甲壳虫")
+    _looked_up(enriching, alice, "披头士", "甲壳虫")
+
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    named = _named(enriching, "甲壳虫")
+    assert (named.candidates, named.suggested) == (((BEATLES, 100), (TRIBUTE, 61)), BEATLES)
+
+
+def test_a_name_naming_no_one_is_offered_no_artist_already_linked(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    enriching.add_song("Mix", artist="Various")
+    _looked_up(enriching, alice, "披头士")
+
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    named = _named(enriching, "Various")
+    assert named.look_up is LookUp.NEVER
+
+    assert (named.candidates, named.suggested) == ((), None)
+
+
+def test_wikidata_refusing_fails_the_job_and_leaves_the_artist_to_ask_again(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Tribute", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+
+    enriching.artists.link(alice, "披头士", TRIBUTE)
+
+    [job] = _names_jobs(enriching)
+    failed = enriching.wait_for(job.id, JobState.FAILED)
+    assert failed.job.failure_kind == "refused"
+    enriching.artists.look_up(alice, ["Anyone Else"])
+    assert len(_names_jobs(enriching)) == 2

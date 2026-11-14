@@ -2,8 +2,9 @@
 
 > [!NOTE]
 > **Status: built.** This note describes one artist under many names: looking the
-> Library's artist names up on MusicBrainz, linking each to one artist, and
-> counting linked names as one artist across the Library. Tidying a name written with
+> Library's artist names up on MusicBrainz, linking each to one artist, adding the
+> names Wikidata knows each linked artist by, and counting linked names as one
+> artist across the Library. Tidying a name written with
 > more than the name in it is in [Track details](Track%20details.md).
 
 ## Contents
@@ -12,6 +13,7 @@
 - [Names and artists](#names-and-artists)
 - [Looking a name up](#looking-a-name-up)
 - [Linking a name](#linking-a-name)
+- [Wikidata's names](#wikidatas-names)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
@@ -83,6 +85,43 @@ keeps the text and counts them as one.
 - **Any signed-in Account** may look names up and link them, as any may edit a
   Track's details: the catalog is the household's.
 
+## Wikidata's names
+
+MusicBrainz often lacks the names a Chinese Library writes: it knows *披头士*
+for The Beatles, but not *甲壳虫* or *甲壳虫乐队*. Wikidata often has them, and
+nicknames such as *周董*, and Japanese and Korean names.
+
+- **Asked once a name is linked:** linking a name to an artist asks Wikidata
+  every name the artist goes by, a Job of the kind `find_artist_names` per artist,
+  through the plugin point `ArtistNameFinder`, which the plugin `wikipedia`
+  answers. The plugin is off by default, as every plugin that contacts a site is,
+  and is turned on in `medleyplay.toml`. An artist only offered, not linked, is
+  not asked about, since a name may offer up to ten.
+- **Found by its MusicBrainz id:** Wikidata's search for the item holding the
+  id (`haswbstatement:P434=<id>`), then the item's labels and aliases in Chinese,
+  Cantonese, Japanese, Korean, and English: two requests, a second apart, in the
+  plugin's own lane, so Wikidata refusing leaves MusicBrainz running. Each name
+  keeps its language, written as MusicBrainz writes a locale (`zh_Hant`, `zh_TW`).
+  A name ending in a note in brackets, such as *朴树 (歌手)*, is a Wikipedia page
+  title, not a name, and is left out.
+
+  ```text
+  The Beatles (b10bbbfc-…) → Q1299 → 甲壳虫乐队, 甲壳虫, 披頭四樂隊, ビートルズ, 비틀즈, …
+  ```
+
+- **Kept apart from MusicBrainz's names:** each alias records the site that gave
+  it, and each site's answer replaces only its own, so looking a name up on
+  MusicBrainz again keeps Wikidata's. A name both give is shown once, as
+  MusicBrainz gives it.
+- **Asked about an artist once:** an answer, none included, is kept with when;
+  a refusal fails the Job as *refused* and leaves the artist to ask again.
+  *Look up* asks about every linked artist Wikidata hasn't answered for, such as
+  one linked while the plugin was off.
+- **A name an artist already linked goes by is offered it,** with nothing asked
+  of any site: once *披头士* is linked to The Beatles, *甲壳虫乐队* is offered The
+  Beatles, scored 100, chosen already when no other artist goes by it too; it can
+  still be looked up. A name naming no one artist is offered none.
+
 ## The web client
 
 - **A capsule in the Artists heading,** *Link 17 artist names*, shows while any
@@ -107,22 +146,22 @@ keeps the text and counts them as one.
 | --- | --- | --- |
 | `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, and whether it is being asked now; and every artist those name, with its aliases |
 | `POST /api/artist-names/look-up` | Signed in | Ask about up to 500 names at once; each not linked, and that may be looked up, gets a Job. Answers how many were asked about, or 409 while the `musicbrainz` plugin is off |
-| `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none; 404 for an artist never named |
+| `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
 | `POST /api/artist-names/unlink` | Signed in | Forget a name's link |
 
 ## Testing
 
 - **The rules** (which names are looked up, the suggestion) are domain tests.
-- **The plugin** is tested against a hand-made artist search in MusicBrainz's
-  shape, with no socket opened.
+- **The plugins** are tested with no socket opened: `musicbrainz` against a
+  hand-made artist search in MusicBrainz's shape, and `wikipedia` against
+  Wikidata's real answers for The Beatles.
 - **The service** runs real Jobs against the test plugin `reader`, whose finder
-  answers *披头士* with The Beatles and a tribute band.
+  answers *披头士* with The Beatles and a tribute band, and whose name finder
+  answers for The Beatles as Wikidata would.
 - **Shared lanes** are tested with two lanes sharing one name.
 
 ## Left for later
 
-- **Wikidata's names,** through the MusicBrainz artist's Wikidata link, for
-  Chinese names MusicBrainz lacks.
 - **Two artists of one name,** such as two singers called *Jay*: a link is one
   per name, so telling them apart song by song would need a link per Track.
 - **Showing a linked artist in a chosen language,** rather than as written.

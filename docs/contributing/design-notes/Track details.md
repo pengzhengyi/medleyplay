@@ -617,8 +617,3 @@ that reason. `GET /api/settings` gains `album_minutes`.
 - **Covers in `medleyplay backup`,** which copies only the database.
 - **A folder's `cover.jpg`** for every file in it.
 - **Lyrics,** and naming songs by their audio with AcoustID.
-- **One artist under many names:** *The Beatles*, *披头士*, and *甲壳虫* still
-  count as three artists. Linking each name to one artist, from MusicBrainz's
-  artists and their aliases, with Wikidata's labels for names MusicBrainz lacks,
-  would let the Artists view, favorites, and search treat them as one, while
-  each song keeps the name as written.

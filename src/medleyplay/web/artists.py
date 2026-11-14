@@ -66,7 +66,9 @@ class ArtistNameOut(BaseModel):
     linked: bool = Field(description="Whether the household chose an artist, or none, for it.")
     artist_id: str | None = Field(description="The artist chosen; none when it chose none.")
     looked_at: datetime | None
-    candidates: list[CandidateOut] = Field(description="What MusicBrainz knows, best first.")
+    candidates: list[CandidateOut] = Field(
+        description="What MusicBrainz knows, and artists linked that go by the name; best first."
+    )
     suggested: str | None = Field(description="The artist going by the name exactly, if one.")
     finding: bool = Field(description="Whether MusicBrainz is being asked about it now.")
 
@@ -136,9 +138,12 @@ def look_up(body: LookUpIn, me: SignedInAccount, service: ArtistsDep) -> LookUpO
 
 
 @router.put("/link", status_code=status.HTTP_204_NO_CONTENT)
-def link(body: LinkIn, _: SignedInAccount, service: ArtistsDep) -> None:
-    """Link the name to the artist, or to none, in place of any link it had."""
-    service.link(body.name, body.artist_id)
+def link(body: LinkIn, me: SignedInAccount, service: ArtistsDep) -> None:
+    """Link the name to the artist, or to none, in place of any link it had.
+
+    Wikidata is then asked every other name the artist goes by.
+    """
+    service.link(me, body.name, body.artist_id)
 
 
 @router.post("/unlink", status_code=status.HTTP_204_NO_CONTENT)

@@ -10,7 +10,11 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.ai import AiService
-from medleyplay.application.artists import ArtistService, find_artist_kind
+from medleyplay.application.artists import (
+    ArtistService,
+    find_artist_kind,
+    find_artist_names_kind,
+)
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
@@ -145,7 +149,8 @@ def running_enrichment(
     jobs_dir = data_dir / "jobs"
     kind = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
     find = find_artist_kind(clock)
-    kinds: dict[str, AnyJobKind] = {kind.name: kind, find.name: find}
+    find_names = find_artist_names_kind(clock)
+    kinds: dict[str, AnyJobKind] = {kind.name: kind, find.name: find, find_names.name: find_names}
     with started_plugins(units, clock, "reader") as plugins:
         secrets = MemorySecrets()
         proxies = ProxyService(units, clock, secrets)
@@ -168,7 +173,7 @@ def running_enrichment(
             yield Enriching(
                 enrichment=EnrichmentService(units, clock, plugins, jobs, kind),
                 kind=kind,
-                artists=ArtistService(units, clock, plugins, jobs, find),
+                artists=ArtistService(units, clock, plugins, jobs, find, find_names),
                 jobs=jobs,
                 runner=runner,
                 plugins=plugins,

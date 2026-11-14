@@ -5,7 +5,8 @@
  * opens the list: each name with its songs, and what is known of it. A name not
  * looked up yet can be, one by one or all at once; a name looked up offers the
  * artists MusicBrainz knows by it, the one going by it exactly chosen already, to
- * link, or none of them. A linked name says what it is linked to, and can be
+ * link, or none of them. A name an artist already linked goes by offers that artist
+ * at once, still to look up if it isn't the one. A linked name says what it is linked to, and can be
  * unlinked. Names linked to one artist count as one artist across the Library.
  */
 
@@ -197,7 +198,7 @@ function NameRow({
           </span>
         ) : named.look_up === "tidy_first" ? (
           <span className="link-to">Tidy the name first, then look it up</span>
-        ) : named.looked_at === null ? (
+        ) : named.looked_at === null && offered.length === 0 ? (
           <button
             type="button"
             className="secondary outline dialog-button"
@@ -230,6 +231,16 @@ function NameRow({
               </fieldset>
             )}
             <span className="tidy-actions">
+              {named.looked_at === null && (
+                <button
+                  type="button"
+                  className="secondary outline dialog-button"
+                  aria-label={`Look up ${named.name}`}
+                  onClick={onLookUp}
+                >
+                  Look up
+                </button>
+              )}
               <button
                 type="button"
                 className="secondary outline dialog-button"

@@ -50,7 +50,7 @@ lists. They are on its site alone, which medleyplay doesn't read (see below).
 | --- | --- | --- | --- |
 | MusicBrainz | Ratings of recordings and release groups, from listeners' 1–5 stars; the ids and Wikidata links the others need | Its own match | `musicbrainz`, already built |
 | CritiqueBrainz | Reviews of recordings and release groups, each with its author, rating, and license | MusicBrainz ids | `critiquebrainz` |
-| Wikidata and Wikipedia | A summary of the song's work or its album | Wikidata ids, from MusicBrainz | `wikipedia` |
+| Wikidata and Wikipedia | A summary of the song's work or its album; the names an artist goes by | Wikidata ids, from MusicBrainz | `wikipedia`, built for artists' names ([Artists](Artists.md)) |
 | Last.fm | Similar tracks and artists, with a match score | Title and artist, and a key of the household's | `lastfm` |
 | Rate Your Music | The household's own album ratings and reviews | A file a member downloads from their RYM profile | No plugin: an import in Settings |
 

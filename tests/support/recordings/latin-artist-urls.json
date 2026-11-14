@@ -1,0 +1,46 @@
+{
+  "id": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+  "name": "The Beatles",
+  "sort-name": "Beatles, The",
+  "disambiguation": "UK rock band, “The Fab Four”",
+  "country": "GB",
+  "type": "Group",
+  "relations": [
+    {
+      "target-credit": "",
+      "url": {
+        "resource": "https://www.thebeatles.com/",
+        "id": "7bea8a51-7f45-4941-8c9c-b20d975199b1"
+      },
+      "direction": "forward",
+      "type-id": "fe33d22f-c3b0-4d68-bd53-a856badf2b15",
+      "type": "official homepage",
+      "attribute-values": {},
+      "attributes": [],
+      "begin": null,
+      "attribute-ids": {},
+      "ended": false,
+      "target-type": "url",
+      "end": null,
+      "source-credit": ""
+    },
+    {
+      "attributes": [],
+      "begin": null,
+      "attribute-ids": {},
+      "target-type": "url",
+      "ended": false,
+      "end": null,
+      "source-credit": "",
+      "target-credit": "",
+      "direction": "forward",
+      "url": {
+        "id": "7a14a19d-17d6-452e-8741-6ace4eea275c",
+        "resource": "https://www.wikidata.org/wiki/Q1299"
+      },
+      "type-id": "689870a4-a1e4-4912-b17f-7b2664215698",
+      "type": "wikidata",
+      "attribute-values": {}
+    }
+  ]
+}

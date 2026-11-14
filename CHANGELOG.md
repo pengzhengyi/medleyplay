@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Wikidata's names for linked artists** — linking a name to an artist asks
+  Wikidata every name the artist goes by, in Chinese, Japanese, Korean, and
+  English, for the names MusicBrainz lacks: *甲壳虫乐队* for The Beatles, *周董*
+  for 周杰倫. A name a linked artist goes by is then offered that artist at once,
+  and search finds the artist by it. The new plugin `wikipedia` is off by
+  default; turn it on in `medleyplay.toml`.
+
 - **One artist under many names** — the Artists heading offers to link the
   Library's artist names to artists MusicBrainz knows: *披头士*, *甲壳虫*, and *The
   Beatles*, or *Michael Jackson/迈克尔·杰克逊*, each looked up and offered with the

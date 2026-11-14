@@ -660,7 +660,11 @@ class TidyKeptRow(Base):
 
 
 class ArtistRow(Base):
-    """An artist a site knows, as it last answered: its id there, names, and country."""
+    """An artist a site knows, as it last answered: its id there, names, and country.
+
+    `names_at` is when another site, Wikidata, last answered with every name it
+    knows the artist by, none being an answer too; until then it is `None`.
+    """
 
     __tablename__ = "artist"
 
@@ -670,10 +674,15 @@ class ArtistRow(Base):
     disambiguation: Mapped[str] = mapped_column(Text)
     country: Mapped[str] = mapped_column(String(8))
     found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    names_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
 
 
 class ArtistAliasRow(Base):
-    """Another name an artist goes by, and its folded `key`, which names are matched by."""
+    """Another name an artist goes by, and its folded `key`, which names are matched by.
+
+    `origin` is the site that gave it, `musicbrainz` or `wikipedia`: each site's
+    answer replaces only the names it gave before.
+    """
 
     __tablename__ = "artist_alias"
     __table_args__ = (Index("ix_artist_alias_key", "key"),)
@@ -681,6 +690,7 @@ class ArtistAliasRow(Base):
     artist_id: Mapped[str] = mapped_column(
         ForeignKey("artist.id", ondelete="CASCADE"), primary_key=True
     )
+    origin: Mapped[str] = mapped_column(String(16), primary_key=True, server_default="musicbrainz")
     name: Mapped[str] = mapped_column(String(512), primary_key=True)
     key: Mapped[str] = mapped_column(String(512))
     locale: Mapped[str | None] = mapped_column(String(16))

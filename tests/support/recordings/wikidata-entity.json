@@ -1,0 +1,189 @@
+{
+  "entities": {
+    "Q1299": {
+      "type": "item",
+      "id": "Q1299",
+      "labels": {
+        "ja": {
+          "language": "ja",
+          "value": "ビートルズ"
+        },
+        "zh": {
+          "language": "zh",
+          "value": "披頭四樂隊"
+        },
+        "ko": {
+          "language": "ko",
+          "value": "비틀즈"
+        },
+        "yue": {
+          "language": "yue",
+          "value": "披頭四"
+        },
+        "zh-tw": {
+          "language": "zh-tw",
+          "value": "披頭四樂隊"
+        },
+        "zh-hk": {
+          "language": "zh-hk",
+          "value": "披頭四樂隊"
+        },
+        "zh-cn": {
+          "language": "zh-cn",
+          "value": "披头士乐队"
+        },
+        "zh-hant": {
+          "language": "zh-hant",
+          "value": "披頭四樂隊"
+        },
+        "zh-hans": {
+          "language": "zh-hans",
+          "value": "披头士乐队"
+        },
+        "en": {
+          "language": "en",
+          "value": "The Beatles"
+        }
+      },
+      "aliases": {
+        "ja": [
+          {
+            "language": "ja",
+            "value": "ザ・ビートルズ"
+          }
+        ],
+        "zh": [
+          {
+            "language": "zh",
+            "value": "披頭士"
+          },
+          {
+            "language": "zh",
+            "value": "披头士"
+          },
+          {
+            "language": "zh",
+            "value": "披頭四"
+          },
+          {
+            "language": "zh",
+            "value": "披头四"
+          },
+          {
+            "language": "zh",
+            "value": "甲壳虫乐队"
+          },
+          {
+            "language": "zh",
+            "value": "甲壳虫"
+          },
+          {
+            "language": "zh",
+            "value": "披頭士樂隊"
+          }
+        ],
+        "ko": [
+          {
+            "language": "ko",
+            "value": "더 비틀즈"
+          }
+        ],
+        "zh-cn": [
+          {
+            "language": "zh-cn",
+            "value": "披头士"
+          }
+        ],
+        "zh-hans": [
+          {
+            "language": "zh-hans",
+            "value": "披头士"
+          }
+        ],
+        "zh-hant": [
+          {
+            "language": "zh-hant",
+            "value": "披頭四"
+          }
+        ],
+        "zh-tw": [
+          {
+            "language": "zh-tw",
+            "value": "披頭四"
+          },
+          {
+            "language": "zh-tw",
+            "value": "披頭四人合唱團"
+          },
+          {
+            "language": "zh-tw",
+            "value": "披頭合唱團"
+          },
+          {
+            "language": "zh-tw",
+            "value": "比特四重唱"
+          }
+        ],
+        "en": [
+          {
+            "language": "en",
+            "value": "The Lads from Liverpool"
+          },
+          {
+            "language": "en",
+            "value": "John, Paul, George, and Ringo"
+          },
+          {
+            "language": "en",
+            "value": "The Beetles"
+          },
+          {
+            "language": "en",
+            "value": "The Silver Beetles"
+          },
+          {
+            "language": "en",
+            "value": "The Silver Beatles"
+          },
+          {
+            "language": "en",
+            "value": "Beatals"
+          }
+        ],
+        "yue": [
+          {
+            "language": "yue",
+            "value": "狂人樂隊"
+          },
+          {
+            "language": "yue",
+            "value": "四狂人樂隊"
+          },
+          {
+            "language": "yue",
+            "value": "四狂"
+          }
+        ],
+        "zh-hk": [
+          {
+            "language": "zh-hk",
+            "value": "狂人樂隊"
+          },
+          {
+            "language": "zh-hk",
+            "value": "四狂人樂隊"
+          },
+          {
+            "language": "zh-hk",
+            "value": "四狂人"
+          },
+          {
+            "language": "zh-hk",
+            "value": "四狂"
+          }
+        ]
+      }
+    }
+  },
+  "success": 1
+}

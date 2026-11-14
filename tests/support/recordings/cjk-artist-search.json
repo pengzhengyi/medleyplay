@@ -1,0 +1,32 @@
+{
+  "created": "2026-11-15T00:00:00.000Z",
+  "count": 2,
+  "offset": 0,
+  "artists": [
+    {
+      "id": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+      "type": "Group",
+      "score": 100,
+      "name": "The Beatles",
+      "sort-name": "Beatles, The",
+      "country": "GB",
+      "disambiguation": "",
+      "aliases": [
+        {"sort-name": "Beatles", "name": "Beatles", "locale": null, "type": "Search hint", "primary": null},
+        {"sort-name": "披头士", "name": "披头士", "locale": "zh", "type": "Artist name", "primary": true},
+        {"sort-name": "披頭四", "name": "披頭四", "locale": "zh_Hant", "type": "Artist name", "primary": true},
+        {"sort-name": "ビートルズ", "name": "ザ・ビートルズ", "locale": "ja", "type": "Artist name", "primary": true}
+      ]
+    },
+    {
+      "id": "6a3b5c1e-0000-4000-8000-0000000b0a1d",
+      "type": "Group",
+      "score": 61,
+      "name": "披头士乐队纪念乐团",
+      "sort-name": "披头士乐队纪念乐团",
+      "country": "CN",
+      "disambiguation": "Beatles tribute band",
+      "aliases": []
+    }
+  ]
+}

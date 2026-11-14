@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.ai import AiService
+from medleyplay.application.artists import ArtistService, find_artist_kind
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
@@ -42,6 +43,7 @@ class Enriching:
 
     enrichment: EnrichmentService
     kind: EnrichKind
+    artists: ArtistService
     jobs: JobService
     runner: JobRunner
     plugins: PluginService
@@ -134,7 +136,7 @@ class Enriching:
 def running_enrichment(
     units: sessionmaker[Session], clock: FakeClock, data_dir: Path
 ) -> Iterator[Enriching]:
-    """Run `reader`, enrich Jobs, and the services around them over `data_dir`.
+    """Run `reader`, enrich and find-artist Jobs, and the services around them over `data_dir`.
 
     The services follow `Enriching.online`, which a test turns Offline. The enricher
     pauses `PAUSE` between calls, which a test passes by moving the clock.
@@ -142,7 +144,8 @@ def running_enrichment(
     online = OnlineSwitch()
     jobs_dir = data_dir / "jobs"
     kind = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
-    kinds: dict[str, AnyJobKind] = {kind.name: kind}
+    find = find_artist_kind(clock)
+    kinds: dict[str, AnyJobKind] = {kind.name: kind, find.name: find}
     with started_plugins(units, clock, "reader") as plugins:
         secrets = MemorySecrets()
         proxies = ProxyService(units, clock, secrets)
@@ -165,6 +168,7 @@ def running_enrichment(
             yield Enriching(
                 enrichment=EnrichmentService(units, clock, plugins, jobs, kind),
                 kind=kind,
+                artists=ArtistService(units, clock, plugins, jobs, find),
                 jobs=jobs,
                 runner=runner,
                 plugins=plugins,

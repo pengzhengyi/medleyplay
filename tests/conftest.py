@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
+from medleyplay.application.artists import ArtistService, FindArtistKind, find_artist_kind
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
@@ -215,6 +216,7 @@ def jobs(
     clock: FakeClock,
     plugins: PluginService,
     enrich_kind: EnrichKind,
+    find_kind: FindArtistKind,
     tmp_path: Path,
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
@@ -226,9 +228,26 @@ def jobs(
         cache.name: cache,
         download.name: download,
         enrich_kind.name: enrich_kind,
+        find_kind.name: find_kind,
     }
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
+
+
+@pytest.fixture
+def find_kind(clock: FakeClock) -> FindArtistKind:
+    return find_artist_kind(clock)
+
+
+@pytest.fixture
+def artists(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    find_kind: FindArtistKind,
+) -> ArtistService:
+    return ArtistService(units, clock, plugins, jobs, find_kind)
 
 
 @pytest.fixture
@@ -369,6 +388,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     ai: AiService,
     devices: DeviceService,
     ratings: RatingsService,
+    artists: ArtistService,
     clock: FakeClock,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
@@ -400,6 +420,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         devices=devices,
         remote=remote,
         ratings=ratings,
+        artists=artists,
     )
 
 

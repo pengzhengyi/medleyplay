@@ -17,6 +17,7 @@ import requests
 
 from medleyplay.plugin_api import MAX_COVER_BYTES, NetworkError, is_cover_image
 from medleyplay.plugins.musicbrainz.models import (
+    ArtistSearch,
     RecordingSearch,
     Release,
     ReleaseSearch,
@@ -39,6 +40,8 @@ MAX_WAIT: Final = 10.0
 DEFAULT_WAIT: Final = 2.0
 SEARCH_LIMIT: Final = 25
 """How many recordings, or releases, a search asks for."""
+ARTIST_LIMIT: Final = 10
+"""The most artists an artist search asks for: a name rarely fits more."""
 MAX_REDIRECTS: Final = 5
 
 type Sleep = Callable[[float], None]
@@ -71,6 +74,11 @@ class MusicBrainzClient:
         """Return the recordings that match the Lucene `query`, best first."""
         found = self._json(f"{API}/recording", {"query": query, "limit": str(SEARCH_LIMIT)})
         return RecordingSearch.model_validate(found)
+
+    def search_artists(self, query: str) -> ArtistSearch:
+        """Return the artists that match the Lucene `query`, best first, with their aliases."""
+        found = self._json(f"{API}/artist", {"query": query, "limit": str(ARTIST_LIMIT)})
+        return ArtistSearch.model_validate(found)
 
     def search_releases(self, query: str) -> ReleaseSearch:
         """Return the releases that match the Lucene `query`, best first."""

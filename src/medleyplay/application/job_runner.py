@@ -345,14 +345,14 @@ class JobRunner:
         """Return the Jobs that can't start: those of a lane that is busy or still spacing."""
         with self._lock:
             closed = {
-                (running.kind.name, running.lane)
+                _lane_key(running.kind, running.lane)
                 for running in self._running.values()
                 if running.lane is not None
             }
             closed |= {lane for lane, opens in self._lane_opens.items() if opens > now}
         clauses = []
         for name, kind in self._kinds.items():
-            lanes = sorted(lane for kind_name, lane in closed if kind_name == name)
+            lanes = sorted(lane for lane in kind.lanes if _lane_key(kind, lane) in closed)
             if kind.lane_field is not None and lanes:
                 request = JobRow.__table__.c.request[kind.lane_field].as_string()
                 clauses.append(and_(JobRow.kind == name, request.in_(lanes)))
@@ -462,7 +462,7 @@ class JobRunner:
             running.done = True
             if running.lane is not None:
                 spacing = running.kind.lanes[running.lane].spacing
-                self._lane_opens[running.kind.name, running.lane] = self._clock() + spacing
+                self._lane_opens[_lane_key(running.kind, running.lane)] = self._clock() + spacing
         if isinstance(outcome, JobFinished | JobFailed):
             running.process.finish()
         else:
@@ -664,6 +664,12 @@ def _redacted(running: _Running, outcome: _Outcome) -> _Outcome:
             update={"outcomes": outcomes, "message": running.redact(outcome.message)}
         )
     return outcome.model_copy(update={"outcomes": outcomes})
+
+
+def _lane_key(kind: AnyJobKind, lane: str) -> tuple[str, str]:
+    """Return what the lane is busy and spaced by: its shared name, else its kind and name."""
+    shared = kind.lanes[lane].shared if lane in kind.lanes else None
+    return ("", shared) if shared is not None else (kind.name, lane)
 
 
 def _lane_name(kind: AnyJobKind, request: object) -> str | None:

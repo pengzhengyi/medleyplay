@@ -36,7 +36,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin, Values, shown
 from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
-from medleyplay.domain.links import BILIBILI_SOURCE, parse_part_locator
+from medleyplay.domain.links import BILIBILI_SOURCE, CODE_LINK, parse_part_locator, part_link
 from medleyplay.domain.video_text import VideoText
 
 ASK_AGAIN_AFTER: Final = timedelta(hours=24)
@@ -146,6 +146,20 @@ def video_id_of(sources: Iterable[tuple[str, str]]) -> str | None:
         if BILIBILI_FILE_NAME.fullmatch(stem):
             return stem
     return None
+
+
+def video_page_of(sources: Iterable[tuple[str, str]]) -> str | None:
+    """Return the page of the video a Track's Sources came from, or `None`.
+
+    A Bilibili Source links to its part of the video; a Library file named for a
+    video, as `3/Music/BV1dm4y1s7ak.m4a` is, to the video.
+    """
+    found = list(sources)
+    for kind, locator in found:
+        if kind == BILIBILI_SOURCE:
+            return part_link(kind, locator)
+    video = video_id_of(found)
+    return None if video is None else CODE_LINK.format(code=video)
 
 
 class Ineligible(StrEnum):

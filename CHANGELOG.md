@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Open on Bilibili** — a Track that came from a Bilibili video, as a file
+  named for it (`BV1dm4y1s7ak.m4a`) or a part added by link, has *Open on
+  Bilibili* in its menu, which opens the video in a new tab; a song of a split
+  file opens its file's video. The page only links; medleyplay asks Bilibili
+  nothing.
+
 - **Settings save as you change them** — the album length and the storage limit
   have no Save button any more: a choice saves at once, a typed value once
   typing pauses or the field is left, and *Saving…*, then *Saved.*, shows beside

@@ -47,6 +47,7 @@ from medleyplay.domain.catalog import (
 from medleyplay.domain.community import CommunityRating, RatedAs, shown_rating
 from medleyplay.domain.details import LONGEST_SONG_MS, Field, Kind, Origin, Value, kind_of
 from medleyplay.domain.downloads import download_target
+from medleyplay.domain.enrichers import video_page_of
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.history import (
     KEPT_FOR,
@@ -160,6 +161,7 @@ class CatalogService:
             failed = _download_failed(db, sites, downloaded)
             segment_of = album_file_of(db)
             split = set(segment_of.values())
+            videos = _video_pages(db)
             album_from_ms = read_settings(db).album_from_ms
             community = _community_ratings(db, select(CommunityRatingRow), segment_of)
             rated = album_ratings_of(db, account_id)
@@ -174,6 +176,8 @@ class CatalogService:
                     downloaded=track.id in downloaded,
                     download_failed=track.id in failed,
                     site=sites[track.id].kind if track.id in sites else None,
+                    # A song came from the video its album file did.
+                    video=videos.get(segment_of.get(TrackId(track.id), track.id)),
                     segment_of=segment_of.get(TrackId(track.id)),
                     split=track.id in split,
                     album_from_ms=album_from_ms,
@@ -199,6 +203,7 @@ class CatalogService:
             )
             sites = _site_sources(db, SourceRow.track_id == looked_at)
             failed = _download_failed(db, sites, downloaded)
+            videos = _video_pages(db, SourceRow.track_id == looked_at)
             album_from_ms = read_settings(db).album_from_ms
             rated = select(CommunityRatingRow).where(
                 CommunityRatingRow.track_id.in_({track_id, looked_at})
@@ -211,6 +216,7 @@ class CatalogService:
             downloaded=looked_at in downloaded,
             download_failed=looked_at in failed,
             site=sites[track_id].kind if track_id in sites else None,
+            video=videos.get(looked_at),
             segment_of=segment_of.get(track_id),
             split=track_id in segment_of.values(),
             album_from_ms=album_from_ms,
@@ -716,6 +722,18 @@ def _site_sources(db: Session, *where: ColumnElement[bool]) -> dict[int, SourceR
     return first
 
 
+def _video_pages(db: Session, *where: ColumnElement[bool]) -> dict[int, str]:
+    """Return the page of the video each Track came from, among the Sources `where` keeps."""
+    sources: defaultdict[int, list[tuple[str, str]]] = defaultdict(list)
+    named = select(SourceRow.track_id, SourceRow.kind, SourceRow.locator).where(
+        SourceRow.kind.in_({*PART_LINKS, LIBRARY_SOURCE}), *where
+    )
+    for track_id, kind, locator in db.execute(named.order_by(SourceRow.id)):
+        sources[track_id].append((kind, locator))
+    pages = {track_id: video_page_of(each) for track_id, each in sources.items()}
+    return {track_id: page for track_id, page in pages.items() if page is not None}
+
+
 def _download_failed(db: Session, sites: Mapping[int, SourceRow], downloaded: set[int]) -> set[int]:
     """Return the Tracks with a site Source but no Download whose last download Job failed."""
     if not sites:
@@ -763,6 +781,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     downloaded: bool,
     download_failed: bool = False,
     site: str | None = None,
+    video: str | None = None,
     segment_of: int | None = None,
     split: bool = False,
     album_from_ms: int | None = LONGEST_SONG_MS,
@@ -799,6 +818,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         downloaded=downloaded,
         download_failed=download_failed,
         site=site,
+        video=video,
         segment_of=None if segment_of is None else TrackId(segment_of),
         split=split,
         kind=kind.kind,

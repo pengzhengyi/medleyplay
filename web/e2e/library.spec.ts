@@ -82,6 +82,7 @@ function manySongs(count: number): Track[] {
     track_number: null,
     disc_number: null,
     site: null,
+    video: null,
     segment_of: null,
     split: false,
     kind: "song",

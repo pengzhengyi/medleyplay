@@ -161,6 +161,17 @@ def test_track_lists_say_which_file_is_split_and_which_file_a_song_is_of(
     assert catalog.get_track(alice.id, first.track_id).segment_of == album
 
 
+def test_a_song_links_to_the_video_of_its_album_file(
+    songs: SongsService, catalog: CatalogService, album: TrackId, alice: Account
+) -> None:
+    first = songs.save(album, THREE_SONGS).songs[0]
+
+    tracks = {track.id: track for track in catalog.list_tracks(alice.id)}
+
+    assert tracks[first.track_id].video == "https://www.bilibili.com/video/BV1dm4y1s7ak?p=1"
+    assert catalog.get_track(alice.id, first.track_id).video == tracks[first.track_id].video
+
+
 def test_a_song_can_play_while_its_album_file_can(
     songs: SongsService,
     catalog: CatalogService,

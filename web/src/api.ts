@@ -32,6 +32,8 @@ export interface Track {
   readonly download_failed: boolean;
   /** The kind of site its audio is downloaded from, such as `bilibili`, if any. */
   readonly site: string | null;
+  /** The page of the video its audio came from, such as a Bilibili video's, if known. */
+  readonly video: string | null;
   /** The album file this Track is a song of, if it is one. */
   readonly segment_of: number | null;
   /** Whether this Track's file is split into songs, which then stand for it. */

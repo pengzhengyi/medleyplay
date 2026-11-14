@@ -25,4 +25,17 @@ describe("useNow", () => {
     expect(before).toBe(shown);
     expect(result.current).toBe(Date.parse("2026-11-06T16:30:15Z"));
   });
+
+  it("shows the time now from its first render, however long ago it was last read", () => {
+    vi.useFakeTimers({ now: new Date("2026-11-06T16:30:00Z") });
+    renderHook(() => useNow()).unmount();
+    vi.setSystemTime(new Date("2026-11-13T09:00:00Z"));
+    const rendered: number[] = [];
+
+    renderHook(() => {
+      rendered.push(useNow());
+    });
+
+    expect(rendered[0]).toBe(Date.parse("2026-11-13T09:00:00Z"));
+  });
 });

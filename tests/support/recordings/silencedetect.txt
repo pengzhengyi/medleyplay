@@ -1,0 +1,26 @@
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 0
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 0.656104 | silence_duration: 0.656104
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 246.306875
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 247.672313 | silence_duration: 1.365437
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 542.240771
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 542.763 | silence_duration: 0.522229
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 542.763021
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 545.781146 | silence_duration: 3.018125
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 1013.966521
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 1020.600771 | silence_duration: 6.63425
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 1261.836354
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 1267.915062 | silence_duration: 6.078708
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 1497.076708
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 1502.665583 | silence_duration: 5.588875
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 1817.952312
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 1823.363083 | silence_duration: 5.410771
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 2068.4915
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 2075.110729 | silence_duration: 6.619229
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 2352.811062
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 2356.129375 | silence_duration: 3.318312
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 2609.820292
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 2610.552917 | silence_duration: 0.732625
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 2610.552958
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 2613.600375 | silence_duration: 3.047417
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_start: 2888.107375
+[Parsed_silencedetect_0 @ 0x7fdcd7104080] silence_end: 2893.76 | silence_duration: 5.652625

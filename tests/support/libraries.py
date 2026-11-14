@@ -17,6 +17,7 @@ from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
+from medleyplay.application.silences import SilenceService, find_silences_kind
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.libraries import LibraryId
 from medleyplay.persistence.schema import LibraryRow
@@ -24,7 +25,7 @@ from medleyplay.plugin_host.client import PluginHost
 from medleyplay.plugin_host.loader import plugin_names
 from tests.support.fakes import FakeClock, MemorySecrets
 
-LIBRARY_PLUGINS = ("fsspec-library", "tinytag-tags")
+LIBRARY_PLUGINS = ("fsspec-library", "tinytag-tags", "ffmpeg")
 
 
 def library_row(units: sessionmaker[Session], clock: FakeClock) -> LibraryId:
@@ -53,6 +54,7 @@ class Libraries:
     jobs: JobService
     catalog: CatalogService
     playback: PlaybackService
+    silences: SilenceService
 
     def wait_for(self, job_id: JobId, *states: JobState) -> JobView:
         """Wait until the Job is in one of `states`, and return it."""
@@ -70,16 +72,30 @@ class Libraries:
 def running_libraries(
     units: sessionmaker[Session], clock: FakeClock, data_dir: Path
 ) -> Iterator[Libraries]:
-    """Run the Library plugins, the scan and cache Job kinds, and the services over `data_dir`."""
+    """Run the Library plugins and `ffmpeg`, their Job kinds, and the services over `data_dir`."""
     lineup = Lineup(plugin_names(), LIBRARY_PLUGINS)
     plugins = PluginService(units, clock, lineup, PluginHost(LIBRARY_PLUGINS))
     scan = scan_library_kind(clock, data_dir / "covers")
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / "jobs", clock)
-    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
+    find_silences = find_silences_kind(clock)
+    kinds: dict[str, AnyJobKind] = {
+        scan.name: scan,
+        cache.name: cache,
+        download.name: download,
+        find_silences.name: find_silences,
+    }
     linked = LinkedAccountService(units, clock, plugins, MemorySecrets())
     runner = JobRunner(units, clock, kinds, plugins, data_dir / "jobs", poll=timedelta(seconds=0.1))
     jobs = JobService(units, clock, kinds, runner)
+    playback = PlaybackService(
+        units,
+        plugins,
+        jobs,
+        cache,
+        data_dir,
+        DownloadService(units, plugins, jobs, download, linked, data_dir, clock),
+    )
     plugins.start()
     jobs.start()
     try:
@@ -88,14 +104,8 @@ def running_libraries(
             plugins,
             jobs,
             CatalogService(units, clock),
-            PlaybackService(
-                units,
-                plugins,
-                jobs,
-                cache,
-                data_dir,
-                DownloadService(units, plugins, jobs, download, linked, data_dir, clock),
-            ),
+            playback,
+            SilenceService(units, clock, plugins, jobs, find_silences, playback),
         )
     finally:
         jobs.stop()

@@ -1,6 +1,7 @@
 """Audio files the tests make: small WAV files with tags, in folders and zip archives."""
 
 import io
+import math
 import struct
 import wave
 import zipfile
@@ -23,10 +24,15 @@ class Song:
     album: str = "Blue"
     seconds: float = 1.0
     cover: bytes = b""
+    songs_in_it: tuple[float, ...] = ()
+    """For a whole album in one file, how long each of its songs is: each a tone, a
+    second of silence between them. The file is then as long as they are, not `seconds`."""
 
 
 def wav_bytes(song: Song) -> bytes:
-    """Return a silent mono WAV file whose RIFF `INFO` chunk carries the song's tags.
+    """Return a mono WAV file whose RIFF `INFO` chunk carries the song's tags.
+
+    It is silent, unless the song is an album holding `songs_in_it`.
 
     A song with a cover gets an `id3 ` chunk after them, holding the cover:
 
@@ -40,7 +46,7 @@ def wav_bytes(song: Song) -> bytes:
         audio.setnchannels(1)
         audio.setsampwidth(2)
         audio.setframerate(RATE)
-        audio.writeframes(b"\0\0" * int(RATE * song.seconds))
+        audio.writeframes(_frames(song))
     data = bytearray(buffer.getvalue())
     info = b"INFO"
     for key, value in (("INAM", song.title), ("IART", song.artist), ("IPRD", song.album)):
@@ -79,6 +85,25 @@ def id3_tag(song: Song) -> bytes:
 
 def _id3_frame(name: str, content: bytes) -> bytes:
     return name.encode() + struct.pack(">I", len(content)) + b"\0\0" + content
+
+
+GAP_SECONDS = 1.0
+"""The silence between the songs of a whole album in one file."""
+
+
+def _frames(song: Song) -> bytes:
+    if not song.songs_in_it:
+        return b"\0\0" * int(RATE * song.seconds)
+    gap = b"\0\0" * int(RATE * GAP_SECONDS)
+    return gap.join(_tone(seconds) for seconds in song.songs_in_it)
+
+
+def _tone(seconds: float) -> bytes:
+    """Return `seconds` of a 440 Hz tone, loud enough not to count as silence."""
+    return b"".join(
+        struct.pack("<h", round(8_000 * math.sin(2 * math.pi * 440 * frame / RATE)))
+        for frame in range(int(RATE * seconds))
+    )
 
 
 def folder_of(root: Path, songs: Mapping[str, Song]) -> Path:

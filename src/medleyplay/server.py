@@ -54,6 +54,7 @@ from medleyplay.application.remote import RemoteService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.silences import SilenceService, find_silences_kind
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
@@ -181,6 +182,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     enrich = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
     find_artist = find_artist_kind(clock)
     find_artist_names = find_artist_names_kind(clock)
+    find_silences = find_silences_kind(clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,
@@ -188,6 +190,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         enrich.name: enrich,
         find_artist.name: find_artist,
         find_artist_names.name: find_artist_names,
+        find_silences.name: find_silences,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -241,13 +244,14 @@ def build_services(  # noqa: PLR0913, PLR0915
         multiple_accounts=config.multiple_accounts,
         on_change=changes.tell,
     )
+    playback = PlaybackService(units, plugins, jobs, cache, data_dir, downloads, mode.online)
     return Services(
         accounts=accounts,
         catalog=catalog,
         plugins=plugins,
         jobs=jobs,
         libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
-        playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads, mode.online),
+        playback=playback,
         linked=linked,
         proxies=proxies,
         links=links,
@@ -259,6 +263,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         mode=mode,
         details=DetailsService(units, clock, changes.tell),
         songs=SongsService(units, clock, changes.tell),
+        silences=SilenceService(units, clock, plugins, jobs, find_silences, playback),
         covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
         enrichment=enrichment,
         sweeper=sweeper,

@@ -165,6 +165,26 @@ export interface Songs {
   readonly suggested_by: AnsweredBy | null;
 }
 
+/** A quiet stretch of a file's audio, such as the gap between two songs. */
+export interface Silence {
+  readonly start_ms: number;
+  readonly end_ms: number;
+}
+
+/**
+ * What is known of the gaps in a file's audio: found; being found; waiting for the
+ * file to be copied or downloaded; not looked for, or the file changed since; or not
+ * found, as ffmpeg isn't installed or couldn't read the file.
+ */
+export type SilenceState =
+  "found" | "finding" | "preparing" | "not_found" | "no_tool" | "unreadable";
+
+/** What is known of the gaps in a file's audio, and the gaps, in order, once found. */
+export interface Silences {
+  readonly state: SilenceState;
+  readonly silences: readonly Silence[];
+}
+
 /** A row of the songs editor: the song it keeps by `id`, or `null` for a new one. */
 export interface SongRowIn extends Song {
   readonly id: number | null;
@@ -902,6 +922,11 @@ export const api = {
   removeCover: (trackId: number) => call<Details>("DELETE", `/api/tracks/${String(trackId)}/cover`),
   /** The songs a Track's file is split into, and the lists found for it. */
   songs: (trackId: number) => call<Songs>("GET", `/api/tracks/${String(trackId)}/songs`),
+  /** Say what is known of the gaps in a file's audio. */
+  silences: (trackId: number) => call<Silences>("GET", `/api/tracks/${String(trackId)}/silences`),
+  /** Find the gaps in a file's audio, unless they are known or being found. */
+  findSilences: (trackId: number) =>
+    call<Silences>("POST", `/api/tracks/${String(trackId)}/silences/find`),
   /** Make `rows` the file's songs: each kept by its id, the others new, the rest removed. */
   saveSongs: (trackId: number, rows: readonly SongRowIn[], known: readonly number[]) =>
     call<Songs>("PUT", `/api/tracks/${String(trackId)}/songs`, { rows, known }),

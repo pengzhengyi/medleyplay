@@ -29,6 +29,7 @@ from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.silences import SilenceService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import DeviceId
@@ -59,6 +60,7 @@ class Services:
     mode: ModeService
     details: DetailsService
     songs: SongsService
+    silences: SilenceService
     covers: CoverService
     enrichment: EnrichmentService
     sweeper: EnrichmentSweeper
@@ -158,6 +160,10 @@ def _songs(services: Annotated[Services, Depends(_services)]) -> SongsService:
     return services.songs
 
 
+def _silences(services: Annotated[Services, Depends(_services)]) -> SilenceService:
+    return services.silences
+
+
 def _covers(services: Annotated[Services, Depends(_services)]) -> CoverService:
     return services.covers
 
@@ -202,6 +208,7 @@ ArtistsDep = Annotated[ArtistService, Depends(_artists)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]
+SilencesDep = Annotated[SilenceService, Depends(_silences)]
 CoversDep = Annotated[CoverService, Depends(_covers)]
 EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
 AiDep = Annotated[AiService, Depends(_ai)]

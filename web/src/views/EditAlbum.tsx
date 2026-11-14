@@ -105,25 +105,29 @@ export function EditAlbum({
         <p className="hint">
           {`${String(songs.length)} songs of their own. What you type here is set on each of them.`}
         </p>
-        {FIELDS.map(({ detail, label }) => (
-          <label key={detail} className="edit-album-field">
-            {label}
-            <input
-              className="edit-album-box"
-              type={detail === "year" ? "number" : "text"}
-              inputMode={detail === "year" ? "numeric" : undefined}
-              min={detail === "year" ? 1 : undefined}
-              max={detail === "year" ? 9999 : undefined}
-              maxLength={detail === "year" ? undefined : 512}
-              value={draft[detail]}
-              placeholder={shared[detail] === undefined ? "Varies; each keeps its own" : undefined}
-              onChange={(event) => {
-                const { value } = event.currentTarget;
-                setDraft((now) => ({ ...now, [detail]: value }));
-              }}
-            />
-          </label>
-        ))}
+        <div className="edit-album-fields">
+          {FIELDS.map(({ detail, label }) => (
+            <label key={detail} className="edit-album-field">
+              {label}
+              <input
+                className="edit-album-box"
+                type={detail === "year" ? "number" : "text"}
+                inputMode={detail === "year" ? "numeric" : undefined}
+                min={detail === "year" ? 1 : undefined}
+                max={detail === "year" ? 9999 : undefined}
+                maxLength={detail === "year" ? undefined : 512}
+                value={draft[detail]}
+                placeholder={
+                  shared[detail] === undefined ? "Varies; each keeps its own" : undefined
+                }
+                onChange={(event) => {
+                  const { value } = event.currentTarget;
+                  setDraft((now) => ({ ...now, [detail]: value }));
+                }}
+              />
+            </label>
+          ))}
+        </div>
         {error !== "" && (
           <p className="error" role="alert">
             {error}

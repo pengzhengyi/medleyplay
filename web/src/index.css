@@ -3420,7 +3420,8 @@ dialog.modal::backdrop {
   padding-block: 0;
 }
 
-.add-to-playlist .dialog-button {
+.add-to-playlist .dialog-button,
+.edit-album .dialog-button {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -6182,13 +6183,22 @@ button.playing-kind[aria-expanded="true"] {
   }
 }
 
-/* Edit album: a label over each box. */
+/* Edit album: a label over each box, two to a row where there is room. */
+.edit-album-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
 .edit-album-field {
   display: grid;
   gap: 0.25rem;
-  margin-bottom: 0.75rem;
+  margin: 0;
 }
 
 .edit-album-box {
+  height: 2.6rem;
   margin: 0;
+  padding-block: 0;
 }

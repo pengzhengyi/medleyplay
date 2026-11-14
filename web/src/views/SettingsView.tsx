@@ -19,6 +19,7 @@ import {
   type Storage,
   type WaitingDevice,
   api,
+  newestOf,
 } from "../api";
 import { AUTO_SAVE_MS, useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
@@ -108,6 +109,9 @@ export function SettingsView({
   const [folded, setFolded] = useState(loadFolded);
   // One copy for the sections that save the settings, so each saves at the latest revision.
   const [household, setHousehold] = useState<Settings | undefined>(undefined);
+  const keepNewest = (read: Settings) => {
+    setHousehold((held) => newestOf(held, read));
+  };
   const fold = (next: ReadonlySet<SectionId>) => {
     setFolded(next);
     keepFolded(next);
@@ -143,12 +147,12 @@ export function SettingsView({
       <KindSettings
         admin={admin}
         settings={household}
-        onSettings={setHousehold}
+        onSettings={keepNewest}
         onChanged={onKindsChanged}
       />
     ),
     ratings: <RatingsSettings onChanged={onRatingsChanged} />,
-    storage: <StorageSettings admin={admin} settings={household} onSettings={setHousehold} />,
+    storage: <StorageSettings admin={admin} settings={household} onSettings={keepNewest} />,
     bilibili: (
       <>
         <BilibiliSettings />
@@ -290,16 +294,19 @@ function StorageSettings({
   const asked = useRef<() => void>(undefined);
   const latest = useRef(settings);
   useEffect(() => {
-    latest.current = settings;
+    if (settings !== undefined) {
+      latest.current = newestOf(latest.current, settings);
+    }
   }, [settings]);
 
   const reload = (then = () => undefined) => {
     Promise.all([api.settings(), api.storage()]).then(
       ([read, now]) => {
-        latest.current = read;
-        onSettings(read);
+        const newest = newestOf(latest.current, read);
+        latest.current = newest;
+        onSettings(newest);
         setStorage(now);
-        setDraft(draftOf(read));
+        setDraft(draftOf(newest));
         setRemoving(undefined);
         then();
       },

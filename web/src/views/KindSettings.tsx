@@ -8,7 +8,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { ApiError, type Settings, api } from "../api";
+import { ApiError, type Settings, api, newestOf } from "../api";
 import { useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
 
@@ -51,15 +51,18 @@ export function KindSettings({
   const [error, setError] = useState("");
   const latest = useRef(settings);
   useEffect(() => {
-    latest.current = settings;
+    if (settings !== undefined) {
+      latest.current = newestOf(latest.current, settings);
+    }
   }, [settings]);
 
   const reload = (then = () => undefined) => {
     api.settings().then(
       (read) => {
-        latest.current = read;
-        onSettings(read);
-        setDraft(draftOf(read));
+        const newest = newestOf(latest.current, read);
+        latest.current = newest;
+        onSettings(newest);
+        setDraft(draftOf(newest));
         then();
       },
       (failure: unknown) => {

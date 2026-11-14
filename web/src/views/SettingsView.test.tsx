@@ -558,6 +558,74 @@ describe("the Songs and albums section", () => {
     });
   });
 
+  it("saves a length typed back after a save, at the revision that save left", async () => {
+    let kept: Settings = LIMIT_20;
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": () => ({ body: kept }),
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        kept = { ...(body as Settings), revision: kept.revision + 1 };
+        return { body: kept };
+      },
+    });
+    const minutes = await kinds().findByRole("spinbutton", { name: "Shortest album, in minutes" });
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "25");
+    await userEvent.tab();
+    await kinds().findByText("Saved.");
+
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "20");
+    await userEvent.tab();
+
+    await waitFor(() => {
+      expect(sent).toEqual([
+        { ...LIMIT_20, album_minutes: 25 },
+        { ...LIMIT_20, album_minutes: 20, revision: 3 },
+      ]);
+    });
+  });
+
+  it("keeps the newest settings when another section's first read answers after a save", async () => {
+    let release: (value: undefined) => void = () => undefined;
+    const slow = new Promise<undefined>((resolve) => {
+      release = resolve;
+    });
+    let kept: Settings = LIMIT_20;
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": () => ({ body: kept }),
+      "GET /api/storage": { body: USING_2, after: slow },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        if ((body as Settings).revision !== kept.revision) {
+          return { status: 409, body: { detail: "Saved since." } };
+        }
+        kept = { ...(body as Settings), revision: kept.revision + 1 };
+        return { body: kept };
+      },
+    });
+    const minutes = await kinds().findByRole("spinbutton", { name: "Shortest album, in minutes" });
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "25");
+    await userEvent.tab();
+    await kinds().findByText("Saved.");
+    release(undefined);
+    await storage().findByRole("spinbutton", { name: "Limit in GB" });
+
+    await userEvent.clear(minutes);
+    await userEvent.type(minutes, "20");
+    await userEvent.tab();
+
+    await waitFor(() => {
+      expect(sent).toEqual([
+        { ...LIMIT_20, album_minutes: 25 },
+        { ...LIMIT_20, album_minutes: 20, revision: 3 },
+      ]);
+    });
+  });
+
   it("saves the storage limit at the revision saving the album length left", async () => {
     let kept: Settings = LIMIT_20;
     const sent: unknown[] = [];

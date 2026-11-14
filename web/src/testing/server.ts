@@ -34,6 +34,8 @@ import { type SavedShortcuts, openAccount } from "../shortcuts";
 export interface Answer {
   readonly status?: number;
   readonly body?: unknown;
+  /** Answer only once this settles, as a slow server would. */
+  readonly after?: Promise<unknown>;
 }
 
 /** Routes keyed by method and path, such as `"GET /api/me"`. */
@@ -49,15 +51,16 @@ export function serve(routes: Routes): { readonly calls: string[] } {
     const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     const answer = typeof found === "function" ? found(body) : (found ?? { status: 404 });
     const status = answer.status ?? 200;
-    return Promise.resolve(
-      new Response(
-        status === 204
-          ? null
-          : JSON.stringify(answer.body === undefined ? { detail: "Not Found" } : answer.body),
-        {
-          status,
-        },
-      ),
+    return (answer.after ?? Promise.resolve()).then(
+      () =>
+        new Response(
+          status === 204
+            ? null
+            : JSON.stringify(answer.body === undefined ? { detail: "Not Found" } : answer.body),
+          {
+            status,
+          },
+        ),
     );
   });
   return { calls };

@@ -464,7 +464,7 @@ function StorageSettings({
                 <p className="hint">Type a size in GB, such as 20.</p>
               )}
               {removing !== undefined && (
-                <div className="limit-confirm" role="group" aria-label="Lower the limit">
+                <div className="limit-confirm">
                   <p>{removalText(removing.preview)}</p>
                   <button
                     type="button"

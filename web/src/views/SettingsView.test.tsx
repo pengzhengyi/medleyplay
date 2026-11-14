@@ -248,6 +248,37 @@ describe("storage settings", () => {
     ]);
   });
 
+  it("asks again when, by the time it saves, the limit would remove more than was said", async () => {
+    const sent: unknown[] = [];
+    const removals = [{ kind: "download", size: 400_000_000 }] as const;
+    let previews = 0;
+    open(true, {
+      "GET /api/storage?limit=1000000000": () => {
+        previews++;
+        return {
+          body: {
+            ...USING_2,
+            preview: { removals: previews === 1 ? removals : [...removals, ...removals] },
+          },
+        };
+      },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: LIMIT_20 };
+      },
+    });
+    const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    await userEvent.clear(size);
+    await userEvent.type(size, "1");
+    await userEvent.tab();
+    await screen.findByText("Saving removes 1 download (400 MB) to fit.");
+
+    await userEvent.click(storage().getByRole("button", { name: "Remove and save" }));
+
+    expect(await screen.findByText("Saving removes 2 downloads (800 MB) to fit.")).toBeVisible();
+    expect(sent).toEqual([]);
+  });
+
   it("keeps the limit when asked to, removing nothing", async () => {
     const sent: unknown[] = [];
     open(true, {
@@ -307,18 +338,94 @@ describe("storage settings", () => {
     });
   });
 
-  it("shows the settings as they are now when someone else saved first", async () => {
+  it("shows the limit as it is now when someone else changed it first", async () => {
     open(true, {
+      "GET /api/settings": { body: LIMIT_20 },
+      "PUT /api/settings": { status: 409, body: { detail: "The settings changed." } },
+    });
+    await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    serve({
+      "GET /api/settings": { body: { ...LIMIT_20, storage_limit: 50 * GB, revision: 3 } },
       "PUT /api/settings": { status: 409, body: { detail: "The settings changed." } },
     });
 
-    await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
+    await userEvent.click(screen.getByRole("radio", { name: "No limit" }));
 
-    expect(await screen.findByText(/These settings changed elsewhere/)).toBeInTheDocument();
-    expect(screen.getByRole("spinbutton", { name: "Limit in GB" })).toHaveValue(20);
+    expect(
+      await storage().findByText("Someone else changed this first, so here it is now."),
+    ).toBeVisible();
+    expect(screen.getByRole("spinbutton", { name: "Limit in GB" })).toHaveValue(50);
   });
 
-  it("saves no size that isn't one", async () => {
+  it("saves the limit over another change to the settings made since", async () => {
+    const sent: unknown[] = [];
+    const since: Settings = { ...LIMIT_20, album_minutes: 45, revision: 3 };
+    open(true);
+    await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    serve({
+      "GET /api/settings": { body: since },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return (body as Settings).revision === since.revision
+          ? { body: { ...since, storage_limit: null, revision: 4 } }
+          : { status: 409, body: { detail: "The settings changed." } };
+      },
+    });
+
+    await userEvent.click(screen.getByRole("radio", { name: "No limit" }));
+
+    expect(await storage().findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([
+      { ...LIMIT_20, storage_limit: null },
+      { ...since, storage_limit: null },
+    ]);
+  });
+
+  it("says a limit that couldn't be saved wasn't, and saves it once back online", async () => {
+    const sent: unknown[] = [];
+    let reachable = false;
+    open(true, {
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return reachable
+          ? { body: { ...LIMIT_20, storage_limit: null, revision: 3 } }
+          : { status: 503, body: { detail: "The server is restarting." } };
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
+    expect(await storage().findByText(/^Not saved: /)).toBeVisible();
+    reachable = true;
+    window.dispatchEvent(new Event("online"));
+
+    expect(await storage().findByText("Saved.")).toBeVisible();
+    expect(sent).toHaveLength(2);
+  });
+
+  it("only opens the size to type when a limit is chosen, saving it once the size is left", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": { body: { ...LIMIT_20, storage_limit: null } },
+      "GET /api/storage?limit=20000000000": { body: { ...USING_2, preview: { removals: [] } } },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, revision: 3 } };
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("radio", { name: /Up to/ }));
+    const size = screen.getByRole("spinbutton", { name: "Limit in GB" });
+    const opened = { focused: size === document.activeElement, sent: [...sent] };
+    await userEvent.tab();
+
+    expect(opened).toEqual({ focused: true, sent: [] });
+    expect(size).toHaveValue(20);
+    await waitFor(() => {
+      expect(sent).toEqual([{ ...LIMIT_20, storage_limit: 20 * GB, revision: 2 }]);
+    });
+  });
+
+  it("puts back the saved limit when the size is left as no size at all", async () => {
     const sent: unknown[] = [];
     open(true, {
       "PUT /api/settings": (body) => {
@@ -331,7 +438,8 @@ describe("storage settings", () => {
     await userEvent.clear(size);
     await userEvent.tab();
 
-    expect(screen.getByText("Type a size in GB, such as 20.")).toBeInTheDocument();
+    expect(storage().getByText("Not saved: type a size in GB, such as 20.")).toBeVisible();
+    expect(size).toHaveValue(20);
     expect(sent).toEqual([]);
   });
 });
@@ -605,6 +713,47 @@ describe("the Songs and albums section", () => {
         { ...LIMIT_20, album_minutes: 20, revision: 3 },
       ]);
     });
+  });
+
+  it("saves turning the guess back on while turning it off still saves", async () => {
+    let kept: Settings = LIMIT_20;
+    const sent: unknown[] = [];
+    let answer: (value: undefined) => void = () => undefined;
+    open(true, {
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        kept = { ...(body as Settings), revision: kept.revision + 1 };
+        const slow = new Promise<undefined>((resolve) => {
+          answer = resolve;
+        });
+        return sent.length === 1 ? { body: kept, after: slow } : { body: kept };
+      },
+    });
+    const guess = await kinds().findByRole("checkbox", {
+      name: "Guess that a long file is an album",
+    });
+
+    await userEvent.click(guess);
+    await userEvent.click(guess);
+    answer(undefined);
+
+    await waitFor(() => {
+      expect(sent).toEqual([
+        { ...LIMIT_20, album_minutes: null },
+        { ...LIMIT_20, album_minutes: 20, revision: 3 },
+      ]);
+    });
+  });
+
+  it("puts back the saved length when it is left as no length at all", async () => {
+    open(true);
+    const minutes = await kinds().findByRole("spinbutton", { name: "Shortest album, in minutes" });
+
+    await userEvent.clear(minutes);
+    await userEvent.tab();
+
+    expect(kinds().getByText("Not saved: type whole minutes from 1 to 600.")).toBeVisible();
+    expect(minutes).toHaveValue(20);
   });
 
   it("saves the storage limit at the revision saving the album length left", async () => {

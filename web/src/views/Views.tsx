@@ -8,6 +8,7 @@ import {
   PlayIcon,
   PlaylistIcon,
   ShuffleIcon,
+  PencilSimpleIcon,
 } from "@phosphor-icons/react";
 import { Fragment, type ReactNode, useMemo } from "react";
 
@@ -26,6 +27,7 @@ import {
   type Album,
   type Artist,
   albumsOf,
+  albumFileOf,
   artistsOf,
   downloadedOf,
   favoritesOf,
@@ -153,6 +155,8 @@ function viewOf(given: ViewProps) {
       return <Albums tracks={props.tracks} favorites={props.favorites} actions={props.actions} />;
     case "album": {
       const songs = tracksOfAlbum(props.tracks, route.artist, route.name);
+      const file = albumFileOf(songs, new Map(given.tracks.map((track) => [track.id, track])));
+      const { onEditAlbum } = props.actions;
       return (
         <Songs
           title={route.name || UNKNOWN_ALBUM}
@@ -171,6 +175,25 @@ function viewOf(given: ViewProps) {
                 loved={favoriteSongsSuggesting(songs)}
                 suggestionKey={`${String(props.accountId)}:album:${albumKey(route.artist, route.name)}`}
               />
+            )
+          }
+          edit={
+            songs.length > 0 &&
+            (file !== undefined || onEditAlbum !== undefined) && (
+              <button
+                type="button"
+                className="secondary outline edit-heading"
+                onClick={() => {
+                  if (file === undefined) {
+                    onEditAlbum?.(songs);
+                  } else {
+                    props.actions.onEditDetails(file);
+                  }
+                }}
+              >
+                <PencilSimpleIcon aria-hidden />
+                Edit details
+              </button>
             )
           }
           about={<AlbumRatingNote artist={route.artist} album={route.name} />}
@@ -253,6 +276,7 @@ function Songs({
   back,
   backLabel,
   heart,
+  edit,
   about,
   children,
   empty,
@@ -265,6 +289,8 @@ function Songs({
   readonly backLabel?: string;
   /** A heart beside the title, for an artist or album that can be a favorite. */
   readonly heart?: ReactNode;
+  /** A way to edit what the page is of, beside the title. */
+  readonly edit?: ReactNode;
   /** What you said of the artist or album, shown under the heading. */
   readonly about?: ReactNode;
   readonly children: readonly Track[];
@@ -278,6 +304,7 @@ function Songs({
         back={back}
         backLabel={backLabel}
         heart={heart}
+        edit={edit}
       >
         {children.length > 0 && formatLength(children.length, durationOf(children))}
       </ViewHeading>
@@ -293,6 +320,7 @@ function ViewHeading({
   back,
   backLabel,
   heart,
+  edit,
   children,
 }: {
   readonly title: string;
@@ -300,8 +328,10 @@ function ViewHeading({
   readonly back?: Route | undefined;
   readonly backLabel?: string | undefined;
   readonly heart?: ReactNode;
+  readonly edit?: ReactNode;
   readonly children?: ReactNode;
 }) {
+  const beside = [heart, edit].some((each) => each !== undefined && each !== false);
   return (
     <header className="view-heading">
       {back !== undefined && (
@@ -310,13 +340,14 @@ function ViewHeading({
           {backLabel}
         </a>
       )}
-      {heart === undefined || heart === false ? (
-        <h2 className="section">{title}</h2>
-      ) : (
+      {beside ? (
         <div className="view-title">
           <h2 className="section">{title}</h2>
           {heart}
+          {edit}
         </div>
+      ) : (
+        <h2 className="section">{title}</h2>
       )}
       {subtitle !== undefined && <p className="subtitle">{subtitle}</p>}
       {children !== undefined && children !== false && <p className="meta">{children}</p>}

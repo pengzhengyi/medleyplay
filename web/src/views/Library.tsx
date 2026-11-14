@@ -20,6 +20,7 @@ import { linksOf, withLinkedFavorites } from "../library/artistLinks";
 import { useArtistNames } from "../library/useArtistNames";
 import { useNamesToTidy } from "../library/useNamesToTidy";
 import { toDoOf } from "../library/cleanUp";
+import { albumArtistOf } from "../library/views";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
@@ -28,12 +29,13 @@ import { useRemotePlayer } from "../player/useRemotePlayer";
 import { useSleepTimer } from "../player/useSleepTimer";
 import { useSpeaker } from "../player/useSpeaker";
 import { stepVolume } from "../player/volume";
-import { hrefOf, useRoute } from "../routes";
+import { hrefOf, navigate, useRoute } from "../routes";
 import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddFile } from "./AddFile";
 import { AddLink } from "./AddLink";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { CheckNetwork } from "./CheckNetwork";
+import { EditAlbum } from "./EditAlbum";
 import { EditDetails } from "./EditDetails";
 import { ListenOnDevice } from "./ListenOnDevice";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
@@ -170,6 +172,8 @@ export function Library({
   const [editing, setEditing] = useState<
     { readonly track: Track; readonly songs: boolean } | undefined
   >(undefined);
+  // The songs of their own whose album is being edited, while its dialog is open.
+  const [editingAlbum, setEditingAlbum] = useState<readonly Track[] | undefined>(undefined);
   // The link or code being added from Bilibili, and the Track whose file is being added by hand.
   const [linking, setLinking] = useState<string | undefined>(undefined);
   const [filing, setFiling] = useState<Track | undefined>(undefined);
@@ -233,6 +237,7 @@ export function Library({
     onEditDetails: (track: Track) => {
       setEditing({ track, songs: false });
     },
+    onEditAlbum: setEditingAlbum,
     canFind: (lookup: Lookup, track: Track) =>
       library.findable.get(lookup.enricher)?.has(track.id) ?? false,
     // The song's cover shows the lookup as it goes; screen readers hear it asked.
@@ -577,6 +582,33 @@ export function Library({
           onSave={(ids, newNames) => addTo(adding, ids, newNames)}
           onClose={() => {
             setAdding(undefined);
+          }}
+        />
+      )}
+      {editingAlbum !== undefined && (
+        <EditAlbum
+          songs={editingAlbum}
+          onSave={async (changes) => {
+            const [first] = editingAlbum;
+            await library.setDetailsOn(
+              editingAlbum.map(({ id }) => id),
+              changes,
+            );
+            setNotice(`Saved the album of ${String(editingAlbum.length)} songs.`);
+            // A renamed album is found under its new name; one whose name was emptied, in Albums.
+            if (first !== undefined && ("album" in changes || "album_artist" in changes)) {
+              const name = changes.album === undefined ? first.album : changes.album;
+              const artist =
+                changes.album_artist === undefined ? albumArtistOf(first) : changes.album_artist;
+              navigate(
+                typeof name === "string" && typeof artist === "string"
+                  ? { view: "album", artist, name }
+                  : { view: "albums" },
+              );
+            }
+          }}
+          onClose={() => {
+            setEditingAlbum(undefined);
           }}
         />
       )}

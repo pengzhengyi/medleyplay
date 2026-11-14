@@ -116,6 +116,23 @@ export function tracksOfAlbum(tracks: readonly Track[], artist: string, name: st
   );
 }
 
+/**
+ * Return the one file an album is, if it is one: the file its songs were split from,
+ * listed among them or not, or the album itself as one file not yet split.
+ */
+export function albumFileOf(
+  album: readonly Track[],
+  byId: ReadonlyMap<number, Track>,
+): Track | undefined {
+  const files = new Set(album.map((track) => track.segment_of ?? track.id));
+  const [only] = files;
+  if (files.size !== 1 || only === undefined) {
+    return undefined;
+  }
+  const file = byId.get(only);
+  return file?.kind === "album" ? file : undefined;
+}
+
 /** Return the favorite Tracks newest added first, the order of the server's Favorites. */
 export function favoritesOf(tracks: readonly Track[]): Track[] {
   return tracks

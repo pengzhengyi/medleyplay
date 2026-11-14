@@ -578,6 +578,18 @@ button.text:hover:not(:disabled) {
   font-size: 1.35rem;
 }
 
+/* The way to edit what the page is of: a quiet pill after the heart. */
+.view-title button.edit-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
 .favorite-heart.beat {
   animation: heart-beat 900ms ease-in-out 3;
 }
@@ -6168,4 +6180,15 @@ button.playing-kind[aria-expanded="true"] {
   .clean-up-link.on-phone {
     display: flex;
   }
+}
+
+/* Edit album: a label over each box. */
+.edit-album-field {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.edit-album .edit-album-field input {
+  margin: 0;
 }

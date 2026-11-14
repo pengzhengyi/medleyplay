@@ -20,7 +20,8 @@ import {
   type WaitingDevice,
   api,
 } from "../api";
-import { classOf, useNote } from "../useNote";
+import { AUTO_SAVE_MS, useAutoSave } from "../useAutoSave";
+import { classOf } from "../useNote";
 import { formatBytes } from "../format";
 import { hrefOf } from "../routes";
 import { AiSettings } from "./AiSettings";
@@ -35,8 +36,6 @@ import { ThemeSwitch } from "./ThemeSwitch";
 import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
 const GB = 1_000_000_000;
-/** How long after the limit stops changing its preview is asked for. */
-const SETTLE_MS = 300;
 
 /** The sections, in the order the page shows them. */
 const SECTIONS = [
@@ -284,22 +283,24 @@ function StorageSettings({
 }) {
   const [storage, setStorage] = useState<Storage | undefined>(undefined);
   const [draft, setDraft] = useState<Draft>({ unlimited: true, gb: "" });
-  const [preview, setPreview] = useState<Preview | undefined>(undefined);
-  const notes = useNote();
+  /** A lower limit waiting to be confirmed: what saving it removes, `null` if unknown. */
+  const [removing, setRemoving] = useState<{ bytes: number; preview: Preview | null }>();
   const [error, setError] = useState("");
   const asking = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const asked = useRef<() => void>(undefined);
+  const latest = useRef(settings);
+  useEffect(() => {
+    latest.current = settings;
+  }, [settings]);
 
-  const reload = (
-    then = () => {
-      notes.tell("");
-    },
-  ) => {
+  const reload = (then = () => undefined) => {
     Promise.all([api.settings(), api.storage()]).then(
       ([read, now]) => {
+        latest.current = read;
         onSettings(read);
         setStorage(now);
         setDraft(draftOf(read));
-        setPreview(undefined);
+        setRemoving(undefined);
         then();
       },
       (failure: unknown) => {
@@ -317,40 +318,22 @@ function StorageSettings({
     };
   }, []);
 
-  const limit = bytesOf(draft);
-  const changed = settings !== undefined && limit !== undefined && limit !== settings.storage_limit;
-
-  const change = (next: Draft) => {
-    setDraft(next);
-    notes.tell("");
-    setPreview(undefined);
-    clearTimeout(asking.current);
-    const bytes = bytesOf(next);
-    if (bytes === null || bytes === undefined || bytes === settings?.storage_limit) {
-      return;
-    }
-    asking.current = setTimeout(() => {
-      api.storage(bytes).then(
-        (planned) => {
-          setPreview(planned.preview ?? undefined);
-        },
-        () => {
-          // Without a preview, saving still works; the policy says what it removed.
-        },
-      );
-    }, SETTLE_MS);
-  };
-
-  const save = () => {
-    if (settings === undefined || limit === undefined) {
-      return;
+  const saving = useAutoSave((limit: number | null, notes) => {
+    const base = latest.current;
+    if (base === undefined || limit === base.storage_limit) {
+      notes.tell("");
+      return Promise.resolve(false);
     }
     setError("");
-    api.saveSettings({ ...settings, storage_limit: limit }).then(
-      () => {
-        reload(() => {
-          notes.confirm("Saved.");
+    setRemoving(undefined);
+    return api.saveSettings({ ...base, storage_limit: limit }).then(
+      (saved) => {
+        latest.current = saved;
+        onSettings(saved);
+        api.storage().then(setStorage, () => {
+          // The usage shown is a moment old; the next visit reads it again.
         });
+        return true;
       },
       (failure: unknown) => {
         if (failure instanceof ApiError && failure.status === 409) {
@@ -359,11 +342,63 @@ function StorageSettings({
               "These settings changed elsewhere, so here they are now. Change them again to save.",
             );
           });
-          return;
+        } else {
+          notes.tell("");
+          setError(failure instanceof Error ? failure.message : String(failure));
         }
-        setError(failure instanceof Error ? failure.message : String(failure));
+        return false;
       },
     );
+  });
+
+  /** Ask what `bytes` would remove: save it if nothing, or wait for a confirmation. */
+  const ask = (bytes: number) => {
+    clearTimeout(asking.current);
+    asked.current = undefined;
+    const confirmBefore = (preview: Preview | null) => {
+      if (asked.current !== settle) {
+        return;
+      }
+      asked.current = undefined;
+      if (preview !== null && preview.removals.length === 0) {
+        saving.now(bytes);
+      } else {
+        setRemoving({ bytes, preview });
+      }
+    };
+    const settle = () => {
+      clearTimeout(asking.current);
+      api.storage(bytes).then(
+        (planned) => {
+          confirmBefore(planned.preview ?? { removals: [] });
+        },
+        () => {
+          confirmBefore(null);
+        },
+      );
+    };
+    asked.current = settle;
+    asking.current = setTimeout(settle, AUTO_SAVE_MS);
+  };
+  const settleNow = () => {
+    asked.current?.();
+  };
+
+  const change = (next: Draft) => {
+    setDraft(next);
+    setRemoving(undefined);
+    clearTimeout(asking.current);
+    asked.current = undefined;
+    const bytes = bytesOf(next);
+    if (bytes === undefined || bytes === latest.current?.storage_limit) {
+      saving.cancel();
+      saving.tell("");
+    } else if (bytes === null) {
+      saving.now(null);
+    } else {
+      saving.cancel();
+      ask(bytes);
+    }
   };
 
   return (
@@ -383,7 +418,7 @@ function StorageSettings({
               className="limit"
               onSubmit={(event) => {
                 event.preventDefault();
-                save();
+                settleNow();
               }}
             >
               <fieldset>
@@ -420,23 +455,43 @@ function StorageSettings({
                     onChange={(event) => {
                       change({ unlimited: false, gb: event.currentTarget.value });
                     }}
+                    onBlur={settleNow}
                   />
                   GB
                 </label>
               </fieldset>
-              <p className="hint" role="status">
-                {limit === undefined
-                  ? "Type a size in GB, such as 20."
-                  : changed && limit !== null
-                    ? previewText(preview)
-                    : ""}
-              </p>
-              <button type="submit" disabled={!changed}>
-                Save
-              </button>
-              {notes.note.text !== "" && (
-                <p className={classOf(notes.note, "hint saved")}>{notes.note.text}</p>
+              {bytesOf(draft) === undefined && (
+                <p className="hint">Type a size in GB, such as 20.</p>
               )}
+              {removing !== undefined && (
+                <div className="limit-confirm" role="group" aria-label="Lower the limit">
+                  <p>{removalText(removing.preview)}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saving.now(removing.bytes);
+                    }}
+                  >
+                    Remove and save
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary outline"
+                    onClick={() => {
+                      const kept = latest.current;
+                      setRemoving(undefined);
+                      if (kept !== undefined) {
+                        setDraft(draftOf(kept));
+                      }
+                    }}
+                  >
+                    Keep the limit
+                  </button>
+                </div>
+              )}
+              <p className={classOf(saving.note, "hint saved")} role="status">
+                {saving.note.text}
+              </p>
             </form>
           ) : (
             <p className="hint">
@@ -525,15 +580,12 @@ const countOf = (count: number, done: string) =>
   `${String(count)} ${count === 1 ? "download" : "downloads"} ${done}`;
 
 /** Say what saving a lower limit would remove, from its preview. */
-function previewText(preview: Preview | undefined): string {
-  if (preview === undefined) {
-    return "Working out what this limit would remove…";
+function removalText(preview: Preview | null): string {
+  if (preview === null) {
+    return "This limit may remove Downloads to fit, but what it removes couldn't be worked out.";
   }
   const downloads = preview.removals.filter((each) => each.kind === "download");
   const copies = preview.removals.filter((each) => each.kind === "cache");
-  if (downloads.length === 0 && copies.length === 0) {
-    return "Nothing needs removing to fit.";
-  }
   const sized = (items: typeof downloads, one: string, many: string) =>
     `${String(items.length)} ${items.length === 1 ? one : many} (${formatBytes(
       items.reduce((total, each) => total + each.size, 0),

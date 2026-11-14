@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Settings save as you change them** — the album length and the storage limit
+  have no Save button any more: a choice saves at once, a typed value once
+  typing pauses or the field is left, and *Saving…*, then *Saved.*, shows beside
+  it. A lower limit that would remove Downloads still asks first, saying what it
+  removes.
+
 - **Snap song starts to the gaps** — the songs editor's *Snap* moves each start
   to the silence between songs nearest it, within half a minute, so an AI
   model's or a video's guessed starts land exactly; the moved starts are

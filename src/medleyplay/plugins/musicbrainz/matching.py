@@ -56,6 +56,12 @@ def release_query(album: str, artist: str) -> str:
     return f'release:"{escape_lucene(album)}" AND artist:"{escape_lucene(artist)}"'
 
 
+def artist_query(name: str) -> str:
+    """Return the Lucene query for the artists known by `name`, as their name or an alias."""
+    escaped = escape_lucene(name)
+    return f'artist:"{escaped}" OR alias:"{escaped}"'
+
+
 def same_title(first: str, second: str) -> bool:
     """Return whether two titles are the same ignoring case and the width of characters."""
     return _folded(first) == _folded(second)

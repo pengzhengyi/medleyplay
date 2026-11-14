@@ -26,6 +26,8 @@ SHU_PU_GROUP = "7a1b2c3d-0000-4000-8000-00000000c3d4"
 """A made-up release group of 生如夏花, for the hand-made answers."""
 SHU_PU = "0f463449-2b8b-4874-88ed-92392d97f955"
 """The 2003 original of 朴树's 生如夏花 in the hand-made answers."""
+BEATLES = "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d"
+"""The Beatles on MusicBrainz."""
 
 
 class FakeMusicBrainz(FakeTransport):
@@ -34,6 +36,15 @@ class FakeMusicBrainz(FakeTransport):
 
 class MusicBrainzFactory:
     """Builds the answers of MusicBrainz and the sites it points to, from the recordings."""
+
+    @staticmethod
+    def beatles_search() -> dict[str, Any]:
+        """Return the hand-made artist search for *披头士*.
+
+        The Beatles score 100, and go by Beatles, 披头士 (zh), 披頭四 (zh_Hant), and
+        ザ・ビートルズ (ja); a made-up tribute band, 披头士乐队纪念乐团, scores 61.
+        """
+        return recorded_answer("cjk-artist-search")
 
     @staticmethod
     def let_down_search(*, score: int | None = None) -> dict[str, Any]:

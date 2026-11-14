@@ -16,6 +16,9 @@ CC BY-NC-SA 3.0, from MusicBrainz, https://musicbrainz.org):
 - `cjk-release-search.json`: made by hand in the shape of MusicBrainz's release search;
   the album 生如夏花 by 朴树 as its 2003 original and a 2013 reissue, and a compilation
   that scores lower.
+- `cjk-artist-search.json`: made by hand in the shape of MusicBrainz's artist search,
+  for *披头士*: The Beatles, scoring 100 with that name among its aliases, and a made-up
+  tribute band scoring 61.
 - `cjk-release.json`: made by hand in the shape of a release lookup; the 2003 original,
   with 11 songs whose titles after the first are made up, and a front cover.
 

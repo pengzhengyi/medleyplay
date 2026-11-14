@@ -11,6 +11,18 @@ plugin = Plugin(api_version=1, register=register)
 ```
 """
 
+from medleyplay.plugin_api.artists import (
+    ARTIST_FINDER,
+    FIND_ARTIST,
+    MAX_ALIASES,
+    MAX_ARTISTS,
+    ArtistAlias,
+    ArtistFinder,
+    FindArtist,
+    FindStatus,
+    FoundArtist,
+    FoundArtists,
+)
 from medleyplay.plugin_api.covers import MAX_COVER_BYTES, is_cover_image
 from medleyplay.plugin_api.enrichers import (
     ENRICH_TRACK,
@@ -95,6 +107,7 @@ from medleyplay.plugin_api.tags import READ_TAGS, TAG_READER, ReadTags, TagReade
 
 __all__ = [
     "API_VERSION",
+    "ARTIST_FINDER",
     "BEST_QUALITY",
     "CANONICALIZE",
     "CHECK_LOGIN",
@@ -104,11 +117,14 @@ __all__ = [
     "DOWNLOAD_PART",
     "ENRICH_TRACK",
     "FETCH_FILE",
+    "FIND_ARTIST",
     "FINGERPRINT_FILE",
     "LIBRARY_BACKEND",
     "LIST_FILES",
     "LOCATE_FILE",
     "MAX_AI_PROVIDERS",
+    "MAX_ALIASES",
+    "MAX_ARTISTS",
     "MAX_COVER_BYTES",
     "MAX_HINT",
     "READ_TAGS",
@@ -120,6 +136,8 @@ __all__ = [
     "AiEndpoint",
     "AiFailure",
     "AiFailureKind",
+    "ArtistAlias",
+    "ArtistFinder",
     "AudioQuality",
     "AuthError",
     "Canonical",
@@ -142,6 +160,10 @@ __all__ = [
     "FileList",
     "FileLocation",
     "FileRequest",
+    "FindArtist",
+    "FindStatus",
+    "FoundArtist",
+    "FoundArtists",
     "LibraryBackend",
     "LibraryFile",
     "LibraryPath",

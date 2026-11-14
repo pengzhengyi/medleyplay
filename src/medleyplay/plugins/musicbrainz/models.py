@@ -137,3 +137,29 @@ class Release(_Model):
     genres: list[Genre] = []
     cover_art_archive: Annotated[CoverArt, Field(alias="cover-art-archive")] = CoverArt()
     release_group: Annotated[ReleaseGroup | None, Field(alias="release-group")] = None
+
+
+class Alias(_Model):
+    """Another name an artist goes by."""
+
+    name: str
+    locale: str | None = None
+    primary: bool | None = None
+
+
+class FoundArtistHit(_Model):
+    """An artist an artist search found, with its score and its other names."""
+
+    id: str
+    name: str
+    score: int = 0
+    sort_name: str = Field(default="", alias="sort-name")
+    disambiguation: str = ""
+    country: str | None = None
+    aliases: list[Alias] = []
+
+
+class ArtistSearch(_Model):
+    """The artists an artist search found, best first."""
+
+    artists: list[FoundArtistHit] = []

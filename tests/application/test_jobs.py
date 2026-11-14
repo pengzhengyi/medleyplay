@@ -57,7 +57,7 @@ def test_a_running_job_shows_its_progress(
     units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
 ) -> None:
     with running_jobs(units, clock, tmp_path / "jobs") as jobs:
-        job = jobs.submit(EchoJob(text="slow", steps=2, step_seconds=1))
+        job = jobs.submit(EchoJob(text="slow", steps=2, step_seconds=30))
         running = jobs.wait_for(
             job.id, JobState.RUNNING, until=lambda view: view.progress is not None
         )

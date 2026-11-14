@@ -199,6 +199,50 @@ export interface JobEvent {
 }
 
 /** The enricher that reads a Track's video details and cover from Bilibili. */
+/** Another name an artist goes by, and the language it is written for, if one. */
+export interface ArtistAlias {
+  readonly name: string;
+  readonly locale: string | null;
+  readonly primary: boolean;
+}
+
+/** An artist MusicBrainz knows, with every name it goes by. */
+export interface KnownArtist {
+  readonly id: string;
+  readonly name: string;
+  readonly sort_name: string;
+  /** What tells it apart from others of its name, such as *Liverpool rock band*. */
+  readonly disambiguation: string;
+  readonly country: string;
+  readonly aliases: readonly ArtistAlias[];
+}
+
+/** A name Tracks show as an artist or album artist, and what is known of it. */
+export interface ArtistName {
+  readonly name: string;
+  readonly key: string;
+  readonly tracks: number;
+  /** Whether it may be looked up, never (it names no one artist), or once tidied. */
+  readonly look_up: "yes" | "never" | "tidy_first";
+  /** Whether the household chose an artist, or none, for it. */
+  readonly linked: boolean;
+  /** The artist chosen; `null` when none was, or none is linked. */
+  readonly artist_id: string | null;
+  readonly looked_at: string | null;
+  /** What MusicBrainz knows by the name, best first. */
+  readonly candidates: readonly { readonly artist_id: string; readonly score: number }[];
+  /** The artist going by the name exactly, if one. */
+  readonly suggested: string | null;
+  /** Whether MusicBrainz is being asked about it now. */
+  readonly finding: boolean;
+}
+
+/** Every artist name the Library shows, most Tracks first, and the artists they name. */
+export interface ArtistNames {
+  readonly names: readonly ArtistName[];
+  readonly artists: readonly KnownArtist[];
+}
+
 /** An artist's or album's name shown on Tracks with more than the name in it, tidied. */
 export interface NameToTidy {
   /** What the name names: an artist or album artist, or an album. */
@@ -814,6 +858,16 @@ export const api = {
     trackIds: readonly number[],
     values: Partial<Record<Detail, string | number | null>>,
   ) => call<{ changed: number }>("POST", "/api/tracks/details", { track_ids: trackIds, values }),
+  /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
+  artistNames: () => call<ArtistNames>("GET", "/api/artist-names"),
+  /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */
+  lookUpArtists: (names: readonly string[]) =>
+    call<{ asked: number }>("POST", "/api/artist-names/look-up", { names }),
+  /** Link a name to an artist MusicBrainz named for it, or to none. */
+  linkArtist: (name: string, artistId: string | null) =>
+    call<undefined>("PUT", "/api/artist-names/link", { name, artist_id: artistId }),
+  /** Forget a name's link, so it is offered again. */
+  unlinkArtist: (name: string) => call<undefined>("POST", "/api/artist-names/unlink", { name }),
   /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */

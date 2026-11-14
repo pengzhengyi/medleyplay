@@ -1,7 +1,8 @@
 // cspell:ignore supercell ｍｅｌｔ
 import { describe, expect, it } from "vitest";
 
-import { trackOf } from "../testing/server";
+import { artistNameOf, trackOf } from "../testing/server";
+import { linksOf } from "./artistLinks";
 import {
   albumsOf,
   artistsOf,
@@ -72,6 +73,51 @@ describe("artists", () => {
   it("opens an artist's Tracks by the name as written, in any case or width", () => {
     expect(titles(tracksOfArtist(LIBRARY, "RYO"))).toEqual(["Melt", "Ｍｅｌｔ (live)"]);
     expect(titles(tracksOfArtist(LIBRARY, ""))).toEqual(["Untitled"]);
+  });
+});
+
+describe("artists linked as one", () => {
+  /** *Help!* by The Beatles, two songs by 披头士, and *Melt* by ryo. */
+  const SONGS = [
+    trackOf(1, "Help!", { artist: "The Beatles", duration_ms: 100_000 }),
+    trackOf(2, "Yesterday", { artist: "披头士", duration_ms: 200_000 }),
+    trackOf(3, "Let It Be", { artist: "披头士", duration_ms: 300_000 }),
+    trackOf(4, "Melt", { artist: "ryo", duration_ms: 400_000 }),
+  ];
+  /** The Beatles and 披头士 linked to one artist, who also goes by 甲壳虫. */
+  const LINKS = linksOf({
+    names: [artistNameOf("The Beatles", "b1"), artistNameOf("披头士", "b1")],
+    artists: [
+      {
+        id: "b1",
+        name: "The Beatles",
+        sort_name: "Beatles, The",
+        disambiguation: "",
+        country: "GB",
+        aliases: [{ name: "甲壳虫", locale: "zh", primary: false }],
+      },
+    ],
+  });
+
+  it("are listed once, named as most of their songs write the name", () => {
+    const artists = artistsOf(SONGS, LINKS);
+
+    expect(artists.map((artist) => [artist.name, artist.count, artist.durationMs])).toEqual([
+      ["ryo", 1, 400_000],
+      ["披头士", 3, 600_000],
+    ]);
+  });
+
+  it("open every song of the artist from any of its names", () => {
+    expect(titles(tracksOfArtist(SONGS, "The Beatles", LINKS))).toEqual([
+      "Help!",
+      "Yesterday",
+      "Let It Be",
+    ]);
+  });
+
+  it("are found by any name the artist goes by", () => {
+    expect(search(SONGS, "甲壳虫", LINKS).artists.map((artist) => artist.name)).toEqual(["披头士"]);
   });
 });
 

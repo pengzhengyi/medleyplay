@@ -1,11 +1,9 @@
 # Artists
 
 > [!NOTE]
-> **Status: in progress.** Looking the Library's artist names up on MusicBrainz,
-> keeping what it knows, and linking each name to one artist are built in the
-> core and the API; the web client's list of names, and counting linked names as
-> one artist in the Artists view, an artist's page, favorites, and search, follow.
-> This note describes one artist under many names. Tidying a name written with
+> **Status: built.** This note describes one artist under many names: looking the
+> Library's artist names up on MusicBrainz, linking each to one artist, and
+> counting linked names as one artist across the Library. Tidying a name written with
 > more than the name in it is in [Track details](Track%20details.md).
 
 ## Contents
@@ -14,6 +12,7 @@
 - [Names and artists](#names-and-artists)
 - [Looking a name up](#looking-a-name-up)
 - [Linking a name](#linking-a-name)
+- [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
 - [Left for later](#left-for-later)
@@ -84,6 +83,24 @@ keeps the text and counts them as one.
 - **Any signed-in Account** may look names up and link them, as any may edit a
   Track's details: the catalog is the household's.
 
+## The web client
+
+- **A capsule in the Artists heading,** *Link 17 artist names*, shows while any
+  name that may be looked up is not linked, beside the one for tidying names. It
+  opens the list: each name with its songs, most songs first.
+- **Each name says where it stands:** *Look up* for one not looked up yet, with
+  *Look up 17 names* above the list for all of them; *Looking it up on
+  MusicBrainz…* while it is; *Tidy the name first* for a name that needs it; up to
+  three artists found, each with what tells it apart and its country, the
+  suggested one chosen already, to *Link* or answer *None of these*; and, once
+  linked, what it is linked to, with *Unlink*. The list reads the names again every
+  2 seconds while any is being looked up.
+- **Linked names are one artist** in the Artists view, named as most of its songs
+  write it; on its page, which lists every song of every name linked to it; in
+  search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;
+  and in favorites and Radio, where a favorite name makes every name linked with
+  it a favorite. Each song keeps its artist as written.
+
 ## What the API shows
 
 | Endpoint | Who | What |
@@ -104,8 +121,6 @@ keeps the text and counts them as one.
 
 ## Left for later
 
-- **The web client:** the list of names with their suggestions, and counting
-  linked names as one artist wherever the Library groups by artist.
 - **Wikidata's names,** through the MusicBrainz artist's Wikidata link, for
   Chinese names MusicBrainz lacks.
 - **Two artists of one name,** such as two singers called *Jay*: a link is one

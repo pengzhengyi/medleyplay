@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **One artist under many names** — the Artists heading offers to link the
+  Library's artist names to artists MusicBrainz knows: *披头士*, *甲壳虫*, and *The
+  Beatles*, or *Michael Jackson/迈克尔·杰克逊*, each looked up and offered with the
+  artist going by it chosen already. Linked names count as one artist in the
+  Artists view, on its page, in search, which finds it by any name it goes by,
+  and in favorites and Radio; each song keeps its artist as written.
+
 - **Hold ⌘ for the shortcuts** — holding ⌘ (Ctrl on Windows and Linux) on its
   own for a second shows the keyboard shortcuts over the page, and letting go
   hides them. Shortcuts made with the key never show it. Settings turns it off

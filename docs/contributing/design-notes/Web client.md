@@ -255,6 +255,16 @@ Track's kind is decided.
   and in `aria-keyshortcuts`. The header's keyboard button, or *?*, lists them
   all, with a link to change them; a phone, which has no keyboard, hides the
   button.
+- **Holding ⌘** (Ctrl off Apple devices) on its own for a second shows the same
+  list for a glance, until the key comes up. It is a dialog that isn't modal and
+  takes no focus or clicks, so the key's release still reaches the page and
+  nothing under it changes. A quick press never shows it, nor a shortcut made
+  with the key, such as ⌘ + K: any other key while it is down cancels it until it
+  comes up. It doesn't show while typing in a text box, or while the list's own
+  dialog is open, and it closes when the window loses focus or the page is
+  hidden, so switching apps with ⌘ + Tab can't leave it open. Settings turns it
+  off; the choice is the browser's, kept in `localStorage`, since it belongs to
+  the keyboard in front of it.
 - **Changing a shortcut** is in Settings: each key of a command has a remove
   button, and *Add keys* waits for the next press, modifiers included, and adds
   it, unless another command has it, which it names, waiting for other keys.

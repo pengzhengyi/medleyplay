@@ -39,7 +39,7 @@ import { PlayOn, type PlaysOn } from "./PlayOn";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
 import { SearchBox } from "./SearchBox";
-import { ShortcutList } from "./ShortcutList";
+import { HoldForShortcuts, ShortcutList } from "./ShortcutList";
 import { type ShortcutHandlers, Shortcuts } from "./Shortcuts";
 import { REPEATS, shuffleSaid } from "./playModes";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -598,6 +598,7 @@ export function Library({
           }}
         />
       )}
+      <HoldForShortcuts blocked={listingShortcuts} />
       <Shortcuts on={shortcuts} />
       <p className="notice" role="status">
         {notice}

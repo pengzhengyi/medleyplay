@@ -6189,6 +6189,6 @@ button.playing-kind[aria-expanded="true"] {
   margin-bottom: 0.75rem;
 }
 
-.edit-album .edit-album-field input {
+.edit-album-box {
   margin: 0;
 }

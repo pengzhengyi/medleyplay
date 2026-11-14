@@ -109,6 +109,7 @@ export function EditAlbum({
           <label key={detail} className="edit-album-field">
             {label}
             <input
+              className="edit-album-box"
               type={detail === "year" ? "number" : "text"}
               inputMode={detail === "year" ? "numeric" : undefined}
               min={detail === "year" ? 1 : undefined}

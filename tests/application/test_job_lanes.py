@@ -111,6 +111,40 @@ def test_the_spacing_of_one_lane_does_not_hold_another(
         assert _states(jobs, waiting.id) == [JobState.QUEUED]
 
 
+def test_lanes_sharing_a_name_run_one_at_a_time_as_one_lane(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    kind = kind_with_lanes({"tracks": Lane(shared="site"), "artists": Lane(shared="site")})
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind) as jobs:
+        first = jobs.submit(slow("tracks"), target="echo:1")
+        second = jobs.submit(slow("artists"), target="echo:2")
+        jobs.wait_for(first.id, JobState.RUNNING, until=lambda view: view.progress is not None)
+
+        while_first_runs = _states(jobs, first.id, second.id)
+        jobs.wait_for(first.id, JobState.SUCCEEDED)
+        jobs.wait_for(second.id, JobState.SUCCEEDED)
+
+    assert while_first_runs == [JobState.RUNNING, JobState.QUEUED]
+
+
+def test_the_spacing_of_a_shared_lane_holds_every_lane_sharing_it(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    shared = Lane(spacing=SPACING, shared="site")
+    kind = kind_with_lanes({"tracks": shared, "artists": shared})
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind) as jobs:
+        first = jobs.submit(EchoJob(text="a", lane="tracks"), target="echo:1")
+        jobs.wait_for(first.id, JobState.SUCCEEDED)
+        other = jobs.submit(EchoJob(text="b", lane="artists"), target="echo:2")
+
+        time.sleep(SETTLE)
+        held = _states(jobs, other.id)
+        jobs.retry_time_comes(SPACING)
+        jobs.wait_for(other.id, JobState.SUCCEEDED)
+
+    assert held == [JobState.QUEUED]
+
+
 def test_a_job_gets_the_proxy_of_its_lanes_site(
     units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
 ) -> None:

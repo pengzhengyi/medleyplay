@@ -122,7 +122,14 @@ def enrich_track_kind(covers_folder: Path, clock: Clock) -> EnrichKind:
         needs_network=True,
         lane_field="enricher",
         lanes={
-            each.name: Lane(spacing=each.spacing, proxy_site=each.site, lends_ai=each.uses_ai)
+            # Shared by the enricher's name, so another kind asking the same site, such as
+            # finding an artist on MusicBrainz, keeps to its spacing too.
+            each.name: Lane(
+                spacing=each.spacing,
+                proxy_site=each.site,
+                lends_ai=each.uses_ai,
+                shared=each.name,
+            )
             for each in ENRICHERS.values()
         },
         refuse_start=_refuse_start,

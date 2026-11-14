@@ -42,6 +42,9 @@ class Lane:
     proxy_site: str | None = None
     lends_ai: bool = False
     """Its Jobs are lent the AI provider the household set up, key included."""
+    shared: str | None = None
+    """A name other lanes, of this kind or another, may share: the Jobs of every lane
+    sharing it run one at a time and spaced, as one lane, such as all that ask one site."""
 
 
 @dataclass(frozen=True)

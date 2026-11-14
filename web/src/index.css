@@ -6031,6 +6031,10 @@ button.playing-kind[aria-expanded="true"] {
   gap: 0.6rem;
 }
 
+.link-row .tidy-names-pair .tidy-meta {
+  grid-column: auto;
+}
+
 .link-state {
   display: flex;
   flex-wrap: wrap;

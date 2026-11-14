@@ -1,3 +1,4 @@
+// cspell:ignore ｍｅｌｔ
 import { describe, expect, it } from "vitest";
 
 import type { ArtistNames, KnownArtist } from "../api";
@@ -38,7 +39,7 @@ describe("artist links", () => {
   });
 
   it("compare names folded, as the Library does", () => {
-    expect(linksOf(LINKED).groupOf("ＭＥＬＴ")).toBe(linksOf(LINKED).groupOf("melt"));
+    expect(linksOf(LINKED).groupOf("Ｍｅｌｔ")).toBe(linksOf(LINKED).groupOf("melt"));
   });
 
   it("know every name a linked artist goes by", () => {

@@ -82,14 +82,14 @@ describe("linking names to artists", () => {
     const onChanged = vi.fn();
     const { rerender } = render(
       <LinkArtists
-        names={namesOf(artistNameOf("披头士"), artistNameOf("Kraftwerk"))}
+        names={namesOf(artistNameOf("披头士"), artistNameOf("Blue Room"))}
         onChanged={onChanged}
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: "Link 2 artist names" }));
 
     rerender(
-      <LinkArtists names={namesOf(LOOKED_UP, artistNameOf("Kraftwerk"))} onChanged={onChanged} />,
+      <LinkArtists names={namesOf(LOOKED_UP, artistNameOf("Blue Room"))} onChanged={onChanged} />,
     );
 
     const row = rowOf(screen.getByRole("dialog"), "披头士");
@@ -123,7 +123,7 @@ describe("linking names to artists", () => {
       },
     });
     const { list } = await openList(
-      namesOf(LOOKED_UP, artistNameOf("Kraftwerk"), artistNameOf("朴树"), {
+      namesOf(LOOKED_UP, artistNameOf("Blue Room"), artistNameOf("朴树"), {
         ...artistNameOf("周杰伦2000年发行"),
         look_up: "tidy_first",
       }),
@@ -131,14 +131,14 @@ describe("linking names to artists", () => {
 
     await userEvent.click(within(list).getByRole("button", { name: "Look up 2 names" }));
 
-    expect(sent).toEqual({ names: ["Kraftwerk", "朴树"] });
+    expect(sent).toEqual({ names: ["Blue Room", "朴树"] });
   });
 
   it("says a name is being looked up, or needs tidying first", async () => {
     const { list } = await openList(
       namesOf(
         LOOKED_UP,
-        { ...artistNameOf("Kraftwerk"), finding: true },
+        { ...artistNameOf("Blue Room"), finding: true },
         {
           ...artistNameOf("周杰伦2000年发行"),
           look_up: "tidy_first",
@@ -146,7 +146,7 @@ describe("linking names to artists", () => {
       ),
     );
 
-    expect(rowOf(list, "Kraftwerk")).toHaveTextContent("Looking it up on MusicBrainz…");
+    expect(rowOf(list, "Blue Room")).toHaveTextContent("Looking it up on MusicBrainz…");
     expect(rowOf(list, "周杰伦2000年发行")).toHaveTextContent("Tidy the name first");
   });
 

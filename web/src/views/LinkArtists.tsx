@@ -8,10 +8,15 @@
  * still to look up if it isn't the one. A linked name says what it is linked to, and
  * can be unlinked; while Wikidata is asked the artist's other names, the row says so.
  * Names linked to one artist count as one artist across the Library.
+ *
+ * Each row's actions line up at its right, so a list is worked down in one column. A
+ * name's recommended artist, the one going by it exactly, is marked, and *Link all*
+ * links every name that has one. Linking a name moves to the next name's *Link*, so
+ * Enter links it in turn.
  */
 
-import { LinkSimpleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { KeyReturnIcon, LinkSimpleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { useRef, useState } from "react";
 
 import { type ArtistName, type ArtistNames, type KnownArtist, api } from "../api";
 import { unlinkedOf } from "../library/cleanUp";
@@ -29,6 +34,10 @@ export function LinkArtists({
   readonly onChanged: () => void;
 }) {
   const [error, setError] = useState("");
+  // Only a choice made here is kept; until one is, a name's recommendation is chosen.
+  const [picked, setPicked] = useState<ReadonlyMap<string, string>>(new Map());
+  const [linkingAll, setLinkingAll] = useState(false);
+  const linkButtons = useRef(new Map<string, HTMLButtonElement>());
   const shown = names.names.filter((each) => each.look_up !== "never");
   const artists = new Map(names.artists.map((artist) => [artist.id, artist]));
   const toLookUp = shown
@@ -36,11 +45,43 @@ export function LinkArtists({
       (each) => each.look_up === "yes" && !each.linked && each.looked_at === null && !each.finding,
     )
     .map((each) => each.name);
+  const rows = shown.map((named) => {
+    const offered = offeredOf(named, artists);
+    const choice = picked.get(named.key);
+    const chosen = choice ?? named.suggested ?? offered[0]?.id ?? "";
+    const linkable = !named.linked && !named.finding && offered.length > 0;
+    const recommended = linkable && (choice ?? named.suggested) !== null && chosen !== "";
+    return { named, offered, chosen, linkable, recommended };
+  });
+  const toLink = rows.filter((row) => row.recommended);
+
   const lookUp = (wanted: readonly string[]) => {
     setError("");
     api.lookUpArtists(wanted).then(onChanged, (failure: unknown) => {
       setError(failure instanceof Error ? failure.message : String(failure));
     });
+  };
+  /** Move to the Link of the next name that can be linked after `key`. */
+  const focusAfter = (key: string) => {
+    const at = rows.findIndex((row) => row.named.key === key);
+    const next = rows.slice(at + 1).find((row) => row.linkable);
+    if (next !== undefined) {
+      linkButtons.current.get(next.named.key)?.focus();
+    }
+  };
+  const linkAll = async () => {
+    setError("");
+    setLinkingAll(true);
+    try {
+      for (const row of toLink) {
+        await api.linkArtist(row.named.name, row.chosen);
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setLinkingAll(false);
+      onChanged();
+    }
   };
   return (
     <section className="clean-up-section" aria-labelledby="link-artists-title">
@@ -50,17 +91,30 @@ export function LinkArtists({
           Link artist names
           <span className="clean-up-count">{unlinkedOf(names)}</span>
         </h3>
-        {toLookUp.length > 0 && (
-          <button
-            type="button"
-            className="dialog-button"
-            onClick={() => {
-              lookUp(toLookUp);
-            }}
-          >
-            {`Look up ${String(toLookUp.length)} ${toLookUp.length === 1 ? "name" : "names"}`}
-          </button>
-        )}
+        <span className="clean-up-head-actions">
+          {toLookUp.length > 0 && (
+            <button
+              type="button"
+              className="secondary outline dialog-button"
+              onClick={() => {
+                lookUp(toLookUp);
+              }}
+            >
+              {`Look up ${String(toLookUp.length)} ${toLookUp.length === 1 ? "name" : "names"}`}
+            </button>
+          )}
+          {toLink.length > 0 && (
+            <button
+              type="button"
+              className="dialog-button"
+              disabled={linkingAll}
+              aria-busy={linkingAll}
+              onClick={() => void linkAll()}
+            >
+              {`Link ${String(toLink.length)} recommended`}
+            </button>
+          )}
+        </span>
       </header>
       <p className="tidy-lead">
         Names linked to one artist count as one artist, each song keeping its name as written.
@@ -75,13 +129,29 @@ export function LinkArtists({
         <p className="empty">No artist name to link yet.</p>
       ) : (
         <ul className="tidy-list" aria-label="Artist names">
-          {shown.map((each) => (
+          {rows.map(({ named, offered, chosen, recommended }) => (
             <NameRow
-              key={each.key}
-              named={each}
+              key={named.key}
+              named={named}
+              offered={offered}
               artists={artists}
+              chosen={chosen}
+              recommended={recommended}
+              linkRef={(button) => {
+                if (button === null) {
+                  linkButtons.current.delete(named.key);
+                } else {
+                  linkButtons.current.set(named.key, button);
+                }
+              }}
+              onPick={(id) => {
+                setPicked((now) => new Map(now).set(named.key, id));
+              }}
               onLookUp={() => {
-                lookUp([each.name]);
+                lookUp([named.name]);
+              }}
+              onLinked={() => {
+                focusAfter(named.key);
               }}
               onChanged={onChanged}
             />
@@ -92,33 +162,55 @@ export function LinkArtists({
   );
 }
 
-function NameRow({
-  named,
-  artists,
-  onLookUp,
-  onChanged,
-}: {
-  readonly named: ArtistName;
-  readonly artists: ReadonlyMap<string, KnownArtist>;
-  readonly onLookUp: () => void;
-  readonly onChanged: () => void;
-}) {
-  const offered = named.candidates
+/** The artists a name is offered, best first, among those known. */
+function offeredOf(named: ArtistName, artists: ReadonlyMap<string, KnownArtist>): KnownArtist[] {
+  return named.candidates
     .map((candidate) => artists.get(candidate.artist_id))
     .filter((artist) => artist !== undefined)
     .slice(0, OFFERED);
-  // Only a choice made here is kept; until one is, the suggestion is chosen, as it
-  // comes once the name has been looked up.
-  const [picked, setPicked] = useState<string | undefined>(undefined);
-  const chosen = picked ?? named.suggested ?? offered[0]?.id ?? "";
+}
+
+function NameRow({
+  named,
+  offered,
+  artists,
+  chosen,
+  recommended,
+  linkRef,
+  onPick,
+  onLookUp,
+  onLinked,
+  onChanged,
+}: {
+  readonly named: ArtistName;
+  readonly offered: readonly KnownArtist[];
+  readonly artists: ReadonlyMap<string, KnownArtist>;
+  /** The artist chosen to link, `""` for none. */
+  readonly chosen: string;
+  /** Whether the choice is a recommendation, so it and Link are marked. */
+  readonly recommended: boolean;
+  readonly linkRef: (button: HTMLButtonElement | null) => void;
+  readonly onPick: (id: string) => void;
+  readonly onLookUp: () => void;
+  /** Called once the name is linked to an artist, to move on to the next. */
+  readonly onLinked: () => void;
+  readonly onChanged: () => void;
+}) {
   const [error, setError] = useState("");
-  const act = (change: Promise<unknown>) => {
+  const act = (change: Promise<unknown>, then: () => void = () => undefined) => {
     setError("");
-    change.then(onChanged, (failure: unknown) => {
-      setError(failure instanceof Error ? failure.message : String(failure));
-    });
+    change.then(
+      () => {
+        then();
+        onChanged();
+      },
+      (failure: unknown) => {
+        setError(failure instanceof Error ? failure.message : String(failure));
+      },
+    );
   };
   const songs = `${String(named.tracks)} ${named.tracks === 1 ? "song" : "songs"}`;
+  const choosing = !named.linked && !named.finding && named.look_up !== "tidy_first";
   return (
     <li className="tidy-row link-row">
       <div className="tidy-names-pair">
@@ -138,16 +230,6 @@ function NameRow({
                 <SpinnerGapIcon className="spin" aria-hidden /> Finding its other names on Wikidata…
               </span>
             )}
-            <button
-              type="button"
-              className="secondary outline dialog-button"
-              aria-label={`Unlink ${named.name}`}
-              onClick={() => {
-                act(api.unlinkArtist(named.name));
-              }}
-            >
-              Unlink
-            </button>
           </>
         ) : named.finding ? (
           <span className="link-to">
@@ -156,38 +238,53 @@ function NameRow({
         ) : named.look_up === "tidy_first" ? (
           <span className="link-to">Tidy the name first, then look it up</span>
         ) : named.looked_at === null && offered.length === 0 ? (
+          <span className="link-to">Not looked up yet</span>
+        ) : offered.length === 0 ? (
+          <span className="link-to">MusicBrainz knows no artist by this name</span>
+        ) : (
+          <fieldset className="link-choices">
+            <legend className="visually-hidden">{`Artists for ${named.name}`}</legend>
+            {offered.map((artist) => {
+              const marked = recommended && chosen === artist.id;
+              return (
+                <label
+                  key={artist.id}
+                  className={marked ? "link-choice recommended" : "link-choice"}
+                >
+                  <input
+                    type="radio"
+                    className="link-choice-box"
+                    name={`artist-${named.key}`}
+                    checked={chosen === artist.id}
+                    onChange={() => {
+                      onPick(artist.id);
+                    }}
+                  />
+                  <span>{describe(artist)}</span>
+                  {marked && artist.id === named.suggested && (
+                    <span className="link-tag">Goes by this name</span>
+                  )}
+                </label>
+              );
+            })}
+          </fieldset>
+        )}
+      </div>
+      <span className="link-actions">
+        {named.linked ? (
           <button
             type="button"
             className="secondary outline dialog-button"
-            aria-label={`Look up ${named.name}`}
-            onClick={onLookUp}
+            aria-label={`Unlink ${named.name}`}
+            onClick={() => {
+              act(api.unlinkArtist(named.name));
+            }}
           >
-            Look up
+            Unlink
           </button>
         ) : (
-          <>
-            {offered.length === 0 ? (
-              <span className="link-to">MusicBrainz knows no artist by this name</span>
-            ) : (
-              <fieldset className="link-choices">
-                <legend className="visually-hidden">{`Artists for ${named.name}`}</legend>
-                {offered.map((artist) => (
-                  <label key={artist.id} className="link-choice">
-                    <input
-                      type="radio"
-                      className="link-choice-box"
-                      name={`artist-${named.key}`}
-                      checked={chosen === artist.id}
-                      onChange={() => {
-                        setPicked(artist.id);
-                      }}
-                    />
-                    <span>{describe(artist)}</span>
-                  </label>
-                ))}
-              </fieldset>
-            )}
-            <span className="tidy-actions">
+          choosing && (
+            <>
               {named.looked_at === null && (
                 <button
                   type="button"
@@ -198,33 +295,41 @@ function NameRow({
                   Look up
                 </button>
               )}
-              <button
-                type="button"
-                className="secondary outline dialog-button"
-                aria-label={`None of these for ${named.name}`}
-                onClick={() => {
-                  act(api.linkArtist(named.name, null));
-                }}
-              >
-                {offered.length === 0 ? "Keep apart" : "None of these"}
-              </button>
-              {offered.length > 0 && (
+              {(named.looked_at !== null || offered.length > 0) && (
                 <button
                   type="button"
-                  className="dialog-button"
-                  aria-label={`Link ${named.name}`}
-                  disabled={chosen === ""}
+                  className="secondary outline dialog-button"
+                  aria-label={`None of these for ${named.name}`}
                   onClick={() => {
-                    act(api.linkArtist(named.name, chosen));
+                    act(api.linkArtist(named.name, null));
                   }}
                 >
-                  Link
+                  {offered.length === 0 ? "Keep apart" : "None of these"}
                 </button>
               )}
-            </span>
-          </>
+              {offered.length > 0 && (
+                <span className="link-go">
+                  <button
+                    ref={linkRef}
+                    type="button"
+                    className={recommended ? "dialog-button recommended" : "dialog-button"}
+                    aria-label={`Link ${named.name}`}
+                    disabled={chosen === ""}
+                    onClick={() => {
+                      act(api.linkArtist(named.name, chosen), onLinked);
+                    }}
+                  >
+                    Link
+                  </button>
+                  <span className="link-hint" aria-hidden>
+                    <KeyReturnIcon /> to link
+                  </span>
+                </span>
+              )}
+            </>
+          )
         )}
-      </div>
+      </span>
       {error !== "" && (
         <p className="error" role="alert">
           {error}

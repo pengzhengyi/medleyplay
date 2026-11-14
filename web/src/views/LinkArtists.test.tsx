@@ -111,6 +111,64 @@ describe("linking names to artists", () => {
     expect(within(row).getByRole("button", { name: "Link 甲壳虫乐队" })).toBeEnabled();
   });
 
+  it("marks the artist going by a name exactly as the one recommended", () => {
+    const { list } = openList(namesOf(LOOKED_UP));
+    const row = rowOf(list, "披头士");
+
+    const beatles = within(row)
+      .getByRole("radio", { name: /The Beatles/ })
+      .closest("label");
+    expect(beatles).toHaveTextContent("Goes by this name");
+    expect(
+      within(row)
+        .getByRole("radio", { name: /tribute/ })
+        .closest("label"),
+    ).not.toHaveTextContent("Goes by this name");
+  });
+
+  it("links every name with a recommended artist at once, leaving the rest", async () => {
+    const sent: unknown[] = [];
+    serve({
+      "PUT /api/artist-names/link": (body) => {
+        sent.push(body);
+        return { status: 204 };
+      },
+    });
+    const unsure: ArtistName = { ...LOOKED_UP, ...artistNameOf("Beatles?"), suggested: null };
+    const { list, onChanged } = openList(
+      namesOf(LOOKED_UP, {
+        ...unsure,
+        looked_at: LOOKED_UP.looked_at,
+        candidates: LOOKED_UP.candidates,
+      }),
+    );
+
+    await userEvent.click(within(list).getByRole("button", { name: "Link 1 recommended" }));
+
+    expect(sent).toEqual([{ name: "披头士", artist_id: BEATLES.id }]);
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it("moves on to the next name's Link once one is linked, so Enter links it", async () => {
+    serve({ "PUT /api/artist-names/link": { status: 204 } });
+    const next: ArtistName = {
+      ...LOOKED_UP,
+      ...artistNameOf("甲壳虫"),
+      looked_at: LOOKED_UP.looked_at,
+      candidates: LOOKED_UP.candidates,
+      suggested: BEATLES.id,
+    };
+    const { list } = openList(namesOf(LOOKED_UP, next));
+
+    await userEvent.click(
+      within(rowOf(list, "披头士")).getByRole("button", { name: "Link 披头士" }),
+    );
+
+    expect(
+      within(rowOf(list, "甲壳虫")).getByRole("button", { name: "Link 甲壳虫" }),
+    ).toHaveFocus();
+  });
+
   it("links a name to none of the artists found", async () => {
     let sent: unknown;
     serve({

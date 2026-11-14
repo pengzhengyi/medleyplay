@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Link artist names in one column** — each name's actions line up at the
+  right, the same on every row; the artist going by a name exactly is marked as
+  recommended, and *Link N recommended* links them all at once. Linking a name
+  moves to the next name's *Link*, so the list is linked by pressing Enter in
+  turn.
+
 - **Previous and Next album** — while an album plays, the player's Previous
   and Next step by album: back to the album's start once it is a few seconds
   in, else to the album before, and on to the album after. A smaller pair inside

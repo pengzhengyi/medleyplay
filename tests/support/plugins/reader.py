@@ -248,7 +248,9 @@ class Suggester:
                 return _NIGHT_DRIVE.model_copy(
                     update={"ai_answered": request.ai[-1].id, "ai_failures": (rejected,)}
                 )
-        return _SUGGESTIONS.get(title, _NIGHT_DRIVE)
+        # As the real plugin does, the answer names the provider that gave it: the first.
+        answered = request.ai[0].id if request.ai else None
+        return _SUGGESTIONS.get(title, _NIGHT_DRIVE).model_copy(update={"ai_answered": answered})
 
 
 def _key_of(request: EnrichTrack) -> str:

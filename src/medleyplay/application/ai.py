@@ -11,6 +11,7 @@ import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -20,6 +21,7 @@ from medleyplay.application.secrets import Secrets
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.ai import (
     MAX_PROVIDERS,
+    AnsweredBy,
     ProviderFailed,
     ProviderFailure,
     UnusableReason,
@@ -28,13 +30,14 @@ from medleyplay.domain.ai import (
     check_model,
     key_secret,
 )
+from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import (
     ConflictError,
     ForbiddenError,
     KeychainUnavailableError,
     NotFoundError,
 )
-from medleyplay.persistence.schema import AiProviderRow
+from medleyplay.persistence.schema import AiAnswerRow, AiProviderRow
 from medleyplay.plugin_api import AiEndpoint
 
 
@@ -78,6 +81,29 @@ def record_answers(
     row = None if answered is None else db.get(AiProviderRow, answered)
     if row is not None:
         _note(row, None, None)
+
+
+def record_answered_by(
+    db: Session, track_id: TrackId, provider_id: str | None, now: datetime
+) -> None:
+    """Note that the provider `provider_id` answered for the Track, as its model and host now.
+
+    A provider no longer set up, or none, leaves the last note as it was.
+    """
+    provider = None if provider_id is None else db.get(AiProviderRow, provider_id)
+    if provider is None:
+        return
+    row = db.get(AiAnswerRow, track_id) or AiAnswerRow(track_id=track_id)
+    row.model = provider.model
+    row.host = urlsplit(provider.base_url).netloc or provider.base_url
+    row.answered_at = now
+    db.add(row)
+
+
+def answered_by_of(db: Session, track_id: TrackId) -> AnsweredBy | None:
+    """Return the AI model that last answered for the Track, or `None` if none has."""
+    row = db.get(AiAnswerRow, track_id)
+    return None if row is None else AnsweredBy(row.model, row.host, row.answered_at)
 
 
 def _note(row: AiProviderRow, failed: ProviderFailed | None, now: datetime | None) -> None:

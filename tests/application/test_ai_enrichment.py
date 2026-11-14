@@ -14,7 +14,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.enrichment import ENRICH_KIND, EnrichmentService, enrich_target
 from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.ai import ProviderFailure, UnusableReason
+from medleyplay.domain.ai import AnsweredBy, ProviderFailure, UnusableReason
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin
 from medleyplay.domain.enrichers import AI_DETAILS, ASK_AGAIN_AFTER, MUSICBRAINZ
@@ -137,6 +137,51 @@ def test_the_songs_the_ai_suggests_are_kept_for_the_songs_editor(
         Song(192_000, "Night Drive", "Blue Room"),
         Song(4_060_000, "Outro"),
     )
+
+
+def test_the_model_that_answered_and_its_host_are_kept_with_the_suggestion(
+    enriching: Enriching, alice: Account, clock: FakeClock
+) -> None:
+    track_id = enriching.add_track_with_text("Album")
+
+    _suggested(enriching, alice, track_id)
+
+    answered = AnsweredBy("deepseek-flash", "api.deepseek.com", clock.now)
+    assert enriching.details.details(track_id).ai_answered_by == answered
+    songs = SongsService(enriching.units, enriching.clock).songs(track_id)
+    assert songs.suggested_by == answered
+
+
+def test_the_provider_that_answered_is_named_not_one_passed_over(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, OLLAMA, "llama3.2", None)
+    track_id = enriching.add_track_with_text("Second")
+
+    _suggested(enriching, alice, track_id)
+
+    answered = enriching.details.details(track_id).ai_answered_by
+    assert answered is not None
+    assert (answered.model, answered.host) == ("llama3.2", "127.0.0.1:11434")
+
+
+def test_who_answered_is_kept_after_the_provider_is_removed(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_track_with_text("Night Drive")
+    _suggested(enriching, alice, track_id)
+
+    _remove_providers(enriching, alice)
+
+    answered = enriching.details.details(track_id).ai_answered_by
+    assert answered is not None
+    assert answered.model == "deepseek-flash"
+
+
+def test_a_track_never_asked_of_the_ai_names_no_one(enriching: Enriching) -> None:
+    track_id = enriching.add_track_with_text("Night Drive")
+
+    assert enriching.details.details(track_id).ai_answered_by is None
 
 
 def test_a_song_list_that_is_no_song_list_is_not_kept_but_the_values_are(

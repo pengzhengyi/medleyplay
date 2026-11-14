@@ -148,6 +148,7 @@ export function detailsOf(
     origins,
     video_text: videoText,
     kind: { value: "song", reason: "length" },
+    ai_answered_by: null,
   };
 }
 
@@ -373,6 +374,7 @@ export function splitSongsOf(
     })),
     found,
     suggested,
+    suggested_by: null,
   };
 }
 

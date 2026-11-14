@@ -601,6 +601,29 @@ describe("the AI's suggestions", () => {
     }
   });
 
+  it("names the model that suggested, and where it was asked, once it is known", async () => {
+    const { dialog } = await renderDialog({
+      ...SUGGESTED,
+      ai_answered_by: {
+        model: "deepseek-chat",
+        host: "api.deepseek.com",
+        at: "2026-11-14T08:00:00Z",
+      },
+    });
+
+    const suggestion = within(dialog).getByRole("group", {
+      name: "deepseek-chat's suggestion for Artist",
+    });
+    expect(suggestion).toHaveTextContent("deepseek-chat suggests “GUMI”");
+    expect(within(suggestion).getByText(/suggests/u)).toHaveAttribute(
+      "title",
+      "Answered by deepseek-chat at api.deepseek.com",
+    );
+    expect(
+      within(suggestion).getByRole("button", { name: "Use “GUMI”, suggested by deepseek-chat" }),
+    ).toBeInTheDocument();
+  });
+
   it("offers nothing for a detail the AI did not suggest", async () => {
     const { dialog } = await renderDialog(SUGGESTED);
 

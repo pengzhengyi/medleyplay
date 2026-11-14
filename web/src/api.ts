@@ -114,6 +114,15 @@ export interface Details {
   readonly video_text: VideoText | null;
   /** Whether the Track is a song or an album, and why. */
   readonly kind: { readonly value: Kind; readonly reason: KindReason };
+  /** The AI model that last gave the `ai` values, as it was then; `null` if none has. */
+  readonly ai_answered_by: AnsweredBy | null;
+}
+
+/** The AI model that answered for a Track, the host it was asked at, and when. */
+export interface AnsweredBy {
+  readonly model: string;
+  readonly host: string;
+  readonly at: string;
 }
 
 /** A video's title and description, as the site shows them. */
@@ -152,6 +161,8 @@ export interface Songs {
   readonly found: readonly (readonly Song[])[];
   /** The song list an AI model suggested for the file, or empty. */
   readonly suggested: readonly Song[];
+  /** The AI model that last answered for the file, as it was then; `null` if none has. */
+  readonly suggested_by: AnsweredBy | null;
 }
 
 /** A row of the songs editor: the song it keeps by `id`, or `null` for a new one. */

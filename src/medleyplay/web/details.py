@@ -5,12 +5,14 @@ and tidies or keeps each one.
 """
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field, StrictInt, StrictStr
 
 from medleyplay.application.details import DetailsView, NameToTidy, VideoRead
+from medleyplay.domain.ai import AnsweredBy
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field as Detail
 from medleyplay.domain.details import Kind, KindReason, Origin, Shown
@@ -60,6 +62,21 @@ class VideoTextOut(BaseModel):
     description: str
 
 
+class AnsweredByOut(BaseModel):
+    """The AI model that last answered for a Track, the host it was asked at, and when."""
+
+    model: str
+    host: str
+    at: datetime
+
+    @classmethod
+    def of(cls, answered: AnsweredBy | None) -> "AnsweredByOut | None":
+        """Return the API view of `answered`, or `None` when no model has answered."""
+        if answered is None:
+            return None
+        return cls(model=answered.model, host=answered.host, at=answered.at)
+
+
 class DetailsOut(BaseModel):
     """A Track's shown values, what each origin says, and what would show without the household.
 
@@ -74,6 +91,9 @@ class DetailsOut(BaseModel):
     origins: dict[Origin, dict[str, DetailValue]]
     video_text: VideoTextOut | None
     kind: KindOut
+    ai_answered_by: AnsweredByOut | None = Field(
+        description="The AI model that last gave the `ai` values, as it was then; none if none."
+    )
 
     @classmethod
     def of(cls, view: DetailsView) -> "DetailsOut":
@@ -90,6 +110,7 @@ class DetailsOut(BaseModel):
             if view.video_text is None
             else VideoTextOut(title=view.video_text.title, description=view.video_text.description),
             kind=KindOut(value=view.kind.kind, reason=view.kind.reason),
+            ai_answered_by=AnsweredByOut.of(view.ai_answered_by),
         )
 
 

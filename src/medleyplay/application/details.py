@@ -16,7 +16,9 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.ai import answered_by_of
 from medleyplay.application.settings import read_settings
+from medleyplay.domain.ai import AnsweredBy
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import (
     TEXT_FIELDS,
@@ -91,6 +93,8 @@ class DetailsView:
     """The video's text the `video` values were read from, if any was."""
     kind: KindShown
     """Whether the Track is a song or an album, and why."""
+    ai_answered_by: AnsweredBy | None
+    """The AI model that last suggested the `ai` values, if one has."""
 
 
 @dataclass(frozen=True)
@@ -380,10 +384,11 @@ class DetailsService:
             values = values_of(db, track_id)
             kind = kind_shown_of(db, _require(db, track_id))
             video_text = video_text_of(db, track_id)
+            answered_by = answered_by_of(db, track_id)
         found = shown(
             {origin: kept for origin, kept in values.items() if origin is not Origin.HOUSEHOLD}
         )
-        return DetailsView(track_id, shown(values), found, values, video_text, kind)
+        return DetailsView(track_id, shown(values), found, values, video_text, kind, answered_by)
 
     def read_video_text(self, track_id: TrackId, text: VideoText) -> VideoRead:
         """Read the video's text the household pasted as the Track's `video` values.

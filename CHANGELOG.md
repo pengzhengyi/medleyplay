@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Choose the accent color** — *Settings › Appearance* picks any color for
+  buttons, links, and what's playing, from a color square, a hex code, or a
+  roll of the dice, and goes back to jade in one click. Each browser keeps its
+  own; the page shades the color so it stays readable in light and dark.
+
 - **Edit an artist's details** — *Edit details* on a linked artist's page
   chooses the name it is shown by, from every name it goes by, a note about it,
   and a photo of your own in place of Wikidata's. Its songs keep their names as

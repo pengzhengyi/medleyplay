@@ -15,11 +15,11 @@
   --ink: #17201d;
   --muted: #5d6b67;
   --line: #dbe2df;
-  --accent: #0b8a70;
-  --accent-soft: rgb(11 138 112 / 12%);
+  --accent: var(--chosen-accent-light, #0b8a70);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --caution: #8a4b00;
   --caution-soft: rgb(196 120 20 / 14%);
-  --accent-ink: #fff;
+  --accent-ink: var(--chosen-accent-ink-light, #fff);
   --shadow-color: 160deg 30% 20%;
   --lift: 0 1px 2px hsl(var(--shadow-color) / 8%), 0 6px 16px -6px hsl(var(--shadow-color) / 16%);
   --float:
@@ -35,11 +35,11 @@
     --ink: #e3ebe8;
     --muted: #8d9d98;
     --line: #24312e;
-    --accent: #3dc4a4;
-    --accent-soft: rgb(61 196 164 / 14%);
+    --accent: var(--chosen-accent-dark, #3dc4a4);
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
     --caution: #f0b461;
     --caution-soft: rgb(240 180 97 / 14%);
-    --accent-ink: #062019;
+    --accent-ink: var(--chosen-accent-ink-dark, #062019);
     --lift: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 16px -6px rgb(0 0 0 / 50%);
     --float:
       0 1px 0 rgb(255 255 255 / 4%) inset, 0 8px 18px -6px rgb(0 0 0 / 50%),
@@ -56,9 +56,9 @@
   --ink: #e3ebe8;
   --muted: #8d9d98;
   --line: #24312e;
-  --accent: #3dc4a4;
-  --accent-soft: rgb(61 196 164 / 14%);
-  --accent-ink: #062019;
+  --accent: var(--chosen-accent-dark, #3dc4a4);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-ink: var(--chosen-accent-ink-dark, #062019);
   --lift: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 16px -6px rgb(0 0 0 / 50%);
   --float:
     0 1px 0 rgb(255 255 255 / 4%) inset, 0 8px 18px -6px rgb(0 0 0 / 50%),
@@ -479,6 +479,54 @@ button.text:hover:not(:disabled) {
   background: var(--surface);
   color: var(--accent);
   box-shadow: var(--lift);
+}
+
+/* The accent: a swatch that opens the color square, its hex code, and two tools. */
+.accent-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.accent-swatch {
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  margin: 0;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.accent-picker input.accent-hex {
+  width: 6.5rem;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  height: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.accent-tool {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.accent-tool:hover {
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.accent-picker .accent-square {
+  margin-top: 0.75rem;
 }
 
 .library main {

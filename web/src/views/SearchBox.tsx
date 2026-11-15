@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { type Route, navigate } from "../routes";
 import { hintOf, useBindings } from "../shortcuts";
+import { SiteMark } from "./SiteMark";
 
 /** How long after typing stops the search runs. */
 const SETTLE_MS = 150;
@@ -103,7 +104,7 @@ export function SearchBox({
             Library
           </label>
           {providers.map((provider) => (
-            <label key={provider}>
+            <label key={provider} title={SITE_NAMES[provider] ?? provider}>
               <input
                 type="radio"
                 name="scope"
@@ -112,7 +113,7 @@ export function SearchBox({
                   setChosen(provider);
                 }}
               />
-              {SITE_NAMES[provider] ?? provider}
+              <SiteMark name={SITE_NAMES[provider] ?? provider} />
             </label>
           ))}
         </div>

@@ -52,6 +52,7 @@ import { ThemeSwitch } from "./ThemeSwitch";
 import { WaitingDevices } from "./WaitingDevices";
 import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
+import { setRailCollapsed, useRailCollapsed } from "../rail";
 
 /** How long a notice, such as a song added to a Playlist, stays. */
 const NOTICE_MS = 4000;
@@ -399,17 +400,22 @@ export function Library({
     },
   };
 
+  const railCollapsed = useRailCollapsed();
   const signOut = () => {
     void api.signOut().finally(onSignedOut);
   };
 
   return (
-    <div className={queueOpen ? "library queue-open" : "library"}>
+    <div
+      className={["library", queueOpen && "queue-open", railCollapsed && "rail-collapsed"]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <header ref={top} className="top">
         <h1>
           <a className="wordmark" href={hrefOf({ view: "library" })}>
             <WaveformIcon weight="bold" aria-hidden />
-            medleyplay
+            <span className="wordmark-name">medleyplay</span>
           </a>
         </h1>
         <SearchBox route={route} providers={library.providers} onLookUp={setLinking} />
@@ -471,7 +477,14 @@ export function Library({
           <SignOutIcon weight="regular" aria-hidden />
         </button>
       </header>
-      <Nav route={route} toDo={toDo} />
+      <Nav
+        route={route}
+        toDo={toDo}
+        collapsed={railCollapsed}
+        onToggle={() => {
+          setRailCollapsed(!railCollapsed);
+        }}
+      />
       <main>
         {library.error !== "" && <p role="alert">{library.error}</p>}
         {library.loaded ? (

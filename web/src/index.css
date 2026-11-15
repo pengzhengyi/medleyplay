@@ -213,11 +213,18 @@ button.text:hover:not(:disabled) {
 /* The signed-in page: the views, the Library, and the queue; the player floats below. */
 
 .library {
+  /* The rail's width: its names, or only its icons once collapsed. */
+  --rail: 13.25rem;
+
   display: grid;
   grid-template:
     "top top top" auto
-    "nav main queue" 1fr / 12.5rem minmax(0, 1fr) 20rem;
+    "nav main queue" 1fr / var(--rail) minmax(0, 1fr) 20rem;
   min-height: 100dvh;
+}
+
+.library.rail-collapsed {
+  --rail: 5rem;
 }
 
 .top {
@@ -233,8 +240,11 @@ button.text:hover:not(:disabled) {
   backdrop-filter: blur(12px);
 }
 
+/* The wordmark takes the rail's width, so the search starts where the page does. */
 .top h1 {
-  margin: 0 1rem 0 0;
+  flex: none;
+  width: calc(var(--rail) - 1.5rem);
+  margin: 0;
 }
 
 .top .wordmark {
@@ -246,13 +256,14 @@ button.text:hover:not(:disabled) {
 }
 
 /* The search: a rounded field, and where to look when there is a choice. */
+
+/* The search takes the header's room, with where to look at its end, as on an iPad. */
 .search {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
   gap: 0.6rem;
-  max-width: 34rem;
-  margin-right: auto;
+  min-width: 0;
 }
 
 .search-field {
@@ -1749,14 +1760,85 @@ button.text:hover:not(:disabled) {
   color: var(--accent-ink);
 }
 
-/* The views: a rail of links, the one shown lit. */
+/* The views: a rail of links on a surface of its own, quieter than Up next, the one shown lit. */
 .views {
   grid-area: nav;
   align-self: start;
   position: sticky;
   top: 4.25rem;
-  display: block;
-  padding: 0.5rem 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  margin: 0.5rem 0 1rem 0.75rem;
+  padding: 0.5rem;
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  box-shadow:
+    0 1px 2px hsl(var(--shadow-color) / 6%),
+    0 4px 14px -8px hsl(var(--shadow-color) / 14%);
+}
+
+/* Collapsing the rail, or opening it again. */
+.views .views-toggle {
+  display: flex;
+  align-self: flex-start;
+  width: auto;
+  margin: 0.4rem 0 0;
+  padding: 0.45rem 0.9rem;
+  border: none;
+  border-radius: 0.8rem;
+  background: none;
+  color: var(--muted);
+  font-size: 1.15rem;
+}
+
+.views .views-toggle:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+@media (width > 64rem) {
+  /* Only the icons: each names its view on hover, and Clean up's count rides its icon. */
+  .views.collapsed .view-link {
+    justify-content: center;
+    padding: 0.6rem;
+  }
+
+  .views.collapsed li.under .view-link {
+    padding-left: 0.6rem;
+  }
+
+  .views.collapsed .view-link > span:not(.view-count) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .views.collapsed .view-count {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.1rem;
+    min-width: 1.05rem;
+    padding: 0 0.25rem;
+    font-size: 0.6rem;
+    line-height: 1.05rem;
+  }
+
+  .views.collapsed .views-toggle {
+    align-self: center;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .rail-collapsed .top .wordmark-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .views ul {
@@ -1776,6 +1858,7 @@ button.text:hover:not(:disabled) {
 }
 
 .views .view-link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -3278,10 +3361,22 @@ button.icon.heart.on:hover,
       "main" 1fr / minmax(0, 1fr);
   }
 
+  .top h1 {
+    width: auto;
+    margin-right: 0.5rem;
+  }
+
+  .views .views-toggle {
+    display: none;
+  }
+
   .views {
     top: 3.9rem;
     z-index: 1;
+    margin: 0;
     padding: 0.25rem 1rem 0.5rem;
+    border-radius: 0;
+    box-shadow: none;
     overflow-x: auto;
     background: color-mix(in srgb, var(--page) 82%, transparent);
     backdrop-filter: blur(12px);

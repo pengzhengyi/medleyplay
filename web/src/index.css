@@ -6541,12 +6541,31 @@ button.playing-kind[aria-expanded="true"] {
 }
 
 .album-songs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
   margin: 0;
   list-style: none;
 }
 
+/* A song's heart, first in its row, quiet until it is a favorite or pointed at. */
+.album-song-heart {
+  flex: none;
+}
+
+.album-song-heart:not(.on) {
+  opacity: 0.55;
+}
+
+.album-songs-row:hover .album-song-heart,
+.album-songs-row .album-song-heart:focus-visible {
+  opacity: 1;
+}
+
 .album-song {
   display: grid;
+  flex: 1;
+  min-width: 0;
   grid-template-columns: 1.5rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.3rem 0.5rem;

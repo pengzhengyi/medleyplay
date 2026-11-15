@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its page, and the *Wikidata* link opens the artist's own item. Artists linked
   before are asked again the next time you choose *Look up*.
 
+- **A rail that collapses, and a search that spans the header** — the views'
+  rail sits apart on a soft surface and collapses to its icons with the button
+  at its foot, which each browser remembers; the search takes the header's room,
+  with *Library* and Bilibili's mark at its end, as on an iPad. Bilibili shows as
+  its mark wherever there is little room, named on hover.
+
 - **GitHub Copilot as an AI provider** — Settings offers *GitHub Copilot*
   beside DeepSeek, OpenAI, Anthropic, and Ollama. It is asked through GitHub's
   Copilot SDK with a GitHub token of an account with Copilot, kept in the

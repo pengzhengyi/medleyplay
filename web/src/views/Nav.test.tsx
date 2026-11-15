@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { Nav } from "./Nav";
 
@@ -29,5 +30,33 @@ describe("moving between views", () => {
 
     expect(screen.getByRole("link", { name: "Clean up" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Insights" })).toBeInTheDocument();
+  });
+
+  it("collapses to its icons, each naming its view on hover, and opens again", async () => {
+    const onToggle = vi.fn();
+    render(<Nav route={{ view: "library" }} toDo={2} collapsed onToggle={onToggle} />);
+
+    const nav = screen.getByRole("navigation", { name: "Views" });
+    expect(nav).toHaveClass("collapsed");
+    expect(screen.getByRole("link", { name: "Radio" })).toHaveAttribute("title", "Radio");
+    expect(screen.getByRole("link", { name: "Clean up, 2 names to clean up" })).toHaveAttribute(
+      "title",
+      "Clean up, 2 names to clean up",
+    );
+    const toggle = screen.getByRole("button", { name: "Show the views' names" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
+
+  it("shows each view's name beside its icon, with a way to collapse to the icons", () => {
+    render(<Nav route={{ view: "library" }} collapsed={false} onToggle={vi.fn()} />);
+
+    expect(screen.getByRole("link", { name: "Radio" })).not.toHaveAttribute("title");
+    expect(screen.getByRole("button", { name: "Show the views' names" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
   });
 });

@@ -6,7 +6,6 @@ import {
   CloudSlashIcon,
   DeviceMobileSpeakerIcon,
   KeyboardIcon,
-  SignOutIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -39,7 +38,7 @@ import { EditAlbum } from "./EditAlbum";
 import { EditDetails } from "./EditDetails";
 import { ListenOnDevice } from "./ListenOnDevice";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
-import { Nav } from "./Nav";
+import { AccountMenu, Nav } from "./Nav";
 import { NowPlaying } from "./NowPlaying";
 import { PlayOn, type PlaysOn } from "./PlayOn";
 import { PlayerBar } from "./PlayerBar";
@@ -52,7 +51,7 @@ import { ThemeSwitch } from "./ThemeSwitch";
 import { WaitingDevices } from "./WaitingDevices";
 import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
-import { setRailCollapsed, useRailCollapsed } from "../rail";
+import { setRailCollapsed, setRailMinimized, useRailCollapsed, useRailMinimized } from "../rail";
 
 /** How long a notice, such as a song added to a Playlist, stays. */
 const NOTICE_MS = 4000;
@@ -401,13 +400,19 @@ export function Library({
   };
 
   const railCollapsed = useRailCollapsed();
+  const railMinimized = useRailMinimized();
   const signOut = () => {
     void api.signOut().finally(onSignedOut);
   };
 
   return (
     <div
-      className={["library", queueOpen && "queue-open", railCollapsed && "rail-collapsed"]
+      className={[
+        "library",
+        queueOpen && "queue-open",
+        railCollapsed && "rail-collapsed",
+        railMinimized && "rail-minimized",
+      ]
         .filter(Boolean)
         .join(" ")}
     >
@@ -466,24 +471,22 @@ export function Library({
         >
           <KeyboardIcon weight="regular" aria-hidden />
         </button>
-        <span className="account">{account.display_name}</span>
-        <button
-          type="button"
-          className="icon"
-          aria-label="Sign out"
-          title="Sign out"
-          onClick={signOut}
-        >
-          <SignOutIcon weight="regular" aria-hidden />
-        </button>
+        <span className="header-account">
+          <AccountMenu account={{ name: account.display_name, onSignOut: signOut }} />
+        </span>
       </header>
       <Nav
         route={route}
         toDo={toDo}
         collapsed={railCollapsed}
+        minimized={railMinimized}
         onToggle={() => {
           setRailCollapsed(!railCollapsed);
         }}
+        onMinimize={() => {
+          setRailMinimized(!railMinimized);
+        }}
+        account={{ name: account.display_name, onSignOut: signOut }}
       />
       <main>
         {library.error !== "" && <p role="alert">{library.error}</p>}

@@ -468,12 +468,17 @@ songs editor.
   permission, and its model one the subscription offers, `gpt-5-mini` by default.
   The SDK runs Copilot's own runtime as a child process of the Job, downloading it
   on first use (`python -m copilot download-runtime` fetches it ahead), so stopping
-  the Job stops it. As the runtime is an agent, it is given no tool, rejects every
-  permission it asks for, works in an empty directory removed after, and its
-  system message is the plugin's, replacing Copilot's own: it only reads the
-  question and answers it. A token GitHub doesn't accept is a refusal, a model the
-  subscription doesn't offer or an empty reply an unusable answer, and a runtime
-  that doesn't answer in 90 seconds a network failure. Each question counts
+  the Job stops it. As the runtime is an agent, and the question holds untrusted
+  text, it is kept to the question: it starts in the SDK's empty mode with a home
+  of its own in a directory removed after, so it reads none of the account's own
+  Copilot configuration, instructions, skills, or MCP servers, and keeps no session,
+  memory, or log; it gets only the few environment variables it needs to run, and
+  the token in its environment, never its arguments; each session allows no tool,
+  by name and by every kind, rejects every permission it asks for, and has the
+  plugin's system message in place of Copilot's own. A token GitHub doesn't
+  accept is a refusal, a model the subscription doesn't offer or an empty reply an
+  unusable answer, and a runtime that fails to start, exits, or takes over 90
+  seconds in all a network failure, so the next provider is asked. Each question counts
   against the account's Copilot allowance.
 - **A key is a secret.** It is kept in the Keychain, as logins and proxies are,
   under a name of its own that the provider's row keeps; the provider set up when

@@ -1,15 +1,19 @@
 """Asking GitHub Copilot through its SDK: only a question, no tools, the token kept close."""
 
+import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from copilot import JsonRpcError
+from copilot import JsonRpcError, ToolSet
+from copilot._jsonrpc import ProcessExitedError
+from copilot.client import StdioRuntimeConnection
 from copilot.generated.rpc import PermissionDecisionReject
 from copilot.generated.session_events import AssistantMessageData
 
 from medleyplay.domain.ai import PRESETS
 from medleyplay.plugin_api import AiEndpoint, AiFailureReason, NetworkError
+from medleyplay.plugins.ai_details import copilot as copilot_module
 from medleyplay.plugins.ai_details.client import (
     ChatClient,
     Message,
@@ -68,12 +72,20 @@ class FakeRuntime:
     directory: str = ""
     options: dict[str, object] = field(default_factory=dict)
     stopped: bool = False
+    start_failure: BaseException | None = None
+    stop_failure: BaseException | None = None
+    hangs: bool = False
 
     async def start(self) -> None:
-        pass
+        if self.start_failure is not None:
+            raise self.start_failure
+        if self.hangs:
+            await asyncio.sleep(60)
 
     async def stop(self) -> None:
         self.stopped = True
+        if self.stop_failure is not None:
+            raise self.stop_failure
 
     async def get_auth_status(self) -> _Status:
         return _Status(isAuthenticated=self.signed_in)
@@ -91,14 +103,14 @@ def answering(content: str, **change: object) -> FakeRuntime:
     return FakeRuntime(session, **change)  # type: ignore[arg-type]
 
 
-def chat_over(runtime: FakeRuntime) -> CopilotChat:
+def chat_over(runtime: FakeRuntime, *, timeout: float = 90.0) -> CopilotChat:
     """Copilot, asked through `runtime`, which notes the token and directory it gets."""
 
     def start(token: str, directory: str) -> FakeRuntime:
         runtime.token, runtime.directory = token, directory
         return runtime
 
-    return CopilotChat(start)
+    return CopilotChat(start, timeout=timeout)
 
 
 def test_copilot_is_asked_with_the_token_and_model_and_its_reply_returned() -> None:
@@ -118,6 +130,9 @@ def test_copilot_gets_no_tool_no_permission_and_only_the_system_message_given() 
     chat_over(runtime).complete(COPILOT, ASKED)
 
     assert runtime.options["available_tools"] == []
+    excluded = runtime.options["excluded_tools"]
+    assert isinstance(excluded, ToolSet)
+    assert set(excluded.to_list()) == {"builtin:*", "mcp:*", "custom:*"}
     assert runtime.options["system_message"] == {
         "mode": "replace",
         "content": "Reply with one json object.",
@@ -127,13 +142,56 @@ def test_copilot_gets_no_tool_no_permission_and_only_the_system_message_given() 
     assert isinstance(decide(object(), {}), PermissionDecisionReject)
 
 
-def test_copilot_works_in_an_empty_directory_removed_after() -> None:
+def test_copilot_reads_none_of_the_accounts_own_set_up_and_keeps_nothing() -> None:
     runtime = answering("{}")
 
     chat_over(runtime).complete(COPILOT, ASKED)
 
-    assert runtime.options["working_directory"] == runtime.directory
+    assert {
+        name: runtime.options[name]
+        for name in (
+            "enable_config_discovery",
+            "skip_custom_instructions",
+            "enable_skills",
+            "enable_session_store",
+            "enable_session_telemetry",
+            "mcp_servers",
+            "memory",
+        )
+    } == {
+        "enable_config_discovery": False,
+        "skip_custom_instructions": True,
+        "enable_skills": False,
+        "enable_session_store": False,
+        "enable_session_telemetry": False,
+        "mcp_servers": {},
+        "memory": {"enabled": False},
+    }
     assert not Path(runtime.directory).exists()
+
+
+def test_the_runtime_has_a_home_and_a_place_to_work_of_its_own_and_little_else(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    started: dict[str, object] = {}
+    monkeypatch.setattr(copilot_module, "CopilotClient", lambda **options: started.update(options))
+    monkeypatch.setenv("GH_TOKEN", "the account's own token")
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    copilot_module._runtime(TOKEN, str(tmp_path))  # noqa: SLF001 -- the one start of a real runtime
+
+    environment = started["env"]
+    assert isinstance(environment, dict)
+    assert (started["mode"], started["github_token"], started["use_logged_in_user"]) == (
+        "empty",
+        TOKEN,
+        False,
+    )
+    assert started["base_directory"] == environment["HOME"] == str(tmp_path / "home")
+    assert started["working_directory"] == str(tmp_path / "work")
+    assert "GH_TOKEN" not in environment
+    assert environment["PATH"] == "/usr/bin"
+    assert isinstance(started["connection"], StdioRuntimeConnection)
 
 
 def test_asking_again_shows_copilot_its_answer_and_what_was_wrong() -> None:
@@ -186,7 +244,9 @@ def test_an_empty_reply_is_an_unusable_answer() -> None:
     assert unusable.value.reason is AiFailureReason.EMPTY
 
 
-@pytest.mark.parametrize("failure", [TimeoutError(), ConnectionResetError()])
+@pytest.mark.parametrize(
+    "failure", [TimeoutError(), ConnectionResetError(), ProcessExitedError("exited")]
+)
 def test_copilot_not_answering_is_a_network_failure(failure: BaseException) -> None:
     runtime = answering("{}")
     runtime.session.failure = failure
@@ -195,6 +255,33 @@ def test_copilot_not_answering_is_a_network_failure(failure: BaseException) -> N
         chat_over(runtime).complete(COPILOT, ASKED)
 
     assert runtime.stopped
+
+
+@pytest.mark.parametrize(
+    "failure", [RuntimeError("couldn't download the runtime"), ProcessExitedError("exited")]
+)
+def test_a_runtime_that_does_not_start_is_a_network_failure(failure: BaseException) -> None:
+    runtime = answering("{}", start_failure=failure)
+
+    with pytest.raises(NetworkError, match="Copilot"):
+        chat_over(runtime).complete(COPILOT, ASKED)
+
+
+def test_a_runtime_that_hangs_is_a_network_failure_once_the_time_is_up() -> None:
+    runtime = answering("{}", hangs=True)
+
+    with pytest.raises(NetworkError, match="TimeoutError"):
+        chat_over(runtime, timeout=0.05).complete(COPILOT, ASKED)
+
+    assert runtime.stopped
+
+
+def test_a_runtime_that_fails_to_stop_changes_nothing_of_its_answer() -> None:
+    runtime = answering('{"songs": []}', stop_failure=ExceptionGroup("stop", [OSError()]))
+
+    said = chat_over(runtime).complete(COPILOT, ASKED)
+
+    assert said == '{"songs": []}'
 
 
 def test_the_chat_client_asks_copilot_through_the_sdk_and_sends_nothing_itself() -> None:

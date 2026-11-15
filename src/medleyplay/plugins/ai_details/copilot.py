@@ -2,21 +2,35 @@
 
 A provider at `COPILOT_BASE_URL` is Copilot: its key is a GitHub token of an account
 with Copilot, and its model one the subscription offers, such as `gpt-5-mini`. The
-SDK runs Copilot's own runtime as a child process, downloading it on first use. It
-is given no tool, rejects every permission it would ask for, works in an empty
-directory removed after, and its system message is the one given, replacing
-Copilot's own, so it only reads the question and answers it.
+SDK runs Copilot's own runtime as a child process, downloading it on first use.
 
-The token goes to the SDK and nowhere else, and no message raised holds the token or
-what Copilot said. Each question counts against the account's Copilot allowance.
+The runtime is kept to the question alone. It starts in the SDK's empty mode, with
+none of the account's own Copilot set-up: its home is a directory of its own, so it
+reads no configuration, instructions, skills, or MCP servers of the account, and
+keeps no session, memory, or log once it is removed; and it gets no more of the
+environment than it needs to run. Each session has no tool, by name and by every
+kind, rejects every permission it would ask for, and has the system message given
+in place of Copilot's own.
+
+The token goes to the SDK, which hands it to the runtime in its environment, and
+nowhere else; no message raised holds the token or what Copilot said. Each question
+counts against the account's Copilot allowance.
 """
 
+# cspell:ignore SYSTEMROOT
+
 import asyncio
+import contextlib
+import os
 import tempfile
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Final, Protocol
 
-from copilot import CopilotClient, JsonRpcError
+from copilot import CopilotClient, JsonRpcError, RuntimeConnection, ToolSet
+
+# Not exported, but what a runtime that exits raises.
+from copilot._jsonrpc import ProcessExitedError
 from copilot.generated.rpc import PermissionDecisionReject
 from copilot.generated.session_events import AssistantMessageData
 
@@ -31,7 +45,18 @@ from medleyplay.plugins.ai_details.client import (
 COPILOT_BASE_URL: Final = "https://api.githubcopilot.com"
 """The address that names GitHub Copilot among the providers."""
 TIMEOUT: Final = 90.0
-"""How long, in seconds, Copilot may take to answer."""
+"""How long, in seconds, Copilot may take to start, sign in, and answer."""
+KEPT_ENVIRONMENT: Final = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT", "SSL_CERT_FILE")
+"""What of the environment the runtime gets, besides a home of its own."""
+_FAILED: Final = (
+    TimeoutError,
+    OSError,
+    JsonRpcError,
+    ProcessExitedError,
+    RuntimeError,
+    ExceptionGroup,
+)
+"""What starting, asking, or stopping the runtime raises when it fails."""
 
 
 class _Session(Protocol):
@@ -62,11 +87,21 @@ def is_copilot(endpoint: AiEndpoint) -> bool:
 
 
 def _runtime(token: str, directory: str) -> Runtime:
+    """Return a runtime kept to `directory`: its home, and an empty place to work."""
+    home = Path(directory, "home")
+    work = Path(directory, "work")
+    home.mkdir()
+    work.mkdir()
+    environment = {name: os.environ[name] for name in KEPT_ENVIRONMENT if name in os.environ}
     # It has what `Runtime` names, and more.
     return CopilotClient(  # type: ignore[return-value]
+        mode="empty",
         github_token=token,
         use_logged_in_user=False,
-        working_directory=directory,
+        base_directory=str(home),
+        working_directory=str(work),
+        env={**environment, "HOME": str(home)},
+        connection=RuntimeConnection.for_stdio(),
         log_level="error",
     )
 
@@ -80,9 +115,10 @@ def _reject(request: object, invocation: object) -> PermissionDecisionReject:
 class CopilotChat:
     """Asks GitHub Copilot for one reply, as `ChatClient` asks the other providers."""
 
-    def __init__(self, start: StartRuntime = _runtime) -> None:
-        """Ask through runtimes `start` gives."""
+    def __init__(self, start: StartRuntime = _runtime, *, timeout: float = TIMEOUT) -> None:
+        """Ask through runtimes `start` gives, each for at most `timeout` seconds."""
         self._start = start
+        self._timeout = timeout
 
     def handles(self, endpoint: AiEndpoint) -> bool:
         """Return whether `endpoint` is GitHub Copilot."""
@@ -103,44 +139,58 @@ class CopilotChat:
             message = "GitHub Copilot is asked with a GitHub token of an account with Copilot."
             raise RefusedError(message)
         system, prompt = _split(messages)
-        with tempfile.TemporaryDirectory(prefix="medleyplay-copilot-") as directory:
-            runtime = self._start(endpoint.key, directory)
+        with tempfile.TemporaryDirectory(
+            prefix="medleyplay-copilot-", ignore_cleanup_errors=True
+        ) as directory:
             try:
-                return asyncio.run(self._ask(runtime, endpoint.model, system, prompt, directory))
-            except (TimeoutError, OSError, JsonRpcError) as error:
+                runtime = self._start(endpoint.key, directory)
+                return asyncio.run(self._ask(runtime, endpoint.model, system, prompt))
+            except _FAILED as error:
                 # Only the kind of failure: the runtime's words can name the account.
                 message = f"GitHub Copilot didn't answer: {type(error).__name__}."
                 raise NetworkError(message) from None
 
-    @staticmethod
-    async def _ask(runtime: Runtime, model: str, system: str, prompt: str, directory: str) -> str:
-        await runtime.start()
+    async def _ask(self, runtime: Runtime, model: str, system: str, prompt: str) -> str:
         try:
-            status = await runtime.get_auth_status()
-            if not status.isAuthenticated:
-                message = (
-                    "GitHub refused the token: replace it with one of an account with Copilot."
-                )
-                raise RefusedError(message)
-            try:
-                session = await runtime.create_session(
-                    model=model,
-                    available_tools=[],
-                    system_message={"mode": "replace", "content": system},
-                    on_permission_request=_reject,
-                    working_directory=directory,
-                )
-            except JsonRpcError:
-                message = "GitHub Copilot refused the session: check the model."
-                raise UnusableAnswerError(message, AiFailureReason.REJECTED) from None
-            event = await session.send_and_wait(prompt, timeout=TIMEOUT)
+            async with asyncio.timeout(self._timeout):
+                return await _answer(runtime, model, system, prompt, self._timeout)
         finally:
-            await runtime.stop()
-        data = getattr(event, "data", None)
-        if not isinstance(data, AssistantMessageData) or not data.content.strip():
-            message = "GitHub Copilot's answer was empty: check the model."
-            raise UnusableAnswerError(message, AiFailureReason.EMPTY)
-        return data.content
+            # A runtime that fails to stop changes nothing of what it answered.
+            with contextlib.suppress(Exception):
+                await runtime.stop()
+
+
+async def _answer(runtime: Runtime, model: str, system: str, prompt: str, timeout: float) -> str:  # noqa: ASYNC109 -- the SDK's own wait, inside the caller's
+    """Start `runtime`, check its token, and return what the model says to `prompt`."""
+    await runtime.start()
+    status = await runtime.get_auth_status()
+    if not status.isAuthenticated:
+        message = "GitHub refused the token: replace it with one of an account with Copilot."
+        raise RefusedError(message)
+    try:
+        session = await runtime.create_session(
+            model=model,
+            available_tools=[],
+            excluded_tools=ToolSet().add_builtin("*").add_mcp("*").add_custom("*"),
+            system_message={"mode": "replace", "content": system},
+            on_permission_request=_reject,
+            enable_config_discovery=False,
+            skip_custom_instructions=True,
+            enable_skills=False,
+            enable_session_store=False,
+            enable_session_telemetry=False,
+            mcp_servers={},
+            memory={"enabled": False},
+        )
+    except JsonRpcError:
+        message = "GitHub Copilot refused the session: check the model."
+        raise UnusableAnswerError(message, AiFailureReason.REJECTED) from None
+    event = await session.send_and_wait(prompt, timeout=timeout)
+    data = getattr(event, "data", None)
+    if not isinstance(data, AssistantMessageData) or not data.content.strip():
+        message = "GitHub Copilot's answer was empty: check the model."
+        raise UnusableAnswerError(message, AiFailureReason.EMPTY)
+    return data.content
 
 
 def _split(messages: Sequence[Message]) -> tuple[str, str]:

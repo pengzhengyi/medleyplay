@@ -24,8 +24,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.artists import (
     ArtistService,
-    find_artist_kind,
-    find_artist_names_kind,
+    artist_kinds,
 )
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.changes import Changes
@@ -180,16 +179,16 @@ def build_services(  # noqa: PLR0913, PLR0915
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
     enrich = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
-    find_artist = find_artist_kind(clock)
-    find_artist_names = find_artist_names_kind(clock)
+    artist_jobs = artist_kinds(clock)
     find_silences = find_silences_kind(clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,
         download.name: download,
         enrich.name: enrich,
-        find_artist.name: find_artist,
-        find_artist_names.name: find_artist_names,
+        artist_jobs.find.name: artist_jobs.find,
+        artist_jobs.names.name: artist_jobs.names,
+        artist_jobs.choose.name: artist_jobs.choose,
         find_silences.name: find_silences,
         **(kinds or {}),
     }
@@ -271,9 +270,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         devices=_devices(units, clock, accounts, events),
         remote=_remote(clock, events),
         ratings=RatingsService(units, clock, changes.tell),
-        artists=ArtistService(
-            units, clock, plugins, jobs, find_artist, find_artist_names, changes.tell
-        ),
+        artists=ArtistService(units, clock, plugins, jobs, artist_jobs, changes.tell),
     )
 
 

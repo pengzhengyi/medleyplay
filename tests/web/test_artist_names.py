@@ -33,9 +33,11 @@ def test_the_artist_names_in_the_library_are_listed(
                 "candidates": [],
                 "suggested": None,
                 "finding": False,
+                "recommendation": None,
             }
         ],
         "artists": [],
+        "recommending": False,
     }
 
 
@@ -71,6 +73,26 @@ def test_names_are_not_looked_up_while_musicbrainz_is_off(client: TestClient) ->
     asked = client.post("/api/artist-names/look-up", json={"names": ["披头士"]})
 
     assert asked.status_code == 409
+
+
+def test_no_ai_model_is_asked_while_the_ai_plugin_is_off(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    asked = client.post("/api/artist-names/recommend")
+
+    assert asked.status_code == 409
+
+
+def test_the_names_say_no_ai_model_is_being_asked(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _song_by(catalog, "Blue Room")
+
+    listed = client.get("/api/artist-names").json()
+
+    assert listed["recommending"] is False
+    assert listed["names"][0]["recommendation"] is None
 
 
 def test_the_artist_names_are_for_signed_in_accounts(client: TestClient) -> None:

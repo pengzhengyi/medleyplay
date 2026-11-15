@@ -2,9 +2,9 @@
 
 > [!NOTE]
 > **Status: built.** This note describes one artist under many names: looking the
-> Library's artist names up on MusicBrainz, linking each to one artist, adding the
-> names Wikidata knows each linked artist by, and counting linked names as one
-> artist across the Library. Tidying a name written with
+> Library's artist names up on MusicBrainz, linking each to one artist, asking an
+> AI model which artist each name stands for, adding the names Wikidata knows each
+> linked artist by, and counting linked names as one artist across the Library. Tidying a name written with
 > more than the name in it is in [Track details](Track%20details.md).
 
 ## Contents
@@ -13,6 +13,7 @@
 - [Names and artists](#names-and-artists)
 - [Looking a name up](#looking-a-name-up)
 - [Linking a name](#linking-a-name)
+- [Asking an AI model](#asking-an-ai-model)
 - [Wikidata's names](#wikidatas-names)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
@@ -85,6 +86,39 @@ keeps the text and counts them as one.
 - **Any signed-in Account** may look names up and link them, as any may edit a
   Track's details: the catalog is the household's.
 
+## Asking an AI model
+
+MusicBrainz offers up to ten artists for a name, and the one going by it exactly is
+suggested; often none does, or several do, as for *GUMI/MAYU*, where only the songs
+tell a Vocaloid voice from a belly dancer. An AI model reads the songs too.
+
+- **Asked for every name looked up and not linked** that MusicBrainz offered an
+  artist: the name, up to eight of its songs as `title — album`, and the artists
+  offered, each a letter with what tells it apart and its country, so the model
+  never copies an id. It answers a letter or none for each name, and why.
+
+  ```text
+  1. GUMI/MAYU
+     songs: ケビョウニンゲン — ケビョウニンゲン
+     a. GUMI (Vocaloid/SynthV, JP)
+     b. MAYU (Belly dancer, Art of Mayu, JP)
+  ```
+
+  ```json
+  {"choices": [{"name": 1, "artist": "a", "why": "GUMI is a Vocaloid voice"}]}
+  ```
+
+- **A Job a batch of up to 50 names,** of the kind `choose_artists`, through the
+  plugin point `ArtistChooser`, which the `ai-details` plugin answers. It runs in
+  the AI's lane and asks the providers in the order Settings lists them, as asking
+  for a Track's details does; the providers' failover is shared by the two.
+- **Only a recommendation:** what the model answers is kept for the name, with
+  the model and host that answered and when, replacing what it answered before.
+  Nothing is linked until someone links it. A choice of a name or a letter not
+  offered is left out, as is one naming an artist no longer known.
+- **A refusal by every provider** fails the Job as *refused*; an answer with no
+  choice in it fails it as *invalid*.
+
 ## Wikidata's names
 
 MusicBrainz often lacks the names a Chinese Library writes: it knows *披头士*
@@ -136,7 +170,15 @@ nicknames such as *周董*, and Japanese and Korean names.
   suggested one chosen already, to *Link* or answer *None of these*; and, once
   linked, what it is linked to, with *Unlink*, and *Finding its other names on
   Wikidata…* while Wikidata is asked. The list reads the names again every 2
-  seconds while any is being looked up, or any artist's names asked for.
+  seconds while any is being looked up, any artist's names asked for, or an AI
+  model asked.
+- **Ask AI** asks an AI model about every name that may be linked, and reads
+  *Asking the AI…* while it is. A name's recommended artist is the one the model
+  recommends, tagged *llama3.2 suggests* with its reason in the tooltip, else the
+  one going by the name exactly; its choice and *Link* are marked. When the model
+  recommends none of those offered, *None of these* is marked instead, with the
+  reason beneath. *Link N recommended* links every name whose recommendation is an
+  artist, never one the model recommends none for.
 - **Linked names are one artist** in the Artists view, named as most of its songs
   write it; on its page, which lists every song of every name linked to it; in
   search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;
@@ -150,17 +192,20 @@ nicknames such as *周董*, and Japanese and Korean names.
 | `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, and whether it is being asked now; and every artist those name, with its aliases |
 | `POST /api/artist-names/look-up` | Signed in | Ask about up to 500 names at once; each not linked, and that may be looked up, gets a Job. Answers how many were asked about, or 409 while the `musicbrainz` plugin is off |
 | `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
+| `POST /api/artist-names/recommend` | Signed in | Ask an AI model about every name looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off or no AI provider is set up |
 | `POST /api/artist-names/unlink` | Signed in | Forget a name's link |
 
 ## Testing
 
 - **The rules** (which names are looked up, the suggestion) are domain tests.
 - **The plugins** are tested with no socket opened: `musicbrainz` against a
-  hand-made artist search in MusicBrainz's shape, and `wikipedia` against
-  Wikidata's real answers for The Beatles.
+  hand-made artist search in MusicBrainz's shape, `wikipedia` against
+  Wikidata's real answers for The Beatles, and the artist chooser of `ai-details`
+  against a fake chat client.
 - **The service** runs real Jobs against the test plugin `reader`, whose finder
   answers *披头士* with The Beatles and a tribute band, and whose name finder
-  answers for The Beatles as Wikidata would.
+  answers for The Beatles as Wikidata would, and whose chooser recommends The
+  Beatles unless a song is a tribute.
 - **Shared lanes** are tested with two lanes sharing one name.
 
 ## Left for later

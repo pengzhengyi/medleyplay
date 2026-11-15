@@ -37,6 +37,13 @@ const LOOKED_UP: ArtistName = {
 
 const namesOf = (...names: ArtistName[]): ArtistNames => ({ names, artists: [BEATLES, TRIBUTE] });
 
+/** DeepSeek's model, asked at its own host. */
+const BY_DEEPSEEK = {
+  model: "deepseek-flash",
+  host: "api.deepseek.com",
+  at: "2026-11-15T12:00:00Z",
+};
+
 /** Show the section listing `names`. */
 function openList(names: ArtistNames) {
   const onChanged = vi.fn();
@@ -167,6 +174,59 @@ describe("linking names to artists", () => {
     expect(
       within(rowOf(list, "甲壳虫")).getByRole("button", { name: "Link 甲壳虫" }),
     ).toHaveFocus();
+  });
+
+  it("marks the artist an AI model recommends over the one going by the name", () => {
+    const { list } = openList(
+      namesOf({
+        ...LOOKED_UP,
+        recommendation: { ...BY_DEEPSEEK, artist_id: TRIBUTE.id, why: "Its songs are covers" },
+      }),
+    );
+    const row = rowOf(list, "披头士");
+
+    const tribute = within(row).getByRole("radio", { name: /tribute/ });
+    expect(tribute).toBeChecked();
+    expect(tribute.closest("label")).toHaveTextContent("deepseek-flash suggests");
+    expect(
+      within(row)
+        .getByRole("radio", { name: /The Beatles/ })
+        .closest("label"),
+    ).not.toHaveTextContent("Goes by this name");
+  });
+
+  it("marks None of these when an AI model recommends none, and leaves the name out of Link all", () => {
+    const { list } = openList(
+      namesOf({
+        ...LOOKED_UP,
+        recommendation: { ...BY_DEEPSEEK, artist_id: null, why: "A different band" },
+      }),
+    );
+    const row = rowOf(list, "披头士");
+
+    expect(row).toHaveTextContent("deepseek-flash suggests none of these: A different band");
+    expect(within(row).getByRole("button", { name: "None of these for 披头士" })).toHaveClass(
+      "recommended",
+    );
+    expect(within(list).queryByRole("button", { name: /^Link \d+ recommended$/ })).toBeNull();
+  });
+
+  it("asks an AI model for recommendations, saying while it is asked", async () => {
+    const server = serve({ "POST /api/artist-names/recommend": { body: { asked: 1 } } });
+    const { list, onChanged } = openList(namesOf(LOOKED_UP));
+
+    await userEvent.click(within(list).getByRole("button", { name: "Ask AI" }));
+
+    expect(server.calls).toContain("POST /api/artist-names/recommend");
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("says while an AI model is being asked", () => {
+    render(
+      <LinkArtists names={{ ...namesOf(LOOKED_UP), recommending: true }} onChanged={vi.fn()} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Asking the AI…" })).toBeDisabled();
   });
 
   it("links a name to none of the artists found", async () => {

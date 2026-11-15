@@ -268,12 +268,22 @@ export interface ArtistName {
   readonly suggested: string | null;
   /** Whether MusicBrainz is being asked about it now. */
   readonly finding: boolean;
+  /** What an AI model last recommended linking it to, while it isn't linked. */
+  readonly recommendation?: ArtistRecommendation | null;
 }
 
 /** Every artist name the Library shows, most Tracks first, and the artists they name. */
 export interface ArtistNames {
   readonly names: readonly ArtistName[];
   readonly artists: readonly KnownArtist[];
+  /** Whether an AI model is being asked which artists the names name. */
+  readonly recommending?: boolean;
+}
+
+/** The artist an AI model recommends linking a name to, `null` for none offered, and why. */
+export interface ArtistRecommendation extends AnsweredBy {
+  readonly artist_id: string | null;
+  readonly why: string;
 }
 
 /** An artist's or album's name shown on Tracks with more than the name in it, tidied. */
@@ -901,6 +911,8 @@ export const api = {
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */
   lookUpArtists: (names: readonly string[]) =>
     call<{ asked: number }>("POST", "/api/artist-names/look-up", { names }),
+  /** Ask an AI model which artist each name looked up and not linked names; links nothing. */
+  recommendArtists: () => call<{ asked: number }>("POST", "/api/artist-names/recommend"),
   /** Link a name to an artist MusicBrainz named for it, or to none. */
   linkArtist: (name: string, artistId: string | null) =>
     call<undefined>("PUT", "/api/artist-names/link", { name, artist_id: artistId }),

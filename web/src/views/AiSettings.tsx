@@ -334,13 +334,26 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
               >
                 Cancel
               </button>
-              <p className="hint">
-                {isCopilot(baseUrl)
-                  ? "Copilot is asked with a GitHub token of an account with Copilot: a fine-grained token with the Copilot Requests permission. Each question counts against your Copilot allowance. "
-                  : ""}
-                The key is kept in the Keychain and never shown again. A local Ollama needs none.
-                Plain http is for an address on this machine only.
-              </p>
+              {isCopilot(baseUrl) ? (
+                <p className="hint">
+                  A fine-grained GitHub token with the Copilot Requests permission, of an account
+                  with Copilot (
+                  <a
+                    href="https://github.com/settings/personal-access-tokens/new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    create one
+                  </a>
+                  ). Each question counts against your Copilot allowance. The token is kept in the
+                  Keychain and never shown again.
+                </p>
+              ) : (
+                <p className="hint">
+                  The key is kept in the Keychain and never shown again. A local Ollama needs none.
+                  Plain http is for an address on this machine only.
+                </p>
+              )}
             </form>
           )}
           <p className={classOf(notes.note)} role="status">

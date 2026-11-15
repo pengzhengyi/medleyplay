@@ -137,6 +137,11 @@ describe("adding a provider", () => {
     expect(within(form).getByLabelText("GitHub token")).toHaveAttribute("type", "password");
     expect(within(form).queryByLabelText("Key")).toBeNull();
     expect(form).toHaveTextContent("Copilot Requests");
+    expect(within(form).getByRole("link", { name: "create one" })).toHaveAttribute(
+      "href",
+      "https://github.com/settings/personal-access-tokens/new",
+    );
+    expect(form).not.toHaveTextContent("Ollama");
   });
 
   it("starts another provider empty, and adds it only once it has an address and a model", async () => {

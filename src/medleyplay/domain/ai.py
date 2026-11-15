@@ -1,12 +1,15 @@
 """The AI providers the household sets up: where each is, which model to ask, and the key.
 
 A provider speaks the OpenAI chat protocol, as DeepSeek, OpenAI, Anthropic, and a
-local Ollama all do, so a household chooses one with a base URL and a model:
+local Ollama all do, so a household chooses one with a base URL and a model. GitHub
+Copilot is the one exception: its address names it, and the `ai-details` plugin asks
+it through GitHub's Copilot SDK, with a GitHub token as its key:
 
 ```text
-DeepSeek    https://api.deepseek.com          deepseek-flash
-OpenAI      https://api.openai.com/v1         gpt-4o-mini
-Ollama      http://127.0.0.1:11434/v1         llama3.2
+DeepSeek         https://api.deepseek.com          deepseek-flash
+OpenAI           https://api.openai.com/v1         gpt-4o-mini
+GitHub Copilot   https://api.githubcopilot.com     gpt-5-mini
+Ollama           http://127.0.0.1:11434/v1         llama3.2
 ```
 
 The household keeps up to `MAX_PROVIDERS`, in order: a Job asks the first, and the
@@ -110,6 +113,7 @@ PRESETS: Final = (
     Preset("DeepSeek", "https://api.deepseek.com", "deepseek-flash"),
     Preset("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
     Preset("Anthropic", "https://api.anthropic.com/v1", "claude-haiku-5-5"),
+    Preset("GitHub Copilot", "https://api.githubcopilot.com", "gpt-5-mini"),
     Preset("Ollama", "http://127.0.0.1:11434/v1", "llama3.2"),
 )
 

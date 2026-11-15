@@ -12,6 +12,7 @@ const PRESETS: AiSetting["presets"] = [
   { name: "DeepSeek", base_url: "https://api.deepseek.com", model: "deepseek-flash" },
   { name: "OpenAI", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   { name: "Anthropic", base_url: "https://api.anthropic.com/v1", model: "claude-haiku-5-5" },
+  { name: "GitHub Copilot", base_url: "https://api.githubcopilot.com", model: "gpt-5-mini" },
   { name: "Ollama", base_url: "http://127.0.0.1:11434/v1", model: "llama3.2" },
 ];
 
@@ -108,6 +109,7 @@ describe("adding a provider", () => {
       "DeepSeek",
       "OpenAI",
       "Anthropic",
+      "GitHub Copilot",
       "Ollama",
       "Other",
     ]);
@@ -123,6 +125,18 @@ describe("adding a provider", () => {
     const form = screen.getByRole("form", { name: "Add OpenAI" });
     expect(within(form).getByLabelText("Base URL")).toHaveValue("https://api.openai.com/v1");
     expect(within(form).getByLabelText("Model")).toHaveValue("gpt-4o-mini");
+  });
+
+  it("asks GitHub Copilot for a GitHub token, saying which permission it needs", async () => {
+    const user = userEvent.setup();
+    open([]);
+
+    await user.click(await screen.findByRole("button", { name: "GitHub Copilot" }));
+
+    const form = screen.getByRole("form", { name: "Add GitHub Copilot" });
+    expect(within(form).getByLabelText("GitHub token")).toHaveAttribute("type", "password");
+    expect(within(form).queryByLabelText("Key")).toBeNull();
+    expect(form).toHaveTextContent("Copilot Requests");
   });
 
   it("starts another provider empty, and adds it only once it has an address and a model", async () => {

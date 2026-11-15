@@ -6,6 +6,8 @@
 import type { AiFailure, AiPreset, AiProvider } from "./api";
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+/** The address that names GitHub Copilot, asked with a GitHub token rather than an API key. */
+const COPILOT = "https://api.githubcopilot.com";
 const relative = new Intl.RelativeTimeFormat("en-US", { numeric: "auto", style: "short" });
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -45,6 +47,11 @@ export function fixOf(provider: AiProvider): string {
 export function providerNameOf(provider: AiProvider, presets: readonly AiPreset[]): string {
   const preset = presets.find((each) => each.base_url === provider.base_url);
   return preset?.name ?? hostOf(provider.base_url);
+}
+
+/** Whether the address is GitHub Copilot's, whose key is a GitHub token. */
+export function isCopilot(baseUrl: string): boolean {
+  return baseUrl.trim().replace(/\/+$/u, "") === COPILOT;
 }
 
 /** Whether the address is on this machine, where a provider such as Ollama needs no key. */

@@ -654,6 +654,116 @@ button.text:hover:not(:disabled) {
   color: var(--muted);
 }
 
+/* About an artist, under its heading: a round mosaic of its covers, then what is known. */
+.artist-about {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0 0 1.25rem;
+}
+
+.artist-art {
+  display: grid;
+  flex: none;
+  grid-template-columns: 1fr;
+  width: 7.5rem;
+  height: 7.5rem;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  box-shadow: var(--lift);
+}
+
+.artist-art.tiles-2,
+.artist-art.tiles-3,
+.artist-art.tiles-4 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.artist-art.tiles-3,
+.artist-art.tiles-4 {
+  grid-template-rows: 1fr 1fr;
+}
+
+.artist-art.tiles-3 > :first-child {
+  grid-row: 1 / 3;
+}
+
+.artist-art .artist-tile {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  object-fit: cover;
+}
+
+.artist-initial {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.artist-facts {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.artist-facts p {
+  margin: 0;
+}
+
+.artist-who {
+  font-weight: 600;
+}
+
+.artist-names {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.artist-places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.artist-places li {
+  margin: 0;
+  list-style: none;
+}
+
+.artist-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.artist-place:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (width <= 40rem) {
+  .artist-art {
+    width: 5.5rem;
+    height: 5.5rem;
+  }
+}
+
 /* Your imported rating of the album shown, and your review, under its heading. */
 .album-rating {
   max-width: 60ch;

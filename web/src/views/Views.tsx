@@ -13,8 +13,8 @@ import {
 import { Fragment, type ReactNode, useMemo } from "react";
 
 import type { ArtistNames, Mode, NameToTidy, Playlist, Track, WaitingDevice } from "../api";
-import type { ArtistLinks } from "../library/artistLinks";
-import { formatLength, formatLibraryLength } from "../format";
+import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
+import { formatLength, formatLibraryLength, initialOf } from "../format";
 import {
   type FavoriteGroups,
   albumKey,
@@ -40,6 +40,7 @@ import {
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
 import { type Route, hrefOf } from "../routes";
 import { AlbumRatingNote } from "./AlbumRatingNote";
+import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
 import { FavoriteHeart } from "./FavoriteHeart";
 import type { Station } from "../library/useStation";
@@ -125,9 +126,25 @@ function viewOf(given: ViewProps) {
       return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
     case "artist": {
       const songs = tracksOfArtist(props.tracks, route.name, props.links);
+      const known = props.artistNames?.names;
+      const group = (props.links ?? NO_LINKS).groupOf(route.name);
+      const artist = group.startsWith("artist:")
+        ? known?.artists.find((each) => `artist:${each.id}` === group)
+        : undefined;
+      const named = known?.names.find((each) => fold(each.name.trim()) === fold(route.name.trim()));
       return (
         <Songs
           title={route.name || UNKNOWN_ARTIST}
+          about={
+            route.name !== "" && (
+              <ArtistAbout
+                name={route.name}
+                songs={songs}
+                artist={artist}
+                toLink={named !== undefined && !named.linked && named.look_up === "yes"}
+              />
+            )
+          }
           back={{ view: "artists" }}
           backLabel="Artists"
           heart={
@@ -653,12 +670,4 @@ function tracksOfPlaylist(tracks: readonly Track[], playlist: Playlist): Track[]
 
 function durationOf(tracks: readonly Track[]): number {
   return tracks.reduce((total, track) => total + (track.duration_ms ?? 0), 0);
-}
-
-const letters = new Intl.Segmenter();
-
-/** Return the first letter of `name` as a person sees it, such as `初` or `É`. */
-function initialOf(name: string): string {
-  const [first] = letters.segment(name.trim());
-  return first?.segment.toUpperCase() ?? "?";
 }

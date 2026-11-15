@@ -7,6 +7,7 @@ import { App } from "../App";
 import { hrefOf } from "../routes";
 import {
   type Routes,
+  artistNameOf,
   detailsOf,
   favoritesPlaylistOf,
   lookupOf,
@@ -294,6 +295,47 @@ function withFavorites(favorites: {
     },
   };
 }
+
+describe("an artist's page", () => {
+  /** The routes of `LIBRARY` with *ryo* linked to the composer MusicBrainz knows, or not. */
+  const withRyo = (linked: boolean): Routes => ({
+    ...signedIn(LIBRARY, [favoritesPlaylistOf([1])]),
+    "GET /api/artist-names": {
+      body: {
+        names: [linked ? artistNameOf("ryo", "ryo-id") : artistNameOf("ryo")],
+        artists: [
+          {
+            id: "ryo-id",
+            name: "ryo",
+            sort_name: "ryo",
+            disambiguation: "supercell composer",
+            country: "JP",
+            aliases: [{ name: "supercell", locale: null, primary: false }],
+          },
+        ],
+      },
+    },
+  });
+
+  it("says who a linked artist is, and links it to MusicBrainz", async () => {
+    open("#/artist?name=ryo", withRyo(true));
+
+    const about = await screen.findByRole("region", { name: "About the artist" });
+    expect(within(about).getByText("ryo (supercell composer, JP)")).toBeInTheDocument();
+    expect(within(about).getByRole("link", { name: "MusicBrainz" })).toHaveAttribute(
+      "href",
+      "https://musicbrainz.org/artist/ryo-id",
+    );
+  });
+
+  it("offers to link an artist name not linked yet", async () => {
+    open("#/artist?name=ryo", withRyo(false));
+
+    const about = await screen.findByRole("region", { name: "About the artist" });
+    expect(await within(about).findByRole("link", { name: "Link it to an artist" })).toBeVisible();
+    expect(within(about).queryByRole("link", { name: "MusicBrainz" })).toBeNull();
+  });
+});
 
 describe("favorite artists and albums", () => {
   afterEach(() => {

@@ -1,0 +1,120 @@
+/**
+ * @file What is known of an artist, under its page's heading: covers of its albums,
+ * who MusicBrainz says it is, the other names it goes by, and where to read more.
+ *
+ * The links only open the sites in a new tab; nothing here asks them anything.
+ */
+
+import { ArrowSquareOutIcon } from "@phosphor-icons/react";
+
+import type { KnownArtist, Track } from "../api";
+import { initialOf } from "../format";
+import { albumsOf, fold } from "../library/views";
+import { hrefOf } from "../routes";
+import { Cover } from "./Cover";
+
+/** How many album covers the mosaic shows. */
+const MOSAIC = 4;
+
+/** Say who MusicBrainz says the artist is: `The Beatles (Liverpool rock band, GB)`. */
+function describe(artist: KnownArtist): string {
+  const about = [artist.disambiguation, artist.country].filter(Boolean).join(", ");
+  return about === "" ? artist.name : `${artist.name} (${about})`;
+}
+
+/** The names the artist goes by, but the one shown and its own, each once. */
+function otherNames(artist: KnownArtist, shown: string): string[] {
+  const seen = new Set([fold(shown.trim()), fold(artist.name.trim())]);
+  const names: string[] = [];
+  for (const { name } of artist.aliases) {
+    const key = fold(name.trim());
+    if (key !== "" && !seen.has(key)) {
+      seen.add(key);
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+/** Where to read more of the artist, each a page of its own. */
+function placesOf(name: string, artist: KnownArtist | undefined) {
+  const search = encodeURIComponent(artist?.name ?? name);
+  return [
+    ...(artist === undefined
+      ? []
+      : [
+          { site: "MusicBrainz", href: `https://musicbrainz.org/artist/${artist.id}` },
+          {
+            site: "Wikidata",
+            // The item holding the MusicBrainz id, found by Wikidata's own search.
+            href: `https://www.wikidata.org/w/index.php?search=${encodeURIComponent(`haswbstatement:P434=${artist.id}`)}`,
+          },
+        ]),
+    {
+      site: "Rate Your Music",
+      href: `https://rateyourmusic.com/search?searchterm=${search}&searchtype=a`,
+    },
+  ];
+}
+
+/**
+ * About the artist `name`: `songs` are its songs, `artist` the one it is linked to,
+ * if any, and `toLink` says whether it could be linked to one on Clean up.
+ */
+export function ArtistAbout({
+  name,
+  songs,
+  artist,
+  toLink,
+}: {
+  readonly name: string;
+  readonly songs: readonly Track[];
+  readonly artist: KnownArtist | undefined;
+  readonly toLink: boolean;
+}) {
+  const covers = albumsOf(songs)
+    .flatMap((album) => (album.cover === null ? [] : [album.cover]))
+    .slice(0, MOSAIC);
+  const others = artist === undefined ? [] : otherNames(artist, name);
+  return (
+    <section className="artist-about" aria-label="About the artist">
+      <div
+        className={`artist-art tiles-${String(covers.length)}`}
+        role="img"
+        aria-label={`Album covers of ${name}`}
+      >
+        {covers.length === 0 ? (
+          <span className="artist-initial">{initialOf(name)}</span>
+        ) : (
+          covers.map((cover) => <Cover key={cover} cover={cover} className="artist-tile" />)
+        )}
+      </div>
+      <div className="artist-facts">
+        {artist !== undefined && <p className="artist-who">{describe(artist)}</p>}
+        {others.length > 0 && <p className="artist-names">Goes by {others.join(", ")}</p>}
+        <ul className="artist-places" aria-label="The artist elsewhere">
+          {placesOf(name, artist).map(({ site, href }) => (
+            <li key={site}>
+              <a
+                className="artist-place"
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open ${site} in a new tab`}
+              >
+                {site}
+                <ArrowSquareOutIcon aria-hidden />
+              </a>
+            </li>
+          ))}
+        </ul>
+        {toLink && (
+          <p className="hint">
+            Not linked to an artist yet.{" "}
+            <a href={hrefOf({ view: "clean-up" })}>Link it to an artist</a>
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}

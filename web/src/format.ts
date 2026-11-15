@@ -166,3 +166,11 @@ export function formatBytes(bytes: number): string {
   const digits = unit === 0 || value >= 100 ? 0 : 1;
   return `${value.toFixed(digits).replace(/\.0$/, "")} ${UNITS[unit] ?? "bytes"}`;
 }
+
+const letters = new Intl.Segmenter();
+
+/** Return the first letter of `name` as a person sees it, such as `初` or `É`. */
+export function initialOf(name: string): string {
+  const [first] = letters.segment(name.trim());
+  return first?.segment.toUpperCase() ?? "?";
+}

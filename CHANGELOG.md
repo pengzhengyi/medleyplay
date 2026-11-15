@@ -431,6 +431,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The album's songs close when the mouse leaves** — opened from the album
+  playing, by pointing or a click, they no longer stay until Escape; each song
+  leads with a heart to favorite it.
+
 - **Controls say why they can't be used** — *AI* and *Snap* in the songs editor,
   and a preset already set up, say why on hover; a heart says whether its song
   is a favorite and what a click does; short buttons no longer wrap their

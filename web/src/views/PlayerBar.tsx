@@ -72,6 +72,7 @@ export function PlayerBar({
                   onPlaySong={(song) => {
                     player.playAt(song.entry.key, song.from);
                   }}
+                  onFavorite={onFavorite}
                 />
               )
             : undefined
@@ -102,6 +103,7 @@ export function PlayerBar({
               player.playAt(song.entry.key, song.from);
             }}
             onEditSongs={menuActions.onEditSongs}
+            onFavorite={onFavorite}
           />
         )}
         <div className="names">

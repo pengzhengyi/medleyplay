@@ -84,6 +84,7 @@ export function NowPlayingNames({
       opens="below"
       onPlaySong={onPlaySong}
       onEditSongs={onEditSongs}
+      onFavorite={onFavorite}
     />
   );
   return (

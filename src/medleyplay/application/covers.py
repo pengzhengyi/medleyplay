@@ -21,7 +21,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.covers import MAX_COVER_BYTES, CoverType, cover_id, cover_type, is_cover_id
 from medleyplay.domain.details import Field
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.persistence.schema import ArtistRow, TrackValueRow
+from medleyplay.persistence.schema import ArtistHouseholdRow, ArtistRow, TrackValueRow
 
 COVERS_FOLDER = "covers"
 """Where covers are kept in the data folder."""
@@ -50,6 +50,21 @@ def keep_cover(folder: Path, name: str, data: bytes) -> None:
         raise
 
 
+def checked_cover(data: bytes) -> str:
+    """Return the name of the cover `data` would be kept as, refusing what is no cover.
+
+    A JPEG, PNG, or WebP image of at most 10 MiB, known by its first bytes, is a
+    cover; anything else is refused.
+    """
+    if len(data) > MAX_COVER_BYTES:
+        message = f"A cover is at most {MAX_COVER_BYTES // (1024 * 1024)} MiB."
+        raise InvalidInputError(message)
+    if cover_type(data) is None:
+        message = "A cover is a JPEG, PNG, or WebP image."
+        raise InvalidInputError(message)
+    return cover_id(data)
+
+
 class CoverService:
     """Keep covers, set and remove the household's, and sweep those no value names."""
 
@@ -72,13 +87,7 @@ class CoverService:
         A JPEG, PNG, or WebP image of at most 10 MiB, known by its first bytes, is
         kept; anything else is refused.
         """
-        if len(data) > MAX_COVER_BYTES:
-            message = f"A cover is at most {MAX_COVER_BYTES // (1024 * 1024)} MiB."
-            raise InvalidInputError(message)
-        if cover_type(data) is None:
-            message = "A cover is a JPEG, PNG, or WebP image."
-            raise InvalidInputError(message)
-        name = cover_id(data)
+        name = checked_cover(data)
         with self._units.begin() as db:
             set_household(db, track_id, {Field.COVER: name}, self._clock())
             keep_cover(self._folder, name, data)
@@ -104,7 +113,10 @@ class CoverService:
         return None if kind is None or path.is_symlink() else (path, kind)
 
     def sweep(self) -> None:
-        """Remove every file in the covers folder that no value or artist's photo names."""
+        """Remove every file in the covers folder that no value or artist's photo names.
+
+        An artist's photo is the one Wikidata gave, or the household's own.
+        """
         if not self._folder.is_dir():
             return
         with self._units() as db:
@@ -114,6 +126,11 @@ class CoverService:
                 )
             )
             named.update(db.scalars(select(ArtistRow.photo).where(ArtistRow.photo.is_not(None))))
+            named.update(
+                db.scalars(
+                    select(ArtistHouseholdRow.photo).where(ArtistHouseholdRow.photo.is_not(None))
+                )
+            )
         for file in self._folder.iterdir():
             if file.name not in named:
                 with contextlib.suppress(OSError):

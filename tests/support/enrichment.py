@@ -189,7 +189,12 @@ def running_enrichment(
                 enrichment=EnrichmentService(units, clock, plugins, jobs, kind),
                 kind=kind,
                 artists=ArtistService(
-                    units, clock, plugins, jobs, ArtistKinds(find, find_names, choose)
+                    units,
+                    clock,
+                    plugins,
+                    jobs,
+                    ArtistKinds(find, find_names, choose),
+                    covers_folder=data_dir / COVERS_FOLDER,
                 ),
                 jobs=jobs,
                 runner=runner,

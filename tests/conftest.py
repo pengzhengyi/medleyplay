@@ -286,9 +286,12 @@ def artists(
     jobs: JobService,
     find_kind: FindArtistKind,
     find_names_kind: FindArtistNamesKind,
+    tmp_path: Path,
 ) -> ArtistService:
     kinds = ArtistKinds(find_kind, find_names_kind, choose_artists_kind(clock))
-    return ArtistService(units, clock, plugins, jobs, kinds)
+    return ArtistService(
+        units, clock, plugins, jobs, kinds, covers_folder=tmp_path / "data" / "covers"
+    )
 
 
 @pytest.fixture

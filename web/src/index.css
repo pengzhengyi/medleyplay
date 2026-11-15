@@ -558,6 +558,78 @@ button[aria-disabled="true"] {
   margin-top: 0.75rem;
 }
 
+.accent-tool.on {
+  color: var(--accent);
+}
+
+/* Saved colors: a row of small tiles, the one in use ringed; each shows its hex large on hover. */
+.accent-saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.accent-saved li {
+  margin: 0;
+  list-style: none;
+}
+
+.accent-tile {
+  position: relative;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 0.4rem;
+  background: var(--tile);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.accent-tile.on {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.accent-tile::after {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 0.75rem;
+  background: var(--tile);
+  box-shadow: var(--float);
+  color: var(--tile-ink);
+  content: attr(data-hex);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) scale(0.92);
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+}
+
+.accent-tile:hover::after,
+.accent-tile:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accent-tile::after {
+    transition: none;
+  }
+}
+
 .library main {
   /* The table drops a column when the view is narrow, however wide the window. */
   container-type: inline-size;

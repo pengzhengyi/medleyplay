@@ -3,15 +3,17 @@
  *
  * The swatch opens a color square and hue slider; the field takes a hex code; the
  * dice roll a color. Each change shows at once, and the page works out a readable
- * shade of it for light and dark.
+ * shade of it for light and dark. The heart saves the color shown among a row of
+ * tiles to choose again, each showing a large swatch with its hex on hover.
  */
 
-import { ArrowCounterClockwiseIcon, DiceFiveIcon } from "@phosphor-icons/react";
+import { ArrowCounterClockwiseIcon, DiceFiveIcon, HeartIcon } from "@phosphor-icons/react";
+import type { CSSProperties } from "react";
 import { useId, useState } from "react";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 
-import { DEFAULT_ACCENT, useAccent } from "../accent";
-import { randomAccent } from "../color";
+import { DEFAULT_ACCENT, forgetColor, saveColor, useAccent, useSavedColors } from "../accent";
+import { inkFor, randomAccent } from "../color";
 
 /** Choose the accent color; `random` rolls the dice. */
 export function AccentPicker({ random = Math.random }: { readonly random?: () => number }) {
@@ -19,6 +21,8 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
   const [open, setOpen] = useState(false);
   const square = useId();
   const shown = accent ?? DEFAULT_ACCENT;
+  const colors = useSavedColors();
+  const saved = colors.includes(shown);
   return (
     <div className="accent-picker">
       <div className="accent-row">
@@ -52,6 +56,22 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
         >
           <DiceFiveIcon aria-hidden />
         </button>
+        <button
+          type="button"
+          className={saved ? "accent-tool on" : "accent-tool"}
+          aria-label="Save this color"
+          aria-pressed={saved}
+          title={saved ? "Forget this color" : "Save this color to choose again"}
+          onClick={() => {
+            if (saved) {
+              forgetColor(shown);
+            } else {
+              saveColor(shown);
+            }
+          }}
+        >
+          <HeartIcon weight={saved ? "fill" : "regular"} aria-hidden />
+        </button>
         {accent !== undefined && (
           <button
             type="button"
@@ -66,6 +86,25 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
           </button>
         )}
       </div>
+      {colors.length > 0 && (
+        <ul className="accent-saved" aria-label="Saved colors">
+          {colors.map((color) => (
+            <li key={color}>
+              <button
+                type="button"
+                className={color === shown ? "accent-tile on" : "accent-tile"}
+                aria-label={`Use ${color}`}
+                aria-pressed={color === shown}
+                data-hex={color}
+                style={{ "--tile": color, "--tile-ink": inkFor(color) } as CSSProperties}
+                onClick={() => {
+                  setAccent(color);
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
       {open && (
         <HexColorPicker id={square} className="accent-square" color={shown} onChange={setAccent} />
       )}

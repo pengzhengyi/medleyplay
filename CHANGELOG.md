@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fill one artist into every song** — in the songs editor, an artist typed
   into one row shows faintly in the rows with none, and Tab fills them all.
 
+- **Save accent colors to choose again** — the heart in *Settings › Appearance*
+  keeps the color shown among 10 tiles, the oldest going first; a tile uses its
+  color, and shows it large with its hex on hover.
+
 - **Clean up leads with what can be done** — a bar goes to each of its sections,
   with how many names wait or a check once done, the sections waiting first;
   in *Link artist names*, names ready to link come first and those linked or

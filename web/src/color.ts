@@ -14,6 +14,7 @@ const LIGHT_CONTRAST = 4.5;
 const DARK_CONTRAST = 6.5;
 
 const WHITE = "#ffffff";
+const BLACK = "#000000";
 
 /** How a chosen accent shows in each scheme, and the ink written on it. */
 export interface Shades {
@@ -42,6 +43,11 @@ export function shadesOf(accent: string): Shades {
   return { light, lightInk: inkOn(light), dark, darkInk: inkOn(dark) };
 }
 
+/** White or black, whichever reads better written on `color`. */
+export function inkFor(color: string): string {
+  return contrast(WHITE, color) >= contrast(BLACK, color) ? WHITE : BLACK;
+}
+
 /** A color of any hue, as strong as the default accent: `random` rolls the hue. */
 export function randomAccent(random: () => number = Math.random): string {
   return fromLch({ lightness: 0.62, chroma: 0.15, hue: random() * 360 });
@@ -60,7 +66,7 @@ function readableOn(color: string, surface: string, ratio: number, direction: 1 
       return shade;
     }
   }
-  return direction > 0 ? WHITE : "#000000";
+  return direction > 0 ? WHITE : BLACK;
 }
 
 /** White, or the accent's own hue nearly black, whichever reads better on `color`. */

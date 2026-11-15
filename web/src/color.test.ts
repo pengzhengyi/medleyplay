@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DARK_SURFACE, LIGHT_SURFACE, contrast, randomAccent, shadesOf } from "./color";
+import { DARK_SURFACE, LIGHT_SURFACE, contrast, inkFor, randomAccent, shadesOf } from "./color";
 
 describe("contrast", () => {
   it("is 21 between black and white, and 1 between a color and itself", () => {
@@ -48,6 +48,13 @@ describe("the shades of a chosen accent", () => {
 
     expect(Math.abs(hueOf(light) - hueOf("#e0245e"))).toBeLessThan(10);
     expect(Math.abs(hueOf(dark) - hueOf("#e0245e"))).toBeLessThan(10);
+  });
+});
+
+describe("the ink written on a color", () => {
+  it("is white on a deep color and black on a pale one", () => {
+    expect(inkFor("#1a237e")).toBe("#ffffff");
+    expect(inkFor("#ffd84d")).toBe("#000000");
   });
 });
 

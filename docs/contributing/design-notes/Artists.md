@@ -187,6 +187,13 @@ nicknames such as *周董*, and Japanese and Korean names.
   recommends none of those offered, *None of these* is marked instead, with the
   reason beneath. *Link N recommended* links every name whose recommendation is an
   artist, never one the model recommends none for.
+- **An artist's page says who it is:** under its heading, a round mosaic of up to
+  four of its albums' covers, or its initial; who MusicBrainz says it is, as
+  *周杰倫 (TW)*; six of the other names it goes by, and the rest on request; and
+  links that open its MusicBrainz page, its Wikidata item (Wikidata's own search
+  for the MusicBrainz id), and a Rate Your Music search for its name, each in a
+  new tab. Nothing is asked of those sites; the household opens them. A name not
+  linked yet offers *Link it to an artist*, which opens Clean up.
 - **Linked names are one artist** in the Artists view, named as most of its songs
   write it; on its page, which lists every song of every name linked to it; in
   search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;

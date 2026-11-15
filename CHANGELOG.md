@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in *Link artist names*, names ready to link come first and those linked or
   kept apart last.
 
+- **Play a song from Up next** — clicking a song in *Up next*, or pressing its
+  title, plays it now; an album's row plays from its first song queued.
+
 - **Turn an AI provider off** — each provider's card in *Settings › AI* has a
   switch: off, it keeps its place and key but isn't asked. The card fits one
   line, why it last failed shows as an icon that explains on hover, and its

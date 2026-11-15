@@ -3096,10 +3096,28 @@ button.icon.heart.on:hover,
   white-space: nowrap;
 }
 
+/* A song's title, and an album's, play it now; they look like text, not buttons. */
+.queue :is(.entry-title, .album-title) {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  line-height: inherit;
+  text-align: left;
+}
+
 .queue .entry-title {
   grid-area: title;
   font-size: 0.92rem;
   font-weight: 500;
+}
+
+/* A row plays when clicked, like a row of the song table. */
+.queue li:not(.queue-album) {
+  cursor: pointer;
 }
 
 .queue .entry-artist {

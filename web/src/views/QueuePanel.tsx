@@ -220,6 +220,9 @@ export function QueuePanel({
                           entry={entry}
                           track={tracks.get(entry.trackId)}
                           inAlbum={inAlbum}
+                          onPlay={() => {
+                            player.playAt(entry.key, 0);
+                          }}
                           onRemove={() => {
                             player.remove(entry.key);
                           }}
@@ -246,6 +249,12 @@ export function QueuePanel({
                             }
                             return next;
                           });
+                        }}
+                        onPlay={() => {
+                          const [start] = row.entries;
+                          if (start !== undefined) {
+                            player.playAt(start.key, 0);
+                          }
                         }}
                         onRemove={() => {
                           for (const entry of row.entries) {
@@ -303,6 +312,7 @@ function AlbumRow({
   count,
   folded,
   onFold,
+  onPlay,
   onRemove,
 }: {
   readonly file: Track | undefined;
@@ -311,6 +321,8 @@ function AlbumRow({
   readonly count: number;
   readonly folded: boolean;
   readonly onFold: () => void;
+  /** Play its first song queued now. */
+  readonly onPlay: () => void;
   readonly onRemove: () => void;
 }) {
   const title = file?.title ?? "An album no longer here";
@@ -328,7 +340,15 @@ function AlbumRow({
         <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
       </button>
       <KindMark kind="album" reason="split" />
-      <span className="album-title">{title}</span>
+      <button
+        type="button"
+        className="album-title"
+        aria-label={`Play ${title} from song ${String(place)}`}
+        title="Play now"
+        onClick={onPlay}
+      >
+        {title}
+      </button>
       <span className="album-place" title={`From song ${where}`}>
         {where}
       </span>
@@ -345,16 +365,22 @@ function AlbumRow({
   );
 }
 
+/**
+ * One entry of what plays next: clicked anywhere but its own buttons, or its title
+ * pressed, it plays now.
+ */
 function QueueItem({
   entry,
   track,
   inAlbum,
+  onPlay,
   onRemove,
 }: {
   readonly entry: Entry;
   readonly track: Track | undefined;
   /** Whether it shows under its album's row. */
   readonly inAlbum: boolean;
+  readonly onPlay: () => void;
   readonly onRemove: () => void;
 }) {
   const {
@@ -374,6 +400,12 @@ function QueueItem({
         [inAlbum ? "in-album" : "", isDragging ? "dragging" : ""].join(" ").trim() || undefined
       }
       style={{ transform: CSS.Translate.toString(transform), transition }}
+      onClick={(event) => {
+        // The title is a button of its own; the handle and Remove do their own thing.
+        if (!(event.target instanceof Element) || event.target.closest("button") === null) {
+          onPlay();
+        }
+      }}
     >
       <button
         type="button"
@@ -388,7 +420,15 @@ function QueueItem({
       </button>
       <Cover cover={track?.cover ?? null} className="thumb" />
       {track !== undefined && <KindMark kind={track.kind} reason={track.kind_reason} />}
-      <span className="entry-title">{title}</span>
+      <button
+        type="button"
+        className="entry-title"
+        aria-label={`Play ${title} now`}
+        title="Play now"
+        onClick={onPlay}
+      >
+        {title}
+      </button>
       <span className="entry-artist">{track?.artist}</span>
       <button
         type="button"

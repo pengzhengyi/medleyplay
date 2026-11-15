@@ -63,3 +63,70 @@ describe("a station", () => {
     expect(added()).toHaveLength(12);
   });
 });
+
+/** Forty songs by one band, the first five of them hearted. */
+const HEARTED = LIBRARY.map((track) => (track.id <= 5 ? { ...track, favorite: true } : track));
+
+/** The favorites station started over `tracks`, its player showing `queue` as it changes. */
+function startFavorites(tracks: readonly Track[] = HEARTED) {
+  const playList = vi.fn();
+  const add = vi.fn();
+  const playing = (queue: Queue) => playerOf({ queue, playList, add });
+  const rendered = renderHook(({ player }: { player: Player }) => useStation(player, tracks, 1), {
+    initialProps: { player: playing(EMPTY) },
+  });
+  let started = false;
+  act(() => {
+    started = rendered.result.current.startFavorites();
+  });
+  const first = (playList.mock.calls[0]?.[0] ?? []) as Track[];
+  const show = (queue: Queue) => {
+    rendered.rerender({ player: playing(queue) });
+  };
+  const added = () => add.mock.calls.map(([track]) => track as Track);
+  return { started, first, show, added, station: () => rendered.result.current };
+}
+
+describe("the favorites station", () => {
+  it("plays only favorites, each once before any again", () => {
+    const { first, station } = startFavorites();
+
+    expect(first.every((track) => track.favorite)).toBe(true);
+    expect(new Set(first.slice(0, 5).map((track) => track.id)).size).toBe(5);
+    expect(station().playing).toBe("favorites");
+  });
+
+  it("plays on with more favorites when few remain", () => {
+    const { first, show, added } = startFavorites();
+
+    show(queueOf(first, 7));
+
+    expect(added()).toHaveLength(6);
+    expect(added().every((track) => track.favorite)).toBe(true);
+  });
+
+  it("can't start without a favorite", () => {
+    const { started, first, station } = startFavorites(LIBRARY);
+
+    expect(started).toBe(false);
+    expect(first).toEqual([]);
+    expect(station().playing).toBeUndefined();
+  });
+});
+
+describe("which station plays", () => {
+  it("is a song's station when started from a song", () => {
+    const { station } = startStationShowing();
+
+    expect(station().playing).toBe("song");
+  });
+});
+
+/** A station started from the first song, as the page shows it. */
+function startStationShowing() {
+  const rendered = renderHook(() => useStation(playerOf({ queue: EMPTY }), LIBRARY, 1));
+  act(() => {
+    rendered.result.current.start(LIBRARY[0]);
+  });
+  return { station: () => rendered.result.current };
+}

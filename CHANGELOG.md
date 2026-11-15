@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A Favorites station** — the Radio tab offers *Favorites* beside *My
+  station*: it plays the songs you hearted, and those by an artist or from an
+  album you favorited, every one before any again, for as long as you listen.
+
 - **Rate Your Music imports merge, and can be viewed** — *Your ratings* in
   Settings has one row of buttons: *Export ratings*, *Discard import*, and
   *Import ratings*. Importing again keeps your earlier import and updates the

@@ -263,9 +263,10 @@ class EnricherAskRow(Base):
 class AiProviderRow(Base):
     """An AI provider the household set up; its key, if it has one, is in the Keychain.
 
-    Jobs ask the providers by `position`, lowest first. `key_secret` is the name the
-    key is kept under, or `None` for a provider that needs none, and `failure` is why
-    the provider last gave no answer, at `failed_at`, until it answers again.
+    Jobs ask the providers by `position`, lowest first, skipping one not `enabled`.
+    `key_secret` is the name the key is kept under, or `None` for a provider that needs
+    none, and `failure` is why the provider last gave no answer, at `failed_at`, until it
+    answers again.
     """
 
     __tablename__ = "ai_provider"
@@ -277,6 +278,8 @@ class AiProviderRow(Base):
     model: Mapped[str] = mapped_column(String(128))
     key_secret: Mapped[str | None] = mapped_column(String(64))
     saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    enabled: Mapped[bool] = mapped_column(default=True, server_default=text("1"))
+    """Whether Jobs ask it; one turned off keeps its place and key."""
     failure: Mapped[str | None] = mapped_column(String(16))
     failed_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     failure_reason: Mapped[str | None] = mapped_column(String(16))

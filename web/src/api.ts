@@ -388,6 +388,8 @@ export interface AiProvider {
   readonly failure_reason: UnusableReason | null;
   /** The status it refused the request with, when it refused one. */
   readonly failure_status: number | null;
+  /** Whether it is asked; one turned off keeps its place and key. */
+  readonly enabled: boolean;
 }
 
 /** What was wrong with an AI provider's unusable answer. */
@@ -1041,6 +1043,9 @@ export const api = {
   /** Ask another model of a provider, keeping its place and key; admins only. */
   changeAiModel: (id: string, model: string) =>
     call<AiProvider>("PUT", `/api/ai/providers/${id}/model`, { model }),
+  /** Turn a provider on or off, keeping its place and key; admins only. */
+  setAiEnabled: (id: string, enabled: boolean) =>
+    call<AiProvider>("PUT", `/api/ai/providers/${id}/enabled`, { enabled }),
   /** Ask the providers in the order of `ids`, which names each once; admins only. */
   reorderAi: (ids: readonly string[]) => call<AiProvider[]>("PUT", "/api/ai/order", { ids }),
   /** Forget a provider and delete its key; admins only. */

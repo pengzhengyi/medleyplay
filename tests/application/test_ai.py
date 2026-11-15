@@ -320,6 +320,7 @@ def test_the_row_is_removed_before_the_key(
         lambda ai: ai.change_model(MEMBER, "any", "deepseek-flash"),
         lambda ai: ai.reorder(MEMBER, []),
         lambda ai: ai.remove(MEMBER, "any"),
+        lambda ai: ai.set_enabled(MEMBER, "any", enabled=False),
     ],
     ids=[
         "showing them",
@@ -328,6 +329,7 @@ def test_the_row_is_removed_before_the_key(
         "changing a model",
         "reordering them",
         "removing one",
+        "turning one off",
     ],
 )
 def test_only_an_admin_manages_the_providers(
@@ -335,6 +337,49 @@ def test_only_an_admin_manages_the_providers(
 ) -> None:
     with pytest.raises(ForbiddenError):
         act(ai)
+
+
+def test_a_provider_starts_on(ai: AiService) -> None:
+    assert _add_deepseek(ai).enabled
+
+
+def test_a_provider_turned_off_keeps_its_place_and_key_but_is_not_lent(
+    ai: AiService, secrets: MemorySecrets
+) -> None:
+    deepseek, ollama = _add_deepseek(ai), _add_ollama(ai)
+
+    turned = ai.set_enabled(ADMIN, deepseek.id, enabled=False)
+
+    assert not turned.enabled
+    assert _models(ai) == ["deepseek-flash", "llama3.2"]
+    assert secrets.items == {key_secret(deepseek.id): KEY}
+    assert ai.endpoints() == (AiEndpoint(id=ollama.id, base_url=OLLAMA, model="llama3.2"),)
+
+
+def test_a_provider_turned_on_again_is_lent_in_its_place(ai: AiService) -> None:
+    deepseek, ollama = _add_deepseek(ai), _add_ollama(ai)
+    ai.set_enabled(ADMIN, deepseek.id, enabled=False)
+
+    ai.set_enabled(ADMIN, deepseek.id, enabled=True)
+
+    assert [each.id for each in ai.endpoints()] == [deepseek.id, ollama.id]
+
+
+def test_with_every_provider_off_none_is_set_up(
+    ai: AiService, units: sessionmaker[Session]
+) -> None:
+    deepseek = _add_deepseek(ai)
+
+    ai.set_enabled(ADMIN, deepseek.id, enabled=False)
+
+    assert ai.endpoints() == ()
+    with units() as db:
+        assert not is_set_up(db)
+
+
+def test_turning_off_a_provider_that_is_gone_is_not_found(ai: AiService) -> None:
+    with pytest.raises(NotFoundError):
+        ai.set_enabled(ADMIN, "gone", enabled=False)
 
 
 def test_a_job_is_lent_each_providers_address_model_and_key_in_order(ai: AiService) -> None:

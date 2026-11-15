@@ -55,6 +55,7 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "rea
 
 import type { CommunityRating, Track } from "../api";
 import { formatTime } from "../format";
+import { heartTitleOf } from "../heart";
 import type { CoverStatus } from "../library/lookups";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
 import { ratingOf } from "../library/ratings";
@@ -754,7 +755,7 @@ const COLUMNS: Column[] = [
         className={track.favorite ? "icon heart on" : "icon heart"}
         aria-label={`Favorite ${track.title}`}
         aria-pressed={track.favorite}
-        title={track.favorite ? "Favorite" : "Not a favorite"}
+        title={heartTitleOf(track.title, track.favorite)}
         onClick={() => {
           meta(table).actions.onFavorite(track, !track.favorite);
         }}

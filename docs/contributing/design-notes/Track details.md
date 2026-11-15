@@ -444,9 +444,11 @@ songs editor.
 
 - **The providers are the household's choice,** set by an admin in Settings → AI:
   each a base URL, a model, and a key, up to 5, in the order they are asked. Each
-  saved provider is a card that opens to its address and model as read-only
-  fields, with *Change model*, *Replace key*, and *Remove*, which keep its place;
-  a drag handle or the up and down buttons reorder the cards. One hand-written
+  saved provider is a card, one line closed, that opens to its address and model
+  as read-only fields, with *Change model*, *Replace key*, and *Remove*, which
+  keep its place; a drag handle or the up and down buttons reorder the cards. A
+  switch on each card turns the provider off: it keeps its place and key, Jobs
+  skip it, and with every provider off none counts as set up. One hand-written
   client on `requests` speaks the
   OpenAI chat protocol, so it works unchanged with DeepSeek, OpenAI, Anthropic's
   compatible endpoint, and a local Ollama; the section offers each as a preset
@@ -523,8 +525,10 @@ songs editor.
   until an admin resets it; any that couldn't be reached or stayed busy makes it a
   network failure, which waits and tries again later; otherwise the Job fails as
   an invalid answer. Why each provider passed over failed is kept on its row, with
-  when, until it answers again, and its card shows it, such as *Key refused 2 hr.
-  ago*, so a broken first provider shows rather than hiding behind the next. For
+  when, until it answers again, and its card shows it as an icon, no connection
+  for one that couldn't be reached and a warning otherwise, whose tooltip says
+  why, such as *Key refused 2 hr. ago. Replace the key.*, so a broken first
+  provider shows rather than hiding behind the next. For
   an unusable answer, the row also keeps what was wrong, as one of a few fixed
   reasons (refused with a status, redirected, cut off, empty, or not the JSON
   asked for) and never the provider's own words, which could hold anything; the
@@ -574,10 +578,11 @@ songs editor.
 | `PUT /api/enrichers/{name}/mode` | Admin | Sets the mode, `manual`, `next`, or `all`; answers the enricher, and with `all` queues every eligible Track first |
 | `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |
 | `POST /api/enrichers/{name}/reset` | Admin | Lets a stopped enricher be asked again; 204, also when it was not stopped |
-| `GET /api/ai` | Admin | The providers in order: each one's id, base URL, model, whether it has a key, and why it last failed; the presets; the limits |
+| `GET /api/ai` | Admin | The providers in order: each one's id, base URL, model, whether it has a key, whether it is on, and why it last failed; the presets; the limits |
 | `POST /api/ai/providers` | Admin | Adds a provider after the others, with its key when it needs one; 409 for one set up already or one too many; 422 never repeats the body |
 | `PUT /api/ai/providers/{id}/key` | Admin | Replaces the provider's key, keeping its place |
 | `PUT /api/ai/providers/{id}/model` | Admin | Asks another model of the provider, keeping its place and key |
+| `PUT /api/ai/providers/{id}/enabled` | Admin | Turns the provider on or off, keeping its place and key |
 | `PUT /api/ai/order` | Admin | Asks the providers in the order of the ids given; 409 when they are not every provider once |
 | `DELETE /api/ai/providers/{id}` | Admin | Forgets the provider and deletes its key; 204, also when it is gone |
 

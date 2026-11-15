@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { agoOf, fixOf, isCopilot, isLocal, movedOrder, providerNameOf } from "./aiProviders";
 import type { AiPreset, AiProvider } from "./api";
+import { aiProviderOf } from "./testing/server";
 
 const PRESETS: readonly AiPreset[] = [
   { name: "DeepSeek", base_url: "https://api.deepseek.com", model: "deepseek-flash" },
@@ -11,17 +12,8 @@ const PRESETS: readonly AiPreset[] = [
 const NOON = Date.parse("2026-11-06T12:00:00Z");
 
 /** A provider at `baseUrl`, with a key and no failure. */
-const at = (baseUrl: string): AiProvider => ({
-  id: "p1",
-  base_url: baseUrl,
-  model: "m",
-  has_key: true,
-  saved_at: "2026-11-06T09:00:00Z",
-  failure: null,
-  failed_at: null,
-  failure_reason: null,
-  failure_status: null,
-});
+const at = (baseUrl: string): AiProvider =>
+  aiProviderOf({ id: "p1", base_url: baseUrl, model: "m", saved_at: "2026-11-06T09:00:00Z" });
 
 describe("a provider's name", () => {
   it("is the name of the preset whose address it has, whatever model it asks", () => {

@@ -1,6 +1,7 @@
 """The Library's artist names: looking each up on MusicBrainz, and linking it to one artist."""
 
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -321,15 +322,21 @@ def test_an_ai_model_recommends_an_artist_for_each_name_looked_up_and_not_linked
     _looked_up(enriching, alice, "披头士", "Beatles/披头士")
     _linked(enriching, alice, "Beatles/披头士", BEATLES)
 
+    asked_at = clock()
+
     asked = _recommended(enriching, alice)
 
     assert asked == 1
-    assert _named(enriching, "披头士").recommendation == Recommendation(
+    recommendation = _named(enriching, "披头士").recommendation
+    assert recommendation is not None
+    # The Job answers while the clock steps on, so when is between the asking and now.
+    assert asked_at <= recommendation.at <= clock()
+    assert replace(recommendation, at=asked_at) == Recommendation(
         artist_id=BEATLES,
         why="The Beatles, by its songs",
         model="deepseek-flash",
         host="api.deepseek.com",
-        at=clock(),
+        at=asked_at,
     )
     assert _named(enriching, "Beatles/披头士").recommendation is None
     assert _named(enriching, "Blue Room").recommendation is None

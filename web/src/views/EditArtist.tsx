@@ -50,8 +50,13 @@ function useArtistSuggestion(artistId: string) {
   const [state, setState] = useState<ArtistSuggestionState>();
   // Counts the reads asked for, so each asks the server again.
   const [reads, setReads] = useState(0);
+  // Counts the reads that failed, so reading goes on after one while the AI is asked.
+  const [misses, setMisses] = useState(0);
   const [sending, setSending] = useState(false);
   const [askError, setAskError] = useState("");
+  const readAgain = () => {
+    setReads((count) => count + 1);
+  };
   useEffect(() => {
     let current = true;
     api.artistSuggestion(artistId).then(
@@ -61,7 +66,10 @@ function useArtistSuggestion(artistId: string) {
         }
       },
       () => {
-        // Without it, nothing is suggested; the artist is edited all the same.
+        // Without it, nothing new is suggested; the artist is edited all the same.
+        if (current) {
+          setMisses((count) => count + 1);
+        }
       },
     );
     return () => {
@@ -72,27 +80,34 @@ function useArtistSuggestion(artistId: string) {
     if (state?.asking !== true) {
       return;
     }
-    const timer = setTimeout(() => {
-      setReads((count) => count + 1);
-    }, ASKING_EVERY_MS);
+    const timer = setTimeout(readAgain, ASKING_EVERY_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [state]);
+  }, [state, misses]);
   const ask = async () => {
     setSending(true);
     setAskError("");
     try {
       await api.suggestForArtist(artistId);
-      setState((was) => ({ asking: true, suggestion: was?.suggestion ?? null, failure: null }));
+      setState((was) => ({
+        asking: true,
+        waiting: false,
+        suggestion: was?.suggestion ?? null,
+        failure: null,
+      }));
     } catch (failure) {
       setAskError(messageOf(failure));
     } finally {
       setSending(false);
+      // A read begun before asking may answer that nothing is asked; this one replaces it,
+      // and shows an asking another began.
+      readAgain();
     }
   };
   return {
     asking: sending || state?.asking === true,
+    waiting: state?.waiting === true,
     suggestion: state?.suggestion ?? null,
     failure: askError || (state?.failure ?? ""),
     ask,
@@ -133,7 +148,7 @@ function Suggested({
       <button
         type="button"
         className="detail-alternative"
-        aria-label={`Use “${value}”, suggested by ${aiNameOf(by)}`}
+        aria-label={`Use “${value}”, suggested by ${aiNameOf(by)}${why === "" ? "" : `: ${why}`}`}
         onClick={onUse}
       >
         Use
@@ -303,7 +318,11 @@ export function EditArtist({
                 ) : (
                   <SparkleIcon aria-hidden />
                 )}
-                {ai.asking ? "Asking the AI…" : "Ask AI"}
+                {ai.waiting
+                  ? "Asking the AI once medleyplay is Online"
+                  : ai.asking
+                    ? "Asking the AI…"
+                    : "Ask AI"}
               </button>
             </div>
             <label className="edit-album-field">

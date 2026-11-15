@@ -255,7 +255,12 @@ def test_nothing_is_suggested_for_an_artist_no_ai_model_was_asked_about(
 
     response = client.get("/api/artists/b10bbbfc/suggestion")
 
-    assert response.json() == {"asking": False, "suggestion": None, "failure": None}
+    assert response.json() == {
+        "asking": False,
+        "waiting": False,
+        "suggestion": None,
+        "failure": None,
+    }
 
 
 def test_what_an_ai_model_last_suggested_for_an_artist_is_shown(

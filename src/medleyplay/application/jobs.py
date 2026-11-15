@@ -287,6 +287,10 @@ class JobService:
         if self._events is not None:
             self._events.publish(job_id)
 
+    def online(self) -> bool:
+        """Return whether the Mode is Online, so Jobs that need the network may run."""
+        return self._online()
+
     def held_count(self) -> int:
         """Return how many Jobs wait for the Mode to be Online; none while it is.
 

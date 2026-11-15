@@ -260,10 +260,12 @@ class ArtistSuggestion:
 class SuggestionState:
     """Whether an AI model is asked about an artist now, what it last suggested, and why not.
 
-    `failure` says why the last asking failed, as the viewer may read it.
+    `waiting` says the asking waits for medleyplay to be Online, or to try again.
+    `failure` says why the last asking failed, to the Account that asked and to admins.
     """
 
     asking: bool
+    waiting: bool
     suggestion: ArtistSuggestion | None
     failure: str | None
 
@@ -480,7 +482,7 @@ class ArtistService:
             message = "An AI model is being asked already; ask again once it has answered."
             raise ConflictError(message)
         with self._units() as db:
-            known = _known(db).get(artist_id)
+            known = _known(db, only=artist_id).get(artist_id)
             if known is None:
                 message = "No site has named that artist."
                 raise NotFoundError(message)
@@ -501,7 +503,7 @@ class ArtistService:
         """
         target = suggestion_target(artist_id)
         with self._units() as db:
-            known = _known(db).get(artist_id)
+            known = _known(db, only=artist_id).get(artist_id)
             if known is None:
                 message = "No site has named that artist."
                 raise NotFoundError(message)
@@ -525,13 +527,15 @@ class ArtistService:
                 at=row.answered_at,
             )
         latest = self._jobs.latest(DESCRIBE_ARTIST_KIND, target)
-        failure = None
-        if latest is not None and latest.state is JobState.FAILED:
-            failure = failure_shown_to(latest, viewer) or "The AI model gave no suggestion."
+        failed = latest is not None and latest.state is JobState.FAILED
         return SuggestionState(
             asking=latest is not None and latest.state.is_active,
+            # Asking needs the network, so it waits while medleyplay is Offline.
+            waiting=latest is not None
+            and latest.state.is_active
+            and (latest.state is JobState.WAITING or not self._jobs.online()),
             suggestion=suggestion,
-            failure=failure,
+            failure=(failure_shown_to(latest, viewer) or None) if failed and latest else None,
         )
 
     def set_details(self, artist_id: str, *, shown_as: str | None, about: str | None) -> None:
@@ -870,19 +874,26 @@ def _found_of(search: ArtistSearchRow) -> tuple[tuple[str, int], ...]:
     return tuple(found)
 
 
-def _known(db: Session) -> dict[str, KnownArtist]:
-    """Return every artist known, each with its names once, MusicBrainz's first.
+def _known(db: Session, *, only: str | None = None) -> dict[str, KnownArtist]:
+    """Return every artist known, or `only` that one, each with its names once, MusicBrainz's first.
 
     The household's photo shows in place of Wikidata's.
     """
+    alias_rows = select(ArtistAliasRow).order_by(ArtistAliasRow.name)
+    household = select(ArtistHouseholdRow)
+    artists = select(ArtistRow)
+    if only is not None:
+        alias_rows = alias_rows.where(ArtistAliasRow.artist_id == only)
+        household = household.where(ArtistHouseholdRow.artist_id == only)
+        artists = artists.where(ArtistRow.id == only)
     aliases: dict[str, dict[str, Alias]] = {}
-    rows = db.scalars(select(ArtistAliasRow).order_by(ArtistAliasRow.name)).all()
+    rows = db.scalars(alias_rows).all()
     for row in sorted(rows, key=lambda row: row.origin != FINDER):
         names = aliases.setdefault(row.artist_id, {})
         names.setdefault(row.key, Alias(row.name, row.locale, row.primary))
-    chosen = {row.artist_id: row for row in db.scalars(select(ArtistHouseholdRow))}
+    chosen = {row.artist_id: row for row in db.scalars(household)}
     known: dict[str, KnownArtist] = {}
-    for found in db.scalars(select(ArtistRow)):
+    for found in db.scalars(artists):
         own = chosen.get(found.id)
         own_photo = own is not None and own.photo is not None
         known[found.id] = KnownArtist(

@@ -248,7 +248,8 @@ not.
   an answer with neither a name nor a note fails the Job as *invalid*, and a
   refusal by every provider as *refused*.
 - **Kept per artist,** with the names offered and the model and host that
-  answered, replacing what it suggested before. A suggested name stands while the
+  answered, replacing what it suggested before. Asking needs the network, so it
+  waits while medleyplay is Offline. A suggested name stands while the
   artist goes by it; once it no longer does, as when its name is unlinked, only
   the note is offered.
 - **Asked once at a time:** asking while a model is asked about the artist is
@@ -294,7 +295,8 @@ not.
   the songs' own name as its placeholder; and *About*. *Save* keeps the name and
   the note together; until then *Cancel* forgets them. *Ask AI* above the fields
   asks a model for a name and a note, reads *Asking the AI…* with one spinner
-  while it is, and reads its answer every 2 seconds until it comes; each
+  while it is, or *Asking the AI once medleyplay is Online* while it waits, and
+  reads its answer every 2 seconds until it comes; each
   suggestion shows beneath its field as *deepseek-flash suggests “甲壳虫乐队”*, its
   reason and model in the tooltip, with *Use*, until the field says the same. Why
   an asking failed shows beside *Ask AI*.
@@ -318,7 +320,7 @@ not.
 | `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
 | `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |
 | `POST /api/artists/{id}/suggestion` | Signed in | Ask an AI model which name to show an artist by, and who it is; 202, or 404 for an artist no site named, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked about it already |
-| `GET /api/artists/{id}/suggestion` | Signed in | Whether a model is asked about the artist, what it last suggested, with the model that answered, and why the last asking failed, as the viewer may read it |
+| `GET /api/artists/{id}/suggestion` | Signed in | Whether a model is asked about the artist and whether that waits for medleyplay to be Online, what it last suggested, with the model that answered, and why the last asking failed, to the Account that asked and to admins |
 
 ## Testing
 

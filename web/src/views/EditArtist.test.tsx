@@ -20,7 +20,12 @@ const DETAILS = "PUT /api/artists/b10bbbfc/details";
 const PHOTO = "/api/artists/b10bbbfc/photo";
 const SUGGESTION = "/api/artists/b10bbbfc/suggestion";
 /** No AI model asked about the artist yet. */
-const UNASKED: ArtistSuggestionState = { asking: false, suggestion: null, failure: null };
+const UNASKED: ArtistSuggestionState = {
+  asking: false,
+  waiting: false,
+  suggestion: null,
+  failure: null,
+};
 
 /** The editor for `artist`, written as 披头士 by most of its songs. */
 function editing(artist: KnownArtist = BEATLES) {
@@ -192,7 +197,9 @@ describe("asking the AI about an artist", () => {
     });
     expect(name).toHaveTextContent("deepseek-flash suggests “甲壳虫乐队”");
     await userEvent.click(
-      within(name).getByRole("button", { name: "Use “甲壳虫乐队”, suggested by deepseek-flash" }),
+      within(name).getByRole("button", {
+        name: "Use “甲壳虫乐队”, suggested by deepseek-flash: The songs are Chinese",
+      }),
     );
     const about = screen.getByRole("group", { name: "deepseek-flash's suggestion for About" });
     await userEvent.click(within(about).getByRole("button", { name: /^Use/u }));
@@ -228,6 +235,55 @@ describe("asking the AI about an artist", () => {
       await screen.findByRole("group", { name: "deepseek-flash's suggestion for Shown as" }),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Ask AI" })).toBeEnabled();
+  });
+
+  it("reads again after a read fails while the AI is asked", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const answers = [
+      { body: { ...UNASKED, asking: true } },
+      { status: 500, body: { detail: "Busy" } },
+      { body: { ...UNASKED, suggestion: artistSuggestionOf() } },
+    ];
+    serve({ [`GET ${SUGGESTION}`]: () => answers.shift() ?? answers[0] ?? { body: UNASKED } });
+    editing();
+    expect(await screen.findByRole("button", { name: "Asking the AI…" })).toBeDisabled();
+
+    // The first read fails; the next answers.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(
+      await screen.findByRole("group", { name: "deepseek-flash's suggestion for Shown as" }),
+    ).toBeVisible();
+  });
+
+  it("shows an asking another began, when asked already", async () => {
+    let state = UNASKED;
+    serve({
+      [`GET ${SUGGESTION}`]: () => ({ body: state }),
+      [`POST ${SUGGESTION}`]: () => {
+        state = { ...UNASKED, asking: true };
+        return { status: 409, body: { detail: "An AI model is being asked already." } };
+      },
+    });
+    editing();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+
+    expect(await screen.findByRole("button", { name: "Asking the AI…" })).toBeDisabled();
+  });
+
+  it("says an asking waits while medleyplay is Offline", async () => {
+    serve({ [`GET ${SUGGESTION}`]: { body: { ...UNASKED, asking: true, waiting: true } } });
+    editing();
+
+    expect(
+      await screen.findByRole("button", { name: "Asking the AI once medleyplay is Online" }),
+    ).toBeDisabled();
   });
 
   it("says why the last asking failed, beside Ask AI", async () => {

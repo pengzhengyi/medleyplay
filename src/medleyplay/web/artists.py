@@ -103,8 +103,11 @@ class SuggestionOut(BaseModel):
     """Whether an AI model is asked about an artist now, what it last suggested, and why not."""
 
     asking: bool
+    waiting: bool = Field(description="Whether the asking waits for medleyplay to be Online.")
     suggestion: ArtistSuggestionOut | None
-    failure: str | None = Field(description="Why the last asking failed, as you may read it.")
+    failure: str | None = Field(
+        description="Why the last asking failed; only to the Account that asked, and to admins."
+    )
 
 
 class ArtistNameOut(BaseModel):
@@ -252,6 +255,7 @@ def suggestion(artist_id: _ArtistId, me: SignedInAccount, service: ArtistsDep) -
     found = state.suggestion
     return SuggestionOut(
         asking=state.asking,
+        waiting=state.waiting,
         suggestion=None
         if found is None
         else ArtistSuggestionOut(

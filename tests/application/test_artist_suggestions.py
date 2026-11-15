@@ -52,11 +52,11 @@ def _linked(enriching: Enriching, alice: Account, name: str) -> None:
     enriching.finish_every_job()
 
 
-def _suggested(enriching: Enriching, alice: Account) -> SuggestionState:
-    """Ask the AI model about The Beatles, wait until it answered, and return what it said."""
-    enriching.artists.suggest(alice, BEATLES)
+def _suggested(enriching: Enriching, caller: Account) -> SuggestionState:
+    """Have `caller` ask the AI model about The Beatles, and return what it said once it has."""
+    enriching.artists.suggest(caller, BEATLES)
     enriching.finish_every_job()
-    return enriching.artists.suggestion(alice, BEATLES)
+    return enriching.artists.suggestion(caller, BEATLES)
 
 
 def _asked(enriching: Enriching) -> dict[str, object]:
@@ -111,7 +111,7 @@ def test_the_model_is_offered_the_songs_name_then_musicbrainz_s_then_primary_nam
 def test_nothing_is_suggested_until_asked(enriching: Enriching, alice: Account) -> None:
     state = enriching.artists.suggestion(alice, BEATLES)
 
-    assert state == SuggestionState(asking=False, suggestion=None, failure=None)
+    assert state == SuggestionState(asking=False, waiting=False, suggestion=None, failure=None)
 
 
 def test_a_name_the_model_was_not_offered_is_no_suggestion_but_its_note_is(
@@ -136,6 +136,28 @@ def test_the_provider_refusing_fails_the_job_and_says_why_to_whoever_asked(
     assert [job.state for job in jobs] == [JobState.FAILED]
     assert state.suggestion is None
     assert state.failure == "The key was refused."
+
+
+def test_why_an_asking_failed_shows_only_to_whoever_asked_and_to_admins(
+    enriching: Enriching, alice: Account, accounts: AccountService
+) -> None:
+    bob = accounts.create_account(alice, NewAccountFactory.member("bob"))
+    carol = accounts.create_account(alice, NewAccountFactory.member("carol"))
+    enriching.add_song("Refused", artist="披头士")
+
+    _suggested(enriching, bob)
+
+    failures = [enriching.artists.suggestion(each, BEATLES).failure for each in (bob, alice, carol)]
+    assert failures == ["The key was refused.", "The key was refused.", None]
+
+
+def test_an_asking_held_while_offline_says_it_waits(enriching: Enriching, alice: Account) -> None:
+    enriching.online.online = False
+
+    enriching.artists.suggest(alice, BEATLES)
+
+    state = enriching.artists.suggestion(alice, BEATLES)
+    assert (state.asking, state.waiting) == (True, True)
 
 
 def test_an_answer_suggesting_nothing_fails_the_job(enriching: Enriching, alice: Account) -> None:

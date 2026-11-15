@@ -311,8 +311,10 @@ export interface ArtistSuggestion extends AnsweredBy {
 /** Whether an AI model is asked about an artist now, what it last suggested, and why not. */
 export interface ArtistSuggestionState {
   readonly asking: boolean;
+  /** Whether the asking waits for medleyplay to be Online. */
+  readonly waiting: boolean;
   readonly suggestion: ArtistSuggestion | null;
-  /** Why the last asking failed, as the viewer may read it. */
+  /** Why the last asking failed; only to the Account that asked, and to admins. */
   readonly failure: string | null;
 }
 

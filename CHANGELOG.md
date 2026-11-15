@@ -399,6 +399,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In *Link artist names*, hovering a name or its song count, or focusing the
+  count, shows its songs with their albums, so which artist it names can be told;
+  and *Asking the AI…* shows one spinner, not two.
+
 - **Ask AI keeps its recommendations true** — a recommendation is no longer
   shown once the name is offered other artists; a song with a very long title no
   longer stops the AI being asked; a name written only as an album artist is shown

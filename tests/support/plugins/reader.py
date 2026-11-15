@@ -373,13 +373,16 @@ class ArtistChoices:
     """Answers as an AI model might, judging by the songs it is shown.
 
     A name stands for the option that is The Beatles, unless a song of it is a tribute,
-    when it stands for none. A song *Refused* has the provider refuse the key.
+    when it stands for none. A song *Refused* has the provider refuse the key, and a
+    song *Silence* has it choose for no name.
     """
 
     def choose(self, request: ChooseArtists) -> ChosenArtists:
         songs = [song for each in request.names for song in each.songs]
         if any(song.startswith("Refused") for song in songs):
             return ChosenArtists(status=FindStatus.REFUSED, message="The key was refused.")
+        if any(song.startswith("Silence") for song in songs):
+            return ChosenArtists(ai_answered=request.ai[0].id)
         chosen = []
         for each in request.names:
             beatles = next((one for one in each.options if one.name == "The Beatles"), None)

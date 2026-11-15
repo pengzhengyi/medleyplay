@@ -751,8 +751,9 @@ class ArtistSearchRow(Base):
 class ArtistRecommendationRow(Base):
     """The artist an AI model last recommended linking a written name to, and why.
 
-    `artist_id` is `None` when it recommended none of those offered. `model` and `host`
-    are the model that answered and where, as they were then.
+    `artist_id` is `None` when it recommended none of those offered. `offered` lists the
+    ids of the artists it was offered, so a recommendation stops standing once they
+    change. `model` and `host` are the model that answered and where, as they were then.
     """
 
     __tablename__ = "artist_recommendation"
@@ -760,6 +761,7 @@ class ArtistRecommendationRow(Base):
     key: Mapped[str] = mapped_column(String(512), primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
     artist_id: Mapped[str | None] = mapped_column(ForeignKey("artist.id", ondelete="CASCADE"))
+    offered: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     why: Mapped[str] = mapped_column(String(300))
     model: Mapped[str] = mapped_column(String(128))
     host: Mapped[str] = mapped_column(String(255))

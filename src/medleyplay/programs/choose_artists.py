@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from medleyplay.plugin_api import (
     CHOOSE_ARTISTS,
+    MAX_ARTISTS,
     MAX_CHOICES,
     ChooseArtists,
     ChosenArtist,
@@ -26,10 +27,21 @@ class ChooseArtistsJob(_Model):
     chooser: Annotated[str, StringConstraints(max_length=64)] = "ai-details"
 
 
+class OfferedArtists(_Model):
+    """The ids of the artists a name was offered."""
+
+    name: Annotated[str, StringConstraints(max_length=512)]
+    artist_ids: Annotated[
+        tuple[Annotated[str, StringConstraints(max_length=64)], ...],
+        Field(max_length=MAX_ARTISTS),
+    ] = ()
+
+
 class ChosenArtistsResult(_Model):
-    """The choice for each name answered for, and the provider that answered."""
+    """The choice for each name answered for, what each was offered, and who answered."""
 
     chosen: Annotated[tuple[ChosenArtist, ...], Field(max_length=MAX_CHOICES)] = ()
+    offered: Annotated[tuple[OfferedArtists, ...], Field(max_length=MAX_CHOICES)] = ()
     ai_answered: Annotated[str, StringConstraints(max_length=64)] = ""
 
 
@@ -41,9 +53,18 @@ def run(request: ChooseArtistsJob, context: JobContext) -> ChosenArtistsResult:
     if answer.status is FindStatus.REFUSED:
         message = answer.message or "The AI provider refused the request."
         raise AnswerFailedError(message, kind="refused")
-    if not answer.chosen and answer.message:
-        raise AnswerFailedError(answer.message, kind="invalid")
-    return ChosenArtistsResult(chosen=answer.chosen, ai_answered=answer.ai_answered)
+    if not answer.chosen:
+        message = answer.message or "The AI model's answer chose for none of the names."
+        raise AnswerFailedError(message, kind="invalid")
+    chosen = {each.name for each in answer.chosen}
+    offered = tuple(
+        OfferedArtists(name=each.name, artist_ids=tuple(option.id for option in each.options))
+        for each in request.names
+        if each.name in chosen
+    )
+    return ChosenArtistsResult(
+        chosen=answer.chosen, offered=offered, ai_answered=answer.ai_answered
+    )
 
 
 CHOOSE_ARTISTS_PROGRAM: JobProgram[ChooseArtistsJob, ChosenArtistsResult] = JobProgram(

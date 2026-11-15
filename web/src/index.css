@@ -1068,6 +1068,37 @@ button[aria-disabled="true"] {
   white-space: nowrap;
 }
 
+/* Clean up's bar: each section's pill with how many wait, or a check once done. */
+.clean-up-toc {
+  max-width: none;
+}
+
+.clean-up-toc button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.clean-up-toc-count {
+  min-width: 1.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.3rem;
+  text-align: center;
+}
+
+.clean-up-toc-done {
+  color: var(--accent);
+}
+
+.clean-up-anchor {
+  scroll-margin-top: calc(var(--top-height, 0px) + 4rem);
+}
+
 .settings-toc .fold-all {
   flex: none;
   border: none;

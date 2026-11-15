@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ArtistNames, NameToTidy } from "../api";
 import { artistNameOf } from "../testing/server";
@@ -18,6 +19,10 @@ const JAY: NameToTidy = {
 };
 
 const namesOf = (...names: ArtistNames["names"]): ArtistNames => ({ names, artists: [] });
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("cleaning up names", () => {
   it("counts the names to tidy and those that may be linked and are not", () => {
@@ -42,6 +47,28 @@ describe("cleaning up names", () => {
     expect(screen.getByText("1 name to tidy, 1 to link")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /Tidy names/ })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /Link artist names/ })).toBeInTheDocument();
+  });
+
+  it("goes to each section from a bar, saying how many names each has waiting", async () => {
+    render(
+      <CleanUpView
+        tidy={{ names: [JAY], reload: vi.fn() }}
+        artistNames={{ names: namesOf(artistNameOf("Beatles", "b10bbbfc")), reload: vi.fn() }}
+      />,
+    );
+    const bar = screen.getByRole("navigation", { name: "Clean up sections" });
+    const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
+
+    await userEvent.click(
+      within(bar).getByRole("button", { name: "Go to Link artist names, done" }),
+    );
+
+    expect(
+      within(bar)
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Go to Tidy names, 1 waiting", "Go to Link artist names, done"]);
+    expect(scrolled.mock.contexts).toEqual([document.getElementById("clean-up-link")]);
   });
 
   it("says there is nothing to clean up, and what would show here", () => {

@@ -53,6 +53,28 @@ const rowOf = (list: HTMLElement, name: string) =>
     .find((row) => within(row).queryByText(name, { selector: "strong" }) !== null) ?? document.body;
 
 describe("linking names to artists", () => {
+  it("lists the names ready to link first, then those to choose for, those to look up, and the linked last", () => {
+    const choosing: ArtistName = {
+      ...artistNameOf("Fab Four"),
+      looked_at: "2026-11-15T12:00:00Z",
+      candidates: [{ artist_id: TRIBUTE.id, score: 40 }],
+    };
+    const { list } = openList(
+      namesOf(
+        artistNameOf("The Beatles", BEATLES.id),
+        artistNameOf("Blue Room"),
+        choosing,
+        LOOKED_UP,
+      ),
+    );
+
+    const shown = within(list)
+      .getAllByRole("listitem")
+      .flatMap((row) => row.querySelector("strong")?.textContent ?? []);
+
+    expect(shown).toEqual(["披头士", "Fab Four", "Blue Room", "The Beatles"]);
+  });
+
   it("counts the names that may be linked and are not, and leaves out names of no one", () => {
     const { list } = openList(
       namesOf(LOOKED_UP, artistNameOf("The Beatles", BEATLES.id), {

@@ -2,8 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ArtistName, ArtistNames, KnownArtist } from "../api";
-import { artistNameOf, serve } from "../testing/server";
+import type { ArtistName, ArtistNames, KnownArtist, Track } from "../api";
+import { artistNameOf, serve, trackOf } from "../testing/server";
 import { LinkArtists } from "./LinkArtists";
 
 const BEATLES: KnownArtist = {
@@ -45,9 +45,9 @@ const BY_DEEPSEEK = {
 };
 
 /** Show the section listing `names`. */
-function openList(names: ArtistNames) {
+function openList(names: ArtistNames, tracks: readonly Track[] = []) {
   const onChanged = vi.fn();
-  render(<LinkArtists names={names} onChanged={onChanged} />);
+  render(<LinkArtists names={names} tracks={tracks} onChanged={onChanged} />);
   return { list: screen.getByRole("region", { name: /Link artist names/ }), onChanged };
 }
 
@@ -232,7 +232,11 @@ describe("linking names to artists", () => {
       <LinkArtists names={{ ...namesOf(LOOKED_UP), recommending: true }} onChanged={vi.fn()} />,
     );
 
-    expect(screen.getByRole("button", { name: "Asking the AI…" })).toBeDisabled();
+    const asking = screen.getByRole("button", { name: "Asking the AI…" });
+    expect(asking).toBeDisabled();
+    // Its own spinner alone: busy, Pico would draw a second.
+    expect(asking).not.toHaveAttribute("aria-busy");
+    expect(asking.querySelectorAll(".spin")).toHaveLength(1);
   });
 
   it("links a name to none of the artists found", async () => {
@@ -328,5 +332,26 @@ describe("linking names to artists", () => {
     await userEvent.click(within(row).getByRole("button", { name: "Link 披头士" }));
 
     expect(await within(row).findByRole("alert")).toHaveTextContent("hasn't named");
+  });
+
+  it("shows a name's songs, with their albums, on its song count", () => {
+    const { list } = openList(namesOf(artistNameOf("Guest")), [
+      trackOf(1, "Encore", { artist: "Guest", album: "Live at Home" }),
+      trackOf(2, "Elsewhere", { artist: "Someone", album: "Other" }),
+    ]);
+
+    expect(within(list).getByRole("button", { name: "1 song" })).toHaveAccessibleDescription(
+      "Encore — Live at Home",
+    );
+  });
+
+  it("shows eight of a name's songs, and how many more", () => {
+    const songs = Array.from({ length: 10 }, (_, n) =>
+      trackOf(n + 1, `Song ${String(n + 1)}`, { artist: "Guest", album: "" }),
+    );
+    const { list } = openList(namesOf({ ...artistNameOf("Guest"), tracks: 10 }), songs);
+
+    const count = within(list).getByRole("button", { name: "10 songs" });
+    expect(count).toHaveAccessibleDescription(/^Song 1 Song 2 .* Song 8 and 2 more$/u);
   });
 });

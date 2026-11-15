@@ -6,7 +6,7 @@
  * names show in need no row of their own for them.
  */
 
-import type { ArtistNames, NameToTidy } from "../api";
+import type { ArtistNames, NameToTidy, Track } from "../api";
 import { unlinkedOf } from "../library/cleanUp";
 import { LinkArtists } from "./LinkArtists";
 import { TidyNames } from "./TidyNames";
@@ -21,9 +21,12 @@ interface Read<T> {
 export function CleanUpView({
   tidy,
   artistNames,
+  tracks = [],
 }: {
   readonly tidy: Read<readonly NameToTidy[]>;
   readonly artistNames: Read<ArtistNames> | undefined;
+  /** The Library's songs, to show the songs of each name to link. */
+  readonly tracks?: readonly Track[];
 }) {
   const toTidy = tidy.names.length;
   const toLink = artistNames === undefined ? 0 : unlinkedOf(artistNames.names);
@@ -42,7 +45,7 @@ export function CleanUpView({
         <div className="clean-up">
           {toTidy > 0 && <TidyNames names={tidy.names} onChanged={tidy.reload} />}
           {artistNames !== undefined && linkable && (
-            <LinkArtists names={artistNames.names} onChanged={artistNames.reload} />
+            <LinkArtists names={artistNames.names} tracks={tracks} onChanged={artistNames.reload} />
           )}
         </div>
       )}

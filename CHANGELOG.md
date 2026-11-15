@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Save accent colors to choose again** — the heart in *Settings › Appearance*
+  keeps the color shown among 10 tiles, the oldest going first; a tile uses its
+  color, and shows it large with its hex on hover.
+
 - **Clean up leads with what can be done** — a bar goes to each of its sections,
   with how many names wait or a check once done, the sections waiting first;
   in *Link artist names*, names ready to link come first and those linked or

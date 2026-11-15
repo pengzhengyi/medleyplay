@@ -5,7 +5,7 @@
  * The Bilibili mark is Simple Icons' (CC0); the trademark remains Bilibili's.
  */
 
-/** Bilibili's mark: its television with antennae, in the colour of the text around it. */
+/** Bilibili's mark: its television with antennae, in the color of the text around it. */
 export function BilibiliMark({ className }: { readonly className?: string }) {
   return (
     <svg

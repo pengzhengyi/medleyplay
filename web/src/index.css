@@ -583,7 +583,8 @@ button.text:hover:not(:disabled) {
   gap: 0.5rem;
 }
 
-.ratings-confirm button {
+.ratings-confirm button,
+.ratings-preview-actions button {
   width: auto;
   margin: 0;
   padding: 0.35rem 1.1rem;

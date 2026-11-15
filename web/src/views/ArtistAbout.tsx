@@ -6,6 +6,7 @@
  */
 
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
+import { useState } from "react";
 
 import type { KnownArtist, Track } from "../api";
 import { initialOf } from "../format";
@@ -15,6 +16,8 @@ import { Cover } from "./Cover";
 
 /** How many album covers the mosaic shows. */
 const MOSAIC = 4;
+/** How many other names show before *and N more*. */
+const NAMES_SHOWN = 6;
 
 /** Say who MusicBrainz says the artist is: `The Beatles (Liverpool rock band, GB)`. */
 function describe(artist: KnownArtist): string {
@@ -76,6 +79,8 @@ export function ArtistAbout({
     .flatMap((album) => (album.cover === null ? [] : [album.cover]))
     .slice(0, MOSAIC);
   const others = artist === undefined ? [] : otherNames(artist, name);
+  const [allNames, setAllNames] = useState(false);
+  const hidden = allNames ? 0 : Math.max(0, others.length - NAMES_SHOWN);
   return (
     <section className="artist-about" aria-label="About the artist">
       <div
@@ -91,7 +96,25 @@ export function ArtistAbout({
       </div>
       <div className="artist-facts">
         {artist !== undefined && <p className="artist-who">{describe(artist)}</p>}
-        {others.length > 0 && <p className="artist-names">Goes by {others.join(", ")}</p>}
+        {others.length > 0 && (
+          <p className="artist-names">
+            Goes by {others.slice(0, others.length - hidden).join(", ")}
+            {hidden > 0 && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    setAllNames(true);
+                  }}
+                >
+                  and {hidden} more
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <ul className="artist-places" aria-label="The artist elsewhere">
           {placesOf(name, artist).map(({ site, href }) => (
             <li key={site}>

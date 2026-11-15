@@ -758,6 +758,11 @@ button.text:hover:not(:disabled) {
 }
 
 @media (width <= 40rem) {
+  .artist-about {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .artist-art {
     width: 5.5rem;
     height: 5.5rem;

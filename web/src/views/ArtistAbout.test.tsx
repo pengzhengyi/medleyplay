@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import type { KnownArtist } from "../api";
@@ -84,6 +85,24 @@ describe("about an artist", () => {
 
     expect(screen.getByText("The Beatles (Liverpool rock band, GB)")).toBeInTheDocument();
     expect(screen.getByText("Goes by 甲壳虫乐队")).toBeInTheDocument();
+  });
+
+  it("shows six other names, and the rest when asked", async () => {
+    const many: KnownArtist = {
+      ...BEATLES,
+      aliases: ["A", "B", "C", "D", "E", "F", "G", "H"].map((name) => ({
+        name,
+        locale: null,
+        primary: false,
+      })),
+    };
+    render(<ArtistAbout name="The Beatles" songs={[]} artist={many} toLink={false} />);
+
+    expect(screen.getByText(/^Goes by A, B, C, D, E, F/u)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "and 2 more" }));
+
+    expect(screen.getByText("Goes by A, B, C, D, E, F, G, H")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "and 2 more" })).toBeNull();
   });
 
   it("searches Rate Your Music by the name alone, and offers to link a name not linked", () => {

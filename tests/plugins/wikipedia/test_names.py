@@ -1,15 +1,26 @@
-"""The name finder: every name Wikidata knows an artist by, found by its MusicBrainz id."""
+"""The name finder: every name Wikidata knows an artist by, found by its MusicBrainz id.
+
+It also gives the artist's page on Wikidata, and the item's image from Wikimedia
+Commons as the artist's photo.
+"""
+
+from pathlib import Path
 
 import pytest
+import requests
 
 from medleyplay.plugin_api import ArtistAlias, FindArtistNames, FindStatus, NetworkError
-from medleyplay.plugins.wikipedia.client import USER_AGENT, WikidataClient
+from medleyplay.plugins.wikipedia.client import USER_AGENT, WikidataClient, file_page
 from medleyplay.plugins.wikipedia.names import WikidataNames
+from tests.support.images import gif_image, jpeg_image, jpeg_of_size
 from tests.support.transport import FakeWaits, Reply
 from tests.support.wikidata import (
     API,
     BEATLES,
     BEATLES_ITEM,
+    PHOTO,
+    PHOTO_FILE,
+    PHOTO_IMAGE,
     FakeWikidata,
     FakeWikidataFactory,
     WikidataFactory,
@@ -126,3 +137,158 @@ def test_requests_name_medleyplay_and_come_a_second_apart() -> None:
     assert {each.headers["User-Agent"] for each in fake.sent} == {USER_AGENT}
     assert "github.com/pengzhengyi/medleyplay" in USER_AGENT
     assert waits.pauses == [1.0]
+
+
+def test_the_artist_s_page_is_its_wikidata_item() -> None:
+    fake = FakeWikidataFactory.knowing_beatles()
+
+    found = finder_over(fake).find(ASK)
+
+    assert found.page == "https://www.wikidata.org/wiki/Q1299"
+
+
+def test_without_a_folder_no_photo_is_asked_for() -> None:
+    fake = FakeWikidataFactory.knowing_beatles()
+
+    found = finder_over(fake).find(ASK)
+
+    assert (found.photo, found.photo_page) == (None, None)
+    assert len(fake.sent) == 2
+
+
+def test_the_photo_is_the_item_s_image_from_commons_500_pixels_wide(tmp_path: Path) -> None:
+    photo = jpeg_image("The Beatles in 1964")
+    fake = FakeWikidataFactory.knowing_beatles_photo(photo)
+
+    found = finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert (fake.parameter("action", 2), fake.parameter("property", 2)) == ("wbgetclaims", "P18")
+    assert fake.urls()[3:] == [PHOTO, PHOTO_IMAGE]
+    assert fake.parameter("width", 3) == "500"
+    assert found.photo is not None
+    assert (tmp_path / found.photo).read_bytes() == photo
+    assert found.photo_page == "https://commons.wikimedia.org/wiki/File:The_Beatles_in_1964.jpg"
+
+
+def test_the_preferred_image_is_the_photo_and_a_deprecated_one_never_is(tmp_path: Path) -> None:
+    images = WikidataFactory.images(
+        ("Ringo.jpg", "deprecated"), ("Live.jpg", "normal"), (PHOTO_FILE, "preferred")
+    )
+    fake = FakeWikidataFactory.knowing_beatles_photo(jpeg_image()).answer(
+        API,
+        Reply.json(WikidataFactory.beatles_search()),
+        Reply.json(WikidataFactory.beatles()),
+        Reply.json(images),
+    )
+
+    found = finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert fake.urls()[3] == PHOTO
+    assert found.photo is not None
+
+
+def test_an_item_with_only_a_deprecated_image_or_none_has_no_photo(tmp_path: Path) -> None:
+    fake = FakeWikidata().answer(
+        API,
+        Reply.json(WikidataFactory.beatles_search()),
+        Reply.json(WikidataFactory.beatles()),
+        Reply.json(WikidataFactory.images(("Ringo.jpg", "deprecated"))),
+    )
+
+    found = finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert (found.photo, found.photo_page) == (None, None)
+    assert ArtistAlias(name="甲壳虫乐队", locale="zh") in found.aliases
+    assert len(fake.sent) == 3
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        Reply(404),
+        Reply(200, {"Content-Type": "image/gif"}, gif_image()),
+        Reply(200, {"Content-Type": "image/jpeg"}, jpeg_of_size(2 * 1024 * 1024 + 1)),
+    ],
+    ids=["not found", "no cover image", "too large"],
+)
+def test_an_image_commons_does_not_have_is_no_photo_and_the_names_stay(
+    tmp_path: Path, reply: Reply
+) -> None:
+    fake = FakeWikidataFactory.knowing_beatles_photo(jpeg_image()).answer(PHOTO_IMAGE, reply)
+
+    found = finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert (found.status, found.photo, found.photo_page) == (FindStatus.OK, None, None)
+    assert ArtistAlias(name="甲壳虫乐队", locale="zh") in found.aliases
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "elsewhere",
+    ["https://example.com/beatles.jpg", "http://upload.wikimedia.org/thumb/beatles.jpg"],
+    ids=["another site", "not over HTTPS"],
+)
+def test_a_photo_is_never_fetched_from_where_commons_should_not_send_it(
+    tmp_path: Path, elsewhere: str
+) -> None:
+    fake = FakeWikidataFactory.knowing_beatles_photo(jpeg_image()).answer(
+        PHOTO, Reply.redirect(elsewhere)
+    )
+
+    found = finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert found.photo is None
+    assert fake.urls()[-1] == PHOTO
+
+
+def test_an_image_named_with_a_slash_is_never_asked_for(tmp_path: Path) -> None:
+    fake = FakeWikidata().answer(
+        API,
+        Reply.json(WikidataFactory.beatles_search()),
+        Reply.json(WikidataFactory.beatles()),
+        Reply.json(WikidataFactory.images(("../../w/index.php", "normal"))),
+    )
+
+    found = finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert found.photo is None
+    assert len(fake.sent) == 3
+
+
+def test_an_image_s_odd_characters_stay_in_its_name() -> None:
+    assert file_page("AC?DC #1.jpg") == "https://commons.wikimedia.org/wiki/File:AC%3FDC_%231.jpg"
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_commons_turning_the_photo_away_is_a_refusal_so_the_artist_is_asked_again(
+    tmp_path: Path, status: int
+) -> None:
+    fake = FakeWikidataFactory.knowing_beatles_photo(jpeg_image()).answer(
+        PHOTO_IMAGE, Reply(status)
+    )
+
+    found = finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert found.status is FindStatus.REFUSED
+
+
+@pytest.mark.parametrize(
+    "reply", [Reply(503), requests.ConnectionError("down")], ids=["server error", "unreachable"]
+)
+def test_commons_not_answering_is_a_network_failure_so_the_artist_is_asked_again(
+    tmp_path: Path, reply: Reply | Exception
+) -> None:
+    fake = FakeWikidataFactory.knowing_beatles_photo(jpeg_image()).answer(PHOTO_IMAGE, reply)
+
+    with pytest.raises(NetworkError, match="Commons"):
+        finder_over(fake).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+
+def test_asking_for_the_photo_keeps_a_second_between_requests(tmp_path: Path) -> None:
+    fake = FakeWikidataFactory.knowing_beatles_photo(jpeg_image())
+    waits = FakeWaits()
+
+    finder_over(fake, waits).find(ASK.model_copy(update={"folder": str(tmp_path)}))
+
+    assert waits.pauses == [1.0, 1.0, 1.0]
+    assert {each.headers["User-Agent"] for each in fake.sent} == {USER_AGENT}

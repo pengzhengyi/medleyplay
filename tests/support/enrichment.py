@@ -158,7 +158,7 @@ def running_enrichment(
     jobs_dir = data_dir / "jobs"
     kind = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
     find = find_artist_kind(clock)
-    find_names = find_artist_names_kind(clock)
+    find_names = find_artist_names_kind(clock, data_dir / COVERS_FOLDER)
     choose = choose_artists_kind(clock)
     kinds: dict[str, AnyJobKind] = {
         kind.name: kind,

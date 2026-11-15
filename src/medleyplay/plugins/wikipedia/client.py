@@ -1,4 +1,4 @@
-"""A small client for Wikidata's API.
+"""A small client for Wikidata's API, and for the images on Wikimedia Commons its items name.
 
 It is polite by construction: one request at a time, at least a second apart, with a
 User-Agent that names medleyplay and where to reach it, and a timeout on every
@@ -11,13 +11,15 @@ from collections.abc import Callable
 from http import HTTPStatus
 from importlib.metadata import version
 from typing import Final
+from urllib.parse import quote, urljoin, urlsplit
 
 import requests
 
-from medleyplay.plugin_api import NetworkError
-from medleyplay.plugins.wikipedia.models import Entities, Entity, Search
+from medleyplay.plugin_api import NetworkError, is_cover_image
+from medleyplay.plugins.wikipedia.models import Claims, Entities, Entity, Search
 
 API: Final = "https://www.wikidata.org/w/api.php"
+COMMONS: Final = "https://commons.wikimedia.org/wiki"
 USER_AGENT: Final = (
     f"medleyplay/{version('medleyplay')} ( https://github.com/pengzhengyi/medleyplay )"
 )
@@ -28,6 +30,15 @@ TIMEOUT: Final = 10.0
 """How long, in seconds, one request may take to connect and to answer."""
 MUSICBRAINZ_ARTIST: Final = "P434"
 """Wikidata's property holding an item's MusicBrainz artist id."""
+IMAGE: Final = "P18"
+"""Wikidata's property naming an item's image on Wikimedia Commons."""
+PHOTO_WIDTH: Final = 500
+"""How wide, in pixels, an image is asked for: a width Commons keeps ready."""
+MAX_PHOTO_BYTES: Final = 2 * 1024 * 1024
+"""The largest photo taken: an image 500 pixels wide is far smaller."""
+MAX_REDIRECTS: Final = 5
+WIKIMEDIA_HOSTS: Final = frozenset({"commons.wikimedia.org", "upload.wikimedia.org"})
+"""Where Commons keeps its files, and the only sites a photo is fetched from."""
 LANGUAGES: Final = (
     "zh",
     "zh-hans",
@@ -65,6 +76,7 @@ class WikidataClient:
         """Create a client over `session`; `sleep` and `clock` pace its requests."""
         self._session = session or requests.Session()
         self._session.headers["User-Agent"] = USER_AGENT
+        self._session.max_redirects = MAX_REDIRECTS
         self._sleep = sleep
         self._clock = clock
         self._next_at = 0.0
@@ -99,6 +111,56 @@ class WikidataClient:
         entity = next(iter(found.entities.values()), None)
         return None if entity is None or entity.missing is not None else entity
 
+    def image_of(self, item: str) -> str | None:
+        """Return the file on Wikimedia Commons of the item's image, if it has one.
+
+        A preferred image comes first, then any other; a deprecated one never does.
+        """
+        found = Claims.model_validate(
+            self._json({"action": "wbgetclaims", "entity": item, "property": IMAGE, "props": ""})
+        )
+        statements = found.claims.get(IMAGE, [])
+        for rank in ("preferred", "normal"):
+            for statement in statements:
+                value = statement.mainsnak.datavalue
+                if statement.rank == rank and value is not None and isinstance(value.value, str):
+                    return value.value
+        return None
+
+    def image(self, file: str) -> bytes | None:
+        """Return the Commons file `file`, 500 pixels wide, or `None` when there is no image.
+
+        Commons redirects to the image; each redirect is followed only to a Wikimedia
+        site over HTTPS. A file Commons doesn't have, an image larger than a photo
+        may be, one found elsewhere, and one that is no JPEG, PNG, or WebP image are
+        no image. A 403 or 429 is a refusal; a server error, or no answer, is a
+        network failure, so the artist is asked about again.
+        """
+        if "/" in file:
+            return None
+        self._pace()
+        url: str = f"{COMMONS}/Special:FilePath/{_on_commons(file)}"
+        params: dict[str, str] | None = {"width": str(PHOTO_WIDTH)}
+        try:
+            for _ in range(MAX_REDIRECTS + 1):
+                with self._session.get(
+                    url, params=params, timeout=TIMEOUT, stream=True, allow_redirects=False
+                ) as response:
+                    if response.is_redirect:
+                        url, params = urljoin(url, response.headers["Location"]), None
+                        if not _on_wikimedia(url):
+                            return None
+                        continue
+                    _check_image_status(response.status_code)
+                    if not response.ok:
+                        return None
+                    data = _read_at_most(response, MAX_PHOTO_BYTES)
+                    return data if data is not None and is_cover_image(data) else None
+        except requests.RequestException as error:
+            message = f"Wikimedia Commons couldn't be reached: {type(error).__name__}."
+            raise NetworkError(message) from error
+        return None
+
     def _json(self, params: dict[str, str]) -> object:
         self._pace()
         try:
@@ -131,3 +193,39 @@ class WikidataClient:
             self._sleep(self._next_at - now)
             now = self._next_at
         self._next_at = now + SPACING
+
+
+def file_page(file: str) -> str:
+    """Return the page on Wikimedia Commons of the file `file`: who made it, and its license."""
+    return f"{COMMONS}/File:{_on_commons(file)}"
+
+
+def _on_commons(file: str) -> str:
+    """Return `file` as Commons writes it in an address: spaces as underscores, all quoted."""
+    return quote(file.replace(" ", "_"), safe="")
+
+
+def _on_wikimedia(url: str) -> bool:
+    """Return whether `url` is on one of Commons' sites, over HTTPS."""
+    parts = urlsplit(url)
+    return parts.scheme == "https" and parts.hostname in WIKIMEDIA_HOSTS
+
+
+def _check_image_status(status: int) -> None:
+    """Raise for an answer that says to ask again later: a refusal, or a server error."""
+    if status in {HTTPStatus.FORBIDDEN, HTTPStatus.TOO_MANY_REQUESTS}:
+        message = f"Wikimedia Commons refused the request ({status})."
+        raise RefusedError(message)
+    if status >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        message = f"Wikimedia Commons answered {status}."
+        raise NetworkError(message)
+
+
+def _read_at_most(response: requests.Response, limit: int) -> bytes | None:
+    """Return the body, or `None` as soon as it is longer than `limit` bytes."""
+    body = bytearray()
+    for chunk in response.iter_content(chunk_size=64 * 1024):
+        body += chunk
+        if len(body) > limit:
+            return None
+    return bytes(body)

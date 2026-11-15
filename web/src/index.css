@@ -710,6 +710,15 @@ button.text:hover:not(:disabled) {
   object-fit: cover;
 }
 
+.artist-credit {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+}
+
+.artist-credit a {
+  color: var(--muted);
+}
+
 .artist-initial {
   display: grid;
   place-items: center;

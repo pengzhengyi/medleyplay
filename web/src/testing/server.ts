@@ -10,13 +10,14 @@ import type {
   Details,
   Enricher,
   Features,
+  HistoryLength,
+  KnownArtist,
   LinkLookup,
   MeteredNetwork,
   Mode,
   ModeSettings,
-  Playlist,
-  HistoryLength,
   Played,
+  Playlist,
   Preferences,
   PreferencesChange,
   Song,
@@ -447,6 +448,26 @@ export function downloadOf(
     status,
     message,
     backend: status === "downloaded" ? "manual" : null,
+  };
+}
+
+/** The artist MusicBrainz knows as `name` by the id `id`, before Wikidata has answered for it. */
+export function knownArtistOf(
+  id: string,
+  name: string,
+  change: Partial<KnownArtist> = {},
+): KnownArtist {
+  return {
+    id,
+    name,
+    sort_name: "",
+    disambiguation: "",
+    country: "",
+    aliases: [],
+    page: null,
+    photo: null,
+    photo_page: null,
+    ...change,
   };
 }
 

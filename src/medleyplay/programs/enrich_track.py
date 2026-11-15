@@ -11,16 +11,12 @@ it reads, so the result holds no image bytes:
 ```
 """
 
-import os
-import stat
-from pathlib import Path, PurePosixPath
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
 from medleyplay.plugin_api import (
     ENRICH_TRACK,
-    MAX_COVER_BYTES,
     AiFailure,
     CommunityRating,
     EnrichStatus,
@@ -29,13 +25,11 @@ from medleyplay.plugin_api import (
     SuggestedSong,
     VideoId,
     VideoText,
-    is_cover_image,
 )
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext, JobProgram
-from medleyplay.programs.scan_covers import COPIES_FOLDER, CopyFolder, CoverFile
+from medleyplay.programs.scan_covers import CoverFile, copy_written
 
 ENRICH_FOLDER: Final = "enrich"
-_OPEN_FLAGS: Final = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 
 
 class _Model(BaseModel):
@@ -108,7 +102,7 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
         raise AnswerFailedError(answer.message or "The site no longer has the video.", kind="gone")
     if answer.status is EnrichStatus.INVALID:
         raise AnswerFailedError(answer.message or "The answer was not usable.", kind="invalid")
-    copy = None if answer.cover is None else _copy_cover(folder, answer.cover, context.work_dir)
+    copy = None if answer.cover is None else copy_written(folder, answer.cover, context.work_dir)
     return EnrichedTrack(
         enricher=request.enricher,
         subject=request.subject,
@@ -120,24 +114,6 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
         ai_answered=answer.ai_answered,
         ai_failures=answer.ai_failures,
     )
-
-
-def _copy_cover(folder: Path, name: str, work_dir: Path) -> CoverFile | None:
-    """Return a copy of the cover the enricher named, or `None` when it is no cover."""
-    if PurePosixPath(name).name != name or name in {".", ".."} or "\\" in name:
-        return None
-    try:
-        descriptor = os.open(folder / name, _OPEN_FLAGS)
-    except OSError:
-        return None
-    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-        os.close(descriptor)
-        return None
-    with os.fdopen(descriptor, "rb") as file:
-        data = file.read(MAX_COVER_BYTES + 1)
-    if len(data) > MAX_COVER_BYTES or not is_cover_image(data):
-        return None
-    return CopyFolder(work_dir / COPIES_FOLDER).keep(data)
 
 
 ENRICH_TRACK_PROGRAM: JobProgram[EnrichJob, EnrichedTrack] = JobProgram(

@@ -10,8 +10,9 @@ the name as written.
 
 Once a name is linked, Wikidata is asked every name the artist goes by, a Job per
 artist in its own lane, for the names MusicBrainz lacks, such as *甲壳虫* for The
-Beatles. A name that an artist already linked goes by is offered that artist, with
-nothing asked of any site.
+Beatles, and for the artist's page there and a photo, kept with the covers. A name
+that an artist already linked goes by is offered that artist, with nothing asked of
+any site.
 
 An AI model may be asked which of the artists offered each name not linked names,
 given a few of its songs, in batches in the AI's lane. What it answers is kept as a
@@ -23,6 +24,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
+from pathlib import Path
 from typing import Final
 
 from sqlalchemy import delete, select
@@ -32,6 +34,7 @@ from medleyplay.application import Clock
 from medleyplay.application.ai import is_set_up, provider_named
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
+from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import (
     Alias,
@@ -109,14 +112,17 @@ def find_artist_kind(clock: Clock) -> FindArtistKind:
     )
 
 
-def find_artist_names_kind(clock: Clock) -> FindArtistNamesKind:
-    """Return the kind of Job that asks Wikidata every name an artist goes by."""
+def find_artist_names_kind(clock: Clock, covers_folder: Path) -> FindArtistNamesKind:
+    """Return the kind of Job that asks Wikidata every name an artist goes by.
+
+    The photo it finds is kept in `covers_folder`, as an enricher's cover is.
+    """
     return JobKind(
         name=FIND_ARTIST_NAMES_KIND,
         program="medleyplay.programs.find_artist:FIND_ARTIST_NAMES_PROGRAM",
         request=FindArtistNamesJob,
         result=FoundArtistNamesResult,
-        complete=partial(_complete_names, clock=clock),
+        complete=partial(_complete_names, clock=clock, covers_folder=covers_folder),
         points=(ARTIST_NAME_FINDER.name,),
         needs_network=True,
         lane_field="finder",
@@ -152,10 +158,12 @@ class ArtistKinds:
     choose: ChooseArtistsKind
 
 
-def artist_kinds(clock: Clock) -> ArtistKinds:
-    """Return every kind of Job the artist service submits."""
+def artist_kinds(clock: Clock, covers_folder: Path) -> ArtistKinds:
+    """Return every kind of Job the artist service submits, keeping photos in `covers_folder`."""
     return ArtistKinds(
-        find_artist_kind(clock), find_artist_names_kind(clock), choose_artists_kind(clock)
+        find_artist_kind(clock),
+        find_artist_names_kind(clock, covers_folder),
+        choose_artists_kind(clock),
     )
 
 
@@ -166,10 +174,17 @@ def find_artist_target(name: str) -> str:
 
 @dataclass(frozen=True)
 class KnownArtist:
-    """An artist MusicBrainz knows, with every name it goes by."""
+    """An artist MusicBrainz knows, with every name it goes by.
+
+    `page` is its page on Wikidata, and `photo` the cover holding its photo, with
+    `photo_page`, where the photo comes from; each is `None` until Wikidata gives it.
+    """
 
     artist: Artist
     aliases: tuple[Alias, ...]
+    page: str | None = None
+    photo: str | None = None
+    photo_page: str | None = None
 
 
 @dataclass(frozen=True)
@@ -538,8 +553,13 @@ def _option_of(known: KnownArtist) -> ArtistOption:
     )
 
 
-def _complete_names(db: Session, job: Job, result: FoundArtistNamesResult, *, clock: Clock) -> None:
-    """Keep every name the finder knows the artist by, in place of those it gave before."""
+def _complete_names(
+    db: Session, job: Job, result: FoundArtistNamesResult, *, clock: Clock, covers_folder: Path
+) -> None:
+    """Keep every name the finder knows the artist by, its page, and its photo.
+
+    Each replaces what the finder gave before.
+    """
     del job
     row = db.get(ArtistRow, result.artist_id)
     if row is None:
@@ -561,6 +581,15 @@ def _complete_names(db: Session, job: Job, result: FoundArtistNamesResult, *, cl
         )
         for alias in {each.name: each for each in result.aliases}.values()
     )
+    row.page = result.page
+    try:
+        row.photo = None if result.photo is None else keep_copy(result.photo, covers_folder)
+        row.photo_page = None if row.photo is None else result.photo_page
+    except NotACoverError:
+        row.photo = row.photo_page = None
+    except OSError:
+        # Such as a full disk: the photo there was stays, rather than none.
+        pass
     row.names_at = clock()
 
 
@@ -606,6 +635,9 @@ def _known(db: Session) -> dict[str, KnownArtist]:
         row.id: KnownArtist(
             Artist(row.id, row.name, row.sort_name, row.disambiguation, row.country),
             tuple(aliases.get(row.id, {}).values()),
+            row.page,
+            row.photo,
+            row.photo_page,
         )
         for row in db.scalars(select(ArtistRow))
     }

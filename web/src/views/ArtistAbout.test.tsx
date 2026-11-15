@@ -3,13 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import type { KnownArtist } from "../api";
-import { trackOf } from "../testing/server";
+import { knownArtistOf, trackOf } from "../testing/server";
 import { ArtistAbout } from "./ArtistAbout";
 
 /** The Beatles as MusicBrainz knows them, going by 披头士 and 甲壳虫乐队 too. */
-const BEATLES: KnownArtist = {
-  id: "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
-  name: "The Beatles",
+const BEATLES: KnownArtist = knownArtistOf("b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d", "The Beatles", {
   sort_name: "Beatles, The",
   disambiguation: "Liverpool rock band",
   country: "GB",
@@ -17,6 +15,14 @@ const BEATLES: KnownArtist = {
     { name: "披头士", locale: "zh", primary: true },
     { name: "甲壳虫乐队", locale: "zh", primary: false },
   ],
+});
+
+/** The Beatles once Wikidata has answered: their item, and a photo from Commons. */
+const BEATLES_ON_WIKIDATA: KnownArtist = {
+  ...BEATLES,
+  page: "https://www.wikidata.org/wiki/Q1299",
+  photo: "beatles-photo",
+  photo_page: "https://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
 };
 
 /** A song of `album` with the cover `cover`. */
@@ -78,6 +84,52 @@ describe("about an artist", () => {
       expect(link).toHaveAttribute("target", "_blank");
       expect(link).toHaveAttribute("rel", "noopener noreferrer");
     }
+  });
+
+  it("shows the artist's photo in place of its album covers, crediting where it comes from", () => {
+    render(
+      <ArtistAbout
+        name="The Beatles"
+        songs={[songOn(1, "Abbey Road", "abbey.jpg")]}
+        artist={BEATLES_ON_WIKIDATA}
+        toLink={false}
+      />,
+    );
+
+    const photo = screen.getByRole("img", { name: "Photo of The Beatles" });
+    expect(photo.querySelector("img")).toHaveAttribute("src", "/api/covers/beatles-photo");
+    expect(screen.queryByRole("img", { name: "Album covers of The Beatles" })).toBeNull();
+    const credit = screen.getByRole("link", { name: "Photo: Wikimedia Commons" });
+    expect(credit).toHaveAttribute(
+      "href",
+      "https://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
+    );
+    expect(credit).toHaveAttribute("target", "_blank");
+  });
+
+  it("links straight to the artist's Wikidata item once Wikidata has answered", () => {
+    render(<ArtistAbout name="披头士" songs={[]} artist={BEATLES_ON_WIKIDATA} toLink={false} />);
+
+    const links = within(screen.getByRole("list", { name: "The artist elsewhere" }));
+    expect(links.getByRole("link", { name: "Wikidata" })).toHaveAttribute(
+      "href",
+      "https://www.wikidata.org/wiki/Q1299",
+    );
+  });
+
+  it("links to no page that is not on the web over HTTPS", () => {
+    const odd: KnownArtist = {
+      ...BEATLES_ON_WIKIDATA,
+      page: "javascript:alert(1)",
+      photo_page: "http://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
+    };
+    render(<ArtistAbout name="The Beatles" songs={[]} artist={odd} toLink={false} />);
+
+    const links = within(screen.getByRole("list", { name: "The artist elsewhere" }));
+    expect(links.getByRole("link", { name: "Wikidata" }).getAttribute("href")).toMatch(
+      /^https:\/\/www\.wikidata\.org\/w\/index\.php\?search=/u,
+    );
+    expect(screen.queryByRole("link", { name: "Photo: Wikimedia Commons" })).toBeNull();
   });
 
   it("says what tells the artist apart, and the other names it goes by", () => {

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An artist's page shows its photo** — once a name is linked, Wikidata gives
+  the artist's photo from Wikimedia Commons, kept with the covers and credited on
+  its page, and the *Wikidata* link opens the artist's own item. Artists linked
+  before are asked again the next time you choose *Look up*.
+
 - **A rail that collapses, and a search that spans the header** — the views'
   rail sits apart on a soft surface and collapses to its icons with the button
   at its foot, which each browser remembers; the search takes the header's room,

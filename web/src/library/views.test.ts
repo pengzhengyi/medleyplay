@@ -1,7 +1,7 @@
 // cspell:ignore supercell ｍｅｌｔ
 import { describe, expect, it } from "vitest";
 
-import { artistNameOf, trackOf } from "../testing/server";
+import { artistNameOf, knownArtistOf, trackOf } from "../testing/server";
 import { linksOf } from "./artistLinks";
 import {
   albumFileOf,
@@ -89,14 +89,12 @@ describe("artists linked as one", () => {
   const LINKS = linksOf({
     names: [artistNameOf("The Beatles", "b1"), artistNameOf("披头士", "b1")],
     artists: [
-      {
-        id: "b1",
-        name: "The Beatles",
+      knownArtistOf("b1", "The Beatles", {
         sort_name: "Beatles, The",
         disambiguation: "",
         country: "GB",
         aliases: [{ name: "甲壳虫", locale: "zh", primary: false }],
-      },
+      }),
     ],
   });
 

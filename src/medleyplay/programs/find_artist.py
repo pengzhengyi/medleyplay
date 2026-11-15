@@ -1,6 +1,11 @@
-"""The programs that ask which artists go by a name, and every name an artist goes by."""
+"""The programs that ask which artists go by a name, and every name an artist goes by.
 
-from typing import Annotated
+The name finder writes the artist's photo into `photo/`, a folder of its own, and
+the program copies it as an enricher's cover is copied, so the result holds no image
+bytes.
+"""
+
+from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -14,8 +19,13 @@ from medleyplay.plugin_api import (
     FindArtistNames,
     FindStatus,
     FoundArtist,
+    Page,
 )
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext, JobProgram
+from medleyplay.programs.scan_covers import CoverFile, copy_written
+
+PHOTO_FOLDER: Final = "photo"
+"""Where the name finder writes the artist's photo, in the Job's working folder."""
 
 
 class _Model(BaseModel):
@@ -77,23 +87,40 @@ class FindArtistNamesJob(_Model):
 
 
 class FoundArtistNamesResult(_Model):
-    """Every name the finder knows the artist by; none when it doesn't know it."""
+    """Every name the finder knows the artist by; none when it doesn't know it.
+
+    `page` is the artist's page on the finder's site, and `photo` a copy of the photo
+    it gave, with `photo_page`, where the photo comes from.
+    """
 
     artist_id: str
     finder: str
     aliases: Annotated[tuple[ArtistAlias, ...], Field(max_length=MAX_ALIASES)] = ()
+    page: Page | None = None
+    photo: CoverFile | None = None
+    photo_page: Page | None = None
 
 
 def run_names(request: FindArtistNamesJob, context: JobContext) -> FoundArtistNamesResult:
     """Ask the finder, and fail the Job if the site refuses."""
+    folder = context.work_dir / PHOTO_FOLDER
+    folder.mkdir(exist_ok=True)
     answer = context.call(
-        FIND_ARTIST_NAMES, request.finder, FindArtistNames(musicbrainz_id=request.artist_id)
+        FIND_ARTIST_NAMES,
+        request.finder,
+        FindArtistNames(musicbrainz_id=request.artist_id, folder=str(folder)),
     )
     if answer.status is FindStatus.REFUSED:
         message = answer.message or "The site refused the request."
         raise AnswerFailedError(message, kind="refused")
+    photo = None if answer.photo is None else copy_written(folder, answer.photo, context.work_dir)
     return FoundArtistNamesResult(
-        artist_id=request.artist_id, finder=request.finder, aliases=answer.aliases
+        artist_id=request.artist_id,
+        finder=request.finder,
+        aliases=answer.aliases,
+        page=answer.page,
+        photo=photo,
+        photo_page=None if photo is None else answer.photo_page,
     )
 
 

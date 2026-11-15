@@ -179,7 +179,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
     enrich = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
-    artist_jobs = artist_kinds(clock)
+    artist_jobs = artist_kinds(clock, data_dir / COVERS_FOLDER)
     find_silences = find_silences_kind(clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,

@@ -10,6 +10,7 @@ import {
   artistNameOf,
   detailsOf,
   favoritesPlaylistOf,
+  knownArtistOf,
   lookupOf,
   playlistOf,
   serve,
@@ -304,14 +305,12 @@ describe("an artist's page", () => {
       body: {
         names: [linked ? artistNameOf("ryo", "ryo-id") : artistNameOf("ryo")],
         artists: [
-          {
-            id: "ryo-id",
-            name: "ryo",
+          knownArtistOf("ryo-id", "ryo", {
             sort_name: "ryo",
             disambiguation: "supercell composer",
             country: "JP",
             aliases: [{ name: "supercell", locale: null, primary: false }],
-          },
+          }),
         ],
       },
     },

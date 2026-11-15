@@ -11,12 +11,14 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.artists import ArtistName, Recommendation
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import Alias, LookUp
+from medleyplay.domain.covers import cover_id
 from medleyplay.domain.errors import ConflictError, NotFoundError
 from medleyplay.domain.jobs import Job, JobState
 from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
+from tests.support.plugins.reader import BEATLES_PHOTO
 
 BEATLES = "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d"
 TRIBUTE = "6a3b5c1e-0000-4000-8000-0000000b0a1d"
@@ -188,6 +190,31 @@ def test_linking_a_name_adds_every_name_wikidata_knows_the_artist_by(
     aliases = enriching.artists.names().artists[BEATLES].aliases
     assert Alias("甲壳虫乐队", "zh") in aliases
     assert Alias("ビートルズ", "ja", primary=True) in aliases
+
+
+def test_linking_a_name_keeps_the_artist_s_wikidata_page_and_photo(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    known = enriching.artists.names().artists[BEATLES]
+    assert known.page == "https://www.wikidata.org/wiki/Q1299"
+    assert known.photo == cover_id(BEATLES_PHOTO)
+    assert known.photo_page == "https://commons.wikimedia.org/wiki/File:The_Beatles.jpg"
+    assert enriching.covers.open(known.photo) is not None
+
+
+def test_the_sweep_keeps_an_artist_s_photo(enriching: Enriching, alice: Account) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+    _linked(enriching, alice, "披头士", BEATLES)
+
+    enriching.covers.sweep()
+
+    assert enriching.covers.open(cover_id(BEATLES_PHOTO)) is not None
 
 
 def test_a_name_both_sites_give_is_kept_once_as_musicbrainz_gives_it(

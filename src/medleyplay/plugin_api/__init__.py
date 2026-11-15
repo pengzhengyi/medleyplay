@@ -38,6 +38,7 @@ from medleyplay.plugin_api.artists import (
     FoundArtistNames,
     FoundArtists,
     NameToChoose,
+    Page,
 )
 from medleyplay.plugin_api.audio import (
     FIND_SILENCES,
@@ -220,6 +221,7 @@ __all__ = [
     "NameToChoose",
     "NetworkError",
     "Operation",
+    "Page",
     "PartDetails",
     "PartNumber",
     "Plugin",

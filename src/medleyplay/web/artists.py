@@ -32,6 +32,9 @@ class ArtistOut(BaseModel):
     disambiguation: str
     country: str
     aliases: list[AliasOut]
+    page: str | None = Field(description="Its page on Wikidata, once Wikidata gives it.")
+    photo: str | None = Field(description="The cover holding its photo, from Wikidata.")
+    photo_page: str | None = Field(description="Where the photo comes from, and its license.")
 
     @classmethod
     def of(cls, known: KnownArtist) -> "ArtistOut":
@@ -46,6 +49,9 @@ class ArtistOut(BaseModel):
             aliases=[
                 AliasOut(name=a.name, locale=a.locale, primary=a.primary) for a in known.aliases
             ],
+            page=known.page,
+            photo=known.photo,
+            photo_page=known.photo_page,
         )
 
 

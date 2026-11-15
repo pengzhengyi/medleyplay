@@ -2,8 +2,11 @@
 
 from fastapi.testclient import TestClient
 
+from medleyplay.application.artists import KnownArtist
 from medleyplay.application.catalog import CatalogService
+from medleyplay.domain.artists import Alias, Artist
 from medleyplay.domain.catalog import SourceKey, TrackDetails
+from medleyplay.web.artists import ArtistOut
 from tests.support.api import set_up_as_alice
 
 
@@ -97,3 +100,27 @@ def test_the_names_say_no_ai_model_is_being_asked(
 
 def test_the_artist_names_are_for_signed_in_accounts(client: TestClient) -> None:
     assert client.get("/api/artist-names").status_code == 401
+
+
+def test_an_artist_shows_its_names_and_its_page_and_photo_from_wikidata() -> None:
+    known = KnownArtist(
+        Artist("b10bbbfc", "The Beatles", "Beatles, The", "Liverpool rock band", "GB"),
+        (Alias("披头士", "zh"),),
+        page="https://www.wikidata.org/wiki/Q1299",
+        photo="9f2c" * 16,
+        photo_page="https://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
+    )
+
+    shown = ArtistOut.of(known).model_dump()
+
+    assert shown == {
+        "id": "b10bbbfc",
+        "name": "The Beatles",
+        "sort_name": "Beatles, The",
+        "disambiguation": "Liverpool rock band",
+        "country": "GB",
+        "aliases": [{"name": "披头士", "locale": "zh", "primary": False}],
+        "page": "https://www.wikidata.org/wiki/Q1299",
+        "photo": "9f2c" * 16,
+        "photo_page": "https://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
+    }

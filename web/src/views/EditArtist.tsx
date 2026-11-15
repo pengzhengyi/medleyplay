@@ -4,19 +4,29 @@
  *
  * The name and the note are saved together; a photo is set or removed at once, as a
  * song's cover is. An empty name shows the artist as most of its songs write it, and
- * removing the household's photo shows Wikidata's again.
+ * removing the household's photo shows Wikidata's again. An AI model may be asked to
+ * suggest a name and a note; each suggestion shows beside its field, to use or not.
  */
 
 import {
   CircleNotchIcon,
   PencilSimpleIcon,
+  SparkleIcon,
+  SpinnerGapIcon,
   TrashIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react";
-import { type SubmitEvent, useId, useRef, useState } from "react";
+import { type SubmitEvent, useEffect, useId, useRef, useState } from "react";
 
-import { type KnownArtist, api, coverUrl } from "../api";
+import {
+  type AnsweredBy,
+  type ArtistSuggestionState,
+  type KnownArtist,
+  api,
+  coverUrl,
+} from "../api";
 import { initialOf } from "../format";
+import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { MAX_COVER_BYTES } from "./EditDetails";
 import { Modal } from "./Modal";
 
@@ -24,9 +34,112 @@ import { Modal } from "./Modal";
 const MAX_SHOWN_AS = 512;
 const MAX_ABOUT = 1000;
 
+/** How often what the AI suggests is read again while it is asked. */
+const ASKING_EVERY_MS = 2000;
+
 /** Say why a change failed, in the server's words when it gave some. */
 function messageOf(failure: unknown): string {
   return failure instanceof Error ? failure.message : String(failure);
+}
+
+/**
+ * What an AI model last suggested for the artist `artistId`, whether it is asked now,
+ * why the last asking failed, and a way to ask it; read again while it is asked.
+ */
+function useArtistSuggestion(artistId: string) {
+  const [state, setState] = useState<ArtistSuggestionState>();
+  // Counts the reads asked for, so each asks the server again.
+  const [reads, setReads] = useState(0);
+  const [sending, setSending] = useState(false);
+  const [askError, setAskError] = useState("");
+  useEffect(() => {
+    let current = true;
+    api.artistSuggestion(artistId).then(
+      (found) => {
+        if (current) {
+          setState(found);
+        }
+      },
+      () => {
+        // Without it, nothing is suggested; the artist is edited all the same.
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [artistId, reads]);
+  useEffect(() => {
+    if (state?.asking !== true) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setReads((count) => count + 1);
+    }, ASKING_EVERY_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [state]);
+  const ask = async () => {
+    setSending(true);
+    setAskError("");
+    try {
+      await api.suggestForArtist(artistId);
+      setState((was) => ({ asking: true, suggestion: was?.suggestion ?? null, failure: null }));
+    } catch (failure) {
+      setAskError(messageOf(failure));
+    } finally {
+      setSending(false);
+    }
+  };
+  return {
+    asking: sending || state?.asking === true,
+    suggestion: state?.suggestion ?? null,
+    failure: askError || (state?.failure ?? ""),
+    ask,
+  };
+}
+
+/** What `by` suggests for `field`, unless it is what `typed` says already, with *Use*. */
+function Suggested({
+  field,
+  value,
+  typed,
+  why,
+  by,
+  onUse,
+}: {
+  readonly field: string;
+  readonly value: string;
+  readonly typed: string;
+  readonly why: string;
+  readonly by: AnsweredBy;
+  readonly onUse: () => void;
+}) {
+  if (value === "" || value === typed.trim()) {
+    return null;
+  }
+  return (
+    <div
+      className="detail-suggestion"
+      role="group"
+      aria-label={`${aiNameOf(by, true)}'s suggestion for ${field}`}
+    >
+      <small
+        className="detail-origin"
+        title={[why, answeredOf(by)].filter((line) => line !== undefined && line !== "").join("\n")}
+      >
+        {aiNameOf(by, true)} suggests “{value}”
+      </small>
+      <button
+        type="button"
+        className="detail-alternative"
+        aria-label={`Use “${value}”, suggested by ${aiNameOf(by)}`}
+        onClick={onUse}
+      >
+        Use
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -52,6 +165,8 @@ export function EditArtist({
   const [error, setError] = useState("");
   const [picturing, setPicturing] = useState(false);
   const [photoError, setPhotoError] = useState("");
+  const ai = useArtistSuggestion(artist.id);
+  const suggested = ai.suggestion;
 
   const names = [
     ...new Set([written, artist.name, ...artist.aliases.map((alias) => alias.name)]),
@@ -170,6 +285,27 @@ export function EditArtist({
             )}
           </div>
           <div className="edit-artist-fields">
+            <div className="edit-artist-ask">
+              {ai.failure !== "" && (
+                <p className="error" role="alert">
+                  {ai.failure}
+                </p>
+              )}
+              <button
+                type="button"
+                className="secondary outline edit-artist-ask-button"
+                disabled={ai.asking}
+                title="Ask the AI to suggest a name and a note; nothing changes until you save"
+                onClick={() => void ai.ask()}
+              >
+                {ai.asking ? (
+                  <SpinnerGapIcon className="spin" aria-hidden />
+                ) : (
+                  <SparkleIcon aria-hidden />
+                )}
+                {ai.asking ? "Asking the AI…" : "Ask AI"}
+              </button>
+            </div>
             <label className="edit-album-field">
               Shown as
               <input
@@ -190,6 +326,18 @@ export function EditArtist({
               </datalist>
               <small className="edit-artist-hint">Its songs keep their names as written.</small>
             </label>
+            {suggested !== null && (
+              <Suggested
+                field="Shown as"
+                value={suggested.shown_as ?? ""}
+                typed={shownAs}
+                why={suggested.why}
+                by={suggested}
+                onUse={() => {
+                  setShownAs(suggested.shown_as ?? "");
+                }}
+              />
+            )}
             <label className="edit-album-field">
               About
               <textarea
@@ -202,6 +350,18 @@ export function EditArtist({
                 }}
               />
             </label>
+            {suggested !== null && (
+              <Suggested
+                field="About"
+                value={suggested.about}
+                typed={about}
+                why=""
+                by={suggested}
+                onUse={() => {
+                  setAbout(suggested.about);
+                }}
+              />
+            )}
           </div>
         </div>
         {error !== "" && (

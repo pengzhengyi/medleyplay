@@ -274,8 +274,8 @@ def silences(
 
 
 @pytest.fixture
-def find_names_kind(clock: FakeClock) -> FindArtistNamesKind:
-    return find_artist_names_kind(clock)
+def find_names_kind(clock: FakeClock, tmp_path: Path) -> FindArtistNamesKind:
+    return find_artist_names_kind(clock, tmp_path / "data" / "covers")
 
 
 @pytest.fixture

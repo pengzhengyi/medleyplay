@@ -671,6 +671,29 @@ def test_migrating_forgets_when_musicbrainz_was_asked_so_it_is_asked_again_for_r
     assert asked == ["bilibili-details"]
 
 
+def test_migrating_forgets_when_wikidata_answered_so_each_artist_is_asked_again_for_a_photo(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0039")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO artist"
+                " (id, name, sort_name, disambiguation, country, found_at, names_at)"
+                " VALUES ('b10bbbfc', 'The Beatles', 'Beatles, The', '', 'GB',"
+                " '2026-11-01 00:00:00.000000', '2026-11-02 00:00:00.000000')"
+            )
+        )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        asked = connection.execute(text("SELECT names_at, page, photo FROM artist")).one()
+    engine.dispose()
+    assert tuple(asked) == (None, None, None)
+
+
 def test_upgrading_records_every_play_when_it_was_played_and_clears_none(tmp_path: Path) -> None:
     engine = make_engine(database_url(tmp_path))
     _migrate_to(engine, "0027")

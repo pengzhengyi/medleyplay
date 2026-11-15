@@ -346,23 +346,33 @@ class Artists:
         return FoundArtists()
 
 
+BEATLES_PHOTO: Final = jpeg_image("The Beatles")
+"""The photo of The Beatles the name finder gives."""
+
+
 class ArtistNames:
     """Answers as Wikidata would: The Beatles go by 甲壳虫乐队, ビートルズ, and Beatles too.
 
     It also gives them *Various*, a name of no one artist, which no real answer gave,
-    so a test can show such a name offers no artist. Wikidata refuses to answer for the
-    tribute band, and knows no other artist.
+    so a test can show such a name offers no artist, and their page and photo,
+    `BEATLES_PHOTO`, written into the folder when it is asked with one. Wikidata
+    refuses to answer for the tribute band, and knows no other artist.
     """
 
     def find(self, request: FindArtistNames) -> FoundArtistNames:
         if request.musicbrainz_id == BEATLES.id:
+            if request.folder:
+                (Path(request.folder) / "photo").write_bytes(BEATLES_PHOTO)
             return FoundArtistNames(
                 aliases=(
                     ArtistAlias(name="甲壳虫乐队", locale="zh"),
                     ArtistAlias(name="ビートルズ", locale="ja", primary=True),
                     ArtistAlias(name="Beatles", locale="en"),
                     ArtistAlias(name="Various", locale="en"),
-                )
+                ),
+                page="https://www.wikidata.org/wiki/Q1299",
+                photo="photo" if request.folder else None,
+                photo_page="https://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
             )
         if request.musicbrainz_id == TRIBUTE.id:
             return FoundArtistNames(status=FindStatus.REFUSED, message="Wikidata refused.")

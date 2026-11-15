@@ -1,8 +1,9 @@
 """Covers: images kept once in the data folder, named by their content, shown on Tracks.
 
 A cover's file is named by the SHA-256 of its bytes, so the songs of an album share
-one file, and a name never changes while its content stands. A cover no value
-names any more is removed by the sweep.
+one file, and a name never changes while its content stands. An artist's photo is
+kept as a cover too. A cover no value or artist names any more is removed by the
+sweep.
 """
 
 import contextlib
@@ -20,7 +21,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.covers import MAX_COVER_BYTES, CoverType, cover_id, cover_type, is_cover_id
 from medleyplay.domain.details import Field
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.persistence.schema import TrackValueRow
+from medleyplay.persistence.schema import ArtistRow, TrackValueRow
 
 COVERS_FOLDER = "covers"
 """Where covers are kept in the data folder."""
@@ -103,7 +104,7 @@ class CoverService:
         return None if kind is None or path.is_symlink() else (path, kind)
 
     def sweep(self) -> None:
-        """Remove every file in the covers folder that no value names."""
+        """Remove every file in the covers folder that no value or artist's photo names."""
         if not self._folder.is_dir():
             return
         with self._units() as db:
@@ -112,6 +113,7 @@ class CoverService:
                     select(TrackValueRow.value).where(TrackValueRow.field == Field.COVER).distinct()
                 )
             )
+            named.update(db.scalars(select(ArtistRow.photo).where(ArtistRow.photo.is_not(None))))
         for file in self._folder.iterdir():
             if file.name not in named:
                 with contextlib.suppress(OSError):

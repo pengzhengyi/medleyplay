@@ -48,3 +48,29 @@ class Entities(_Model):
     """The items asked for, by id; an item merged into another answers as that one."""
 
     entities: dict[str, Entity] = {}
+
+
+class DataValue(_Model):
+    """A statement's value: for an image, the name of its file on Wikimedia Commons."""
+
+    value: object = None
+
+
+class Snak(_Model):
+    """What a statement says: a value, or that there is none or none known."""
+
+    snaktype: str = "value"
+    datavalue: DataValue | None = None
+
+
+class Statement(_Model):
+    """One statement of an item, and its rank: `preferred`, `normal`, or `deprecated`."""
+
+    mainsnak: Snak
+    rank: str = "normal"
+
+
+class Claims(_Model):
+    """An item's statements, by property."""
+
+    claims: dict[str, list[Statement]] = {}

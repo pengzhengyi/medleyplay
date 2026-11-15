@@ -11,11 +11,14 @@ answer   The Beatles (b10bbbfc-…), UK, Liverpool rock band, score 100;
 
 Another site may know more names of an artist than the one that found it: asked
 with the artist's MusicBrainz id, a name finder answers with every name it knows the
-artist by.
+artist by, the artist's page there, and a photo of the artist, if it has one, which
+it writes into a folder the core owns.
 
 ```text
 ask      b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d
-answer   甲壳虫乐队 (zh), 甲壳虫 (zh), ビートルズ (ja), …
+answer   甲壳虫乐队 (zh), 甲壳虫 (zh), ビートルズ (ja), …;
+         https://www.wikidata.org/wiki/Q1299; a photo, from
+         https://commons.wikimedia.org/wiki/File:…
 ```
 
 An artist chooser is asked which of the artists offered a name names, given a few of
@@ -45,12 +48,15 @@ MAX_ARTISTS: Final = 10
 """The most artists a finder answers with."""
 MAX_ALIASES: Final = 100
 """The most other names kept of one artist."""
+MAX_PAGE: Final = 2048
 MAX_CHOICES: Final = 50
 """The most names an artist chooser is asked about at once."""
 MAX_SONGS_SHOWN: Final = 8
 """The most of a name's songs an artist chooser is shown."""
 
 type Name = Annotated[str, StringConstraints(min_length=1, max_length=MAX_NAME)]
+type Page = Annotated[str, StringConstraints(max_length=MAX_PAGE, pattern=r"^https://")]
+"""A page on the web, over HTTPS."""
 
 
 class _Model(BaseModel):
@@ -112,17 +118,30 @@ class ArtistFinder(Protocol):
 
 
 class FindArtistNames(_Model):
-    """Ask every name the artist `musicbrainz_id` goes by."""
+    """Ask every name the artist `musicbrainz_id` goes by.
+
+    A photo of the artist goes into `folder`, an empty folder the caller owns; with
+    no folder, none is asked for.
+    """
 
     musicbrainz_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    folder: Annotated[str, StringConstraints(max_length=4096)] = ""
 
 
 class FoundArtistNames(_Model):
-    """Every name a site knows the artist by; none when it doesn't know the artist."""
+    """Every name a site knows the artist by; none when it doesn't know the artist.
+
+    `page` is the artist's page on the site. `photo` is the bare name of the photo
+    the finder wrote into the folder, and `photo_page` the page that says where the
+    photo comes from and who may use it.
+    """
 
     status: FindStatus = FindStatus.OK
     message: Annotated[str, StringConstraints(max_length=500)] = ""
     aliases: Annotated[tuple[ArtistAlias, ...], Field(max_length=MAX_ALIASES)] = ()
+    page: Page | None = None
+    photo: Annotated[str, StringConstraints(max_length=255)] | None = None
+    photo_page: Page | None = None
 
 
 class ArtistNameFinder(Protocol):

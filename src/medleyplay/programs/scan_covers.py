@@ -14,8 +14,10 @@ Music/Blue/01 Intro.jpg      the image beside it
 import base64
 import binascii
 import hashlib
+import os
+import stat
 from collections.abc import Iterable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
@@ -34,6 +36,7 @@ COVER_EXTENSIONS: Final = ("jpg", "jpeg", "png", "webp")
 """The extensions of an image beside a file, in the order the first one found is the cover."""
 COPIES_FOLDER: Final = "covers"
 """Where the Job keeps its copies of the images it reads, in its working folder."""
+_OPEN_FLAGS: Final = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 
 
 class _Model(BaseModel):
@@ -159,3 +162,25 @@ def detach_cover(tags: Tags, copies: CopyFolder) -> tuple[Tags, CoverFile | None
 
 def _rank(extension: str) -> int:
     return COVER_EXTENSIONS.index(extension)
+
+
+def copy_written(folder: Path, name: str, work_dir: Path) -> CoverFile | None:
+    """Return a copy of the cover a plugin wrote into `folder` as `name`, or `None` for none.
+
+    The name is trusted only once the file proves to be a plain image directly in
+    `folder`; the copy is kept in the Job's copies, in `work_dir`.
+    """
+    if PurePosixPath(name).name != name or name in {".", ".."} or "\\" in name:
+        return None
+    try:
+        descriptor = os.open(folder / name, _OPEN_FLAGS)
+    except OSError:
+        return None
+    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        return None
+    with os.fdopen(descriptor, "rb") as file:
+        data = file.read(MAX_COVER_BYTES + 1)
+    if len(data) > MAX_COVER_BYTES or not is_cover_image(data):
+        return None
+    return CopyFolder(work_dir / COPIES_FOLDER).keep(data)

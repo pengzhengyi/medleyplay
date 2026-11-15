@@ -699,7 +699,9 @@ class ArtistRow(Base):
     """An artist a site knows, as it last answered: its id there, names, and country.
 
     `names_at` is when another site, Wikidata, last answered with every name it
-    knows the artist by, none being an answer too; until then it is `None`.
+    knows the artist by, none being an answer too; until then it is `None`. With
+    the names it gave the artist's `page` there, and its `photo`, a cover's name,
+    with `photo_page`, where the photo comes from.
     """
 
     __tablename__ = "artist"
@@ -711,6 +713,9 @@ class ArtistRow(Base):
     country: Mapped[str] = mapped_column(String(8))
     found_at: Mapped[datetime] = mapped_column(UtcDateTime)
     names_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    page: Mapped[str | None] = mapped_column(String(2048), default=None)
+    photo: Mapped[str | None] = mapped_column(String(64), default=None)
+    photo_page: Mapped[str | None] = mapped_column(String(2048), default=None)
 
 
 class ArtistAliasRow(Base):

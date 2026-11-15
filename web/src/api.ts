@@ -1050,10 +1050,13 @@ export const api = {
       days === undefined ? "/api/plays/counts" : `/api/plays/counts?days=${String(days)}`,
     ),
   /** What importing a Rate Your Music export would change, changing nothing. */
-  previewRatingsImport: (file: Blob) =>
-    send<RatingsImport>("POST", "/api/ratings/import/preview", file),
-  /** Replace your imported album ratings with a Rate Your Music export's. */
-  importRatings: (file: Blob) => send<RatingsImport>("POST", "/api/ratings/import", file),
+  previewRatingsImport: (file: Blob, mode: ImportMode) =>
+    send<RatingsImport>("POST", `/api/ratings/import/preview?mode=${mode}`, file),
+  /** Merge a Rate Your Music export's album ratings into yours, or replace yours with them. */
+  importRatings: (file: Blob, mode: ImportMode) =>
+    send<RatingsImport>("POST", `/api/ratings/import?mode=${mode}`, file),
+  /** The albums you imported, in the order you imported them. */
+  importedAlbums: () => call<ImportedAlbum[]>("GET", "/api/ratings/imported"),
   /** How many albums your last import rated or reviewed, 0 for none. */
   ratingsImportKept: () => call<{ readonly albums: number }>("GET", "/api/ratings/import"),
   /** Forget the album ratings you imported; the ratings you gave songs stay. */
@@ -1068,6 +1071,9 @@ export const api = {
 
 /** Where your ratings download as a CSV file: the songs you rated, then your albums. */
 export const RATINGS_EXPORT_URL = "/api/ratings/export";
+
+/** What importing does with the albums you imported before: keep them, or drop them. */
+export type ImportMode = "merge" | "replace";
 
 /** What importing a Rate Your Music export changes, or changed, for you. */
 export interface RatingsImport {
@@ -1086,8 +1092,20 @@ export interface RatingsImport {
     readonly joining: number;
     readonly leaving: number;
   }[];
-  /** The albums of your earlier import this replaces. */
+  /** The albums of your earlier import this replaces: all when replacing, those rated again when merging. */
   readonly replaced_albums: number;
+  /** The albums your import holds after. */
+  readonly total_albums: number;
+}
+
+/** An album you imported, your rating of it if you rated it, and your review. */
+export interface ImportedAlbum {
+  readonly artist: string;
+  readonly album: string;
+  readonly stars: number | null;
+  readonly note: string;
+  /** Whether the Library has the album. */
+  readonly in_library: boolean;
 }
 
 /** Your imported rating of an album, if you rated it, and your review. */

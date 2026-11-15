@@ -17,27 +17,49 @@
  */
 
 import { KeyReturnIcon, LinkSimpleIcon, SparkleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
-import { useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import {
   type ArtistName,
   type ArtistNames,
   type ArtistRecommendation,
   type KnownArtist,
+  type Track,
   api,
 } from "../api";
 import { answeredOf } from "../library/aiAnswer";
 import { unlinkedOf } from "../library/cleanUp";
+import { fold } from "../library/views";
 
 /** The most artists offered for one name. */
 const OFFERED = 3;
+/** The most songs a name's song count shows. */
+const SONGS_SHOWN = 8;
+
+/** Each name's songs, by its folded name, as artist or album artist. */
+function songsByName(tracks: readonly Track[]): ReadonlyMap<string, readonly Track[]> {
+  const found = new Map<string, Track[]>();
+  for (const track of tracks) {
+    for (const key of new Set(
+      [track.artist, track.album_artist].map((name) => fold(name.trim())),
+    )) {
+      if (key !== "") {
+        found.set(key, [...(found.get(key) ?? []), track]);
+      }
+    }
+  }
+  return found;
+}
 
 /** The names to link, each with what is known of it, and all to look up at once. */
 export function LinkArtists({
   names,
+  tracks = [],
   onChanged,
 }: {
   readonly names: ArtistNames;
+  /** The Library's songs, to show each name's. */
+  readonly tracks?: readonly Track[];
   /** Called after a change, so the names are read again. */
   readonly onChanged: () => void;
 }) {
@@ -46,6 +68,7 @@ export function LinkArtists({
   const [picked, setPicked] = useState<ReadonlyMap<string, string>>(new Map());
   const [linkingAll, setLinkingAll] = useState(false);
   const linkButtons = useRef(new Map<string, HTMLButtonElement>());
+  const songsOf = useMemo(() => songsByName(tracks), [tracks]);
   const shown = names.names.filter((each) => each.look_up !== "never");
   const artists = new Map(names.artists.map((artist) => [artist.id, artist]));
   const toLookUp = shown
@@ -121,7 +144,6 @@ export function LinkArtists({
               type="button"
               className="secondary outline dialog-button"
               disabled={asking}
-              aria-busy={asking}
               title="Ask the AI which artist each name names; it links nothing"
               onClick={askAi}
             >
@@ -174,6 +196,7 @@ export function LinkArtists({
             <NameRow
               key={named.key}
               named={named}
+              songs={songsOf.get(fold(named.name.trim())) ?? []}
               offered={offered}
               artists={artists}
               chosen={chosen}
@@ -216,6 +239,7 @@ function offeredOf(named: ArtistName, artists: ReadonlyMap<string, KnownArtist>)
 
 function NameRow({
   named,
+  songs,
   offered,
   artists,
   chosen,
@@ -230,6 +254,8 @@ function NameRow({
   onChanged,
 }: {
   readonly named: ArtistName;
+  /** The songs that show the name. */
+  readonly songs: readonly Track[];
   readonly offered: readonly KnownArtist[];
   readonly artists: ReadonlyMap<string, KnownArtist>;
   /** The artist chosen to link, `""` for none. */
@@ -263,13 +289,13 @@ function NameRow({
       },
     );
   };
-  const songs = `${String(named.tracks)} ${named.tracks === 1 ? "song" : "songs"}`;
+  const count = `${String(named.tracks)} ${named.tracks === 1 ? "song" : "songs"}`;
   const choosing = !named.linked && !named.finding && named.look_up !== "tidy_first";
   return (
     <li className="tidy-row link-row">
-      <div className="tidy-names-pair">
+      <div className="tidy-names-pair link-songs-anchor">
         <strong className="tidy-name">{named.name}</strong>
-        <span className="tidy-meta">{songs}</span>
+        <NameSongs count={count} songs={songs} />
       </div>
       <div className="link-state">
         {named.linked ? (
@@ -419,4 +445,33 @@ function describe(artist: KnownArtist | undefined): string {
   }
   const about = [artist.disambiguation, artist.country].filter(Boolean).join(", ");
   return about === "" ? artist.name : `${artist.name} (${about})`;
+}
+
+/**
+ * A name's song count, showing its songs and their albums when hovered or focused,
+ * so which artist it names can be told from them.
+ */
+function NameSongs({ count, songs }: { readonly count: string; readonly songs: readonly Track[] }) {
+  const tip = useId();
+  if (songs.length === 0) {
+    return <span className="tidy-meta">{count}</span>;
+  }
+  const more = songs.length - SONGS_SHOWN;
+  return (
+    <>
+      <button type="button" className="tidy-meta link-songs-count" aria-describedby={tip}>
+        {count}
+      </button>
+      <span className="link-songs" role="tooltip" id={tip}>
+        <ul className="link-songs-list">
+          {songs.slice(0, SONGS_SHOWN).map((song) => (
+            <li key={song.id} className="link-songs-item">
+              {song.album === "" ? song.title : `${song.title} — ${song.album}`}
+            </li>
+          ))}
+        </ul>
+        {more > 0 && <span className="link-songs-more">{`and ${String(more)} more`}</span>}
+      </span>
+    </>
+  );
 }

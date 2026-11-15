@@ -6500,6 +6500,60 @@ button.playing-kind[aria-expanded="true"] {
   gap: 0.35rem;
 }
 
+/* A name's songs, shown over the list when its name or song count is hovered or focused. */
+.link-songs-anchor {
+  position: relative;
+}
+
+.link-row .link-songs-count {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: help;
+}
+
+.link-songs {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  display: none;
+  width: max-content;
+  max-width: min(28rem, 80vw);
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: var(--float);
+  font-size: 0.85rem;
+}
+
+.link-songs-anchor:hover .link-songs,
+.link-songs-anchor:focus-within .link-songs {
+  display: block;
+}
+
+.link-songs-list {
+  margin: 0;
+  padding: 0;
+}
+
+.link-songs-item {
+  margin: 0;
+  list-style: none;
+}
+
+.link-songs-more {
+  color: var(--muted);
+}
+
 .link-row .tidy-names-pair {
   grid-column: 1;
   grid-auto-flow: column;

@@ -171,6 +171,9 @@ nicknames such as *周董*, and Japanese and Korean names.
 - **A section of Clean up,** *Link artist names*, with how many names that may
   be looked up are not linked, counted in the rail's *Clean up* with the names to
   tidy: each name with its songs, most songs first.
+- **A name's songs on hover:** hovering a name or its song count, or focusing the
+  count, shows up to eight of its songs, as artist or album artist, with their
+  albums, and how many more.
 - **Each name says where it stands:** *Look up* for one not looked up yet, with
   *Look up 17 names* above the list for all of them; *Looking it up on
   MusicBrainz…* while it is; *Tidy the name first* for a name that needs it; up to

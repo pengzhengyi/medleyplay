@@ -259,6 +259,7 @@ function viewOf(given: ViewProps) {
         <CleanUpView
           tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
           artistNames={props.artistNames}
+          tracks={props.tracks}
         />
       );
   }

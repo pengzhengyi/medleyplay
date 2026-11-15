@@ -368,6 +368,11 @@ One view, in sections, each saved on its own:
     falling back to jade; `--accent-soft` mixes from `--accent`, so it follows.
   - **Kept per browser,** like the theme, since how a screen looks belongs to
     the screen.
+  - **Colors to choose again.** The heart saves the color shown among up to 10
+    small tiles, the newest first; saving one more forgets the oldest, and the
+    heart pressed again forgets the color shown. A tile uses its color; pointed
+    at or focused, it shows a large swatch with its hex, in white or black,
+    whichever reads on it. They are kept per browser, beside the accent.
 - **Keyboard shortcuts:** each command's keys, and changing them; see
   [Keyboard shortcuts](#keyboard-shortcuts).
 - **Network:** whether medleyplay is Online or Offline and why, the network the

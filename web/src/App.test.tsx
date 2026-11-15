@@ -7,6 +7,9 @@ import { api } from "./api";
 import { ASK_AGAIN_MS } from "./views/DeviceWaiting";
 import { ALICE, modeOf, serve, signedIn, trackOf } from "./testing/server";
 
+/** The rail of views, where who is signed in sits on a laptop. */
+const rail = () => within(screen.getByRole("navigation", { name: "Views" }));
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -61,7 +64,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("button", { name: "Night Drive" })).toBeInTheDocument();
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(rail().getByRole("button", { name: "Alice: account" })).toBeInTheDocument();
   });
 
   it("says in the header when medleyplay is Offline, and why, leading to Settings", async () => {
@@ -357,7 +360,9 @@ describe("App", () => {
     render(<App />);
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+    await screen.findByRole("navigation", { name: "Views" });
+    await user.click(rail().getByRole("button", { name: "Alice: account" }));
+    await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
 
     expect(await screen.findByRole("form", { name: "Sign in" })).toBeInTheDocument();
   });

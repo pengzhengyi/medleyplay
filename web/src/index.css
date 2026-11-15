@@ -214,7 +214,7 @@ button.text:hover:not(:disabled) {
 
 .library {
   /* The rail's width: its names, or only its icons once collapsed. */
-  --rail: 14rem;
+  --rail: 13.25rem;
 
   display: grid;
   grid-template:
@@ -231,7 +231,7 @@ button.text:hover:not(:disabled) {
 @media (width > 64rem) {
   .library.rail-minimized {
     /* The header's wordmark keeps the rail's full width. */
-    --rail: 14rem;
+    --rail: 13.25rem;
 
     grid-template:
       "top top" auto
@@ -2125,7 +2125,7 @@ button.text:hover:not(:disabled) {
 /* Clean up sits under Insights, indented, with how many names wait. */
 
 .views li.under .view-link {
-  padding-left: 2.4rem;
+  padding-left: 2.1rem;
   font-size: 0.92rem;
 }
 

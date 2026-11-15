@@ -347,8 +347,11 @@ and the full views are in [Web client](Web%20client.md).
     in Now Playing alike, and the time beside it is the album's. It is split into
     one segment a song, each filled as far as it has played. The segment under
     the pointer lights up, the tip names its song, and a card of the album's
-    songs shows over the pointer with the song under it ringed. The card only
-    shows: the bar under it takes the click.
+    songs shows over the pointer with the song under it ringed. It stays a moment
+    after the pointer leaves the bar, and a strip spans the gap, so the pointer
+    can move up onto it; there it holds still, and a song chosen on it plays.
+    Pressing on the card never seeks. Its songs are for the pointer: the album's
+    mark lists the same songs for the keyboard, so Tab passes the card by.
   - **The volume** steps a tenth with each of its buttons, and its bar sets it
     once let go. Each browser keeps its own. On iOS, where only the device sets
     the volume, the control doesn't show.

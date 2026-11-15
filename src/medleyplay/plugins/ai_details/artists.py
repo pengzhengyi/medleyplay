@@ -35,6 +35,7 @@ from medleyplay.plugin_api import (
     NameToChoose,
 )
 from medleyplay.plugins.ai_details.client import ChatClient, Message
+from medleyplay.plugins.ai_details.copilot import chat_client
 from medleyplay.plugins.ai_details.models import BadAnswerError
 from medleyplay.plugins.ai_details.turns import (
     all_refused,
@@ -125,7 +126,7 @@ def parse_choices(text: str, names: tuple[NameToChoose, ...]) -> tuple[ChosenArt
 class AiArtistChooser:
     """Asks AI models in turn which artist each name names."""
 
-    client: ChatClient = field(default_factory=ChatClient)
+    client: ChatClient = field(default_factory=chat_client)
 
     def choose(self, request: ChooseArtists) -> ChosenArtists:
         """Ask the providers in turn, and return the choices of the first to answer.

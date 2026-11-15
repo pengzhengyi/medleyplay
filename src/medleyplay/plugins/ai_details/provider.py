@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from medleyplay.plugin_api import Enriched, EnrichStatus, EnrichTrack
 from medleyplay.plugins.ai_details.client import ChatClient
+from medleyplay.plugins.ai_details.copilot import chat_client
 from medleyplay.plugins.ai_details.models import parse_answer
 from medleyplay.plugins.ai_details.prompt import asking
 from medleyplay.plugins.ai_details.turns import (
@@ -20,7 +21,7 @@ from medleyplay.plugins.ai_details.turns import (
 class AiDetails:
     """Asks AI models for a Track's details and its song list, from its video text."""
 
-    client: ChatClient = field(default_factory=ChatClient)
+    client: ChatClient = field(default_factory=chat_client)
 
     def enrich(self, request: EnrichTrack) -> Enriched:
         """Ask the providers about the Track in turn, and return what the first to answer says.

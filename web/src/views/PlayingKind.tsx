@@ -6,7 +6,8 @@
  * pointed at, focused, or pressed: those played, the one playing and how far it
  * has got, and those to come. A song in it plays when chosen.
  *
- * Over an album's seek bar, a card of the same songs lights up the one under the pointer.
+ * Over an album's seek bar, a card of the same songs lights up the one under the pointer,
+ * and plays one chosen on it.
  */
 
 import {
@@ -188,13 +189,16 @@ function AlbumMark({
 
 /**
  * The songs of the album playing, for a seek bar's hover: the one under the pointer
- * lit, with how far into it the pointer is. It only shows; the bar under it takes the click.
+ * lit, with how far into it the pointer is. A song chosen on it plays, by `onPlaySong`;
+ * without one it only shows. It is for the pointer: the album's mark lists the same
+ * songs for the keyboard, so Tab passes it by.
  */
 export function AlbumCard({
   playing,
   track,
   position,
   pointedAt,
+  onPlaySong,
 }: {
   readonly playing: Extract<Playing, { kind: "album" }>;
   readonly track: Track;
@@ -202,6 +206,7 @@ export function AlbumCard({
   readonly position: number;
   /** The second of the album under the pointer. */
   readonly pointedAt: number;
+  readonly onPlaySong?: (song: AlbumSong) => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const pointed = songAt(playing.songs, pointedAt);
@@ -209,14 +214,15 @@ export function AlbumCard({
     list.current?.querySelector(".pointed")?.scrollIntoView({ block: "nearest" });
   }, [pointed?.index]);
   return (
-    <div ref={list} className="album-card" inert>
+    <div ref={list} className="album-card" inert={onPlaySong === undefined}>
       <AlbumSongs
         playing={playing}
         track={track}
         name={track.album === "" ? track.title : track.album}
         position={position}
         pointed={pointed}
-        onPlaySong={() => undefined}
+        pointerOnly
+        onPlaySong={onPlaySong ?? (() => undefined)}
         onEditSongs={() => undefined}
       />
     </div>
@@ -229,6 +235,7 @@ function AlbumSongs({
   name,
   position,
   pointed,
+  pointerOnly = false,
   onPlaySong,
   onEditSongs,
 }: {
@@ -238,6 +245,8 @@ function AlbumSongs({
   readonly position: number;
   /** The song under a seek bar's pointer, and how far into it. */
   readonly pointed?: ReturnType<typeof songAt>;
+  /** Whether the songs are for the pointer alone, so Tab passes them by. */
+  readonly pointerOnly?: boolean;
   readonly onPlaySong: (song: AlbumSong) => void;
   readonly onEditSongs: (track: Track) => void;
 }) {
@@ -297,6 +306,7 @@ function AlbumSongs({
                 className={pointedHere ? `album-song ${state} pointed` : `album-song ${state}`}
                 aria-current={state === "playing" ? "true" : undefined}
                 aria-label={`${title}, ${STATE_WORDS[state]}`}
+                tabIndex={pointerOnly ? -1 : undefined}
                 onClick={() => {
                   onPlaySong(song);
                 }}

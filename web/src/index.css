@@ -6231,8 +6231,17 @@ button.playing-kind[aria-expanded="true"] {
   left: clamp(min(10rem, 50%), calc(var(--tip) * 100%), calc(100% - min(10rem, 50%)));
   z-index: 20;
   width: min(20rem, 100%);
-  pointer-events: none;
   transform: translateX(-50%);
+}
+
+/* A strip over the gap down to the bar, so the pointer stays on the preview crossing it. */
+.seek-preview::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 2.4rem;
+  content: "";
 }
 
 .album-card {

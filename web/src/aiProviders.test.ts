@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { agoOf, fixOf, isLocal, movedOrder, providerNameOf } from "./aiProviders";
+import { agoOf, fixOf, isCopilot, isLocal, movedOrder, providerNameOf } from "./aiProviders";
 import type { AiPreset, AiProvider } from "./api";
 
 const PRESETS: readonly AiPreset[] = [
@@ -32,6 +32,18 @@ describe("a provider's name", () => {
     expect(providerNameOf(at("https://llm.example.com:8443/v1"), PRESETS)).toBe(
       "llm.example.com:8443",
     );
+  });
+});
+
+describe("GitHub Copilot", () => {
+  it("is the provider at Copilot's address, with or without a trailing slash", () => {
+    expect(
+      [
+        "https://api.githubcopilot.com",
+        " https://api.githubcopilot.com/ ",
+        "https://api.openai.com/v1",
+      ].map(isCopilot),
+    ).toEqual([true, true, false]);
   });
 });
 

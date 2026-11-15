@@ -143,4 +143,31 @@ describe("an album's card over its seek bar", () => {
     expect(pointed[0]).toHaveTextContent("1:00 / 3:00");
     expect(container).toHaveTextContent("5:12 of 12:00");
   });
+
+  it("plays a song chosen on it, which a pointer reaches but Tab passes by", async () => {
+    const onPlaySong = vi.fn();
+    render(
+      <AlbumCard
+        playing={ALBUM}
+        track={PLAYING}
+        position={72}
+        pointedAt={600}
+        onPlaySong={onPlaySong}
+      />,
+    );
+
+    const song = screen.getByRole("button", { name: /^生如夏花/u });
+    await userEvent.click(song);
+
+    expect(onPlaySong).toHaveBeenCalledExactlyOnceWith(SONGS[2]);
+    expect(song).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("only shows when no song can be chosen on it", () => {
+    const { container } = render(
+      <AlbumCard playing={ALBUM} track={PLAYING} position={72} pointedAt={600} />,
+    );
+
+    expect(container.querySelector(".album-card")).toHaveAttribute("inert");
+  });
 });

@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with *Library* and Bilibili's mark at its end, as on an iPad. Bilibili shows as
   its mark wherever there is little room, named on hover.
 
+- **GitHub Copilot as an AI provider** — Settings offers *GitHub Copilot*
+  beside DeepSeek, OpenAI, Anthropic, and Ollama. It is asked through GitHub's
+  Copilot SDK with a GitHub token of an account with Copilot, kept in the
+  Keychain, and given no tools: it only answers the question. Each question counts
+  against your Copilot allowance.
+
 - **An artist's page says who it is** — a round mosaic of its album covers, who
   MusicBrainz says it is, the other names it goes by, and links to its
   MusicBrainz and Wikidata pages and a Rate Your Music search; a name not linked
@@ -107,9 +113,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and in favorites and Radio; each song keeps its artist as written.
 
 - **Hold ⌘ for the shortcuts** — holding ⌘ (Ctrl on Windows and Linux) on its
-  own for a second shows the keyboard shortcuts over the page, and letting go
-  hides them. Shortcuts made with the key never show it. Settings turns it off
-  for the browser.
+  own for a second and a half shows the keyboard shortcuts over the page, and
+  letting go hides them. Shortcuts made with the key never show it. Settings turns
+  it off for the browser.
 
 - **Tidy names** — artist and album names written with more than the name in
   them, such as *周杰伦2000年发行首张个人*, *The Beatles（披头士）*, or
@@ -398,6 +404,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- **Reach the album's songs over the seek bar** — the card of the album's songs
+  shown while hovering its seek bar now stays as the pointer moves up onto it,
+  holding still there, and a song chosen on it plays.
 
 - In *Link artist names*, hovering a name or its song count, or focusing the
   count, shows its songs with their albums, so which artist it names can be told;

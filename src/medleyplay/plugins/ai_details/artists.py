@@ -81,11 +81,11 @@ def asking(names: tuple[NameToChoose, ...]) -> list[Message]:
     """Return the messages that ask which artist each of `names` names."""
     lines: list[str] = []
     for number, each in enumerate(names, start=1):
-        lines.append(f"{number}. {_one_line(each.name)}")
+        lines.append(f"{number}. {one_line(each.name)}")
         if each.songs:
-            lines.append(f"   songs: {'; '.join(_one_line(song) for song in each.songs)}")
+            lines.append(f"   songs: {'; '.join(one_line(song) for song in each.songs)}")
         lines += [
-            f"   {_LETTERS[place]}. {_one_line(_described(option))}"
+            f"   {_LETTERS[place]}. {one_line(described(option))}"
             for place, option in enumerate(each.options)
         ]
     return [
@@ -100,9 +100,8 @@ def parse_choices(text: str, names: tuple[NameToChoose, ...]) -> tuple[ChosenArt
     A choice for a name not asked about, or of a letter not offered it, is left out;
     the first choice for a name stands.
     """
-    fenced = _FENCE.match(text.strip())
     try:
-        answer = _Answer.model_validate_json(fenced.group(1) if fenced else text)
+        answer = _Answer.model_validate_json(unfenced(text))
     except ValidationError:
         message = 'The answer is not a json object with a "choices" list.'
         raise BadAnswerError(message) from None
@@ -151,11 +150,18 @@ class AiArtistChooser:
         return ChosenArtists(chosen=outcome.answer, ai_answered=outcome.provider.id)
 
 
-def _described(option: ArtistOption) -> str:
+def described(option: ArtistOption) -> str:
+    """Return `option` as a model reads it, with what tells it apart: `GUMI (Vocaloid, JP)`."""
     about = ", ".join(each for each in (option.disambiguation, option.country) if each)
     return f"{option.name} ({about})" if about else option.name
 
 
-def _one_line(text: str) -> str:
+def one_line(text: str) -> str:
     """Return `text` with each run of spaces and line breaks one space."""
     return " ".join(text.split())
+
+
+def unfenced(text: str) -> str:
+    """Return `text` without the code fence a model may wrap its json in."""
+    fenced = _FENCE.match(text.strip())
+    return fenced.group(1) if fenced else text

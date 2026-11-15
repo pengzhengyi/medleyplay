@@ -4329,7 +4329,8 @@ dialog.modal::backdrop {
   gap: 0.4rem;
 }
 
-.edit-details .detail-alternative {
+.edit-details .detail-alternative,
+.edit-artist .detail-alternative {
   display: inline-flex;
 
   /* Its own width, not a share of Pico's joined group. */
@@ -4350,7 +4351,8 @@ dialog.modal::backdrop {
   white-space: nowrap;
 }
 
-.edit-details .detail-alternative:hover {
+.edit-details .detail-alternative:hover,
+.edit-artist .detail-alternative:hover {
   border-style: solid;
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -6849,6 +6851,28 @@ button.playing-kind[aria-expanded="true"] {
 .edit-artist .edit-artist-hint {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.edit-artist-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.edit-artist-ask-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.edit-artist-ask .error {
+  margin: 0;
 }
 
 .edit-artist .edit-artist-about {

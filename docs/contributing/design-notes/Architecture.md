@@ -128,6 +128,8 @@ implementation.
 | `TrackEnricher` | Enricher name | Job | Find or suggest a Track's details and cover from a site or an AI model, when asked; see [Track details](Track%20details.md#enrichers) | `bilibili-details`, `musicbrainz`, `ai-details` |
 | `ArtistFinder` | Finder name | Job | Find the artists a site knows by a name, with every name each goes by; see [Artists](Artists.md) | `musicbrainz` |
 | `ArtistNameFinder` | Finder name | Job | Find every name another site knows an artist by; see [Artists](Artists.md#wikidatas-names) | `wikipedia` |
+| `ArtistChooser` | Chooser name | Job | Recommend which artist offered each name names; see [Artists](Artists.md#asking-an-ai-model) | `ai-details` |
+| `ArtistDescriber` | Describer name | Job | Suggest the name to show an artist by, and a note about it; see [Artists](Artists.md#what-an-ai-model-suggests-for-an-artist) | `ai-details` |
 | `SilenceFinder` | Finder name | Job | Find where a file's audio falls quiet; see [Segments](Segments.md#snapping-starts-to-the-gaps) | `ffmpeg` |
 
 Plugins implement core-defined extension points only. They add no HTTP routes, no

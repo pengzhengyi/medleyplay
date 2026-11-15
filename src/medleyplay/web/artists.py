@@ -88,6 +88,28 @@ class RecommendationOut(BaseModel):
     at: datetime
 
 
+class ArtistSuggestionOut(BaseModel):
+    """What an AI model suggests for an artist: a name to show it by, and a note."""
+
+    shown_as: str | None = Field(description="One of the names it goes by; none for none.")
+    why: str = Field(description="Why that name; empty with none.")
+    about: str = Field(description="A note about who it is; empty for none.")
+    model: str = Field(description="The model that answered, as it was then.")
+    host: str = Field(description="Where the model was asked.")
+    at: datetime
+
+
+class SuggestionOut(BaseModel):
+    """Whether an AI model is asked about an artist now, what it last suggested, and why not."""
+
+    asking: bool
+    waiting: bool = Field(description="Whether the asking waits for medleyplay to be Online.")
+    suggestion: ArtistSuggestionOut | None
+    failure: str | None = Field(
+        description="Why the last asking failed; only to the Account that asked, and to admins."
+    )
+
+
 class ArtistNameOut(BaseModel):
     """A name Tracks show as an artist or album artist, and what is known of it."""
 
@@ -224,6 +246,34 @@ def set_details(
 ) -> None:
     """Keep the name the artist is shown by, and a note about it; its songs keep theirs."""
     service.set_details(artist_id, shown_as=body.shown_as, about=body.about)
+
+
+@artists_router.get("/{artist_id}/suggestion")
+def suggestion(artist_id: _ArtistId, me: SignedInAccount, service: ArtistsDep) -> SuggestionOut:
+    """Return whether an AI model is asked about the artist, and what it last suggested."""
+    state = service.suggestion(me, artist_id)
+    found = state.suggestion
+    return SuggestionOut(
+        asking=state.asking,
+        waiting=state.waiting,
+        suggestion=None
+        if found is None
+        else ArtistSuggestionOut(
+            shown_as=found.shown_as,
+            why=found.why,
+            about=found.about,
+            model=found.model,
+            host=found.host,
+            at=found.at,
+        ),
+        failure=state.failure,
+    )
+
+
+@artists_router.post("/{artist_id}/suggestion", status_code=status.HTTP_202_ACCEPTED)
+def suggest(artist_id: _ArtistId, me: SignedInAccount, service: ArtistsDep) -> None:
+    """Ask an AI model which name to show the artist by, and who it is; nothing is changed."""
+    service.suggest(me, artist_id)
 
 
 @artists_router.put(

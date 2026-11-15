@@ -5,6 +5,7 @@
 import { vi } from "vitest";
 
 import type {
+  ArtistSuggestion,
   Account,
   ArtistName,
   Details,
@@ -470,6 +471,19 @@ export function knownArtistOf(
     shown_as: null,
     about: null,
     own_photo: false,
+    ...change,
+  };
+}
+
+/** What deepseek-flash suggests for The Beatles: to show them as *甲壳虫乐队*, with a note. */
+export function artistSuggestionOf(change: Partial<ArtistSuggestion> = {}): ArtistSuggestion {
+  return {
+    shown_as: "甲壳虫乐队",
+    why: "The songs are Chinese",
+    about: "An English rock band from Liverpool.",
+    model: "deepseek-flash",
+    host: "api.deepseek.com",
+    at: "2026-11-02T00:00:00Z",
     ...change,
   };
 }

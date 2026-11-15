@@ -189,6 +189,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         artist_jobs.find.name: artist_jobs.find,
         artist_jobs.names.name: artist_jobs.names,
         artist_jobs.choose.name: artist_jobs.choose,
+        artist_jobs.describe.name: artist_jobs.describe,
         find_silences.name: find_silences,
         **(kinds or {}),
     }

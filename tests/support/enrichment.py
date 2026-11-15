@@ -14,6 +14,7 @@ from medleyplay.application.artists import (
     ArtistKinds,
     ArtistService,
     choose_artists_kind,
+    describe_artist_kind,
     find_artist_kind,
     find_artist_names_kind,
 )
@@ -160,11 +161,13 @@ def running_enrichment(
     find = find_artist_kind(clock)
     find_names = find_artist_names_kind(clock, data_dir / COVERS_FOLDER)
     choose = choose_artists_kind(clock)
+    describe = describe_artist_kind(clock)
     kinds: dict[str, AnyJobKind] = {
         kind.name: kind,
         find.name: find,
         find_names.name: find_names,
         choose.name: choose,
+        describe.name: describe,
     }
     with started_plugins(units, clock, "reader") as plugins:
         secrets = MemorySecrets()
@@ -193,7 +196,7 @@ def running_enrichment(
                     clock,
                     plugins,
                     jobs,
-                    ArtistKinds(find, find_names, choose),
+                    ArtistKinds(find, find_names, choose, describe),
                     covers_folder=data_dir / COVERS_FOLDER,
                 ),
                 jobs=jobs,

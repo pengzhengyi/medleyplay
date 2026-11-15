@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { KnownArtist } from "../api";
-import { knownArtistOf, serve } from "../testing/server";
+import type { ArtistSuggestionState, KnownArtist } from "../api";
+import { artistSuggestionOf, knownArtistOf, serve } from "../testing/server";
 import { EditArtist } from "./EditArtist";
 import { MAX_COVER_BYTES } from "./EditDetails";
 
@@ -18,6 +18,14 @@ const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
 });
 const DETAILS = "PUT /api/artists/b10bbbfc/details";
 const PHOTO = "/api/artists/b10bbbfc/photo";
+const SUGGESTION = "/api/artists/b10bbbfc/suggestion";
+/** No AI model asked about the artist yet. */
+const UNASKED: ArtistSuggestionState = {
+  asking: false,
+  waiting: false,
+  suggestion: null,
+  failure: null,
+};
 
 /** The editor for `artist`, written as 披头士 by most of its songs. */
 function editing(artist: KnownArtist = BEATLES) {
@@ -29,6 +37,7 @@ function editing(artist: KnownArtist = BEATLES) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("editing an artist", () => {
@@ -101,7 +110,10 @@ describe("editing an artist", () => {
   });
 
   it("sets a photo of the household's at once", async () => {
-    const server = serve({ [`PUT ${PHOTO}`]: { status: 204 } });
+    const server = serve({
+      [`GET ${SUGGESTION}`]: { body: UNASKED },
+      [`PUT ${PHOTO}`]: { status: 204 },
+    });
     const { onChanged } = editing();
 
     await userEvent.upload(
@@ -112,11 +124,11 @@ describe("editing an artist", () => {
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
     });
-    expect(server.calls).toEqual([`PUT ${PHOTO}`]);
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`, `PUT ${PHOTO}`]);
   });
 
   it("sends no photo past 10 MiB, and says so beside the photo", async () => {
-    const server = serve({});
+    const server = serve({ [`GET ${SUGGESTION}`]: { body: UNASKED } });
     const photo = new File(["jpeg"], "huge.jpg", { type: "image/jpeg" });
     Object.defineProperty(photo, "size", { value: MAX_COVER_BYTES + 1 });
     editing();
@@ -124,7 +136,7 @@ describe("editing an artist", () => {
     await userEvent.upload(screen.getByLabelText("Replace the photo"), photo);
 
     expect(screen.getByRole("alert")).toHaveTextContent("A photo is at most 10 MiB.");
-    expect(server.calls).toEqual([]);
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`]);
   });
 
   it("says why a photo was refused, beside the photo", async () => {
@@ -161,13 +173,140 @@ describe("editing an artist", () => {
   });
 
   it("removes the household's own photo, so Wikidata's shows again", async () => {
-    const server = serve({ [`DELETE ${PHOTO}`]: { status: 204 } });
+    const server = serve({
+      [`GET ${SUGGESTION}`]: { body: UNASKED },
+      [`DELETE ${PHOTO}`]: { status: 204 },
+    });
     const { onChanged } = editing({ ...BEATLES, photo: "own-photo", own_photo: true });
     await userEvent.click(screen.getByRole("button", { name: "Remove your photo" }));
 
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
     });
-    expect(server.calls).toEqual([`DELETE ${PHOTO}`]);
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`, `DELETE ${PHOTO}`]);
+  });
+});
+
+describe("asking the AI about an artist", () => {
+  it("offers what the AI last suggested beside each field, to use", async () => {
+    serve({ [`GET ${SUGGESTION}`]: { body: { ...UNASKED, suggestion: artistSuggestionOf() } } });
+    editing();
+
+    const name = await screen.findByRole("group", {
+      name: "deepseek-flash's suggestion for Shown as",
+    });
+    expect(name).toHaveTextContent("deepseek-flash suggests “甲壳虫乐队”");
+    await userEvent.click(
+      within(name).getByRole("button", {
+        name: "Use “甲壳虫乐队”, suggested by deepseek-flash: The songs are Chinese",
+      }),
+    );
+    const about = screen.getByRole("group", { name: "deepseek-flash's suggestion for About" });
+    await userEvent.click(within(about).getByRole("button", { name: /^Use/u }));
+
+    expect(screen.getByRole("combobox", { name: /Shown as/u })).toHaveValue("甲壳虫乐队");
+    expect(screen.getByRole("textbox", { name: "About" })).toHaveValue(
+      "An English rock band from Liverpool.",
+    );
+    expect(screen.queryByRole("group", { name: /suggestion for/u })).toBeNull();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("asks the AI with one spinner, and shows its answer once it has answered", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let state = UNASKED;
+    serve({
+      [`GET ${SUGGESTION}`]: () => ({ body: state }),
+      [`POST ${SUGGESTION}`]: () => {
+        state = { ...UNASKED, asking: true };
+        return { status: 202, body: null };
+      },
+    });
+    editing();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+
+    expect(await screen.findByRole("button", { name: "Asking the AI…" })).toBeDisabled();
+    state = { ...UNASKED, suggestion: artistSuggestionOf() };
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(
+      await screen.findByRole("group", { name: "deepseek-flash's suggestion for Shown as" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Ask AI" })).toBeEnabled();
+  });
+
+  it("reads again after a read fails while the AI is asked", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const answers = [
+      { body: { ...UNASKED, asking: true } },
+      { status: 500, body: { detail: "Busy" } },
+      { body: { ...UNASKED, suggestion: artistSuggestionOf() } },
+    ];
+    serve({ [`GET ${SUGGESTION}`]: () => answers.shift() ?? answers[0] ?? { body: UNASKED } });
+    editing();
+    expect(await screen.findByRole("button", { name: "Asking the AI…" })).toBeDisabled();
+
+    // The first read fails; the next answers.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(
+      await screen.findByRole("group", { name: "deepseek-flash's suggestion for Shown as" }),
+    ).toBeVisible();
+  });
+
+  it("shows an asking another began, when asked already", async () => {
+    let state = UNASKED;
+    serve({
+      [`GET ${SUGGESTION}`]: () => ({ body: state }),
+      [`POST ${SUGGESTION}`]: () => {
+        state = { ...UNASKED, asking: true };
+        return { status: 409, body: { detail: "An AI model is being asked already." } };
+      },
+    });
+    editing();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+
+    expect(await screen.findByRole("button", { name: "Asking the AI…" })).toBeDisabled();
+  });
+
+  it("says an asking waits while medleyplay is Offline", async () => {
+    serve({ [`GET ${SUGGESTION}`]: { body: { ...UNASKED, asking: true, waiting: true } } });
+    editing();
+
+    expect(
+      await screen.findByRole("button", { name: "Asking the AI once medleyplay is Online" }),
+    ).toBeDisabled();
+  });
+
+  it("says why the last asking failed, beside Ask AI", async () => {
+    serve({ [`GET ${SUGGESTION}`]: { body: { ...UNASKED, failure: "The key was refused." } } });
+    editing();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The key was refused.");
+  });
+
+  it("says why the AI could not be asked, beside Ask AI", async () => {
+    serve({
+      [`GET ${SUGGESTION}`]: { body: UNASKED },
+      [`POST ${SUGGESTION}`]: {
+        status: 409,
+        body: { detail: "Set up an AI provider in Settings to ask it." },
+      },
+    });
+    editing();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Set up an AI provider in Settings to ask it.",
+    );
   });
 });

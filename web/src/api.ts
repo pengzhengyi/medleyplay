@@ -298,6 +298,26 @@ export interface ArtistRecommendation extends AnsweredBy {
   readonly why: string;
 }
 
+/** What an AI model suggests for an artist: a name to show it by, and a note about it. */
+export interface ArtistSuggestion extends AnsweredBy {
+  /** One of the names the artist goes by; `null` for none. */
+  readonly shown_as: string | null;
+  /** Why that name; empty with none. */
+  readonly why: string;
+  /** A note about who it is; empty for none. */
+  readonly about: string;
+}
+
+/** Whether an AI model is asked about an artist now, what it last suggested, and why not. */
+export interface ArtistSuggestionState {
+  readonly asking: boolean;
+  /** Whether the asking waits for medleyplay to be Online. */
+  readonly waiting: boolean;
+  readonly suggestion: ArtistSuggestion | null;
+  /** Why the last asking failed; only to the Account that asked, and to admins. */
+  readonly failure: string | null;
+}
+
 /** An artist's or album's name shown on Tracks with more than the name in it, tidied. */
 export interface NameToTidy {
   /** What the name names: an artist or album artist, or an album. */
@@ -942,6 +962,12 @@ export const api = {
   /** Drop the household's photo of an artist, so Wikidata's shows again. */
   removeArtistPhoto: (artistId: string) =>
     call<undefined>("DELETE", `/api/artists/${encodeURIComponent(artistId)}/photo`),
+  /** Whether an AI model is asked about an artist, and what it last suggested. */
+  artistSuggestion: (artistId: string) =>
+    call<ArtistSuggestionState>("GET", `/api/artists/${encodeURIComponent(artistId)}/suggestion`),
+  /** Ask an AI model which name to show an artist by, and who it is; nothing changes. */
+  suggestForArtist: (artistId: string) =>
+    call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/suggestion`),
   /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */

@@ -11,7 +11,7 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.artists import Alias, Artist
 from medleyplay.domain.catalog import SourceKey, TrackDetails
 from medleyplay.domain.covers import MAX_COVER_BYTES
-from medleyplay.persistence.schema import ArtistRow
+from medleyplay.persistence.schema import ArtistRow, ArtistSuggestionRow
 from medleyplay.web.artists import ArtistOut
 from tests.support.api import set_up_as_alice
 from tests.support.images import gif_image, png_image
@@ -245,3 +245,74 @@ def test_choosing_for_an_artist_is_for_signed_in_accounts(client: TestClient) ->
     response = client.put("/api/artists/b10bbbfc/details", json={"shown_as": "Anyone"})
 
     assert response.status_code == 401
+
+
+def test_nothing_is_suggested_for_an_artist_no_ai_model_was_asked_about(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+
+    response = client.get("/api/artists/b10bbbfc/suggestion")
+
+    assert response.json() == {
+        "asking": False,
+        "waiting": False,
+        "suggestion": None,
+        "failure": None,
+    }
+
+
+def test_what_an_ai_model_last_suggested_for_an_artist_is_shown(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+    with units.begin() as db:
+        db.add(
+            ArtistSuggestionRow(
+                artist_id="b10bbbfc",
+                offered=["The Beatles"],
+                shown_as="The Beatles",
+                why="The songs are English",
+                about="An English rock band.",
+                model="deepseek-flash",
+                host="api.deepseek.com",
+                answered_at=datetime(2026, 11, 2, tzinfo=UTC),
+            )
+        )
+
+    suggestion = client.get("/api/artists/b10bbbfc/suggestion").json()["suggestion"]
+
+    assert suggestion == {
+        "shown_as": "The Beatles",
+        "why": "The songs are English",
+        "about": "An English rock band.",
+        "model": "deepseek-flash",
+        "host": "api.deepseek.com",
+        "at": "2026-11-02T00:00:00Z",
+    }
+
+
+def test_no_ai_model_is_asked_about_an_artist_while_the_ai_plugin_is_off(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+
+    response = client.post("/api/artists/b10bbbfc/suggestion")
+
+    assert response.status_code == 409
+
+
+def test_an_artist_no_site_named_has_no_suggestion(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.get("/api/artists/nobody/suggestion")
+
+    assert response.status_code == 404
+
+
+def test_suggestions_are_for_signed_in_accounts(client: TestClient) -> None:
+    assert client.get("/api/artists/b10bbbfc/suggestion").status_code == 401
+    assert client.post("/api/artists/b10bbbfc/suggestion").status_code == 401

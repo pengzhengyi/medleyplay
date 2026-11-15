@@ -16,7 +16,9 @@ any site.
 
 An AI model may be asked which of the artists offered each name not linked names,
 given a few of its songs, in batches in the AI's lane. What it answers is kept as a
-recommendation, with the model that gave it; it links nothing.
+recommendation, with the model that gave it; it links nothing. One may also be asked,
+for one artist, which of the names it goes by to show it by, and who it is; what it
+answers is kept as a suggestion, which the household may use or not.
 """
 
 from collections import Counter
@@ -52,7 +54,7 @@ from medleyplay.domain.artists import (
 )
 from medleyplay.domain.enrichers import AI_DETAILS, MUSICBRAINZ
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
-from medleyplay.domain.jobs import Job
+from medleyplay.domain.jobs import Job, JobState, failure_shown_to
 from medleyplay.persistence.schema import (
     ArtistAliasRow,
     ArtistHouseholdRow,
@@ -60,20 +62,24 @@ from medleyplay.persistence.schema import (
     ArtistRecommendationRow,
     ArtistRow,
     ArtistSearchRow,
+    ArtistSuggestionRow,
     TrackRow,
 )
 from medleyplay.plugin_api import (
     ARTIST_CHOOSER,
+    ARTIST_DESCRIBER,
     ARTIST_FINDER,
     ARTIST_NAME_FINDER,
     MAX_ARTISTS,
     MAX_CHOICES,
     MAX_NAME,
+    MAX_NAMES_OFFERED,
     MAX_SONGS_SHOWN,
     ArtistOption,
     NameToChoose,
 )
 from medleyplay.programs.choose_artists import ChooseArtistsJob, ChosenArtistsResult
+from medleyplay.programs.describe_artist import DescribeArtistJob, DescribedArtistResult
 from medleyplay.programs.find_artist import (
     FindArtistJob,
     FindArtistNamesJob,
@@ -96,10 +102,14 @@ KNOWN_SCORE: Final = 100
 CHOOSE_ARTISTS_KIND: Final = "choose_artists"
 CHOOSER: Final = AI_DETAILS.name
 """The chooser asked: the AI plugin, in the lane its enricher keeps to."""
+DESCRIBE_ARTIST_KIND: Final = "describe_artist"
+DESCRIBER: Final = AI_DETAILS.name
+"""The describer asked: the AI plugin, in the lane its enricher keeps to."""
 
 type FindArtistKind = JobKind[FindArtistJob, FoundArtistsResult]
 type FindArtistNamesKind = JobKind[FindArtistNamesJob, FoundArtistNamesResult]
 type ChooseArtistsKind = JobKind[ChooseArtistsJob, ChosenArtistsResult]
+type DescribeArtistKind = JobKind[DescribeArtistJob, DescribedArtistResult]
 
 
 def find_artist_kind(clock: Clock) -> FindArtistKind:
@@ -150,17 +160,33 @@ def choose_artists_kind(clock: Clock) -> ChooseArtistsKind:
     )
 
 
+def describe_artist_kind(clock: Clock) -> DescribeArtistKind:
+    """Return the kind of Job that asks an AI model how to name an artist, and who it is."""
+    return JobKind(
+        name=DESCRIBE_ARTIST_KIND,
+        program="medleyplay.programs.describe_artist:DESCRIBE_ARTIST_PROGRAM",
+        request=DescribeArtistJob,
+        result=DescribedArtistResult,
+        complete=partial(_complete_suggestion, clock=clock),
+        points=(ARTIST_DESCRIBER.name,),
+        needs_network=True,
+        lane_field="describer",
+        lanes={DESCRIBER: Lane(spacing=AI_DETAILS.spacing, lends_ai=True, shared=AI_DETAILS.name)},
+    )
+
+
 @dataclass(frozen=True)
 class ArtistKinds:
     """The kinds of Job the artist service submits.
 
-    They look names up, find an artist's other names, and ask an AI model which artist
-    each name names.
+    They look names up, find an artist's other names, ask an AI model which artist
+    each name names, and ask one how to name an artist.
     """
 
     find: FindArtistKind
     names: FindArtistNamesKind
     choose: ChooseArtistsKind
+    describe: DescribeArtistKind
 
 
 def artist_kinds(clock: Clock, covers_folder: Path) -> ArtistKinds:
@@ -169,7 +195,13 @@ def artist_kinds(clock: Clock, covers_folder: Path) -> ArtistKinds:
         find_artist_kind(clock),
         find_artist_names_kind(clock, covers_folder),
         choose_artists_kind(clock),
+        describe_artist_kind(clock),
     )
+
+
+def suggestion_target(artist_id: str) -> str:
+    """Return the target of the Job that asks an AI model about the artist `artist_id`."""
+    return f"artist-suggestion:{artist_id}"
 
 
 def find_artist_target(name: str) -> str:
@@ -206,6 +238,36 @@ class Recommendation:
     model: str
     host: str
     at: datetime
+
+
+@dataclass(frozen=True)
+class ArtistSuggestion:
+    """What an AI model suggests for an artist, and the model that said so.
+
+    `shown_as` is a name to show it by, `None` for none, and `why` says why; `about`
+    is a note about it, empty for none.
+    """
+
+    shown_as: str | None
+    why: str
+    about: str
+    model: str
+    host: str
+    at: datetime
+
+
+@dataclass(frozen=True)
+class SuggestionState:
+    """Whether an AI model is asked about an artist now, what it last suggested, and why not.
+
+    `waiting` says the asking waits for medleyplay to be Online, or to try again.
+    `failure` says why the last asking failed, to the Account that asked and to admins.
+    """
+
+    asking: bool
+    waiting: bool
+    suggestion: ArtistSuggestion | None
+    failure: str | None
 
 
 @dataclass(frozen=True)
@@ -268,6 +330,7 @@ class ArtistService:
         self._kind = kinds.find
         self._names_kind = kinds.names
         self._choose_kind = kinds.choose
+        self._describe_kind = kinds.describe
         self._on_change = on_change
 
     def names(self) -> ArtistNames:
@@ -402,6 +465,77 @@ class ArtistService:
         return any(
             self._jobs.active(CHOOSE_ARTISTS_KIND, f"artist-choice:{batch}") is not None
             for batch in range(MAX_LOOK_UP // MAX_CHOICES)
+        )
+
+    def suggest(self, caller: Account, artist_id: str) -> None:
+        """Ask an AI model which of the names the artist goes by to show it by, and who it is.
+
+        The names its songs write come first, most songs first, then MusicBrainz's, then
+        the rest; the model is shown a few of its songs. Asking while it is asked
+        already is refused.
+        """
+        if DESCRIBER not in self._plugins.available_keys().get(ARTIST_DESCRIBER.name, []):
+            message = "Turn on the ai-details plugin to ask an AI model."
+            raise ConflictError(message)
+        target = suggestion_target(artist_id)
+        if self._jobs.active(DESCRIBE_ARTIST_KIND, target) is not None:
+            message = "An AI model is being asked already; ask again once it has answered."
+            raise ConflictError(message)
+        with self._units() as db:
+            known = _known(db, only=artist_id).get(artist_id)
+            if known is None:
+                message = "No site has named that artist."
+                raise NotFoundError(message)
+            if not is_set_up(db):
+                message = "Set up an AI provider in Settings to ask it."
+                raise ConflictError(message)
+            written, songs = _written_and_songs(db, artist_id)
+        names = _offered_names([*written, known.artist.name, *_aliases_by_rank(known)])
+        request = DescribeArtistJob(
+            artist=_option_of(known), names=names, songs=songs, describer=DESCRIBER
+        )
+        self._jobs.submit(self._describe_kind, target, request, caller.id)
+
+    def suggestion(self, viewer: Account, artist_id: str) -> SuggestionState:
+        """Return whether an AI model is asked about the artist, and what it last suggested.
+
+        A name suggested stands while the artist goes by it.
+        """
+        target = suggestion_target(artist_id)
+        with self._units() as db:
+            known = _known(db, only=artist_id).get(artist_id)
+            if known is None:
+                message = "No site has named that artist."
+                raise NotFoundError(message)
+            row = db.get(ArtistSuggestionRow, artist_id)
+            linked = db.scalars(
+                select(ArtistLinkRow.name).where(ArtistLinkRow.artist_id == artist_id)
+            ).all()
+        suggestion = None
+        if row is not None:
+            goes_by = {
+                artist_key(name)
+                for name in [*linked, known.artist.name, *(each.name for each in known.aliases)]
+            }
+            stands = row.shown_as is not None and artist_key(row.shown_as) in goes_by
+            suggestion = ArtistSuggestion(
+                shown_as=row.shown_as if stands else None,
+                why=row.why if stands else "",
+                about=row.about,
+                model=row.model,
+                host=row.host,
+                at=row.answered_at,
+            )
+        latest = self._jobs.latest(DESCRIBE_ARTIST_KIND, target)
+        failed = latest is not None and latest.state is JobState.FAILED
+        return SuggestionState(
+            asking=latest is not None and latest.state.is_active,
+            # Asking needs the network, so it waits while medleyplay is Offline.
+            waiting=latest is not None
+            and latest.state.is_active
+            and (latest.state is JobState.WAITING or not self._jobs.online()),
+            suggestion=suggestion,
+            failure=(failure_shown_to(latest, viewer) or None) if failed and latest else None,
         )
 
     def set_details(self, artist_id: str, *, shown_as: str | None, about: str | None) -> None:
@@ -585,6 +719,60 @@ def _complete_choices(db: Session, job: Job, result: ChosenArtistsResult, *, clo
         db.add(row)
 
 
+def _complete_suggestion(
+    db: Session, job: Job, result: DescribedArtistResult, *, clock: Clock
+) -> None:
+    """Keep what the model suggested for the artist, with the model that answered.
+
+    A suggestion for an artist no longer known is dropped.
+    """
+    artist_id = job.target.removeprefix(suggestion_target(""))
+    if db.get(ArtistRow, artist_id) is None:
+        return
+    named = provider_named(db, result.ai_answered or None)
+    model, host = named if named is not None else ("an AI model", "")
+    row = db.get(ArtistSuggestionRow, artist_id) or ArtistSuggestionRow(artist_id=artist_id)
+    row.offered, row.shown_as, row.why = list(result.offered), result.shown_as, result.why
+    row.about, row.model, row.host, row.answered_at = result.about, model, host, clock()
+    db.add(row)
+
+
+def _written_and_songs(db: Session, artist_id: str) -> tuple[list[str], tuple[str, ...]]:
+    """Return the names the artist's songs write, most songs first, and a few of its songs.
+
+    Its songs are those whose artist or album artist is a name linked to it.
+    """
+    keys = set(db.scalars(select(ArtistLinkRow.key).where(ArtistLinkRow.artist_id == artist_id)))
+    written: Counter[str] = Counter()
+    songs: list[str] = []
+    rows = db.execute(
+        select(TrackRow.title, TrackRow.artist, TrackRow.album_artist, TrackRow.album)
+    )
+    for title, artist, album_artist, album in rows:
+        names = {
+            name.strip() for name in (artist, album_artist) if name and artist_key(name) in keys
+        }
+        written.update(names)
+        if names and title and len(songs) < MAX_SONGS_SHOWN:
+            songs.append((f"{title} — {album}" if album else title)[:MAX_NAME])
+    return [name for name, _ in written.most_common()], tuple(songs)
+
+
+def _aliases_by_rank(known: KnownArtist) -> list[str]:
+    """Return the other names the artist goes by, each locale's primary name first."""
+    return [each.name for each in sorted(known.aliases, key=lambda each: not each.primary)]
+
+
+def _offered_names(names: list[str]) -> tuple[str, ...]:
+    """Return `names` once each, as names compare, up to as many as a describer is offered."""
+    seen: dict[str, str] = {}
+    for name in names:
+        trimmed = name.strip()[:MAX_NAME]
+        if trimmed:
+            seen.setdefault(artist_key(trimmed), trimmed)
+    return tuple(seen.values())[:MAX_NAMES_OFFERED]
+
+
 def _songs_by_artist(db: Session) -> dict[str, tuple[str, ...]]:
     """Return a few songs of each artist or album artist name, by the name's key.
 
@@ -686,19 +874,26 @@ def _found_of(search: ArtistSearchRow) -> tuple[tuple[str, int], ...]:
     return tuple(found)
 
 
-def _known(db: Session) -> dict[str, KnownArtist]:
-    """Return every artist known, each with its names once, MusicBrainz's first.
+def _known(db: Session, *, only: str | None = None) -> dict[str, KnownArtist]:
+    """Return every artist known, or `only` that one, each with its names once, MusicBrainz's first.
 
     The household's photo shows in place of Wikidata's.
     """
+    alias_rows = select(ArtistAliasRow).order_by(ArtistAliasRow.name)
+    household = select(ArtistHouseholdRow)
+    artists = select(ArtistRow)
+    if only is not None:
+        alias_rows = alias_rows.where(ArtistAliasRow.artist_id == only)
+        household = household.where(ArtistHouseholdRow.artist_id == only)
+        artists = artists.where(ArtistRow.id == only)
     aliases: dict[str, dict[str, Alias]] = {}
-    rows = db.scalars(select(ArtistAliasRow).order_by(ArtistAliasRow.name)).all()
+    rows = db.scalars(alias_rows).all()
     for row in sorted(rows, key=lambda row: row.origin != FINDER):
         names = aliases.setdefault(row.artist_id, {})
         names.setdefault(row.key, Alias(row.name, row.locale, row.primary))
-    chosen = {row.artist_id: row for row in db.scalars(select(ArtistHouseholdRow))}
+    chosen = {row.artist_id: row for row in db.scalars(household)}
     known: dict[str, KnownArtist] = {}
-    for found in db.scalars(select(ArtistRow)):
+    for found in db.scalars(artists):
         own = chosen.get(found.id)
         own_photo = own is not None and own.photo is not None
         known[found.id] = KnownArtist(

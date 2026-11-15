@@ -65,12 +65,14 @@ The artist finder `musicbrainz` answers by the name asked about:
 | any other | no artist |
 """
 
+import re
 import time
 from pathlib import Path
 from typing import Final
 
 from medleyplay.plugin_api import (
     ARTIST_CHOOSER,
+    ARTIST_DESCRIBER,
     ARTIST_FINDER,
     ARTIST_NAME_FINDER,
     TRACK_ENRICHER,
@@ -83,6 +85,8 @@ from medleyplay.plugin_api import (
     ChosenArtist,
     ChosenArtists,
     CommunityRating,
+    DescribeArtist,
+    DescribedArtist,
     Enriched,
     EnrichStatus,
     EnrichTrack,
@@ -404,10 +408,34 @@ class ArtistChoices:
         return ChosenArtists(chosen=tuple(chosen), ai_answered=request.ai[0].id)
 
 
+class ArtistDescriptions:
+    """Answers as an AI model might, judging by the names it is offered and the songs.
+
+    It suggests the first Chinese name after the songs' own, and a note naming the
+    artist and its country. A song *Refused* has the provider refuse the key, a song
+    *Silence* has it suggest nothing, and a song *Forged* has it name a name it was
+    not offered.
+    """
+
+    def describe(self, request: DescribeArtist) -> DescribedArtist:
+        if any(song.startswith("Refused") for song in request.songs):
+            return DescribedArtist(status=FindStatus.REFUSED, message="The key was refused.")
+        if any(song.startswith("Silence") for song in request.songs):
+            return DescribedArtist(ai_answered=request.ai[0].id)
+        chinese = [name for name in request.names[1:] if re.search("[\u4e00-\u9fff]", name)]
+        forged = any(song.startswith("Forged") for song in request.songs)
+        return DescribedArtist(
+            shown_as="Someone else" if forged else next(iter(chinese), None),
+            why="Its songs are Chinese",
+            about=f"{request.artist.name}, from {request.artist.country}.",
+            ai_answered=request.ai[0].id,
+        )
+
+
 def register(registry: Registry) -> None:
     """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
 
-    The rest are two artist finders and an artist chooser.
+    The rest are two artist finders, an artist chooser, and an artist describer.
     """
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
@@ -415,6 +443,7 @@ def register(registry: Registry) -> None:
     registry.add(ARTIST_FINDER, "musicbrainz", Artists())
     registry.add(ARTIST_NAME_FINDER, "wikipedia", ArtistNames())
     registry.add(ARTIST_CHOOSER, "ai-details", ArtistChoices())
+    registry.add(ARTIST_DESCRIBER, "ai-details", ArtistDescriptions())
 
 
 plugin = Plugin(api_version=1, register=register)

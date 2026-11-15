@@ -53,6 +53,10 @@ MAX_CHOICES: Final = 50
 """The most names an artist chooser is asked about at once."""
 MAX_SONGS_SHOWN: Final = 8
 """The most of a name's songs an artist chooser is shown."""
+MAX_NAMES_OFFERED: Final = 12
+"""The most names an artist describer is offered to show an artist by."""
+MAX_ABOUT_SUGGESTED: Final = 400
+"""The longest note about an artist a describer suggests."""
 
 type Name = Annotated[str, StringConstraints(min_length=1, max_length=MAX_NAME)]
 type Page = Annotated[str, StringConstraints(max_length=MAX_PAGE, pattern=r"^https://")]
@@ -203,6 +207,40 @@ class ArtistChooser(Protocol):
         ...
 
 
+class DescribeArtist(_Model):
+    """Ask the AI providers `ai`, in turn, which name to show the artist by, and who it is."""
+
+    artist: ArtistOption
+    names: Annotated[tuple[Name, ...], Field(min_length=1, max_length=MAX_NAMES_OFFERED)]
+    """The names it goes by, the one most of its songs write first."""
+    songs: Annotated[tuple[Name, ...], Field(max_length=MAX_SONGS_SHOWN)] = ()
+    """Some of its songs, each as `title — album`, or its title alone."""
+    ai: tuple[AiEndpoint, ...] = Field(default=(), repr=False)
+
+
+class DescribedArtist(_Model):
+    """The name suggested of those asked about, why, a note about the artist, and who said so.
+
+    No name suggested keeps the one its songs write; an empty note suggests none.
+    """
+
+    status: FindStatus = FindStatus.OK
+    message: Annotated[str, StringConstraints(max_length=500)] = ""
+    shown_as: Name | None = None
+    why: Annotated[str, StringConstraints(max_length=300)] = ""
+    about: Annotated[str, StringConstraints(max_length=MAX_ABOUT_SUGGESTED)] = ""
+    ai_answered: Annotated[str, StringConstraints(max_length=64)] = ""
+    """The `id` of the provider that answered."""
+
+
+class ArtistDescriber(Protocol):
+    """Suggests the name an artist is shown by, and a note about who it is."""
+
+    def describe(self, request: DescribeArtist) -> DescribedArtist:
+        """Answer which of the names to show the artist by, and who it is."""
+        ...
+
+
 ARTIST_FINDER = ExtensionPoint[ArtistFinder]("artist_finder")
 FIND_ARTIST = ARTIST_FINDER.operation(
     "find",
@@ -227,5 +265,14 @@ CHOOSE_ARTISTS = ARTIST_CHOOSER.operation(
     ChooseArtists,
     ChosenArtists,
     lambda chooser: chooser.choose,
+    deadline=timedelta(minutes=5),
+)
+
+ARTIST_DESCRIBER = ExtensionPoint[ArtistDescriber]("artist_describer")
+DESCRIBE_ARTIST = ARTIST_DESCRIBER.operation(
+    "describe",
+    DescribeArtist,
+    DescribedArtist,
+    lambda describer: describer.describe,
     deadline=timedelta(minutes=5),
 )

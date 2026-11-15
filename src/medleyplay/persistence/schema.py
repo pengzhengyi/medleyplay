@@ -792,6 +792,27 @@ class ArtistRecommendationRow(Base):
     answered_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class ArtistSuggestionRow(Base):
+    """What an AI model last suggested for an artist: a name to show it by, and a note.
+
+    `offered` lists the names it was offered; `shown_as` is one of them, or `None` for
+    none. `model` and `host` are the model that answered and where, as they were then.
+    """
+
+    __tablename__ = "artist_suggestion"
+
+    artist_id: Mapped[str] = mapped_column(
+        ForeignKey("artist.id", ondelete="CASCADE"), primary_key=True
+    )
+    offered: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    shown_as: Mapped[str | None] = mapped_column(String(512), default=None)
+    why: Mapped[str] = mapped_column(String(300))
+    about: Mapped[str] = mapped_column(String(400))
+    model: Mapped[str] = mapped_column(String(128))
+    host: Mapped[str] = mapped_column(String(255))
+    answered_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class ArtistLinkRow(Base):
     """The artist the household linked a written name to, or `None` for no artist a site knows."""
 

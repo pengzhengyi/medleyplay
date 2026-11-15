@@ -17,6 +17,7 @@
 - [Asking an AI model](#asking-an-ai-model)
 - [Wikidata's names](#wikidatas-names)
 - [Wikidata's page and photo](#wikidatas-page-and-photo)
+- [What the household chooses](#what-the-household-chooses)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
@@ -193,6 +194,21 @@ nicknames such as *周董*, and Japanese and Korean names.
 - **Asked again for artists linked before photos were kept:** the migration that
   added them forgets when Wikidata answered, so *Look up* asks it again.
 
+## What the household chooses
+
+An artist's songs keep their names as written; what the household chooses is kept
+on the artist, apart from what the sites said.
+
+- **The name it is shown by,** up to 512 characters, in place of the name most of
+  its songs write: in the Artists view, on its page, and in search, which finds it
+  by that name too. Empty, the songs' name shows again.
+- **A note about it,** up to 1,000 characters, shown on its page.
+- **A photo of the household's,** in place of Wikidata's, kept as a cover is: a
+  JPEG, PNG, or WebP image of at most 10 MiB, named by its bytes, and kept by the
+  sweep. Removing it shows Wikidata's again.
+- **Only for an artist a site named,** as a linked name's is; any signed-in
+  Account may choose, as any may edit a Track's details.
+
 ## The web client
 
 - **A section of Clean up,** *Link artist names*, with how many names that may
@@ -226,6 +242,11 @@ nicknames such as *周董*, and Japanese and Korean names.
   search for its name, each in a new tab. The links ask nothing of those sites;
   the household opens them. A name not linked yet offers *Link it to an artist*,
   which opens Clean up.
+- **Edit details** on a linked artist's page opens *Edit artist*: its photo, with
+  where it is from (*From Wikidata* or *Yours*), to replace or, when it is the
+  household's, remove at once; *Shown as*, offering every name it goes by, with
+  the songs' own name as its placeholder; and *About*. *Save* keeps the name and
+  the note together.
 - **Linked names are one artist** in the Artists view, named as most of its songs
   write it; on its page, which lists every song of every name linked to it; in
   search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;
@@ -241,6 +262,9 @@ nicknames such as *周董*, and Japanese and Korean names.
 | `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
 | `POST /api/artist-names/recommend` | Signed in | Ask an AI model about up to 500 names looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked already |
 | `POST /api/artist-names/unlink` | Signed in | Forget a name's link |
+| `PUT /api/artists/{id}/details` | Signed in | Keep the name an artist is shown by and a note about it; an empty one is forgotten; 404 for an artist no site named |
+| `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
+| `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |
 
 ## Testing
 
@@ -260,4 +284,5 @@ nicknames such as *周董*, and Japanese and Korean names.
 
 - **Two artists of one name,** such as two singers called *Jay*: a link is one
   per name, so telling them apart song by song would need a link per Track.
-- **Showing a linked artist in a chosen language,** rather than as written.
+- **Showing every linked artist in a chosen language** at once, rather than as
+  written or by the name chosen for each.

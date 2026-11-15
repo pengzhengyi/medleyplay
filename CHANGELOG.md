@@ -388,6 +388,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Ask AI keeps its recommendations true** — a recommendation is no longer
+  shown once the name is offered other artists; a song with a very long title no
+  longer stops the AI being asked; a name written only as an album artist is shown
+  to the model with its songs; one choice the model writes in words no longer
+  spoils the rest; asking again while it is asked is refused rather than skipping
+  names; and *Ask AI* appears only when there is a name it can ask about.
+
 - **Why an AI provider's answer couldn't be used** now shows on its card in
   Settings, such as *It answered 400: check the model and the base URL* or *Its
   answer ran out of room before it finished*, and a reasoning model such as

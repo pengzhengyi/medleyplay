@@ -369,3 +369,74 @@ def test_an_ai_model_is_asked_only_once_one_is_set_up(enriching: Enriching, alic
 
     with pytest.raises(ConflictError, match="Set up an AI provider"):
         enriching.artists.recommend(alice)
+
+
+def test_a_recommendation_is_dropped_once_the_artists_offered_change(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Yesterday", artist="披头士")
+    enriching.add_song("Help!", artist="Beatles")
+    _looked_up(enriching, alice, "披头士")
+    _linked(enriching, alice, "披头士", BEATLES)
+    _recommended(enriching, alice)
+    assert _named(enriching, "Beatles").recommendation is not None
+
+    _looked_up(enriching, alice, "Beatles")
+
+    assert _named(enriching, "Beatles").candidates == ((BEATLES, 100), (TRIBUTE, 61))
+    assert _named(enriching, "Beatles").recommendation is None
+
+
+def test_asking_again_while_an_ai_model_is_asked_is_refused(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Yesterday", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+    enriching.artists.recommend(alice)
+
+    with pytest.raises(ConflictError, match="being asked already"):
+        enriching.artists.recommend(alice)
+
+    assert enriching.artists.recommending()
+
+
+def test_a_long_song_is_shown_to_the_ai_model_cut_short(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Y" * 500, artist="披头士", album="A" * 500)
+    _looked_up(enriching, alice, "披头士")
+
+    asked = _recommended(enriching, alice)
+
+    assert asked == 1
+    assert _named(enriching, "披头士").recommendation is not None
+
+
+def test_a_name_written_only_as_an_album_artist_is_shown_with_its_songs(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Tribute Medley", artist="Various", album_artist="甲壳虫")
+    _looked_up(enriching, alice, "甲壳虫")
+
+    _recommended(enriching, alice)
+
+    recommendation = _named(enriching, "甲壳虫").recommendation
+    assert recommendation is not None
+    assert (recommendation.artist_id, recommendation.why) == (None, "A tribute")
+
+
+def test_an_answer_choosing_for_no_name_fails_the_job_as_invalid(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Silence", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+
+    _recommended(enriching, alice)
+
+    jobs = [view.job for view in enriching.jobs.list_jobs() if view.job.kind == "choose_artists"]
+    assert [(job.state, job.failure_kind) for job in jobs] == [(JobState.FAILED, "invalid")]

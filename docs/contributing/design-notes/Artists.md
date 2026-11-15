@@ -92,10 +92,12 @@ MusicBrainz offers up to ten artists for a name, and the one going by it exactly
 suggested; often none does, or several do, as for *GUMI/MAYU*, where only the songs
 tell a Vocaloid voice from a belly dancer. An AI model reads the songs too.
 
-- **Asked for every name looked up and not linked** that MusicBrainz offered an
-  artist: the name, up to eight of its songs as `title — album`, and the artists
-  offered, each a letter with what tells it apart and its country, so the model
-  never copies an id. It answers a letter or none for each name, and why.
+- **Asked for every name looked up and not linked** that is offered an artist, up
+  to 500: the name, up to eight of its songs as `title — album`, as artist or album
+  artist, and the artists offered, each a letter with what tells it apart and its
+  country, so the model never copies an id. Each is written on one line, so a line
+  break in a title can't add a name or an artist. It answers a letter or none for
+  each name, and why.
 
   ```text
   1. GUMI/MAYU
@@ -113,11 +115,17 @@ tell a Vocaloid voice from a belly dancer. An AI model reads the songs too.
   the AI's lane and asks the providers in the order Settings lists them, as asking
   for a Track's details does; the providers' failover is shared by the two.
 - **Only a recommendation:** what the model answers is kept for the name, with
-  the model and host that answered and when, replacing what it answered before.
-  Nothing is linked until someone links it. A choice of a name or a letter not
-  offered is left out, as is one naming an artist no longer known.
+  the model and host that answered and when, and the artists it was offered,
+  replacing what it answered before. Nothing is linked until someone links it. A
+  choice of a name or a letter not offered is left out, as is one naming an artist
+  no longer known.
+- **It stands while the artists offered do:** once a name is offered other
+  artists, as when it is looked up again, the recommendation is no longer shown,
+  since the model never weighed them.
+- **Asked once at a time:** asking while a model is asked already is refused,
+  rather than leaving out the names that came since.
 - **A refusal by every provider** fails the Job as *refused*; an answer with no
-  choice in it fails it as *invalid*.
+  usable choice in it fails it as *invalid*.
 
 ## Wikidata's names
 
@@ -192,7 +200,7 @@ nicknames such as *周董*, and Japanese and Korean names.
 | `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, and whether it is being asked now; and every artist those name, with its aliases |
 | `POST /api/artist-names/look-up` | Signed in | Ask about up to 500 names at once; each not linked, and that may be looked up, gets a Job. Answers how many were asked about, or 409 while the `musicbrainz` plugin is off |
 | `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
-| `POST /api/artist-names/recommend` | Signed in | Ask an AI model about every name looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off or no AI provider is set up |
+| `POST /api/artist-names/recommend` | Signed in | Ask an AI model about up to 500 names looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked already |
 | `POST /api/artist-names/unlink` | Signed in | Forget a name's link |
 
 ## Testing

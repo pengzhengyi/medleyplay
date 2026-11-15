@@ -531,11 +531,127 @@ button.text:hover:not(:disabled) {
   margin-top: 0.75rem;
 }
 
-.ratings-kept {
+/* Export, Discard, and Import, one row of pills alike, the file input hidden in Import. */
+.ratings-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.ratings-actions > a[role="button"],
+.ratings-actions > button,
+.ratings-actions > .ratings-import-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+  padding: 0.45rem 1.2rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.ratings-actions > .ratings-import-button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ratings-actions > .ratings-import-button:hover {
+  filter: brightness(1.08);
+}
+
+.ratings-actions > .ratings-import-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ratings-actions > .ratings-import-button.busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.ratings-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ratings-confirm button,
+.ratings-preview-actions button {
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 1.1rem;
+  border-radius: 999px;
+}
+
+.ratings-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0 0 0.5rem;
+}
+
+.ratings-mode legend {
+  flex-basis: 100%;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The albums you imported, read only, in a table that scrolls within the section. */
+.ratings-imported {
+  margin-top: 0.5rem;
+}
+
+.ratings-imported .ratings-filter {
+  max-width: 24rem;
+  margin: 0.5rem 0;
+}
+
+.ratings-table {
+  max-height: 24rem;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.ratings-table table {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.ratings-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+
+.ratings-stars {
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.ratings-missing {
+  margin-left: 0.5rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.ratings-review {
+  max-width: 28ch;
+  color: var(--muted);
 }
 
 /* Your imported rating of the album shown, and your review, under its heading. */

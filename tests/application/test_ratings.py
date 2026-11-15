@@ -15,7 +15,13 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.policy_snapshot import read_snapshot
-from medleyplay.application.ratings import ImportSummary, PlaylistChange, RatingsService
+from medleyplay.application.ratings import (
+    ImportedAlbum,
+    ImportMode,
+    ImportSummary,
+    PlaylistChange,
+    RatingsService,
+)
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import PlaylistId, TrackDetails, TrackId
 from medleyplay.domain.errors import InvalidInputError
@@ -129,6 +135,7 @@ def test_the_preview_counts_what_importing_changes_and_changes_nothing(
             PlaylistChange(to_rate, "To rate", joining=0, leaving=1),
         ),
         replaced_albums=0,
+        total_albums=3,
     )
     assert changes == []
     assert catalog.get_track(alice.id, bremen).album_rating is None
@@ -158,19 +165,55 @@ def test_importing_the_same_export_again_changes_nothing(
 
     again = ratings.import_ratings(alice.id, EXPORT_2020.encode())
 
-    assert (again.songs, again.replaced_albums) == (0, 3)
+    assert (again.songs, again.replaced_albums, again.total_albums) == (0, 3, 3)
     assert catalog.get_track(alice.id, bremen).album_rating == 5
 
 
-def test_importing_again_replaces_the_earlier_import(
+def test_importing_again_merges_with_the_earlier_import(
     catalog: CatalogService, accounts: AccountService, ratings: RatingsService
 ) -> None:
     alice, _ = _alice_and_bob(accounts)
     bremen, blue = _bremen_and_blue(catalog)
     ratings.import_ratings(alice.id, EXPORT_2020.encode())
 
-    ratings.import_ratings(alice.id, export_of(row(last="The Band", title="Blue", rating="6")))
+    summary = ratings.import_ratings(
+        alice.id, export_of(row(rym_id="2001", last="The Band", title="Blue", rating="6"))
+    )
 
+    assert (summary.replaced_albums, summary.total_albums) == (0, 4)
+    assert catalog.get_track(alice.id, bremen).album_rating == 5
+    assert catalog.get_track(alice.id, blue).album_rating == 3
+
+
+def test_an_album_imported_again_takes_its_new_rating(
+    catalog: CatalogService, accounts: AccountService, ratings: RatingsService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    bremen, _ = _bremen_and_blue(catalog)
+    ratings.import_ratings(alice.id, EXPORT_2020.encode())
+
+    summary = ratings.import_ratings(
+        alice.id, export_of(row(rym_id="1001", last="ハチ", title="Bremen", rating="6"))
+    )
+
+    assert (summary.songs, summary.replaced_albums, summary.total_albums) == (1, 1, 3)
+    assert catalog.get_track(alice.id, bremen).album_rating == 3
+
+
+def test_importing_to_replace_drops_the_earlier_import(
+    catalog: CatalogService, accounts: AccountService, ratings: RatingsService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    bremen, blue = _bremen_and_blue(catalog)
+    ratings.import_ratings(alice.id, EXPORT_2020.encode())
+
+    summary = ratings.import_ratings(
+        alice.id,
+        export_of(row(rym_id="2001", last="The Band", title="Blue", rating="6")),
+        ImportMode.REPLACE,
+    )
+
+    assert (summary.replaced_albums, summary.total_albums) == (3, 1)
     assert catalog.get_track(alice.id, bremen).album_rating is None
     assert catalog.get_track(alice.id, blue).album_rating == 3
 
@@ -278,3 +321,22 @@ def test_the_import_kept_counts_its_albums(
     ratings.import_ratings(alice.id, EXPORT_2020.encode())
 
     assert (ratings.imported_albums(alice.id), ratings.imported_albums(bob.id)) == (3, 0)
+
+
+def test_the_imported_albums_list_in_import_order_saying_which_the_library_has(
+    catalog: CatalogService, accounts: AccountService, ratings: RatingsService
+) -> None:
+    alice, bob = _alice_and_bob(accounts)
+    _bremen_and_blue(catalog)
+    ratings.import_ratings(alice.id, EXPORT_2020.encode())
+
+    imported = ratings.imported(alice.id)
+
+    assert imported == (
+        ImportedAlbum("ハチ", "Bremen", stars=5, note="", in_library=True),
+        ImportedAlbum(
+            "Tony Allen", "Film of Life", stars=4, note="Warm & loose.", in_library=False
+        ),
+        ImportedAlbum("スズム", "八日", stars=1, note="", in_library=False),
+    )
+    assert ratings.imported(bob.id) == ()

@@ -2,20 +2,27 @@
 
 An import previews before it applies, since an album's rating stands for every song
 on it the Account hasn't rated, and so moves songs in and out of smart playlists.
-Importing again replaces the earlier import; a song's own rating is never touched.
+Importing again merges with the earlier import, or replaces it when asked; a song's
+own rating is never touched.
 """
 
 import csv
 import io
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Final
 
 from sqlalchemy import delete, func, insert, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.album_ratings import album_ratings_of, library_album_of
+from medleyplay.application.album_ratings import (
+    album_ratings_of,
+    library_album_of,
+    rated_album_of,
+)
 from medleyplay.application.changes import OnChange
 from medleyplay.application.rule_schema import read_rules
 from medleyplay.application.track_facts import track_facts
@@ -24,11 +31,20 @@ from medleyplay.domain.album_ratings import AlbumRatings, LibraryAlbums, RatedAl
 from medleyplay.domain.catalog import PlaylistId, TrackId
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.rules import TrackFacts, fold, matches
-from medleyplay.domain.rym import RymAlbum, read_rym_export
+from medleyplay.domain.rym import RymAlbum, identity_of, merged, read_rym_export
 from medleyplay.persistence.schema import AlbumRatingRow, PlaylistRow, TrackRow, TrackStateRow
 
 EXPORT_COLUMNS: Final = ("Rated", "Artist", "Album", "Title", "Stars", "Review")
 _FORMULA_STARTS: Final = tuple("=+-@\t\r")
+
+
+class ImportMode(StrEnum):
+    """What importing does with the albums imported before."""
+
+    MERGE = "merge"
+    """Keep them; an album the export rates again takes its new rating."""
+    REPLACE = "replace"
+    """Drop them for the export's."""
 
 
 @dataclass(frozen=True)
@@ -47,8 +63,9 @@ class ImportSummary:
 
     `albums` it rated or reviewed, of which the Library has `matched_albums`;
     `songs` whose rating changes; the albums the Library hasn't, each its artist and
-    name; the smart playlists songs join or leave; and how many albums the earlier
-    import had, which this one replaces.
+    name; the smart playlists songs join or leave; how many albums of the earlier
+    import it replaces: all of them when replacing, those it rates again when merging;
+    and how many albums the import holds after.
     """
 
     albums: int
@@ -57,6 +74,7 @@ class ImportSummary:
     unmatched: tuple[tuple[str, str], ...]
     playlists: tuple[PlaylistChange, ...]
     replaced_albums: int
+    total_albums: int
 
 
 @dataclass(frozen=True)
@@ -65,6 +83,17 @@ class AlbumRating:
 
     stars: int | None
     note: str
+
+
+@dataclass(frozen=True)
+class ImportedAlbum:
+    """An album the Account imported, its rating if it rated it, and whether the Library has it."""
+
+    artist: str
+    album: str
+    stars: int | None
+    note: str
+    in_library: bool
 
 
 @dataclass(frozen=True)
@@ -86,19 +115,23 @@ class RatingsService:
         self._clock = clock
         self._on_change = on_change
 
-    def preview_import(self, account_id: AccountId, data: bytes) -> ImportSummary:
+    def preview_import(
+        self, account_id: AccountId, data: bytes, mode: ImportMode = ImportMode.MERGE
+    ) -> ImportSummary:
         """Return what importing the export `data` would change, changing nothing."""
         albums = _read(data)
         with self._units() as db:
-            return _summary(db, account_id, albums, self._clock())
+            return _summary(db, account_id, albums, mode, self._clock())[0]
 
-    def import_ratings(self, account_id: AccountId, data: bytes) -> ImportSummary:
-        """Replace the Account's imported album ratings with the export `data`'s."""
+    def import_ratings(
+        self, account_id: AccountId, data: bytes, mode: ImportMode = ImportMode.MERGE
+    ) -> ImportSummary:
+        """Merge the export `data`'s album ratings into the Account's, or replace them."""
         albums = _read(data)
         with self._units.begin() as db:
-            summary = _summary(db, account_id, albums, self._clock())
+            summary, held = _summary(db, account_id, albums, mode, self._clock())
             db.execute(delete(AlbumRatingRow).where(AlbumRatingRow.account_id == account_id))
-            db.execute(insert(AlbumRatingRow), [_row_of(account_id, album) for album in albums])
+            db.execute(insert(AlbumRatingRow), [_row_of(account_id, album) for album in held])
         self._changed()
         return summary
 
@@ -112,6 +145,20 @@ class RatingsService:
         """Return how many albums the Account's last import rated or reviewed."""
         with self._units() as db:
             return _imported(db, account_id)
+
+    def imported(self, account_id: AccountId) -> tuple[ImportedAlbum, ...]:
+        """Return the albums the Account imported, in the order it imported them."""
+        with self._units() as db:
+            rows = _kept_rows(db, account_id)
+            library = LibraryAlbums(
+                library_album_of(track) for track in db.scalars(select(TrackRow))
+            )
+        return tuple(
+            ImportedAlbum(
+                row.artist, row.album, row.stars, row.note, library.has(rated_album_of(row))
+            )
+            for row in rows
+        )
 
     def album_rating(self, account_id: AccountId, artist: str, album: str) -> AlbumRating | None:
         """Return the Account's imported rating of the Library album `album` by `artist`."""
@@ -131,11 +178,7 @@ class RatingsService:
                 .where(TrackStateRow.account_id == account_id, TrackStateRow.rating.is_not(None))
                 .order_by(TrackRow.id)
             ).all()
-            albums = db.scalars(
-                select(AlbumRatingRow)
-                .where(AlbumRatingRow.account_id == account_id)
-                .order_by(AlbumRatingRow.id)
-            ).all()
+            albums = _kept_rows(db, account_id)
         written = io.StringIO()
         writer = csv.writer(written, lineterminator="\r\n")
         writer.writerow(EXPORT_COLUMNS)
@@ -160,15 +203,22 @@ def _read(data: bytes) -> tuple[RymAlbum, ...]:
 
 
 def _summary(
-    db: Session, account_id: AccountId, albums: tuple[RymAlbum, ...], now: datetime
-) -> ImportSummary:
-    rated = [_rated(album) for album in albums]
+    db: Session,
+    account_id: AccountId,
+    albums: tuple[RymAlbum, ...],
+    mode: ImportMode,
+    now: datetime,
+) -> tuple[ImportSummary, tuple[RymAlbum, ...]]:
+    """Return what importing `albums` changes, and the albums the import holds after."""
+    kept = tuple(_album_of(row) for row in _kept_rows(db, account_id))
+    held = merged(kept, albums) if mode is ImportMode.MERGE else albums
     before = track_facts(db, account_id)
-    after = track_facts(db, account_id, AlbumRatings(rated))
+    after = track_facts(db, account_id, AlbumRatings(_rated(album) for album in held))
     library = LibraryAlbums(library_album_of(track) for track in db.scalars(select(TrackRow)))
-    has = [library.has(each) for each in rated]
-    replaced = _imported(db, account_id)
-    return ImportSummary(
+    has = [library.has(_rated(album)) for album in albums]
+    rated_again = {identity_of(album) for album in albums} & {identity_of(album) for album in kept}
+    replaced = len(kept) if mode is ImportMode.REPLACE else len(rated_again)
+    summary = ImportSummary(
         albums=len(albums),
         matched_albums=sum(has),
         songs=sum(
@@ -181,6 +231,25 @@ def _summary(
         ),
         playlists=_playlist_changes(db, account_id, before, after, now),
         replaced_albums=replaced,
+        total_albums=len(held),
+    )
+    return summary, held
+
+
+def _kept_rows(db: Session, account_id: AccountId) -> Sequence[AlbumRatingRow]:
+    """Return the albums the Account imported, in the order it imported them."""
+    found = select(AlbumRatingRow).where(AlbumRatingRow.account_id == account_id)
+    return db.scalars(found.order_by(AlbumRatingRow.id)).all()
+
+
+def _album_of(row: AlbumRatingRow) -> RymAlbum:
+    return RymAlbum(
+        rym_id=row.source_id,
+        artist=row.artist,
+        artist_localized=row.artist_localized,
+        album=row.album,
+        stars=row.stars,
+        note=row.note,
     )
 
 

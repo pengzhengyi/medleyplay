@@ -181,7 +181,7 @@ export function EditArtist({
                   <option key={name} value={name} />
                 ))}
               </datalist>
-              <small className="hint">Its songs keep their names as written.</small>
+              <small className="edit-artist-hint">Its songs keep their names as written.</small>
             </label>
             <label className="edit-album-field">
               About

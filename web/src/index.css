@@ -6815,6 +6815,11 @@ button.playing-kind[aria-expanded="true"] {
   padding-block: 0;
 }
 
+.edit-artist .edit-artist-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .edit-artist .edit-artist-about {
   margin: 0;
   resize: vertical;

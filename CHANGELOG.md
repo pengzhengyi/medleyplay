@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clean up leads with what can be done** — a bar goes to each of its sections,
+  with how many names wait or a check once done, the sections waiting first;
+  in *Link artist names*, names ready to link come first and those linked or
+  kept apart last.
+
 - **Turn an AI provider off** — each provider's card in *Settings › AI* has a
   switch: off, it keeps its place and key but isn't asked. The card fits one
   line, why it last failed shows as an icon that explains on hover, and its

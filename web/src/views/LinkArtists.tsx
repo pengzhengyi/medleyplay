@@ -91,6 +91,11 @@ export function LinkArtists({
     const apart = linkable && choice === undefined && ai !== null && ai.artist_id === null;
     return { named, offered, chosen, linkable, recommended, ai, aiPick, apart };
   });
+  // What can be done now comes first: a recommendation to link, then a choice to make,
+  // then a name still to look up; names already linked, or kept apart, sink to the end.
+  const readiness = (row: (typeof rows)[number]) =>
+    row.named.linked ? 3 : row.recommended && !row.apart ? 0 : row.linkable ? 1 : 2;
+  rows.sort((a, b) => readiness(a) - readiness(b));
   const toLink = rows.filter((row) => row.recommended && !row.apart);
   // The server asks only about the names that may be looked up, as it is.
   const toAsk = rows.filter((row) => row.linkable && row.named.look_up === "yes").length;

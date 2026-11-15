@@ -63,7 +63,7 @@ no router package.
 | View | Route | Shows |
 | --- | --- | --- |
 | Library | `#/library` | Every song and album, a split file's songs folded under it; see [The Library](#the-library) |
-| Radio | `#/radio` | *My station*, and shelves of albums for the Account; see [Recommendations](Recommendations.md#the-radio-tab) |
+| Radio | `#/radio` | *My station*, *Favorites*, and shelves of albums for the Account; see [Recommendations](Recommendations.md#the-radio-tab) |
 | Artists | `#/artists` | Each artist, with how many Tracks and how long; one opens its Tracks |
 | Albums | `#/albums` | Each album, under its album artist, or its artist when that is blank |
 | Downloaded | `#/downloaded` | The Tracks with `downloaded`, in the song table |

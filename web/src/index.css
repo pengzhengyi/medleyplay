@@ -1505,20 +1505,26 @@ button.text:hover:not(:disabled) {
   font-size: 0.82rem;
 }
 
-/* The Radio tab: the Account's own station, then shelves of albums. */
-.my-station {
+/* The Radio tab: the stations, side by side when there is room, then shelves of albums. */
+.stations {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   gap: 1rem;
   margin: 0 0 1.75rem;
+}
+
+.station {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem 1rem;
   padding: 1.1rem 1.25rem;
   border-radius: 1.25rem;
   background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--surface);
   box-shadow: var(--lift);
 }
 
-.my-station-icon {
+.station-icon {
   display: grid;
   place-items: center;
   width: 3.5rem;
@@ -1529,19 +1535,21 @@ button.text:hover:not(:disabled) {
   font-size: 2rem;
 }
 
-.my-station-text h3 {
+.station-text h3 {
   margin: 0 0 0.15rem;
   font-size: 1.15rem;
 }
 
-.my-station-text p {
+.station-text p {
   margin: 0;
   color: var(--muted);
   font-size: 0.88rem;
 }
 
-.my-station-play {
+.station .station-play {
   display: inline-flex;
+  grid-column: 1 / -1;
+  justify-self: start;
   align-items: center;
   gap: 0.4rem;
   width: auto;
@@ -5399,12 +5407,8 @@ kbd {
 
 /* A phone: the station's button takes a row of its own. */
 @media (width <= 36rem) {
-  .my-station {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .my-station-play {
-    grid-column: 1 / -1;
+  .station .station-play {
+    justify-self: stretch;
     justify-content: center;
   }
 }

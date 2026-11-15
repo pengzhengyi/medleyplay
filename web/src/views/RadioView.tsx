@@ -1,13 +1,14 @@
 /**
- * @file The Radio tab: the Account's own station, and shelves of albums to play.
+ * @file The Radio tab: the Account's own station, its favorites station, and shelves of
+ * albums to play.
  */
 
-import { PlayIcon, RadioIcon } from "@phosphor-icons/react";
+import { HeartIcon, PlayIcon, RadioIcon } from "@phosphor-icons/react";
 import { useMemo } from "react";
 
 import type { Track } from "../api";
 import { type FavoriteGroups, NO_FAVORITES } from "../library/favoriteGroups";
-import { type AlbumCard, albumShelves, seedOf, seeded } from "../library/radio";
+import { type AlbumCard, albumShelves, favoriteSongsOf, seedOf, seeded } from "../library/radio";
 import type { Station } from "../library/useStation";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
@@ -44,35 +45,67 @@ export function RadioView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tracks, accountId, day, favorites],
   );
+  const favoriteCount = useMemo(
+    () => favoriteSongsOf(tracks, favorites).length,
+    [tracks, favorites],
+  );
   const { seed } = station;
   return (
     <>
       <header className="view-heading">
         <h2 className="section">Radio</h2>
       </header>
-      <section className="my-station" aria-label="My station">
-        <span className="my-station-icon" aria-hidden>
-          <RadioIcon weight="duotone" />
-        </span>
-        <div className="my-station-text">
-          <h3>My station</h3>
-          <p>
-            {station.own && seed !== undefined
-              ? `Playing from ${seed.title} by ${seed.artist}`
-              : "Songs you like, and more like them, for as long as you listen."}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="my-station-play"
-          onClick={() => {
-            station.start();
-          }}
-        >
-          <PlayIcon weight="fill" aria-hidden />
-          Play my station
-        </button>
-      </section>
+      <div className="stations">
+        <section className="station" aria-label="My station">
+          <span className="station-icon" aria-hidden>
+            <RadioIcon weight="duotone" />
+          </span>
+          <div className="station-text">
+            <h3>My station</h3>
+            <p>
+              {station.playing === "mine" && seed !== undefined
+                ? `Playing from ${seed.title} by ${seed.artist}`
+                : "Songs you like, and more like them, for as long as you listen."}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="station-play"
+            onClick={() => {
+              station.start();
+            }}
+          >
+            <PlayIcon weight="fill" aria-hidden />
+            Play my station
+          </button>
+        </section>
+        <section className="station favorites" aria-label="Favorites">
+          <span className="station-icon" aria-hidden>
+            <HeartIcon weight="duotone" />
+          </span>
+          <div className="station-text">
+            <h3>Favorites</h3>
+            <p>
+              {station.playing === "favorites"
+                ? "Playing now"
+                : favoriteCount === 0
+                  ? "Heart a song, or favorite an artist or album, to fill it."
+                  : `Your ${favoriteCount === 1 ? "1 favorite song" : `${String(favoriteCount)} favorite songs`}, every one before any again.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="station-play"
+            disabled={favoriteCount === 0}
+            onClick={() => {
+              station.startFavorites();
+            }}
+          >
+            <PlayIcon weight="fill" aria-hidden />
+            Play favorites
+          </button>
+        </section>
+      </div>
       {shelves.length === 0 && (
         <p className="empty">
           Play, rate, and add some albums, and albums for you show here. An album here has at least

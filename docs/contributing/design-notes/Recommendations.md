@@ -4,8 +4,9 @@
 > **Status: the Radio tab and its stations are built, in the web client; *Start
 > radio* in a song's menu and the mixes are proposed.** This note describes how
 > medleyplay suggests what to play
-> next from an Account's own Library: a Radio tab of albums for the Account and
-> a station of its own, a radio from a song, and a few mixes. It
+> next from an Account's own Library: a Radio tab of albums for the Account, a
+> station of its own and one of its favorites, a radio from a song, and a few
+> mixes. It
 > builds on plays, favorites, and ratings ([Playback](Playback.md),
 > [Web client](Web%20client.md)) and on Track details
 > ([Track details](Track%20details.md)). Everything here works Offline and sends
@@ -27,8 +28,8 @@
 
 ## What it offers
 
-- **The Radio tab:** *My station*, a radio from the Account's own taste, and
-  shelves of albums to play: *More like …*, *Not played yet*, *Rediscover*, and
+- **The Radio tab:** *My station*, a radio from the Account's own taste;
+  *Favorites*, a station of its favorites alone; and shelves of albums to play: *More like …*, *Not played yet*, *Rediscover*, and
   *Just added*.
 - **Radio:** *Start radio* in a song's menu and in Now Playing fills the queue
   with songs like it, and keeps adding more as it plays.
@@ -94,7 +95,8 @@ recency  = 2 if played in the last 2 hours, 1 if in the last day
 
 ## The Radio tab
 
-A tab of its own, after Songs, with *My station* at the top and shelves of
+A tab of its own, after Songs, with the stations, *My station* and *Favorites*,
+at the top, side by side where there is room, and shelves of
 album cards below, each card with its cover, name, album artist, and a line
 saying why it is there.
 
@@ -138,6 +140,15 @@ saying why it is there.
   from the Account's 20 best-liked songs, at most 2 by one artist and 2 from one
   album, never one still titled by a video's id. When songs like it run out, it
   goes on from another liked song.
+- ***Favorites*** plays the Account's favorites alone, as Apple Music's
+  favorites station does: each song it hearted, and each by a favorite artist or
+  from a favorite album, that may be suggested. Each plays once before any plays
+  again; once all have, it starts over, leaving out the latest half played, so it
+  plays for as long as the Account listens. Each is drawn weighted by taste and
+  less if played lately, with radio's variety rules over the last ten songs, and
+  says why it is there: *A favorite*, *By a favorite artist*, or *From a favorite
+  album*. Its card counts the favorites; with none, it says how to add one and
+  can't be played. Its card, and *My station*'s, says when that station plays.
 - **Computed in the web client,** which already holds every Track with the
   Account's favorite, rating, plays, last play, and added: the tab needs no new
   route, works the moment the Library loads, and goes on working with the server
@@ -209,7 +220,8 @@ An empty mix says why, such as *Play some songs and they'll show here*.
 - **Invariants over many generators:** a radio never repeats a song, never
   suggests a song rated 1–2, one that cannot play now, or an album file; it
   plays no three songs in a row by one artist while others remain; the same
-  generator gives the same radio.
+  generator gives the same radio. The favorites station plays favorites alone,
+  each once before any again.
 - **Degenerate libraries:** no plays, nothing tagged, albums named for a video,
   singles only.
 - **Performance:** shelves and ten picks for 20,000 Tracks, bounded at 5 seconds

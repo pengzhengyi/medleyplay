@@ -1,6 +1,6 @@
 /**
  * @file What to play next from the Account's own Library: a radio from a song, the
- * Account's own station, and shelves of albums.
+ * Account's own station, its favorites station, and shelves of albums.
  *
  * Pure functions of the Tracks the client already holds, the time, and a generator,
  * so the same generator gives the same picks. Scoring is a small sum that says why:
@@ -180,6 +180,8 @@ function recency(track: Track, now: Date): number {
 }
 
 const TOP = 30;
+/** How many of the latest songs the favorites station spaces its next by. */
+const RECENT = 10;
 
 /** Draw one of `scored` weighted by its score; `scored` is not empty. */
 function draw<T>(scored: readonly { item: T; score: number }[], random: Random): T {
@@ -236,6 +238,31 @@ export function nextPicks(
   });
   // Best first, once; each pick walks the list, so a long Library is sorted only once.
   candidates.sort((a, b) => b.score - a.score);
+  return spaced(candidates, history, used, count, random);
+}
+
+/** A song a station may pick, how much it would like to, and why. */
+interface Candidate {
+  readonly track: Track;
+  readonly score: number;
+  readonly reason: string;
+}
+
+/**
+ * Draw up to `count` of `candidates`, best first, after `history`, never one in `used`,
+ * which it adds each pick to.
+ *
+ * Each pick is drawn from the 30 best left, weighted by score, with at most two songs
+ * in a row by one artist and three from one album, until too few songs remain, when
+ * the album rule goes first, then the artist rule.
+ */
+function spaced(
+  candidates: readonly Candidate[],
+  history: readonly Track[],
+  used: Set<number>,
+  count: number,
+  random: Random,
+): Pick[] {
   const artistOf = (track: Track) => keyOf(track.artist);
   const albumOf = (track: Track) => {
     const album = keyOf(track.album);
@@ -257,9 +284,9 @@ export function nextPicks(
         ? lastTwo[0]
         : undefined;
     // The album rule gives way first, then the artist rule, only when nothing else is left.
-    const strict: typeof candidates = [];
-    const loose: typeof candidates = [];
-    const left: typeof candidates = [];
+    const strict: Candidate[] = [];
+    const loose: Candidate[] = [];
+    const left: Candidate[] = [];
     for (const each of candidates) {
       if (used.has(each.track.id)) {
         continue;
@@ -292,6 +319,79 @@ export function nextPicks(
       fromAlbum.set(album, (fromAlbum.get(album) ?? 0) + 1);
     }
     picks.push({ track: chosen.track, reason: chosen.reason });
+  }
+  return picks;
+}
+
+/** Whether `track` is one of the Account's favorites: hearted, or in a favorite group. */
+function favoriteReason(track: Track, favorites: FavoriteGroups): string | undefined {
+  const artist = albumArtistOf(track);
+  if (track.favorite) {
+    return "A favorite";
+  }
+  if (isFavoriteArtist(favorites, track.artist) || isFavoriteArtist(favorites, artist)) {
+    return "By a favorite artist";
+  }
+  return isFavoriteAlbum(favorites, artist, track.album) ? "From a favorite album" : undefined;
+}
+
+/**
+ * The songs the favorites station plays: each that plays now and is hearted, by a
+ * favorite artist, or from a favorite album, in the Library's order.
+ */
+export function favoriteSongsOf(
+  tracks: readonly Track[],
+  favorites: FavoriteGroups = NO_FAVORITES,
+): Track[] {
+  return tracks.filter(
+    (track) => canSuggest(track) && favoriteReason(track, favorites) !== undefined,
+  );
+}
+
+/**
+ * The next `count` songs of the favorites station, after the songs in `played`, the
+ * latest last.
+ *
+ * Each favorite plays once before any plays again; once all have, it starts over,
+ * leaving out the latest half played. A song is drawn as a radio draws it, weighted
+ * by how much the Account likes it and less if played lately. Fewer than `count`
+ * come back only when there is no favorite.
+ */
+export function favoritePicks(
+  tracks: readonly Track[],
+  played: readonly number[],
+  count: number,
+  random: Random,
+  now: Date,
+  favorites: FavoriteGroups = NO_FAVORITES,
+): Pick[] {
+  const candidates = tracks.flatMap((track) => {
+    const reason = canSuggest(track) ? favoriteReason(track, favorites) : undefined;
+    if (reason === undefined) {
+      return [];
+    }
+    const taste = Math.max(-0.9, Math.min(0.9, tasteOf(track, favorites) / 3));
+    return [{ track, score: Math.max(0.05, 1 + taste - recency(track, now)), reason }];
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  const byId = new Map(tracks.map((track) => [track.id, track]));
+  // Only the latest songs space the next: a station that plays on for hours forgets.
+  const recent = () =>
+    [...played, ...picks.map((pick) => pick.track.id)]
+      .slice(-RECENT)
+      .flatMap((id) => byId.get(id) ?? []);
+  const picks: Pick[] = [];
+  picks.push(...spaced(candidates, recent(), new Set(played), count, random));
+  const kept = Math.floor(candidates.length / 2);
+  while (picks.length < count && candidates.length > 0) {
+    // Every favorite has played: start over, but not with the latest ones.
+    const order = [...played, ...picks.map((pick) => pick.track.id)];
+    const latest = new Set(kept === 0 ? [] : order.slice(-kept));
+    const more = spaced(candidates, recent(), latest, count - picks.length, random);
+    if (more.length === 0) {
+      break;
+    }
+    picks.push(...more);
   }
   return picks;
 }

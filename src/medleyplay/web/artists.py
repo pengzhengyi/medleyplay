@@ -7,7 +7,7 @@ choose the name it is shown by, a note, and a photo.
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/artist-names", tags=["artists"])
 artists_router = APIRouter(prefix="/api/artists", tags=["artists"])
 
 type _Name = Annotated[str, Field(min_length=1, max_length=512)]
+type _ArtistId = Annotated[str, Path(max_length=64)]
 
 
 class AliasOut(BaseModel):
@@ -219,7 +220,7 @@ def unlink(body: UnlinkIn, _: SignedInAccount, service: ArtistsDep) -> None:
 
 @artists_router.put("/{artist_id}/details", status_code=status.HTTP_204_NO_CONTENT)
 def set_details(
-    artist_id: str, body: ArtistDetailsIn, _: SignedInAccount, service: ArtistsDep
+    artist_id: _ArtistId, body: ArtistDetailsIn, _: SignedInAccount, service: ArtistsDep
 ) -> None:
     """Keep the name the artist is shown by, and a note about it; its songs keep theirs."""
     service.set_details(artist_id, shown_as=body.shown_as, about=body.about)
@@ -233,7 +234,7 @@ def set_details(
     },
 )
 async def set_photo(
-    artist_id: str, request: Request, _: SignedInAccount, service: ArtistsDep
+    artist_id: _ArtistId, request: Request, _: SignedInAccount, service: ArtistsDep
 ) -> None:
     """Make the image in the body the household's photo of the artist."""
     data = bytearray()
@@ -247,6 +248,6 @@ async def set_photo(
 
 
 @artists_router.delete("/{artist_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
-def remove_photo(artist_id: str, _: SignedInAccount, service: ArtistsDep) -> None:
+def remove_photo(artist_id: _ArtistId, _: SignedInAccount, service: ArtistsDep) -> None:
     """Drop the household's photo of the artist, so Wikidata's shows again."""
     service.remove_photo(artist_id)

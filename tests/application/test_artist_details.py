@@ -85,6 +85,8 @@ def test_an_artist_no_site_named_has_no_details_to_set(enriching: Enriching) -> 
         enriching.artists.set_details("not-an-artist", shown_as="Anyone", about=None)
     with pytest.raises(NotFoundError):
         enriching.artists.set_photo("not-an-artist", OWN_PHOTO)
+    with pytest.raises(NotFoundError):
+        enriching.artists.remove_photo("not-an-artist")
 
 
 def test_the_household_s_photo_shows_in_place_of_wikidata_s(enriching: Enriching) -> None:
@@ -121,7 +123,34 @@ def test_the_sweep_keeps_the_household_s_photo_of_an_artist(enriching: Enriching
     assert enriching.covers.open(cover_id(OWN_PHOTO)) is not None
 
 
-def test_choosing_details_changes_no_song(enriching: Enriching) -> None:
+def test_the_sweep_drops_a_photo_the_household_removed(enriching: Enriching) -> None:
+    enriching.artists.set_photo(BEATLES, OWN_PHOTO)
+    enriching.artists.remove_photo(BEATLES)
+
+    enriching.covers.sweep()
+
+    assert enriching.covers.open(cover_id(OWN_PHOTO)) is None
+
+
+def test_asking_wikidata_again_keeps_what_the_household_chose(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.artists.set_details(BEATLES, shown_as="The Beatles", about="Four lads.")
+    enriching.artists.set_photo(BEATLES, OWN_PHOTO)
+
+    enriching.artists.link(alice, "披头士", BEATLES)
+    enriching.finish_every_job()
+
+    beatles = _beatles(enriching)
+    assert (beatles.shown_as, beatles.about, beatles.own_photo) == (
+        "The Beatles",
+        "Four lads.",
+        True,
+    )
+
+
+def test_choosing_details_changes_no_song(enriching: Enriching, alice: Account) -> None:
     enriching.artists.set_details(BEATLES, shown_as="The Beatles", about=None)
 
     assert [each.name for each in enriching.artists.names().names] == ["披头士"]
+    assert [track.details.artist for track in enriching.catalog.list_tracks(alice.id)] == ["披头士"]

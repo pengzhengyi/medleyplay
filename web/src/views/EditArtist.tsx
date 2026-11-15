@@ -109,7 +109,11 @@ export function EditArtist({
               {artist.photo === null ? (
                 <span className="artist-initial">{initialOf(artist.shown_as ?? written)}</span>
               ) : (
-                <img className="edit-artist-picture" src={coverUrl(artist.photo)} alt="Photo" />
+                <img
+                  className="edit-artist-picture"
+                  src={coverUrl(artist.photo)}
+                  alt={`Photo of ${artist.shown_as ?? written}`}
+                />
               )}
               {picturing && (
                 <span className="cover-saving" role="status" aria-label="Saving the photo…">
@@ -118,7 +122,10 @@ export function EditArtist({
               )}
             </span>
             <div className="edit-artist-photo-tools">
-              <label className={busy ? "cover-tool disabled" : "cover-tool"} title={choose}>
+              <label
+                className={busy ? "edit-artist-tool disabled" : "edit-artist-tool"}
+                title={choose}
+              >
                 <UploadSimpleIcon weight="bold" aria-hidden />
                 <span className="visually-hidden">{choose}</span>
                 <input
@@ -143,7 +150,7 @@ export function EditArtist({
               {artist.own_photo && (
                 <button
                   type="button"
-                  className="cover-tool"
+                  className="edit-artist-tool"
                   disabled={busy}
                   aria-label="Remove your photo"
                   title="Remove your photo"
@@ -209,7 +216,7 @@ export function EditArtist({
             disabled={saving}
             onClick={() => dialog.current?.close()}
           >
-            Close
+            {changed ? "Cancel" : "Close"}
           </button>
           <button
             type="submit"

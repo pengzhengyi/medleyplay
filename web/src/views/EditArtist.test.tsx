@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { KnownArtist } from "../api";
 import { knownArtistOf, serve } from "../testing/server";
 import { EditArtist } from "./EditArtist";
+import { MAX_COVER_BYTES } from "./EditDetails";
 
 /** The Beatles, with Wikidata's photo, going by 披头士 and 甲壳虫乐队 too. */
 const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
@@ -114,11 +115,52 @@ describe("editing an artist", () => {
     expect(server.calls).toEqual([`PUT ${PHOTO}`]);
   });
 
-  it("says where the photo is from, and removes only the household's own", async () => {
+  it("sends no photo past 10 MiB, and says so beside the photo", async () => {
+    const server = serve({});
+    const photo = new File(["jpeg"], "huge.jpg", { type: "image/jpeg" });
+    Object.defineProperty(photo, "size", { value: MAX_COVER_BYTES + 1 });
     editing();
+
+    await userEvent.upload(screen.getByLabelText("Replace the photo"), photo);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("A photo is at most 10 MiB.");
+    expect(server.calls).toEqual([]);
+  });
+
+  it("says why a photo was refused, beside the photo", async () => {
+    serve({
+      [`PUT ${PHOTO}`]: { status: 422, body: { detail: "That is no JPEG, PNG, or WebP image." } },
+    });
+    const { onChanged } = editing();
+
+    await userEvent.upload(
+      screen.getByLabelText("Replace the photo"),
+      new File(["gif"], "beatles.jpg", { type: "image/jpeg" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That is no JPEG, PNG, or WebP image.",
+    );
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("says a photo from Wikidata is, and offers no way to remove it", () => {
+    editing();
+
     expect(screen.getByText("From Wikidata")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove your photo" })).toBeNull();
+  });
 
+  it("offers to cancel once something changed, and to close before", async () => {
+    editing();
+    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
+
+    await userEvent.type(screen.getByRole("textbox", { name: "About" }), "Four lads.");
+
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+  });
+
+  it("removes the household's own photo, so Wikidata's shows again", async () => {
     const server = serve({ [`DELETE ${PHOTO}`]: { status: 204 } });
     const { onChanged } = editing({ ...BEATLES, photo: "own-photo", own_photo: true });
     await userEvent.click(screen.getByRole("button", { name: "Remove your photo" }));

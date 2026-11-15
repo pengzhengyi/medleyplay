@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -9,6 +10,7 @@ from medleyplay.application.artists import KnownArtist
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.artists import Alias, Artist
 from medleyplay.domain.catalog import SourceKey, TrackDetails
+from medleyplay.domain.covers import MAX_COVER_BYTES
 from medleyplay.persistence.schema import ArtistRow
 from medleyplay.web.artists import ArtistOut
 from tests.support.api import set_up_as_alice
@@ -188,6 +190,45 @@ def test_a_photo_that_is_no_image_is_refused(
     _beatles_known(units)
 
     response = client.put("/api/artists/b10bbbfc/photo", content=gif_image())
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("shown_as", "about", "status"),
+    [("x" * 512, "x" * 1000, 204), ("x" * 513, None, 422), (None, "x" * 1001, 422)],
+    ids=["at-the-limits", "name-too-long", "note-too-long"],
+)
+def test_an_artist_s_details_are_kept_up_to_their_limits(
+    client: TestClient,
+    units: sessionmaker[Session],
+    shown_as: str | None,
+    about: str | None,
+    status: int,
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+
+    response = client.put(
+        "/api/artists/b10bbbfc/details", json={"shown_as": shown_as, "about": about}
+    )
+
+    assert response.status_code == status
+
+
+def test_a_photo_past_10_mib_is_refused(client: TestClient, units: sessionmaker[Session]) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+
+    response = client.put("/api/artists/b10bbbfc/photo", content=b"\0" * (MAX_COVER_BYTES + 1))
+
+    assert response.status_code == 413
+
+
+def test_an_artist_id_past_64_characters_is_refused(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.put(f"/api/artists/{'x' * 65}/details", json={"shown_as": "Anyone"})
 
     assert response.status_code == 422
 

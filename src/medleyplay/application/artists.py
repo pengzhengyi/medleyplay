@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Final
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
@@ -439,11 +440,15 @@ class ArtistService:
         if db.get(ArtistRow, artist_id) is None:
             message = "No site has named that artist."
             raise NotFoundError(message)
-        row = db.get(ArtistHouseholdRow, artist_id)
-        if row is None:
-            row = ArtistHouseholdRow(artist_id=artist_id, changed_at=self._clock())
-            db.add(row)
-        return row
+        # Two first changes at once both find no row; the second keeps the first's.
+        db.execute(
+            insert(ArtistHouseholdRow)
+            .values(artist_id=artist_id, changed_at=self._clock())
+            .on_conflict_do_nothing()
+        )
+        return db.scalars(
+            select(ArtistHouseholdRow).where(ArtistHouseholdRow.artist_id == artist_id)
+        ).one()
 
     def unlink(self, name: str) -> None:
         """Forget the link of `name`, so it is offered again."""

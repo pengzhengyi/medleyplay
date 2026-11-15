@@ -128,6 +128,10 @@ both read its full length.
   `1:07:40`, its title, and its artist; add, remove, and move rows, by dragging
   a row's handle or with its buttons. Saving says first how many songs it
   removes with their ratings and plays, and so does ***Unsplit***.
+- **One artist for every song.** An artist typed into a row is offered to the
+  rows with none, shown faintly in them, with a note under the field: *Tab
+  fills “蛙池” into the 9 songs with no artist*. Tab fills them and moves on;
+  Escape, or leaving the field another way, drops the offer.
 - **Ways to fill the rows sit above them,** each a small button:
   - ***List*** opens the rows as text, one song a line, in CodeMirror, loaded
     only when opened: lines are numbered, each time and artist is colored, the

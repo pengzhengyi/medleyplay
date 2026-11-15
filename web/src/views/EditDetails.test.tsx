@@ -129,14 +129,28 @@ describe("editing a song's details", () => {
     expect(dialog).toHaveAccessibleDescription("ケビョウニンゲン");
   });
 
-  it("saves only the details changed", async () => {
-    const { dialog, onSave, onClose } = await renderDialog();
+  it("saves only the details changed, and stays open on them, saying so", async () => {
+    const { dialog, onSave, onClose, load } = await renderDialog();
+    load.mockResolvedValue(detailsOf(7, { album: "Re:Start", year: 2014 }));
 
     await userEvent.type(box(dialog, "Album"), "Re:Start");
     await userEvent.type(box(dialog, "Year"), "2014");
     await save(dialog);
 
     expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "Re:Start", year: 2014 });
+    expect(await within(dialog).findByText("Saved.")).toHaveRole("status");
+    expect(box(dialog, "Album")).toHaveValue("Re:Start");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes only when asked, with Close once nothing is left to save", async () => {
+    const { dialog, onClose } = await renderDialog();
+
+    await userEvent.type(box(dialog, "Album"), "Re:Start");
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    await save(dialog);
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Close" }));
+
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -191,13 +205,13 @@ describe("editing a song's details", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("closes without a request when nothing changed, keeping the household's empty text", async () => {
-    const { dialog, onSave, onClose } = await renderDialog(detailsOf(7, { genre: "" }));
+  it("has nothing to save until something changes, keeping the household's empty text", async () => {
+    const { dialog, onSave } = await renderDialog(detailsOf(7, { genre: "" }));
 
     await save(dialog);
 
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
     expect(onSave).not.toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalledOnce();
   });
 
   describe("with the album fields, which come together from one origin", () => {
@@ -558,7 +572,7 @@ describe("editing a song's details", () => {
       await userEvent.upload(within(dialog).getByLabelText("Add a cover"), PNG);
 
       expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
-      expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+      expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
       expect(within(dialog).getByRole("status", { name: "Saving the cover…" })).toBeVisible();
     });
 

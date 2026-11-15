@@ -4,8 +4,9 @@
  * A box typed in, or a value chosen from another origin, becomes the household's
  * value, which wins; every other box shows what would show with them. Typing or
  * choosing what would show anyway drops the household's value. Saving sends only
- * what changed. Escape, Cancel, or a click outside it close it without saving, except
- * while a save is under way.
+ * what changed, and the dialog stays open on the details as saved, saying so: closing
+ * is the household's to choose. Escape, Cancel (Close once nothing is left to save), or
+ * a click outside it close it without saving, except while a save is under way.
  *
  * A video's title and description, pasted, are read by the server at once as the
  * `video` origin, as a file beside the audio would be; the boxes then show what it
@@ -145,6 +146,7 @@ export function EditDetails({
   const [covering, setCovering] = useState(false);
   const [coverError, setCoverError] = useState("");
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
   const [panel, setPanel] = useState<"details" | "songs">(
     startOnSongs && songs !== undefined ? "songs" : "details",
   );
@@ -223,22 +225,27 @@ export function EditDetails({
     };
   }, [done, track.id, load]);
 
+  const changes =
+    details === undefined ? {} : { ...changesOf(details, own), ...kindChange(details, kind) };
+  const changed = Object.keys(changes).length > 0;
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (details === undefined) {
-      return;
-    }
-    const changes = { ...changesOf(details, own), ...kindChange(details, kind) };
-    if (Object.keys(changes).length === 0) {
-      close();
+    if (!changed) {
       return;
     }
     setSaving(true);
     setError("");
     try {
       await onSave(changes);
+      // The details as saved, so what is shown is what is kept.
+      const fresh = await load(track.id).catch(() => undefined);
+      if (fresh !== undefined) {
+        setDetails(fresh);
+        setOwn(ownOf(fresh));
+        setKind(undefined);
+      }
       setSaving(false);
-      close();
+      setSaved(true);
     } catch (failure) {
       setSaving(false);
       setError(messageOf(failure));
@@ -366,18 +373,23 @@ export function EditDetails({
           </p>
         )}
         <footer className="dialog-buttons">
+          {saved && !changed && !saving && (
+            <span className="dialog-saved" role="status">
+              Saved.
+            </span>
+          )}
           <button
             type="button"
             className="secondary outline dialog-button"
             disabled={saving || reading || covering}
             onClick={close}
           >
-            Cancel
+            {changed ? "Cancel" : "Close"}
           </button>
           <button
             type="submit"
             className="dialog-button"
-            disabled={details === undefined || saving || reading || covering}
+            disabled={!changed || saving || reading || covering}
             aria-busy={saving}
           >
             Save

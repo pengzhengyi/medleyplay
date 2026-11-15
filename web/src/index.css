@@ -5039,6 +5039,40 @@ button.link-button {
   list-style: none;
 }
 
+/* An artist typed in one row: the rows with none show it faintly, and Tab fills them. */
+.song-artist-cell {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.song-artist-cell .song-artist {
+  width: 100%;
+}
+
+.song-artist.ghost::placeholder {
+  color: var(--accent);
+  font-style: italic;
+  opacity: 0.6;
+}
+
+.song-artist-hint {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0.5rem;
+  z-index: 2;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--accent-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--lift);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .song-row {
   display: grid;
   grid-template-columns: auto 5rem minmax(0, 2fr) minmax(0, 1fr) auto;
@@ -5182,7 +5216,7 @@ button.song-handle {
     grid-area: title;
   }
 
-  .song-artist {
+  .song-artist-cell {
     grid-area: artist;
   }
 

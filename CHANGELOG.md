@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Fill one artist into every song** — in the songs editor, an artist typed
+  into one row shows faintly in the rows with none, and Tab fills them all.
+
 - **Clean up leads with what can be done** — a bar goes to each of its sections,
   with how many names wait or a check once done, the sections waiting first;
   in *Link artist names*, names ready to link come first and those linked or
@@ -426,6 +429,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Track details](docs/contributing/design-notes/Track%20details.md#ai-suggestions) note.
 
 ### Changed
+
+- **Saving details keeps the dialog open** — *Edit details* stays on the details
+  as saved and says so, so an album's songs can be split next; *Cancel* reads
+  *Close* once nothing is left to save.
 
 - **Controls say why they can't be used** — *AI* and *Snap* in the songs editor,
   and a preset already set up, say why on hover; a heart says whether its song

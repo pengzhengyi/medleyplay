@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ask AI which artist a name stands for** — *Ask AI* in *Link artist names*
+  shows an AI model each name, a few of its songs, and the artists MusicBrainz
+  offers, and marks the one it recommends, tagged with the model and why; or
+  marks *None of these* when it recommends none. Nothing is linked until you
+  link it, one by one or with *Link N recommended*.
+
 - **Link artist names in one column** — each name's actions line up at the
   right, the same on every row; the artist going by a name exactly is marked as
   recommended, and *Link N recommended* links them all at once. Linking a name

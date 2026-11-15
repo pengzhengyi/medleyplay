@@ -10,15 +10,23 @@
  * Names linked to one artist count as one artist across the Library.
  *
  * Each row's actions line up at its right, so a list is worked down in one column. A
- * name's recommended artist, the one going by it exactly, is marked, and *Link all*
- * links every name that has one. Linking a name moves to the next name's *Link*, so
- * Enter links it in turn.
+ * name's recommended artist is marked: the one an AI model recommends, when it was
+ * asked, else the one going by the name exactly. *Link N recommended* links every name
+ * that has one. An AI model recommending none of them marks *None of these* instead.
+ * Linking a name moves to the next name's recommended action, so Enter takes it in turn.
  */
 
-import { KeyReturnIcon, LinkSimpleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
+import { KeyReturnIcon, LinkSimpleIcon, SparkleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 
-import { type ArtistName, type ArtistNames, type KnownArtist, api } from "../api";
+import {
+  type ArtistName,
+  type ArtistNames,
+  type ArtistRecommendation,
+  type KnownArtist,
+  api,
+} from "../api";
+import { answeredOf } from "../library/aiAnswer";
 import { unlinkedOf } from "../library/cleanUp";
 
 /** The most artists offered for one name. */
@@ -48,12 +56,21 @@ export function LinkArtists({
   const rows = shown.map((named) => {
     const offered = offeredOf(named, artists);
     const choice = picked.get(named.key);
-    const chosen = choice ?? named.suggested ?? offered[0]?.id ?? "";
+    const ai = named.recommendation ?? null;
+    const aiPick = offered.some((artist) => artist.id === ai?.artist_id)
+      ? (ai?.artist_id ?? undefined)
+      : undefined;
+    const pick = choice ?? aiPick ?? named.suggested ?? undefined;
+    const chosen = pick ?? offered[0]?.id ?? "";
     const linkable = !named.linked && !named.finding && offered.length > 0;
-    const recommended = linkable && (choice ?? named.suggested) !== null && chosen !== "";
-    return { named, offered, chosen, linkable, recommended };
+    const recommended = linkable && pick !== undefined && chosen !== "";
+    // An AI model recommending none of those offered, while nothing was picked here.
+    const apart = linkable && choice === undefined && ai !== null && ai.artist_id === null;
+    return { named, offered, chosen, linkable, recommended, ai, aiPick, apart };
   });
-  const toLink = rows.filter((row) => row.recommended);
+  const toLink = rows.filter((row) => row.recommended && !row.apart);
+  const toAsk = rows.filter((row) => row.linkable).length;
+  const asking = names.recommending === true;
 
   const lookUp = (wanted: readonly string[]) => {
     setError("");
@@ -68,6 +85,12 @@ export function LinkArtists({
     if (next !== undefined) {
       linkButtons.current.get(next.named.key)?.focus();
     }
+  };
+  const askAi = () => {
+    setError("");
+    api.recommendArtists().then(onChanged, (failure: unknown) => {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    });
   };
   const linkAll = async () => {
     setError("");
@@ -92,6 +115,23 @@ export function LinkArtists({
           <span className="clean-up-count">{unlinkedOf(names)}</span>
         </h3>
         <span className="clean-up-head-actions">
+          {(toAsk > 0 || asking) && (
+            <button
+              type="button"
+              className="secondary outline dialog-button"
+              disabled={asking}
+              aria-busy={asking}
+              title="Ask the AI which artist each name names; it links nothing"
+              onClick={askAi}
+            >
+              {asking ? (
+                <SpinnerGapIcon className="spin" aria-hidden />
+              ) : (
+                <SparkleIcon aria-hidden />
+              )}
+              {asking ? "Asking the AI…" : "Ask AI"}
+            </button>
+          )}
           {toLookUp.length > 0 && (
             <button
               type="button"
@@ -129,7 +169,7 @@ export function LinkArtists({
         <p className="empty">No artist name to link yet.</p>
       ) : (
         <ul className="tidy-list" aria-label="Artist names">
-          {rows.map(({ named, offered, chosen, recommended }) => (
+          {rows.map(({ named, offered, chosen, recommended, ai, aiPick, apart }) => (
             <NameRow
               key={named.key}
               named={named}
@@ -137,6 +177,9 @@ export function LinkArtists({
               artists={artists}
               chosen={chosen}
               recommended={recommended}
+              ai={ai}
+              aiPick={aiPick}
+              apart={apart}
               linkRef={(button) => {
                 if (button === null) {
                   linkButtons.current.delete(named.key);
@@ -176,6 +219,9 @@ function NameRow({
   artists,
   chosen,
   recommended,
+  ai,
+  aiPick,
+  apart,
   linkRef,
   onPick,
   onLookUp,
@@ -189,6 +235,13 @@ function NameRow({
   readonly chosen: string;
   /** Whether the choice is a recommendation, so it and Link are marked. */
   readonly recommended: boolean;
+  /** What an AI model recommended for the name, if it was asked. */
+  readonly ai: ArtistRecommendation | null;
+  /** The artist the AI recommended, when it is one of those offered. */
+  readonly aiPick: string | undefined;
+  /** Whether the AI recommended none of those offered, so *None of these* is marked. */
+  readonly apart: boolean;
+  /** Holds the button of the row's recommended action, to move to it. */
   readonly linkRef: (button: HTMLButtonElement | null) => void;
   readonly onPick: (id: string) => void;
   readonly onLookUp: () => void;
@@ -245,7 +298,7 @@ function NameRow({
           <fieldset className="link-choices">
             <legend className="visually-hidden">{`Artists for ${named.name}`}</legend>
             {offered.map((artist) => {
-              const marked = recommended && chosen === artist.id;
+              const marked = recommended && !apart && chosen === artist.id;
               return (
                 <label
                   key={artist.id}
@@ -261,13 +314,25 @@ function NameRow({
                     }}
                   />
                   <span>{describe(artist)}</span>
-                  {marked && artist.id === named.suggested && (
-                    <span className="link-tag">Goes by this name</span>
+                  {marked && ai !== null && artist.id === aiPick ? (
+                    <span className="link-tag ai" title={`${ai.why} ${answeredOf(ai) ?? ""}`}>
+                      <SparkleIcon aria-hidden /> {ai.model} suggests
+                    </span>
+                  ) : (
+                    marked &&
+                    artist.id === named.suggested && (
+                      <span className="link-tag">Goes by this name</span>
+                    )
                   )}
                 </label>
               );
             })}
           </fieldset>
+        )}
+        {apart && ai !== null && (
+          <span className="link-to link-ai-none" title={answeredOf(ai)}>
+            <SparkleIcon aria-hidden /> {`${ai.model} suggests none of these: ${ai.why}`}
+          </span>
         )}
       </div>
       <span className="link-actions">
@@ -297,11 +362,16 @@ function NameRow({
               )}
               {(named.looked_at !== null || offered.length > 0) && (
                 <button
+                  ref={apart ? linkRef : undefined}
                   type="button"
-                  className="secondary outline dialog-button"
+                  className={
+                    apart
+                      ? "secondary outline dialog-button recommended"
+                      : "secondary outline dialog-button"
+                  }
                   aria-label={`None of these for ${named.name}`}
                   onClick={() => {
-                    act(api.linkArtist(named.name, null));
+                    act(api.linkArtist(named.name, null), onLinked);
                   }}
                 >
                   {offered.length === 0 ? "Keep apart" : "None of these"}
@@ -310,9 +380,11 @@ function NameRow({
               {offered.length > 0 && (
                 <span className="link-go">
                   <button
-                    ref={linkRef}
+                    ref={apart ? undefined : linkRef}
                     type="button"
-                    className={recommended ? "dialog-button recommended" : "dialog-button"}
+                    className={
+                      recommended && !apart ? "dialog-button recommended" : "dialog-button"
+                    }
                     aria-label={`Link ${named.name}`}
                     disabled={chosen === ""}
                     onClick={() => {

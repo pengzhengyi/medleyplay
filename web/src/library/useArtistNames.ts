@@ -3,7 +3,7 @@
  *
  * They are read again whenever `version` changes, as it does with the Tracks, after
  * a change made here, and every 2 seconds while MusicBrainz is being asked about any,
- * or Wikidata about a linked artist's other names.
+ * Wikidata about a linked artist's other names, or an AI model which artists they name.
  */
 
 import { useEffect, useState } from "react";
@@ -22,7 +22,7 @@ export function useArtistNames(version: unknown): {
   const [names, setNames] = useState<ArtistNames>(NONE);
   // Counts the reads asked for, so each asks the server again.
   const [reads, setReads] = useState(0);
-  const finding = names.names.some((each) => each.finding);
+  const finding = names.recommending === true || names.names.some((each) => each.finding);
   useEffect(() => {
     let current = true;
     api.artistNames().then(

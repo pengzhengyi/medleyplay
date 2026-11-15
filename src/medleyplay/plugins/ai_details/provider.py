@@ -2,36 +2,18 @@
 
 from dataclasses import dataclass, field
 
-from medleyplay.plugin_api import (
-    AiEndpoint,
-    AiFailure,
-    AiFailureKind,
-    AiFailureReason,
-    Enriched,
-    EnrichStatus,
-    EnrichTrack,
-    NetworkError,
+from medleyplay.plugin_api import Enriched, EnrichStatus, EnrichTrack
+from medleyplay.plugins.ai_details.client import ChatClient
+from medleyplay.plugins.ai_details.models import parse_answer
+from medleyplay.plugins.ai_details.prompt import asking
+from medleyplay.plugins.ai_details.turns import (
+    Failed,
+    all_refused,
+    ask_in_turn,
+    failures_of,
+    message_of,
+    raise_unreachable,
 )
-from medleyplay.plugins.ai_details.client import (
-    BusyError,
-    ChatClient,
-    Message,
-    RefusedError,
-    UnusableAnswerError,
-)
-from medleyplay.plugins.ai_details.models import Answer, BadAnswerError, parse_answer
-from medleyplay.plugins.ai_details.prompt import asking, asking_again
-
-
-@dataclass(frozen=True)
-class _Failed:
-    """A provider that gave no answer to use: why, and what it was told or said."""
-
-    provider: AiEndpoint
-    kind: AiFailureKind
-    message: str
-    reason: AiFailureReason | None = None
-    status: int | None = None
 
 
 @dataclass(frozen=True)
@@ -52,66 +34,18 @@ class AiDetails:
         if not request.ai or request.text is None:
             message = "ai-details is asked with a video's text and a provider."
             raise ValueError(message)
-        messages = asking(request)
-        failed: list[_Failed] = []
-        for place, ai in enumerate(request.ai, start=1):
-            outcome = self._try(ai, messages, patient=place == len(request.ai))
-            if isinstance(outcome, _Failed):
-                failed.append(outcome)
-                continue
-            return Enriched(
-                values=outcome.values(),
-                songs=outcome.suggested_songs(),
-                ai_answered=ai.id,
-                ai_failures=_failures_of(failed),
-            )
-        return _none_answered(failed)
-
-    def _try(self, ai: AiEndpoint, messages: list[Message], *, patient: bool) -> Answer | _Failed:
-        try:
-            return self._answer(ai, messages, patient=patient)
-        except RefusedError as error:
-            return _Failed(ai, AiFailureKind.REFUSED, str(error))
-        except BusyError as error:
-            return _Failed(ai, AiFailureKind.BUSY, str(error))
-        except NetworkError as error:
-            return _Failed(ai, AiFailureKind.UNREACHABLE, str(error))
-        except UnusableAnswerError as error:
-            return _Failed(ai, AiFailureKind.UNUSABLE, str(error), error.reason, error.status)
-        except BadAnswerError as error:
-            return _Failed(ai, AiFailureKind.UNUSABLE, _invalid(error), AiFailureReason.NOT_JSON)
-
-    def _answer(self, ai: AiEndpoint, messages: list[Message], *, patient: bool) -> Answer:
-        said = self.client.complete(ai, messages, patient=patient)
-        try:
-            return parse_answer(said)
-        except BadAnswerError as first:
-            again = asking_again(messages, said, str(first))
-        return parse_answer(self.client.complete(ai, again, patient=patient))
+        outcome = ask_in_turn(self.client, request.ai, asking(request), parse_answer)
+        if isinstance(outcome, tuple):
+            return _none_answered(outcome)
+        return Enriched(
+            values=outcome.answer.values(),
+            songs=outcome.answer.suggested_songs(),
+            ai_answered=outcome.provider.id,
+            ai_failures=failures_of(outcome.failed),
+        )
 
 
-def _none_answered(failed: list[_Failed]) -> Enriched:
-    kinds = {each.kind for each in failed}
-    message = _message_of(failed)
-    if kinds & {AiFailureKind.UNREACHABLE, AiFailureKind.BUSY}:
-        raise NetworkError(message)
-    status = EnrichStatus.REFUSED if kinds == {AiFailureKind.REFUSED} else EnrichStatus.INVALID
-    return Enriched(status=status, message=message, ai_failures=_failures_of(failed))
-
-
-def _message_of(failed: list[_Failed]) -> str:
-    if len(failed) == 1:
-        return failed[0].message
-    each = " ".join(f"{place}. {one.message}" for place, one in enumerate(failed, start=1))
-    return f"No AI provider answered. {each}"
-
-
-def _failures_of(failed: list[_Failed]) -> tuple[AiFailure, ...]:
-    return tuple(
-        AiFailure(provider=each.provider.id, kind=each.kind, reason=each.reason, status=each.status)
-        for each in failed
-    )
-
-
-def _invalid(error: BadAnswerError) -> str:
-    return f"The AI model's answer was not the JSON asked for, even when asked again: {error}."
+def _none_answered(failed: tuple[Failed, ...]) -> Enriched:
+    raise_unreachable(failed)
+    status = EnrichStatus.REFUSED if all_refused(failed) else EnrichStatus.INVALID
+    return Enriched(status=status, message=message_of(failed), ai_failures=failures_of(failed))

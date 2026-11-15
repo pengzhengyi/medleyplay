@@ -56,6 +56,16 @@ class CandidateOut(BaseModel):
     score: int
 
 
+class RecommendationOut(BaseModel):
+    """The artist an AI model recommends linking a name to, or none, and why."""
+
+    artist_id: str | None = Field(description="The artist recommended; none for none offered.")
+    why: str
+    model: str = Field(description="The model that answered, as it was then.")
+    host: str = Field(description="Where the model was asked.")
+    at: datetime
+
+
 class ArtistNameOut(BaseModel):
     """A name Tracks show as an artist or album artist, and what is known of it."""
 
@@ -73,6 +83,9 @@ class ArtistNameOut(BaseModel):
     finding: bool = Field(
         description="Whether MusicBrainz is asked about it now, or Wikidata about its artist."
     )
+    recommendation: RecommendationOut | None = Field(
+        default=None, description="What an AI model last recommended, while it isn't linked."
+    )
 
     @classmethod
     def of(cls, named: ArtistName) -> "ArtistNameOut":
@@ -88,6 +101,15 @@ class ArtistNameOut(BaseModel):
             candidates=[CandidateOut(artist_id=i, score=s) for i, s in named.candidates],
             suggested=named.suggested,
             finding=named.finding,
+            recommendation=None
+            if named.recommendation is None
+            else RecommendationOut(
+                artist_id=named.recommendation.artist_id,
+                why=named.recommendation.why,
+                model=named.recommendation.model,
+                host=named.recommendation.host,
+                at=named.recommendation.at,
+            ),
         )
 
 
@@ -96,6 +118,9 @@ class ArtistNamesOut(BaseModel):
 
     names: list[ArtistNameOut]
     artists: list[ArtistOut]
+    recommending: bool = Field(
+        default=False, description="Whether an AI model is being asked which artists they name."
+    )
 
 
 class LookUpIn(BaseModel):
@@ -130,6 +155,7 @@ def artist_names(_: SignedInAccount, service: ArtistsDep) -> ArtistNamesOut:
     return ArtistNamesOut(
         names=[ArtistNameOut.of(each) for each in found.names],
         artists=[ArtistOut.of(each) for each in found.artists.values()],
+        recommending=service.recommending(),
     )
 
 
@@ -137,6 +163,15 @@ def artist_names(_: SignedInAccount, service: ArtistsDep) -> ArtistNamesOut:
 def look_up(body: LookUpIn, me: SignedInAccount, service: ArtistsDep) -> LookUpOut:
     """Ask MusicBrainz about each name not linked yet, one a second."""
     return LookUpOut(asked=service.look_up(me, body.names))
+
+
+@router.post("/recommend")
+def recommend(me: SignedInAccount, service: ArtistsDep) -> LookUpOut:
+    """Ask an AI model which artist each name looked up and not linked names.
+
+    What it answers is kept as each name's recommendation; nothing is linked.
+    """
+    return LookUpOut(asked=service.recommend(me))
 
 
 @router.put("/link", status_code=status.HTTP_204_NO_CONTENT)

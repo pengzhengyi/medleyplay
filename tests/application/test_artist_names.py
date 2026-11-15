@@ -7,11 +7,12 @@ import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.artists import ArtistName
+from medleyplay.application.artists import ArtistName, Recommendation
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import Alias, LookUp
-from medleyplay.domain.errors import NotFoundError
+from medleyplay.domain.errors import ConflictError, NotFoundError
 from medleyplay.domain.jobs import Job, JobState
+from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -298,3 +299,73 @@ def test_wikidata_refusing_fails_the_job_and_leaves_the_artist_to_ask_again(
     assert failed.job.failure_kind == "refused"
     enriching.artists.look_up(alice, ["Anyone Else"])
     assert len(_names_jobs(enriching)) == 2
+
+
+# What an AI model recommends
+
+
+def _recommended(enriching: Enriching, alice: Account) -> int:
+    """Ask the AI model about the names, and wait until it has answered."""
+    asked = enriching.artists.recommend(alice)
+    enriching.finish_every_job()
+    return asked
+
+
+def test_an_ai_model_recommends_an_artist_for_each_name_looked_up_and_not_linked(
+    enriching: Enriching, alice: Account, clock: FakeClock
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Yesterday", artist="披头士")
+    enriching.add_song("Let It Be", artist="Beatles/披头士")
+    enriching.add_song("Night Drive", artist="Blue Room")
+    _looked_up(enriching, alice, "披头士", "Beatles/披头士")
+    _linked(enriching, alice, "Beatles/披头士", BEATLES)
+
+    asked = _recommended(enriching, alice)
+
+    assert asked == 1
+    assert _named(enriching, "披头士").recommendation == Recommendation(
+        artist_id=BEATLES,
+        why="The Beatles, by its songs",
+        model="deepseek-flash",
+        host="api.deepseek.com",
+        at=clock(),
+    )
+    assert _named(enriching, "Beatles/披头士").recommendation is None
+    assert _named(enriching, "Blue Room").recommendation is None
+
+
+def test_an_ai_model_may_recommend_none_of_the_artists_offered(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Tribute Medley", artist="甲壳虫")
+    _looked_up(enriching, alice, "甲壳虫")
+
+    _recommended(enriching, alice)
+
+    recommendation = _named(enriching, "甲壳虫").recommendation
+    assert recommendation is not None
+    assert (recommendation.artist_id, recommendation.why) == (None, "A tribute")
+
+
+def test_the_ai_provider_refusing_fails_the_job_and_recommends_nothing(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.add_song("Refused", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+
+    _recommended(enriching, alice)
+
+    jobs = [view.job for view in enriching.jobs.list_jobs() if view.job.kind == "choose_artists"]
+    assert [job.state for job in jobs] == [JobState.FAILED]
+    assert _named(enriching, "披头士").recommendation is None
+
+
+def test_an_ai_model_is_asked_only_once_one_is_set_up(enriching: Enriching, alice: Account) -> None:
+    enriching.add_song("Yesterday", artist="披头士")
+    _looked_up(enriching, alice, "披头士")
+
+    with pytest.raises(ConflictError, match="Set up an AI provider"):
+        enriching.artists.recommend(alice)

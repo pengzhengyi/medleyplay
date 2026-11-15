@@ -10,6 +10,7 @@ import {
   formatPlayed,
   formatQueueLength,
   formatSeen,
+  initialOf,
   formatTime,
 } from "./format";
 
@@ -187,5 +188,11 @@ describe("formatPlayed", () => {
     expect(formatPlayed(lastMonth, NOW)).toBe(
       new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(lastMonth),
     );
+  });
+});
+
+describe("an initial", () => {
+  it("is the first letter as a person sees it, upper-cased", () => {
+    expect(["  初音ミク", "élan", "👩‍🎤 Singer", ""].map(initialOf)).toEqual(["初", "É", "👩‍🎤", "?"]);
   });
 });

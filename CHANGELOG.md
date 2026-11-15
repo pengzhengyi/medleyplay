@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An artist's page says who it is** — a round mosaic of its album covers, who
+  MusicBrainz says it is, the other names it goes by, and links to its
+  MusicBrainz and Wikidata pages and a Rate Your Music search; a name not linked
+  yet offers to link it.
+
 - **A Favorites station** — the Radio tab offers *Favorites* beside *My
   station*: it plays the songs you hearted, and those by an artist or from an
   album you favorited, every one before any again, for as long as you listen.

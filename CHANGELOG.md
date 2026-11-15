@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Play a song from Up next** — clicking a song in *Up next*, or pressing its
+  title, plays it now; an album's row plays from its first song queued.
+
 - **A rail that minimizes, and the account at its foot** — the rail's two
   controls sit at its top: one shows only its icons, the other minimizes it to
   the view shown, whose menu goes to any other, so the page takes the width. Who

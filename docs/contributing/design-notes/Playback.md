@@ -267,6 +267,10 @@ and the full views are in [Web client](Web%20client.md).
   with one unit shuffle as one, whether Shuffle queued them, shuffle was turned
   on later, or a Track was clicked while shuffled. A queue saved without units
   shuffles as it did.
+- **A song in Up next plays when clicked:** anywhere on its row but its handle
+  and *Remove*, or its title pressed, it plays now from its start, as *Next*
+  would reach it; the songs before it count as passed. An album's row plays from
+  its first song queued.
 - **Up next names an album's songs:** two or more songs of one split file in a
   row show under a row with the file's name and where they start in it, such as
   *3 of 11*. It folds them away, and its *Remove* removes them all; each song

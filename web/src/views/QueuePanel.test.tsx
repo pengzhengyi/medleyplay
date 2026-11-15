@@ -102,6 +102,30 @@ describe("the queue", () => {
     ).toBeInTheDocument();
     expect(upNext()).toEqual(["Outro"]);
   });
+
+  it("plays a song from Up next at once, passing the ones before it", async () => {
+    await playingIntro();
+
+    await userEvent.click(screen.getByRole("button", { name: "Play Outro now" }));
+
+    expect(
+      within(screen.getByRole("region", { name: "Player" })).getByText("Outro"),
+    ).toBeInTheDocument();
+    expect(upNext()).toEqual([]);
+  });
+
+  it("plays a song when its row is clicked anywhere but its own buttons", async () => {
+    await playingIntro();
+    const queue = screen.getByRole("region", { name: "Up next" });
+    const row = within(queue).getByRole("button", { name: "Play Long Road now" }).closest("li");
+
+    await userEvent.click(within(row ?? queue).getByText("The Band"));
+
+    expect(
+      within(screen.getByRole("region", { name: "Player" })).getByText("Long Road"),
+    ).toBeInTheDocument();
+    expect(upNext()).toEqual(["Outro"]);
+  });
 });
 
 /**
@@ -158,6 +182,17 @@ describe("an album in the queue", () => {
       "Song",
       "Album, guessed from its length",
     ]);
+  });
+
+  it("plays an album from its first song queued", async () => {
+    const queue = await playingMelt();
+
+    await userEvent.click(within(queue).getByRole("button", { name: "Play 生如夏花 from song 1" }));
+
+    expect(
+      within(screen.getByRole("region", { name: "Player" })).getByText("傲慢的上校"),
+    ).toBeInTheDocument();
+    expect(upNext()).toEqual(["浮游", "生如夏花", "Bremen"]);
   });
 
   it("removes the rest of an album at once", async () => {

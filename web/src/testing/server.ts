@@ -5,6 +5,7 @@
 import { vi } from "vitest";
 
 import type {
+  AiProvider,
   ArtistSuggestion,
   Account,
   ArtistName,
@@ -211,6 +212,26 @@ export function signedIn(
     "GET /api/features": { body: features },
     "GET /api/mode": { body: modeOf() },
     ...preferencesOf(),
+  };
+}
+
+/**
+ * DeepSeek's `deepseek-flash` with a key, saved at noon, turned on, that has not failed,
+ * unless `change` says otherwise.
+ */
+export function aiProviderOf(change: Partial<AiProvider> = {}): AiProvider {
+  return {
+    id: "d1",
+    base_url: "https://api.deepseek.com",
+    model: "deepseek-flash",
+    has_key: true,
+    saved_at: "2026-11-06T12:00:00Z",
+    failure: null,
+    failed_at: null,
+    failure_reason: null,
+    failure_status: null,
+    enabled: true,
+    ...change,
   };
 }
 

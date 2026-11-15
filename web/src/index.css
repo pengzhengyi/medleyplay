@@ -210,6 +210,27 @@ button.text:hover:not(:disabled) {
   border-radius: 999px;
 }
 
+/*
+ * A control that can't be used for now says why on hover, so the pointer must reach it:
+ * `aria-disabled` rather than `disabled`, looking the same.
+ */
+button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* A short action's label stays on one line; a pill that wraps reads as two buttons. */
+.dialog-button,
+.fill-button,
+.ai-preset {
+  white-space: nowrap;
+}
+
+/* A busy button that shows its own spinner in its icon's place leaves out Pico's. */
+[aria-busy="true"]:has(.spin)::before {
+  display: none;
+}
+
 /* The signed-in page: the views, the Library, and the queue; the player floats below. */
 
 .library {
@@ -1327,7 +1348,7 @@ button.text:hover:not(:disabled) {
 .ai-provider-head {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.35rem 0.6rem;
   width: auto;
@@ -1353,8 +1374,25 @@ button.text:hover:not(:disabled) {
   border-radius: 999px;
 }
 
+.ai-provider-name,
+.ai-provider-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ai-provider-model {
   color: var(--muted);
+}
+
+/* Turned off: kept in its place, quieter, and skipped when asking. */
+.ai-provider.off :is(.ai-provider-place, .ai-provider-name, .ai-provider-model, .ai-provider-mark) {
+  opacity: 0.5;
+}
+
+.ai-provider-bar input.ai-provider-switch {
+  flex: none;
+  margin: 0 0.5rem;
 }
 
 .ai-provider-mark {
@@ -1362,12 +1400,13 @@ button.text:hover:not(:disabled) {
   color: var(--accent);
 }
 
+/* Why it last failed, as an icon whose tooltip says what happened and how to fix it. */
 .ai-provider-failure {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.1rem 0.55rem;
-  font-size: 0.8rem;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
   color: var(--caution);
   background: var(--caution-soft);
   border-radius: 999px;
@@ -1402,23 +1441,55 @@ button.text:hover:not(:disabled) {
   background: var(--surface);
 }
 
+/*
+ * Each field and its actions share one grid, so every field ends at the same edge and
+ * every action is as wide and as tall as its neighbors.
+ */
 .ai-provider-row {
+  --field-height: calc(
+    1rem * var(--pico-line-height) + var(--pico-form-element-spacing-vertical) * 2 +
+      var(--pico-border-width) * 2
+  );
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 13rem;
+  align-items: end;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.ai-provider-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ai-provider-actions button,
+.ai-provider-confirm button {
+  flex: 1;
+  height: var(--field-height, auto);
+  margin: 0;
+  padding: 0 1rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.ai-provider-confirm {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: center;
   gap: 0.5rem 0.75rem;
   margin: 0;
 }
 
-.ai-provider-row button {
-  width: auto;
-  margin: 0;
-  padding: 0.45rem 1.4rem;
-  border-radius: 999px;
+.ai-provider-confirm button {
+  flex: 0 0 13rem;
+  height: 2.75rem;
 }
 
-.ai-provider-confirm {
-  align-items: center;
+@media (width <= 48rem) {
+  .ai-provider-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .ai-provider-why {
@@ -6748,7 +6819,7 @@ button.playing-kind[aria-expanded="true"] {
  * width on every row, so a list is worked down without the buttons moving.
  */
 .link-row {
-  grid-template-columns: minmax(0, 1fr) 18rem;
+  grid-template-columns: minmax(0, 1fr) 19.5rem;
   align-items: start;
 }
 

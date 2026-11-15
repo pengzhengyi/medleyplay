@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AiProvider, AiSetting, Enricher } from "../api";
-import { type Routes, enricherOf, serve } from "../testing/server";
+import { type Routes, aiProviderOf, enricherOf, serve } from "../testing/server";
 import { AiSettings } from "./AiSettings";
 
 const KEY = "sk-4f9a1c7e5b2d";
@@ -16,18 +16,8 @@ const PRESETS: AiSetting["presets"] = [
   { name: "Ollama", base_url: "http://127.0.0.1:11434/v1", model: "llama3.2" },
 ];
 
-/** DeepSeek's `deepseek-flash` with a key, saved at noon, that has not failed. */
-const DEEPSEEK: AiProvider = {
-  id: "d1",
-  base_url: "https://api.deepseek.com",
-  model: "deepseek-flash",
-  has_key: true,
-  saved_at: "2026-11-06T12:00:00Z",
-  failure: null,
-  failed_at: null,
-  failure_reason: null,
-  failure_status: null,
-};
+/** DeepSeek's `deepseek-flash` with a key, saved at noon, turned on, that has not failed. */
+const DEEPSEEK = aiProviderOf();
 
 /** A local Ollama, which needs no key. */
 const OLLAMA: AiProvider = {
@@ -231,14 +221,18 @@ describe("adding a provider", () => {
     expect(onChanged).not.toHaveBeenCalled();
   });
 
-  it("offers no preset already set up", async () => {
+  it("offers no preset already set up, saying so on hover", async () => {
+    const user = userEvent.setup();
     open([DEEPSEEK]);
+    const deepseek = await screen.findByRole("button", { name: "DeepSeek" });
 
-    expect(await screen.findByRole("button", { name: "DeepSeek" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "DeepSeek" })).toHaveAttribute(
-      "title",
-      "Set up already",
+    await user.click(deepseek);
+
+    expect(deepseek).toHaveAttribute("aria-disabled", "true");
+    expect(deepseek).toHaveAccessibleDescription(
+      "DeepSeek is set up already; change its model in its card",
     );
+    expect(screen.queryByRole("button", { name: "Add provider" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "OpenAI" })).toBeEnabled();
   });
 
@@ -301,7 +295,38 @@ describe("a saved provider", () => {
     expect(await header("DeepSeek")).toHaveAccessibleName(
       "DeepSeek, deepseek-flash, has a key, Key refused 2 hr. ago",
     );
-    expect(screen.getByTitle("Replace the key.")).toHaveTextContent("Key refused 2 hr. ago");
+    expect(screen.getByTitle("Key refused 2 hr. ago. Replace the key.")).toHaveClass(
+      "ai-provider-failure",
+    );
+  });
+
+  it("is asked until it is turned off, which keeps its place and key", async () => {
+    let sent: unknown;
+    const user = userEvent.setup();
+    open([DEEPSEEK, OLLAMA], {
+      "PUT /api/ai/providers/d1/enabled": (body) => {
+        sent = body;
+        return { body: { ...DEEPSEEK, enabled: false } };
+      },
+    });
+    const ask = await screen.findByRole("switch", { name: "Ask DeepSeek" });
+    expect(ask).toBeChecked();
+
+    await user.click(ask);
+
+    expect(sent).toEqual({ enabled: false });
+    expect(await header("DeepSeek")).toHaveAccessibleName(
+      "DeepSeek, deepseek-flash, has a key, off",
+    );
+    expect(ask).not.toBeChecked();
+    expect((await cards()).length).toBe(2);
+  });
+
+  it("shows a provider turned off as off", async () => {
+    open([{ ...OLLAMA, enabled: false }]);
+
+    expect(await header("Ollama")).toHaveAccessibleName("Ollama, llama3.2, on this Mac, off");
+    expect(screen.getByRole("switch", { name: "Ask Ollama" })).not.toBeChecked();
   });
 
   it("says what was wrong with an answer it couldn't use", async () => {

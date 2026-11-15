@@ -22,6 +22,7 @@ import {
 import { useState } from "react";
 
 import type { Track } from "../api";
+import { heartTitleOf } from "../heart";
 import type { AlbumSteps, Step } from "../player/albumNow";
 import { repeatAfter } from "../player/queue";
 import type { Player } from "../player/usePlayer";
@@ -200,7 +201,7 @@ export function FavoriteButton({
       className={track.favorite ? "icon heart on" : "icon heart"}
       aria-label={`Favorite ${track.title}`}
       aria-pressed={track.favorite}
-      {...hintOf(track.favorite ? "Favorite" : "Not a favorite", keys.favorite)}
+      {...hintOf(heartTitleOf(track.title, track.favorite), keys.favorite)}
       onClick={() => {
         onFavorite(track, !track.favorite);
       }}

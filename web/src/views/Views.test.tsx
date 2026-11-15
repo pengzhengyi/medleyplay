@@ -425,7 +425,7 @@ describe("favorite artists and albums", () => {
 
     expect(
       await screen.findByRole("button", { name: "Favorite artist ryo" }),
-    ).toHaveAccessibleDescription("Not a favorite");
+    ).toHaveAccessibleDescription("Add “ryo” to favorites");
     expect(screen.queryByText("2 songs you love")).not.toBeInTheDocument();
   });
 

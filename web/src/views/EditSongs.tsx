@@ -509,6 +509,9 @@ export function SongsEditor({
       : fromAi
         ? "answered"
         : undefined;
+  // Unavailable until something changes, so each says why on hover rather than being disabled.
+  const noAi = !fromAi && (songs?.suggested.length ?? 0) === 0 && !ai.can;
+  const tooFewToSnap = rows.length < 2;
 
   const save = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -613,7 +616,8 @@ export function SongsEditor({
               type="button"
               className="fill-button ai-button"
               data-status={aiStatus}
-              disabled={busy || thinking || (!fromAi && songs.suggested.length === 0 && !ai.can)}
+              disabled={busy || thinking}
+              aria-disabled={noAi}
               aria-label={fromAi ? "Ask the AI again" : "Fill with AI"}
               aria-expanded={fromAi ? askingAgain : undefined}
               aria-busy={thinking}
@@ -627,6 +631,9 @@ export function SongsEditor({
                       : "Set up an AI provider in Settings to ask it"
               }
               onClick={() => {
+                if (noAi) {
+                  return;
+                }
                 setTyping(false);
                 if (fromAi) {
                   setAskingAgain((open) => !open);
@@ -648,11 +655,20 @@ export function SongsEditor({
             <button
               type="button"
               className="fill-button"
-              disabled={busy || snapping || rows.length < 2}
+              disabled={busy || snapping}
+              aria-disabled={tooFewToSnap}
               aria-label="Snap the starts to the gaps in the audio"
               aria-busy={snapping}
-              title="Move each start to the gap in the audio nearest it, within half a minute"
-              onClick={() => void snap()}
+              title={
+                tooFewToSnap
+                  ? "Add two songs or more to snap their starts"
+                  : "Move each start to the gap in the audio nearest it, within half a minute"
+              }
+              onClick={() => {
+                if (!tooFewToSnap) {
+                  void snap();
+                }
+              }}
             >
               {snapping ? (
                 <CircleNotchIcon className="spin" aria-hidden />

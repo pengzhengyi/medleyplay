@@ -831,3 +831,43 @@ describe("snapping the starts to the gaps in the audio", () => {
     expect(startOfSong(dialog, 2)).toHaveValue("4:12");
   });
 });
+
+const artistOfSong = (dialog: HTMLElement, place: number) =>
+  within(dialog).getByRole("textbox", { name: `Artist of song ${String(place)}` });
+
+describe("filling one artist into every song", () => {
+  it("offers the artist typed to the songs with none, and Tab fills them", async () => {
+    const { dialog } = await renderEditor(SPLIT);
+
+    await userEvent.type(artistOfSong(dialog, 1), "ハチ");
+
+    expect(artistOfSong(dialog, 2)).toHaveAttribute("placeholder", "ハチ");
+    expect(artistOfSong(dialog, 1)).toHaveAccessibleDescription(
+      "Tab fills “ハチ” into the 2 songs with no artist",
+    );
+    await userEvent.tab();
+    expect(artistOfSong(dialog, 2)).toHaveValue("ハチ");
+    expect(artistOfSong(dialog, 3)).toHaveValue("ハチ");
+  });
+
+  it("drops the offer once the artist is left another way, filling nothing", async () => {
+    const { dialog } = await renderEditor(SPLIT);
+
+    await userEvent.type(artistOfSong(dialog, 1), "ハチ");
+    await userEvent.click(within(dialog).getByRole("textbox", { name: "Title of song 2" }));
+
+    expect(artistOfSong(dialog, 2)).toHaveValue("");
+    expect(artistOfSong(dialog, 2)).toHaveAttribute("placeholder", "Artist");
+  });
+
+  it("drops the offer on Escape, keeping the editor open", async () => {
+    const { dialog } = await renderEditor(SPLIT);
+
+    await userEvent.type(artistOfSong(dialog, 1), "ハチ{Escape}");
+
+    expect(artistOfSong(dialog, 1)).not.toHaveAccessibleDescription();
+    expect(dialog).toHaveAttribute("open");
+    await userEvent.tab();
+    expect(artistOfSong(dialog, 2)).toHaveValue("");
+  });
+});

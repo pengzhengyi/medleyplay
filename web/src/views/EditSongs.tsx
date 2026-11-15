@@ -56,6 +56,7 @@ import {
   useContext,
   useEffect,
   useEffectEvent,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -377,6 +378,16 @@ export function SongsEditor({
 
   const change = (key: string, field: "start" | "title" | "artist", value: string) => {
     edit(rows.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
+  };
+  // An artist typed into one row is offered to the rows with none, until Tab fills them,
+  // or Escape or leaving the field another way drops the offer.
+  const [offering, setOffering] = useState<string | undefined>(undefined);
+  const offered = rows.find((row) => row.key === offering)?.artist.trim() ?? "";
+  const without = rows.filter((row) => row.key !== offering && row.artist.trim() === "").length;
+  const offer = offered !== "" && without > 0 ? offered : undefined;
+  const fillArtist = (artist: string) => {
+    edit(rows.map((row) => (row.artist.trim() === "" ? { ...row, artist } : row)));
+    setOffering(undefined);
   };
   const move = (from: number, to: number) => {
     const next = [...rows];
@@ -809,6 +820,32 @@ export function SongsEditor({
                       playing={playing?.key === row.key ? playing.mode : undefined}
                       onChange={(field, value) => {
                         change(row.key, field, value);
+                        if (field === "artist") {
+                          setOffering(row.key);
+                        }
+                      }}
+                      artistOffer={
+                        offer === undefined
+                          ? undefined
+                          : row.key === offering
+                            ? { hint: fillHintOf(offer, without) }
+                            : { ghost: offer }
+                      }
+                      onArtistKey={(key) => {
+                        if (row.key !== offering || offer === undefined) {
+                          return false;
+                        }
+                        if (key === "Tab") {
+                          fillArtist(offer);
+                          return false;
+                        }
+                        setOffering(undefined);
+                        return true;
+                      }}
+                      onArtistLeft={() => {
+                        if (row.key === offering) {
+                          setOffering(undefined);
+                        }
                       }}
                       onMove={(by) => {
                         move(index, index + by);
@@ -901,6 +938,9 @@ function SongRow({
   snapped,
   playing,
   onChange,
+  artistOffer,
+  onArtistKey,
+  onArtistLeft,
   onMove,
   onRemove,
   onPlay,
@@ -918,12 +958,21 @@ function SongRow({
   /** How the row's song is playing, if it is. */
   readonly playing: Playing["mode"] | undefined;
   readonly onChange: (field: "start" | "title" | "artist", value: string) => void;
+  /**
+   * An artist typed in another row, shown faintly in this one while it has none; or,
+   * in the row typed in, what Tab does with it.
+   */
+  readonly artistOffer?: { readonly ghost: string } | { readonly hint: string } | undefined;
+  /** Tab or Escape pressed in the artist; `true` when it was the offer's, so taken. */
+  readonly onArtistKey?: (key: "Tab" | "Escape") => boolean;
+  readonly onArtistLeft?: () => void;
   readonly onMove: (by: -1 | 1) => void;
   readonly onRemove: () => void;
   readonly onPlay: (mode: Playing["mode"]) => void;
   readonly onStartHere: () => void;
 }) {
   const named = row.title.trim() === "" ? `song ${String(place)}` : `“${row.title}”`;
+  const hintId = useId();
   const {
     attributes,
     listeners,
@@ -969,15 +1018,39 @@ function SongRow({
           onChange("title", event.currentTarget.value);
         }}
       />
-      <input
-        className="detail-input song-artist"
-        aria-label={`Artist of song ${String(place)}`}
-        placeholder="Artist"
-        value={row.artist}
-        onChange={(event) => {
-          onChange("artist", event.currentTarget.value);
-        }}
-      />
+      <span className="song-artist-cell">
+        <input
+          className={
+            artistOffer !== undefined && "ghost" in artistOffer
+              ? "detail-input song-artist ghost"
+              : "detail-input song-artist"
+          }
+          aria-label={`Artist of song ${String(place)}`}
+          aria-describedby={artistOffer !== undefined && "hint" in artistOffer ? hintId : undefined}
+          placeholder={
+            artistOffer !== undefined && "ghost" in artistOffer ? artistOffer.ghost : "Artist"
+          }
+          value={row.artist}
+          onChange={(event) => {
+            onChange("artist", event.currentTarget.value);
+          }}
+          onKeyDown={(event) => {
+            if ((event.key === "Tab" && !event.shiftKey) || event.key === "Escape") {
+              if (onArtistKey?.(event.key) === true) {
+                // Escape drops the offer only; the editor stays open.
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            }
+          }}
+          onBlur={onArtistLeft}
+        />
+        {artistOffer !== undefined && "hint" in artistOffer && (
+          <small id={hintId} className="song-artist-hint">
+            {artistOffer.hint}
+          </small>
+        )}
+      </span>
       <span className="song-row-buttons">
         <button
           type="button"
@@ -1127,4 +1200,9 @@ function songCount(count: number): string {
 
 function messageOf(failure: unknown): string {
   return failure instanceof Error ? failure.message : String(failure);
+}
+
+/** What Tab does with `artist`, typed in one row, for the `count` rows with no artist. */
+function fillHintOf(artist: string, count: number): string {
+  return `Tab fills “${artist}” into the ${count === 1 ? "song" : `${String(count)} songs`} with no artist`;
 }

@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable, Sequence
 from http import HTTPStatus
 from importlib.metadata import version
-from typing import Final, TypedDict
+from typing import Final, Protocol, TypedDict
 
 import requests
 from pydantic import JsonValue
@@ -68,16 +68,38 @@ class BusyError(NetworkError):
     """The provider stayed busy or kept failing."""
 
 
+class Asker(Protocol):
+    """Asks providers of its own kind, that speak no OpenAI chat, as `ChatClient` asks."""
+
+    def handles(self, endpoint: AiEndpoint) -> bool:
+        """Return whether `endpoint` is a provider of its kind."""
+        ...
+
+    def complete(
+        self, endpoint: AiEndpoint, messages: Sequence[Message], *, patient: bool = True
+    ) -> str:
+        """Return what the model says, raising as `ChatClient.complete` does."""
+        ...
+
+
 class ChatClient:
     """Asks a provider's chat for one reply, waiting out a busy provider."""
 
     def __init__(
-        self, session: requests.Session | None = None, *, sleep: Sleep = time.sleep
+        self,
+        session: requests.Session | None = None,
+        *,
+        sleep: Sleep = time.sleep,
+        copilot: Asker | None = None,
     ) -> None:
-        """Create a client over `session`; `sleep` waits out a busy provider."""
+        """Create a client over `session`; `sleep` waits out a busy provider.
+
+        `copilot` asks GitHub Copilot, which speaks no OpenAI chat, when it is a provider.
+        """
         self._session = session or requests.Session()
         self._session.headers["User-Agent"] = USER_AGENT
         self._sleep = sleep
+        self._copilot = copilot
 
     def complete(
         self, endpoint: AiEndpoint, messages: Sequence[Message], *, patient: bool = True
@@ -89,6 +111,8 @@ class ChatClient:
         `BusyError` for a provider that stays busy, or is busy once when not `patient`,
         and `NetworkError` for one that can't be reached.
         """
+        if self._copilot is not None and self._copilot.handles(endpoint):
+            return self._copilot.complete(endpoint, messages, patient=patient)
         body: dict[str, JsonValue] = {
             "model": endpoint.model,
             "messages": [{"role": each["role"], "content": each["content"]} for each in messages],

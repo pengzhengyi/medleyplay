@@ -28,7 +28,7 @@ import {
 import { PlusIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useEffect, useEffectEvent, useState } from "react";
 
-import { movedOrder, providerNameOf } from "../aiProviders";
+import { isCopilot, movedOrder, providerNameOf } from "../aiProviders";
 import { AI_ENRICHER, type AiPreset, type AiProvider, type AiSetting, api } from "../api";
 import { classOf, useNote } from "../useNote";
 import { AiProviderCard } from "./AiProviderCard";
@@ -309,7 +309,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
                 />
               </label>
               <label className="mark-name">
-                Key
+                {isCopilot(baseUrl) ? "GitHub token" : "Key"}
                 <input
                   type="password"
                   autoComplete="off"
@@ -334,10 +334,26 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
               >
                 Cancel
               </button>
-              <p className="hint">
-                The key is kept in the Keychain and never shown again. A local Ollama needs none.
-                Plain http is for an address on this machine only.
-              </p>
+              {isCopilot(baseUrl) ? (
+                <p className="hint">
+                  A fine-grained GitHub token with the Copilot Requests permission, of an account
+                  with Copilot (
+                  <a
+                    href="https://github.com/settings/personal-access-tokens/new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    create one
+                  </a>
+                  ). Each question counts against your Copilot allowance. The token is kept in the
+                  Keychain and never shown again.
+                </p>
+              ) : (
+                <p className="hint">
+                  The key is kept in the Keychain and never shown again. A local Ollama needs none.
+                  Plain http is for an address on this machine only.
+                </p>
+              )}
             </form>
           )}
           <p className={classOf(notes.note)} role="status">

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **GitHub Copilot as an AI provider** — Settings offers *GitHub Copilot*
+  beside DeepSeek, OpenAI, Anthropic, and Ollama. It is asked through GitHub's
+  Copilot SDK with a GitHub token of an account with Copilot, kept in the
+  Keychain, and given no tools: it only answers the question. Each question counts
+  against your Copilot allowance.
+
 - **An artist's page says who it is** — a round mosaic of its album covers, who
   MusicBrainz says it is, the other names it goes by, and links to its
   MusicBrainz and Wikidata pages and a Rate Your Music search; a name not linked

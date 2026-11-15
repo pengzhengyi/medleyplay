@@ -137,11 +137,12 @@ def test_every_preset_is_an_address_and_a_model_a_household_could_enter() -> Non
         assert check_model(preset.model) == preset.model
 
 
-def test_the_presets_are_deepseek_openai_anthropic_and_ollama_in_that_order() -> None:
+def test_the_presets_are_deepseek_openai_anthropic_copilot_and_ollama_in_that_order() -> None:
     assert [(preset.name, preset.base_url) for preset in PRESETS] == [
         ("DeepSeek", "https://api.deepseek.com"),
         ("OpenAI", "https://api.openai.com/v1"),
         ("Anthropic", "https://api.anthropic.com/v1"),
+        ("GitHub Copilot", "https://api.githubcopilot.com"),
         ("Ollama", "http://127.0.0.1:11434/v1"),
     ]
 

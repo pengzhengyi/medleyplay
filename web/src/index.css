@@ -4419,6 +4419,19 @@ dialog.modal::backdrop {
   min-width: 0;
 }
 
+/* The heading, and beside it for a moment, quietly, that the details were saved. */
+.edit-details-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.edit-details-saved {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
 .edit-details h2 {
   margin-bottom: 0.15rem;
 }

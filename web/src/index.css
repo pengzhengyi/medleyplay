@@ -741,6 +741,11 @@ button.text:hover:not(:disabled) {
   font-weight: 600;
 }
 
+.artist-note {
+  max-width: 60ch;
+  white-space: pre-line;
+}
+
 .artist-names {
   color: var(--muted);
   font-size: 0.9rem;
@@ -3762,7 +3767,8 @@ dialog.modal::backdrop {
 }
 
 .add-to-playlist .dialog-button,
-.edit-album .dialog-button {
+.edit-album .dialog-button,
+.edit-artist .dialog-button {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -6758,6 +6764,102 @@ button.playing-kind[aria-expanded="true"] {
   display: grid;
   gap: 0.25rem;
   margin: 0;
+}
+
+.edit-artist-body {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.edit-artist-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.edit-artist-image {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 9rem;
+  height: 9rem;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  box-shadow: var(--lift);
+}
+
+.edit-artist-picture {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.edit-artist-photo-tools {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.edit-artist-tool {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.edit-artist-tool:hover {
+  background: var(--accent-soft);
+}
+
+.edit-artist-tool:focus-visible,
+.edit-artist-tool:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.edit-artist-tool.disabled,
+.edit-artist-tool:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.edit-artist-fields {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.edit-artist .edit-album-box {
+  height: 2.6rem;
+  margin: 0;
+  padding-block: 0;
+}
+
+.edit-artist .edit-artist-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.edit-artist .edit-artist-about {
+  margin: 0;
+  resize: vertical;
+}
+
+@media (width <= 32rem) {
+  .edit-artist-body {
+    grid-template-columns: 1fr;
+  }
 }
 
 .edit-album .edit-album-box {

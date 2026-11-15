@@ -252,8 +252,14 @@ export interface KnownArtist {
   readonly page: string | null;
   /** The cover holding its photo, from Wikidata, if it has one. */
   readonly photo: string | null;
-  /** Where the photo comes from: who made it, and its license. */
+  /** Where Wikidata's photo comes from: who made it, and its license; none for the household's. */
   readonly photo_page: string | null;
+  /** The name the household shows it by, if it chose one. */
+  readonly shown_as: string | null;
+  /** The household's note about it, if any. */
+  readonly about: string | null;
+  /** Whether the photo is the household's own, in place of Wikidata's. */
+  readonly own_photo: boolean;
 }
 
 /** A name Tracks show as an artist or album artist, and what is known of it. */
@@ -808,7 +814,7 @@ async function send<T>(method: string, path: string, file: Blob): Promise<T> {
   if (!response.ok) {
     throw await refusalOf(response);
   }
-  return (await response.json()) as T;
+  return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
 /** Say why the server refused: its own words, each check a request failed, or its status. */
@@ -924,6 +930,18 @@ export const api = {
     call<undefined>("PUT", "/api/artist-names/link", { name, artist_id: artistId }),
   /** Forget a name's link, so it is offered again. */
   unlinkArtist: (name: string) => call<undefined>("POST", "/api/artist-names/unlink", { name }),
+  /** Keep the name an artist is shown by and a note about it; `null` or empty forgets one. */
+  setArtistDetails: (artistId: string, shownAs: string | null, about: string | null) =>
+    call<undefined>("PUT", `/api/artists/${encodeURIComponent(artistId)}/details`, {
+      shown_as: shownAs,
+      about,
+    }),
+  /** Make `image` the household's photo of an artist, in place of Wikidata's. */
+  setArtistPhoto: (artistId: string, image: Blob) =>
+    send<undefined>("PUT", `/api/artists/${encodeURIComponent(artistId)}/photo`, image),
+  /** Drop the household's photo of an artist, so Wikidata's shows again. */
+  removeArtistPhoto: (artistId: string) =>
+    call<undefined>("DELETE", `/api/artists/${encodeURIComponent(artistId)}/photo`),
   /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */

@@ -28,15 +28,19 @@ from pathlib import Path
 from typing import Final
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
 from medleyplay.application.ai import is_set_up, provider_named
+from medleyplay.application.covers import checked_cover, keep_cover
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import (
+    MAX_ABOUT,
+    MAX_SHOWN_AS,
     Alias,
     Artist,
     Candidate,
@@ -51,6 +55,7 @@ from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundE
 from medleyplay.domain.jobs import Job
 from medleyplay.persistence.schema import (
     ArtistAliasRow,
+    ArtistHouseholdRow,
     ArtistLinkRow,
     ArtistRecommendationRow,
     ArtistRow,
@@ -176,8 +181,10 @@ def find_artist_target(name: str) -> str:
 class KnownArtist:
     """An artist MusicBrainz knows, with every name it goes by.
 
-    `page` is its page on Wikidata, and `photo` the cover holding its photo, with
-    `photo_page`, where the photo comes from; each is `None` until Wikidata gives it.
+    `page` is its page on Wikidata. `photo` is the cover holding its photo: the
+    household's own when `own_photo`, else Wikidata's, with `photo_page`, where it
+    comes from. `shown_as` is the name the household shows it by, and `about` the
+    household's note about it. Each is `None` until given or chosen.
     """
 
     artist: Artist
@@ -185,6 +192,9 @@ class KnownArtist:
     page: str | None = None
     photo: str | None = None
     photo_page: str | None = None
+    shown_as: str | None = None
+    about: str | None = None
+    own_photo: bool = False
 
 
 @dataclass(frozen=True)
@@ -243,8 +253,14 @@ class ArtistService:
         jobs: JobService,
         kinds: ArtistKinds,
         on_change: Callable[[str], None] | None = None,
+        *,
+        covers_folder: Path,
     ) -> None:
-        """Create a service over the database `units` open, telling `on_change` of each change."""
+        """Create a service over the database `units` open, telling `on_change` of each change.
+
+        The household's photos of artists are kept in `covers_folder`, with the covers.
+        """
+        self._covers_folder = covers_folder
         self._units = units
         self._clock = clock
         self._plugins = plugins
@@ -387,6 +403,52 @@ class ArtistService:
             self._jobs.active(CHOOSE_ARTISTS_KIND, f"artist-choice:{batch}") is not None
             for batch in range(MAX_LOOK_UP // MAX_CHOICES)
         )
+
+    def set_details(self, artist_id: str, *, shown_as: str | None, about: str | None) -> None:
+        """Keep the name the household shows the artist by, and its note; empty forgets one.
+
+        The songs keep their names as written.
+        """
+        shown = _chosen(shown_as, MAX_SHOWN_AS, "The name it is shown by")
+        note = _chosen(about, MAX_ABOUT, "The note")
+        with self._units.begin() as db:
+            row = self._household(db, artist_id)
+            row.shown_as, row.about, row.changed_at = shown, note, self._clock()
+        self._changed()
+
+    def set_photo(self, artist_id: str, data: bytes) -> None:
+        """Make the image `data` the household's photo of the artist, in place of Wikidata's.
+
+        A JPEG, PNG, or WebP image of at most 10 MiB is kept; anything else is refused.
+        """
+        name = checked_cover(data)
+        with self._units.begin() as db:
+            row = self._household(db, artist_id)
+            row.photo, row.changed_at = name, self._clock()
+            keep_cover(self._covers_folder, name, data)
+        self._changed()
+
+    def remove_photo(self, artist_id: str) -> None:
+        """Drop the household's photo of the artist, so Wikidata's shows again."""
+        with self._units.begin() as db:
+            row = self._household(db, artist_id)
+            row.photo, row.changed_at = None, self._clock()
+        self._changed()
+
+    def _household(self, db: Session, artist_id: str) -> ArtistHouseholdRow:
+        """Return what the household chose for the artist, refusing an artist no site named."""
+        if db.get(ArtistRow, artist_id) is None:
+            message = "No site has named that artist."
+            raise NotFoundError(message)
+        # Two first changes at once both find no row; the second keeps the first's.
+        db.execute(
+            insert(ArtistHouseholdRow)
+            .values(artist_id=artist_id, changed_at=self._clock())
+            .on_conflict_do_nothing()
+        )
+        return db.scalars(
+            select(ArtistHouseholdRow).where(ArtistHouseholdRow.artist_id == artist_id)
+        ).one()
 
     def unlink(self, name: str) -> None:
         """Forget the link of `name`, so it is offered again."""
@@ -625,19 +687,37 @@ def _found_of(search: ArtistSearchRow) -> tuple[tuple[str, int], ...]:
 
 
 def _known(db: Session) -> dict[str, KnownArtist]:
-    """Return every artist known, each with its names once: MusicBrainz's first."""
+    """Return every artist known, each with its names once, MusicBrainz's first.
+
+    The household's photo shows in place of Wikidata's.
+    """
     aliases: dict[str, dict[str, Alias]] = {}
     rows = db.scalars(select(ArtistAliasRow).order_by(ArtistAliasRow.name)).all()
     for row in sorted(rows, key=lambda row: row.origin != FINDER):
         names = aliases.setdefault(row.artist_id, {})
         names.setdefault(row.key, Alias(row.name, row.locale, row.primary))
-    return {
-        row.id: KnownArtist(
-            Artist(row.id, row.name, row.sort_name, row.disambiguation, row.country),
-            tuple(aliases.get(row.id, {}).values()),
-            row.page,
-            row.photo,
-            row.photo_page,
+    chosen = {row.artist_id: row for row in db.scalars(select(ArtistHouseholdRow))}
+    known: dict[str, KnownArtist] = {}
+    for found in db.scalars(select(ArtistRow)):
+        own = chosen.get(found.id)
+        own_photo = own is not None and own.photo is not None
+        known[found.id] = KnownArtist(
+            Artist(found.id, found.name, found.sort_name, found.disambiguation, found.country),
+            tuple(aliases.get(found.id, {}).values()),
+            page=found.page,
+            photo=own.photo if own is not None and own_photo else found.photo,
+            photo_page=None if own_photo else found.photo_page,
+            shown_as=None if own is None else own.shown_as,
+            about=None if own is None else own.about,
+            own_photo=own_photo,
         )
-        for row in db.scalars(select(ArtistRow))
-    }
+    return known
+
+
+def _chosen(value: str | None, longest: int, what: str) -> str | None:
+    """Return `value` trimmed, `None` when empty, refusing one longer than `longest`."""
+    trimmed = (value or "").strip()
+    if len(trimmed) > longest:
+        message = f"{what} is at most {longest} characters."
+        raise InvalidInputError(message)
+    return trimmed or None

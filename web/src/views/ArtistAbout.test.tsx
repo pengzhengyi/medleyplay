@@ -132,6 +132,19 @@ describe("about an artist", () => {
     expect(screen.queryByRole("link", { name: "Photo: Wikimedia Commons" })).toBeNull();
   });
 
+  it("shows the household's note about the artist", () => {
+    render(
+      <ArtistAbout
+        name="The Beatles"
+        songs={[]}
+        artist={{ ...BEATLES, about: "Four lads from Liverpool." }}
+        toLink={false}
+      />,
+    );
+
+    expect(screen.getByText("Four lads from Liverpool.")).toBeInTheDocument();
+  });
+
   it("says what tells the artist apart, and the other names it goes by", () => {
     render(<ArtistAbout name="披头士" songs={[]} artist={BEATLES} toLink={false} />);
 

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Edit an artist's details** — *Edit details* on a linked artist's page
+  chooses the name it is shown by, from every name it goes by, a note about it,
+  and a photo of your own in place of Wikidata's. Its songs keep their names as
+  written.
+
 - **An artist's page shows its photo** — once a name is linked, Wikidata gives
   the artist's photo from Wikimedia Commons, kept with the covers and credited on
   its page, and the *Wikidata* link opens the artist's own item. Artists linked

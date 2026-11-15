@@ -1,18 +1,26 @@
-"""The artist names API: the Library's artist names, looked up on MusicBrainz, and linked."""
+"""The artists API: the Library's artist names, and what the household chooses for an artist.
+
+Names are looked up on MusicBrainz and linked; for an artist, the household may
+choose the name it is shown by, a note, and a photo.
+"""
 
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from medleyplay.application.artists import MAX_LOOK_UP, ArtistName, KnownArtist
-from medleyplay.domain.artists import LookUp
+from medleyplay.domain.artists import MAX_ABOUT, MAX_SHOWN_AS, LookUp
+from medleyplay.domain.covers import MAX_COVER_BYTES
 from medleyplay.web.deps import ArtistsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/artist-names", tags=["artists"])
+artists_router = APIRouter(prefix="/api/artists", tags=["artists"])
 
 type _Name = Annotated[str, Field(min_length=1, max_length=512)]
+type _ArtistId = Annotated[str, Path(max_length=64)]
 
 
 class AliasOut(BaseModel):
@@ -34,7 +42,12 @@ class ArtistOut(BaseModel):
     aliases: list[AliasOut]
     page: str | None = Field(description="Its page on Wikidata, once Wikidata gives it.")
     photo: str | None = Field(description="The cover holding its photo, from Wikidata.")
-    photo_page: str | None = Field(description="Where the photo comes from, and its license.")
+    photo_page: str | None = Field(
+        description="Where Wikidata's photo comes from, and its license; none for the household's."
+    )
+    shown_as: str | None = Field(description="The name the household shows it by, if chosen.")
+    about: str | None = Field(description="The household's note about it, if any.")
+    own_photo: bool = Field(description="Whether the photo is the household's own.")
 
     @classmethod
     def of(cls, known: KnownArtist) -> "ArtistOut":
@@ -52,6 +65,9 @@ class ArtistOut(BaseModel):
             page=known.page,
             photo=known.photo,
             photo_page=known.photo_page,
+            shown_as=known.shown_as,
+            about=known.about,
+            own_photo=known.own_photo,
         )
 
 
@@ -148,6 +164,13 @@ class LinkIn(BaseModel):
     artist_id: Annotated[str, Field(max_length=64)] | None
 
 
+class ArtistDetailsIn(BaseModel):
+    """What the household chooses for an artist; an empty one, or none, is forgotten."""
+
+    shown_as: Annotated[str, Field(max_length=MAX_SHOWN_AS)] | None = None
+    about: Annotated[str, Field(max_length=MAX_ABOUT)] | None = None
+
+
 class UnlinkIn(BaseModel):
     """Forget the link of a name."""
 
@@ -193,3 +216,38 @@ def link(body: LinkIn, me: SignedInAccount, service: ArtistsDep) -> None:
 def unlink(body: UnlinkIn, _: SignedInAccount, service: ArtistsDep) -> None:
     """Forget the name's link, so it is offered again."""
     service.unlink(body.name)
+
+
+@artists_router.put("/{artist_id}/details", status_code=status.HTTP_204_NO_CONTENT)
+def set_details(
+    artist_id: _ArtistId, body: ArtistDetailsIn, _: SignedInAccount, service: ArtistsDep
+) -> None:
+    """Keep the name the artist is shown by, and a note about it; its songs keep theirs."""
+    service.set_details(artist_id, shown_as=body.shown_as, about=body.about)
+
+
+@artists_router.put(
+    "/{artist_id}/photo",
+    status_code=status.HTTP_204_NO_CONTENT,
+    openapi_extra={
+        "requestBody": {"content": {"image/*": {"schema": {"type": "string", "format": "binary"}}}}
+    },
+)
+async def set_photo(
+    artist_id: _ArtistId, request: Request, _: SignedInAccount, service: ArtistsDep
+) -> None:
+    """Make the image in the body the household's photo of the artist."""
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > MAX_COVER_BYTES:
+            message = f"A photo is at most {MAX_COVER_BYTES // (1024 * 1024)} MiB."
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, message)
+    # Hashing, writing, and waiting on the database go to a thread, clear of the event loop.
+    await run_in_threadpool(service.set_photo, artist_id, bytes(data))
+
+
+@artists_router.delete("/{artist_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+def remove_photo(artist_id: _ArtistId, _: SignedInAccount, service: ArtistsDep) -> None:
+    """Drop the household's photo of the artist, so Wikidata's shows again."""
+    service.remove_photo(artist_id)

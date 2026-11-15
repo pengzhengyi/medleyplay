@@ -26,6 +26,10 @@ from typing import Final
 from medleyplay.domain.rules import fold
 from medleyplay.domain.tidy import tidy_artist
 
+MAX_SHOWN_AS: Final = 512
+"""The longest name the household may show an artist by."""
+MAX_ABOUT: Final = 1000
+"""The longest note the household may keep about an artist."""
 MAX_QUERIES: Final = 4
 """The most searches one name is looked up with: whole, then by its parts."""
 MIN_SLASHED_LATIN: Final = 3

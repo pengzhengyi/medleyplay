@@ -227,6 +227,19 @@ button.text:hover:not(:disabled) {
   --rail: 5rem;
 }
 
+/* Minimized, the rail is one line above the view, and the view takes its column. */
+@media (width > 64rem) {
+  .library.rail-minimized {
+    /* The header's wordmark keeps the rail's full width. */
+    --rail: 13.25rem;
+
+    grid-template:
+      "top top" auto
+      "nav queue" auto
+      "main queue" 1fr / minmax(0, 1fr) 20rem;
+  }
+}
+
 .top {
   grid-area: top;
   position: sticky;
@@ -341,11 +354,6 @@ button.text:hover:not(:disabled) {
 .scope label:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
-}
-
-.top .account {
-  color: var(--muted);
-  font-size: 0.9rem;
 }
 
 /* Offline says so in the header, calmly, and leads to the Network settings. */
@@ -1839,23 +1847,140 @@ button.text:hover:not(:disabled) {
     0 4px 14px -8px hsl(var(--shadow-color) / 14%);
 }
 
-/* Collapsing the rail, or opening it again. */
-.views .views-toggle {
+/* The rail's two controls, at its top right: its names or icons, and minimizing it. */
+.views-bar {
   display: flex;
-  align-self: flex-start;
-  width: auto;
-  margin: 0.4rem 0 0;
-  padding: 0.45rem 0.9rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+  margin: 0 0 0.25rem;
+}
+
+.views .views-control {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.views .views-control:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* Who is signed in, at the rail's foot under a hairline, opening a menu with Sign out. */
+.views-foot {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.views-account {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.45rem 0.6rem;
   border: none;
   border-radius: 0.8rem;
   background: none;
-  color: var(--muted);
-  font-size: 1.15rem;
+  color: var(--ink);
+  font-weight: 500;
+  text-align: left;
 }
 
-.views .views-toggle:hover {
+.views-account:hover,
+.views-account[data-state="open"] {
   background: var(--surface);
+}
+
+.views-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.views-account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* In the header, on a screen too narrow for the rail: only as wide as the name. */
+.top .views-account {
+  width: auto;
+  padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+  color: var(--muted);
+}
+
+/* Minimized: the view shown, as a button opening every view, and the way back. */
+.views .views-shown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: auto;
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  border-radius: 0.8rem;
+  background: var(--accent-soft);
   color: var(--ink);
+  font-weight: 500;
+}
+
+.views-shown-icon {
+  color: var(--accent);
+  font-size: 1.2rem;
+}
+
+.views-shown-caret {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.track-menu-item[aria-current="page"] {
+  font-weight: 600;
+}
+
+/* How many names wait, in the minimized rail and its menu. */
+.menu-count {
+  min-width: 1.4rem;
+  margin-left: auto;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.views-shown .menu-count {
+  margin-left: 0;
+}
+
+/* A click leaves no ring; the keyboard still shows one. */
+.views .views-control:focus:not(:focus-visible),
+.views-account:focus:not(:focus-visible),
+.views .views-shown:focus:not(:focus-visible) {
+  box-shadow: none;
 }
 
 @media (width > 64rem) {
@@ -1888,12 +2013,49 @@ button.text:hover:not(:disabled) {
     line-height: 1.05rem;
   }
 
-  .views.collapsed .views-toggle {
-    align-self: center;
-    padding: 0.45rem 0.6rem;
+  .views.collapsed .views-bar {
+    justify-content: center;
   }
 
-  .rail-collapsed .top .wordmark-name {
+  .views.collapsed .views-account {
+    justify-content: center;
+    padding: 0.45rem 0;
+  }
+
+  .views.collapsed .views-account-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .views.minimized {
+    flex-direction: row;
+    justify-self: start;
+    z-index: 1;
+    margin: 0.5rem 0 0 1.5rem;
+    padding: 0.3rem;
+    border-radius: 1rem;
+  }
+
+  .views.minimized .views-bar {
+    gap: 0.25rem;
+    margin: 0;
+  }
+
+  .views.minimized .views-list,
+  .views.minimized .views-foot {
+    display: none;
+  }
+
+  /* The header's own name and Sign out make way for the rail's. */
+  .top .header-account {
+    display: none;
+  }
+
+  .rail-collapsed:not(.rail-minimized) .top .wordmark-name {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1912,6 +2074,11 @@ button.text:hover:not(:disabled) {
   margin: 0;
 }
 
+/* Inset from the rail's edges: Pico's `nav ul:first-of-type` would pull the list out to them. */
+.views .views-list {
+  margin: 0;
+}
+
 .views li {
   display: block;
   padding: 0;
@@ -1924,6 +2091,7 @@ button.text:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  white-space: nowrap;
   padding: 0.55rem 0.9rem;
   margin: 0;
   border-radius: 0.8rem;
@@ -1957,7 +2125,7 @@ button.text:hover:not(:disabled) {
 /* Clean up sits under Insights, indented, with how many names wait. */
 
 .views li.under .view-link {
-  padding-left: 2.4rem;
+  padding-left: 2.1rem;
   font-size: 0.92rem;
 }
 
@@ -3428,7 +3596,8 @@ button.icon.heart.on:hover,
     margin-right: 0.5rem;
   }
 
-  .views .views-toggle {
+  .views .views-bar,
+  .views .views-foot {
     display: none;
   }
 
@@ -3534,7 +3703,7 @@ button.icon.heart.on:hover,
     padding: 0.6rem 1rem;
   }
 
-  .top .account,
+  .top .views-account-name,
   .mode-note .why {
     display: none;
   }
@@ -5218,7 +5387,7 @@ kbd {
 
 /* Without a keyboard, as on a phone, there are no shortcuts to list. */
 @media (hover: none), (width <= 48rem) {
-  .keys-button {
+  .top .keys-button {
     display: none;
   }
 }

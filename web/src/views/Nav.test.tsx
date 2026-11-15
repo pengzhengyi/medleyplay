@@ -59,4 +59,64 @@ describe("moving between views", () => {
       "true",
     );
   });
+
+  it("offers to minimize the rail to the view shown", async () => {
+    const onMinimize = vi.fn();
+    render(<Nav route={{ view: "library" }} onToggle={vi.fn()} onMinimize={onMinimize} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Minimize the rail" }));
+
+    expect(onMinimize).toHaveBeenCalledOnce();
+  });
+
+  it("minimized, names the view shown, whose menu goes to any other", async () => {
+    const onMinimize = vi.fn();
+    render(<Nav route={{ view: "artist", name: "陶喆" }} minimized onMinimize={onMinimize} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Artists: choose a view" }));
+
+    expect(screen.getByRole("menuitem", { name: "Radio" })).toHaveAttribute("href", "#/radio");
+    expect(screen.getByRole("menuitem", { name: "Artists" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("minimized, shows the whole rail again", async () => {
+    const onMinimize = vi.fn();
+    render(<Nav route={{ view: "library" }} minimized onMinimize={onMinimize} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Show the whole rail" }));
+
+    expect(onMinimize).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the account in the rail", () => {
+  it("shows who is signed in, with Sign out in its menu", async () => {
+    const onSignOut = vi.fn();
+    render(<Nav route={{ view: "library" }} account={{ name: "Admin", onSignOut }} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Admin: account" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+
+    expect(onSignOut).toHaveBeenCalledOnce();
+  });
+
+  it("minimized, keeps Sign out at the foot of the views' menu", async () => {
+    const onSignOut = vi.fn();
+    render(
+      <Nav
+        route={{ view: "library" }}
+        minimized
+        onMinimize={vi.fn()}
+        account={{ name: "Admin", onSignOut }}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Library: choose a view" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+
+    expect(onSignOut).toHaveBeenCalledOnce();
+  });
 });

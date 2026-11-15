@@ -424,9 +424,21 @@ and its last button folds or opens them all.
 
 Wider than 64rem, the rail sits on a surface of its own with a soft shadow,
 quieter than Up next's, and the wordmark above it takes its width, so the search
-starts where the page does. Its last button collapses it to its icons, each
-naming its view on hover, with Clean up's count on its icon; each browser
-remembers the choice.
+starts where the page does. The view shown is lit as a pill set in from the
+rail's edges. Two controls sit at the rail's top right, and each browser
+remembers both choices:
+
+- **Icons or names.** The rail collapses to its icons, each naming its view on
+  hover, with Clean up's count on its icon.
+- **Minimize or show it whole.** Minimized, the rail is one line above the view,
+  the view shown and the way back; the view takes the rail's column. The view
+  shown opens a menu of every view, with Clean up's count and, at its foot, who
+  is signed in and *Sign out*.
+
+Who is signed in sits at the rail's foot, as a round initial and the name,
+opening a menu with *Sign out*; the header leaves them out. Narrower, where
+there is no rail, the same menu sits in the header instead, as only the initial
+on a phone.
 
 A touch screen, which can't point, shows a row's actions all the time. The
 page sizes itself to the dynamic viewport (`dvh`) and keeps the player and the

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A rail that minimizes, and the account at its foot** — the rail's two
+  controls sit at its top: one shows only its icons, the other minimizes it to
+  the view shown, whose menu goes to any other, so the page takes the width. Who
+  is signed in moves from the header to the rail's foot, with *Sign out* in its
+  menu; the view shown is set in from the rail's edges.
+
 - **Choose the accent color** — *Settings › Appearance* picks any color for
   buttons, links, and what's playing, from a color square, a hex code, or a
   roll of the dice, and goes back to jade in one click. Each browser keeps its

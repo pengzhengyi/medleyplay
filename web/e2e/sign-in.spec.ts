@@ -13,7 +13,8 @@ test("signing in shows the Library, and signing out returns to the form", async 
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("button", { name: "Alpha", exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: /: account$/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("form", { name: "Sign in" })).toBeVisible();
 });
 

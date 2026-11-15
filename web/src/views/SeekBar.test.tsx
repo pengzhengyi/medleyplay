@@ -208,22 +208,75 @@ describe("a seek bar across a whole album", () => {
 });
 
 describe("a seek bar with a preview", () => {
-  it("shows the preview of the time under the pointer while hovering, and nothing once it leaves", () => {
+  /** A bar 200 pixels wide over 100 seconds, whose preview names the second under the pointer. */
+  function renderPreviewed() {
+    const onSeek = vi.fn();
     render(
       <SeekBar
         position={10}
         duration={100}
-        onSeek={vi.fn()}
+        onSeek={onSeek}
         preview={(seconds) => <p>{`Preview of ${String(seconds)}`}</p>}
       />,
     );
     const bar = screen.getByRole("slider", { name: "Position" });
     bar.getBoundingClientRect = () => new DOMRect(0, 0, 200, 12);
+    const preview = () => bar.querySelector<HTMLElement>(".seek-preview");
+    return { bar, preview, onSeek };
+  }
+  const wait = (ms: number) => {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+
+  it("shows the preview of the time under the pointer, and hides it a moment after it leaves", () => {
+    vi.useFakeTimers();
+    const { bar, preview } = renderPreviewed();
 
     fireEvent.pointerMove(bar, { clientX: 50 });
-
-    expect(bar.querySelector(".seek-preview")).toHaveTextContent("Preview of 25");
+    expect(preview()).toHaveTextContent("Preview of 25");
     fireEvent.pointerLeave(bar);
-    expect(bar.querySelector(".seek-preview")).toBeNull();
+    const lingering = preview();
+    wait(150);
+
+    expect(lingering).not.toBeNull();
+    expect(preview()).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("stays, as it was, while the pointer moves from the bar onto it", () => {
+    vi.useFakeTimers();
+    const { bar, preview } = renderPreviewed();
+    fireEvent.pointerMove(bar, { clientX: 50 });
+
+    const card = preview();
+    if (card === null) {
+      throw new Error("No preview shows.");
+    }
+    fireEvent.pointerEnter(card);
+    fireEvent.pointerMove(card, { clientX: 120 });
+    fireEvent.pointerLeave(bar);
+    wait(1000);
+
+    expect(preview()).toHaveTextContent("Preview of 25");
+    fireEvent.pointerLeave(card);
+    wait(150);
+    expect(preview()).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("never seeks for a press on the preview", () => {
+    const { bar, preview, onSeek } = renderPreviewed();
+    fireEvent.pointerMove(bar, { clientX: 50 });
+
+    const card = preview();
+    if (card === null) {
+      throw new Error("No preview shows.");
+    }
+    fireEvent.pointerDown(card, { clientX: 120, button: 0 });
+    fireEvent.pointerUp(card, { clientX: 120, button: 0 });
+
+    expect(onSeek).not.toHaveBeenCalled();
   });
 });

@@ -458,6 +458,23 @@ songs editor.
   accept: no JSON schema, no tools,
   no streaming. A base URL is `http` or `https` with no login, query, or fragment,
   and `http` only for an address on the machine itself.
+- **GitHub Copilot is asked through its SDK.** GitHub retired its Models API, the
+  OpenAI-style endpoint, on 2026-07-30, and Copilot offers no chat endpoint of its
+  own to an app, so the preset *GitHub Copilot* is a provider at
+  `https://api.githubcopilot.com` that the plugin asks through GitHub's Copilot SDK
+  (`github-copilot-sdk`, MIT) instead of over HTTP; ordering, failover, the
+  Keychain, and *answered by* treat it as any other. Its key is a GitHub token of
+  an account with Copilot, a fine-grained token with the *Copilot Requests*
+  permission, and its model one the subscription offers, `gpt-5-mini` by default.
+  The SDK runs Copilot's own runtime as a child process of the Job, downloading it
+  on first use (`python -m copilot download-runtime` fetches it ahead), so stopping
+  the Job stops it. As the runtime is an agent, it is given no tool, rejects every
+  permission it asks for, works in an empty directory removed after, and its
+  system message is the plugin's, replacing Copilot's own: it only reads the
+  question and answers it. A token GitHub doesn't accept is a refusal, a model the
+  subscription doesn't offer or an empty reply an unusable answer, and a runtime
+  that doesn't answer in 90 seconds a network failure. Each question counts
+  against the account's Copilot allowance.
 - **A key is a secret.** It is kept in the Keychain, as logins and proxies are,
   under a name of its own that the provider's row keeps; the provider set up when
   only one could be keeps `ai:key`, so no migration touches the Keychain. The API

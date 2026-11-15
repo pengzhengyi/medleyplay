@@ -5,7 +5,7 @@
  * choice too: there the box takes a link or a bare video code, and Enter looks it up.
  */
 
-import { MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon, MusicNotesSimpleIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { type Route, navigate } from "../routes";
@@ -92,7 +92,7 @@ export function SearchBox({
       </label>
       {providers.length > 0 && (
         <div className="scope" role="radiogroup" aria-label="Search in">
-          <label>
+          <label title="Library">
             <input
               type="radio"
               name="scope"
@@ -101,7 +101,8 @@ export function SearchBox({
                 setChosen(LIBRARY);
               }}
             />
-            Library
+            <MusicNotesSimpleIcon className="site-mark" weight="bold" aria-hidden />
+            <span className="visually-hidden">Library</span>
           </label>
           {providers.map((provider) => (
             <label key={provider} title={SITE_NAMES[provider] ?? provider}>

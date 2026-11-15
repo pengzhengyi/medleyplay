@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An artist's page shows its photo** — once a name is linked, Wikidata gives
+  the artist's photo from Wikimedia Commons, kept with the covers and credited on
+  its page, and the *Wikidata* link opens the artist's own item. Artists linked
+  before are asked again the next time you choose *Look up*.
+
 - **GitHub Copilot as an AI provider** — Settings offers *GitHub Copilot*
   beside DeepSeek, OpenAI, Anthropic, and Ollama. It is asked through GitHub's
   Copilot SDK with a GitHub token of an account with Copilot, kept in the

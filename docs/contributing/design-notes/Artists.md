@@ -3,9 +3,10 @@
 > [!NOTE]
 > **Status: built.** This note describes one artist under many names: looking the
 > Library's artist names up on MusicBrainz, linking each to one artist, asking an
-> AI model which artist each name stands for, adding the names Wikidata knows each
-> linked artist by, and counting linked names as one artist across the Library. Tidying a name written with
-> more than the name in it is in [Track details](Track%20details.md).
+> AI model which artist each name stands for, adding the names, page, and photo
+> Wikidata knows each linked artist by, and counting linked names as one artist
+> across the Library. Tidying a name written with more than the name in it is in
+> [Track details](Track%20details.md).
 
 ## Contents
 
@@ -15,6 +16,7 @@
 - [Linking a name](#linking-a-name)
 - [Asking an AI model](#asking-an-ai-model)
 - [Wikidata's names](#wikidatas-names)
+- [Wikidata's page and photo](#wikidatas-page-and-photo)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
@@ -166,6 +168,25 @@ nicknames such as *周董*, and Japanese and Korean names.
   Beatles, scored 100, chosen already when no other artist goes by it too; it can
   still be looked up. A name naming no one artist is offered none.
 
+## Wikidata's page and photo
+
+- **Asked with the names,** in the same Job: the item's page
+  (`https://www.wikidata.org/wiki/Q1299`) and its image (`P18`), a preferred one
+  first and never a deprecated one, fetched from Wikimedia Commons 500 pixels wide
+  (`Special:FilePath/<file>?width=500`), a width Commons keeps ready. That is two
+  more requests, each a second after the one before.
+- **Kept as a cover:** the plugin writes the image into a folder of the Job's,
+  and the core keeps it as it keeps an enricher's cover: named by its bytes, and
+  only a JPEG, PNG, or WebP image of at most 10 MiB. The sweep that removes covers
+  no Track names keeps every artist's photo.
+- **Credited:** with the photo comes its page on Commons, which says who took it
+  and under what license; the artist's page links to it.
+- **A photo Commons doesn't give,** because it can't be fetched or is no such
+  image, is none, and the names are kept all the same. Each answer replaces the
+  page and photo the one before gave.
+- **Asked again for artists linked before photos were kept:** the migration that
+  added them forgets when Wikidata answered, so *Look up* asks it again.
+
 ## The web client
 
 - **A section of Clean up,** *Link artist names*, with how many names that may
@@ -190,13 +211,15 @@ nicknames such as *周董*, and Japanese and Korean names.
   recommends none of those offered, *None of these* is marked instead, with the
   reason beneath. *Link N recommended* links every name whose recommendation is an
   artist, never one the model recommends none for.
-- **An artist's page says who it is:** under its heading, a round mosaic of up to
+- **An artist's page says who it is:** under its heading, its photo from
+  Wikidata, credited *Photo: Wikimedia Commons*, or else a round mosaic of up to
   four of its albums' covers, or its initial; who MusicBrainz says it is, as
   *周杰倫 (TW)*; six of the other names it goes by, and the rest on request; and
-  links that open its MusicBrainz page, its Wikidata item (Wikidata's own search
-  for the MusicBrainz id), and a Rate Your Music search for its name, each in a
-  new tab. Nothing is asked of those sites; the household opens them. A name not
-  linked yet offers *Link it to an artist*, which opens Clean up.
+  links that open its MusicBrainz page, its Wikidata item (until Wikidata has
+  answered, Wikidata's own search for the MusicBrainz id), and a Rate Your Music
+  search for its name, each in a new tab. The links ask nothing of those sites;
+  the household opens them. A name not linked yet offers *Link it to an artist*,
+  which opens Clean up.
 - **Linked names are one artist** in the Artists view, named as most of its songs
   write it; on its page, which lists every song of every name linked to it; in
   search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;
@@ -207,7 +230,7 @@ nicknames such as *周董*, and Japanese and Korean names.
 
 | Endpoint | Who | What |
 | --- | --- | --- |
-| `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, and whether it is being asked now; and every artist those name, with its aliases |
+| `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, and whether it is being asked now; and every artist those name, with its aliases, and its Wikidata page and photo once Wikidata has answered |
 | `POST /api/artist-names/look-up` | Signed in | Ask about up to 500 names at once; each not linked, and that may be looked up, gets a Job. Answers how many were asked about, or 409 while the `musicbrainz` plugin is off |
 | `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
 | `POST /api/artist-names/recommend` | Signed in | Ask an AI model about up to 500 names looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked already |
@@ -218,7 +241,8 @@ nicknames such as *周董*, and Japanese and Korean names.
 - **The rules** (which names are looked up, the suggestion) are domain tests.
 - **The plugins** are tested with no socket opened: `musicbrainz` against a
   hand-made artist search in MusicBrainz's shape, `wikipedia` against
-  Wikidata's real answers for The Beatles, and the artist chooser of `ai-details`
+  Wikidata's real answers for The Beatles' names and a hand-made image statement
+  in Wikidata's shape, and the artist chooser of `ai-details`
   against a fake chat client.
 - **The service** runs real Jobs against the test plugin `reader`, whose finder
   answers *披头士* with The Beatles and a tribute band, and whose name finder

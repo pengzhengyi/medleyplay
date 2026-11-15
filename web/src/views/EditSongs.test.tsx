@@ -361,13 +361,16 @@ describe("editing a file's songs", () => {
     );
   });
 
-  it("can't ask an AI that isn't set up, and says where to set one up", async () => {
-    const { dialog } = await renderEditor(SPLIT, { ai: { ...AI_UNASKED, can: false } });
-
+  it("can't ask an AI that isn't set up, and says on hover where to set one up", async () => {
+    const ask = vi.fn();
+    const { dialog } = await renderEditor(SPLIT, { ai: { ...AI_UNASKED, can: false, ask } });
     const button = within(dialog).getByRole("button", { name: "Fill with AI" });
 
-    expect(button).toBeDisabled();
+    await userEvent.click(button);
+
+    expect(button).toHaveAttribute("aria-disabled", "true");
     expect(button).toHaveAccessibleDescription("Set up an AI provider in Settings to ask it");
+    expect(ask).not.toHaveBeenCalled();
   });
 
   it("types the songs as a list, starting from the rows, and keeps the songs it still names", async () => {
@@ -752,6 +755,19 @@ const startOfSong = (dialog: HTMLElement, place: number) =>
   within(dialog).getByRole("textbox", { name: `Start of song ${String(place)}` });
 
 describe("snapping the starts to the gaps in the audio", () => {
+  it("can't snap fewer than two songs, and says on hover why", async () => {
+    const { dialog } = await renderEditor(splitSongsOf(104, []), { silences: BREMEN_GAPS });
+    const button = within(dialog).getByRole("button", {
+      name: "Snap the starts to the gaps in the audio",
+    });
+
+    await userEvent.click(button);
+
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAccessibleDescription("Add two songs or more to snap their starts");
+    expect(within(dialog).queryByRole("status", { name: /Moved/ })).not.toBeInTheDocument();
+  });
+
   it("moves each start but the first to the gap nearest it, and says so", async () => {
     const { dialog } = await renderEditor(SPLIT, { silences: BREMEN_GAPS });
 

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Turn an AI provider off** — each provider's card in *Settings › AI* has a
+  switch: off, it keeps its place and key but isn't asked. The card fits one
+  line, why it last failed shows as an icon that explains on hover, and its
+  opened fields and buttons line up.
+
 - **A rail that minimizes, and the account at its foot** — the rail's two
   controls sit at its top: one shows only its icons, the other minimizes it to
   the view shown, whose menu goes to any other, so the page takes the width. Who
@@ -413,6 +418,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Track details](docs/contributing/design-notes/Track%20details.md#ai-suggestions) note.
 
 ### Changed
+
+- **Controls say why they can't be used** — *AI* and *Snap* in the songs editor,
+  and a preset already set up, say why on hover; a heart says whether its song
+  is a favorite and what a click does; short buttons no longer wrap their
+  labels, and a busy button shows one spinner in its icon's place.
 
 - Renamed the project from stream to medleyplay.
 - A Library backend's `locate` answers *missing* for a file that is gone,

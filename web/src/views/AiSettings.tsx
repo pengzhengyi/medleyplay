@@ -261,16 +261,18 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
                       : "secondary outline ai-preset"
                   }
                   aria-pressed={adding?.name === preset.name}
-                  disabled={preset !== OTHER && saved(preset)}
+                  aria-disabled={preset !== OTHER && saved(preset)}
                   title={
                     preset === OTHER
                       ? "Another provider that speaks the OpenAI chat protocol"
                       : saved(preset)
-                        ? "Set up already"
+                        ? `${preset.name} is set up already; change its model in its card`
                         : `Add ${preset.name}, asking ${preset.model}`
                   }
                   onClick={() => {
-                    startAdding(preset);
+                    if (preset === OTHER || !saved(preset)) {
+                      startAdding(preset);
+                    }
                   }}
                 >
                   {preset.name}

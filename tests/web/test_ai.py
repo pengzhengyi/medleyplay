@@ -25,6 +25,7 @@ def _shown(clock: FakeClock, provider_id: str, *, has_key: bool = True) -> dict[
         "failed_at": None,
         "failure_reason": None,
         "failure_status": None,
+        "enabled": True,
     }
 
 
@@ -137,17 +138,36 @@ def test_changing_the_model_keeps_the_place_and_the_key(
 
 @pytest.mark.parametrize(
     ("method", "path", "body"),
-    [("PUT", "key", {"key": KEY}), ("PUT", "model", {"model": "deepseek-pro"})],
-    ids=["replacing its key", "changing its model"],
+    [
+        ("PUT", "key", {"key": KEY}),
+        ("PUT", "model", {"model": "deepseek-pro"}),
+        ("PUT", "enabled", {"enabled": False}),
+    ],
+    ids=["replacing its key", "changing its model", "turning it off"],
 )
 def test_changing_a_provider_that_is_gone_is_not_found(
-    client: TestClient, method: str, path: str, body: dict[str, str]
+    client: TestClient, method: str, path: str, body: Mapping[str, object]
 ) -> None:
     set_up_as_alice(client)
 
     response = client.request(method, f"/api/ai/providers/gone/{path}", json=body)
 
     assert response.status_code == 404
+
+
+def test_turning_a_provider_off_and_on_keeps_its_place(client: TestClient) -> None:
+    set_up_as_alice(client)
+    deepseek = _add(client, DEEPSEEK)
+    _add(client, LOCAL)
+
+    off = client.put(f"/api/ai/providers/{deepseek}/enabled", json={"enabled": False})
+    shown = client.get("/api/ai").json()["providers"]
+
+    assert (off.status_code, off.json()["enabled"]) == (200, False)
+    assert [(each["model"], each["enabled"]) for each in shown] == [
+        ("deepseek-flash", False),
+        ("llama3.2", True),
+    ]
 
 
 def test_removing_a_provider_answers_204_also_when_it_is_gone_and_forgets_its_key(
@@ -170,6 +190,7 @@ _ROUTES: list[tuple[str, str, Mapping[str, object] | None]] = [
     ("POST", "/api/ai/providers", DEEPSEEK),
     ("PUT", "/api/ai/providers/any/key", {"key": KEY}),
     ("PUT", "/api/ai/providers/any/model", {"model": "m"}),
+    ("PUT", "/api/ai/providers/any/enabled", {"enabled": False}),
     ("PUT", "/api/ai/order", {"ids": []}),
     ("DELETE", "/api/ai/providers/any", None),
 ]

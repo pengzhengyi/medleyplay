@@ -9,6 +9,8 @@
 import { HeartIcon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { heartTitleOf } from "../heart";
+
 /** How long the note stays once nothing points at it. */
 const NOTE_MS = 6000;
 const SUGGESTED = "medleyplay.suggested";
@@ -95,7 +97,7 @@ export function FavoriteHeart({
         aria-label={`Favorite ${kind} ${name}`}
         aria-pressed={favorite}
         aria-describedby={showNote ? noteId : undefined}
-        title={favorite ? "Favorite" : "Not a favorite"}
+        title={heartTitleOf(name, favorite)}
         onFocus={showNote ? keep : undefined}
         onBlur={showNote ? hideLater : undefined}
         onClick={() => {

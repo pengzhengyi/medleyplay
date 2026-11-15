@@ -1,9 +1,10 @@
 /**
  * @file One saved AI provider, as a card in the order providers are asked.
  *
- * Closed, the card shows the provider's place, name, model, and key, and why it last
- * failed. Opened, it shows the address and model as read-only fields, and the few
- * things that can change while keeping its place: its model, its key, or removing it.
+ * Closed, the card is one line: the provider's place, name, model, and key, an icon
+ * when it last failed that says why on hover, and a switch to turn it off. Opened, it
+ * shows the address and model as read-only fields, and the few things that can change
+ * while keeping its place: its model, its key, or removing it.
  */
 
 import { useSortable } from "@dnd-kit/sortable";
@@ -16,6 +17,7 @@ import {
   HouseLineIcon,
   KeyIcon,
   WarningCircleIcon,
+  WifiSlashIcon,
 } from "@phosphor-icons/react";
 import { type SubmitEvent, useId, useState } from "react";
 
@@ -68,7 +70,8 @@ export function AiProviderCard({
   const sortable = count > 1;
   const keyWords = provider.has_key ? ", has a key" : local ? ", on this Mac" : "";
   const failureWords = failure === null ? "" : `, ${failure.label} ${failedAgo}`;
-  const heading = `${name}, ${provider.model}${keyWords}${failureWords}`;
+  const heading = `${name}, ${provider.model}${keyWords}${failureWords}${provider.enabled ? "" : ", off"}`;
+  const FailureIcon = provider.failure === "unreachable" ? WifiSlashIcon : WarningCircleIcon;
 
   const edit = (next: Editing) => {
     setEditing(next);
@@ -115,6 +118,13 @@ export function AiProviderCard({
   const remove = () => {
     run(api.removeAiProvider(provider.id), onRemoved);
   };
+  const turn = (enabled: boolean) => {
+    run(api.setAiEnabled(provider.id, enabled), (saved) => {
+      if (saved !== undefined) {
+        onChanged(saved);
+      }
+    });
+  };
 
   const removal =
     (provider.has_key ? `Remove ${name} and delete its key from this Mac?` : `Remove ${name}?`) +
@@ -123,7 +133,9 @@ export function AiProviderCard({
   return (
     <li
       ref={setNodeRef}
-      className={open ? "ai-provider open" : "ai-provider"}
+      className={["ai-provider", open && "open", !provider.enabled && "off"]
+        .filter(Boolean)
+        .join(" ")}
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       <div className="ai-provider-bar">
@@ -165,13 +177,29 @@ export function AiProviderCard({
             )
           )}
           {failure !== null && (
-            <span className="ai-provider-failure" title={fixOf(provider)}>
-              <WarningCircleIcon weight="fill" aria-hidden />
-              {failure.label} {failedAgo}
+            <span
+              className="ai-provider-failure"
+              title={`${failure.label} ${failedAgo}. ${fixOf(provider)}`}
+            >
+              <FailureIcon weight="bold" aria-hidden />
             </span>
           )}
           <CaretDownIcon className="ai-provider-caret" aria-hidden />
         </button>
+        <input
+          type="checkbox"
+          role="switch"
+          className="ai-provider-switch"
+          aria-label={`Ask ${name}`}
+          title={
+            provider.enabled ? `Asked; turn off to skip ${name}` : `Skipped; turn on to ask ${name}`
+          }
+          checked={provider.enabled}
+          disabled={busy}
+          onChange={(event) => {
+            turn(event.target.checked);
+          }}
+        />
         {sortable && (
           <span className="ai-provider-moves">
             <button
@@ -207,10 +235,12 @@ export function AiProviderCard({
             {failure.label} {failedAgo}. {fixOf(provider)}
           </p>
         )}
-        <label className="mark-name">
-          Base URL
-          <input type="url" readOnly value={provider.base_url} />
-        </label>
+        <div className="ai-provider-row">
+          <label className="mark-name">
+            Base URL
+            <input type="url" readOnly value={provider.base_url} />
+          </label>
+        </div>
         <form className="ai-provider-row" onSubmit={saveModel}>
           <label className="mark-name">
             Model
@@ -226,32 +256,38 @@ export function AiProviderCard({
               }}
             />
           </label>
-          {editing === "model" ? (
-            <>
-              <button type="submit" disabled={busy || model.trim() === ""}>
-                Save model
-              </button>
+          <span className="ai-provider-actions">
+            {editing === "model" ? (
+              <>
+                <button
+                  type="submit"
+                  aria-label="Save model"
+                  disabled={busy || model.trim() === ""}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="secondary outline"
+                  onClick={() => {
+                    edit(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
               <button
                 type="button"
                 className="secondary outline"
                 onClick={() => {
-                  edit(null);
+                  edit("model");
                 }}
               >
-                Cancel
+                Change model
               </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="secondary outline"
-              onClick={() => {
-                edit("model");
-              }}
-            >
-              Change model
-            </button>
-          )}
+            )}
+          </span>
         </form>
         <form className="ai-provider-row" onSubmit={saveKey}>
           {editing === "key" ? (
@@ -269,18 +305,20 @@ export function AiProviderCard({
                   }}
                 />
               </label>
-              <button type="submit" disabled={busy || key.trim() === ""}>
-                Save key
-              </button>
-              <button
-                type="button"
-                className="secondary outline"
-                onClick={() => {
-                  edit(null);
-                }}
-              >
-                Cancel
-              </button>
+              <span className="ai-provider-actions">
+                <button type="submit" aria-label="Save key" disabled={busy || key.trim() === ""}>
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="secondary outline"
+                  onClick={() => {
+                    edit(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </span>
             </>
           ) : (
             <>
@@ -292,20 +330,22 @@ export function AiProviderCard({
                   value={provider.has_key ? "Kept in the Keychain" : local ? "None needed" : "None"}
                 />
               </label>
-              <button
-                type="button"
-                className="secondary outline"
-                onClick={() => {
-                  edit("key");
-                }}
-              >
-                {provider.has_key ? "Replace key" : "Add a key"}
-              </button>
+              <span className="ai-provider-actions">
+                <button
+                  type="button"
+                  className="secondary outline"
+                  onClick={() => {
+                    edit("key");
+                  }}
+                >
+                  {provider.has_key ? "Replace key" : "Add a key"}
+                </button>
+              </span>
             </>
           )}
         </form>
         {editing === "remove" ? (
-          <p className="ai-provider-row ai-provider-confirm" role="group" aria-label="Remove">
+          <p className="ai-provider-confirm" role="group" aria-label="Remove">
             <span>{removal}</span>
             <button
               type="button"
@@ -326,7 +366,7 @@ export function AiProviderCard({
             </button>
           </p>
         ) : (
-          <p className="ai-provider-row">
+          <p className="ai-provider-confirm">
             <button
               type="button"
               className="secondary outline ai-provider-remove"

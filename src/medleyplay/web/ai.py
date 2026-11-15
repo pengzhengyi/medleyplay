@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, status
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, StrictStr
 
 from medleyplay.application.ai import SavedProvider
 from medleyplay.domain.ai import (
@@ -59,6 +59,14 @@ class ModelIn(BaseModel):
     model: _Model
 
 
+class EnabledIn(BaseModel):
+    """Whether a provider is asked from now on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: StrictBool
+
+
 class OrderIn(BaseModel):
     """Every provider's id, in the order they are asked."""
 
@@ -84,6 +92,8 @@ class ProviderOut(BaseModel):
     """What was wrong with its answer, when it was unusable."""
     failure_status: int | None
     """The status it refused the request with, when it refused one."""
+    enabled: bool
+    """Whether it is asked; one turned off keeps its place and key."""
 
     @classmethod
     def of(cls, saved: SavedProvider) -> "ProviderOut":
@@ -98,6 +108,7 @@ class ProviderOut(BaseModel):
             failed_at=saved.failed_at,
             failure_reason=saved.failure_reason,
             failure_status=saved.failure_status,
+            enabled=saved.enabled,
         )
 
 
@@ -149,6 +160,12 @@ def replace_key(provider_id: str, body: KeyIn, me: SignedInAccount, ai: AiDep) -
 def change_model(provider_id: str, body: ModelIn, me: SignedInAccount, ai: AiDep) -> ProviderOut:
     """Ask another model of the provider, keeping its place and key; 404 when it is gone."""
     return ProviderOut.of(ai.change_model(me, provider_id, body.model))
+
+
+@router.put("/providers/{provider_id}/enabled")
+def set_enabled(provider_id: str, body: EnabledIn, me: SignedInAccount, ai: AiDep) -> ProviderOut:
+    """Turn the provider on or off, keeping its place and key; admins only."""
+    return ProviderOut.of(ai.set_enabled(me, provider_id, enabled=body.enabled))
 
 
 @router.put("/order")

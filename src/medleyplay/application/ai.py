@@ -47,7 +47,7 @@ class SavedProvider:
 
     `failure` is why it last gave no answer, at `failed_at`, until it answers again; for
     an unusable answer, `failure_reason` says what was wrong, and `failure_status` the
-    status of a request it refused.
+    status of a request it refused. One not `enabled` keeps its place but isn't asked.
     The key is never shown, only whether there is one.
     """
 
@@ -60,11 +60,13 @@ class SavedProvider:
     failed_at: datetime | None = None
     failure_reason: UnusableReason | None = None
     failure_status: int | None = None
+    enabled: bool = True
 
 
 def is_set_up(db: Session) -> bool:
-    """Return whether an admin has set up a provider."""
-    return db.scalar(select(func.count()).select_from(AiProviderRow)) != 0
+    """Return whether an admin has set up a provider that is turned on."""
+    on = select(func.count()).select_from(AiProviderRow).where(AiProviderRow.enabled)
+    return db.scalar(on) != 0
 
 
 def record_answers(
@@ -214,6 +216,15 @@ class AiService:
             db.flush()
             return [_to_saved(rows[each]) for each in provider_ids]
 
+    def set_enabled(self, caller: Account, provider_id: str, *, enabled: bool) -> SavedProvider:
+        """Turn the provider on or off, keeping its place and key; admins only."""
+        _require_admin(caller)
+        with self._lock, self._units.begin() as db:
+            row = _row_of(db, provider_id)
+            row.enabled = enabled
+            db.flush()
+            return _to_saved(row)
+
     def remove(self, caller: Account, provider_id: str) -> None:
         """Forget the provider and its key, also when there is none; admins only."""
         _require_admin(caller)
@@ -230,14 +241,18 @@ class AiService:
                     self._secrets.delete(secret)
 
     def endpoints(self) -> tuple[AiEndpoint, ...]:
-        """Return the providers for a Job, in order, or none when none is set up.
+        """Return the providers turned on for a Job, in order, or none when none is set up.
 
         A provider whose key the Keychain no longer holds is left out and marked so. A
         Keychain that doesn't answer raises `KeychainUnavailableError`, and so does one
         that holds the key of no provider.
         """
         with self._units() as db:
-            rows = [(row.id, row.base_url, row.model, row.key_secret) for row in _in_order(db)]
+            rows = [
+                (row.id, row.base_url, row.model, row.key_secret)
+                for row in _in_order(db)
+                if row.enabled
+            ]
         lent: list[AiEndpoint] = []
         missing: list[str] = []
         for provider_id, base_url, model, secret in rows:
@@ -293,6 +308,7 @@ def _to_saved(row: AiProviderRow) -> SavedProvider:
         failed_at=row.failed_at,
         failure_reason=reason,
         failure_status=row.failure_status,
+        enabled=row.enabled,
     )
 
 

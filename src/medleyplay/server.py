@@ -270,7 +270,15 @@ def build_services(  # noqa: PLR0913, PLR0915
         devices=_devices(units, clock, accounts, events),
         remote=_remote(clock, events),
         ratings=RatingsService(units, clock, changes.tell),
-        artists=ArtistService(units, clock, plugins, jobs, artist_jobs, changes.tell),
+        artists=ArtistService(
+            units,
+            clock,
+            plugins,
+            jobs,
+            artist_jobs,
+            changes.tell,
+            covers_folder=data_dir / COVERS_FOLDER,
+        ),
     )
 
 

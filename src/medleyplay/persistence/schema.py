@@ -753,6 +753,25 @@ class ArtistSearchRow(Base):
     looked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class ArtistHouseholdRow(Base):
+    """What the household chose for an artist, apart from what the sites said.
+
+    `shown_as` is the name the Library shows the artist by, `about` a note about it,
+    and `photo` the cover holding the household's own photo of it; each is `None`
+    until chosen.
+    """
+
+    __tablename__ = "artist_household"
+
+    artist_id: Mapped[str] = mapped_column(
+        ForeignKey("artist.id", ondelete="CASCADE"), primary_key=True
+    )
+    shown_as: Mapped[str | None] = mapped_column(String(512), default=None)
+    about: Mapped[str | None] = mapped_column(String(1000), default=None)
+    photo: Mapped[str | None] = mapped_column(String(64), default=None)
+    changed_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class ArtistRecommendationRow(Base):
     """The artist an AI model last recommended linking a written name to, and why.
 

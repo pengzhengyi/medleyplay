@@ -1,13 +1,18 @@
 """The artist names API: the Library's artist names, and the links the household chose."""
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.artists import KnownArtist
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.artists import Alias, Artist
 from medleyplay.domain.catalog import SourceKey, TrackDetails
+from medleyplay.persistence.schema import ArtistRow
 from medleyplay.web.artists import ArtistOut
 from tests.support.api import set_up_as_alice
+from tests.support.images import gif_image, png_image
 
 
 def _song_by(catalog: CatalogService, artist: str, title: str = "Song") -> None:
@@ -123,4 +128,79 @@ def test_an_artist_shows_its_names_and_its_page_and_photo_from_wikidata() -> Non
         "page": "https://www.wikidata.org/wiki/Q1299",
         "photo": "9f2c" * 16,
         "photo_page": "https://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
+        "shown_as": None,
+        "about": None,
+        "own_photo": False,
     }
+
+
+def _beatles_known(units: sessionmaker[Session]) -> None:
+    """Keep The Beatles as an artist MusicBrainz named, as looking a name up would."""
+    with units.begin() as db:
+        db.add(
+            ArtistRow(
+                id="b10bbbfc",
+                name="The Beatles",
+                sort_name="Beatles, The",
+                disambiguation="",
+                country="GB",
+                found_at=datetime(2026, 11, 1, tzinfo=UTC),
+            )
+        )
+
+
+def test_the_household_shows_an_artist_by_a_name_of_its_choosing_with_a_note(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+
+    saved = client.put(
+        "/api/artists/b10bbbfc/details", json={"shown_as": "披头士", "about": "Four lads."}
+    )
+
+    assert saved.status_code == 204
+    [beatles] = client.get("/api/artist-names").json()["artists"]
+    assert (beatles["shown_as"], beatles["about"]) == ("披头士", "Four lads.")
+
+
+def test_the_household_s_photo_of_an_artist_is_set_and_removed(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+
+    set_photo = client.put("/api/artists/b10bbbfc/photo", content=png_image("Beatles"))
+    with_photo = client.get("/api/artist-names").json()["artists"][0]
+    removed = client.delete("/api/artists/b10bbbfc/photo")
+    without = client.get("/api/artist-names").json()["artists"][0]
+
+    assert (set_photo.status_code, removed.status_code) == (204, 204)
+    assert with_photo["own_photo"] is True
+    assert client.get(f"/api/covers/{with_photo['photo']}").status_code == 200
+    assert (without["own_photo"], without["photo"]) == (False, None)
+
+
+def test_a_photo_that_is_no_image_is_refused(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+
+    response = client.put("/api/artists/b10bbbfc/photo", content=gif_image())
+
+    assert response.status_code == 422
+
+
+def test_an_artist_no_site_named_is_not_found(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.put("/api/artists/nobody/details", json={"shown_as": "Anyone"})
+
+    assert response.status_code == 404
+
+
+def test_choosing_for_an_artist_is_for_signed_in_accounts(client: TestClient) -> None:
+    response = client.put("/api/artists/b10bbbfc/details", json={"shown_as": "Anyone"})
+
+    assert response.status_code == 401

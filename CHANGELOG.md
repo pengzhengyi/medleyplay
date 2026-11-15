@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Fill one artist into every song** — in the songs editor, an artist typed
+  into one row shows faintly in the rows with none, and Tab fills them all.
+
 - **Save accent colors to choose again** — the heart in *Settings › Appearance*
   keeps the color shown among 10 tiles, the oldest going first; a tile uses its
   color, and shows it large with its hex on hover.
@@ -434,6 +437,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The album's songs close when the mouse leaves** — opened from the album
   playing, by pointing or a click, they no longer stay until Escape; each song
   leads with a heart to favorite it.
+
+- **Saving details keeps the dialog open** — *Edit details* stays on the details
+  as saved and says so, so an album's songs can be split next; *Cancel* reads
+  *Close* once nothing is left to save.
 
 - **Controls say why they can't be used** — *AI* and *Snap* in the songs editor,
   and a preset already set up, say why on hover; a heart says whether its song

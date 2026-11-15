@@ -151,6 +151,10 @@ values.
   the household types or chooses that reads as what would show anyway, such as
   `03` over the file's track 3, is dropped rather than saved, so the found value
   still follows the file.
+- **Saving keeps the dialog open,** on the details read again as saved, saying
+  *Saved.*; closing is the household's choice, so an album's songs can be split
+  next without opening it again. *Save* waits for a change, and *Cancel* reads
+  *Close* once nothing is left to save.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works for any video, and asks the

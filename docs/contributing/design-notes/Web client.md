@@ -90,7 +90,12 @@ no router package.
   tab bar has no room for a ninth tab, so there Insights carries the count, and
   its page opens with *Clean up 37 names*. Each kind of change is a section headed by its
   name, how many wait, and its action for all of them: *Tidy all*, which tidies
-  the names listed in one request, and *Look up 24 names*.
+  the names listed in one request, and *Look up 24 names*. A bar above the
+  sections goes to each, with its count or a check once done; the sections with
+  names waiting come first. Within *Link artist names*, what can be done now
+  comes first: a name with a recommendation to link, then one with artists to
+  choose from, then one still to look up, and the names linked or kept apart
+  last.
 - **Playlists gain songs from a song's menu;** renaming, reordering, and
   removing wait. See [A song's menu](#a-songs-menu).
 - **Playing from a view** queues the Tracks the view shows, in their order at

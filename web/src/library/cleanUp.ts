@@ -13,3 +13,13 @@ export function unlinkedOf(names: ArtistNames): number {
 export function toDoOf(tidy: readonly NameToTidy[], artistNames: ArtistNames | undefined): number {
   return tidy.length + (artistNames === undefined ? 0 : unlinkedOf(artistNames));
 }
+
+/** Return `sections` with those that have names waiting first, and those done last, each as it was. */
+export function inOrderOfWaiting<T extends { readonly waiting: number }>(
+  sections: readonly T[],
+): T[] {
+  return [
+    ...sections.filter((section) => section.waiting > 0),
+    ...sections.filter((section) => section.waiting === 0),
+  ];
+}

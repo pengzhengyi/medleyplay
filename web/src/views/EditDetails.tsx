@@ -74,6 +74,9 @@ import { ORIGIN_TAGS } from "./originTags";
 import { type SongsControls, SongsControlsContext } from "./songsControls";
 import { STATUS_ICONS } from "./statusIcons";
 
+/** How long *Saved* shows beside the heading once the details are saved. */
+const SAVED_MS = 2500;
+
 /** How long text may be, as the server keeps it. */
 const MAX_TEXT = 512;
 
@@ -147,6 +150,18 @@ export function EditDetails({
   const [coverError, setCoverError] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  // Saying it saved is enough for a moment; the details shown are what was kept.
+  useEffect(() => {
+    if (!saved) {
+      return undefined;
+    }
+    const hide = setTimeout(() => {
+      setSaved(false);
+    }, SAVED_MS);
+    return () => {
+      clearTimeout(hide);
+    };
+  }, [saved]);
   const [panel, setPanel] = useState<"details" | "songs">(
     startOnSongs && songs !== undefined ? "songs" : "details",
   );
@@ -298,7 +313,14 @@ export function EditDetails({
         </div>
       )}
       <form className="card" hidden={panel === "songs"} onSubmit={(event) => void save(event)}>
-        <h2 id="edit-details-title">Edit details</h2>
+        <div className="edit-details-head">
+          <h2 id="edit-details-title">Edit details</h2>
+          {saved && !changed && !saving && (
+            <span className="edit-details-saved" role="status">
+              Saved
+            </span>
+          )}
+        </div>
         <p id="edit-details-song" className="edit-details-song">
           {track.title}
         </p>
@@ -373,11 +395,6 @@ export function EditDetails({
           </p>
         )}
         <footer className="dialog-buttons">
-          {saved && !changed && !saving && (
-            <span className="dialog-saved" role="status">
-              Saved.
-            </span>
-          )}
           <button
             type="button"
             className="secondary outline dialog-button"

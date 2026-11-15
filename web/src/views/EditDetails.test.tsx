@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ReactNode, useContext } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -138,9 +138,16 @@ describe("editing a song's details", () => {
     await save(dialog);
 
     expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "Re:Start", year: 2014 });
-    expect(await within(dialog).findByText("Saved.")).toHaveRole("status");
+    const said = await within(dialog).findByText("Saved");
+    expect(said).toHaveRole("status");
     expect(box(dialog, "Album")).toHaveValue("Re:Start");
     expect(onClose).not.toHaveBeenCalled();
+    await waitFor(
+      () => {
+        expect(said).not.toBeInTheDocument();
+      },
+      { timeout: 4000 },
+    );
   });
 
   it("closes only when asked, with Close once nothing is left to save", async () => {

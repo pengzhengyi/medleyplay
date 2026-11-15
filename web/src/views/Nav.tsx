@@ -3,6 +3,9 @@
  *
  * *Clean up* sits under Insights, with how many names wait. A phone's tab bar has no
  * room for it, so there Insights carries the count, and opens with a way to it.
+ *
+ * The rail can collapse to its icons, to leave the page more room; each then names its
+ * view on hover, as its accessible name always does.
  */
 
 import {
@@ -15,6 +18,7 @@ import {
   MusicNotesSimpleIcon,
   PlaylistIcon,
   RadioIcon,
+  SidebarSimpleIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
 
@@ -65,23 +69,38 @@ function topOf(route: Route): Top | undefined {
   }
 }
 
-/** Links to each view, the current one marked, and how many names wait to be cleaned up. */
-export function Nav({ route, toDo = 0 }: { readonly route: Route; readonly toDo?: number }) {
+/**
+ * Links to each view, the current one marked, and how many names wait to be cleaned up.
+ * With `onToggle`, a rail that shows its names, or not while `collapsed`.
+ */
+export function Nav({
+  route,
+  toDo = 0,
+  collapsed = false,
+  onToggle,
+}: {
+  readonly route: Route;
+  readonly toDo?: number;
+  readonly collapsed?: boolean;
+  readonly onToggle?: () => void;
+}) {
   const top = topOf(route);
   return (
-    <nav className="views" aria-label="Views">
+    <nav className={collapsed ? "views collapsed" : "views"} aria-label="Views" id="views">
       <ul>
         {TOPS.map(({ view, label, icon: ViewIcon, under = false }) => {
           const current = view === top;
           const counted = toDo > 0 && (view === "clean-up" || view === "insights");
           const waiting = `${String(toDo)} ${toDo === 1 ? "name" : "names"} to clean up`;
+          const named = counted ? `${label}, ${waiting}` : label;
           return (
             <li key={view} className={under ? "under" : undefined}>
               <a
                 className="view-link"
                 href={hrefOf({ view })}
                 aria-current={current ? "page" : undefined}
-                aria-label={counted ? `${label}, ${waiting}` : undefined}
+                aria-label={counted ? named : undefined}
+                title={collapsed ? named : undefined}
               >
                 <ViewIcon weight={current ? "fill" : "regular"} aria-hidden />
                 <span>{label}</span>
@@ -98,6 +117,19 @@ export function Nav({ route, toDo = 0 }: { readonly route: Route; readonly toDo?
           );
         })}
       </ul>
+      {onToggle !== undefined && (
+        <button
+          type="button"
+          className="views-toggle"
+          aria-label="Show the views' names"
+          aria-expanded={!collapsed}
+          aria-controls="views"
+          title={collapsed ? "Show the views' names" : "Show only the icons"}
+          onClick={onToggle}
+        >
+          <SidebarSimpleIcon aria-hidden />
+        </button>
+      )}
     </nav>
   );
 }

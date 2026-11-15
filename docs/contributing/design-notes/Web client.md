@@ -301,8 +301,10 @@ Track's kind is decided.
 
 <!-- cspell:ignore ｍｅｌｔ -->
 
-- **One search box in the header,** with a scope toggle: *Library* or
-  *Bilibili*. Bilibili shows only while the `bilibili` plugin is on. With it
+- **One search box in the header,** taking its room as on an iPad, with a scope
+  toggle at its end: *Library* or Bilibili, shown as Bilibili's mark and named on
+  hover and to a screen reader. Bilibili shows only while the `bilibili` plugin is
+  on. With it
   chosen, the box takes a link or a bare video code and *Enter* opens the add
   dialog; it doesn't search anything else. See
   [Manual downloads](Manual%20downloads.md#the-web-client).
@@ -407,6 +409,12 @@ and its last button folds or opens them all.
 | Wider than 64rem | A rail on the left | A panel on the right |
 | 48rem to 64rem | Tabs under the header | A panel opened from the player |
 | Up to 48rem | A tab bar along the bottom, below the player | A sheet opened from the player |
+
+Wider than 64rem, the rail sits on a surface of its own with a soft shadow,
+quieter than Up next's, and the wordmark above it takes its width, so the search
+starts where the page does. Its last button collapses it to its icons, each
+naming its view on hover, with Clean up's count on its icon; each browser
+remembers the choice.
 
 A touch screen, which can't point, shows a row's actions all the time. The
 page sizes itself to the dynamic viewport (`dvh`) and keeps the player and the

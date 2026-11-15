@@ -32,6 +32,7 @@ import type { AlbumSong, Playing } from "../player/albumNow";
 import { hrefOf } from "../routes";
 import { FavoriteHeart } from "./FavoriteHeart";
 import { PlayingKind } from "./PlayingKind";
+import { SiteMark } from "./SiteMark";
 import { FavoriteButton } from "./Transport";
 
 /** The song `track` names in what plays now: itself, the song the position is in, or none. */
@@ -179,7 +180,7 @@ export function NowPlayingNames({
               rel="noopener noreferrer"
               title={`Open the video it came from on ${siteNameOf(track.video)}, in a new tab`}
             >
-              {siteNameOf(track.video)}
+              <SiteMark name={siteNameOf(track.video)} />
               <ArrowSquareOutIcon aria-hidden />
             </a>
           )}

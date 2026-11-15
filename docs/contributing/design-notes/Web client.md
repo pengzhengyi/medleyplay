@@ -355,7 +355,19 @@ Track's kind is decided.
 One view, in sections, each saved on its own:
 
 - **Appearance:** the theme, the same choice as the header's switch; every
-  switch on the page shows the one chosen.
+  switch on the page shows the one chosen. And the accent color, jade unless
+  this browser chose another: a swatch opens react-colorful's color square and
+  hue slider, a field takes a hex code, the dice roll a hue as strong as jade,
+  and *Back to jade* forgets the choice.
+  - **One color, a shade per scheme.** The chosen color is moved in OKLCH
+    lightness only, keeping its hue, until it reads on each card: darkened to
+    4.5:1 on light, lightened to 6.5:1 on dark; one that already does is left as
+    chosen. The ink on it is white or a near-black of its hue, whichever reads
+    better. `accent.ts` writes the four shades as `--chosen-accent-*` on the root
+    before the first render, and the schemes' `--accent` tokens read them before
+    falling back to jade; `--accent-soft` mixes from `--accent`, so it follows.
+  - **Kept per browser,** like the theme, since how a screen looks belongs to
+    the screen.
 - **Keyboard shortcuts:** each command's keys, and changing them; see
   [Keyboard shortcuts](#keyboard-shortcuts).
 - **Network:** whether medleyplay is Online or Offline and why, the network the

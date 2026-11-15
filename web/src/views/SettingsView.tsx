@@ -24,6 +24,7 @@ import { useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
 import { formatBytes } from "../format";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import { AccentPicker } from "./AccentPicker";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
@@ -133,6 +134,8 @@ export function SettingsView({
       <>
         <p className="hint">Follow this device's light or dark setting, or keep one.</p>
         <ThemeSwitch />
+        <p className="hint">The color of buttons, links, and what's playing.</p>
+        <AccentPicker />
       </>
     ),
     "keyboard-shortcuts": <ShortcutSettings />,

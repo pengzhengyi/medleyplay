@@ -86,6 +86,12 @@ const HOTSPOT_MARK: MeteredNetwork = {
 
 const network = () => within(screen.getByRole("region", { name: "Network" }));
 const storage = () => within(screen.getByRole("region", { name: "Downloads and storage" }));
+/** The buttons in the sections' headings, which fold and open each section. */
+const folded = () =>
+  screen
+    .getAllByRole("heading", { level: 3 })
+    .map((heading) => within(heading).getByRole("button"))
+    .filter((toggle) => toggle.getAttribute("aria-expanded") === "false");
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -487,9 +493,7 @@ describe("the Settings sections", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Fold all" }));
 
-    expect(
-      screen.getAllByRole("button", { expanded: false }).map((button) => button.textContent),
-    ).toEqual([
+    expect(folded().map((toggle) => toggle.textContent)).toEqual([
       "Appearance",
       "Keyboard shortcuts",
       "Network",
@@ -504,7 +508,7 @@ describe("the Settings sections", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Open all" }));
 
-    expect(screen.queryAllByRole("button", { expanded: false })).toEqual([]);
+    expect(folded()).toEqual([]);
   });
 });
 

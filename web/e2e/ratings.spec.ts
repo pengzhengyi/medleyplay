@@ -8,7 +8,9 @@ const EXPORT = `RYM Album, First Name,Last Name,First Name localized, Last Name 
 "1002","Tony","Allen","","","Film of Life","2014","7","o","","CD",  "Warm &amp; loose."
 `;
 
-test("Settings previews a Rate Your Music export, imports it, lists it, and discards it", async ({ page }) => {
+test("Settings previews a Rate Your Music export, imports it, lists it, and discards it", async ({
+  page,
+}) => {
   await page.goto("/#/settings");
   const section = page.getByRole("region", { name: "Your ratings" });
 

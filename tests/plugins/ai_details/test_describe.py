@@ -102,12 +102,12 @@ def test_a_note_is_one_paragraph_cut_to_its_limit() -> None:
 
 def test_a_note_keeps_no_control_or_direction_characters() -> None:
     fake = FakeAiFactory.answering(
-        ChatReplyFactory.json_saying({"shown_as": None, "about": "A\u202esinger\u0007."})
+        ChatReplyFactory.json_saying({"shown_as": None, "about": "A\u202e singer\u0007."})
     )
 
     answer = describer_over(fake).describe(DAVID_TAO)
 
-    assert answer.about == "Asinger."
+    assert answer.about == "A singer."
 
 
 def test_a_line_break_in_a_name_or_song_cannot_add_a_line_to_the_question() -> None:

@@ -4,8 +4,9 @@
 > **Status: built.** This note describes one artist under many names: looking the
 > Library's artist names up on MusicBrainz, linking each to one artist, asking an
 > AI model which artist each name stands for, adding the names, page, and photo
-> Wikidata knows each linked artist by, and counting linked names as one artist
-> across the Library. Tidying a name written with more than the name in it is in
+> Wikidata knows each linked artist by, counting linked names as one artist across
+> the Library, and keeping what the household chooses for an artist, with an AI
+> model's suggestions. Tidying a name written with more than the name in it is in
 > [Track details](Track%20details.md).
 
 ## Contents
@@ -18,6 +19,7 @@
 - [Wikidata's names](#wikidatas-names)
 - [Wikidata's page and photo](#wikidatas-page-and-photo)
 - [What the household chooses](#what-the-household-chooses)
+- [What an AI model suggests for an artist](#what-an-ai-model-suggests-for-an-artist)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
@@ -211,6 +213,48 @@ on the artist, apart from what the sites said.
 - **Only for an artist a site named,** as a linked name's is; any signed-in
   Account may choose, as any may edit a Track's details.
 
+## What an AI model suggests for an artist
+
+An AI model may be asked, for one linked artist, which name to show it by and who
+it is. What it answers is only offered beside each field; the household uses it or
+not.
+
+- **Offered the names it goes by,** up to 12, each a number so the model never
+  copies one: the names its songs write, most songs first, then MusicBrainz's, then
+  each locale's primary name, then the rest; with up to eight of its songs and what
+  tells the artist apart. Each is written on one line.
+
+  ```text
+  artist: 陶喆 (Taiwanese singer-songwriter, TW)
+  names:
+  1. 陶喆/David Tao
+  2. 陶喆
+  3. David Tao
+  songs: 爱很简单 — I'm OK; 普通朋友 — I'm OK
+  ```
+
+  ```json
+  {"shown_as": 2, "why": "the songs are Chinese", "about": "台湾 R&B 创作歌手"}
+  ```
+
+- **It answers** the number of the name the household would most likely know the
+  artist by, judging by the language of the songs' titles, or none, and why; and
+  one or two sentences on who the artist is, in the songs' language, or English
+  when they mix, empty when it is not sure. The note is kept as one paragraph of
+  at most 400 characters, without control or direction characters.
+- **A Job,** of the kind `describe_artist`, through the plugin point
+  `ArtistDescriber`, which the `ai-details` plugin answers, in the AI's lane, as
+  asking which artist a name names does. A name not offered is no suggestion;
+  an answer with neither a name nor a note fails the Job as *invalid*, and a
+  refusal by every provider as *refused*.
+- **Kept per artist,** with the names offered and the model and host that
+  answered, replacing what it suggested before. A suggested name stands while the
+  artist goes by it; once it no longer does, as when its name is unlinked, only
+  the note is offered.
+- **Asked once at a time:** asking while a model is asked about the artist is
+  refused. Why the last asking failed shows to the Account that asked, and to
+  admins.
+
 ## The web client
 
 - **A section of Clean up,** *Link artist names*, with how many names that may
@@ -248,12 +292,18 @@ on the artist, apart from what the sites said.
   where it is from (*From Wikidata* or *Yours*), to replace or, when it is the
   household's, remove at once; *Shown as*, offering every name it goes by, with
   the songs' own name as its placeholder; and *About*. *Save* keeps the name and
-  the note together; until then *Cancel* forgets them.
+  the note together; until then *Cancel* forgets them. *Ask AI* above the fields
+  asks a model for a name and a note, reads *Asking the AI…* with one spinner
+  while it is, and reads its answer every 2 seconds until it comes; each
+  suggestion shows beneath its field as *deepseek-flash suggests “甲壳虫乐队”*, its
+  reason and model in the tooltip, with *Use*, until the field says the same. Why
+  an asking failed shows beside *Ask AI*.
 - **Linked names are one artist** in the Artists view, named as the household
-  chose or as most of its songs write it; on its page, headed by the same name, which lists every song of every name linked to it; in
-  search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;
-  and in favorites and Radio, where a favorite name makes every name linked with
-  it a favorite. Each song keeps its artist as written.
+  chose or as most of its songs write it; on its page, headed by the same name,
+  which lists every song of every name linked to it; in search, which finds it by
+  any name it goes by, *甲壳虫* finding *The Beatles*; and in favorites and Radio,
+  where a favorite name makes every name linked with it a favorite. Each song
+  keeps its artist as written.
 
 ## What the API shows
 
@@ -267,6 +317,8 @@ on the artist, apart from what the sites said.
 | `PUT /api/artists/{id}/details` | Signed in | Keep the name an artist is shown by and a note about it; an empty one is forgotten; 404 for an artist no site named |
 | `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
 | `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |
+| `POST /api/artists/{id}/suggestion` | Signed in | Ask an AI model which name to show an artist by, and who it is; 202, or 404 for an artist no site named, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked about it already |
+| `GET /api/artists/{id}/suggestion` | Signed in | Whether a model is asked about the artist, what it last suggested, with the model that answered, and why the last asking failed, as the viewer may read it |
 
 ## Testing
 
@@ -274,12 +326,13 @@ on the artist, apart from what the sites said.
 - **The plugins** are tested with no socket opened: `musicbrainz` against a
   hand-made artist search in MusicBrainz's shape, `wikipedia` against
   Wikidata's real answers for The Beatles' names and a hand-made image statement
-  in Wikidata's shape, and the artist chooser of `ai-details`
+  in Wikidata's shape, and the artist chooser and describer of `ai-details`
   against a fake chat client.
 - **The service** runs real Jobs against the test plugin `reader`, whose finder
   answers *披头士* with The Beatles and a tribute band, and whose name finder
-  answers for The Beatles as Wikidata would, and whose chooser recommends The
-  Beatles unless a song is a tribute.
+  answers for The Beatles as Wikidata would, whose chooser recommends The
+  Beatles unless a song is a tribute, and whose describer suggests the first
+  Chinese name after the songs' own.
 - **Shared lanes** are tested with two lanes sharing one name.
 
 ## Left for later

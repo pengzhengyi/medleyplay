@@ -219,6 +219,18 @@ describe("search", () => {
     expect(within(scope).getByRole("radio", { name: "Bilibili" })).toBeEnabled();
   });
 
+  it("marks each place to search by its icon, naming it on hover", async () => {
+    open("", withBilibili());
+
+    const scope = await screen.findByRole("radiogroup", { name: "Search in" });
+
+    for (const name of ["Library", "Bilibili"]) {
+      const place = within(scope).getByRole("radio", { name }).closest("label");
+      expect(place).toHaveAttribute("title", name);
+      expect(place?.querySelector("svg")).not.toBeNull();
+    }
+  });
+
   it("takes a link or a code with Bilibili chosen, and opens the add dialog on Enter", async () => {
     const { calls } = open("", {
       ...withBilibili(),

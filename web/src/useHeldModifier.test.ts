@@ -42,6 +42,15 @@ describe("holding the modifier alone", () => {
     expect(result.current).toBe(false);
   });
 
+  it("isn't held after a second, as while choosing an app with ⌘ + Tab", () => {
+    const { result } = renderHook(() => useHeldModifier(true));
+
+    press();
+    wait(1000);
+
+    expect(result.current).toBe(false);
+  });
+
   it("isn't held after a quick press", () => {
     const { result } = renderHook(() => useHeldModifier(true));
 

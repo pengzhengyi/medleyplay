@@ -157,6 +157,9 @@ export function NowPlaying({
                           track={track}
                           position={position}
                           pointedAt={seconds}
+                          onPlaySong={(song) => {
+                            player.playAt(song.entry.key, song.from);
+                          }}
                         />
                       )
                     : undefined

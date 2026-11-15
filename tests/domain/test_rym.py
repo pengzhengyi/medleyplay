@@ -10,6 +10,7 @@ from medleyplay.domain.rym import (
     MAX_EXPORT_ROWS,
     MAX_FIELD_LENGTH,
     RymAlbum,
+    merged,
     read_rym_export,
     stars_of,
 )
@@ -178,3 +179,38 @@ def test_a_character_that_hides_text_is_removed_or_shown_as_unknown(
     albums = read_rym_export(export_of(row(title=written)))
 
     assert albums[0].album == read
+
+
+def _album(rym_id: str, album: str, stars: int, artist: str = "ハチ") -> RymAlbum:
+    return RymAlbum(rym_id=rym_id, artist=artist, artist_localized="", album=album, stars=stars)
+
+
+def test_merging_keeps_the_earlier_albums_and_adds_the_later_ones_after_them() -> None:
+    earlier = (_album("1001", "Bremen", 5), _album("1004", "八日", 1))
+    later = (_album("1005", "Diorama", 4),)
+
+    assert merged(earlier, later) == (*earlier, *later)
+
+
+def test_an_album_merged_again_takes_its_later_rating_in_its_earlier_place() -> None:
+    earlier = (_album("1001", "Bremen", 5), _album("1004", "八日", 1))
+
+    assert merged(earlier, (_album("1001", "Bremen", 3),)) == (
+        _album("1001", "Bremen", 3),
+        _album("1004", "八日", 1),
+    )
+
+
+def test_an_album_without_an_id_is_the_same_album_by_its_artist_and_name_folded() -> None:
+    earlier = (_album("", "Bremen", 5, artist="Hachi"),)
+
+    assert merged(earlier, (_album("", "BREMEN", 2, artist="hachi"),)) == (
+        _album("", "BREMEN", 2, artist="hachi"),
+    )
+
+
+def test_two_albums_of_one_name_but_different_ids_are_both_kept() -> None:
+    earlier = (_album("1001", "Bremen", 5),)
+    later = (_album("2001", "Bremen", 2),)
+
+    assert merged(earlier, later) == (*earlier, *later)

@@ -10,7 +10,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.rym import MAX_EXPORT_BYTES
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
-from tests.support.rym import EXPORT_2020
+from tests.support.rym import EXPORT_2020, export_of, row
 
 CSV = {"Content-Type": "text/csv"}
 
@@ -39,6 +39,7 @@ def test_the_preview_answers_what_importing_would_change(
         ],
         "playlists": [],
         "replaced_albums": 0,
+        "total_albums": 3,
     }
     assert client.get("/api/tracks").json()[0]["album_rating"] is None
 
@@ -145,3 +146,48 @@ def test_the_import_kept_answers_how_many_albums_it_has(client: TestClient) -> N
     after = client.get("/api/ratings/import").json()
 
     assert (before, after) == ({"albums": 0}, {"albums": 3})
+
+
+def test_importing_again_merges_unless_asked_to_replace(client: TestClient) -> None:
+    set_up_as_alice(client)
+    client.post("/api/ratings/import", content=EXPORT_2020.encode(), headers=CSV)
+    blue = export_of(row(rym_id="2001", last="The Band", title="Blue", rating="6"))
+
+    merging = client.post("/api/ratings/import/preview", content=blue, headers=CSV)
+    replacing = client.post("/api/ratings/import?mode=replace", content=blue, headers=CSV)
+
+    assert (merging.json()["replaced_albums"], merging.json()["total_albums"]) == (0, 4)
+    assert (replacing.json()["replaced_albums"], replacing.json()["total_albums"]) == (3, 1)
+    assert client.get("/api/ratings/import").json() == {"albums": 1}
+
+
+def test_an_import_mode_this_server_does_not_know_is_refused(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    answer = client.post(
+        "/api/ratings/import?mode=append", content=EXPORT_2020.encode(), headers=CSV
+    )
+
+    assert answer.status_code == 422
+
+
+def test_the_imported_albums_list_each_rating_and_whether_the_library_has_it(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _bremen(catalog)
+    client.post("/api/ratings/import", content=EXPORT_2020.encode(), headers=CSV)
+
+    answer = client.get("/api/ratings/imported")
+
+    assert answer.json() == [
+        {"artist": "ハチ", "album": "Bremen", "stars": 5, "note": "", "in_library": True},
+        {
+            "artist": "Tony Allen",
+            "album": "Film of Life",
+            "stars": 4,
+            "note": "Warm & loose.",
+            "in_library": False,
+        },
+        {"artist": "スズム", "album": "八日", "stars": 1, "note": "", "in_library": False},
+    ]

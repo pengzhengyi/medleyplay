@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Rate Your Music imports merge, and can be viewed** — *Your ratings* in
+  Settings has one row of buttons: *Export ratings*, *Discard import*, and
+  *Import ratings*. Importing again keeps your earlier import and updates the
+  albums the new export rates again, or replaces it if you choose *Replace it*
+  in the preview. *Your imported ratings* lists every album you imported, with
+  its stars and review and whether your Library has it, filtered as you type.
+
 - **Ask AI which artist a name stands for** — *Ask AI* in *Link artist names*
   shows an AI model each name, a few of its songs, and the artists MusicBrainz
   offers, and marks the one it recommends, tagged with the model and why; or

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from medleyplay.application.ratings import ImportSummary
+from medleyplay.application.ratings import ImportedAlbum, ImportMode, ImportSummary
 from medleyplay.domain.errors import TooLargeError
 from medleyplay.domain.rym import MAX_EXPORT_BYTES
 from medleyplay.web.deps import RatingsDep, SignedInAccount
@@ -45,7 +45,11 @@ class ImportSummaryOut(BaseModel):
     playlists: list[PlaylistChangeOut] = Field(
         description="Your smart playlists songs join or leave."
     )
-    replaced_albums: int = Field(description="The albums of the earlier import this replaces.")
+    replaced_albums: int = Field(
+        description="The albums of the earlier import this replaces: all of them when "
+        "replacing, those the export rates again when merging."
+    )
+    total_albums: int = Field(description="The albums your import holds after.")
 
     @classmethod
     def of(cls, summary: ImportSummary) -> "ImportSummaryOut":
@@ -65,6 +69,7 @@ class ImportSummaryOut(BaseModel):
                 for each in summary.playlists
             ],
             replaced_albums=summary.replaced_albums,
+            total_albums=summary.total_albums,
         )
 
 
@@ -75,22 +80,57 @@ class AlbumRatingOut(BaseModel):
     note: str
 
 
+class ImportedAlbumOut(BaseModel):
+    """An album you imported, your rating of it if you rated it, and your review."""
+
+    artist: str
+    album: str
+    stars: int | None
+    note: str
+    in_library: bool = Field(description="Whether the Library has the album.")
+
+    @classmethod
+    def of(cls, album: ImportedAlbum) -> "ImportedAlbumOut":
+        """Return the API view of `album`."""
+        return cls(
+            artist=album.artist,
+            album=album.album,
+            stars=album.stars,
+            note=album.note,
+            in_library=album.in_library,
+        )
+
+
+type ModeQuery = Annotated[
+    ImportMode,
+    Query(description="Merge with your earlier import, or replace it."),
+]
+
+
 @router.post("/ratings/import/preview", openapi_extra=_CSV_BODY)
 async def preview_import(
-    request: Request, me: SignedInAccount, ratings: RatingsDep
+    request: Request, me: SignedInAccount, ratings: RatingsDep, mode: ModeQuery = ImportMode.MERGE
 ) -> ImportSummaryOut:
     """Check a Rate Your Music export and answer what importing it would change."""
     data = await _export_in(request)
-    return ImportSummaryOut.of(await run_in_threadpool(ratings.preview_import, me.id, data))
+    summary = await run_in_threadpool(ratings.preview_import, me.id, data, mode)
+    return ImportSummaryOut.of(summary)
 
 
 @router.post("/ratings/import", openapi_extra=_CSV_BODY)
 async def import_ratings(
-    request: Request, me: SignedInAccount, ratings: RatingsDep
+    request: Request, me: SignedInAccount, ratings: RatingsDep, mode: ModeQuery = ImportMode.MERGE
 ) -> ImportSummaryOut:
-    """Replace your imported album ratings with a Rate Your Music export's."""
+    """Merge a Rate Your Music export's album ratings into yours, or replace yours with them."""
     data = await _export_in(request)
-    return ImportSummaryOut.of(await run_in_threadpool(ratings.import_ratings, me.id, data))
+    summary = await run_in_threadpool(ratings.import_ratings, me.id, data, mode)
+    return ImportSummaryOut.of(summary)
+
+
+@router.get("/ratings/imported")
+def imported_albums(me: SignedInAccount, ratings: RatingsDep) -> list[ImportedAlbumOut]:
+    """List the albums you imported, in the order you imported them."""
+    return [ImportedAlbumOut.of(album) for album in ratings.imported(me.id)]
 
 
 class ImportKeptOut(BaseModel):

@@ -271,6 +271,11 @@ and the full views are in [Web client](Web%20client.md).
   and *Remove*, or its title pressed, it plays now from its start, as *Next*
   would reach it; the songs before it count as passed. An album's row plays from
   its first song queued.
+- **The album playing lists its songs** from its mark beside the title, pointed
+  at, focused, or pressed: those played, the one playing and how far, and those
+  to come, each led by its heart to favorite it. They close once the mouse leaves
+  them, focus leaves them, or Escape is pressed; the seek bar's card of the same
+  songs follows the pointer.
 - **Up next names an album's songs:** two or more songs of one split file in a
   row show under a row with the file's name and where they start in it, such as
   *3 of 11*. It folds them away, and its *Remove* removes them all; each song

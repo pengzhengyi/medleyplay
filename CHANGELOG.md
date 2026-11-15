@@ -434,6 +434,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The album's songs close when the mouse leaves** — opened from the album
+  playing, by pointing or a click, they no longer stay until Escape; each song
+  leads with a heart to favorite it.
+
 - **Saving details keeps the dialog open** — *Edit details* stays on the details
   as saved and says so, so an album's songs can be split next; *Cancel* reads
   *Close* once nothing is left to save.

@@ -160,6 +160,7 @@ export function NowPlaying({
                           onPlaySong={(song) => {
                             player.playAt(song.entry.key, song.from);
                           }}
+                          onFavorite={onFavorite}
                         />
                       )
                     : undefined

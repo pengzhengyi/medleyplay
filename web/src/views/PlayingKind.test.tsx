@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -10,7 +10,7 @@ import { AlbumCard, PlayingKind } from "./PlayingKind";
  * 生如夏花 split into three songs, the second playing:
  *
  * ```text
- * 1  傲慢的上校  4:00  played
+ * 1  傲慢的上校  4:00  played, a favorite
  * 2  浮游        5:00  playing, 1:12 in
  * 3  生如夏花    3:00  to come
  * ```
@@ -21,7 +21,11 @@ const SONGS: readonly AlbumSong[] = [
   ["生如夏花", 540, 180],
 ].map(([title, start, length], index) => ({
   entry: { key: String.fromCharCode(97 + index), trackId: 11 + index, unit: "file:9" },
-  track: trackOf(11 + index, String(title), { album: "生如夏花", segment_of: 9 }),
+  track: trackOf(11 + index, String(title), {
+    album: "生如夏花",
+    segment_of: 9,
+    favorite: index === 0,
+  }),
   start: Number(start),
   from: 0,
   length: Number(length),
@@ -32,6 +36,7 @@ const PLAYING = SONGS[1]?.track ?? trackOf(12, "浮游");
 function renderKind(playing: Playing, track = PLAYING) {
   const onPlaySong = vi.fn();
   const onEditSongs = vi.fn();
+  const onFavorite = vi.fn();
   render(
     <PlayingKind
       playing={playing}
@@ -41,10 +46,15 @@ function renderKind(playing: Playing, track = PLAYING) {
       opens="below"
       onPlaySong={onPlaySong}
       onEditSongs={onEditSongs}
+      onFavorite={onFavorite}
     />,
   );
-  return { onPlaySong, onEditSongs };
+  return { onPlaySong, onEditSongs, onFavorite };
 }
+
+/** The album's songs as buttons that play them, leaving out each one's heart. */
+const songButtons = (songs: HTMLElement) =>
+  within(songs).getAllByRole("button", { name: /, (played|playing now|to come)$/u });
 
 describe("what plays now", () => {
   it("is a song's mark, with nothing to open", () => {
@@ -60,11 +70,11 @@ describe("what plays now", () => {
     await userEvent.click(screen.getByRole("button", { name: "Album: 生如夏花, song 2 of 3" }));
 
     const songs = screen.getByRole("region", { name: "Songs of 生如夏花" });
-    expect(
-      within(songs)
-        .getAllByRole("button")
-        .map((song) => song.getAttribute("aria-label")),
-    ).toEqual(["傲慢的上校, played", "浮游, playing now", "生如夏花, to come"]);
+    expect(songButtons(songs).map((song) => song.getAttribute("aria-label"))).toEqual([
+      "傲慢的上校, played",
+      "浮游, playing now",
+      "生如夏花, to come",
+    ]);
     expect(within(songs).getByRole("button", { current: true })).toHaveTextContent("1:12 / 5:00");
     expect(songs).toHaveTextContent("5:12 of 12:00");
   });
@@ -115,6 +125,33 @@ describe("what plays now", () => {
 
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
     expect(mark).toHaveFocus();
+  });
+
+  it("closes the songs once the mouse leaves, also after a click opened them", async () => {
+    renderKind(ALBUM);
+    const mark = screen.getByRole("button", { name: /^Album:/u });
+    await userEvent.click(mark);
+    expect(screen.getByRole("region", { name: "Songs of 生如夏花" })).toBeInTheDocument();
+
+    await userEvent.unhover(mark.parentElement ?? mark);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows whether each song is a favorite first in its row, and toggles it", async () => {
+    const { onFavorite } = renderKind(ALBUM);
+    await userEvent.click(screen.getByRole("button", { name: /^Album:/u }));
+    const songs = screen.getByRole("region", { name: "Songs of 生如夏花" });
+    const loved = within(songs).getByRole("button", { name: "Favorite 傲慢的上校" });
+    const row = loved.closest("li");
+
+    await userEvent.click(within(songs).getByRole("button", { name: "Favorite 浮游" }));
+
+    expect(loved).toHaveAttribute("aria-pressed", "true");
+    expect(row?.firstElementChild).toBe(loved);
+    expect(onFavorite).toHaveBeenCalledWith(SONGS[1]?.track, true);
   });
 
   it("offers to split a whole album in one file into its songs", async () => {

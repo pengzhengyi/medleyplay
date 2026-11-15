@@ -4,7 +4,9 @@
  * Each moves only while the music plays, and not at all for a viewer who asked
  * for less motion. An album's mark opens its songs, in the order they play, when
  * pointed at, focused, or pressed: those played, the one playing and how far it
- * has got, and those to come. A song in it plays when chosen.
+ * has got, and those to come. A song in it plays when chosen, and its heart, first
+ * in its row, favorites it. The songs close once the mouse leaves them, focus
+ * leaves them, or Escape is pressed.
  *
  * Over an album's seek bar, a card of the same songs lights up the one under the pointer,
  * and plays one chosen on it.
@@ -12,6 +14,7 @@
 
 import {
   CheckIcon,
+  HeartIcon,
   MusicNoteSimpleIcon,
   ScissorsIcon,
   VinylRecordIcon,
@@ -20,6 +23,7 @@ import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
+import { heartTitleOf } from "../heart";
 import { type AlbumSong, type Playing, songAt } from "../player/albumNow";
 
 /** How long the songs stay open after the pointer leaves, so it can cross the gap to them. */
@@ -33,6 +37,7 @@ export function PlayingKind({
   opens,
   onPlaySong,
   onEditSongs,
+  onFavorite,
 }: {
   readonly playing: Playing;
   /** The Track playing. */
@@ -46,6 +51,8 @@ export function PlayingKind({
   readonly onPlaySong: (song: AlbumSong) => void;
   /** Split a whole album in one file into its songs. */
   readonly onEditSongs: (track: Track) => void;
+  /** Favorite a song of the album, or not; without it, the songs show no hearts. */
+  readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
   const motion = moving ? "moving" : "still";
   if (playing.kind === "song") {
@@ -68,6 +75,7 @@ export function PlayingKind({
       opens={opens}
       onPlaySong={onPlaySong}
       onEditSongs={onEditSongs}
+      onFavorite={onFavorite}
     />
   );
 }
@@ -80,6 +88,7 @@ function AlbumMark({
   opens,
   onPlaySong,
   onEditSongs,
+  onFavorite,
 }: {
   readonly playing: Extract<Playing, { kind: "album" }>;
   readonly track: Track;
@@ -88,8 +97,11 @@ function AlbumMark({
   readonly opens: "above" | "below";
   readonly onPlaySong: (song: AlbumSong) => void;
   readonly onEditSongs: (track: Track) => void;
+  /** Favorite a song of the album, or not; without it, the songs show no hearts. */
+  readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
-  // Pointing opens the songs until the pointer leaves; a press keeps them open until pressed again.
+  // Pointing opens the songs, and a press keeps them open while the pointer stays or
+  // focus is in them; leaving with the mouse closes them either way.
   const [shown, setShown] = useState<"closed" | "pointed" | "kept">("closed");
   const open = shown !== "closed";
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -108,7 +120,7 @@ function AlbumMark({
   const leave = () => {
     clearTimeout(closing.current);
     closing.current = setTimeout(() => {
-      setShown((was) => (was === "pointed" ? "closed" : was));
+      setShown("closed");
     }, CLOSE_AFTER_MS);
   };
   const close = () => {
@@ -180,6 +192,7 @@ function AlbumMark({
             position={position}
             onPlaySong={onPlaySong}
             onEditSongs={onEditSongs}
+            onFavorite={onFavorite}
           />
         </section>
       )}
@@ -199,6 +212,7 @@ export function AlbumCard({
   position,
   pointedAt,
   onPlaySong,
+  onFavorite,
 }: {
   readonly playing: Extract<Playing, { kind: "album" }>;
   readonly track: Track;
@@ -207,6 +221,8 @@ export function AlbumCard({
   /** The second of the album under the pointer. */
   readonly pointedAt: number;
   readonly onPlaySong?: (song: AlbumSong) => void;
+  /** Favorite a song of the album, or not; without it, the songs show no hearts. */
+  readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const pointed = songAt(playing.songs, pointedAt);
@@ -224,6 +240,7 @@ export function AlbumCard({
         pointerOnly
         onPlaySong={onPlaySong ?? (() => undefined)}
         onEditSongs={() => undefined}
+        onFavorite={onFavorite}
       />
     </div>
   );
@@ -238,6 +255,7 @@ function AlbumSongs({
   pointerOnly = false,
   onPlaySong,
   onEditSongs,
+  onFavorite,
 }: {
   readonly playing: Extract<Playing, { kind: "album" }>;
   readonly track: Track;
@@ -249,6 +267,8 @@ function AlbumSongs({
   readonly pointerOnly?: boolean;
   readonly onPlaySong: (song: AlbumSong) => void;
   readonly onEditSongs: (track: Track) => void;
+  /** Favorite a song of the album, or not; without it, the songs show no hearts. */
+  readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
   const { songs, current, length } = playing;
   if (songs.length === 0) {
@@ -301,6 +321,9 @@ function AlbumSongs({
           const pointedHere = pointed?.index === index;
           return (
             <li key={`${song.entry.key}@${String(song.from)}`} className="album-songs-row">
+              {onFavorite !== undefined && song.track !== undefined && (
+                <SongHeart track={song.track} pointerOnly={pointerOnly} onFavorite={onFavorite} />
+              )}
               <button
                 type="button"
                 className={pointedHere ? `album-song ${state} pointed` : `album-song ${state}`}
@@ -335,6 +358,33 @@ function AlbumSongs({
         })}
       </ol>
     </>
+  );
+}
+
+/** A song's heart, first in its row: filled while it is a favorite, and pressed to change that. */
+function SongHeart({
+  track,
+  pointerOnly,
+  onFavorite,
+}: {
+  readonly track: Track;
+  readonly pointerOnly: boolean;
+  readonly onFavorite: (track: Track, favorite: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={track.favorite ? "icon heart album-song-heart on" : "icon heart album-song-heart"}
+      aria-label={`Favorite ${track.title}`}
+      aria-pressed={track.favorite}
+      title={heartTitleOf(track.title, track.favorite)}
+      tabIndex={pointerOnly ? -1 : undefined}
+      onClick={() => {
+        onFavorite(track, !track.favorite);
+      }}
+    >
+      <HeartIcon weight={track.favorite ? "fill" : "regular"} aria-hidden />
+    </button>
   );
 }
 

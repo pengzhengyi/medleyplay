@@ -22,8 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A rail that collapses, and a search that spans the header** — the views'
   rail sits apart on a soft surface and collapses to its icons with the button
   at its foot, which each browser remembers; the search takes the header's room,
-  with *Library* and Bilibili's mark at its end, as on an iPad. Bilibili shows as
-  its mark wherever there is little room, named on hover.
+  with the Library's icon, as in the rail, and Bilibili's mark at its end, as on
+  an iPad. Bilibili shows as its mark wherever there is little room, named on
+  hover.
 
 - **GitHub Copilot as an AI provider** — Settings offers *GitHub Copilot*
   beside DeepSeek, OpenAI, Anthropic, and Ollama. It is asked through GitHub's

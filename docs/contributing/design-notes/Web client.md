@@ -302,8 +302,8 @@ Track's kind is decided.
 <!-- cspell:ignore ｍｅｌｔ -->
 
 - **One search box in the header,** taking its room as on an iPad, with a scope
-  toggle at its end: *Library* or Bilibili, shown as Bilibili's mark and named on
-  hover and to a screen reader. Bilibili shows only while the `bilibili` plugin is
+  toggle at its end: *Library*, shown as its icon in the rail, or Bilibili, shown
+  as its mark, each named on hover and to a screen reader. Bilibili shows only while the `bilibili` plugin is
   on. With it
   chosen, the box takes a link or a bare video code and *Enter* opens the add
   dialog; it doesn't search anything else. See

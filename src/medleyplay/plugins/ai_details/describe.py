@@ -39,10 +39,7 @@ from medleyplay.plugins.ai_details.turns import (
     raise_unreachable,
 )
 
-EXAMPLE: Final = (
-    '{"shown_as": 2, "why": "the songs are Chinese", '
-    '"about": "台湾 R&B 创作歌手"}'
-)
+EXAMPLE: Final = '{"shown_as": 2, "why": "the songs are Chinese", "about": "台湾 R&B 创作歌手"}'
 SYSTEM: Final = f"""You help a household name the artists of its music library.
 You are shown an artist, the names it goes by, each a number, and a few of its songs.
 Reply with one json object and nothing else, shaped like this example:

@@ -19,6 +19,7 @@ from medleyplay.application.artists import (
     FindArtistKind,
     FindArtistNamesKind,
     choose_artists_kind,
+    describe_artist_kind,
     find_artist_kind,
     find_artist_names_kind,
 )
@@ -288,7 +289,9 @@ def artists(
     find_names_kind: FindArtistNamesKind,
     tmp_path: Path,
 ) -> ArtistService:
-    kinds = ArtistKinds(find_kind, find_names_kind, choose_artists_kind(clock))
+    kinds = ArtistKinds(
+        find_kind, find_names_kind, choose_artists_kind(clock), describe_artist_kind(clock)
+    )
     return ArtistService(
         units, clock, plugins, jobs, kinds, covers_folder=tmp_path / "data" / "covers"
     )

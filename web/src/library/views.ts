@@ -9,16 +9,26 @@
 import type { Track } from "../api";
 import type { ArtistLinks } from "./artistLinks";
 
-/** An artist, with how many Tracks are theirs and how long they play. */
-export interface Artist {
-  /** The name as the first of its Tracks writes it; `""` for Tracks with no artist. */
+/** A group of Tracks, with how many there are and how long they play. */
+interface Listed {
   readonly name: string;
   readonly count: number;
   readonly durationMs: number;
 }
 
+/** An artist, with how many Tracks are theirs and how long they play. */
+export interface Artist extends Listed {
+  /**
+   * The name it is shown by: as the household chose, or as most of its Tracks write
+   * it; `""` for Tracks with no artist.
+   */
+  readonly name: string;
+  /** The name most of its Tracks write, which opens its page and keeps its heart. */
+  readonly link: string;
+}
+
 /** An album, under its album artist, or its artist when that is blank. */
-export interface Album extends Artist {
+export interface Album extends Listed {
   readonly artist: string;
   /** The first cover among the album's songs, in the order given. */
   readonly cover: string | null;
@@ -49,11 +59,15 @@ export function songsOf(tracks: readonly Track[]): Track[] {
   return tracks.filter((track) => !track.split);
 }
 
-/** Return each artist once, sorted by name as people read them, a blank name first. */
+/**
+ * Return each artist once, sorted by name as people read them, a blank name first,
+ * and then by the name its Tracks write.
+ */
 export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist[] {
   if (links === undefined) {
     return groups(tracks, (track) => track.artist).map(({ name, count, durationMs }) => ({
       name,
+      link: name,
       count,
       durationMs,
     }));
@@ -72,14 +86,11 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
     found.set(group, each);
   }
   return [...found.entries()]
-    .map(([group, { names, count, durationMs }]) => ({
-      name:
-        links.shownAsOf(group) ??
-        [...names].reduce((best, next) => (next[1] > best[1] ? next : best))[0],
-      count,
-      durationMs,
-    }))
-    .sort((a, b) => collator.compare(a.name, b.name));
+    .map(([group, { names, count, durationMs }]) => {
+      const link = [...names].reduce((best, next) => (next[1] > best[1] ? next : best))[0];
+      return { name: links.shownAsOf(group) ?? link, link, count, durationMs };
+    })
+    .sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.link, b.link));
 }
 
 /** Return the Tracks of the artist `name`, compared folded, in the order given. */
@@ -174,7 +185,7 @@ export function search(tracks: readonly Track[], query: string, links?: ArtistLi
     artists: artistsOf(tracks, links).filter(
       (artist) =>
         matches(fold(artist.name)) ||
-        (links?.aliasesOf(links.groupOf(artist.name)) ?? []).some((alias) => matches(fold(alias))),
+        (links?.aliasesOf(links.groupOf(artist.link)) ?? []).some((alias) => matches(fold(alias))),
     ),
     albums: albumsOf(tracks).filter((album) => matches(fold(album.name))),
   };

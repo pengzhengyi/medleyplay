@@ -349,6 +349,24 @@ describe("an artist's page", () => {
     expect(screen.getByRole("dialog", { name: "Edit artist" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: /Shown as/u })).toHaveValue("supercell");
   });
+
+  it("is opened from the Artists by the name its songs write, and keeps its heart", async () => {
+    open("#/artists", {
+      ...withRyo(true, "Ryo the composer"),
+      "GET /api/favorites": { body: { artists: [{ name: "ryo" }], albums: [] } },
+    });
+
+    const tile = await screen.findByRole("link", { name: /Favorite.*Ryo the composer/u });
+    expect(tile).toHaveAttribute("href", "#/artist?name=ryo");
+    await userEvent.click(tile);
+
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Ryo the composer" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Favorite artist Ryo the composer" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
 });
 
 describe("favorite artists and albums", () => {

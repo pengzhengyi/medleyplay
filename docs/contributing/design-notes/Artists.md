@@ -201,7 +201,9 @@ on the artist, apart from what the sites said.
 
 - **The name it is shown by,** up to 512 characters, in place of the name most of
   its songs write: in the Artists view, on its page, and in search, which finds it
-  by that name too. Empty, the songs' name shows again.
+  by that name too. Empty, the songs' name shows again. Its page still opens, and
+  its favorite is still kept, by the name most of its songs write, so a name shown
+  never takes the songs of another artist who goes by it.
 - **A note about it,** up to 1,000 characters, shown on its page.
 - **A photo of the household's,** in place of Wikidata's, kept as a cover is: a
   JPEG, PNG, or WebP image of at most 10 MiB, named by its bytes, and kept by the
@@ -233,22 +235,22 @@ on the artist, apart from what the sites said.
   recommends none of those offered, *None of these* is marked instead, with the
   reason beneath. *Link N recommended* links every name whose recommendation is an
   artist, never one the model recommends none for.
-- **An artist's page says who it is:** under its heading, its photo from
-  Wikidata, credited *Photo: Wikimedia Commons*, or else a round mosaic of up to
-  four of its albums' covers, or its initial; who MusicBrainz says it is, as
-  *周杰倫 (TW)*; six of the other names it goes by, and the rest on request; and
-  links that open its MusicBrainz page, its Wikidata item (until Wikidata has
-  answered, Wikidata's own search for the MusicBrainz id), and a Rate Your Music
-  search for its name, each in a new tab. The links ask nothing of those sites;
-  the household opens them. A name not linked yet offers *Link it to an artist*,
-  which opens Clean up.
+- **An artist's page says who it is:** under its heading, the household's photo of
+  it, or its photo from Wikidata, credited *Photo: Wikimedia Commons*, or else a
+  round mosaic of up to four of its albums' covers, or its initial; who
+  MusicBrainz says it is, as *周杰倫 (TW)*; the household's note about it; six of the
+  other names it goes by, and the rest on request; and links that open its
+  MusicBrainz page, its Wikidata item (until Wikidata has answered, Wikidata's own
+  search for the MusicBrainz id), and a Rate Your Music search for its name, each
+  in a new tab. The links ask nothing of those sites; the household opens them. A
+  name not linked yet offers *Link it to an artist*, which opens Clean up.
 - **Edit details** on a linked artist's page opens *Edit artist*: its photo, with
   where it is from (*From Wikidata* or *Yours*), to replace or, when it is the
   household's, remove at once; *Shown as*, offering every name it goes by, with
   the songs' own name as its placeholder; and *About*. *Save* keeps the name and
-  the note together.
-- **Linked names are one artist** in the Artists view, named as most of its songs
-  write it; on its page, which lists every song of every name linked to it; in
+  the note together; until then *Cancel* forgets them.
+- **Linked names are one artist** in the Artists view, named as the household
+  chose or as most of its songs write it; on its page, headed by the same name, which lists every song of every name linked to it; in
   search, which finds it by any name it goes by, *甲壳虫* finding *The Beatles*;
   and in favorites and Radio, where a favorite name makes every name linked with
   it a favorite. Each song keeps its artist as written.

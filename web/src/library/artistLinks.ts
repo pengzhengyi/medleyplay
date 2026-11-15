@@ -64,10 +64,6 @@ export function linksOf(found: ArtistNames): ArtistLinks {
     const group = `artist:${artist.id}`;
     if (artist.shown_as !== null && members.has(group)) {
       shownAs.set(group, artist.shown_as);
-      // The page named by the chosen name is the artist's, unless songs write it for another.
-      if (!groups.has(own(artist.shown_as))) {
-        groups.set(own(artist.shown_as), group);
-      }
     }
   }
   return {

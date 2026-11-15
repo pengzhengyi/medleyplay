@@ -176,7 +176,7 @@ function viewOf(given: ViewProps) {
             canFavorite(route.name) && (
               <FavoriteHeart
                 kind="artist"
-                name={route.name}
+                name={shown}
                 favorite={isFavoriteArtist(props.favorites, route.name)}
                 onChange={(favorite) => {
                   props.onFavoriteArtist(route.name, favorite);
@@ -429,15 +429,15 @@ function ArtistList({
     <ul className="groups" aria-label="Artists">
       {artists.map((artist) => (
         <li
-          key={artist.name}
-          className={isFavoriteArtist(favorites, artist.name) ? "favorite" : ""}
+          key={artist.link}
+          className={isFavoriteArtist(favorites, artist.link) ? "favorite" : ""}
         >
-          <a href={hrefOf({ view: "artist", name: artist.name })}>
+          <a href={hrefOf({ view: "artist", name: artist.link })}>
             <span className="tile-frame">
               <span className="avatar" aria-hidden>
                 {initialOf(artist.name)}
               </span>
-              {isFavoriteArtist(favorites, artist.name) && <FavoriteBadge />}
+              {isFavoriteArtist(favorites, artist.link) && <FavoriteBadge />}
             </span>
             <span className="group-name">{artist.name || UNKNOWN_ARTIST}</span>
             <span className="group-meta">{formatLength(artist.count, artist.durationMs)}</span>

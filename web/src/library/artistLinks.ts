@@ -4,8 +4,9 @@
  * Every Track keeps its artist as written. A name the household linked to an artist
  * MusicBrainz knows joins that artist's group, so *The Beatles*, *披头士*, and *甲壳虫*
  * are one artist in the Artists view, on an artist's page, in favorites, and in
- * search, which also finds an artist by any name it goes by. Any other name is a
- * group of its own, folded as the Library compares names.
+ * search, which also finds an artist by any name it goes by. The artist is shown by
+ * the name the household chose for it, if any. Any other name is a group of its
+ * own, folded as the Library compares names.
  */
 
 import type { ArtistNames } from "../api";
@@ -20,6 +21,8 @@ export interface ArtistLinks {
   readonly aliasesOf: (group: string) => readonly string[];
   /** The Library's names in the group, folded. */
   readonly namesOf: (group: string) => readonly string[];
+  /** The name the household shows the group's artist by, if it chose one. */
+  readonly shownAsOf: (group: string) => string | undefined;
 }
 
 const own = (name: string) => fold(name.trim());
@@ -29,6 +32,7 @@ export const NO_LINKS: ArtistLinks = {
   groupOf: own,
   aliasesOf: () => [],
   namesOf: (group) => [group],
+  shownAsOf: () => undefined,
 };
 
 /** The links the server knows, as the client groups by them. */
@@ -46,14 +50,31 @@ export function linksOf(found: ArtistNames): ArtistLinks {
     found.artists.map((artist) => [
       `artist:${artist.id}`,
       [
-        ...new Set([artist.name, artist.sort_name, ...artist.aliases.map((alias) => alias.name)]),
+        ...new Set([
+          artist.shown_as ?? "",
+          artist.name,
+          artist.sort_name,
+          ...artist.aliases.map((alias) => alias.name),
+        ]),
       ].filter(Boolean),
     ]),
   );
+  const shownAs = new Map<string, string>();
+  for (const artist of found.artists) {
+    const group = `artist:${artist.id}`;
+    if (artist.shown_as !== null && members.has(group)) {
+      shownAs.set(group, artist.shown_as);
+      // The page named by the chosen name is the artist's, unless songs write it for another.
+      if (!groups.has(own(artist.shown_as))) {
+        groups.set(own(artist.shown_as), group);
+      }
+    }
+  }
   return {
     groupOf: (name) => groups.get(own(name)) ?? own(name),
     aliasesOf: (group) => aliases.get(group) ?? [],
     namesOf: (group) => members.get(group) ?? [group],
+    shownAsOf: (group) => shownAs.get(group),
   };
 }
 

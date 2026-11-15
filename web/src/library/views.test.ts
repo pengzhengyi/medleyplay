@@ -118,6 +118,32 @@ describe("artists linked as one", () => {
   it("are found by any name the artist goes by", () => {
     expect(search(SONGS, "甲壳虫", LINKS).artists.map((artist) => artist.name)).toEqual(["披头士"]);
   });
+
+  describe("shown as the household chose", () => {
+    /** The links above, with The Beatles shown as *甲壳虫乐队*. */
+    const CHOSEN = linksOf({
+      names: [artistNameOf("The Beatles", "b1"), artistNameOf("披头士", "b1")],
+      artists: [knownArtistOf("b1", "The Beatles", { shown_as: "甲壳虫乐队" })],
+    });
+
+    it("are listed by the name chosen", () => {
+      expect(artistsOf(SONGS, CHOSEN).map((artist) => artist.name)).toEqual(["ryo", "甲壳虫乐队"]);
+    });
+
+    it("open every song of the artist from the name chosen", () => {
+      expect(titles(tracksOfArtist(SONGS, "甲壳虫乐队", CHOSEN))).toEqual([
+        "Help!",
+        "Yesterday",
+        "Let It Be",
+      ]);
+    });
+
+    it("are found by the name chosen", () => {
+      expect(search(SONGS, "甲壳虫乐队", CHOSEN).artists.map((artist) => artist.name)).toEqual([
+        "甲壳虫乐队",
+      ]);
+    });
+  });
 });
 
 describe("albums", () => {

@@ -48,6 +48,7 @@ import { InsightsView } from "./InsightsView";
 import { RadioView } from "./RadioView";
 import { SettingsView } from "./SettingsView";
 import { CleanUpView } from "./CleanUpView";
+import { EditArtistButton } from "./EditArtist";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** The route id of Favorites, the Playlist of favorites the server keeps for each Account. */
@@ -101,6 +102,18 @@ export function CurrentView(given: ViewProps) {
   return <Fragment key={key}>{viewOf(given)}</Fragment>;
 }
 
+/** The artist name most of `songs` write, or `undefined` for no songs. */
+function mostWritten(songs: readonly Track[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const song of songs) {
+    counts.set(song.artist, (counts.get(song.artist) ?? 0) + 1);
+  }
+  return [...counts].reduce<[string, number] | undefined>(
+    (best, next) => (best === undefined || next[1] > best[1] ? next : best),
+    undefined,
+  )?.[0];
+}
+
 function viewOf(given: ViewProps) {
   // A Playlist names its Tracks by id among them all; every other view lists songs.
   const props = { ...given, tracks: songsOf(given.tracks) };
@@ -132,16 +145,28 @@ function viewOf(given: ViewProps) {
         ? known?.artists.find((each) => `artist:${each.id}` === group)
         : undefined;
       const named = known?.names.find((each) => fold(each.name.trim()) === fold(route.name.trim()));
+      const shown = artist?.shown_as ?? route.name;
+      const reload = props.artistNames?.reload;
       return (
         <Songs
-          title={route.name || UNKNOWN_ARTIST}
+          title={shown || UNKNOWN_ARTIST}
           about={
             route.name !== "" && (
               <ArtistAbout
-                name={route.name}
+                name={shown}
                 songs={songs}
                 artist={artist}
                 toLink={named !== undefined && !named.linked && named.look_up === "yes"}
+              />
+            )
+          }
+          edit={
+            artist !== undefined &&
+            reload !== undefined && (
+              <EditArtistButton
+                artist={artist}
+                written={mostWritten(songs) ?? route.name}
+                onChanged={reload}
               />
             )
           }

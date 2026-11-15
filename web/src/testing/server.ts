@@ -467,6 +467,9 @@ export function knownArtistOf(
     page: null,
     photo: null,
     photo_page: null,
+    shown_as: null,
+    about: null,
+    own_photo: false,
     ...change,
   };
 }

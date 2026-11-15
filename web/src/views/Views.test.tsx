@@ -298,8 +298,11 @@ function withFavorites(favorites: {
 }
 
 describe("an artist's page", () => {
-  /** The routes of `LIBRARY` with *ryo* linked to the composer MusicBrainz knows, or not. */
-  const withRyo = (linked: boolean): Routes => ({
+  /**
+   * The routes of `LIBRARY` with *ryo* linked to the composer MusicBrainz knows, or not,
+   * shown as `shownAs` when the household chose a name for it.
+   */
+  const withRyo = (linked: boolean, shownAs: string | null = null): Routes => ({
     ...signedIn(LIBRARY, [favoritesPlaylistOf([1])]),
     "GET /api/artist-names": {
       body: {
@@ -310,6 +313,7 @@ describe("an artist's page", () => {
             disambiguation: "supercell composer",
             country: "JP",
             aliases: [{ name: "supercell", locale: null, primary: false }],
+            shown_as: shownAs,
           }),
         ],
       },
@@ -333,6 +337,17 @@ describe("an artist's page", () => {
     const about = await screen.findByRole("region", { name: "About the artist" });
     expect(await within(about).findByRole("link", { name: "Link it to an artist" })).toBeVisible();
     expect(within(about).queryByRole("link", { name: "MusicBrainz" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit details" })).toBeNull();
+  });
+
+  it("is named as the household chose, and edits the linked artist", async () => {
+    open("#/artist?name=ryo", withRyo(true, "supercell"));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "supercell" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Edit details" }));
+
+    expect(screen.getByRole("dialog", { name: "Edit artist" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /Shown as/u })).toHaveValue("supercell");
   });
 });
 

@@ -58,7 +58,7 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
       durationMs,
     }));
   }
-  // Names linked to one artist are one, named as most of its Tracks write it.
+  // Names linked to one artist are one, named as the household chose, or as most of its Tracks write it.
   const found = new Map<
     string,
     { names: Map<string, number>; count: number; durationMs: number }
@@ -71,9 +71,11 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
     each.durationMs += track.duration_ms ?? 0;
     found.set(group, each);
   }
-  return [...found.values()]
-    .map(({ names, count, durationMs }) => ({
-      name: [...names].reduce((best, next) => (next[1] > best[1] ? next : best))[0],
+  return [...found.entries()]
+    .map(([group, { names, count, durationMs }]) => ({
+      name:
+        links.shownAsOf(group) ??
+        [...names].reduce((best, next) => (next[1] > best[1] ? next : best))[0],
       count,
       durationMs,
     }))

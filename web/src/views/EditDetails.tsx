@@ -88,7 +88,7 @@ const MAX_VIDEO_TITLE = 1_000;
 const MAX_DESCRIPTION = 20_000;
 
 /** The largest cover the server takes, checked before an image is sent. */
-const MAX_COVER_BYTES = 10 * 1024 * 1024;
+export const MAX_COVER_BYTES = 10 * 1024 * 1024;
 
 const SONGS_TITLE = "edit-songs-title";
 

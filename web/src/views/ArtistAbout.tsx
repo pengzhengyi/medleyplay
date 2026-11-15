@@ -114,6 +114,7 @@ export function ArtistAbout({
       )}
       <div className="artist-facts">
         {artist !== undefined && <p className="artist-who">{describe(artist)}</p>}
+        {artist?.about != null && <p className="artist-note">{artist.about}</p>}
         {others.length > 0 && (
           <p className="artist-names">
             Goes by {others.slice(0, others.length - hidden).join(", ")}

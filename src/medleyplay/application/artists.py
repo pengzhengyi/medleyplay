@@ -58,7 +58,9 @@ from medleyplay.plugin_api import (
     ARTIST_CHOOSER,
     ARTIST_FINDER,
     ARTIST_NAME_FINDER,
+    MAX_ARTISTS,
     MAX_CHOICES,
+    MAX_NAME,
     MAX_SONGS_SHOWN,
     ArtistOption,
     NameToChoose,
@@ -330,11 +332,15 @@ class ArtistService:
     def recommend(self, caller: Account) -> int:
         """Ask an AI model which artist each name looked up and not linked names.
 
-        The names go in batches of at most `MAX_CHOICES`, each a Job in the AI's lane;
-        return how many names are asked about.
+        Up to `MAX_LOOK_UP` names go in batches of at most `MAX_CHOICES`, each a Job in
+        the AI's lane; return how many names are asked about. Asking while a model is
+        asked already is refused, so no name is left out unsaid.
         """
         if CHOOSER not in self._plugins.available_keys().get(ARTIST_CHOOSER.name, []):
             message = "Turn on the ai-details plugin to ask an AI model."
+            raise ConflictError(message)
+        if self.recommending():
+            message = "An AI model is being asked already; ask again once it has answered."
             raise ConflictError(message)
         with self._units() as db:
             if not is_set_up(db):
@@ -344,13 +350,15 @@ class ArtistService:
         listed = self.names()
         asking = [
             NameToChoose(
-                name=each.name[:512],
+                name=each.name[:MAX_NAME],
                 songs=songs.get(each.key, ())[:MAX_SONGS_SHOWN],
-                options=tuple(_option_of(listed.artists[id_]) for id_, _ in each.candidates[:10]),
+                options=tuple(
+                    _option_of(listed.artists[id_]) for id_, _ in each.candidates[:MAX_ARTISTS]
+                ),
             )
             for each in listed.names
             if not each.linked and each.candidates and each.look_up is LookUp.YES
-        ]
+        ][:MAX_LOOK_UP]
         for start in range(0, len(asking), MAX_CHOICES):
             batch = tuple(asking[start : start + MAX_CHOICES])
             target = f"artist-choice:{start // MAX_CHOICES}"
@@ -387,6 +395,9 @@ class ArtistService:
         found = () if search is None else _found_of(search)
         if link is None and may_look_up(name) is LookUp.YES:
             found = _with_known(found, read.known_by.get(key, set()))
+        offered = {id_ for id_, _ in found[:MAX_ARTISTS]}
+        if recommended is not None and set(recommended.offered) != offered:
+            recommended = None
         candidates = [
             Candidate(artists[id_].artist, score, artists[id_].aliases)
             for id_, score in found
@@ -482,6 +493,7 @@ def _complete_choices(db: Session, job: Job, result: ChosenArtistsResult, *, clo
     A recommendation of an artist no longer known is left out.
     """
     del job
+    offered = {artist_key(each.name): list(each.artist_ids) for each in result.offered}
     named = provider_named(db, result.ai_answered or None)
     model, host = named if named is not None else ("an AI model", "")
     now = clock()
@@ -491,19 +503,29 @@ def _complete_choices(db: Session, job: Job, result: ChosenArtistsResult, *, clo
         key = artist_key(chosen.name)
         row = db.get(ArtistRecommendationRow, key) or ArtistRecommendationRow(key=key)
         row.name, row.artist_id, row.why = chosen.name, chosen.artist_id, chosen.why[:300]
+        row.offered = offered.get(key, [])
         row.model, row.host, row.answered_at = model, host, now
         db.add(row)
 
 
 def _songs_by_artist(db: Session) -> dict[str, tuple[str, ...]]:
-    """Return a few songs of each artist name, as `title — album`, by the name's key."""
+    """Return a few songs of each artist or album artist name, by the name's key.
+
+    Each is `title — album`, or its title alone, cut to a name's length.
+    """
     found: dict[str, list[str]] = {}
-    for title, artist, album in db.execute(select(TrackRow.title, TrackRow.artist, TrackRow.album)):
-        key = artist_key(artist) if artist else ""
-        shown = found.setdefault(key, [])
-        if key and len(shown) < MAX_SONGS_SHOWN and title:
-            shown.append(f"{title} — {album}" if album else title)
-    return {key: tuple(shown) for key, shown in found.items() if key}
+    rows = db.execute(
+        select(TrackRow.title, TrackRow.artist, TrackRow.album_artist, TrackRow.album)
+    )
+    for title, artist, album_artist, album in rows:
+        if not title:
+            continue
+        song = (f"{title} — {album}" if album else title)[:MAX_NAME]
+        for key in {artist_key(name) for name in (artist, album_artist) if name} - {""}:
+            shown = found.setdefault(key, [])
+            if len(shown) < MAX_SONGS_SHOWN:
+                shown.append(song)
+    return {key: tuple(shown) for key, shown in found.items()}
 
 
 def _option_of(known: KnownArtist) -> ArtistOption:

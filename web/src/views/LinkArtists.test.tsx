@@ -221,6 +221,12 @@ describe("linking names to artists", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
+  it("offers no Ask AI when every name it could ask about needs tidying first", () => {
+    const { list } = openList(namesOf({ ...LOOKED_UP, look_up: "tidy_first" }));
+
+    expect(within(list).queryByRole("button", { name: "Ask AI" })).toBeNull();
+  });
+
   it("says while an AI model is being asked", () => {
     render(
       <LinkArtists names={{ ...namesOf(LOOKED_UP), recommending: true }} onChanged={vi.fn()} />,

@@ -16,6 +16,7 @@ by it, numbered, and answers with a number, or none, and why:
 
 Letters stand for the artists, so the model never has to copy an id. A choice naming a
 name or a letter that wasn't offered is left out; what it says is only a recommendation.
+Every name, song, and artist is written on one line, so none can add a line of its own.
 """
 
 import re
@@ -65,7 +66,7 @@ class _Choice(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: int
-    artist: Annotated[str, StringConstraints(strip_whitespace=True, max_length=4)] | None
+    artist: Annotated[str, StringConstraints(strip_whitespace=True)] | None
     why: Annotated[str, StringConstraints(strip_whitespace=True)] = ""
 
 
@@ -79,11 +80,11 @@ def asking(names: tuple[NameToChoose, ...]) -> list[Message]:
     """Return the messages that ask which artist each of `names` names."""
     lines: list[str] = []
     for number, each in enumerate(names, start=1):
-        lines.append(f"{number}. {each.name}")
+        lines.append(f"{number}. {_one_line(each.name)}")
         if each.songs:
-            lines.append(f"   songs: {'; '.join(each.songs)}")
+            lines.append(f"   songs: {'; '.join(_one_line(song) for song in each.songs)}")
         lines += [
-            f"   {_LETTERS[place]}. {_described(option)}"
+            f"   {_LETTERS[place]}. {_one_line(_described(option))}"
             for place, option in enumerate(each.options)
         ]
     return [
@@ -152,3 +153,8 @@ class AiArtistChooser:
 def _described(option: ArtistOption) -> str:
     about = ", ".join(each for each in (option.disambiguation, option.country) if each)
     return f"{option.name} ({about})" if about else option.name
+
+
+def _one_line(text: str) -> str:
+    """Return `text` with each run of spaces and line breaks one space."""
+    return " ".join(text.split())

@@ -32,6 +32,8 @@ const PAGE_SHARE = 0.1;
 const ARRIVED = 1;
 /** How long the bar waits for the audio to arrive before showing where it is. */
 const GIVE_UP_MS = 2000;
+/** How long the preview stays after the pointer leaves, so it can cross the gap onto it. */
+const PREVIEW_LINGER_MS = 150;
 
 /** Where a song starts on a bar across a whole album, in seconds, and its title. */
 export interface SeekMark {
@@ -60,6 +62,25 @@ export function SeekBar({
   // Where a pressed pointer holds the bar, and where a hovering one points.
   const [held, setHeld] = useState<number | undefined>(undefined);
   const [pointed, setPointed] = useState<number | undefined>(undefined);
+  // Where the preview shows, held a moment after the pointer leaves so it can cross the
+  // gap onto the preview, and held still while the pointer is on it.
+  const [previewAt, setPreviewAt] = useState<number | undefined>(undefined);
+  const onPreview = useRef(false);
+  const hiding = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(hiding.current);
+    },
+    [],
+  );
+  const hidePreviewSoon = () => {
+    clearTimeout(hiding.current);
+    hiding.current = setTimeout(() => {
+      if (!onPreview.current) {
+        setPreviewAt(undefined);
+      }
+    }, PREVIEW_LINGER_MS);
+  };
   // Where the bar last sent the audio, until the audio reports it is there.
   const [sent, setSent] = useState<number | undefined>(undefined);
   if (sent !== undefined && Math.abs(position - sent) < ARRIVED) {
@@ -110,6 +131,8 @@ export function SeekBar({
     }
     const time = timeAt(event.clientX);
     setPointed(time);
+    clearTimeout(hiding.current);
+    setPreviewAt(time);
     if (held !== undefined) {
       setHeld(time);
     }
@@ -163,6 +186,7 @@ export function SeekBar({
       }}
       onPointerLeave={() => {
         setPointed(undefined);
+        hidePreviewSoon();
       }}
       onKeyDown={onKeyDown}
     >
@@ -206,9 +230,30 @@ export function SeekBar({
           {tipOf(songAtTime(tip), tip)}
         </span>
       )}
-      {pointed !== undefined && held === undefined && movable && preview !== undefined && (
-        <span className="seek-preview" aria-hidden>
-          {preview(pointed)}
+      {previewAt !== undefined && held === undefined && movable && preview !== undefined && (
+        <span
+          className="seek-preview"
+          aria-hidden
+          onPointerEnter={() => {
+            onPreview.current = true;
+            clearTimeout(hiding.current);
+          }}
+          onPointerLeave={() => {
+            onPreview.current = false;
+            hidePreviewSoon();
+          }}
+          // The preview is not the bar: pointing or pressing on it moves nothing.
+          onPointerMove={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerUp={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          {preview(previewAt)}
         </span>
       )}
     </div>

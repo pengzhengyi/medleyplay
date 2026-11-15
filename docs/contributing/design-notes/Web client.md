@@ -263,7 +263,7 @@ Track's kind is decided.
   and in `aria-keyshortcuts`. The header's keyboard button, or *?*, lists them
   all, with a link to change them; a phone, which has no keyboard, hides the
   button.
-- **Holding ⌘** (Ctrl off Apple devices) on its own for a second shows the same
+- **Holding ⌘** (Ctrl off Apple devices) on its own for a second and a half shows the same
   list for a glance, until the key comes up. It is a dialog that isn't modal and
   takes no focus or clicks, so the key's release still reaches the page and
   nothing under it changes. A quick press never shows it, nor a shortcut made

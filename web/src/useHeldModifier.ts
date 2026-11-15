@@ -10,8 +10,11 @@
 
 import { useEffect, useState } from "react";
 
-/** How long the key stays down alone before it counts as held. */
-export const HOLD_MS = 1000;
+/**
+ * How long the key stays down alone before it counts as held: longer than the moment
+ * it is held to choose an app with ⌘ + Tab, whose Tab the page never sees.
+ */
+export const HOLD_MS = 1500;
 
 const APPLE = /Mac|iPhone|iPad/.test(navigator.platform);
 

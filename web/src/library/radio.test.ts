@@ -6,6 +6,8 @@ import { favoriteGroupsOf } from "./favoriteGroups";
 import {
   albumShelves,
   canSuggest,
+  favoritePicks,
+  favoriteSongsOf,
   likeness,
   nextPicks,
   seeded,
@@ -227,6 +229,99 @@ describe("my station", () => {
   it("starts from any song that plays when nothing is liked yet", () => {
     expect(stationSeed([song(1, "A", "a")], seeded(1))?.id).toBe(1);
     expect(stationSeed([], seeded(1))).toBeUndefined();
+  });
+});
+
+describe("the favorites station", () => {
+  /**
+   * A hearted song, a song by the favorite artist 朴树, one from the favorite album
+   * *c* by C, a song of none of them, and a hearted song rated 1 star:
+   *
+   * ```text
+   * 1  A     a       ♥
+   * 2  朴树   b       favorite artist
+   * 3  C     c       favorite album
+   * 4  D     d
+   * 5  E     e       ♥, rated 1
+   * ```
+   */
+  const LOVED = [
+    song(1, "A", "a", { favorite: true }),
+    song(2, "朴树", "b"),
+    song(3, "C", "c"),
+    song(4, "D", "d"),
+    song(5, "E", "e", { favorite: true, rating: 1 }),
+  ];
+  const FAVORITES = favoriteGroupsOf({
+    artists: [{ name: "朴树" }],
+    albums: [{ artist: "C", name: "c" }],
+  });
+
+  it("plays only favorites: hearted, by a favorite artist, or from a favorite album", () => {
+    const ids = favoritePicks(LOVED, [], 3, seeded(1), NOW, FAVORITES).map((pick) => pick.track.id);
+
+    expect(ids.toSorted()).toEqual([1, 2, 3]);
+  });
+
+  it("says why each song is there", () => {
+    const reasons = new Map(
+      favoritePicks(LOVED, [], 3, seeded(2), NOW, FAVORITES).map((pick) => [
+        pick.track.id,
+        pick.reason,
+      ]),
+    );
+
+    expect(reasons).toEqual(
+      new Map([
+        [1, "A favorite"],
+        [2, "By a favorite artist"],
+        [3, "From a favorite album"],
+      ]),
+    );
+  });
+
+  it("plays every favorite once before any again, then starts over without the latest", () => {
+    const again = favoritePicks(LOVED, [1, 2, 3], 2, seeded(3), NOW, FAVORITES).map(
+      (pick) => pick.track.id,
+    );
+
+    expect(again.toSorted()).toEqual([1, 2]);
+  });
+
+  it("gives the same picks for the same generator", () => {
+    const picks = (run: number) =>
+      favoritePicks(LOVED, [], 6, seeded(run), NOW, FAVORITES).map((pick) => pick.track.id);
+
+    for (let run = 0; run < 10; run += 1) {
+      expect(picks(run)).toEqual(picks(run));
+    }
+  });
+
+  it("plays at most two songs by one artist in a row while others remain", () => {
+    const hearted = [
+      ...Array.from({ length: 6 }, (_, i) => song(i + 1, "A", `A${String(i)}`, { favorite: true })),
+      ...Array.from({ length: 6 }, (_, i) =>
+        song(i + 11, "B", `B${String(i)}`, { favorite: true }),
+      ),
+    ];
+
+    for (let run = 0; run < 20; run += 1) {
+      const artists = favoritePicks(hearted, [], 10, seeded(run), NOW).map(
+        (pick) => pick.track.artist,
+      );
+      const threeInARow = artists.some(
+        (artist, i) => i >= 2 && artist === artists[i - 1] && artist === artists[i - 2],
+      );
+      expect(threeInARow).toBe(false);
+    }
+  });
+
+  it("has nothing to play without a favorite", () => {
+    expect(favoritePicks([song(1, "A", "a")], [], 5, seeded(4), NOW)).toEqual([]);
+  });
+
+  it("counts the favorites it can play", () => {
+    expect(favoriteSongsOf(LOVED, FAVORITES).map((track) => track.id)).toEqual([1, 2, 3]);
   });
 });
 

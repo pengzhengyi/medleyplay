@@ -2,7 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Track } from "../api";
+import type { FavoritesRead, Track } from "../api";
+import { favoriteGroupsOf } from "../library/favoriteGroups";
 import type { Station } from "../library/useStation";
 import { trackOf } from "../testing/server";
 import { RadioView } from "./RadioView";
@@ -31,16 +32,28 @@ const LIBRARY = [
   trackOf(4, "清白之年", { artist: "朴树", album: "猎户星座", added_at: daysAgo(3) }),
 ];
 
-function renderRadio(tracks: readonly Track[] = LIBRARY, playing?: Partial<Station>) {
+function renderRadio(
+  tracks: readonly Track[] = LIBRARY,
+  playing?: Partial<Station>,
+  favorites?: FavoritesRead,
+) {
   const station: Station = {
     seed: undefined,
-    own: false,
+    playing: undefined,
     start: vi.fn(() => true),
+    startFavorites: vi.fn(() => true),
     ...playing,
   };
   const onPlayAll = vi.fn<(tracks: readonly Track[], shuffled: boolean) => void>();
   render(
-    <RadioView tracks={tracks} station={station} onPlayAll={onPlayAll} accountId={1} now={NOW} />,
+    <RadioView
+      tracks={tracks}
+      station={station}
+      onPlayAll={onPlayAll}
+      accountId={1}
+      now={NOW}
+      {...(favorites === undefined ? {} : { favorites: favoriteGroupsOf(favorites) })}
+    />,
   );
   return { station, onPlayAll };
 }
@@ -55,9 +68,48 @@ describe("the Radio tab", () => {
   });
 
   it("says which song the Account's own station plays from", () => {
-    renderRadio(LIBRARY, { seed: LIBRARY[1], own: true });
+    renderRadio(LIBRARY, { seed: LIBRARY[1], playing: "mine" });
 
     expect(screen.getByText("Playing from 生如夏花 by 朴树")).toBeInTheDocument();
+  });
+
+  it("plays the favorites station, saying how many favorites it holds", async () => {
+    const { station } = renderRadio([
+      ...LIBRARY.map((track) => (track.id <= 3 ? { ...track, favorite: true } : track)),
+    ]);
+
+    const favorites = screen.getByRole("region", { name: "Favorites" });
+    expect(favorites).toHaveTextContent("Your 3 favorite songs, every one before any again.");
+    await userEvent.click(within(favorites).getByRole("button", { name: "Play favorites" }));
+
+    expect(station.startFavorites).toHaveBeenCalledOnce();
+  });
+
+  it("counts a song by a favorite artist as a favorite", () => {
+    renderRadio(LIBRARY, undefined, { artists: [{ name: "朴树" }], albums: [] });
+
+    expect(screen.getByRole("region", { name: "Favorites" })).toHaveTextContent(
+      "Your 4 favorite songs",
+    );
+  });
+
+  it("says the favorites station plays while it does", () => {
+    renderRadio(
+      LIBRARY.map((track) => ({ ...track, favorite: true })),
+      { playing: "favorites" },
+    );
+
+    expect(screen.getByRole("region", { name: "Favorites" })).toHaveTextContent("Playing now");
+  });
+
+  it("says how to fill the favorites station while it is empty", () => {
+    renderRadio();
+
+    const favorites = screen.getByRole("region", { name: "Favorites" });
+    expect(favorites).toHaveTextContent(
+      "Heart a song, or favorite an artist or album, to fill it.",
+    );
+    expect(within(favorites).getByRole("button", { name: "Play favorites" })).toBeDisabled();
   });
 
   it("shows each shelf of albums with why each is there, linked to its album", () => {

@@ -1,6 +1,7 @@
 /**
- * @file What is known of an artist, under its page's heading: covers of its albums,
- * who MusicBrainz says it is, the other names it goes by, and where to read more.
+ * @file What is known of an artist, under its page's heading: its photo, or covers of
+ * its albums, who MusicBrainz says it is, the other names it goes by, and where to
+ * read more.
  *
  * The links only open the sites in a new tab; nothing here asks them anything.
  */
@@ -49,8 +50,10 @@ function placesOf(name: string, artist: KnownArtist | undefined) {
           { site: "MusicBrainz", href: `https://musicbrainz.org/artist/${artist.id}` },
           {
             site: "Wikidata",
-            // The item holding the MusicBrainz id, found by Wikidata's own search.
-            href: `https://www.wikidata.org/w/index.php?search=${encodeURIComponent(`haswbstatement:P434=${artist.id}`)}`,
+            // Until Wikidata answers, the item holding the MusicBrainz id, found by its search.
+            href:
+              artist.page ??
+              `https://www.wikidata.org/w/index.php?search=${encodeURIComponent(`haswbstatement:P434=${artist.id}`)}`,
           },
         ]),
     {
@@ -81,19 +84,28 @@ export function ArtistAbout({
   const others = artist === undefined ? [] : otherNames(artist, name);
   const [allNames, setAllNames] = useState(false);
   const hidden = allNames ? 0 : Math.max(0, others.length - NAMES_SHOWN);
+  const photo = artist?.photo ?? null;
   return (
     <section className="artist-about" aria-label="About the artist">
-      <div
-        className={`artist-art tiles-${String(covers.length)}`}
-        role="img"
-        aria-label={`Album covers of ${name}`}
-      >
-        {covers.length === 0 ? (
-          <span className="artist-initial">{initialOf(name)}</span>
-        ) : (
-          covers.map((cover) => <Cover key={cover} cover={cover} className="artist-tile" />)
-        )}
-      </div>
+      {photo === null ? (
+        <div
+          className={`artist-art tiles-${String(covers.length)}`}
+          role="img"
+          aria-label={`Album covers of ${name}`}
+        >
+          {covers.length === 0 ? (
+            <span className="artist-initial">{initialOf(name)}</span>
+          ) : (
+            covers.map((cover) => <Cover key={cover} cover={cover} className="artist-tile" />)
+          )}
+        </div>
+      ) : (
+        <div className="artist-art tiles-1" role="img" aria-label={`Photo of ${name}`}>
+          <Cover cover={photo} className="artist-tile">
+            <span className="artist-initial">{initialOf(name)}</span>
+          </Cover>
+        </div>
+      )}
       <div className="artist-facts">
         {artist !== undefined && <p className="artist-who">{describe(artist)}</p>}
         {others.length > 0 && (
@@ -131,6 +143,18 @@ export function ArtistAbout({
             </li>
           ))}
         </ul>
+        {photo !== null && artist?.photo_page != null && (
+          <p className="artist-credit">
+            <a
+              href={artist.photo_page}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Who took the photo, and its license, in a new tab"
+            >
+              Photo: Wikimedia Commons
+            </a>
+          </p>
+        )}
         {toLink && (
           <p className="hint">
             Not linked to an artist yet.{" "}

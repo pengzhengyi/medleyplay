@@ -3,25 +3,21 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ArtistName, ArtistNames, KnownArtist, Track } from "../api";
-import { artistNameOf, serve, trackOf } from "../testing/server";
+import { artistNameOf, knownArtistOf, serve, trackOf } from "../testing/server";
 import { LinkArtists } from "./LinkArtists";
 
-const BEATLES: KnownArtist = {
-  id: "b10bbbfc",
-  name: "The Beatles",
+const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
   sort_name: "Beatles, The",
   disambiguation: "UK rock band",
   country: "GB",
   aliases: [{ name: "披头士", locale: "zh", primary: true }],
-};
-const TRIBUTE: KnownArtist = {
-  id: "6a3b5c1e",
-  name: "披头士乐队纪念乐团",
+});
+const TRIBUTE: KnownArtist = knownArtistOf("6a3b5c1e", "披头士乐队纪念乐团", {
   sort_name: "",
   disambiguation: "Beatles tribute band",
   country: "CN",
   aliases: [],
-};
+});
 
 /** 披头士, looked up: The Beatles, suggested, and a tribute band. */
 const LOOKED_UP: ArtistName = {

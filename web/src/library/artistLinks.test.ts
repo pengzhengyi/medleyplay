@@ -2,13 +2,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { ArtistNames, KnownArtist } from "../api";
-import { artistNameOf } from "../testing/server";
+import { artistNameOf, knownArtistOf } from "../testing/server";
 import { NO_LINKS, linksOf, withLinkedFavorites } from "./artistLinks";
 import { NO_FAVORITES } from "./favoriteGroups";
 
-const BEATLES: KnownArtist = {
-  id: "b10bbbfc",
-  name: "The Beatles",
+const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
   sort_name: "Beatles, The",
   disambiguation: "UK rock band",
   country: "GB",
@@ -16,7 +14,7 @@ const BEATLES: KnownArtist = {
     { name: "披头士", locale: "zh", primary: true },
     { name: "甲壳虫", locale: "zh", primary: false },
   ],
-};
+});
 
 /** 披头士 and 甲壳虫 linked to The Beatles, Blue Room linked to none, Melt not linked. */
 const LINKED: ArtistNames = {

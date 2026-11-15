@@ -248,6 +248,12 @@ export interface KnownArtist {
   readonly disambiguation: string;
   readonly country: string;
   readonly aliases: readonly ArtistAlias[];
+  /** Its page on Wikidata, once Wikidata has answered for it. */
+  readonly page: string | null;
+  /** The cover holding its photo, from Wikidata, if it has one. */
+  readonly photo: string | null;
+  /** Where the photo comes from: who made it, and its license. */
+  readonly photo_page: string | null;
 }
 
 /** A name Tracks show as an artist or album artist, and what is known of it. */

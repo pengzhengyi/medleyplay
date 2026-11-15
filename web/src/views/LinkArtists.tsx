@@ -69,7 +69,8 @@ export function LinkArtists({
     return { named, offered, chosen, linkable, recommended, ai, aiPick, apart };
   });
   const toLink = rows.filter((row) => row.recommended && !row.apart);
-  const toAsk = rows.filter((row) => row.linkable).length;
+  // The server asks only about the names that may be looked up, as it is.
+  const toAsk = rows.filter((row) => row.linkable && row.named.look_up === "yes").length;
   const asking = names.recommending === true;
 
   const lookUp = (wanted: readonly string[]) => {

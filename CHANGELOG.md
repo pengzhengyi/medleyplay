@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Rate Your Music imports merge, and can be viewed** — *Your ratings* in
+  Settings has one row of buttons: *Export ratings*, *Discard import*, and
+  *Import ratings*. Importing again keeps your earlier import and updates the
+  albums the new export rates again, or replaces it if you choose *Replace it*
+  in the preview. *Your imported ratings* lists every album you imported, with
+  its stars and review and whether your Library has it, filtered as you type.
+
 - **Link artist names in one column** — each name's actions line up at the
   right, the same on every row; the artist going by a name exactly is marked as
   recommended, and *Link N recommended* links them all at once. Linking a name

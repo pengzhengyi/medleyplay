@@ -260,11 +260,21 @@ kind, lane, asked-once table, Offline wait, and stopped state. What changes:
   songs in and out of smart playlists and changes what may be removed first: how
   many albums it rates or reviews and how many the Library has, how many songs'
   ratings change, which albums the Library hasn't, how many songs join or leave
-  each smart playlist, and how many albums of the earlier import it replaces.
-  Applying it tells the catalog it changed, which plans downloads again, as a
-  rating change does. Importing again replaces the earlier import, never a rating
-  set in medleyplay; an export rating and reviewing no album is refused rather
-  than taking the earlier import away. *Forget the import* takes it away.
+  each smart playlist, how many albums of the earlier import it replaces, and how
+  many the import holds after. Applying it tells the catalog it changed, which
+  plans downloads again, as a rating change does. An export rating and reviewing
+  no album is refused rather than changing the earlier import.
+- **Importing again merges** (built) by default: the earlier albums stay, and an
+  album the export rates again takes its new rating and review. An album is the
+  same one by its id on Rate Your Music, or, without one, by its artist and name
+  folded, so exports of a few new ratings can be imported one after another. The
+  preview offers *Replace it* instead, which drops the earlier import for the
+  export's. Neither touches a rating set in medleyplay. *Discard import* takes
+  the import away, once confirmed.
+- **The imported ratings are listed** (built, read only) under *Your imported
+  ratings*, read once opened: each album with its stars and review, in the order
+  imported, marked *Not in Library* when the Library hasn't it, narrowed by
+  artist or album as you type.
 - **Exporting ratings** (built) downloads the Account's ratings as CSV: the songs
   it rated, then the albums it imported, each with its stars and review. A value
   a spreadsheet would run as a formula starts with `'`.
@@ -304,8 +314,10 @@ keeps Last.fm's for no longer than its terms allow.
   Track, for admins.
 - `POST /api/ratings/import/preview` checks a RYM file, sent as `text/csv`, and
   answers what it would change; `POST /api/ratings/import` applies the same file
-  and answers the same; `GET /api/ratings/import` answers how many albums the
-  import kept has, and `DELETE /api/ratings/import` forgets it (built).
+  and answers the same, each merging with the earlier import, or replacing it
+  with `?mode=replace`; `GET /api/ratings/import` answers how many albums the
+  import kept has, `GET /api/ratings/imported` lists them, and
+  `DELETE /api/ratings/import` discards it (built).
 - `GET /api/album-rating?artist=&album=` answers the Account's imported rating
   and review of a Library album, or `null`; a Track carries `album_rating` (built).
 - `GET /api/ratings/export` downloads the Account's ratings as CSV (built).

@@ -101,7 +101,7 @@ export function SearchBox({
                 setChosen(LIBRARY);
               }}
             />
-            <MusicNotesSimpleIcon className="site-mark" aria-hidden />
+            <MusicNotesSimpleIcon className="site-mark" weight="bold" aria-hidden />
             <span className="visually-hidden">Library</span>
           </label>
           {providers.map((provider) => (

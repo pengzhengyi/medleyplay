@@ -50,8 +50,8 @@ class WikidataNames:
         """Return every name Wikidata knows the artist by; none when it doesn't know it.
 
         Its photo is written into the request's folder, when it names one. Wikidata
-        refusing the request is a refusal; a network failure is raised. A photo
-        Commons doesn't give is none.
+        or Commons refusing a request is a refusal; a network failure is raised, so
+        the artist is asked about again. An image Commons doesn't have is no photo.
         """
         try:
             item = self.client.item_of(request.musicbrainz_id)

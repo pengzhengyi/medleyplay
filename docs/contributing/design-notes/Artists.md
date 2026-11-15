@@ -175,15 +175,21 @@ nicknames such as *周董*, and Japanese and Korean names.
   first and never a deprecated one, fetched from Wikimedia Commons 500 pixels wide
   (`Special:FilePath/<file>?width=500`), a width Commons keeps ready. That is two
   more requests, each a second after the one before.
+- **Only from Commons:** each redirect is followed only to a Wikimedia site
+  over HTTPS, a file name holding a slash is never asked for, and an image larger
+  than 2 MiB is no photo.
 - **Kept as a cover:** the plugin writes the image into a folder of the Job's,
   and the core keeps it as it keeps an enricher's cover: named by its bytes, and
-  only a JPEG, PNG, or WebP image of at most 10 MiB. The sweep that removes covers
-  no Track names keeps every artist's photo.
+  only a JPEG, PNG, or WebP image. The sweep that removes covers no Track names
+  keeps every artist's photo.
 - **Credited:** with the photo comes its page on Commons, which says who took it
   and under what license; the artist's page links to it.
-- **A photo Commons doesn't give,** because it can't be fetched or is no such
-  image, is none, and the names are kept all the same. Each answer replaces the
-  page and photo the one before gave.
+- **A photo Commons doesn't have,** or one that is no such image, is none, and
+  the names are kept all the same. Commons refusing, or not answering, fails the
+  Job as Wikidata doing so does, so the artist is asked again and keeps the photo
+  it had. Each answer replaces the page and photo the one before gave.
+- **Only pages over HTTPS** are taken from the plugin, and the web client links
+  to no other.
 - **Asked again for artists linked before photos were kept:** the migration that
   added them forgets when Wikidata answered, so *Look up* asks it again.
 

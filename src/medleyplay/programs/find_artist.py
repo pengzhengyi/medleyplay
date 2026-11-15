@@ -19,6 +19,7 @@ from medleyplay.plugin_api import (
     FindArtistNames,
     FindStatus,
     FoundArtist,
+    Page,
 )
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext, JobProgram
 from medleyplay.programs.scan_covers import CoverFile, copy_written
@@ -95,9 +96,9 @@ class FoundArtistNamesResult(_Model):
     artist_id: str
     finder: str
     aliases: Annotated[tuple[ArtistAlias, ...], Field(max_length=MAX_ALIASES)] = ()
-    page: str | None = None
+    page: Page | None = None
     photo: CoverFile | None = None
-    photo_page: str | None = None
+    photo_page: Page | None = None
 
 
 def run_names(request: FindArtistNamesJob, context: JobContext) -> FoundArtistNamesResult:

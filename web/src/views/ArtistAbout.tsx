@@ -40,6 +40,11 @@ function otherNames(artist: KnownArtist, shown: string): string[] {
   return names;
 }
 
+/** Return `url` when it is a web page over HTTPS, else `null`: a link opens nothing else. */
+function overHttps(url: string | null): string | null {
+  return url?.startsWith("https://") === true ? url : null;
+}
+
 /** Where to read more of the artist, each a page of its own. */
 function placesOf(name: string, artist: KnownArtist | undefined) {
   const search = encodeURIComponent(artist?.name ?? name);
@@ -52,7 +57,7 @@ function placesOf(name: string, artist: KnownArtist | undefined) {
             site: "Wikidata",
             // Until Wikidata answers, the item holding the MusicBrainz id, found by its search.
             href:
-              artist.page ??
+              overHttps(artist.page) ??
               `https://www.wikidata.org/w/index.php?search=${encodeURIComponent(`haswbstatement:P434=${artist.id}`)}`,
           },
         ]),
@@ -85,6 +90,7 @@ export function ArtistAbout({
   const [allNames, setAllNames] = useState(false);
   const hidden = allNames ? 0 : Math.max(0, others.length - NAMES_SHOWN);
   const photo = artist?.photo ?? null;
+  const credit = overHttps(artist?.photo_page ?? null);
   return (
     <section className="artist-about" aria-label="About the artist">
       {photo === null ? (
@@ -143,10 +149,10 @@ export function ArtistAbout({
             </li>
           ))}
         </ul>
-        {photo !== null && artist?.photo_page != null && (
+        {photo !== null && credit !== null && (
           <p className="artist-credit">
             <a
-              href={artist.photo_page}
+              href={credit}
               target="_blank"
               rel="noopener noreferrer"
               title="Who took the photo, and its license, in a new tab"

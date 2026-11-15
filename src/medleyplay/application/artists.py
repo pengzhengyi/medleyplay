@@ -581,19 +581,16 @@ def _complete_names(
         )
         for alias in {each.name: each for each in result.aliases}.values()
     )
-    photo = _keep_photo(result, covers_folder)
     row.page = result.page
-    row.photo, row.photo_page = photo, None if photo is None else result.photo_page
-    row.names_at = clock()
-
-
-def _keep_photo(result: FoundArtistNamesResult, folder: Path) -> str | None:
-    if result.photo is None:
-        return None
     try:
-        return keep_copy(result.photo, folder)
-    except (OSError, NotACoverError):
-        return None
+        row.photo = None if result.photo is None else keep_copy(result.photo, covers_folder)
+        row.photo_page = None if row.photo is None else result.photo_page
+    except NotACoverError:
+        row.photo = row.photo_page = None
+    except OSError:
+        # Such as a full disk: the photo there was stays, rather than none.
+        pass
+    row.names_at = clock()
 
 
 def _with_known(found: tuple[tuple[str, int], ...], known: set[str]) -> tuple[tuple[str, int], ...]:

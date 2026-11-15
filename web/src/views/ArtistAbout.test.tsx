@@ -117,6 +117,21 @@ describe("about an artist", () => {
     );
   });
 
+  it("links to no page that is not on the web over HTTPS", () => {
+    const odd: KnownArtist = {
+      ...BEATLES_ON_WIKIDATA,
+      page: "javascript:alert(1)",
+      photo_page: "http://commons.wikimedia.org/wiki/File:The_Beatles.jpg",
+    };
+    render(<ArtistAbout name="The Beatles" songs={[]} artist={odd} toLink={false} />);
+
+    const links = within(screen.getByRole("list", { name: "The artist elsewhere" }));
+    expect(links.getByRole("link", { name: "Wikidata" }).getAttribute("href")).toMatch(
+      /^https:\/\/www\.wikidata\.org\/w\/index\.php\?search=/u,
+    );
+    expect(screen.queryByRole("link", { name: "Photo: Wikimedia Commons" })).toBeNull();
+  });
+
   it("says what tells the artist apart, and the other names it goes by", () => {
     render(<ArtistAbout name="披头士" songs={[]} artist={BEATLES} toLink={false} />);
 

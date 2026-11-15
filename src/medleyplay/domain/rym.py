@@ -19,11 +19,12 @@ import html
 import io
 import re
 import unicodedata
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from typing import Final
 
 from medleyplay.domain.errors import InvalidInputError, TooLargeError
+from medleyplay.domain.rules import fold
 
 MAX_EXPORT_BYTES: Final = 5 * 1024 * 1024
 MAX_EXPORT_ROWS: Final = 20_000
@@ -124,6 +125,26 @@ def _check_header(header: list[str] | None) -> None:
     if len(names) > len(COLUMNS):
         message = f"The export has a column {names[len(COLUMNS)]!r} this server doesn't know."
         raise InvalidInputError(message)
+
+
+def merged(earlier: Iterable[RymAlbum], later: Iterable[RymAlbum]) -> tuple[RymAlbum, ...]:
+    """Return the albums of `earlier` and of `later`, an album in both as `later` has it.
+
+    An album is the same in both by its id on Rate Your Music, or, without one, by its
+    artist and name folded. The earlier albums keep their places, and the later ones
+    new to them follow in order.
+    """
+    held = {identity_of(album): album for album in earlier}
+    for album in later:
+        held[identity_of(album)] = album
+    return tuple(held.values())
+
+
+def identity_of(album: RymAlbum) -> tuple[str, ...]:
+    """Return what makes `album` one album: its id on Rate Your Music, else its names folded."""
+    if album.rym_id:
+        return ("id", album.rym_id)
+    return ("name", fold(album.artist), fold(album.album))
 
 
 def _albums_of(rows: Iterator[list[str]], line_of: Callable[[], int]) -> Iterator[RymAlbum]:

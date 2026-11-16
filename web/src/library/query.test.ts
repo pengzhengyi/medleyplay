@@ -1,7 +1,7 @@
 // cspell:ignore loveartist
 import { describe, expect, it } from "vitest";
 
-import { fieldTyped, parseQuery, queryText } from "./query";
+import { fieldTyped, parseQuery, querySaid, queryText } from "./query";
 
 describe("a search's text", () => {
   it("holds tags naming a field, and plain words", () => {
@@ -26,6 +26,23 @@ describe("a search's text", () => {
       { field: "album", value: "" },
       { field: "song", value: "Blue and" },
     ]);
+  });
+
+  it("reads a quote left open after a word that names no field as plain words", () => {
+    expect(parseQuery('say:"hi artist:Jay')).toEqual({
+      tags: [{ field: "artist", value: "Jay" }],
+      words: 'say:"hi',
+    });
+  });
+
+  it("reads a full-width colon, as an input method types it, as a tag's", () => {
+    expect(parseQuery("artist：周杰伦").tags).toEqual([{ field: "artist", value: "周杰伦" }]);
+    expect(fieldTyped("artist：")).toEqual({ field: "artist", before: "" });
+  });
+
+  it("is said as a heading says it, tags by name and words quoted", () => {
+    expect(querySaid('artist:"Jay Chou" album: love song')).toBe("Artist: Jay Chou, “love song”");
+    expect(querySaid("album:")).toBe("");
   });
 
   it("is written back the way it is read", () => {

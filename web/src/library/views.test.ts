@@ -289,11 +289,11 @@ describe("search", () => {
       }),
     ];
 
-    it("keeps the songs of an artist, by artist or album artist", () => {
+    it("keeps the songs of an artist, by artist or album artist, listing only that artist", () => {
       const found = search(SONGS, "artist:jay");
 
       expect(titles(found.tracks)).toEqual(["晴天", "稻香", "Jay's Day"]);
-      expect(found.artists.map((artist) => artist.name)).toEqual(["Jay Chou", "Nobody"]);
+      expect(found.artists.map((artist) => artist.name)).toEqual(["Jay Chou"]);
       expect(found.albums.map((album) => album.name)).toEqual(["Jay Chou?", "叶惠美", "魔杰座"]);
     });
 
@@ -311,6 +311,27 @@ describe("search", () => {
       expect(titles(search(SONGS, "rating:4").tracks)).toEqual(["晴天", "Jay's Day"]);
       expect(titles(search(SONGS, "favorite:yes").tracks)).toEqual(["晴天", "Love Song"]);
       expect(titles(search(SONGS, "favorite:no").tracks)).toEqual(["稻香", "Jay's Day"]);
+    });
+
+    it("lists an album or artist whole when a song the tags keep is its", () => {
+      const found = search(SONGS, "rating:4");
+
+      expect(found.albums.map((album) => [album.name, album.count])).toEqual([
+        ["Jay Chou?", 1],
+        ["叶惠美", 1],
+      ]);
+      expect(found.artists.map((artist) => [artist.name, artist.count])).toEqual([
+        ["Jay Chou", 2],
+        ["Nobody", 1],
+      ]);
+    });
+
+    it("ignores a kind it doesn't know, as one still being typed", () => {
+      expect(titles(search(SONGS, "kind:so artist:jay").tracks)).toEqual([
+        "晴天",
+        "稻香",
+        "Jay's Day",
+      ]);
     });
 
     it("shows only the kind asked for", () => {

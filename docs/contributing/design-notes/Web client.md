@@ -352,10 +352,19 @@ Track's kind is decided.
 - **A tag typed becomes a capsule** in the box: typing `artist:` shows
   *Artist:*, and what follows is its value until *Enter* keeps it and the box
   takes plain words again. *Backspace* at the start chooses the capsule before
-  the caret, outlined, and a second removes it; words typed before a tag return
-  to the box. The capsules describe the box to a screen reader, and choosing one
-  is announced. The search's text, tags written out, is what `#/search?q=`
-  holds, so a link or Back shows the same capsules.
+  the caret, outlined, and a second removes it (a held key doesn't); each
+  capsule also has its own remove button. Words typed before a tag return to
+  the box. The box's clear button, or *Escape*, empties it, capsules and all,
+  in place of the browser's own clear, which left the capsules behind. Tags
+  pasted in become capsules too. The capsules describe the box to a screen
+  reader, and choosing or removing one is announced. The search's text, tags
+  written out, is what `#/search?q=` holds, so a link or Back shows the same
+  capsules, and the results are titled by them, as *Results for Artist: Jay
+  Chou, “love”*.
+- **Artists and albums found are whole:** one is listed, with all its songs,
+  when a song the tags keep is its, so `rating:4` lists albums with their full
+  counts; under `artist:`, only the artists the tag names are listed. A `kind:`
+  value it doesn't know, as one still being typed, is ignored.
 
 ## Favorites and ratings
 

@@ -201,16 +201,58 @@ export function search(tracks: readonly Track[], query: string, links?: ArtistLi
   }
   const kept = asked.reduce<readonly Track[]>((left, tag) => fitting(left, tag, links), tracks);
   const kinds = new Set(
-    asked.flatMap((tag) => (tag.field === "kind" ? [KINDS[fold(tag.value)]] : [])),
+    asked.flatMap((tag) => {
+      const kind = tag.field === "kind" ? KINDS[fold(tag.value).trim()] : undefined;
+      return kind === undefined ? [] : [kind];
+    }),
   );
   const shows = (kind: keyof Found) => kinds.size === 0 || kinds.has(kind);
+  if (kept.length === tracks.length && folded === "") {
+    // Only tags that keep every Track, such as kind:albums, list them all.
+    return {
+      tracks: shows("tracks") ? kept : [],
+      artists: shows("artists") ? artistsOf(tracks, links) : [],
+      albums: shows("albums") ? albumsOf(tracks) : [],
+    };
+  }
+  // An artist or album is listed whole, with all its songs, when a song the tags keep is its.
+  const keptArtists = new Set(kept.map((track) => artistKeyOf(track.artist, links)));
+  const keptAlbums = new Set(kept.map(albumKeyOf));
+  const artistTags = asked.filter((tag) => tag.field === "artist");
+  const artists = artistsOf(tracks, links).filter(
+    (artist) =>
+      keptArtists.has(artistKeyOf(artist.link, links)) &&
+      artistTags.every(
+        (tag) =>
+          closestOf([artist], fold(tag.value).trim(), (each) => namesOf(each.link, links)).length >
+          0,
+      ),
+  );
   return {
     tracks: shows("tracks") ? ranked(kept, folded, haystackOf) : [],
     artists: shows("artists")
-      ? ranked(artistsOf(kept, links), folded, (artist) => namesOf(artist.link, links))
+      ? ranked(artists, folded, (artist) => namesOf(artist.link, links))
       : [],
-    albums: shows("albums") ? ranked(albumsOf(kept), folded, (album) => fold(album.name)) : [],
+    albums: shows("albums")
+      ? ranked(
+          albumsOf(tracks).filter((album) => keptAlbums.has(albumKeyOf(album))),
+          folded,
+          (album) => fold(album.name),
+        )
+      : [],
   };
+}
+
+/** Return the key an artist's songs are grouped by: its linked artist's, or its name's. */
+function artistKeyOf(name: string, links?: ArtistLinks): string {
+  return links === undefined ? fold(name) : links.groupOf(name);
+}
+
+/** Return the key an album's songs are grouped by, from a Track or the album. */
+function albumKeyOf(of: Track | Album): string {
+  return "title" in of
+    ? fold(`${albumArtistOf(of)}\n${of.album}`)
+    : fold(`${of.artist}\n${of.name}`);
 }
 
 /** Return the `tracks` that fit `tag`: a name close to its value, or its rating or heart. */

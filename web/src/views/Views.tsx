@@ -38,6 +38,7 @@ import {
   tracksOfArtist,
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
+import { querySaid } from "../library/query";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
@@ -641,7 +642,8 @@ function SearchResults({ query, ...props }: ViewProps & { readonly query: string
     () => search(props.tracks, query, props.links),
     [props.tracks, query, props.links],
   );
-  if (query.trim() === "") {
+  const said = querySaid(query);
+  if (said === "") {
     return (
       <>
         <ViewHeading title="Search" />
@@ -653,8 +655,8 @@ function SearchResults({ query, ...props }: ViewProps & { readonly query: string
     found.tracks.length === 0 && found.artists.length === 0 && found.albums.length === 0;
   return (
     <>
-      <ViewHeading title={`Results for “${query}”`} />
-      {nothing && <p className="empty">Nothing in your Library matches “{query}”.</p>}
+      <ViewHeading title={`Results for ${said}`} />
+      {nothing && <p className="empty">Nothing in your Library matches {said}.</p>}
       {found.artists.length > 0 && (
         <section aria-label="Artists found">
           <h3 className="found">Artists</h3>

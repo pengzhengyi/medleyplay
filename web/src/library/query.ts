@@ -38,7 +38,8 @@ export const FIELD_LABELS: Readonly<Record<Field, string>> = {
   favorite: "Favorite",
 };
 
-const TOKEN = /(\S+?):(?:"([^"]*)"?|(\S*))|\S+/gu;
+/** A tag, a field's name and `:` (or a full-width `：`) at a word's start, or a plain word. */
+const TOKEN = new RegExp(`(?<=^|\\s)(${FIELDS.join("|")})[:：](?:"([^"]*)"?|(\\S*))|\\S+`, "giu");
 
 /** Return the field `name` is, or `undefined` for a word that isn't one. */
 export function fieldOf(name: string): Field | undefined {
@@ -56,7 +57,7 @@ export function parseQuery(text: string): Query {
     if (field === undefined) {
       words.push(whole);
     } else {
-      tags.push({ field, value: quoted ?? bare ?? "" });
+      tags.push({ field, value: (quoted ?? bare ?? "").trim() });
     }
   }
   return { tags, words: words.join(" ") };
@@ -80,9 +81,23 @@ export function tagText(tag: Tag): string {
 export function fieldTyped(
   text: string,
 ): { readonly field: Field; readonly before: string } | undefined {
-  const match = /(?:^|\s)(\S+):$/u.exec(text);
+  const match = /(?:^|\s)(\S+)[:：]$/u.exec(text);
   const field = match?.[1] === undefined ? undefined : fieldOf(match[1]);
   return field === undefined || match === null
     ? undefined
     : { field, before: text.slice(0, match.index).trim() };
+}
+
+/**
+ * Return `query` as a heading says it: each tag as *Artist: Jay Chou*, then the words
+ * quoted, as *Artist: Jay Chou, “love”*; `""` when it asks nothing.
+ */
+export function querySaid(text: string): string {
+  const { tags, words } = parseQuery(text);
+  return [
+    ...tags
+      .filter((tag) => tag.value !== "")
+      .map((tag) => `${FIELD_LABELS[tag.field]}: ${tag.value}`),
+    ...(words.trim() === "" ? [] : [`“${words.trim()}”`]),
+  ].join(", ");
 }

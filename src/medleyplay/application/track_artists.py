@@ -2,8 +2,10 @@
 
 An artist is the Library's own, under an id it keeps when it is linked to a MusicBrainz
 artist or unlinked. Each written name, folded, names one artist; names linked to one
-MusicBrainz artist name the same one. A Track's artists are bound again whenever its
-shown artist or album artist changes, and a name's Tracks whenever its link changes.
+MusicBrainz artist name the same one. A name the household split is bound as each
+artist it lists, with how the song credits it. A Track's artists are bound again
+whenever its shown artist or album artist changes, and a name's Tracks whenever its
+link changes or it is split or kept.
 """
 
 import uuid
@@ -12,12 +14,14 @@ from dataclasses import dataclass
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from medleyplay.domain.artist_split import Credit, Role, split_suggestion
 from medleyplay.domain.artists import artist_key
 from medleyplay.domain.catalog import TrackId
 from medleyplay.persistence.schema import (
     ArtistLinkRow,
     ArtistNameRow,
     LibraryArtistRow,
+    NameSplitRow,
     TrackArtistRow,
     TrackRow,
 )
@@ -25,10 +29,11 @@ from medleyplay.persistence.schema import (
 
 @dataclass(frozen=True)
 class BoundArtist:
-    """One artist a Track shows, and how the Track writes its name."""
+    """One artist a Track shows, how the Track writes its name, and how it credits it."""
 
     artist_id: str
     written: str
+    role: Role = Role.MAIN
 
 
 @dataclass(frozen=True)
@@ -46,30 +51,69 @@ def artists_of(db: Session, track_id: TrackId) -> TrackArtists:
         .where(TrackArtistRow.track_id == track_id)
         .order_by(TrackArtistRow.position)
     ).all()
-    bound = [(row.album_artist, BoundArtist(row.artist_id, row.written)) for row in rows]
+    bound = [
+        (row.album_artist, BoundArtist(row.artist_id, row.written, Role(row.role))) for row in rows
+    ]
     return TrackArtists(
         artists=tuple(artist for album, artist in bound if not album),
         album_artists=tuple(artist for album, artist in bound if album),
     )
 
 
+def artist_names_of(db: Session, track_id: TrackId | None = None) -> dict[int, tuple[str, ...]]:
+    """Return the artists each Track's artist names, as written, in order; or one Track's."""
+    query = (
+        select(TrackArtistRow.track_id, TrackArtistRow.written)
+        .where(TrackArtistRow.album_artist.is_(False))
+        .order_by(TrackArtistRow.track_id, TrackArtistRow.position)
+    )
+    if track_id is not None:
+        query = query.where(TrackArtistRow.track_id == track_id)
+    found: dict[int, list[str]] = {}
+    for each, written in db.execute(query):
+        found.setdefault(each, []).append(written)
+    return {each: tuple(names) for each, names in found.items()}
+
+
 def bind(db: Session, track: TrackRow) -> None:
     """Bind the artist and album artist the Track shows, each to the artist its name names."""
     db.execute(delete(TrackArtistRow).where(TrackArtistRow.track_id == track.id))
     for album_artist, shown in ((False, track.artist), (True, track.album_artist)):
-        written = shown.strip()
-        if written:
-            artist_id = _artist_named(db, written)
+        for position, credit in enumerate(_credits(db, shown)):
             db.add(
                 TrackArtistRow(
                     track_id=track.id,
                     album_artist=album_artist,
-                    position=0,
-                    artist_id=artist_id,
-                    written=written,
+                    position=position,
+                    artist_id=_artist_named(db, credit.written),
+                    written=credit.written,
+                    role=credit.role,
                 )
             )
     db.flush()
+
+
+def rebind_written(db: Session, keys: set[str]) -> None:
+    """Bind again every Track whose artist or album artist is written as one of the names `keys`."""
+    tracks = db.scalars(
+        select(TrackRow).where((TrackRow.artist != "") | (TrackRow.album_artist != ""))
+    )
+    for track in tracks:
+        if keys & {artist_key(track.artist), artist_key(track.album_artist)}:
+            bind(db, track)
+
+
+def _credits(db: Session, shown: str) -> tuple[Credit, ...]:
+    """Return the artists `shown` lists: each one if the household split it, else itself."""
+    written = shown.strip()
+    if not written:
+        return ()
+    decided = db.get(NameSplitRow, artist_key(written))
+    if decided is not None and decided.split:
+        return split_suggestion(written) or tuple(
+            Credit(part["written"], Role(part["role"])) for part in decided.parts
+        )
+    return (Credit(written),)
 
 
 def rebind_name(db: Session, name: str, musicbrainz_id: str | None) -> None:

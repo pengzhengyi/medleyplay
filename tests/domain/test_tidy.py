@@ -77,6 +77,14 @@ def test_a_name_with_nothing_to_tidy_is_left_as_it_is(written: str) -> None:
     assert tidy_artist(written) is None
 
 
+@pytest.mark.parametrize(
+    "written",
+    ["DECO*27 (feat. 初音ミク)", "スズム（ft. GUMI, MAYU）"],  # noqa: RUF001 -- full-width brackets
+)
+def test_an_artist_featured_in_brackets_is_a_credit_so_is_kept(written: str) -> None:
+    assert tidy_artist(written) is None
+
+
 def test_a_name_that_would_be_left_empty_is_left_as_it_is() -> None:
     assert tidy_artist("2000年发行") is None
 

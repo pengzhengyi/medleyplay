@@ -64,6 +64,7 @@ from medleyplay.persistence.schema import (
     ArtistRow,
     ArtistSearchRow,
     ArtistSuggestionRow,
+    TrackArtistRow,
     TrackRow,
 )
 from medleyplay.plugin_api import (
@@ -337,7 +338,7 @@ class ArtistService:
     def names(self) -> ArtistNames:
         """Return every artist and album artist name Tracks show, and what is known of each."""
         with self._units() as db:
-            shown = db.execute(select(TrackRow.id, TrackRow.artist, TrackRow.album_artist)).all()
+            shown = _names_shown(db)
             links = {row.key: row for row in db.scalars(select(ArtistLinkRow))}
             searches = {row.key: row for row in db.scalars(select(ArtistSearchRow))}
             recommended = {row.key: row for row in db.scalars(select(ArtistRecommendationRow))}
@@ -345,12 +346,10 @@ class ArtistService:
         known_by = _known_by(artists, {row.artist_id for row in links.values()})
         written: dict[str, Counter[str]] = {}
         tracks: dict[str, set[int]] = {}
-        for track_id, artist, album_artist in shown:
-            for name in {artist, album_artist}:
-                if name and name.strip():
-                    key = artist_key(name)
-                    written.setdefault(key, Counter())[name.strip()] += 1
-                    tracks.setdefault(key, set()).add(track_id)
+        for track_id, name, _, _ in shown:
+            key = artist_key(name)
+            written.setdefault(key, Counter())[name] += 1
+            tracks.setdefault(key, set()).add(track_id)
         read = _Read(links, searches, artists, known_by, recommended)
         found = [
             self._name_of(key, forms.most_common(1)[0][0], len(tracks[key]), read)
@@ -747,18 +746,13 @@ def _written_and_songs(db: Session, artist_id: str) -> tuple[list[str], tuple[st
     """
     keys = set(db.scalars(select(ArtistLinkRow.key).where(ArtistLinkRow.artist_id == artist_id)))
     written: Counter[str] = Counter()
-    songs: list[str] = []
-    rows = db.execute(
-        select(TrackRow.title, TrackRow.artist, TrackRow.album_artist, TrackRow.album)
-    )
-    for title, artist, album_artist, album in rows:
-        names = {
-            name.strip() for name in (artist, album_artist) if name and artist_key(name) in keys
-        }
-        written.update(names)
-        if names and title and len(songs) < MAX_SONGS_SHOWN:
-            songs.append((f"{title} — {album}" if album else title)[:MAX_NAME])
-    return [name for name, _ in written.most_common()], tuple(songs)
+    songs: dict[int, str] = {}
+    for track_id, name, title, album in _names_shown(db):
+        if artist_key(name) in keys:
+            written[name] += 1
+            if title and len(songs) < MAX_SONGS_SHOWN:
+                songs.setdefault(track_id, (f"{title} — {album}" if album else title)[:MAX_NAME])
+    return [name for name, _ in written.most_common()], tuple(songs.values())
 
 
 def _aliases_by_rank(known: KnownArtist) -> list[str]:
@@ -781,19 +775,27 @@ def _songs_by_artist(db: Session) -> dict[str, tuple[str, ...]]:
 
     Each is `title — album`, or its title alone, cut to a name's length.
     """
-    found: dict[str, list[str]] = {}
-    rows = db.execute(
-        select(TrackRow.title, TrackRow.artist, TrackRow.album_artist, TrackRow.album)
-    )
-    for title, artist, album_artist, album in rows:
-        if not title:
-            continue
-        song = (f"{title} — {album}" if album else title)[:MAX_NAME]
-        for key in {artist_key(name) for name in (artist, album_artist) if name} - {""}:
-            shown = found.setdefault(key, [])
+    found: dict[str, dict[int, str]] = {}
+    for track_id, name, title, album in _names_shown(db):
+        if title:
+            shown = found.setdefault(artist_key(name), {})
             if len(shown) < MAX_SONGS_SHOWN:
-                shown.append(song)
-    return {key: tuple(shown) for key, shown in found.items()}
+                shown.setdefault(track_id, (f"{title} — {album}" if album else title)[:MAX_NAME])
+    return {key: tuple(shown.values()) for key, shown in found.items()}
+
+
+def _names_shown(db: Session) -> list[tuple[int, str, str, str]]:
+    """Return each artist name each Track shows, once, with the Track's title and album.
+
+    A name split into several artists is each of them.
+    """
+    rows = db.execute(
+        select(TrackArtistRow.track_id, TrackArtistRow.written, TrackRow.title, TrackRow.album)
+        .join(TrackRow, TrackRow.id == TrackArtistRow.track_id)
+        .distinct()
+        .order_by(TrackArtistRow.track_id)
+    )
+    return [(track_id, written, title, album) for track_id, written, title, album in rows]
 
 
 def _option_of(known: KnownArtist) -> ArtistOption:

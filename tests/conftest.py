@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
+from medleyplay.application.artist_splits import ArtistSplitService
 from medleyplay.application.artists import (
     ArtistKinds,
     ArtistService,
@@ -156,6 +157,13 @@ def ratings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) 
 @pytest.fixture
 def preferences(units: sessionmaker[Session], clock: FakeClock) -> PreferencesService:
     return PreferencesService(units, clock)
+
+
+@pytest.fixture
+def artist_splits(
+    units: sessionmaker[Session], clock: FakeClock, changes: list[str]
+) -> ArtistSplitService:
+    return ArtistSplitService(units, clock, changes.append)
 
 
 @pytest.fixture
@@ -463,6 +471,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     devices: DeviceService,
     ratings: RatingsService,
     artists: ArtistService,
+    artist_splits: ArtistSplitService,
     album_covers: AlbumCoverService,
     clock: FakeClock,
 ) -> Services:
@@ -498,6 +507,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         remote=remote,
         ratings=ratings,
         artists=artists,
+        artist_splits=artist_splits,
         album_covers=album_covers,
     )
 

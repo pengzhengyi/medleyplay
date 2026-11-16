@@ -16,6 +16,7 @@
 - [Looking a name up](#looking-a-name-up)
 - [Linking a name](#linking-a-name)
 - [Each song's artists by id](#each-songs-artists-by-id)
+- [Names written as several artists](#names-written-as-several-artists)
 - [Asking an AI model](#asking-an-ai-model)
 - [Wikidata's names](#wikidatas-names)
 - [Wikidata's page and photo](#wikidatas-page-and-photo)
@@ -113,9 +114,40 @@ keeps the text and counts them as one.
   甲壳虫 relinked to a tribute band          甲壳虫's songs to an artist of its own
   ```
 
-- **Nothing shows the ids yet.** Favorites, the artist page, and the web client
-  still go by names; the ids are what songs by several artists, and two artists
-  of one name, are built on.
+- **Ids show nowhere yet.** Favorites, the artist page, and the web client go by
+  names; the ids are what two artists of one name will be told apart by.
+
+## Names written as several artists
+
+A song's artist is often written as several: a collaboration, or an artist featuring
+others. Such a name is offered with the artists it lists, for the household to split,
+so each song counts under each artist, or to keep as written.
+
+```text
+GUMI/MAYU                    GUMI, MAYU
+周杰伦、费玉清                 周杰伦, 费玉清
+スズム feat. GUMI, MAYU       スズム; featuring GUMI, MAYU
+DECO*27 (feat. 初音ミク)       DECO*27; featuring 初音ミク
+AC/DC, Simon & Garfunkel     not offered: each names one artist
+Michael Jackson/迈克尔·杰克逊   not offered: a name and its translation
+```
+
+- **Offers are cautious,** as many a band's name holds `&` or `,`: those divide
+  only the artists a song features. The main artists are divided by `、`, `，`, `;`,
+  ` x `, or ` × `, and by a slash only between names in one script, kept whole by
+  the rules a lookup keeps *AC/DC* whole by. An artist listed twice is one.
+- **Not offered:** a name naming no one artist, such as *Various Artists*; a name
+  to tidy first; a name decided. A name linked to one MusicBrainz artist is offered
+  saying so, as a collaboration may be linked to one of its artists.
+- **A decision is kept per name,** as written and folded, and binds every song
+  showing it as its artist or album artist, now and later: each artist it lists,
+  in order, with how the song credits it, *main* or *featured*; or, kept, the name
+  as written. A decision is listed, and forgetting it offers the name again.
+- **Tidying keeps a featured artist:** a bracket naming one, as in *DECO\*27
+  (feat. 初音ミク)*, is a credit, not the name in another script.
+- **Each artist counts on its own:** the names listed to link are each artist a
+  song shows, so *GUMI* and *MAYU* are linked apart, and an AI model reads each
+  one's songs. A Track lists the artists its artist names, as written.
 
 ## Asking an AI model
 
@@ -349,6 +381,10 @@ not.
 
 | Endpoint | Who | What |
 | --- | --- | --- |
+| `GET /api/artist-splits` | Signed in | Every name written as several artists and not decided, most songs first, with the artists it lists and whether it is linked; and every name decided |
+| `POST /api/artist-splits/split` | Signed in | Split up to 500 names into the artists each lists; 422 for a name naming one |
+| `POST /api/artist-splits/keep` | Signed in | Keep up to 500 names as written |
+| `POST /api/artist-splits/forget` | Signed in | Forget what was decided for up to 500 names, so each is offered again |
 | `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, and whether it is being asked now; and every artist those name, with its aliases, and its Wikidata page and photo once Wikidata has answered |
 | `POST /api/artist-names/look-up` | Signed in | Ask about up to 500 names at once; each not linked, and that may be looked up, gets a Job. Answers how many were asked about, or 409 while the `musicbrainz` plugin is off |
 | `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
@@ -383,7 +419,7 @@ not.
 - **Two artists of one name,** such as two singers called *Jay*: a name names
   one artist, so telling them apart song by song needs a name to name several,
   each song bound to one of them.
-- **Songs by several artists,** such as *GUMI/MAYU*, each bound to every artist
-  it names.
+- **Editing a song's artists one by one,** each a chip with its role, rather than
+  by the name's decision.
 - **Showing every linked artist in a chosen language** at once, rather than as
   written or by the name chosen for each.

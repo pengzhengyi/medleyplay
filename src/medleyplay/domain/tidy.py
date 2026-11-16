@@ -36,6 +36,7 @@ _RELEASED: Final = re.compile(r"\s*((?:19|20)\d{2})\s*年(?!代).*$", re.DOTALL)
 _BRACKETED: Final = re.compile(r"^(.*?)\s*[(\uff08]([^()\uff08\uff09]*)[)\uff09]\s*$")
 _EAST_ASIAN: Final = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]")
 _LATIN: Final = re.compile(r"[A-Za-z]")
+_FEATURING: Final = re.compile(r"\s*(?:feat\.?|ft\.|featuring)\s", re.IGNORECASE)
 _KANA: Final = re.compile(r"[\u3040-\u30ff]")
 # The last clause after a comma, half- or full-width.
 _LAST_CLAUSE: Final = re.compile(r"\s*[,\uff0c]([^,\uff0c]*)$")
@@ -129,6 +130,9 @@ def _without_other_script(text: str) -> str:
     if found is None:
         return text
     name, inside = found.group(1), found.group(2)
+    if _FEATURING.match(inside):
+        # An artist featured is credited, not the name in another script.
+        return text
     return name if name and _scripts_differ(name, inside) else text
 
 

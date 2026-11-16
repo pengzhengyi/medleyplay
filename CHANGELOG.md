@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Names written as several artists** — the server offers each artist name
+  written as several, such as *GUMI/MAYU* or *スズム feat. GUMI*, with the artists
+  it lists, to split or keep as written; a split name's songs count under each
+  artist, credited as main or featured, and each artist is linked on its own.
+  Tidying keeps an artist featured in brackets. New: `GET /api/artist-splits`,
+  `POST /api/artist-splits/split`, `/keep`, and `/forget`, and `artists` on each
+  Track.
+
 - **Find covers from Edit details** — *Edit details* shows *Find covers* under the
   cover, as *Edit album* does, rather than only as a tool over it. A whole album in
   one file that names no album is searched by its title; a song on no album shows

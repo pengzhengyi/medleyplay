@@ -23,6 +23,7 @@ from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
+from medleyplay.application.artist_splits import ArtistSplitService
 from medleyplay.application.artists import (
     ArtistService,
     artist_kinds,
@@ -289,6 +290,7 @@ def build_services(  # noqa: PLR0913, PLR0915
             changes.tell,
             covers_folder=data_dir / COVERS_FOLDER,
         ),
+        artist_splits=ArtistSplitService(units, clock, changes.tell),
         album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs),
     )
 

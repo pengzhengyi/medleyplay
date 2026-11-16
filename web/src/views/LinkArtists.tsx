@@ -14,6 +14,10 @@
  * asked, else the one going by the name exactly. *Link N recommended* links every name
  * that has one. An AI model recommending none of them marks *None of these* instead.
  * Linking a name moves to the next name's recommended action, so Enter takes it in turn.
+ *
+ * A name's song count opens its songs: the one song in the Library, or the name's page.
+ * A name MusicBrainz knows no artist by, which starts with another name the Library has,
+ * as *告五人2019超强音质的* starts with *告五人*, offers to show its songs by that name.
  */
 
 import { KeyReturnIcon, LinkSimpleIcon, SparkleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
@@ -29,7 +33,9 @@ import {
 } from "../api";
 import { answeredOf } from "../library/aiAnswer";
 import { unlinkedOf } from "../library/cleanUp";
+import { likelyNameOf } from "../library/likelyName";
 import { fold } from "../library/views";
+import { navigate } from "../routes";
 
 /** The most artists offered for one name. */
 const OFFERED = 3;
@@ -71,6 +77,7 @@ export function LinkArtists({
   const songsOf = useMemo(() => songsByName(tracks), [tracks]);
   const shown = names.names.filter((each) => each.look_up !== "never");
   const artists = new Map(names.artists.map((artist) => [artist.id, artist]));
+  const written = names.names.map((each) => each.name);
   const toLookUp = shown
     .filter(
       (each) => each.look_up === "yes" && !each.linked && each.looked_at === null && !each.finding,
@@ -89,12 +96,22 @@ export function LinkArtists({
     const recommended = linkable && pick !== undefined && chosen !== "";
     // An AI model recommending none of those offered, while nothing was picked here.
     const apart = linkable && choice === undefined && ai !== null && ai.artist_id === null;
-    return { named, offered, chosen, linkable, recommended, ai, aiPick, apart };
+    const unknown =
+      !named.linked && !named.finding && named.looked_at !== null && offered.length === 0;
+    const likely = unknown ? likelyNameOf(named.name, written) : undefined;
+    return { named, offered, chosen, linkable, recommended, ai, aiPick, apart, likely };
   });
-  // What can be done now comes first: a recommendation to link, then a choice to make,
-  // then a name still to look up; names already linked, or kept apart, sink to the end.
+  // What can be done now comes first: a recommendation to link or a likely name to use,
+  // then a choice to make, then a name still to look up; names already linked, or kept
+  // apart, sink to the end.
   const readiness = (row: (typeof rows)[number]) =>
-    row.named.linked ? 3 : row.recommended && !row.apart ? 0 : row.linkable ? 1 : 2;
+    row.named.linked
+      ? 3
+      : (row.recommended && !row.apart) || row.likely !== undefined
+        ? 0
+        : row.linkable
+          ? 1
+          : 2;
   rows.sort((a, b) => readiness(a) - readiness(b));
   const toLink = rows.filter((row) => row.recommended && !row.apart);
   // The server asks only about the names that may be looked up, as it is.
@@ -110,7 +127,7 @@ export function LinkArtists({
   /** Move to the Link of the next name that can be linked after `key`. */
   const focusAfter = (key: string) => {
     const at = rows.findIndex((row) => row.named.key === key);
-    const next = rows.slice(at + 1).find((row) => row.linkable);
+    const next = rows.slice(at + 1).find((row) => row.linkable || row.likely !== undefined);
     if (next !== undefined) {
       linkButtons.current.get(next.named.key)?.focus();
     }
@@ -197,7 +214,7 @@ export function LinkArtists({
         <p className="empty">No artist name to link yet.</p>
       ) : (
         <ul className="tidy-list" aria-label="Artist names">
-          {rows.map(({ named, offered, chosen, recommended, ai, aiPick, apart }) => (
+          {rows.map(({ named, offered, chosen, recommended, ai, aiPick, apart, likely }) => (
             <NameRow
               key={named.key}
               named={named}
@@ -209,6 +226,7 @@ export function LinkArtists({
               ai={ai}
               aiPick={aiPick}
               apart={apart}
+              likely={likely}
               linkRef={(button) => {
                 if (button === null) {
                   linkButtons.current.delete(named.key);
@@ -252,6 +270,7 @@ function NameRow({
   ai,
   aiPick,
   apart,
+  likely,
   linkRef,
   onPick,
   onLookUp,
@@ -273,6 +292,8 @@ function NameRow({
   readonly aiPick: string | undefined;
   /** Whether the AI recommended none of those offered, so *None of these* is marked. */
   readonly apart: boolean;
+  /** The name the Library has that this one likely is, more written after it. */
+  readonly likely: string | undefined;
   /** Holds the button of the row's recommended action, to move to it. */
   readonly linkRef: (button: HTMLButtonElement | null) => void;
   readonly onPick: (id: string) => void;
@@ -300,7 +321,7 @@ function NameRow({
     <li className="tidy-row link-row">
       <div className="tidy-names-pair link-songs-anchor">
         <strong className="tidy-name">{named.name}</strong>
-        <NameSongs count={count} songs={songs} />
+        <NameSongs count={count} songs={songs} name={named.name} />
       </div>
       <div className="link-state">
         {named.linked ? (
@@ -325,7 +346,10 @@ function NameRow({
         ) : named.looked_at === null && offered.length === 0 ? (
           <span className="link-to">Not looked up yet</span>
         ) : offered.length === 0 ? (
-          <span className="link-to">MusicBrainz knows no artist by this name</span>
+          <span className="link-to">
+            MusicBrainz knows no artist by this name
+            {likely !== undefined && <>, likely {likely}</>}
+          </span>
         ) : (
           <fieldset className="link-choices">
             <legend className="visually-hidden">{`Artists for ${named.name}`}</legend>
@@ -392,6 +416,20 @@ function NameRow({
                   Look up
                 </button>
               )}
+              {likely !== undefined && (
+                <button
+                  ref={linkRef}
+                  type="button"
+                  className="dialog-button recommended"
+                  aria-label={`Show the songs of ${named.name} by ${likely}`}
+                  title={`Show its ${count} by ${likely}, as the Library writes it`}
+                  onClick={() => {
+                    act(renamed(songs, named.name, likely), onLinked);
+                  }}
+                >
+                  Use {likely}
+                </button>
+              )}
               {(named.looked_at !== null || offered.length > 0) && (
                 <button
                   ref={apart ? linkRef : undefined}
@@ -456,7 +494,16 @@ function describe(artist: KnownArtist | undefined): string {
  * A name's song count, showing its songs and their albums when hovered or focused,
  * so which artist it names can be told from them.
  */
-function NameSongs({ count, songs }: { readonly count: string; readonly songs: readonly Track[] }) {
+function NameSongs({
+  count,
+  songs,
+  name,
+}: {
+  readonly count: string;
+  readonly songs: readonly Track[];
+  /** The name, whose page shows its songs. */
+  readonly name: string;
+}) {
   const tip = useId();
   if (songs.length === 0) {
     return <span className="tidy-meta">{count}</span>;
@@ -464,7 +511,20 @@ function NameSongs({ count, songs }: { readonly count: string; readonly songs: r
   const more = songs.length - SONGS_SHOWN;
   return (
     <>
-      <button type="button" className="tidy-meta link-songs-count" aria-describedby={tip}>
+      <button
+        type="button"
+        className="tidy-meta link-songs-count"
+        aria-describedby={tip}
+        title={songs.length === 1 ? "Show it in the Library" : "Show them"}
+        onClick={() => {
+          const [only] = songs;
+          navigate(
+            songs.length === 1 && only !== undefined
+              ? { view: "library", focus: only.id }
+              : { view: "artist", name },
+          );
+        }}
+      >
         {count}
       </button>
       <span className="link-songs" role="tooltip" id={tip}>
@@ -479,4 +539,18 @@ function NameSongs({ count, songs }: { readonly count: string; readonly songs: r
       </span>
     </>
   );
+}
+
+/** Show `songs` by `to` where they show `from`, as the artist or the album artist. */
+async function renamed(songs: readonly Track[], from: string, to: string): Promise<void> {
+  const key = fold(from.trim());
+  const where = (name: string) => fold(name.trim()) === key;
+  const asArtist = songs.filter((song) => where(song.artist)).map((song) => song.id);
+  const asAlbumArtist = songs.filter((song) => where(song.album_artist)).map((song) => song.id);
+  if (asArtist.length > 0) {
+    await api.setDetails(asArtist, { artist: to });
+  }
+  if (asAlbumArtist.length > 0) {
+    await api.setDetails(asAlbumArtist, { album_artist: to });
+  }
 }

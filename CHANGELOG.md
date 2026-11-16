@@ -454,6 +454,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The time playing stands apart from the length** — in the player and an
+  album's songs, the running time reads first and the length it runs to steps
+  back, fainter.
+
 - **A minimized rail names the view once** — with the rail minimized, its menu
   takes the place of a view's heading when the two say the same, as *Library*;
   *Downloaded* now sits below *Playlists* in the rail.

@@ -12,7 +12,6 @@ import type { ReactNode } from "react";
 import type { Track } from "../api";
 import { type FavoriteGroups, canFavorite, isFavoriteAlbum } from "../library/favoriteGroups";
 import { albumArtistOf } from "../library/views";
-import { formatTime } from "../format";
 import { albumSteps, albumTimeline, playingOf, songPlaying } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
@@ -20,6 +19,7 @@ import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { FavoriteHeart } from "./FavoriteHeart";
 import { AlbumCard, PlayingKind } from "./PlayingKind";
+import { PlayTime } from "./PlayTime";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { FavoriteButton, Transport } from "./Transport";
@@ -159,7 +159,7 @@ export function PlayerBar({
           <VolumeControl volume={player.volume} muted={player.muted} onVolume={player.setVolume} />
         )}
         <span className="time">
-          {formatTime(shownPosition)} <span aria-hidden>/</span> {formatTime(shownDuration)}
+          <PlayTime at={shownPosition} length={shownDuration} />
         </span>
       </div>
     </section>

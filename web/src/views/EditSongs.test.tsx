@@ -16,7 +16,7 @@ import { fakeMedia } from "../testing/media";
 import { detailsOf, splitSongsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
-import { AiSetUpContext } from "./aiSetUp";
+import { type AiSetUp, AiSetUpContext } from "./aiSetUp";
 
 /** *Bremen*, a whole album uploaded as one video. */
 const BREMEN = trackOf(104, "BV1dm4y1s7ak", { split: true });
@@ -59,6 +59,9 @@ const NO_GAPS_KNOWN: SilenceFinder = {
   find: () => Promise.resolve({ state: "no_tool", silences: [] }),
 };
 
+/** An AI provider set up, as the page says once the server has. */
+const SET_UP: AiSetUp = { missing: false, admin: true };
+
 /**
  * Open *Bremen*'s details on its songs, as its menu's *Edit songs…* does, its file
  * holding `songs`; the AI is as `ai` says, and `answerAi` shows it as it goes later.
@@ -79,47 +82,47 @@ async function renderEditor(
     onListen = vi.fn(),
     ai = AI_UNASKED,
     silences = NO_GAPS_KNOWN,
-    aiSetUp = { missing: false, admin: true },
+    aiSetUp = SET_UP,
   } = {},
 ) {
   const onClose = vi.fn();
   const load = vi.fn<(trackId: number) => Promise<Songs>>(() => Promise.resolve(songs));
   const dialogOf = (asked: AiAsk) => (
-    <AiSetUpContext value={aiSetUp}>
-      <EditDetails
-        track={BREMEN}
-        load={() => Promise.resolve(detailsOf(104))}
-        onSave={() => Promise.resolve()}
-        onReadVideo={() => Promise.reject(new Error("No video in this test."))}
-        onSetCover={() => Promise.reject(new Error("No cover in this test."))}
-        onRemoveCover={() => Promise.reject(new Error("No cover in this test."))}
-        findable={[]}
-        lookup={undefined}
-        online
-        onFind={vi.fn()}
-        songs={{
-          label: "3 songs",
-          editor: (
-            <SongsEditor
-              album={BREMEN}
-              load={load}
-              check={check}
-              artists={["ハチ"]}
-              ai={asked}
-              loadAudio={loadAudio}
-              silences={silences}
-              onListen={onListen}
-              onSave={onSave}
-              onUnsplit={onUnsplit}
-            />
-          ),
-        }}
-        startOnSongs
-        onClose={onClose}
-      />
-    </AiSetUpContext>
+    <EditDetails
+      track={BREMEN}
+      load={() => Promise.resolve(detailsOf(104))}
+      onSave={() => Promise.resolve()}
+      onReadVideo={() => Promise.reject(new Error("No video in this test."))}
+      onSetCover={() => Promise.reject(new Error("No cover in this test."))}
+      onRemoveCover={() => Promise.reject(new Error("No cover in this test."))}
+      findable={[]}
+      lookup={undefined}
+      online
+      onFind={vi.fn()}
+      songs={{
+        label: "3 songs",
+        editor: (
+          <SongsEditor
+            album={BREMEN}
+            load={load}
+            check={check}
+            artists={["ハチ"]}
+            ai={asked}
+            loadAudio={loadAudio}
+            silences={silences}
+            onListen={onListen}
+            onSave={onSave}
+            onUnsplit={onUnsplit}
+          />
+        ),
+      }}
+      startOnSongs
+      onClose={onClose}
+    />
   );
-  const { rerender, unmount } = render(dialogOf(ai));
+  const { rerender, unmount } = render(dialogOf(ai), {
+    wrapper: ({ children }) => <AiSetUpContext value={aiSetUp}>{children}</AiSetUpContext>,
+  });
   const dialog = screen.getByRole("dialog");
   await within(dialog).findByRole("button", { name: "Add a song" });
   const media = fakeMedia(audioOf(dialog));

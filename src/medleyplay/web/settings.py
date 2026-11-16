@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings
+from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings, SplitAlbums
 from medleyplay.web.deps import SettingsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -21,6 +21,14 @@ class SettingsIn(BaseModel):
             " Left out, it stays as saved."
         ),
     )
+    split_albums: SplitAlbums = Field(
+        default=SplitAlbums.APPROVAL,
+        description=(
+            "What becomes of a long file a song list was found for: offered in Clean up"
+            " (approval), split when the list can be trusted (auto), or nothing (off)."
+            " Left out, it stays as saved."
+        ),
+    )
     revision: int = Field(ge=0)
 
 
@@ -30,6 +38,7 @@ class SettingsOut(BaseModel):
     storage_limit: int | None
     removal_order: RemovalOrder
     album_minutes: int | None
+    split_albums: SplitAlbums
     revision: int
 
     @classmethod
@@ -39,6 +48,7 @@ class SettingsOut(BaseModel):
             storage_limit=settings.storage_limit,
             removal_order=settings.removal_order,
             album_minutes=settings.album_minutes,
+            split_albums=settings.split_albums,
             revision=settings.revision,
         )
 
@@ -52,6 +62,7 @@ def get_settings(_: SignedInAccount, settings: SettingsDep) -> SettingsOut:
 @router.put("")
 def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -> SettingsOut:
     """Replace the settings read at `revision`; a stale revision answers 409. Admins only."""
+    saved_before = settings.get()
     saved = settings.put(
         me,
         Settings(
@@ -60,7 +71,12 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
             album_minutes=(
                 body.album_minutes
                 if "album_minutes" in body.model_fields_set
-                else settings.get().album_minutes
+                else saved_before.album_minutes
+            ),
+            split_albums=(
+                body.split_albums
+                if "split_albums" in body.model_fields_set
+                else saved_before.split_albums
             ),
             revision=body.revision,
         ),

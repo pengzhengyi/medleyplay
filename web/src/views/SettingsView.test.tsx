@@ -13,6 +13,7 @@ const LIMIT_20: Settings = {
   storage_limit: 20 * GB,
   removal_order: "least_favorite",
   album_minutes: 20,
+  split_albums: "approval",
   revision: 2,
 };
 
@@ -281,9 +282,7 @@ describe("storage settings", () => {
     expect(sent).toEqual([]);
     await userEvent.click(storage().getByRole("button", { name: "Remove and save" }));
     expect(await screen.findByText("Saved.")).toBeInTheDocument();
-    expect(sent).toEqual([
-      { storage_limit: GB, removal_order: "least_favorite", album_minutes: 20, revision: 2 },
-    ]);
+    expect(sent).toEqual([{ ...LIMIT_20, storage_limit: GB }]);
   });
 
   it("asks again when, by the time it saves, the limit would remove more than was said", async () => {
@@ -370,9 +369,7 @@ describe("storage settings", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "No limit" }));
 
     await waitFor(() => {
-      expect(sent).toEqual([
-        { storage_limit: null, removal_order: "least_favorite", album_minutes: 20, revision: 2 },
-      ]);
+      expect(sent).toEqual([{ ...LIMIT_20, storage_limit: null }]);
     });
   });
 
@@ -680,6 +677,30 @@ describe("the Songs and albums section", () => {
     expect(await kinds().findByText("Saved.")).toBeVisible();
     expect(sent).toEqual([{ ...LIMIT_20, album_minutes: null }]);
     expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("saves at once that long files are split when their list can be trusted", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, split_albums: "auto", revision: 3 } };
+      },
+    });
+
+    await userEvent.click(await kinds().findByRole("radio", { name: /^Auto/u }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ ...LIMIT_20, split_albums: "auto" }]);
+    });
+    expect(kinds().getByRole("radio", { name: /^Auto/u })).toBeChecked();
+  });
+
+  it("tells a member what becomes of long files, with nothing to change", async () => {
+    open(false);
+
+    expect(await kinds().findByText(/^Split albums: Ask first\./u)).toBeVisible();
+    expect(kinds().queryByRole("radio")).toBeNull();
   });
 
   it("saves how long a file must be to be guessed an album when the field is left", async () => {

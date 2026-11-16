@@ -10,9 +10,10 @@
 import { CheckIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
-import type { ArtistNames, NameToTidy, Track } from "../api";
-import { inOrderOfWaiting, unlinkedOf } from "../library/cleanUp";
+import type { ArtistNames, NameToTidy, SplitOffers, Track } from "../api";
+import { inOrderOfWaiting, toSplitOf, unlinkedOf } from "../library/cleanUp";
 import { LinkArtists } from "./LinkArtists";
+import { SplitFiles } from "./SplitFiles";
 import { TidyNames } from "./TidyNames";
 
 /** Names read from the server, and a way to read them again after a change. */
@@ -26,13 +27,21 @@ export function CleanUpView({
   tidy,
   artistNames,
   tracks = [],
+  splits,
+  onEditSongs,
 }: {
   readonly tidy: Read<readonly NameToTidy[]>;
   readonly artistNames: Read<ArtistNames> | undefined;
   /** The Library's songs, to show the songs of each name to link. */
   readonly tracks?: readonly Track[];
+  /** The long files to split, and a way to open one's songs. */
+  readonly splits?: Read<SplitOffers>;
+  readonly onEditSongs?: (trackId: number) => void;
 }) {
   const toTidy = tidy.names.length;
+  const toSplit = toSplitOf(splits?.names);
+  const splitting =
+    splits !== undefined && splits.names.setting !== "off" && splits.names.files.length > 0;
   const toLink = artistNames === undefined ? 0 : unlinkedOf(artistNames.names);
   const linkable = artistNames?.names.names.some((each) => each.look_up !== "never") ?? false;
   const sections = inOrderOfWaiting<Section>([
@@ -43,6 +52,22 @@ export function CleanUpView({
             title: "Tidy names",
             waiting: toTidy,
             body: <TidyNames names={tidy.names} onChanged={tidy.reload} />,
+          },
+        ]
+      : []),
+    ...(splits !== undefined && splitting
+      ? [
+          {
+            id: "clean-up-split",
+            title: "Split albums",
+            waiting: toSplit,
+            body: (
+              <SplitFiles
+                files={splits.names.files}
+                onChanged={splits.reload}
+                {...(onEditSongs === undefined ? {} : { onEditSongs })}
+              />
+            ),
           },
         ]
       : []),
@@ -69,11 +94,12 @@ export function CleanUpView({
         <h2 className="section" data-rail-named>
           Clean up
         </h2>
-        <p className="meta">{summaryOf(toTidy, toLink)}</p>
+        <p className="meta">{summaryOf(toTidy, toLink, toSplit)}</p>
       </header>
-      {toTidy === 0 && !linkable ? (
+      {toTidy === 0 && !linkable && !splitting ? (
         <p className="empty">
-          Nothing to clean up. Names that could be tidied, or linked to one artist, show here.
+          Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
+          split into songs, show here.
         </p>
       ) : (
         <>
@@ -130,10 +156,11 @@ function SectionBar({ sections }: { readonly sections: readonly Section[] }) {
   );
 }
 
-function summaryOf(toTidy: number, toLink: number): string {
+function summaryOf(toTidy: number, toLink: number, toSplit: number): string {
   const waiting = [
     toTidy > 0 && `${String(toTidy)} ${toTidy === 1 ? "name" : "names"} to tidy`,
     toLink > 0 && `${String(toLink)} to link`,
+    toSplit > 0 && `${String(toSplit)} ${toSplit === 1 ? "file" : "files"} to split`,
   ].filter(Boolean);
   return waiting.length === 0 ? "Every name is tidy and linked." : waiting.join(", ");
 }

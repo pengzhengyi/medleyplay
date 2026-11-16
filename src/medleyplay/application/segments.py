@@ -8,6 +8,7 @@ album file's Source, so a song plays, and is available, as its file is.
 
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -40,7 +41,7 @@ from medleyplay.domain.video_text import (
     read_song_list,
     read_video,
 )
-from medleyplay.persistence.schema import SegmentRow, SourceRow, TrackRow
+from medleyplay.persistence.schema import SegmentRow, SourceRow, SplitOfferStateRow, TrackRow
 
 
 @dataclass(frozen=True)
@@ -124,11 +125,14 @@ class SongsService:
         track_id: TrackId,
         rows: Sequence[SongRow],
         known: Collection[SegmentId] | None = None,
+        *,
+        announce: bool = True,
     ) -> SongsView:
         """Make `rows` the file's songs: keep each by its id, add new ones, remove the rest.
 
         `known` is the songs the editor saw; when the file's songs are others now, the
-        save is refused, so it can't remove a song nobody saw.
+        save is refused, so it can't remove a song nobody saw. Unless `announce`, the
+        change is left for the caller to `announce` with others.
         """
         with self._units.begin() as db:
             album = _album_file(db, track_id)
@@ -154,7 +158,8 @@ class SongsService:
                 _add_song(db, album, SourceId(source_id), place, song)
             db.flush()
             self._settle(db, album)
-        self._changed()
+        if announce:
+            self._changed()
         return self.songs(track_id)
 
     def read_list(self, track_id: TrackId, text: str) -> tuple[Song, ...]:
@@ -177,11 +182,16 @@ class SongsService:
         return check_song_list(text, length_ms=length_ms)
 
     def unsplit(self, track_id: TrackId) -> int:
-        """Remove every song of the file, with its Track; return how many there were."""
+        """Remove every song of the file, with its Track; return how many there were.
+
+        The file is kept as one from then on: no song list is offered for it again.
+        """
         with self._units.begin() as db:
             _album_file(db, track_id)
             removed = [song.track_id for song in songs_of(db, track_id)]
             db.execute(delete(TrackRow).where(TrackRow.id.in_(removed)))
+            if removed:
+                keep_as_one(db, track_id, self._clock())
         if removed:
             self._changed()
         return len(removed)
@@ -195,9 +205,20 @@ class SongsService:
             forget_song_kind(db, TrackId(album.id))
         refresh(db, TrackId(album.id), self._clock())
 
+    def announce(self) -> None:
+        """Tell of songs saved without being announced."""
+        self._changed()
+
     def _changed(self) -> None:
         if self._on_change is not None:
             self._on_change("catalog")
+
+
+def keep_as_one(db: Session, track_id: TrackId, now: datetime) -> None:
+    """Note that the household keeps the file as one, so no song list is offered for it."""
+    state = db.get(SplitOfferStateRow, track_id) or SplitOfferStateRow(track_id=track_id)
+    state.kept_at = now
+    db.add(state)
 
 
 def album_file_of(db: Session) -> dict[TrackId, TrackId]:

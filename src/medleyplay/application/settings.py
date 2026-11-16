@@ -15,7 +15,7 @@ from medleyplay.application import Clock
 from medleyplay.application.changes import OnChange
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
-from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings
+from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings, SplitAlbums
 from medleyplay.persistence.schema import SettingRow
 
 SETTINGS_ROW: Final = 1
@@ -31,6 +31,7 @@ class SettingsDocument(BaseModel):
     storage_limit: int | None = Field(default=None, ge=0)
     removal_order: RemovalOrder = RemovalOrder.LEAST_FAVORITE
     album_minutes: int | None = Field(default=ALBUM_MINUTES, ge=1, le=MAX_ALBUM_MINUTES)
+    split_albums: SplitAlbums = SplitAlbums.APPROVAL
 
 
 class SettingsService:
@@ -63,6 +64,7 @@ class SettingsService:
                 storage_limit=settings.storage_limit,
                 removal_order=settings.removal_order,
                 album_minutes=settings.album_minutes,
+                split_albums=settings.split_albums,
             ).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
@@ -114,5 +116,6 @@ def read_settings(db: Session) -> Settings:
         storage_limit=document.storage_limit,
         removal_order=document.removal_order,
         album_minutes=document.album_minutes,
+        split_albums=document.split_albums,
         revision=row.revision,
     )

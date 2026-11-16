@@ -1,0 +1,33 @@
+{
+  "about": "What looks wrong with a split, as the editor and the server's split offers both judge it. Starts and lengths are in minutes; long names the places, from 0, of the songs so long they may be two.",
+  "cases": [
+    {
+      "name": "a song so long it may be two",
+      "starts": [0, 4, 24],
+      "length": 28,
+      "long": [1],
+      "few": false
+    },
+    {
+      "name": "a file shared by so few songs that one may be missing, each long",
+      "starts": [0, 24],
+      "length": 48,
+      "long": [0, 1],
+      "few": true
+    },
+    {
+      "name": "an album of songs of usual lengths",
+      "starts": [0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44],
+      "length": 48,
+      "long": [],
+      "few": false
+    },
+    {
+      "name": "a file of unknown length, whose last song can't be measured",
+      "starts": [0, 4],
+      "length": null,
+      "long": [],
+      "few": false
+    }
+  ]
+}

@@ -54,6 +54,7 @@ from medleyplay.web import (
     remote,
     settings,
     songs,
+    split_offers,
     storage,
 )
 from medleyplay.web.deps import Services
@@ -84,6 +85,41 @@ AI_PATH: Final = ai.router.prefix
 type Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
 
+ROUTERS: Final = (
+    accounts.router,
+    addresses.router,
+    catalog.router,
+    downloads.router,
+    downloads.under_way_router,
+    plugins.router,
+    jobs.router,
+    libraries.router,
+    playback.router,
+    linked_accounts.router,
+    proxies.router,
+    ai.router,
+    links.router,
+    events.router,
+    settings.router,
+    preferences.router,
+    ratings.router,
+    artists.router,
+    artists.artists_router,
+    album_covers.router,
+    mode.router,
+    details.router,
+    details.names_router,
+    songs.router,
+    split_offers.router,
+    covers.router,
+    enrichers.router,
+    storage.router,
+    devices.router,
+    remote.router,
+)
+"""The API's routers, each included in the app."""
+
+
 def create_app(
     services: Services,
     allowed_hosts: Iterable[str],
@@ -103,35 +139,8 @@ def create_app(
     app = FastAPI(title="medleyplay", version=__version__, lifespan=lifespan)
     app.state.services = services
     app.state.allowed_hosts = hosts
-    app.include_router(accounts.router)
-    app.include_router(addresses.router)
-    app.include_router(catalog.router)
-    app.include_router(downloads.router)
-    app.include_router(downloads.under_way_router)
-    app.include_router(plugins.router)
-    app.include_router(jobs.router)
-    app.include_router(libraries.router)
-    app.include_router(playback.router)
-    app.include_router(linked_accounts.router)
-    app.include_router(proxies.router)
-    app.include_router(ai.router)
-    app.include_router(links.router)
-    app.include_router(events.router)
-    app.include_router(settings.router)
-    app.include_router(preferences.router)
-    app.include_router(ratings.router)
-    app.include_router(artists.router)
-    app.include_router(artists.artists_router)
-    app.include_router(album_covers.router)
-    app.include_router(mode.router)
-    app.include_router(details.router)
-    app.include_router(details.names_router)
-    app.include_router(songs.router)
-    app.include_router(covers.router)
-    app.include_router(enrichers.router)
-    app.include_router(storage.router)
-    app.include_router(devices.router)
-    app.include_router(remote.router)
+    for router in ROUTERS:
+        app.include_router(router)
     app.mount("/", client_app(client_dir))
     app.add_exception_handler(RequestValidationError, _handle_invalid_request)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception

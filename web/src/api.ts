@@ -480,7 +480,44 @@ export interface Settings {
   readonly removal_order: "least_favorite";
   /** A file this many minutes or longer is guessed an album; `null` guesses none. */
   readonly album_minutes: number | null;
+  /** What becomes of a long file a song list was found for. */
+  readonly split_albums: SplitAlbums;
   readonly revision: number;
+}
+
+/** What becomes of a long file a song list was found for: nothing, offered, or split when trusted. */
+export type SplitAlbums = "off" | "approval" | "auto";
+
+/** Why a list offered for a long file is doubtful. */
+export type SplitDoubt = "lists_differ" | "long_song" | "few_songs" | "unknown_length" | "invalid";
+
+/** A long file shown as an album, not split yet, and the song list offered for it, if any. */
+export interface OfferedFile {
+  readonly track_id: number;
+  readonly title: string;
+  readonly artist: string;
+  readonly length_ms: number | null;
+  readonly offer: {
+    readonly source: "both" | "video" | "ai";
+    readonly songs: readonly {
+      readonly start_ms: number;
+      readonly title: string;
+      readonly artist: string;
+    }[];
+    readonly doubts: readonly SplitDoubt[];
+    /** Whether Auto splits the file by it. */
+    readonly trusted: boolean;
+    /** The offer as shown; named to split by it. */
+    readonly signature: string;
+  } | null;
+  /** Whether its video's text was read, so the AI may be asked for a list. */
+  readonly has_text: boolean;
+}
+
+/** The setting *Split albums*, and the long files offered under it. */
+export interface SplitOffers {
+  readonly setting: SplitAlbums;
+  readonly files: readonly OfferedFile[];
 }
 
 /** Return the newer of the settings held and a read of them, so a late answer undoes no save. */
@@ -1046,6 +1083,14 @@ export const api = {
   /** Ask an AI model which of an album's releases found is the album; nothing changes. */
   chooseAlbumCover: (album: string, artist: string) =>
     call<null>("POST", "/api/album-covers/choose", { album, artist }),
+  /** The long files a song list was found for, to split or keep as one file. */
+  splitOffers: () => call<SplitOffers>("GET", "/api/split-offers"),
+  /** Split each file by the offer seen for it; one whose offer changed is left as it is. */
+  splitFiles: (files: readonly { readonly track_id: number; readonly signature: string }[]) =>
+    call<{ split: number; left: number }>("POST", "/api/split-offers/split", { files }),
+  /** Keep each file as one, so no song list is offered for it again. */
+  keepFiles: (trackIds: readonly number[]) =>
+    call<{ kept: number }>("POST", "/api/split-offers/keep", { track_ids: trackIds }),
   /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */

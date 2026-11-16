@@ -70,7 +70,7 @@ no router package.
 | Downloaded | `#/downloaded` | The songs downloading, each with its state and a bar, then the Tracks with `downloaded`, in the song table |
 | Search | `#/search?q=…` | What the search found |
 | Settings | `#/settings`, `#/settings?section=ai` | See [Settings](#settings); `section` opens and goes to the section of that id |
-| Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>) and to [link to one artist](Artists.md#the-web-client) |
+| Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>) and to [link to one artist](Artists.md#the-web-client); and long files to [split by the list found](Segments.md#split-offers) |
 
 - **An artist's or album's Tracks** open at `#/artist?name=…` and
   `#/album?artist=…&name=…`, in the song table, so a name with a `/` is safe.
@@ -84,13 +84,13 @@ no router package.
   and works out its Tracks from the hearts it already holds, newest added first
   as the server orders them, so a heart counts at once. The server doesn't
   record when a Track became a favorite, so *recently liked* waits for that.
-- **Clean up sits under Insights** in the rail, set in, with how many names
-  wait, rather than as a row in each view those names show in: both are about
+- **Clean up sits under Insights** in the rail, set in, with how many names and
+  long files wait, named *N to clean up*, rather than as a row in each view those names show in: both are about
   the Library itself, where Settings is about how medleyplay behaves. A phone's
   tab bar has no room for a ninth tab, so there Insights carries the count, and
   its page opens with *Clean up 37 names*. Each kind of change is a section headed by its
   name, how many wait, and its action for all of them: *Tidy all*, which tidies
-  the names listed in one request, and *Look up 24 names*. A bar above the
+  the names listed in one request, *Look up 24 names*, and *Split all*. A bar above the
   sections goes to each, with its count or a check once done; the sections with
   names waiting come first. Within *Link artist names*, what can be done now
   comes first: a name with a recommendation to link, then one with artists to
@@ -116,7 +116,9 @@ Track's kind is decided.
   from its length*. Choosing Song or Album in Edit details settles it.
 - **Settings → Songs and albums** says how long a file is guessed an album, 20
   minutes unless an admin sets another length or turns the guess off; saving
-  asks for the Tracks again, so their kinds show at once.
+  asks for the Tracks again, so their kinds show at once. Beneath it, *Split
+  albums*: *Off*, *Ask first*, or *Auto*, each saying what it does
+  ([Split offers](Segments.md#split-offers)).
 - **A split file's songs fold under it,** behind a caret named *Show the songs
   of 生如夏花*, which states `aria-expanded`; its songs are set in under it,
   with smaller covers, on a guide that runs down from the caret and turns into

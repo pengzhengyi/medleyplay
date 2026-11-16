@@ -1,7 +1,7 @@
 /**
  * @file The views to move between: a rail, tabs, or a tab bar, as the width allows.
  *
- * *Clean up* sits under Insights, with how many names wait. A phone's tab bar has no
+ * *Clean up* sits under Insights, with how many names and files wait. A phone's tab bar has no
  * room for it, so there Insights carries the count, and opens with a way to it.
  * *Downloaded* says how many songs download now.
  *
@@ -111,7 +111,7 @@ export function Nav({
   readonly account?: NavAccount;
 }) {
   const top = topOf(route);
-  const waiting = `${String(toDo)} ${toDo === 1 ? "name" : "names"} to clean up`;
+  const waiting = `${String(toDo)} to clean up`;
   const countOf = (view: Top) =>
     view === "downloaded" ? downloading : view === "clean-up" || view === "insights" ? toDo : 0;
   const saying = (view: Top) =>

@@ -6,7 +6,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
-from medleyplay.domain.settings import RemovalOrder, Settings
+from medleyplay.domain.settings import RemovalOrder, Settings, SplitAlbums
 from tests.support.factories import NewAccountFactory
 
 FIVE_GB = 5 * 10**9
@@ -20,7 +20,11 @@ def _alice_and_bob(accounts: AccountService) -> tuple[Account, Account]:
 
 def test_settings_never_saved_have_no_limit_at_revision_zero(settings: SettingsService) -> None:
     assert settings.get() == Settings(
-        storage_limit=None, removal_order=RemovalOrder.LEAST_FAVORITE, album_minutes=20, revision=0
+        storage_limit=None,
+        removal_order=RemovalOrder.LEAST_FAVORITE,
+        album_minutes=20,
+        split_albums=SplitAlbums.APPROVAL,
+        revision=0,
     )
 
 

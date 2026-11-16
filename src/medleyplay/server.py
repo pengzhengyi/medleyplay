@@ -55,6 +55,7 @@ from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.silences import SilenceService, find_silences_kind
+from medleyplay.application.split_offers import LibrarySweep, SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
@@ -234,8 +235,11 @@ def build_services(  # noqa: PLR0913, PLR0915
     manual_downloads = ManualDownloadService(units, clock, jobs, downloads.folder, changes.tell)
     links = LinkService(units, clock, plugins, catalog, downloads, mode.online, proxies)
     enrichment = EnrichmentService(units, clock, plugins, jobs, enrich)
-    # Tracks added, scanned, or downloaded, and Jobs ending, may give finding all more to ask.
-    sweeper = EnrichmentSweeper(enrichment)
+    songs = SongsService(units, clock, changes.tell)
+    split_offers = SplitOfferService(units, clock, songs, enrichment)
+    # Tracks added, scanned, or downloaded, Jobs ending, and settings changed may give
+    # finding all more to ask, and Auto more to split.
+    sweeper = EnrichmentSweeper(LibrarySweep(enrichment, split_offers))
     changes.listen(sweeper.request)
     events.listen(sweeper.request)
     # A changed proxy makes a looked-up video's details stale, so they are looked up again.
@@ -266,7 +270,8 @@ def build_services(  # noqa: PLR0913, PLR0915
         preferences=PreferencesService(units, clock),
         mode=mode,
         details=DetailsService(units, clock, changes.tell),
-        songs=SongsService(units, clock, changes.tell),
+        songs=songs,
+        split_offers=split_offers,
         silences=SilenceService(units, clock, plugins, jobs, find_silences, playback),
         covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
         enrichment=enrichment,

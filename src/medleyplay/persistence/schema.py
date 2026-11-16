@@ -756,6 +756,23 @@ class ArtistSearchRow(Base):
     looked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class SplitOfferStateRow(Base):
+    """What became of the song list offered for a long file while it is one file.
+
+    `kept_at` is when the household chose to keep it as one file, so no list is offered
+    for it again; `failed` is the offer, by its signature, that splitting it by itself
+    failed for, so it isn't tried by itself again until the list changes.
+    """
+
+    __tablename__ = "split_offer_state"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    kept_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    failed: Mapped[str | None] = mapped_column(String(4096), default=None)
+
+
 class AlbumCoverSearchRow(Base):
     """What a site last answered for an album: the covers of its releases, best first.
 

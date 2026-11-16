@@ -13,6 +13,7 @@
 - [What a segment is](#what-a-segment-is)
 - [Song lists](#song-lists)
 - [Splitting a file](#splitting-a-file)
+- [Split offers](#split-offers)
 - [Playing a segment](#playing-a-segment)
 - [The web client](#the-web-client)
 - [Snapping starts to the gaps](#snapping-starts-to-the-gaps)
@@ -63,14 +64,16 @@ both read its full length.
   parser in [Track details](Track%20details.md#what-medleyplay-reads), and the
   household can paste one: one song a line, its time first or last, such as
   `00:00 Intro`, `1. 03:12 Night Drive - Blue Room`, or `Blue Room 1:07:40`.
-- **A found list is a proposal.** It shows in the editor, and in the album view
-  as *Split into N songs*; nothing is split until someone in the household says
-  so.
+- **A found list is a proposal.** It shows in the editor, in the album view as
+  *Split into N songs*, and in Clean up; nothing is split until someone in the
+  household says so, unless the household's setting *Split albums* is *Auto* and
+  the list can be trusted (see [Split offers](#split-offers)).
 
 ## Splitting a file
 
-- **Splitting is an act of the household,** from the editor, never a side
-  effect of a scan or an enricher.
+- **Splitting is an act of the household,** from the editor or Clean up, never a
+  side effect of a scan or an enricher, but for what the household chose to have
+  split by itself: *Split albums* set to *Auto*.
 - **Each song keeps an id,** made when it is first added. Saving the editor's
   rows matches them by id: a song moved, renamed, or retimed stays the same
   Track, with its ratings, plays, and Playlist entries; a new row is a new Track;
@@ -92,7 +95,48 @@ both read its full length.
   songs remain.
 - **Removing a Library** removes the songs split from its files, with their
   Tracks.
-- **Unsplitting** removes every segment, after asking.
+- **Unsplitting** removes every segment, after asking, and keeps the file as one:
+  no list is offered for it, nor split by *Auto*, again.
+
+## Split offers
+
+The household's setting *Split albums* says what becomes of a long file a song list
+was found for: one shown as an album, not split yet, not itself a song, and not kept
+as one file.
+
+| Setting | A file with a list | A file with video text and no list |
+| --- | --- | --- |
+| *Off* | nothing | the AI only when someone asks |
+| *Ask first* (`approval`, the default) | offered in Clean up | the AI only when someone asks |
+| *Auto* | split when its list is trusted, offered otherwise | the AI asked in the background |
+
+- **The list offered** is the video's when it has one, else the AI's. The two
+  **agree** when they count the same songs and each starts within 3 seconds of
+  the other's; titles aren't compared, since a model tidies and translates them.
+- **Trusted:** lists that agree, or one list alone raising no doubt. A doubt is a
+  song over 15 minutes, or songs averaging over 12, as the editor warns; lists
+  that differ; a file of unknown length; or a list a save would refuse. Lists
+  that agree are trusted despite a long song, as a live set's are. An AI's list
+  alone may be trusted, though its starts are its estimates; Settings says so.
+- **Doubts are judged alike** by the server and the editor, from one set of
+  cases both suites read, `web/src/library/splitDoubts.cases.json`.
+- **Clean up** lists each file with how long it is, who listed its songs, and its
+  doubts behind a mark: *Split*, *Keep*, *Edit songs…*, and *Ask AI* for a file
+  with video text and no list; *Split all* splits every file with a list. The
+  rail's Clean up count includes the files with a list.
+- **Splitting names the offer seen,** by its signature (its starts), so a file
+  whose list changed since it was shown, or that was split meanwhile, is left as
+  it is, as is a list a save refuses; the answer says how many were split and
+  left.
+- **Keep, or unsplitting,** keeps the file as one: it is offered nothing again.
+- **Auto runs with the enrichers' sweep,** a few seconds after a Track, a
+  Download, a Job, or a setting changes, and hourly. It splits each trusted list
+  once: a list a save refuses is noted and not tried again until it changes. The
+  songs saved are told of once, not one by one.
+- **Auto asks the AI only** about a file with video text, never asked with that
+  text, whose last asking didn't fail within a day, and keeps at most 3 of the
+  AI's Jobs waiting or running at once, so a large Library isn't asked all at
+  once.
 
 ## Playing a segment
 
@@ -208,7 +252,10 @@ Bad, 48 minutes, as the AI guessed     ↳ snapped
 | `PUT /api/tracks/{id}/songs` | Signed in | The household's rows, by id; answers the segment Tracks |
 | `POST /api/tracks/{id}/songs/read` | Signed in | The songs a pasted list names, or the first line that isn't one |
 | `POST /api/tracks/{id}/songs/check` | Signed in | The songs a list names as it is typed, and every problem, each with its line: no time, no title, too long, a start before or within a second of the one above or past the file's end; or too few or too many songs |
-| `DELETE /api/tracks/{id}/songs` | Signed in | Unsplits the file |
+| `DELETE /api/tracks/{id}/songs` | Signed in | Unsplits the file, and keeps it as one |
+| `GET /api/split-offers` | Signed in | The setting *Split albums*, and each long file with the list offered for it: its songs, who listed them, its doubts, whether it is trusted, and its signature; and whether it has video text |
+| `POST /api/split-offers/split` | Signed in | Splits each of `files`, `{track_id, signature}`, by the offer seen; answers how many were split and left |
+| `POST /api/split-offers/keep` | Signed in | Keeps each of `track_ids` as one file |
 | `POST /api/tracks/{id}/playback` | Signed in | Now answers a segment's `start_ms` and `end_ms` |
 | `GET /api/tracks/{id}/silences` | Signed in | What is known of the gaps in the file's audio: found, with each gap; being found; being prepared; not looked for; or not found, as ffmpeg is missing or couldn't read it |
 | `POST /api/tracks/{id}/silences/find` | Signed in | Finds them, unless known or being found; 409 while the `ffmpeg` plugin is off, 422 for a song of a split file |

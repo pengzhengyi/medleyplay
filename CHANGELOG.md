@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Settings links to the Downloaded view** — in *Downloads and storage*,
+  *Downloads* (and *Downloading*, while songs download) opens the Downloaded
+  view, and each label now sits on its value's line.
+
 - **Search suggests as you type** — under the box, the artists a search names,
   each to open, to show only its songs in the Library, or only the albums it
   sings on, and *Group the Library by artist*; in an empty box, resting the

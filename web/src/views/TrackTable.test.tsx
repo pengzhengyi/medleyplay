@@ -6,7 +6,7 @@ import type { CommunityRating, Track } from "../api";
 import type { CoverStatus } from "../library/lookups";
 import { albumUnit, songsByFile } from "../library/playOrder";
 import type { UnitOf } from "../player/usePlayer";
-import { trackOf } from "../testing/server";
+import { downloadOf, serve, trackOf } from "../testing/server";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** Intro, a Long Road that can't play, and Outro, listed in that order, as the server adds them. */
@@ -432,24 +432,77 @@ describe("a Track whose download failed", () => {
   it("says so where a Track that can't play says why, and still plays", async () => {
     const { actions } = renderTable([FAILED]);
 
-    expect(screen.getByText(/Download failed/)).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Download failed/ })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Night Drive" }));
 
     expect(actions.onPlay).toHaveBeenCalledOnce();
   });
 
-  it("offers to add the file", async () => {
+  /** Open what *Download failed* holds, the server saying the Download failed as `message`. */
+  const openWhy = async (message = "Bilibili refused the login.") => {
+    const { calls } = serve({
+      "GET /api/tracks/4/download": { body: downloadOf(4, "failed", message) },
+      "POST /api/jobs/504/retry": { body: { id: 505, state: "queued", failure_message: "" } },
+    });
     const { actions } = renderTable([FAILED]);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download failed: why, and what to do, for Night Drive" }),
+    );
+    await screen.findByText(message);
+    return { actions, calls };
+  };
 
-    await userEvent.click(screen.getByRole("button", { name: "Add the file…" }));
+  it("says why it failed when opened", async () => {
+    await openWhy("Bilibili refused the login.");
+
+    expect(screen.getByRole("menu")).toHaveTextContent("Bilibili refused the login.");
+  });
+
+  it("offers to add the file", async () => {
+    const { actions } = await openWhy();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Add the file…" }));
 
     expect(actions.onAddFile).toHaveBeenCalledExactlyOnceWith(FAILED);
+  });
+
+  it("retries the Job that failed, closing once the server takes it", async () => {
+    const { calls } = await openWhy();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Retry download" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+    expect(calls).toContain("POST /api/jobs/504/retry");
+  });
+
+  it("says why the server refused a retry, staying open", async () => {
+    serve({
+      "GET /api/tracks/4/download": { body: downloadOf(4, "failed", "Refused.") },
+      "POST /api/jobs/504/retry": {
+        status: 403,
+        body: { detail: "Only who asked for a Job, or an admin, may retry it." },
+      },
+    });
+    renderTable([FAILED]);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download failed: why, and what to do, for Night Drive" }),
+    );
+    await screen.findByText("Refused.");
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Retry download" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Only who asked for a Job, or an admin, may retry it.",
+    );
+    expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
   it("says nothing of a Track whose download did not fail", () => {
     renderTable();
 
-    expect(screen.queryByText(/Download failed/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Download failed/ })).toBeNull();
   });
 });
 

@@ -32,7 +32,7 @@ from medleyplay.domain.downloads import (
     manual_download_name,
 )
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError, TooLargeError
-from medleyplay.domain.jobs import JobState
+from medleyplay.domain.jobs import JobId, JobState
 from medleyplay.domain.links import PART_LINKS, part_link
 from medleyplay.persistence.schema import DownloadRow, SourceRow, TrackRow
 
@@ -60,7 +60,8 @@ class TrackDownload:
     """A Track's site Source, its link, and where its Download stands.
 
     `message` is why a Download failed or is unavailable, and `backend` names what
-    made a Download that exists.
+    made a Download that exists. `job_id` is the Job downloading it, or the one that
+    failed, which can be retried.
     """
 
     track_id: TrackId
@@ -70,6 +71,7 @@ class TrackDownload:
     status: DownloadStatus
     message: str = ""
     backend: str | None = None
+    job_id: JobId | None = None
 
 
 def audio_length_ms(path: Path) -> int:
@@ -137,10 +139,10 @@ class ManualDownloadService:
             return replace(none, status=DownloadStatus.DOWNLOADED, backend=download.backend)
         latest = self._jobs.latest(DOWNLOAD_KIND, download_target(SourceId(source.id)))
         if latest is not None and latest.state.is_active:
-            return replace(none, status=DownloadStatus.DOWNLOADING)
+            return replace(none, status=DownloadStatus.DOWNLOADING, job_id=latest.id)
         if latest is not None and latest.state is JobState.FAILED:
             message = latest.failure_message or _FAILED
-            return replace(none, status=DownloadStatus.FAILED, message=message)
+            return replace(none, status=DownloadStatus.FAILED, message=message, job_id=latest.id)
         if source.state == SourceState.UNAVAILABLE:
             return replace(none, status=DownloadStatus.UNAVAILABLE, message=_UNAVAILABLE)
         return none

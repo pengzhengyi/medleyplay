@@ -23,7 +23,9 @@ class TrackDownloadOut(BaseModel):
     """A Track's site Source, its link, and where its Download stands.
 
     `message` says why a Download failed or is unavailable; `backend` names what made
-    a Download that exists, such as `manual` for a file the household added.
+    a Download that exists, such as `manual` for a file the household added; `job_id`
+    is the Job downloading it, or the one that failed, to retry with
+    `POST /api/jobs/{job_id}/retry`.
     """
 
     track_id: int
@@ -33,6 +35,7 @@ class TrackDownloadOut(BaseModel):
     status: DownloadStatus
     message: str
     backend: str | None
+    job_id: int | None
 
     @classmethod
     def of(cls, download: TrackDownload) -> "TrackDownloadOut":
@@ -45,6 +48,7 @@ class TrackDownloadOut(BaseModel):
             status=download.status,
             message=download.message,
             backend=download.backend,
+            job_id=download.job_id,
         )
 
 

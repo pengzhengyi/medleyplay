@@ -78,8 +78,9 @@
   file by hand. The Track's download state, with the failure's message, is
   `GET /api/tracks/{id}/download`: `status` is `downloaded`, `downloading`,
   `failed`, `unavailable` (the site no longer has the video), or `none`, with the
-  Source's `kind`, the part's `link`, a `message` for a failure, and the
-  `backend` of a Download.
+  Source's `kind`, the part's `link`, a `message` for a failure, the
+  `backend` of a Download, and the `job_id` of the Job downloading it or the one
+  that failed, which `POST /api/jobs/{id}/retry` runs again.
 - **Nothing changes in how the Track plays:** playing a failed Track answers its
   failed Job, as it does now.
 
@@ -142,9 +143,14 @@
   remove one.
 - **After adding,** the dialog closes and says how many Tracks were added and
   that they are downloading, or waiting for Online when the Mode is Offline.
-- **A failed Track** shows *Download failed* where its availability shows, with
-  *Add the file…*. The Track's menu has *Add the file yourself…* for any site
-  Track, failed or not.
+- **A failed Track** shows a warning mark where its availability shows, named
+  *Download failed* in its tooltip and to a screen reader, small so the title
+  keeps its room. It opens a menu that reads, when opened, why the Download
+  failed, as the server
+  says it, over *Retry download* and *Add the file…*. Retrying runs the failed
+  Job again; the menu stays open until the server answers, and says why if it
+  refuses, such as to an Account that didn't ask for the Download. The Track's
+  menu has *Add the file yourself…* for any site Track, failed or not.
 - **The add-the-file dialog:** the failure's message, the other ways, a file
   picker, and *Add*, with the upload's progress; *Cancel* stops an upload under
   way. When it finishes, the dialog closes and the Track shows as downloaded and

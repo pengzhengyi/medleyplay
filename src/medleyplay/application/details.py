@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.ai import answered_by_of
 from medleyplay.application.settings import read_settings
+from medleyplay.application.track_artists import bind
 from medleyplay.domain.ai import AnsweredBy
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import (
@@ -297,6 +298,7 @@ def refresh(db: Session, track_id: TrackId, now: datetime) -> dict[Field, Shown]
     if track is None:
         raise _no_track(track_id)
     found = shown(values_of(db, track_id))
+    written = (track.artist, track.album_artist)
     for field in Field:
         value = found[field].value if field in found else None
         if field in TEXT_FIELDS:
@@ -305,6 +307,8 @@ def refresh(db: Session, track_id: TrackId, now: datetime) -> dict[Field, Shown]
             # The household's "no cover" over a found one: the Track shows none.
             value = None
         setattr(track, field.value, value)
+    if (track.artist, track.album_artist) != written:
+        bind(db, track)
     _refresh_songs(db, track, found, now)
     return found
 

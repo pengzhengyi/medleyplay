@@ -867,3 +867,46 @@ class ArtistLinkRow(Base):
     name: Mapped[str] = mapped_column(String(512))
     artist_id: Mapped[str | None] = mapped_column(ForeignKey("artist.id", ondelete="CASCADE"))
     linked_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class LibraryArtistRow(Base):
+    """An artist the Library's Tracks name, by its own id, and the MusicBrainz artist it is.
+
+    The id never changes, so linking the artist to MusicBrainz or unlinking it keeps
+    every row naming it. `name` is the name it was first written as.
+    """
+
+    __tablename__ = "library_artist"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512))
+    musicbrainz_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artist.id", ondelete="SET NULL"), unique=True, default=None
+    )
+
+
+class ArtistNameRow(Base):
+    """The artist a written name, folded, names."""
+
+    __tablename__ = "artist_name"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    artist_id: Mapped[str] = mapped_column(
+        ForeignKey("library_artist.id", ondelete="CASCADE"), index=True
+    )
+
+
+class TrackArtistRow(Base):
+    """One artist a Track shows, as its artist or its album artist, in the order written."""
+
+    __tablename__ = "track_artist"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    album_artist: Mapped[bool] = mapped_column(primary_key=True)
+    """Whether the artist is one of the Track's album artists, rather than its artists."""
+    position: Mapped[int] = mapped_column(primary_key=True)
+    artist_id: Mapped[str] = mapped_column(ForeignKey("library_artist.id"), index=True)
+    written: Mapped[str] = mapped_column(String(512))
+    """How the Track writes the artist's name."""

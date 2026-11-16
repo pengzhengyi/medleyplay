@@ -39,6 +39,7 @@ from medleyplay.application.covers import checked_cover, keep_cover
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
+from medleyplay.application.track_artists import rebind_name
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import (
     MAX_ABOUT,
@@ -413,6 +414,7 @@ class ArtistService:
                 )
             else:
                 row.name, row.artist_id, row.linked_at = name.strip(), artist_id, self._clock()
+            rebind_name(db, name, artist_id)
         self._changed()
         if artist_id is not None:
             with self._units() as db:
@@ -588,6 +590,7 @@ class ArtistService:
         """Forget the link of `name`, so it is offered again."""
         with self._units.begin() as db:
             db.execute(delete(ArtistLinkRow).where(ArtistLinkRow.key == artist_key(name)))
+            rebind_name(db, name, None)
         self._changed()
 
     def _find_names(self, caller: Account, artist_ids: Iterable[str | None]) -> None:

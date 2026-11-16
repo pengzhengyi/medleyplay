@@ -777,3 +777,65 @@ def test_upgrading_leaves_earlier_plays_without_a_time_and_every_total_at_none(
         states = connection.execute(text("SELECT listened_ms, timed_plays FROM track_state")).all()
     engine.dispose()
     assert (plays, [tuple(state) for state in states]) == ([None], [(0, 0)])
+
+
+def test_migrating_binds_every_tracks_artists_and_one_artist_per_musicbrainz_artist(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0045")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO artist"
+                " (id, name, sort_name, disambiguation, country, found_at)"
+                " VALUES ('b10bbbfc', 'The Beatles', 'Beatles, The', '', 'GB',"
+                " '2026-11-01 00:00:00.000000')"
+            )
+        )
+        for key in ("披头士", "甲壳虫"):
+            connection.execute(
+                text(
+                    "INSERT INTO artist_link (key, name, artist_id, linked_at)"
+                    " VALUES (:key, :key, 'b10bbbfc', '2026-11-01 00:00:00.000000')"
+                ),
+                {"key": key},
+            )
+        for title, artist, album_artist in (
+            ("Yesterday", "披头士", ""),
+            ("Help!", "甲壳虫", ""),
+            ("Creep", "Radiohead", "RADIOHEAD"),
+            ("Untitled", "", ""),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO track (title, artist, album, album_artist, genre, added_at)"
+                    " VALUES (:title, :artist, '', :album_artist, '', '2026-10-01 00:00:00.000000')"
+                ),
+                {"title": title, "artist": artist, "album_artist": album_artist},
+            )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        bound = connection.execute(
+            text(
+                "SELECT track.title, track_artist.album_artist, track_artist.artist_id,"
+                " track_artist.written FROM track_artist JOIN track ON track.id = track_id"
+                " ORDER BY track.id, track_artist.album_artist"
+            )
+        ).all()
+        linked = connection.scalars(
+            text("SELECT musicbrainz_id FROM library_artist WHERE musicbrainz_id IS NOT NULL")
+        ).all()
+    engine.dispose()
+    ids = {(title, album_artist): artist_id for title, album_artist, artist_id, _ in bound}
+    assert [(title, written) for title, _, _, written in bound] == [
+        ("Yesterday", "披头士"),
+        ("Help!", "甲壳虫"),
+        ("Creep", "Radiohead"),
+        ("Creep", "RADIOHEAD"),
+    ]
+    assert ids[("Yesterday", False)] == ids[("Help!", False)]
+    assert ids[("Creep", False)] == ids[("Creep", True)] != ids[("Yesterday", False)]
+    assert linked == ["b10bbbfc"]

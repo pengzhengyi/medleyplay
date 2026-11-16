@@ -23,6 +23,8 @@ export interface ArtistLinks {
   readonly namesOf: (group: string) => readonly string[];
   /** The name the household shows the group's artist by, if it chose one. */
   readonly shownAsOf: (group: string) => string | undefined;
+  /** The cover holding the group's artist's photo, the household's or Wikidata's; none for a name alone. */
+  readonly photoOf: (group: string) => string | null;
 }
 
 const own = (name: string) => fold(name.trim());
@@ -33,6 +35,7 @@ export const NO_LINKS: ArtistLinks = {
   aliasesOf: () => [],
   namesOf: (group) => [group],
   shownAsOf: () => undefined,
+  photoOf: () => null,
 };
 
 /** The links the server knows, as the client groups by them. */
@@ -66,11 +69,13 @@ export function linksOf(found: ArtistNames): ArtistLinks {
       shownAs.set(group, artist.shown_as);
     }
   }
+  const photos = new Map(found.artists.map((artist) => [`artist:${artist.id}`, artist.photo]));
   return {
     groupOf: (name) => groups.get(own(name)) ?? own(name),
     aliasesOf: (group) => aliases.get(group) ?? [],
     namesOf: (group) => members.get(group) ?? [group],
     shownAsOf: (group) => shownAs.get(group),
+    photoOf: (group) => photos.get(group) ?? null,
   };
 }
 

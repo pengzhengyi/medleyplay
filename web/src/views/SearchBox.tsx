@@ -20,7 +20,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { initialOf } from "../format";
-import type { ArtistLinks } from "../library/artistLinks";
+import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
 import {
   FIELDS,
   FIELD_LABELS,
@@ -33,6 +33,7 @@ import { suggestedArtists } from "../library/suggestions";
 
 import { type Route, navigate } from "../routes";
 import { hintOf, useBindings } from "../shortcuts";
+import { Cover } from "./Cover";
 import { type PanelOption, SearchPanel } from "./SearchPanel";
 import { SiteMark } from "./SiteMark";
 
@@ -237,6 +238,12 @@ export function SearchBox({
     [tagging, tracks, text, links],
   );
 
+  /** The cover holding the photo of the artist whose songs write `name`, if it has one. */
+  const photoOf = (name: string) => {
+    const known = links ?? NO_LINKS;
+    return known.photoOf(known.groupOf(name));
+  };
+
   /** Close the panel. */
   const close = () => {
     setSuggesting(false);
@@ -280,9 +287,9 @@ export function SearchBox({
                 title: `Go to ${artist.name || "the songs with no artist"}`,
                 content: (
                   <>
-                    <span className="suggest-initial" aria-hidden>
+                    <Cover cover={photoOf(artist.link)} className="suggest-initial">
                       {initialOf(artist.name)}
-                    </span>
+                    </Cover>
                     <span className="suggest-name">{artist.name || "No artist"}</span>{" "}
                     <span className="suggest-meta">{songCount(artist.count)}</span>
                   </>

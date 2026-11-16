@@ -51,7 +51,7 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
 
 import type { CommunityRating, Track } from "../api";
 import { formatTime } from "../format";
@@ -73,6 +73,7 @@ import {
 import { KindMark } from "./KindMark";
 import { DownloadFailed, MoreWays, TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { STATUS_ICONS } from "./statusIcons";
+import type { LibraryGroup } from "../routes";
 
 /** What every cell may need: the page's callbacks, which Track is playing, and the songs of files. */
 interface Meta {
@@ -149,7 +150,11 @@ const genresOf = (genre: string): string[] =>
     .map((part) => part.trim())
     .filter((part) => part !== "");
 
-const isText: TrackFilter = (row, id, value) => row.getValue<string>(id) === value;
+/** The text is the value, or one of the values, as an artist's names. */
+const isText: TrackFilter = (row, id, value) => {
+  const text = row.getValue<string>(id);
+  return Array.isArray(value) ? value.includes(text) : text === value;
+};
 const hasGenre: TrackFilter = (row, id, value) =>
   genresOf(row.getValue<string>(id)).includes(String(value));
 const isYear: TrackFilter = (row, id, value) =>
@@ -269,6 +274,8 @@ export function TrackTable({
   songsIn,
   focus,
   onFocused,
+  asked,
+  onAsked,
 }: {
   readonly tracks: readonly Track[];
   readonly playingId: number | undefined;
@@ -279,6 +286,14 @@ export function TrackTable({
   readonly focus?: number | undefined;
   /** Called once the Track asked for is shown, so it isn't shown again. */
   readonly onFocused?: (() => void) | undefined;
+  /**
+   * What a link asks the table to show: only the songs of an artist, by the names given, in
+   * place of the filters on; grouped so. Each is set once, as a choice of the listener's.
+   */
+  readonly asked?:
+    { readonly artist?: readonly string[]; readonly group?: LibraryGroup } | undefined;
+  /** Called once what was asked is set, so it isn't set again. */
+  readonly onAsked?: (() => void) | undefined;
 }) {
   const [layout, setLayout] = useState(savedLayout);
   useEffect(() => {
@@ -289,6 +304,34 @@ export function TrackTable({
   // Groups open when made; a split file's songs stay folded until asked for.
   const folded: ExpandedState = songsIn === undefined ? true : {};
   const [expanded, setExpanded] = useState<ExpandedState>(folded);
+  // What a link last asked, so asking it again sets it again.
+  const askedKey =
+    asked === undefined ? undefined : JSON.stringify([asked.artist ?? null, asked.group ?? null]);
+  const [applied, setApplied] = useState<string | undefined>(undefined);
+  if (askedKey !== applied) {
+    setApplied(askedKey);
+    if (asked?.artist !== undefined) {
+      const [only] = asked.artist;
+      setColumnFilters([
+        {
+          id: FILTER_COLUMNS.artist,
+          value: asked.artist.length === 1 && only !== undefined ? only : asked.artist,
+        },
+      ]);
+    }
+    if (asked?.group !== undefined) {
+      setExpanded(true);
+      setGrouping([asked.group]);
+    }
+  }
+  const askedDone = useEffectEvent(() => {
+    onAsked?.();
+  });
+  useEffect(() => {
+    if (askedKey !== undefined) {
+      askedDone();
+    }
+  }, [askedKey]);
   // Grouped, the Library lists every song in its split file's place, as other tables do.
   const nested = songsIn !== undefined && grouping.length === 0;
   const data = useMemo(

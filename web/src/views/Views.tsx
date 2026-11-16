@@ -4,6 +4,7 @@
 
 import {
   CaretLeftIcon,
+  XIcon,
   HeartIcon,
   PlayIcon,
   PlaylistIcon,
@@ -42,6 +43,7 @@ import {
   fold,
   search,
   songsOf,
+  albumArtistOf,
   tracksOfAlbum,
   tracksOfArtist,
 } from "../library/views";
@@ -211,7 +213,15 @@ function viewOf(given: ViewProps) {
       );
     }
     case "albums":
-      return <Albums tracks={props.tracks} favorites={props.favorites} actions={props.actions} />;
+      return (
+        <Albums
+          tracks={props.tracks}
+          favorites={props.favorites}
+          actions={props.actions}
+          artist={route.artist}
+          links={props.links}
+        />
+      );
     case "album": {
       const songs = tracksOfAlbum(props.tracks, route.artist, route.name);
       const file = albumFileOf(songs, new Map(given.tracks.map((track) => [track.id, track])));
@@ -310,7 +320,7 @@ function viewOf(given: ViewProps) {
 }
 
 /** Every song and album, a split file's songs folded under it. */
-function LibraryItems({ tracks, playingId, actions, route }: ViewProps) {
+function LibraryItems({ tracks, playingId, actions, route, links }: ViewProps) {
   const items = useMemo(() => tracks.filter((track) => track.segment_of === null), [tracks]);
   const songsIn = useMemo(() => songsByFile(tracks), [tracks]);
   const played = inLibraryOrder(items, songsIn);
@@ -328,12 +338,26 @@ function LibraryItems({ tracks, playingId, actions, route }: ViewProps) {
         empty={<NoMusic />}
         focus={route.view === "library" ? route.focus : undefined}
         onFocused={showFocused}
+        asked={
+          route.view === "library" && (route.artist !== undefined || route.group !== undefined)
+            ? {
+                ...(route.artist !== undefined && {
+                  artist: namesOf(tracksOfArtist(tracks, route.artist, links)),
+                }),
+                ...(route.group !== undefined && { group: route.group }),
+              }
+            : undefined
+        }
+        onAsked={showFocused}
       />
     </>
   );
 }
 
-/** Once the Track asked for is shown, the address drops it, so Back or a reload doesn't show it again. */
+/**
+ * Once the Track asked for is shown, or the filter or grouping asked for is set, the
+ * address drops it, so Back or a reload doesn't do it again over the listener's changes.
+ */
 const showFocused = () => {
   navigate({ view: "library" }, { replace: true });
 };
@@ -484,12 +508,28 @@ function Albums({
   tracks,
   favorites,
   actions,
+  artist,
+  links,
 }: {
   readonly tracks: readonly Track[];
   readonly favorites: FavoriteGroups;
   readonly actions: TrackActions;
+  /** Show only the albums this artist sings on, by any name it goes by. */
+  readonly artist?: string | undefined;
+  readonly links?: ArtistLinks | undefined;
 }) {
-  const albums = useMemo(() => albumsOf(tracks), [tracks]);
+  const albums = useMemo(() => {
+    const every = albumsOf(tracks);
+    if (artist === undefined) {
+      return every;
+    }
+    const sung = new Set(
+      tracksOfArtist(tracks, artist, links).map((track) =>
+        albumKeyOf(albumArtistOf(track), track.album),
+      ),
+    );
+    return every.filter((album) => sung.has(albumKeyOf(album.artist, album.name)));
+  }, [tracks, artist, links]);
   // Each album plays whole, in its track order, in the order the albums are listed.
   const playable = everyAlbum(tracks.filter((track) => track.availability === "ok"));
   return (
@@ -525,10 +565,37 @@ function Albums({
           </button>
         </div>
       )}
+      {artist !== undefined && (
+        <div className="filters-on">
+          <span className="filtered-count" role="status">
+            {`${String(albums.length)} of ${String(albumsOf(tracks).length)} albums`}
+          </span>
+          <a
+            className="chip"
+            href={hrefOf({ view: "albums" })}
+            aria-label={`Remove the filter Artist: ${artist}`}
+          >
+            Artist: {artist}
+            <XIcon weight="bold" aria-hidden />
+          </a>
+        </div>
+      )}
       {albums.length === 0 ? <NoMusic /> : <AlbumList albums={albums} favorites={favorites} />}
     </>
   );
 }
+
+/** The names `tracks` write their artist by, each once, most written first. */
+function namesOf(tracks: readonly Track[]): string[] {
+  const counts = new Map<string, number>();
+  for (const track of tracks) {
+    counts.set(track.artist, (counts.get(track.artist) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+}
+
+/** An album's key: its artist and name, compared folded. */
+const albumKeyOf = (artist: string, name: string) => fold(`${artist}\n${name}`);
 
 function AlbumList({
   albums,

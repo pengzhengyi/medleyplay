@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Search suggests as you type** — under the box, the artists a search names,
+  each to open, to show only its songs in the Library, or only the albums it
+  sings on, and *Group the Library by artist*; in an empty box, resting the
+  pointer or pressing ↓ lists the tags. `#/library?artist=…&group=…` and
+  `#/albums?artist=…` open those views so.
+
 - **Ask AI says how to set up a provider when none is** — beside each *Ask AI*,
   an admin gets a *Set up AI* link that opens Settings at its AI section, and a
   member *Ask an admin to set up AI*; `GET /api/features` tells whether one is

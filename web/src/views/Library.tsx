@@ -434,7 +434,13 @@ export function Library({
             <span className="wordmark-name">medleyplay</span>
           </a>
         </h1>
-        <SearchBox route={route} providers={library.providers} onLookUp={setLinking} />
+        <SearchBox
+          route={route}
+          providers={library.providers}
+          onLookUp={setLinking}
+          tracks={tracks}
+          links={links}
+        />
         {library.mode !== null && !library.mode.online && (
           <span className="mode-note">
             <a

@@ -8,6 +8,9 @@ describe("routes", () => {
     ["", { view: "library" }],
     ["#/library", { view: "library" }],
     ["#/library?focus=12", { view: "library", focus: 12 }],
+    ["#/library?artist=ryo", { view: "library", artist: "ryo" }],
+    ["#/library?group=artist", { view: "library", group: "artist" }],
+    ["#/albums?artist=ryo", { view: "albums", artist: "ryo" }],
     ["#/songs", { view: "library" }],
     ["#/artists", { view: "artists" }],
     ["#/artist?name=ryo", { view: "artist", name: "ryo" }],
@@ -30,6 +33,10 @@ describe("routes", () => {
     expect(routeOf("#/library?focus=")).toEqual({ view: "library" });
   });
 
+  it("ignores a grouping the Library doesn't offer", () => {
+    expect(routeOf("#/library?group=mood")).toEqual({ view: "library" });
+  });
+
   it("goes back to the Library for a route it doesn't know", () => {
     expect(routeOf("#/nowhere")).toEqual({ view: "library" });
     expect(routeOf("#/artist")).toEqual({ view: "library" });
@@ -41,6 +48,8 @@ describe("routes", () => {
     { view: "artist", name: "" },
     { view: "search", query: "melt live #1" },
     { view: "settings", section: "ai" },
+    { view: "library", artist: "AC/DC & Friends", group: "album" },
+    { view: "albums", artist: "初音ミク/米津玄師" },
   ])("writes and reads back %o, whatever its names hold", (route) => {
     expect(routeOf(hrefOf(route))).toEqual(route);
   });

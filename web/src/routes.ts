@@ -7,14 +7,28 @@
 
 import { useEffect, useState } from "react";
 
+/** What the Library can be grouped by. */
+export const LIBRARY_GROUPS = ["album", "artist", "album_artist", "year", "genre"] as const;
+
+export type LibraryGroup = (typeof LIBRARY_GROUPS)[number];
+
 /** A view and what it shows. */
 export type Route =
-  /** The Library; with `focus`, scrolled to that Track, which is lit for a moment. */
-  | { readonly view: "library"; readonly focus?: number }
+  /**
+   * The Library; with `focus`, scrolled to that Track, which is lit for a moment; with
+   * `artist`, filtered to the songs of the artist its Tracks write so; with `group`, grouped.
+   */
+  | {
+      readonly view: "library";
+      readonly focus?: number;
+      readonly artist?: string;
+      readonly group?: LibraryGroup;
+    }
   | { readonly view: "radio" }
   | { readonly view: "artists" }
   | { readonly view: "artist"; readonly name: string }
-  | { readonly view: "albums" }
+  /** The albums; with `artist`, only those the artist sings on. */
+  | { readonly view: "albums"; readonly artist?: string }
   | { readonly view: "album"; readonly artist: string; readonly name: string }
   | { readonly view: "downloaded" }
   | { readonly view: "playlists" }
@@ -38,11 +52,21 @@ export function routeOf(hash: string): Route {
   switch (path) {
     case "library": {
       const focus = params.get("focus") ?? "";
-      return /^\d+$/u.test(focus) ? { view: "library", focus: Number(focus) } : LIBRARY;
+      const artist = params.get("artist");
+      const group = LIBRARY_GROUPS.find((each) => each === params.get("group"));
+      return {
+        view: "library",
+        ...(/^\d+$/u.test(focus) && { focus: Number(focus) }),
+        ...(artist !== null && { artist }),
+        ...(group !== undefined && { group }),
+      };
+    }
+    case "albums": {
+      const artist = params.get("artist");
+      return artist === null ? { view: "albums" } : { view: "albums", artist };
     }
     case "radio":
     case "artists":
-    case "albums":
     case "downloaded":
     case "playlists":
     case "insights":
@@ -84,8 +108,18 @@ export function hrefOf(route: Route): string {
       return route.section === undefined
         ? "#/settings"
         : `#/settings?${new URLSearchParams({ section: route.section }).toString()}`;
-    case "library":
-      return route.focus === undefined ? "#/library" : `#/library?focus=${String(route.focus)}`;
+    case "library": {
+      const params = new URLSearchParams({
+        ...(route.focus !== undefined && { focus: String(route.focus) }),
+        ...(route.artist !== undefined && { artist: route.artist }),
+        ...(route.group !== undefined && { group: route.group }),
+      }).toString();
+      return params === "" ? "#/library" : `#/library?${params}`;
+    }
+    case "albums":
+      return route.artist === undefined
+        ? "#/albums"
+        : `#/albums?${new URLSearchParams({ artist: route.artist }).toString()}`;
     default:
       return `#/${route.view}`;
   }

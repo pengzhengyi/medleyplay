@@ -248,6 +248,7 @@ Track's kind is decided.
     an effect. A new cover fades in over the last.
   - **It fades in once drawn,** over the still blur, so without WebGL 2 the blur
     shows as before; with reduced motion the effect is drawn still, once a cover.
+  <!-- cspell:ignore AMLL Vanta Granim -->
   - **ogl draws it,** chosen over the libraries that do similar: the one
     drawing Apple Music's own background, from AMLL, is AGPL; ShaderGradient
     draws a glossy gradient of three colors, not the cover, at 273 KB gzipped

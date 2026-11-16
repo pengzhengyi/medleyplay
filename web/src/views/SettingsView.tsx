@@ -23,6 +23,7 @@ import {
 import { useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
 import { formatBytes } from "../format";
+import { hrefOf } from "../routes";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 import { AccentPicker } from "./AccentPicker";
 import { AiSettings } from "./AiSettings";
@@ -603,7 +604,9 @@ function Usage({ storage }: { readonly storage: Storage }) {
         <div>
           <dt>
             <span className="swatch downloads" aria-hidden />
-            Downloads
+            <a href={hrefOf({ view: "downloaded" })} title="Show the songs downloaded">
+              Downloads
+            </a>
           </dt>
           <dd>{formatBytes(downloads)}</dd>
         </div>
@@ -618,7 +621,9 @@ function Usage({ storage }: { readonly storage: Storage }) {
           <div>
             <dt>
               <span className="swatch reserved" aria-hidden />
-              Downloading
+              <a href={hrefOf({ view: "downloaded" })} title="Show the songs downloading">
+                Downloading
+              </a>
             </dt>
             <dd>{formatBytes(reserved)}</dd>
           </div>

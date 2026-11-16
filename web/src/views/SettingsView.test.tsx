@@ -230,6 +230,14 @@ describe("storage settings", () => {
     expect(screen.getByText("1.2 GB")).toBeInTheDocument();
   });
 
+  it("links the Downloads to the Downloaded view, which lists them", async () => {
+    open(false);
+
+    const downloads = await storage().findByRole("link", { name: "Downloads" });
+
+    expect(downloads).toHaveAttribute("href", "#/downloaded");
+  });
+
   it("tells a member the limit an admin set, with nothing to change", async () => {
     open(false);
 

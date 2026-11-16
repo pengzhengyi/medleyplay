@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
 import { trackOf } from "../testing/server";
-import { albumSteps, albumTimeline, playingOf, songAt } from "./albumNow";
+import { albumSteps, albumTimeline, playingOf, songAt, songPlaying } from "./albumNow";
 import { EMPTY, type Entry, type Queue } from "./queue";
 
 /**
@@ -142,6 +142,34 @@ describe("playingOf", () => {
 
   it("plays nothing as a song when the queue has finished", () => {
     expect(playingOf(playing(4), BY_ID)).toEqual({ kind: "song" });
+  });
+});
+
+describe("songPlaying", () => {
+  it("is the song itself while a song plays", () => {
+    const melt = BY_ID.get(7) ?? trackOf(7, "Melt");
+
+    expect(songPlaying(melt, { kind: "song" })).toBe(melt);
+  });
+
+  it("is the song under the position while a split file plays whole", () => {
+    const file = trackOf(9, "生如夏花", { kind: "album", split: true, duration_ms: 720_000 });
+    const split = new Map([[9, file], ...BY_ID]);
+
+    const song = songPlaying(file, playingOf(playing(0, [{ key: "w", trackId: 9 }]), split, 300));
+
+    expect(song?.title).toBe("浮游");
+  });
+
+  it("is nothing while an album in one file not yet split plays", () => {
+    const file = trackOf(4, "Jim Restaurant", { kind: "album" });
+
+    const song = songPlaying(
+      file,
+      playingOf(playing(0, [{ key: "j", trackId: 4 }]), new Map([[4, file]])),
+    );
+
+    expect(song).toBeUndefined();
   });
 });
 

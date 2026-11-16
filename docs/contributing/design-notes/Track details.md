@@ -295,9 +295,13 @@ values.
 
 ### An album's covers from MusicBrainz
 
-*Find covers on MusicBrainz*, among the cover's tools in *Edit details* and beside
+*Find covers on MusicBrainz*, a button under the cover in *Edit details* and beside
 the album's cover in *Edit album*, shows the front covers of the album's releases
 MusicBrainz knows, to choose one. Nothing changes until one is chosen.
+
+- **Which album:** the song's album; for a whole album in one file naming none, its
+  title. A song on no album shows the button unavailable, saying the album is
+  needed.
 
 - **Known by the album and its artist,** the album artist or else the artist, as
   written, trimmed and folded: every song writing them alike shares what was found.

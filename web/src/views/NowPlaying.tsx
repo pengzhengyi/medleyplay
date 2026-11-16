@@ -21,6 +21,7 @@ import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { NowPlayingNames } from "./NowPlayingNames";
 import { AlbumCard } from "./PlayingKind";
+import { Dynamics } from "./Dynamics";
 import { QueuePanel } from "./QueuePanel";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
@@ -101,6 +102,9 @@ export function NowPlaying({
     >
       <div className="np-backdrop" aria-hidden>
         {track.cover !== null && track.cover !== "" && <img src={coverUrl(track.cover)} alt="" />}
+        <Dynamics
+          cover={track.cover !== null && track.cover !== "" ? coverUrl(track.cover) : null}
+        />
       </div>
       <div ref={body} className="np-body" tabIndex={-1}>
         <header className="np-top">

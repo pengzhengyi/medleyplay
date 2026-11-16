@@ -1,7 +1,7 @@
 // cspell:ignore loveartist
 import { describe, expect, it } from "vitest";
 
-import { fieldTyped, parseQuery, querySaid, queryText } from "./query";
+import { fieldTyped, parseQuery, querySaid, queryText, siteTyped } from "./query";
 
 describe("a search's text", () => {
   it("holds tags naming a field, and plain words", () => {
@@ -72,5 +72,20 @@ describe("a field typed in the search box", () => {
     expect(fieldTyped("loveartist:")).toBeUndefined();
     expect(fieldTyped("re:")).toBeUndefined();
     expect(fieldTyped("artist:J")).toBeUndefined();
+  });
+});
+
+describe("a site named in the box", () => {
+  it("is the site a word names with a colon, the rest kept", () => {
+    expect(siteTyped("melt bilibili:BV1Xx", ["bilibili"])).toEqual({
+      site: "bilibili",
+      rest: "melt BV1Xx",
+    });
+    expect(siteTyped("Bilibili：", ["bilibili"])).toEqual({ site: "bilibili", rest: "" });
+  });
+
+  it("is none for a site that can't be searched, or a field", () => {
+    expect(siteTyped("bilibili:melt", [])).toBeUndefined();
+    expect(siteTyped("artist:ryo", ["bilibili"])).toBeUndefined();
   });
 });

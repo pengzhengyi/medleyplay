@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`bilibili:` in the search box** — typing it chooses Bilibili to search, as
+  its toggle does, keeping what follows it; it is listed with the tags, and
+  Backspace in the empty box goes back to the Library.
+
 - **Dynamics behind Now Playing** — the cover's colors move behind Now Playing, as
   Apple Music's do: *Flow* (the cover flowing in slow folds), *Drift* (the cover
   turning), or *Mesh* (its colors as wandering lights), chosen per browser in

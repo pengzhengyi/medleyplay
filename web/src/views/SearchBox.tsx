@@ -26,6 +26,7 @@ import {
   FIELD_LABELS,
   type Field,
   fieldTyped,
+  siteTyped,
   parseQuery,
   tagText,
 } from "../library/query";
@@ -264,19 +265,42 @@ export function SearchBox({
     navigate(to);
   };
 
+  /** Search `place`, the Library or a site, with `typed` in the box and no tags. */
+  const searchIn = (place: string, typed = "") => {
+    setChosen(place);
+    change({ tokens: [], field: undefined, query: typed });
+    close();
+    setSaid(
+      place === LIBRARY ? "Searching the Library." : `Searching ${SITE_NAMES[place] ?? place}.`,
+    );
+  };
+
   const options: readonly PanelOption[] =
     helping && empty
-      ? FIELDS.map((each) => ({
-          key: each,
-          className: "suggest-tag",
-          content: (
-            <>
-              <code>{each}:</code>
-              <span className="suggest-meta">{VALUE_HINTS[each]}</span>
-            </>
-          ),
-          does: { tag: each },
-        }))
+      ? [
+          ...FIELDS.map((each) => ({
+            key: each,
+            className: "suggest-tag",
+            content: (
+              <>
+                <code>{each}:</code>
+                <span className="suggest-meta">{VALUE_HINTS[each]}</span>
+              </>
+            ),
+            does: { tag: each },
+          })),
+          ...providers.map((provider) => ({
+            key: `site-${provider}`,
+            className: "suggest-tag",
+            content: (
+              <>
+                <code>{provider}:</code>
+                <span className="suggest-meta">{`search ${SITE_NAMES[provider] ?? provider}`}</span>
+              </>
+            ),
+            does: { site: provider },
+          })),
+        ]
       : suggesting && artists.length > 0
         ? [
             ...artists.flatMap((artist): PanelOption[] => [
@@ -344,6 +368,9 @@ export function SearchBox({
   const choose = (option: PanelOption) => {
     if ("go" in option.does) {
       leaveFor(option.does.go);
+    } else if ("site" in option.does) {
+      searchIn(option.does.site);
+      box.current?.focus();
     } else {
       change({ tokens, field: option.does.tag, query: "" });
       setSuggesting(false);
@@ -464,6 +491,12 @@ export function SearchBox({
               setQuery(text);
               return;
             }
+            const named = siteTyped(text, providers);
+            if (named !== undefined) {
+              // A site's name and a colon searches that site, as its button does.
+              searchIn(named.site, named.rest);
+              return;
+            }
             const pasted = (event.nativeEvent as InputEvent).inputType === "insertFromPaste";
             const found = tokensOf(text);
             if (pasted && field === undefined && found.tokens.length > 0) {
@@ -535,6 +568,12 @@ export function SearchBox({
                   backspace();
                 }
               }
+              return;
+            }
+            if (!tagging && event.key === "Backspace" && at.value === "") {
+              // Backspace in an empty box leaves the site, as it removes a tag.
+              event.preventDefault();
+              searchIn(LIBRARY);
               return;
             }
             if (tagging && event.key === "Escape" && (tagged || query !== "")) {

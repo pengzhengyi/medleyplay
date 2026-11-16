@@ -341,6 +341,10 @@ Track's kind is decided.
   chosen, the box takes a link or a bare video code and *Enter* opens the add
   dialog; it doesn't search anything else. See
   [Manual downloads](Manual%20downloads.md#the-web-client).
+- **Typing `bilibili:` chooses Bilibili,** as its toggle does, at a word's start
+  in the box; what follows it stays typed, so `bilibili:BV1…` pasted is ready for
+  *Enter*. The tags listed in an empty box end with it, and Backspace in an empty
+  box with Bilibili chosen goes back to the Library, as it removes a tag.
 - **Library search** matches the words typed, each anywhere in a Track's title,
   artist, or album, ignoring case, width, and hiragana or katakana: NFKC, lower
   case, and katakana shifted to hiragana, so `ｍｅｌｔ` finds *Melt* and

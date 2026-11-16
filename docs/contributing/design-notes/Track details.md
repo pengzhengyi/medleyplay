@@ -142,6 +142,10 @@ values.
   tag, a mark and a word such as *BV* or *MB*, which says *From the video* in
   full in its tooltip and to screen readers. Each other origin's value carries
   its origin's mark.
+- **A song's album is folded:** many songs are singles, on no album, so for a
+  song the *Album* fields fold to one line saying its album, or *None, a
+  single*, and open when it is pressed. An album in one file shows them open,
+  being its own album.
 - **Looking the song up from the dialog:** a button for each lookup the song
   may be asked about, as in its menu, sits under the cover, and how the one
   asked goes shows beside them. Once it is done, the dialog reads the details

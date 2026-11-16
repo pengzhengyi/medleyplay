@@ -4613,6 +4613,41 @@ dialog.modal::backdrop {
   font-weight: 600;
 }
 
+/* A song's album, folded to one line saying it, opened to edit. */
+.detail-fold {
+  margin: 0 0 1rem;
+}
+
+.detail-fold-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* Pico's chevron at the line's end, as on the dialog's other folds. */
+.detail-fold-summary::after {
+  margin-left: auto;
+}
+
+.detail-fold-title {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.detail-fold-value {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-fold:not([open]) .detail-fold-value {
+  color: var(--muted);
+}
+
 .detail {
   display: flex;
   flex-direction: column;

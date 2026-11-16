@@ -42,7 +42,7 @@ test("/ goes to the search box, where the keys type", async ({ page }) => {
   await page.keyboard.press("Slash");
   await page.keyboard.type("s ");
 
-  await expect(page.getByRole("searchbox")).toHaveValue("s ");
+  await expect(page.getByRole("combobox", { name: "Search" })).toHaveValue("s ");
   await expect(player(page).getByRole("button", { name: "Pause" })).toBeVisible();
 });
 

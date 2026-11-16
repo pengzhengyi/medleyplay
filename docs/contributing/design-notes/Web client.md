@@ -62,10 +62,10 @@ no router package.
 
 | View | Route | Shows |
 | --- | --- | --- |
-| Library | `#/library`, `#/library?focus=<id>` | Every song and album, a split file's songs folded under it; see [The Library](#the-library) |
+| Library | `#/library`, `#/library?focus=<id>`, `#/library?artist=<name>`, `#/library?group=artist` | Every song and album, a split file's songs folded under it; see [The Library](#the-library). `artist` filters to the artist's songs by every name they are written by, `group` groups by a Group by choice; each is set once, then the address drops it |
 | Radio | `#/radio` | *My station*, *Favorites*, and shelves of albums for the Account; see [Recommendations](Recommendations.md#the-radio-tab) |
 | Artists | `#/artists` | Each artist, with how many Tracks and how long; one opens its Tracks |
-| Albums | `#/albums` | Each album, under its album artist, or its artist when that is blank |
+| Albums | `#/albums`, `#/albums?artist=<name>` | Each album, under its album artist, or its artist when that is blank; `artist` keeps the albums the artist sings on, by any name it goes by, with a chip that removes it |
 | Playlists | `#/playlists` | *Favorites* first, then the Account's Playlists |
 | Downloaded | `#/downloaded` | The songs downloading, each with its state and a bar, then the Tracks with `downloaded`, in the song table |
 | Search | `#/search?q=…` | What the search found |
@@ -362,6 +362,18 @@ Track's kind is decided.
   written out, is what `#/search?q=` holds, so a link or Back shows the same
   capsules, and the results are titled by them, as *Results for Artist: Jay
   Chou, “love”*.
+- **Suggestions as you type.** Under the box, a panel offers up to three artists
+  the search names: its `artist:` tag's value, or else its words, found as the
+  search finds artists, by any name. Each row goes to the artist's page, and
+  its *Songs* and *Albums* show the Library filtered to its songs, or the albums
+  it sings on, by every name its songs are written by, as its page counts them. Last, *Group the Library by artist*.
+  Choosing one leaves the search and empties the box. The box is a combobox:
+  the arrow keys move through the choices, *Enter* takes the one pointed at,
+  and *Escape* closes the panel before it clears the box. On a phone the *Songs*
+  and *Albums* chips show their icons alone.
+- **The tags, when the box is empty:** resting the pointer on it a moment, or
+  pressing ↓ in it, lists each tag with what its value is; choosing one starts
+  that tag in the box.
 - **Artists and albums found are whole:** one is listed, with all its songs,
   when a song the tags keep is its, so `rating:4` lists albums with their full
   counts; under `artist:`, only the artists the tag names are listed. A `kind:`

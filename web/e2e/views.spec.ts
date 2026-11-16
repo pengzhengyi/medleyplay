@@ -40,11 +40,11 @@ test("searching finds songs as you type, and Back leaves the search in one step"
 }) => {
   await page.goto("/#/albums");
 
-  await page.getByRole("searchbox", { name: "Search" }).fill("charl");
+  await page.getByRole("combobox", { name: "Search" }).fill("charl");
 
   const found = page.getByRole("region", { name: "Songs found" });
   await expect(found.getByRole("button", { name: "Charlie", exact: true })).toBeVisible();
-  await page.getByRole("searchbox", { name: "Search" }).fill("charlie");
+  await page.getByRole("combobox", { name: "Search" }).fill("charlie");
   await expect(page.getByRole("heading", { name: "Results for “charlie”" })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("heading", { name: "Albums" })).toBeVisible();

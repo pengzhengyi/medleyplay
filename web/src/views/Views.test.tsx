@@ -1,5 +1,5 @@
 // cspell:ignore supercell ｍｅｌｔ
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -161,6 +161,152 @@ describe("the views", () => {
   });
 });
 
+describe("search suggestions", () => {
+  it("offers the artists a search names, each to show, its songs, and its albums", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "ルワ");
+
+    const offered = within(screen.getByRole("listbox", { name: "Suggestions" }));
+    const options = offered.getAllByRole("option");
+    expect(options).toHaveLength(4);
+    expect(options[0]).toHaveAccessibleName("ルワン 1 song");
+    expect(options[1]).toHaveAccessibleName("Songs");
+    expect(options[2]).toHaveAccessibleName("Albums");
+    expect(options[3]).toHaveAccessibleName("Group the Library by artist");
+    expect(offered.getByRole("group", { name: "ルワン" })).toContainElement(options[2] ?? null);
+  });
+
+  it("goes to the artist chosen with the arrow keys and Enter", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "ルワ{ArrowDown}");
+    const offered = within(screen.getByRole("listbox", { name: "Suggestions" }));
+    expect(box).toHaveAttribute(
+      "aria-activedescendant",
+      offered.getByRole("option", { name: "ルワン 1 song" }).id,
+    );
+    await userEvent.keyboard("{Enter}");
+
+    expect(await screen.findByRole("heading", { level: 2, name: "ルワン" })).toBeVisible();
+    expect(box).toHaveValue("");
+    expect(screen.queryByRole("listbox", { name: "Suggestions" })).toBeNull();
+  });
+
+  it("shows only the artist's songs in the Library, as a filter there", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "ルワ");
+    await userEvent.click(screen.getByRole("option", { name: "Songs" }));
+
+    expect(await screen.findByRole("heading", { name: "Library" })).toBeVisible();
+    expect(songs()).toEqual(["クジラ"]);
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(location.hash).toBe("#/library");
+    });
+  });
+
+  it("keeps the artist's songs by every name they are written by, as its page does", async () => {
+    open(
+      hrefOf({ view: "library", artist: "ryo" }),
+      signedIn([
+        trackOf(1, "Melt", { artist: "ryo" }),
+        trackOf(2, "Shiver", { artist: "Ryo" }),
+        trackOf(3, "クジラ", { artist: "ルワン" }),
+      ]),
+    );
+
+    await screen.findByRole("button", { name: "Melt" });
+
+    expect(songs()).toEqual(["Melt", "Shiver"]);
+    expect(
+      screen.getByRole("button", { name: "Remove the filter Artist: ryo / Ryo" }),
+    ).toBeVisible();
+  });
+
+  it("shows only the albums the artist sings on, until the filter is removed", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "ルワ");
+    await userEvent.click(screen.getByRole("option", { name: "Albums" }));
+
+    const albums = await screen.findByRole("list", { name: "Albums" });
+    expect(within(albums).getAllByRole("link")).toHaveLength(1);
+    expect(within(albums).getByRole("link", { name: /空想/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("link", { name: "Remove the filter Artist: ルワン" }));
+    expect(
+      within(await screen.findByRole("list", { name: "Albums" })).getAllByRole("link"),
+    ).toHaveLength(2);
+  });
+
+  it("groups the Library by artist", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "ryo");
+    await userEvent.click(screen.getByRole("option", { name: "Group the Library by artist" }));
+
+    expect(await screen.findByLabelText("Group by")).toHaveValue("artist");
+  });
+
+  it("stays open when pressed between its choices", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "ルワ");
+    await userEvent.click(screen.getByRole("listbox", { name: "Suggestions" }));
+
+    expect(box).toHaveFocus();
+    expect(screen.getByRole("listbox", { name: "Suggestions" })).toBeVisible();
+  });
+
+  it("closes on Escape, keeping what was typed", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "ryo{Escape}");
+
+    expect(screen.queryByRole("listbox", { name: "Suggestions" })).toBeNull();
+    expect(box).toHaveValue("ryo");
+    expect(box).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("lists the tags on ArrowDown in an empty box, and starts the one chosen", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.click(box);
+    await userEvent.keyboard("{ArrowDown}");
+    const tags = screen.getByRole("listbox", { name: "Search by" });
+    await userEvent.click(within(tags).getByRole("option", { name: /^artist:/ }));
+
+    expect(box).toHaveAccessibleDescription("Artist:");
+    expect(box).toHaveFocus();
+  });
+
+  it("lists the tags when the pointer rests on an empty box", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    await userEvent.hover(screen.getByRole("combobox", { name: "Search" }));
+    act(() => {
+      vi.advanceTimersByTime(800);
+    });
+
+    expect(screen.getByRole("listbox", { name: "Search by" })).toBeVisible();
+  });
+});
+
 describe("playlists", () => {
   it("lists the server's Favorites once, first, then the Account's Playlists", async () => {
     open("#/playlists");
@@ -202,7 +348,7 @@ describe("search", () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });
 
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "くじら");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "くじら");
 
     const found = await screen.findByRole("region", { name: "Songs found" });
     expect(within(found).getByRole("button", { name: "クジラ" })).toBeInTheDocument();
@@ -212,7 +358,7 @@ describe("search", () => {
   it("turns a field typed into a tag, the words after it its value", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
 
     await userEvent.type(box, "artist:ryo");
 
@@ -226,7 +372,7 @@ describe("search", () => {
   it("keeps a tag on Enter, leaving the box for plain words", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
 
     await userEvent.type(box, "artist:ryo{Enter}melt");
 
@@ -239,7 +385,7 @@ describe("search", () => {
 
   it("chooses a tag with the first Backspace and removes it with the second", async () => {
     open(`#/search?q=${encodeURIComponent('artist:ryo album:"Super cell"')}`);
-    const box = await screen.findByRole("searchbox", { name: "Search" });
+    const box = await screen.findByRole("combobox", { name: "Search" });
     expect(box).toHaveAccessibleDescription("Artist: ryo Album: Super cell");
 
     await userEvent.type(box, "{Backspace}");
@@ -258,7 +404,7 @@ describe("search", () => {
 
   it("removes a tag by its own button, and clears tags and words together", async () => {
     open(`#/search?q=${encodeURIComponent("artist:ryo album:Supercell melt")}`);
-    const box = await screen.findByRole("searchbox", { name: "Search" });
+    const box = await screen.findByRole("combobox", { name: "Search" });
 
     await userEvent.click(screen.getByRole("button", { name: "Remove Artist: ryo" }));
 
@@ -273,7 +419,7 @@ describe("search", () => {
 
   it("clears the search, tags and all, on Escape", async () => {
     open(`#/search?q=${encodeURIComponent("artist:ryo melt")}`);
-    const box = await screen.findByRole("searchbox", { name: "Search" });
+    const box = await screen.findByRole("combobox", { name: "Search" });
 
     await userEvent.type(box, "{Escape}");
 
@@ -284,7 +430,7 @@ describe("search", () => {
   it("turns tags pasted into the box into tags", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });
-    const box = screen.getByRole("searchbox", { name: "Search" });
+    const box = screen.getByRole("combobox", { name: "Search" });
     await userEvent.click(box);
 
     await userEvent.paste("artist:ryo melt");
@@ -307,7 +453,7 @@ describe("search", () => {
     const albums = await screen.findByRole("region", { name: "Albums found" });
 
     expect(within(albums).getByRole("link", { name: /Supercell/ })).toBeInTheDocument();
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("supercell");
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("supercell");
   });
 
   it("says when nothing matches", async () => {
@@ -344,13 +490,13 @@ describe("search", () => {
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
 
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
 
     const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
     expect(await within(dialog).findByText("【MV】Night Drive")).toBeVisible();
     expect(calls).toContain("POST /api/links/lookup");
     expect(location.hash).toBe("");
-    expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("");
   });
 
   it("adds what is chosen, says so, and asks for the Tracks again", async () => {
@@ -360,7 +506,7 @@ describe("search", () => {
       "POST /api/links": { body: [{ part: 1, track_id: 9, source_id: 90, job: null }] },
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
     const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
     await within(dialog).findByText("【MV】Night Drive");
 
@@ -374,7 +520,7 @@ describe("search", () => {
     open("", withBilibili());
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
 
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "melt");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "melt");
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     expect(location.hash).not.toContain("search");

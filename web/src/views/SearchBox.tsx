@@ -2,21 +2,45 @@
  * @file The search box: what to look for, and where, the Library or a music site.
  *
  * With the Library chosen, it searches as you type, and a field named as `artist:`
- * becomes a tag the words after it fill. A site a plugin provides is a choice too: there
- * the box takes a link or a bare video code, and Enter looks it up.
+ * becomes a tag the words after it fill. Under it, a panel suggests the artists the
+ * search names, each to show, its songs, or its albums; in an empty box, resting the
+ * pointer or pressing ↓ lists the tags instead. A site a plugin provides is a choice
+ * too: there the box takes a link or a bare video code, and Enter looks it up.
  */
 
-import { MagnifyingGlassIcon, MusicNotesSimpleIcon, XIcon } from "@phosphor-icons/react";
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  MagnifyingGlassIcon,
+  MusicNotesIcon,
+  MusicNotesSimpleIcon,
+  UsersThreeIcon,
+  VinylRecordIcon,
+  XIcon,
+} from "@phosphor-icons/react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { FIELD_LABELS, type Field, fieldTyped, parseQuery, tagText } from "../library/query";
+import type { Track } from "../api";
+import { initialOf } from "../format";
+import type { ArtistLinks } from "../library/artistLinks";
+import {
+  FIELDS,
+  FIELD_LABELS,
+  type Field,
+  fieldTyped,
+  parseQuery,
+  tagText,
+} from "../library/query";
+import { suggestedArtists } from "../library/suggestions";
 
 import { type Route, navigate } from "../routes";
 import { hintOf, useBindings } from "../shortcuts";
+import { type PanelOption, SearchPanel } from "./SearchPanel";
 import { SiteMark } from "./SiteMark";
 
 /** How long after typing stops the search runs. */
 const SETTLE_MS = 150;
+
+/** How long the pointer rests on an empty box before the tags are listed. */
+const HELP_AFTER_MS = 700;
 
 const SITE_NAMES: Record<string, string> = { bilibili: "Bilibili" };
 const LIBRARY = "library";
@@ -61,18 +85,25 @@ function tokensOf(text: string): { readonly tokens: readonly Token[]; readonly w
   return { tokens: tags.filter((tag) => tag.value !== ""), words };
 }
 
+const songCount = (count: number) => (count === 1 ? "1 song" : `${String(count)} songs`);
+
 /**
- * Search the Library as you type, showing what it found; with a site chosen, `onLookUp`
- * hears the link or code typed when Enter is pressed.
+ * Search the Library as you type, showing what it found and suggesting the artists of
+ * `tracks` it names, by any name `links` know; with a site chosen, `onLookUp` hears the
+ * link or code typed when Enter is pressed.
  */
 export function SearchBox({
   route,
   providers,
   onLookUp,
+  tracks = [],
+  links,
 }: {
   readonly route: Route;
   readonly providers: readonly string[];
   readonly onLookUp: (link: string) => void;
+  readonly tracks?: readonly Track[];
+  readonly links?: ArtistLinks | undefined;
 }) {
   const shown = route.view === "search" ? route.query : "";
   const [tokens, setTokens] = useState(() => tokensOf(shown).tokens);
@@ -91,6 +122,13 @@ export function SearchBox({
   const site = scope === LIBRARY ? undefined : (SITE_NAMES[scope] ?? scope);
   const tagsId = useId();
   const nameId = useId();
+  const panelId = useId();
+  // Whether the suggestions show, as typing opens them; whether the tags are listed instead.
+  const [suggesting, setSuggesting] = useState(false);
+  const [helping, setHelping] = useState(false);
+  // The option the box points at, moved by the arrow keys; -1 for none.
+  const [active, setActive] = useState(-1);
+  const resting = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Back, Forward, or a link changes the search shown; the box follows.
   if (shown !== seen) {
@@ -104,6 +142,7 @@ export function SearchBox({
   useEffect(
     () => () => {
       clearTimeout(settling.current);
+      clearTimeout(resting.current);
     },
     [],
   );
@@ -129,6 +168,9 @@ export function SearchBox({
     setQuery(next.query);
     setPicked(false);
     setSaid("");
+    setSuggesting(true);
+    setHelping(false);
+    setActive(-1);
     searchFor(textOf(next.tokens, next.field, next.query));
   };
 
@@ -188,6 +230,120 @@ export function SearchBox({
 
   const tagging = site === undefined;
   const tagged = tagging && (tokens.length > 0 || field !== undefined);
+  const empty = tagging && !tagged && query === "";
+  const text = textOf(tokens, field, query);
+  const artists = useMemo(
+    () => (tagging ? suggestedArtists(tracks, text, links) : []),
+    [tagging, tracks, text, links],
+  );
+
+  /** Close the panel. */
+  const close = () => {
+    setSuggesting(false);
+    setHelping(false);
+    setActive(-1);
+  };
+
+  /** Leave the search for `to`, emptying the box. */
+  const leaveFor = (to: Route) => {
+    clearTimeout(settling.current);
+    close();
+    // The search shown stays the one seen, so the box doesn't fill again before it goes.
+    setTokens([]);
+    setField(undefined);
+    setQuery("");
+    setPicked(false);
+    setSaid("");
+    navigate(to);
+  };
+
+  const options: readonly PanelOption[] =
+    helping && empty
+      ? FIELDS.map((each) => ({
+          key: each,
+          className: "suggest-tag",
+          content: (
+            <>
+              <code>{each}:</code>
+              <span className="suggest-meta">{VALUE_HINTS[each]}</span>
+            </>
+          ),
+          does: { tag: each },
+        }))
+      : suggesting && artists.length > 0
+        ? [
+            ...artists.flatMap((artist): PanelOption[] => [
+              {
+                key: `${artist.link}-page`,
+                row: artist.link,
+                className: "suggest-artist",
+                title: `Go to ${artist.name || "the songs with no artist"}`,
+                content: (
+                  <>
+                    <span className="suggest-initial" aria-hidden>
+                      {initialOf(artist.name)}
+                    </span>
+                    <span className="suggest-name">{artist.name || "No artist"}</span>{" "}
+                    <span className="suggest-meta">{songCount(artist.count)}</span>
+                  </>
+                ),
+                does: { go: { view: "artist", name: artist.link } },
+              },
+              {
+                key: `${artist.link}-songs`,
+                row: artist.link,
+                className: "suggest-chip",
+                title: `Only ${artist.name}'s songs in the Library`,
+                content: (
+                  <>
+                    <MusicNotesIcon aria-hidden />
+                    <span className="suggest-chip-label">Songs</span>
+                  </>
+                ),
+                does: { go: { view: "library", artist: artist.link } },
+              },
+              {
+                key: `${artist.link}-albums`,
+                row: artist.link,
+                className: "suggest-chip",
+                title: `Only the albums ${artist.name} sings on`,
+                content: (
+                  <>
+                    <VinylRecordIcon aria-hidden />
+                    <span className="suggest-chip-label">Albums</span>
+                  </>
+                ),
+                does: { go: { view: "albums", artist: artist.link } },
+              },
+            ]),
+            {
+              key: "group",
+              className: "suggest-action",
+              content: (
+                <>
+                  <UsersThreeIcon aria-hidden />
+                  Group the Library by artist
+                </>
+              ),
+              does: { go: { view: "library", group: "artist" } },
+            },
+          ]
+        : [];
+  const open = options.length > 0;
+  // The option pointed at, while the options still hold it.
+  const pointed = active < options.length ? active : -1;
+
+  /** Do what `option` does: leave for a view, or start its tag and type on. */
+  const choose = (option: PanelOption) => {
+    if ("go" in option.does) {
+      leaveFor(option.does.go);
+    } else {
+      change({ tokens, field: option.does.tag, query: "" });
+      setSuggesting(false);
+      box.current?.focus();
+    }
+  };
+  const rows = new Map(artists.map((artist) => [artist.link, artist.name || "No artist"]));
   const pickedTag =
     !picked || !tagging ? undefined : field !== undefined ? "typing" : tokens.length - 1;
   const placeholder =
@@ -200,8 +356,26 @@ export function SearchBox({
           : "Search songs, artists, albums";
 
   return (
-    <search className="search">
-      <label className="search-field">
+    <search
+      className="search"
+      onPointerLeave={() => {
+        clearTimeout(resting.current);
+        if (document.activeElement !== box.current) {
+          setHelping(false);
+        }
+      }}
+    >
+      <label
+        className="search-field"
+        onPointerEnter={() => {
+          clearTimeout(resting.current);
+          if (empty) {
+            resting.current = setTimeout(() => {
+              setHelping(true);
+            }, HELP_AFTER_MS);
+          }
+        }}
+      >
         <MagnifyingGlassIcon className="search-glass" weight="regular" aria-hidden />
         <span className="visually-hidden" id={nameId}>
           Search
@@ -266,6 +440,11 @@ export function SearchBox({
           ref={box}
           id="search"
           type="search"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={open && pointed >= 0 ? `${panelId}-${String(pointed)}` : undefined}
           {...hintOf("Search", keys.search)}
           // The tags sit in the label too; they describe the box, and don't name it.
           aria-labelledby={nameId}
@@ -300,8 +479,42 @@ export function SearchBox({
                 : [field === undefined ? { value: typed.before } : { field, value: typed.before }];
             change({ tokens: [...tokens, ...before], field: typed.field, query: "" });
           }}
+          onBlur={close}
           onKeyDown={(event) => {
             const at = event.currentTarget;
+            if (tagging && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+              event.preventDefault();
+              if (!open) {
+                if (empty) {
+                  setHelping(true);
+                  setActive(0);
+                } else {
+                  setSuggesting(true);
+                  setActive(event.key === "ArrowDown" ? 0 : -1);
+                }
+                return;
+              }
+              const step = event.key === "ArrowDown" ? 1 : -1;
+              // From none to the first and on to the last, then back to none.
+              setActive((was) => {
+                const next = was + step;
+                return next >= options.length ? -1 : next < -1 ? options.length - 1 : next;
+              });
+              return;
+            }
+            if (open && event.key === "Enter" && pointed >= 0) {
+              event.preventDefault();
+              const chosen = options[pointed];
+              if (chosen !== undefined) {
+                choose(chosen);
+              }
+              return;
+            }
+            if (open && event.key === "Escape") {
+              event.preventDefault();
+              close();
+              return;
+            }
             if (
               tagging &&
               event.key === "Backspace" &&
@@ -355,6 +568,16 @@ export function SearchBox({
           {pickedTag === undefined ? said : "Tag chosen. Press Backspace again to remove it."}
         </span>
       </label>
+      {open && (
+        <SearchPanel
+          id={panelId}
+          label={helping && empty ? "Search by" : "Suggestions"}
+          options={options}
+          active={pointed}
+          rows={rows}
+          onChoose={choose}
+        />
+      )}
       {providers.length > 0 && (
         <div className="scope" role="radiogroup" aria-label="Search in">
           <label title="Library">

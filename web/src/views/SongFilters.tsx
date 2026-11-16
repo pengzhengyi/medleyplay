@@ -23,7 +23,8 @@ export type RatingFilter = 1 | 2 | 3 | 4 | 5 | "unrated";
 /** The filters on; a field left out keeps every song. */
 export interface Filters {
   readonly kind?: string;
-  readonly artist?: string;
+  /** The artist's name as written, or every name one artist's songs are written by. */
+  readonly artist?: string | readonly string[];
   readonly album?: string;
   readonly genre?: string;
   readonly year?: string;
@@ -51,6 +52,10 @@ const RATINGS: readonly { value: RatingFilter; label: string }[] = [
   { value: "unrated", label: "Unrated" },
 ];
 
+/** The choice a filter's menu shows: its value, or the first of the names it keeps. */
+const shownChoice = (value: string | readonly string[] | undefined): string =>
+  typeof value === "string" ? value : (value?.[0] ?? "");
+
 /** How a filter on reads, as its chip says it: `Artist: 朴树`, `Favorites only`. */
 function describeFilter(field: FilterField, filters: Filters): string {
   switch (field) {
@@ -62,8 +67,11 @@ function describeFilter(field: FilterField, filters: Filters): string {
       return "Only songs that play now";
     case "kind":
       return filters.kind === "album" ? "Albums only" : "Songs only";
-    default:
-      return `${CHOICE_FIELDS.find((each) => each.field === field)?.label ?? ""}: ${filters[field] ?? ""}`;
+    default: {
+      const value = filters[field] ?? "";
+      const said = typeof value === "string" ? value : value.join(" / ");
+      return `${CHOICE_FIELDS.find((each) => each.field === field)?.label ?? ""}: ${said}`;
+    }
   }
 }
 
@@ -113,7 +121,7 @@ export function SongFilters({
             {label}
             <select
               className="filter-select"
-              value={filters[field] ?? ""}
+              value={shownChoice(filters[field])}
               onChange={(event) => {
                 onChange(field, event.target.value === "" ? undefined : event.target.value);
               }}

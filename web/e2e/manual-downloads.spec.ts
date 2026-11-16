@@ -34,7 +34,7 @@ function wavFile(name: string, seconds: number) {
 async function lookUp(page: Page, text: string) {
   await page.goto("/");
   await page.getByRole("radio", { name: "Bilibili" }).check();
-  const box = page.getByRole("searchbox", { name: "Search" });
+  const box = page.getByRole("combobox", { name: "Search" });
   await box.fill(text);
   await box.press("Enter");
   return page.getByRole("dialog", { name: "Add from Bilibili" });

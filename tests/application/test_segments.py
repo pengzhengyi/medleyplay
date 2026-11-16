@@ -10,6 +10,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.segments import SongsService, SongView
+from medleyplay.application.track_artists import artists_of
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, SourceState, TrackId
 from medleyplay.domain.details import Field, Kind, KindReason, KindShown, Origin, Shown
@@ -132,6 +133,20 @@ def test_a_song_left_out_of_the_rows_is_removed_with_its_track(
     assert [song.title for song in after] == ["アイネクライネ", "Last"]
     with pytest.raises(NotFoundError):
         catalog.get_track(alice.id, before[1].track_id)
+
+
+def test_a_songs_album_artist_follows_its_album_files_artist_by_id(
+    songs: SongsService, details: DetailsService, album: TrackId, units: sessionmaker[Session]
+) -> None:
+    second = songs.save(album, THREE_SONGS).songs[1]
+
+    details.put_household(album, {"album_artist": "米津玄師"})
+
+    with units() as db:
+        bound = artists_of(db, TrackId(second.track_id))
+    [artist] = bound.artists
+    [album_artist] = bound.album_artists
+    assert (album_artist.written, album_artist.artist_id) == ("米津玄師", artist.artist_id)
 
 
 def test_unsplitting_removes_every_song(

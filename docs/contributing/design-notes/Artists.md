@@ -15,6 +15,7 @@
 - [Names and artists](#names-and-artists)
 - [Looking a name up](#looking-a-name-up)
 - [Linking a name](#linking-a-name)
+- [Each song's artists by id](#each-songs-artists-by-id)
 - [Asking an AI model](#asking-an-ai-model)
 - [Wikidata's names](#wikidatas-names)
 - [Wikidata's page and photo](#wikidatas-page-and-photo)
@@ -90,6 +91,31 @@ keeps the text and counts them as one.
 - **Only an artist MusicBrainz named** for a name here can be linked.
 - **Any signed-in Account** may look names up and link them, as any may edit a
   Track's details: the catalog is the household's.
+
+## Each song's artists by id
+
+- **The Library's own artists:** each written name, folded, names one artist of
+  the Library's, under an id of its own. Names linked to one MusicBrainz artist
+  name one artist, which records that MusicBrainz id; no two artists record the
+  same one.
+- **Every song is bound** to the artist its artist names and the one its album
+  artist names, each with the name as the song writes it. A blank name binds
+  none. The song is bound again whenever the artist or album artist it shows
+  changes, from any origin, and a split file's songs with it.
+- **An id never changes.** Linking a name keeps its artist's id when the name is
+  the artist's only one; it joins the artist already linked to that MusicBrainz
+  artist when there is one; and it parts from its artist as one of its own when
+  the artist has other names. Unlinking a name parts it the same way. Only the
+  songs writing that name move.
+
+  ```text
+  披头士, 甲壳虫 both linked to The Beatles   one artist, both names' songs
+  甲壳虫 relinked to a tribute band          甲壳虫's songs to an artist of its own
+  ```
+
+- **Nothing shows the ids yet.** Favorites, the artist page, and the web client
+  still go by names; the ids are what songs by several artists, and two artists
+  of one name, are built on.
 
 ## Asking an AI model
 
@@ -348,10 +374,16 @@ not.
   Beatles unless a song is a tribute, and whose describer suggests the first
   Chinese name after the songs' own.
 - **Shared lanes** are tested with two lanes sharing one name.
+- **Artist ids** are tested through adding, editing, splitting, linking, and
+  unlinking songs, and the migration that binds every song already in the
+  Library.
 
 ## Left for later
 
-- **Two artists of one name,** such as two singers called *Jay*: a link is one
-  per name, so telling them apart song by song would need a link per Track.
+- **Two artists of one name,** such as two singers called *Jay*: a name names
+  one artist, so telling them apart song by song needs a name to name several,
+  each song bound to one of them.
+- **Songs by several artists,** such as *GUMI/MAYU*, each bound to every artist
+  it names.
 - **Showing every linked artist in a chosen language** at once, rather than as
   written or by the name chosen for each.

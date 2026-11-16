@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Artist ids for every song** — each artist the Library's songs name now has an
+  id of its own, and every song is bound to its artist and album artist by id.
+  Names linked to one MusicBrainz artist share one id, and an artist keeps its id
+  when it is linked or unlinked. Upgrading binds every song already in the
+  Library. Nothing shows the ids yet: they are the ground for songs by several
+  artists and for two artists of one name.
+
 - **Split albums: Off, Ask first, or Auto** — a new setting in *Songs and
   albums* says what becomes of a long file a song list was found for. Clean up
   gains *Split albums*: each file with how long it is, who listed its songs, and

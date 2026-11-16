@@ -469,7 +469,11 @@ function Artists({
       <ViewHeading title="Artists">
         {artists.length > 0 && `${String(artists.length)} artists`}
       </ViewHeading>
-      {artists.length === 0 ? <NoMusic /> : <ArtistList artists={artists} favorites={favorites} />}
+      {artists.length === 0 ? (
+        <NoMusic />
+      ) : (
+        <ArtistList artists={artists} favorites={favorites} links={links} />
+      )}
     </>
   );
 }
@@ -477,9 +481,11 @@ function Artists({
 function ArtistList({
   artists,
   favorites,
+  links = NO_LINKS,
 }: {
   readonly artists: readonly Artist[];
   readonly favorites: FavoriteGroups;
+  readonly links: ArtistLinks | undefined;
 }) {
   return (
     <ul className="groups" aria-label="Artists">
@@ -490,9 +496,9 @@ function ArtistList({
         >
           <a href={hrefOf({ view: "artist", name: artist.link })}>
             <span className="tile-frame">
-              <span className="avatar" aria-hidden>
+              <Cover cover={links.photoOf(links.groupOf(artist.link))} className="avatar">
                 {initialOf(artist.name)}
-              </span>
+              </Cover>
               {isFavoriteArtist(favorites, artist.link) && <FavoriteBadge />}
             </span>
             <span className="group-name">{artist.name || UNKNOWN_ARTIST}</span>
@@ -747,7 +753,7 @@ function SearchResults({ query, ...props }: ViewProps & { readonly query: string
       {found.artists.length > 0 && (
         <section aria-label="Artists found">
           <h3 className="found">Artists</h3>
-          <ArtistList artists={found.artists} favorites={props.favorites} />
+          <ArtistList artists={found.artists} favorites={props.favorites} links={props.links} />
         </section>
       )}
       {found.albums.length > 0 && (

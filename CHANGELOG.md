@@ -465,6 +465,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Covers keep to a square** — a cover that isn't square, on a Radio shelf or
+  an artist's or album's tile, is cropped to the tile rather than stretching it.
+
 - **Reach the album's songs over the seek bar** — the card of the album's songs
   shown while hovering its seek bar now stays as the pointer moves up onto it,
   holding still there, and a song chosen on it plays.

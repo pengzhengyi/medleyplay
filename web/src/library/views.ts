@@ -8,6 +8,9 @@
 
 import type { Track } from "../api";
 import type { ArtistLinks } from "./artistLinks";
+import { closestOf, ranked } from "./fuzzy";
+import { type Tag, parseQuery } from "./query";
+import { ratingOf } from "./ratings";
 
 /** A group of Tracks, with how many there are and how long they play. */
 interface Listed {
@@ -170,25 +173,93 @@ function haystackOf(track: Track): string {
   return found;
 }
 
+const NOTHING: Found = { tracks: [], artists: [], albums: [] };
+
+/** What `kind:` keeps, by each word it takes. */
+const KINDS: Readonly<Record<string, keyof Found>> = {
+  song: "tracks",
+  songs: "tracks",
+  album: "albums",
+  albums: "albums",
+  artist: "artists",
+  artists: "artists",
+};
+
 /**
- * Return the Tracks, artists, and albums with every word of `query`; a blank query
- * finds none. An artist is found by any name it goes by, as `links` know them.
+ * Return the Tracks, artists, and albums `query` asks for, as {@link parseQuery} reads
+ * it. Its tags keep the Tracks that fit them; among those, its words find the songs,
+ * artists, and albums whose names hold them, side by side first and then loosely, and
+ * no words find all. `kind:` keeps only songs, albums, or artists. An artist is found
+ * by any name it goes by, as `links` know them. A search asking nothing finds none.
  */
 export function search(tracks: readonly Track[], query: string, links?: ArtistLinks): Found {
-  const words = fold(query).split(/\s+/).filter(Boolean);
-  if (words.length === 0) {
-    return { tracks: [], artists: [], albums: [] };
+  const { tags, words } = parseQuery(query);
+  const asked = tags.filter((tag) => tag.value.trim() !== "");
+  const folded = fold(words).trim();
+  if (asked.length === 0 && folded === "") {
+    return NOTHING;
   }
-  const matches = (text: string) => words.every((word) => text.includes(word));
+  const kept = asked.reduce<readonly Track[]>((left, tag) => fitting(left, tag, links), tracks);
+  const kinds = new Set(
+    asked.flatMap((tag) => (tag.field === "kind" ? [KINDS[fold(tag.value)]] : [])),
+  );
+  const shows = (kind: keyof Found) => kinds.size === 0 || kinds.has(kind);
   return {
-    tracks: tracks.filter((track) => matches(haystackOf(track))),
-    artists: artistsOf(tracks, links).filter(
-      (artist) =>
-        matches(fold(artist.name)) ||
-        (links?.aliasesOf(links.groupOf(artist.link)) ?? []).some((alias) => matches(fold(alias))),
-    ),
-    albums: albumsOf(tracks).filter((album) => matches(fold(album.name))),
+    tracks: shows("tracks") ? ranked(kept, folded, haystackOf) : [],
+    artists: shows("artists")
+      ? ranked(artistsOf(kept, links), folded, (artist) => namesOf(artist.link, links))
+      : [],
+    albums: shows("albums") ? ranked(albumsOf(kept), folded, (album) => fold(album.name)) : [],
   };
+}
+
+/** Return the `tracks` that fit `tag`: a name close to its value, or its rating or heart. */
+function fitting(tracks: readonly Track[], tag: Tag, links?: ArtistLinks): readonly Track[] {
+  const value = fold(tag.value).trim();
+  switch (tag.field) {
+    case "artist": {
+      const names = new Set(
+        closestOf(
+          [...new Set(tracks.flatMap((track) => [track.artist, albumArtistOf(track)]))],
+          value,
+          (name) => namesOf(name, links),
+        ),
+      );
+      return tracks.filter((track) => names.has(track.artist) || names.has(albumArtistOf(track)));
+    }
+    case "album": {
+      const names = new Set(
+        closestOf([...new Set(tracks.map((track) => track.album))], value, fold),
+      );
+      return tracks.filter((track) => names.has(track.album));
+    }
+    case "song": {
+      const found = new Set(closestOf(tracks, value, (track) => fold(track.title)));
+      return tracks.filter((track) => found.has(track));
+    }
+    case "rating": {
+      const least = Number.parseInt(value, 10);
+      return Number.isNaN(least)
+        ? tracks
+        : tracks.filter((track) => (ratingOf(track) ?? 0) >= least);
+    }
+    case "favorite":
+      return value.startsWith("y")
+        ? tracks.filter((track) => track.favorite)
+        : value.startsWith("n")
+          ? tracks.filter((track) => !track.favorite)
+          : tracks;
+    case "kind":
+      return tracks;
+  }
+}
+
+/** Return every name the artist `name` goes by, folded, one to a line. */
+function namesOf(name: string, links?: ArtistLinks): string {
+  const group = links?.groupOf(name);
+  const shown = group === undefined ? undefined : links?.shownAsOf(group);
+  const aliases = group === undefined ? [] : (links?.aliasesOf(group) ?? []);
+  return fold([name, shown ?? "", ...aliases].join("\n"));
 }
 
 /** Return the artist a Track's album is listed under: its album artist, or its artist. */

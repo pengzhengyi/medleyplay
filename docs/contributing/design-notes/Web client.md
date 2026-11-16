@@ -310,7 +310,7 @@ Track's kind is decided.
 
 ## Search
 
-<!-- cspell:ignore ｍｅｌｔ -->
+<!-- cspell:ignore ｍｅｌｔ beatls -->
 
 - **One search box in the header,** taking its room as on an iPad, with a scope
   toggle at its end: *Library*, shown as its icon in the rail, or Bilibili, shown
@@ -328,6 +328,34 @@ Track's kind is decided.
   search in one step. The results show
   the matching Tracks in the song table, and the artists and albums whose names
   match.
+- **Close first, then loose.** Names holding every word side by side come
+  first, in Library order; then names holding the letters in order with some
+  left out, best first, so `beatls` finds *The Beatles*. fuzzysort scores the
+  loose matches, each name on its own, and one scoring under 0.32 is left out,
+  so `jay` finds *Jay Chou* but not *Jealousy*. Fewer than three letters match
+  only side by side. fuzzysort was chosen as small, without dependencies, and
+  fast enough to run on every keystroke; one module owns it.
+- **Tags** narrow a search to one field. `artist:Jay` keeps the songs whose
+  artist or album artist is close to *Jay* (side by side, or loosely when no
+  name is), and the words then search among them; a value with a space is
+  quoted, as `artist:"Jay Chou"`. The fields:
+
+  | Tag | Keeps |
+  | --- | --- |
+  | `artist:` | Songs by a close artist or album artist, by any name it goes by |
+  | `album:` | Songs on a close album |
+  | `song:` | Songs with a close title |
+  | `kind:` | Only `songs`, `albums`, or `artists` among the results |
+  | `rating:` | Songs you rated at least so many stars, or whose album you did |
+  | `favorite:` | Songs with a heart (`yes`) or without (`no`) |
+
+- **A tag typed becomes a capsule** in the box: typing `artist:` shows
+  *Artist:*, and what follows is its value until *Enter* keeps it and the box
+  takes plain words again. *Backspace* at the start chooses the capsule before
+  the caret, outlined, and a second removes it; words typed before a tag return
+  to the box. The capsules describe the box to a screen reader, and choosing one
+  is announced. The search's text, tags written out, is what `#/search?q=`
+  holds, so a link or Back shows the same capsules.
 
 ## Favorites and ratings
 

@@ -6,7 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiError, type Details, type VideoRead, type VideoText } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import type { TrackLookup } from "../library/useLibrary";
-import { ALBUM_FILE_ORIGINS, TAGGED_ORIGINS, detailsOf, trackOf } from "../testing/server";
+import {
+  ALBUM_FILE_ORIGINS,
+  TAGGED_ORIGINS,
+  albumCoversOf,
+  detailsOf,
+  serve,
+  trackOf,
+} from "../testing/server";
 import { EditDetails } from "./EditDetails";
 import { SongsControlsContext } from "./songsControls";
 
@@ -21,6 +28,7 @@ async function renderDialog(
   more: {
     onSetCover?: (image: Blob) => Promise<Details>;
     onRemoveCover?: () => Promise<Details>;
+    onUseCover?: (cover: string) => Promise<Details>;
     /** The lookups the song may be asked about now. */
     findable?: readonly Lookup[];
     /** The lookup last asked about the song. */
@@ -44,6 +52,7 @@ async function renderDialog(
       onRemoveCover={
         more.onRemoveCover ?? (() => Promise.reject(new Error("No cover in this test.")))
       }
+      onUseCover={more.onUseCover ?? (() => Promise.reject(new Error("No cover in this test.")))}
       findable={more.findable ?? []}
       lookup={lookup}
       online
@@ -313,6 +322,7 @@ describe("editing a song's details", () => {
         onReadVideo={vi.fn()}
         onSetCover={vi.fn()}
         onRemoveCover={vi.fn()}
+        onUseCover={vi.fn()}
         findable={[]}
         lookup={undefined}
         online
@@ -544,6 +554,47 @@ describe("editing a song's details", () => {
       expect(saveImage).toHaveAttribute("href", `/api/covers/${COVER}`);
       expect(saveImage).toHaveAttribute("download");
       expect(onSetCover).toHaveBeenCalledExactlyOnceWith(PNG);
+    });
+
+    it("finds covers of the song's album on MusicBrainz, and uses the one chosen", async () => {
+      serve({
+        [`GET /api/album-covers?${new URLSearchParams({ album: "Re:Start", artist: "MAYU" }).toString()}`]:
+          { body: albumCoversOf(["cover-a", "cover-b"]) },
+      });
+      const onUseCover = vi.fn(() =>
+        Promise.resolve(detailsOf(7, { cover: "cover-b" }, TAGGED_ORIGINS)),
+      );
+      const { dialog } = await renderDialog(
+        detailsOf(7, {}, TAGGED_ORIGINS),
+        undefined,
+        undefined,
+        {
+          onUseCover,
+        },
+      );
+
+      await userEvent.click(
+        within(dialog).getByRole("button", { name: "Find covers on MusicBrainz" }),
+      );
+      const found = await within(dialog).findByRole("region", { name: "Covers on MusicBrainz" });
+      await userEvent.click(
+        within(found).getAllByRole("button", { name: /^Use the cover of/u })[1] ?? found,
+      );
+
+      expect(onUseCover).toHaveBeenCalledExactlyOnceWith("cover-b");
+      await waitFor(() => {
+        expect(
+          within(found).getAllByRole("button", { name: /^Use the cover of/u })[1],
+        ).toHaveAttribute("aria-pressed", "true");
+      });
+    });
+
+    it("offers no covers to find for a song on no album", async () => {
+      const { dialog } = await renderDialog();
+
+      expect(
+        within(dialog).queryByRole("button", { name: "Find covers on MusicBrainz" }),
+      ).toBeNull();
     });
 
     it("removes the household's cover", async () => {

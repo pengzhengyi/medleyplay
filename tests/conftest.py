@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
+from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
 from medleyplay.application.artists import (
     ArtistKinds,
     ArtistService,
@@ -280,6 +281,19 @@ def find_names_kind(clock: FakeClock, tmp_path: Path) -> FindArtistNamesKind:
 
 
 @pytest.fixture
+def album_covers(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    tmp_path: Path,
+) -> AlbumCoverService:
+    return AlbumCoverService(
+        units, plugins, jobs, album_cover_kinds(clock, tmp_path / "data" / "covers")
+    )
+
+
+@pytest.fixture
 def artists(
     units: sessionmaker[Session],
     clock: FakeClock,
@@ -437,6 +451,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     devices: DeviceService,
     ratings: RatingsService,
     artists: ArtistService,
+    album_covers: AlbumCoverService,
     clock: FakeClock,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
@@ -470,6 +485,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         remote=remote,
         ratings=ratings,
         artists=artists,
+        album_covers=album_covers,
     )
 
 

@@ -5271,7 +5271,8 @@ dialog.modal::backdrop {
     gap: 0.75rem 1rem;
   }
 
-  .edit-details-side .paste-video {
+  .edit-details-side .paste-video,
+  .edit-details-side .cover-finder {
     grid-column: 1 / -1;
   }
 }
@@ -7709,6 +7710,134 @@ button.playing-kind[aria-expanded="true"] {
   display: grid;
   gap: 0.25rem;
   margin: 0;
+}
+
+/* The album's cover, beside the way to the covers MusicBrainz has of it. */
+.edit-album-cover {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.edit-album-cover .edit-album-cover-image {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 0.6rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.6rem;
+}
+
+.edit-album-cover .edit-album-find {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+}
+
+/* The covers of an album's releases, to choose one: a grid of squares, each captioned. */
+.cover-finder {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.cover-finder-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cover-finder-head h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.cover-finder-head .link-button {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.cover-finder-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.cover-finder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cover-finder .cover-finder-grid li {
+  margin: 0;
+  list-style: none;
+}
+
+.cover-finder .cover-choice {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.3rem;
+  border: 2px solid transparent;
+  border-radius: 0.75rem;
+  background: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.cover-finder .cover-choice:hover:not(:disabled) {
+  border-color: var(--line);
+}
+
+.cover-finder .cover-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.cover-finder .cover-choice img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.cover-choice-about {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.cover-pick {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.66rem;
+  font-weight: 700;
 }
 
 .edit-artist-body {

@@ -5,6 +5,7 @@
 import { vi } from "vitest";
 
 import type {
+  AlbumCovers,
   AiProvider,
   ArtistSuggestion,
   Account,
@@ -157,6 +158,39 @@ export function detailsOf(
     video_text: videoText,
     kind: { value: "song", reason: "length" },
     ai_answered_by: null,
+  };
+}
+
+/**
+ * The covers of an album found on MusicBrainz: one release for each of `covers`, named
+ * `Release 1`, `Release 2`, …, from 2001 on, with nothing being asked.
+ */
+export function albumCoversOf(
+  covers: readonly string[],
+  change: Partial<AlbumCovers> = {},
+): AlbumCovers {
+  return {
+    covers: covers.map((cover, index) => ({
+      release: {
+        release_id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        title: `Release ${String(index + 1)}`,
+        artist: "",
+        date: String(2001 + index),
+        country: "",
+        format: "CD",
+        tracks: null,
+      },
+      cover,
+    })),
+    found_at: "2026-11-16T00:00:00Z",
+    pick: null,
+    finding: false,
+    choosing: false,
+    waiting: false,
+    failure: null,
+    choice_failure: null,
+    may_choose: false,
+    ...change,
   };
 }
 

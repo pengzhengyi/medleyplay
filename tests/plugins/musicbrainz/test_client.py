@@ -296,6 +296,66 @@ def test_a_cover_that_cannot_be_fetched_is_none_not_a_failure() -> None:
     assert client_of(fake).front_cover(ORIGINAL) is None
 
 
+def test_a_release_cover_the_archive_does_not_have_is_none() -> None:
+    fake = FakeMusicBrainz().answer(COVER, Reply(404))
+
+    assert client_of(fake).release_cover(ORIGINAL) is None
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [Reply(503), Reply(500), requests.ConnectionError("down")],
+    ids=["busy", "broken", "unreachable"],
+)
+def test_a_release_cover_that_cannot_be_fetched_now_is_a_network_failure(
+    failure: Reply | Exception,
+) -> None:
+    fake = FakeMusicBrainz().answer(COVER, failure)
+
+    with pytest.raises(NetworkError):
+        client_of(fake).release_cover(ORIGINAL)
+
+
+def test_the_archive_refusing_a_release_cover_is_a_refusal() -> None:
+    fake = FakeMusicBrainz().answer(COVER, Reply(403))
+
+    with pytest.raises(RefusedError):
+        client_of(fake).release_cover(ORIGINAL)
+
+
+@pytest.mark.parametrize(
+    "location",
+    ["http://archive.org/cover.jpg", "https://192.168.1.1/cover.jpg", "https://notarchive.org/x"],
+    ids=["not over HTTPS", "the household's network", "another site"],
+)
+def test_a_cover_redirected_off_the_archive_is_none_and_never_fetched(location: str) -> None:
+    fake = FakeMusicBrainz().answer(COVER, Reply.redirect(location))
+
+    assert client_of(fake).release_cover(ORIGINAL) is None
+    assert client_of(fake).front_cover(ORIGINAL) is None
+    assert location not in fake.urls()
+
+
+def test_a_cover_redirected_too_many_times_is_none() -> None:
+    fake = (
+        FakeMusicBrainz()
+        .answer(COVER, Reply.redirect("https://archive.org/1"))
+        .answer("https://archive.org/1", Reply.redirect("https://archive.org/2"))
+        .answer("https://archive.org/2", Reply.redirect("https://archive.org/3"))
+    )
+
+    assert client_of(fake).release_cover(ORIGINAL) is None
+    assert "https://archive.org/3" not in fake.urls()
+
+
+def test_a_release_id_that_is_no_musicbrainz_id_is_never_asked_for() -> None:
+    fake = FakeMusicBrainz()
+
+    with pytest.raises(ValueError, match="MusicBrainz id"):
+        client_of(fake).release_cover("../../ws/2/artist")
+    assert fake.urls() == []
+
+
 def test_the_cover_request_waits_its_turn_like_any_other() -> None:
     waits = FakeWaits()
     client = client_of(FakeMusicBrainzFactory.knowing_let_down(), waits)

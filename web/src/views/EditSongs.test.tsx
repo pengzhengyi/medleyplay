@@ -95,6 +95,7 @@ async function renderEditor(
       onReadVideo={() => Promise.reject(new Error("No video in this test."))}
       onSetCover={() => Promise.reject(new Error("No cover in this test."))}
       onRemoveCover={() => Promise.reject(new Error("No cover in this test."))}
+      onUseCover={() => Promise.reject(new Error("No cover in this test."))}
       findable={[]}
       lookup={undefined}
       online

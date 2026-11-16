@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
-import { trackOf } from "../testing/server";
+import { albumCoversOf, serve, trackOf } from "../testing/server";
 import { EditAlbum } from "./EditAlbum";
 
 /** *Supercell*, two songs of their own that agree on all but the year. */
@@ -26,9 +26,10 @@ const SUPERCELL: readonly Track[] = [
 
 function renderEditor(songs: readonly Track[] = SUPERCELL) {
   const onSave = vi.fn(() => Promise.resolve());
+  const onUseCover = vi.fn<(cover: string) => Promise<void>>(() => Promise.resolve());
   const onClose = vi.fn();
-  render(<EditAlbum songs={songs} onSave={onSave} onClose={onClose} />);
-  return { onSave, onClose };
+  render(<EditAlbum songs={songs} onSave={onSave} onUseCover={onUseCover} onClose={onClose} />);
+  return { onSave, onUseCover, onClose };
 }
 
 describe("editing an album of songs of their own", () => {
@@ -67,7 +68,7 @@ describe("editing an album of songs of their own", () => {
 
   it("says why a save was refused, and stays open", async () => {
     const onSave = vi.fn(() => Promise.reject(new Error("The year is 1-9999.")));
-    render(<EditAlbum songs={SUPERCELL} onSave={onSave} onClose={vi.fn()} />);
+    render(<EditAlbum songs={SUPERCELL} onSave={onSave} onUseCover={vi.fn()} onClose={vi.fn()} />);
 
     await userEvent.type(screen.getByRole("spinbutton", { name: "Year" }), "2009");
     await userEvent.click(screen.getByRole("button", { name: "Save to 2 songs" }));
@@ -81,4 +82,30 @@ describe("editing an album of songs of their own", () => {
 
     expect(screen.getByRole("button", { name: "Save to 2 songs" })).toBeDisabled();
   });
+
+  it("finds covers of the album on MusicBrainz, and sets the one chosen on every song", async () => {
+    serve({
+      [`GET /api/album-covers?${new URLSearchParams({ album: "Supercell", artist: "supercell" }).toString()}`]:
+        { body: albumCoversOf(["cover-a", "cover-b"]) },
+    });
+    const { onUseCover } = renderEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "Find covers on MusicBrainz" }));
+    const found = await screen.findByRole("region", { name: "Covers on MusicBrainz" });
+    const [, second] = within(found).getAllByRole("button", { name: /^Use the cover of/u });
+    await userEvent.click(second ?? found);
+
+    expect(onUseCover).toHaveBeenCalledExactlyOnceWith("cover-b");
+    expect(second).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("offers no covers to find for songs on no album", () => {
+    renderEditor([trackOf(1, "Melt", { album: "" }), trackOf(2, "Shiver", { album: "" })]);
+
+    expect(screen.queryByRole("button", { name: "Find covers on MusicBrainz" })).toBeNull();
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });

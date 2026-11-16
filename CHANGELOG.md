@@ -488,6 +488,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A minimized rail stays above the view** — it is a band under the header that
+  the view scrolls beneath, rather than a pill the view's text showed through and
+  that scrolled away; section bars and the songs' header stick below it.
+
 - **Adding from a site names its fields** — the parts' boxes say *Title* and
   *Artist* above them, as *Quality* does, and the quality chosen no longer shows
   cut off.

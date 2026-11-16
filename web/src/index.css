@@ -3717,6 +3717,20 @@ button.icon.heart.on:hover,
   white-space: nowrap;
 }
 
+/* A running time and the length it runs to: the time that moves reads first, the length steps back. */
+.time-at {
+  color: var(--ink);
+}
+
+.time-length {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.album-song.playing .time-at {
+  color: var(--accent);
+}
+
 .player .note {
   overflow: hidden;
   color: var(--accent);

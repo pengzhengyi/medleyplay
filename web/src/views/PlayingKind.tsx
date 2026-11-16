@@ -25,6 +25,7 @@ import type { Track } from "../api";
 import { formatTime } from "../format";
 import { heartTitleOf } from "../heart";
 import { type AlbumSong, type Playing, songAt } from "../player/albumNow";
+import { PlayTime } from "./PlayTime";
 
 /** How long the songs stay open after the pointer leaves, so it can cross the gap to them. */
 const CLOSE_AFTER_MS = 150;
@@ -304,7 +305,7 @@ function AlbumSongs({
         {length !== undefined && (
           <>
             <span className="album-songs-time">
-              {`${formatTime(played)} of ${formatTime(length)}`}
+              <PlayTime at={played} length={length} joiner="of" />
             </span>
             <span
               className="album-songs-bar"
@@ -339,11 +340,13 @@ function AlbumSongs({
                 </span>
                 <span className="album-song-title">{title}</span>
                 <span className="album-song-length">
-                  {pointedHere
-                    ? `${formatTime(pointed.within)} / ${formatTime(song.length)}`
-                    : state === "playing"
-                      ? `${formatTime(within(song))} / ${formatTime(song.length)}`
-                      : formatTime(song.length)}
+                  {pointedHere ? (
+                    <PlayTime at={pointed.within} length={song.length} />
+                  ) : state === "playing" ? (
+                    <PlayTime at={within(song)} length={song.length} />
+                  ) : (
+                    formatTime(song.length)
+                  )}
                 </span>
                 {state === "playing" && song.length !== undefined && (
                   <span

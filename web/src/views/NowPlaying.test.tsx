@@ -15,7 +15,8 @@ afterEach(() => {
  * Outro up next.
  */
 async function playingIntro() {
-  serve({
+  const served = serve({
+    "PUT /api/tracks/1/favorite": { body: trackOf(1, "Intro", { favorite: true }) },
     ...signedIn([trackOf(1, "Intro"), trackOf(2, "Long Road"), trackOf(3, "Outro")]),
     ...Object.fromEntries(
       [1, 2, 3].map((id) => [
@@ -33,6 +34,7 @@ async function playingIntro() {
   });
   render(<App />);
   await userEvent.click(await screen.findByRole("button", { name: "Intro" }));
+  return served;
 }
 
 /** Open Now Playing from the player's cover, and return it. */
@@ -50,6 +52,60 @@ async function runOutTheQueue(nowPlaying: HTMLElement) {
 }
 
 describe("Now Playing", () => {
+  it("shows the song favorited from the player's heart, in the player and in Now Playing", async () => {
+    const { calls } = await playingIntro();
+    const player = screen.getByRole("region", { name: "Player" });
+
+    await userEvent.click(within(player).getByRole("button", { name: "Favorite Intro" }));
+
+    expect(calls).toContain("PUT /api/tracks/1/favorite");
+    expect(within(player).getByRole("button", { name: "Favorite Intro" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    const nowPlaying = await openNowPlaying();
+    expect(within(nowPlaying).getByRole("button", { name: "Favorite Intro" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("favorites a whole album in one file from the player's heart, as Now Playing shows it", async () => {
+    const album = trackOf(4, "Jim Restaurant", {
+      kind: "album",
+      album: "Jim Restaurant",
+      artist: "赵雷",
+      duration_ms: 3_000_000,
+    });
+    const { calls } = serve({
+      ...signedIn([album]),
+      "POST /api/tracks/4/playback": {
+        body: {
+          state: "ready",
+          source_id: 4,
+          audio_url: "/api/sources/4/audio",
+          media_type: "audio/wav",
+        },
+      },
+      "PUT /api/albums/favorite": {
+        body: { artists: [], albums: [{ artist: "赵雷", name: "Jim Restaurant" }] },
+      },
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Jim Restaurant" }));
+    const player = screen.getByRole("region", { name: "Player" });
+
+    await userEvent.click(
+      within(player).getByRole("button", { name: "Favorite album Jim Restaurant" }),
+    );
+
+    expect(calls).toContain("PUT /api/albums/favorite");
+    const nowPlaying = await openNowPlaying();
+    expect(
+      within(nowPlaying).getByRole("button", { name: "Favorite album Jim Restaurant" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("opens from the player's cover", async () => {
     await playingIntro();
 

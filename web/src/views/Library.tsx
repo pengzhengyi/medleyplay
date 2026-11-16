@@ -526,6 +526,8 @@ export function Library({
         track={playing}
         tracks={byId}
         onFavorite={actions.onFavorite}
+        favorites={favorites}
+        onFavoriteAlbum={library.setAlbumFavorite}
         menuActions={actions}
         queueOpen={queueOpen}
         onToggleQueue={() => {

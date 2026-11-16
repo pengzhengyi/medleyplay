@@ -8,6 +8,7 @@ from medleyplay.domain.downloads import (
     download_name,
     download_target,
     manual_download_name,
+    source_of_target,
 )
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.playback import MEDIA_TYPES
@@ -25,6 +26,15 @@ def test_a_file_that_is_not_aac_audio_is_refused(file: str) -> None:
 
 def test_a_download_job_works_on_its_source() -> None:
     assert download_target(SourceId(7)) == "source:7"
+
+
+def test_a_download_jobs_target_names_its_source_again() -> None:
+    assert source_of_target(download_target(SourceId(7))) == SourceId(7)
+
+
+@pytest.mark.parametrize("target", ["track:7", "source:", "source:seven", "7"])
+def test_a_target_naming_no_source_gives_none(target: str) -> None:
+    assert source_of_target(target) is None
 
 
 def test_a_file_the_household_adds_is_named_by_its_source_and_its_lower_case_type() -> None:

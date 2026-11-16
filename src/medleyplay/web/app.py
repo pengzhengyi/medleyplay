@@ -106,6 +106,7 @@ def create_app(
     app.include_router(addresses.router)
     app.include_router(catalog.router)
     app.include_router(downloads.router)
+    app.include_router(downloads.under_way_router)
     app.include_router(plugins.router)
     app.include_router(jobs.router)
     app.include_router(libraries.router)

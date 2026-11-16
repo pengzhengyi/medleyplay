@@ -9,6 +9,7 @@ import {
   type Routes,
   artistNameOf,
   detailsOf,
+  downloadUnderWayOf,
   favoritesPlaylistOf,
   knownArtistOf,
   lookupOf,
@@ -629,5 +630,62 @@ describe("showing a song in the Library", () => {
       expect(title).toHaveFocus();
     });
     expect(location.hash).toBe("#/library");
+  });
+});
+
+describe("the Downloaded view", () => {
+  /**
+   * `LIBRARY` with Night Drive downloading, 42% done, Mixtape waiting for Online, and
+   * Long Road downloading with no word yet of how far.
+   */
+  function downloading(): Routes {
+    return {
+      ...signedIn([
+        ...LIBRARY,
+        trackOf(4, "Night Drive", { artist: "Blue Room" }),
+        trackOf(5, "Mixtape", { artist: "Blue Room" }),
+        trackOf(6, "Long Road", { artist: "Blue Room" }),
+      ]),
+      "GET /api/downloads": {
+        body: [
+          downloadUnderWayOf(4, { state: "running", progress: { fraction: 0.42, message: "" } }),
+          downloadUnderWayOf(5, { waits_for_online: true }),
+          downloadUnderWayOf(6, { state: "running" }),
+        ],
+      },
+    };
+  }
+
+  it("shows the songs downloading above those downloaded, each with how far it has got", async () => {
+    open(hrefOf({ view: "downloaded" }), downloading());
+
+    const under = await screen.findByRole("region", { name: "Downloading" });
+
+    const rows = within(under).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "Night DriveBlue Room42%",
+      "MixtapeBlue RoomWaiting for Online",
+      "Long RoadBlue RoomDownloading",
+    ]);
+    expect(within(under).getByRole("progressbar", { name: "Night Drive" })).toHaveAttribute(
+      "value",
+      "0.42",
+    );
+    expect(within(under).getByRole("progressbar", { name: "Mixtape" })).toHaveAttribute(
+      "value",
+      "0",
+    );
+    expect(within(under).getByRole("progressbar", { name: "Long Road" })).not.toHaveAttribute(
+      "value",
+    );
+    expect(songs()).toEqual(["Shiver"]);
+  });
+
+  it("shows no Downloading section while nothing downloads", async () => {
+    open(hrefOf({ view: "downloaded" }));
+
+    expect(await screen.findByRole("heading", { name: "Downloaded" })).toBeInTheDocument();
+
+    expect(screen.queryByRole("region", { name: "Downloading" })).not.toBeInTheDocument();
   });
 });

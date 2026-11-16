@@ -208,6 +208,23 @@ def test_a_finished_download_names_no_job(site: Site, alice: Account) -> None:
     assert site.manual.state(track_id).job_id is None
 
 
+def test_the_downloads_under_way_are_listed_with_their_tracks_and_jobs(
+    site: Site, alice: Account, units: sessionmaker[Session]
+) -> None:
+    _failed_part(site, alice)
+    waiting = _waiting_track(site, alice, units)
+
+    listed = site.manual.downloading()
+
+    assert [(each.track_id, each.job.waits_for_online) for each in listed] == [(waiting, True)]
+
+
+def test_no_download_is_listed_once_each_has_finished(site: Site, alice: Account) -> None:
+    _downloaded_part(site, alice)
+
+    assert site.manual.downloading() == []
+
+
 def test_a_download_that_waits_is_reported_as_downloading(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:

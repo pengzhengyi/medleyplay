@@ -7,10 +7,13 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.manual_downloads import ManualDownloadService
-from medleyplay.domain.catalog import SourceKey, TrackDetails
+from medleyplay.domain.accounts import AccountId
+from medleyplay.domain.catalog import SourceId, SourceKey, TrackDetails
+from medleyplay.persistence.schema import SourceRow
 from medleyplay.web.deps import Services
 from tests.support.audio import Song, wav_bytes
 from tests.support.fakes import FakeClock
@@ -35,6 +38,21 @@ def small_limit_client(
         units, clock, site.jobs, site.downloads.folder, max_bytes=SMALL_LIMIT
     )
     yield from signed_in_client(dataclasses.replace(services, manual_downloads=limited))
+
+
+def _waiting_download(
+    client: TestClient, site: Site, units: sessionmaker[Session]
+) -> tuple[int, int]:
+    """Start downloading a new Track while Offline, so its Job waits; return both ids."""
+    site.online.online = False
+    track_id = site.catalog.add_track(SourceKey("bilibili", "BV1Xx41117Tz/p1"), TrackDetails("A"))
+    with units() as db:
+        source_id = db.scalars(select(SourceRow.id).where(SourceRow.track_id == track_id)).one()
+    job = site.downloads.start_for(
+        AccountId(client.get("/api/me").json()["id"]), SourceId(source_id)
+    )
+    assert job is not None
+    return track_id, job.id
 
 
 def _failed_download(client: TestClient) -> tuple[int, int]:
@@ -228,3 +246,25 @@ def test_a_track_that_does_not_exist_takes_no_file_and_answers_404(site_client: 
 def test_the_downloads_routes_need_a_signed_in_account(client: TestClient) -> None:
     assert client.get("/api/tracks/1/download").status_code == 401
     assert _put(client, 1, "night-drive.wav", TWO_SECONDS).status_code == 401
+    assert client.get("/api/downloads").status_code == 401
+
+
+def test_the_downloads_under_way_are_listed_with_their_tracks_and_progress(
+    site_client: TestClient, site_services: tuple[Site, Services], units: sessionmaker[Session]
+) -> None:
+    track_id, job_id = _waiting_download(site_client, site_services[0], units)
+
+    response = site_client.get("/api/downloads")
+
+    assert response.status_code == 200
+    [listed] = response.json()
+    assert listed["track_id"] == track_id
+    assert (listed["job"]["id"], listed["job"]["state"]) == (job_id, "queued")
+    assert listed["job"]["waits_for_online"] is True
+    assert listed["job"]["progress"] is None
+
+
+def test_no_download_is_listed_once_it_failed(site_client: TestClient) -> None:
+    _failed_track(site_client)
+
+    assert site_client.get("/api/downloads").json() == []

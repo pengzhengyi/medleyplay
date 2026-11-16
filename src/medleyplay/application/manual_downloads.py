@@ -30,9 +30,10 @@ from medleyplay.domain.downloads import (
     MAX_DOWNLOAD_BYTES,
     download_target,
     manual_download_name,
+    source_of_target,
 )
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError, TooLargeError
-from medleyplay.domain.jobs import JobId, JobState
+from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.links import PART_LINKS, part_link
 from medleyplay.persistence.schema import DownloadRow, SourceRow, TrackRow
 
@@ -72,6 +73,14 @@ class TrackDownload:
     message: str = ""
     backend: str | None = None
     job_id: JobId | None = None
+
+
+@dataclass(frozen=True)
+class DownloadUnderWay:
+    """A Track whose Download a Job is getting, with that Job and how far it has got."""
+
+    track_id: TrackId
+    job: JobView
 
 
 def audio_length_ms(path: Path) -> int:
@@ -146,6 +155,23 @@ class ManualDownloadService:
         if source.state == SourceState.UNAVAILABLE:
             return replace(none, status=DownloadStatus.UNAVAILABLE, message=_UNAVAILABLE)
         return none
+
+    def downloading(self) -> list[DownloadUnderWay]:
+        """Return each Download a Job is getting, the first asked for first, with its Track."""
+        jobs = self._jobs.active_of(DOWNLOAD_KIND)
+        sources = {job.job.target: source_of_target(job.job.target) for job in jobs}
+        with self._units() as db:
+            rows = db.execute(
+                select(SourceRow.id, SourceRow.track_id).where(
+                    SourceRow.id.in_([each for each in sources.values() if each is not None])
+                )
+            )
+            tracks = {row.id: row.track_id for row in rows}
+        return [
+            DownloadUnderWay(track_id=TrackId(tracks[source]), job=job)
+            for job in jobs
+            if (source := sources[job.job.target]) is not None and source in tracks
+        ]
 
     def upload(self, track_id: TrackId, name: str) -> "Upload":
         """Return an upload of the Track's file, which `name` is the name of.

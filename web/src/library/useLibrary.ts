@@ -13,6 +13,7 @@ import {
   type EnricherMode,
   type FavoritesRead,
   type Job,
+  type DownloadUnderWay,
   type JobEvent,
   type LinkLookup,
   type Mode,
@@ -31,6 +32,7 @@ import {
 import { newId } from "../ids";
 import { PAGE_ID } from "../page";
 import type { Speaker } from "../player/remote";
+import { downloadEnded, followDownload } from "./downloading";
 import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
 import { fold } from "./views";
 import { LOOKUPS } from "./lookups";
@@ -60,6 +62,8 @@ export interface Library {
   readonly modeChecked: (mode: Mode) => void;
   /** The devices waiting for an admin's answer, oldest first; none for a member. */
   readonly waitingDevices: readonly WaitingDevice[];
+  /** The Downloads under way, oldest first, each with how far it has got. */
+  readonly downloading: readonly DownloadUnderWay[];
   /**
    * The computer playing for this Account, as it last reported, or `null` while none
    * does; `undefined` until the event stream has said.
@@ -185,6 +189,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [waitingDevices, setWaitingDevices] = useState<readonly WaitingDevice[]>([]);
+  const [downloading, setDownloading] = useState<readonly DownloadUnderWay[]>([]);
   const [speaker, setSpeaker] = useState<Speaker | null | undefined>(undefined);
   const commandListeners = useRef(new Set<(command: RemoteCommand) => void>());
   const onCommand = useCallback((listener: (command: RemoteCommand) => void) => {
@@ -228,8 +233,43 @@ export function useLibrary(onSignedOut: () => void): Library {
       return next;
     });
   };
-  /** Follow a lookup's Job as the event stream tells of it. */
+  // The list as last told of, the Jobs that ended, the Jobs already asked about, and the
+  // latest read: so events told at once each count, an older list can't bring back a
+  // Download that ended, and a Job the list never holds is asked about once.
+  const underWay = useRef<readonly DownloadUnderWay[]>([]);
+  const endedJobs = useRef(new Set<number>());
+  const askedJobs = useRef(new Set<number>());
+  const downloadReads = useRef(0);
+  const showDownloading = (next: readonly DownloadUnderWay[]) => {
+    underWay.current = next;
+    setDownloading(next);
+  };
+  const loadDownloading = useCallback(() => {
+    const read = ++downloadReads.current;
+    api.downloads().then(
+      (listed) => {
+        if (read === downloadReads.current) {
+          showDownloading(listed.filter(({ job }) => !endedJobs.current.has(job.id)));
+        }
+      },
+      () => {
+        // Without the list, the Downloaded view shows only what is downloaded.
+      },
+    );
+  }, []);
+  /** Follow a Download's or a lookup's Job as the event stream tells of it. */
   const onJob = useEffectEvent((job: JobEvent) => {
+    if (downloadEnded(job)) {
+      endedJobs.current.add(job.id);
+    }
+    const { next, reread } = followDownload(underWay.current, job);
+    if (next !== underWay.current) {
+      showDownloading(next);
+    }
+    if (reread && !askedJobs.current.has(job.id)) {
+      askedJobs.current.add(job.id);
+      loadDownloading();
+    }
     const id = trackOfJob.current.get(job.id);
     const lookup = id === undefined ? undefined : lookups.get(id);
     if (id === undefined || lookup === undefined || jobOfTrack.current.get(id) !== job.id) {
@@ -305,6 +345,7 @@ export function useLibrary(onSignedOut: () => void): Library {
         // Without the Mode, the page shows nothing about it until the stream says.
       });
       loadFindable();
+      loadDownloading();
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
@@ -330,7 +371,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
     };
-  }, [loadFindable]);
+  }, [loadFindable, loadDownloading]);
 
   /** Ask for the Tracks again; one that can't be read now shows on the next load. */
   const reloadTracks = () => {
@@ -459,6 +500,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     mode,
     modeChecked: setMode,
     waitingDevices,
+    downloading,
     speaker,
     onCommand,
     findable,

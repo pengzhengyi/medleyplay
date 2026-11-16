@@ -12,7 +12,15 @@ import {
 } from "@phosphor-icons/react";
 import { Fragment, type ReactNode, useMemo } from "react";
 
-import type { ArtistNames, Mode, NameToTidy, Playlist, Track, WaitingDevice } from "../api";
+import type {
+  ArtistNames,
+  DownloadUnderWay,
+  Mode,
+  NameToTidy,
+  Playlist,
+  Track,
+  WaitingDevice,
+} from "../api";
 import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
 import { formatLength, formatLibraryLength, initialOf } from "../format";
 import {
@@ -44,6 +52,7 @@ import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
+import { Downloading } from "./Downloading";
 import { FavoriteHeart } from "./FavoriteHeart";
 import type { Station } from "../library/useStation";
 import { InsightsView } from "./InsightsView";
@@ -80,6 +89,8 @@ export interface ViewProps {
   readonly onRatingsChanged?: () => void;
   /** The devices waiting for an admin's answer. */
   readonly waitingDevices: readonly WaitingDevice[];
+  /** The Downloads under way, oldest first; none, unless given. */
+  readonly downloading?: readonly DownloadUnderWay[];
   /** The station playing, and a way to start one. */
   readonly station: Station;
   readonly accountId: number;
@@ -257,6 +268,7 @@ function viewOf(given: ViewProps) {
         <Songs
           title="Downloaded"
           {...props}
+          about={<Downloading downloads={given.downloading ?? []} tracks={given.tracks} />}
           empty={
             <p className="empty">
               Nothing is downloaded yet. A song you add from a music site is kept here once its

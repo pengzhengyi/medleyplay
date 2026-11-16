@@ -79,3 +79,9 @@ def manual_download_name(source_id: SourceId, file: str) -> str:
 def download_target(source_id: SourceId) -> str:
     """Return the Job target that downloads a Source."""
     return f"source:{source_id}"
+
+
+def source_of_target(target: str) -> SourceId | None:
+    """Return the Source a download Job's target names, or `None` for a target naming none."""
+    found = target.removeprefix("source:")
+    return SourceId(int(found)) if found != target and found.isdecimal() else None

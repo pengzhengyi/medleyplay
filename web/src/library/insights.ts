@@ -9,7 +9,7 @@
  */
 
 import type { Track } from "../api";
-import { albumArtistOf, fold } from "./views";
+import { albumArtistOf, artistNamesOf, fold } from "./views";
 
 /** How often and how long a Track was played over a period. */
 export interface Played {
@@ -84,8 +84,11 @@ export function insightsOf(tracks: readonly Track[], counts: PlayCounts): Insigh
     if (track.kind === "song") {
       topSongs.push({ track, plays: played, listenedMs: listened });
     }
-    if (track.artist !== "") {
-      add(artists, fold(track.artist), { name: track.artist, artist: "" }, track, played, listened);
+    // A song by several artists counts for each.
+    for (const name of artistNamesOf(track)) {
+      if (name !== "") {
+        add(artists, fold(name), { name, artist: "" }, track, played, listened);
+      }
     }
     if (track.album !== "") {
       const artist = albumArtistOf(track);

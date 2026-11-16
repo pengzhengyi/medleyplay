@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Split artist names in Clean up** — a new section lists each artist name
+  written as several, such as *GUMI/MAYU* or *スズム feat. GUMI*, with the artists
+  it lists (featured ones marked), to *Split* or *Keep*, or *Split all*; decided
+  names can be undone. A split song counts under each of its artists in Artists,
+  search, Insights, and Radio, and Now Playing and a song's menu link to each.
+
 - **Names written as several artists** — the server offers each artist name
   written as several, such as *GUMI/MAYU* or *スズム feat. GUMI*, with the artists
   it lists, to split or keep as written; a split name's songs count under each

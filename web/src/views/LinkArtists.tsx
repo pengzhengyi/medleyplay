@@ -44,12 +44,12 @@ const OFFERED = 3;
 /** The most songs a name's song count shows. */
 const SONGS_SHOWN = 8;
 
-/** Each name's songs, by its folded name, as artist or album artist. */
+/** Each name's songs, by its folded name: as artist, one of its artists, or album artist. */
 function songsByName(tracks: readonly Track[]): ReadonlyMap<string, readonly Track[]> {
   const found = new Map<string, Track[]>();
   for (const track of tracks) {
     for (const key of new Set(
-      [track.artist, track.album_artist].map((name) => fold(name.trim())),
+      [track.artist, ...track.artists, track.album_artist].map((name) => fold(name.trim())),
     )) {
       if (key !== "") {
         found.set(key, [...(found.get(key) ?? []), track]);
@@ -552,15 +552,29 @@ function NameSongs({
   );
 }
 
-/** Show `songs` by `to` where they show `from`, as the artist or the album artist. */
+/**
+ * Show `songs` by `to` where they show `from`: as the artist, as one of the artists it
+ * lists, in place of that one alone, or as the album artist.
+ */
 async function renamed(songs: readonly Track[], from: string, to: string): Promise<void> {
   const key = fold(from.trim());
   const where = (name: string) => fold(name.trim()) === key;
-  const asArtist = songs.filter((song) => where(song.artist)).map((song) => song.id);
-  const asAlbumArtist = songs.filter((song) => where(song.album_artist)).map((song) => song.id);
-  if (asArtist.length > 0) {
-    await api.setDetails(asArtist, { artist: to });
+  const artists = new Map<string, number[]>();
+  for (const song of songs) {
+    const part = song.artists.find(where);
+    const artist = where(song.artist)
+      ? to
+      : part === undefined
+        ? undefined
+        : song.artist.replace(part, to);
+    if (artist !== undefined) {
+      artists.set(artist, [...(artists.get(artist) ?? []), song.id]);
+    }
   }
+  for (const [artist, ids] of artists) {
+    await api.setDetails(ids, { artist });
+  }
+  const asAlbumArtist = songs.filter((song) => where(song.album_artist)).map((song) => song.id);
   if (asAlbumArtist.length > 0) {
     await api.setDetails(asAlbumArtist, { album_artist: to });
   }

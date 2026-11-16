@@ -34,7 +34,7 @@ import { type ReactNode, useState } from "react";
 import { type Kind, type Track, api } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { siteNameOf } from "../library/videos";
-import { albumArtistOf } from "../library/views";
+import { albumArtistOf, artistNamesOf } from "../library/views";
 import { navigate } from "../routes";
 
 /** Rate Your Music's search, which the household's own browser opens; medleyplay never reads the site. */
@@ -138,15 +138,30 @@ export function TrackMenu({
           >
             Show in Library
           </Item>
-          <Item
-            icon={<MicrophoneStageIcon />}
-            onSelect={() => {
-              onNavigate?.();
-              navigate({ view: "artist", name: track.artist });
-            }}
-          >
-            Go to artist
-          </Item>
+          {artistNamesOf(track).length > 1 ? (
+            artistNamesOf(track).map((name) => (
+              <Item
+                key={name}
+                icon={<MicrophoneStageIcon />}
+                onSelect={() => {
+                  onNavigate?.();
+                  navigate({ view: "artist", name });
+                }}
+              >
+                {`Go to ${name}`}
+              </Item>
+            ))
+          ) : (
+            <Item
+              icon={<MicrophoneStageIcon />}
+              onSelect={() => {
+                onNavigate?.();
+                navigate({ view: "artist", name: track.artist });
+              }}
+            >
+              Go to artist
+            </Item>
+          )}
           <Item
             icon={<VinylRecordIcon />}
             onSelect={() => {

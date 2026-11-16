@@ -70,7 +70,7 @@ no router package.
 | Downloaded | `#/downloaded` | The songs downloading, each with its state and a bar, then the Tracks with `downloaded`, in the song table |
 | Search | `#/search?q=…` | What the search found |
 | Settings | `#/settings`, `#/settings?section=ai` | See [Settings](#settings); `section` opens and goes to the section of that id |
-| Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>) and to [link to one artist](Artists.md#the-web-client); and long files to [split by the list found](Segments.md#split-offers) |
+| Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>), to [split into the artists they list](Artists.md#names-written-as-several-artists), and to [link to one artist](Artists.md#the-web-client); and long files to [split by the list found](Segments.md#split-offers) |
 
 - **An artist's or album's Tracks** open at `#/artist?name=…` and
   `#/album?artist=…&name=…`, in the song table, so a name with a `/` is safe.

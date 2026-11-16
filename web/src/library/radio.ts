@@ -23,7 +23,7 @@ import {
   isFavoriteArtist,
 } from "./favoriteGroups";
 import { ratingOf } from "./ratings";
-import { albumArtistOf, fold } from "./views";
+import { albumArtistOf, artistNamesOf, fold } from "./views";
 
 /** A number from 0 up to 1, as `Math.random` gives. */
 export type Random = () => number;
@@ -62,7 +62,7 @@ export function tasteOf(track: Track, favorites: FavoriteGroups = NO_FAVORITES):
   const artist = albumArtistOf(track);
   // Once, however many of its groups are favorites, so a group can't outweigh a heart.
   const inFavoriteGroup =
-    isFavoriteArtist(favorites, track.artist) ||
+    byFavoriteArtist(track, favorites) ||
     isFavoriteArtist(favorites, artist) ||
     isFavoriteAlbum(favorites, artist, track.album);
   return (
@@ -131,6 +131,15 @@ const same = (a: string, b: string) => {
   return key !== undefined && key === keyOf(b);
 };
 
+/** Whether two songs share an artist, one of several either lists counting. */
+const shareAnArtist = (a: Track, b: Track) =>
+  artistNamesOf(a).some((name) => artistNamesOf(b).some((other) => same(name, other)));
+
+/** Whether a favorite artist sings the song: one it lists, or its artist as written. */
+function byFavoriteArtist(track: Track, favorites: FavoriteGroups): boolean {
+  return [...artistNamesOf(track), track.artist].some((name) => isFavoriteArtist(favorites, name));
+}
+
 const sharesGenre = (a: Track, b: Track) => {
   const theirs = genresOf(b.genre);
   return [...genresOf(a.genre)].some((genre) => theirs.has(genre));
@@ -143,7 +152,7 @@ type Term = "artist" | "album" | "album artist" | "genre" | "year";
 
 function terms(a: Track, b: Track): [Term, number][] {
   return [
-    ["artist", same(a.artist, b.artist) ? 3 : 0],
+    ["artist", shareAnArtist(a, b) ? 3 : 0],
     ["album", same(a.album, b.album) && same(albumArtistOf(a), albumArtistOf(b)) ? 2 : 0],
     ["album artist", same(albumArtistOf(a), albumArtistOf(b)) ? 1 : 0],
     ["genre", sharesGenre(a, b) ? 2 : 0],
@@ -329,7 +338,7 @@ function favoriteReason(track: Track, favorites: FavoriteGroups): string | undef
   if (track.favorite) {
     return "A favorite";
   }
-  if (isFavoriteArtist(favorites, track.artist) || isFavoriteArtist(favorites, artist)) {
+  if (byFavoriteArtist(track, favorites) || isFavoriteArtist(favorites, artist)) {
     return "By a favorite artist";
   }
   return isFavoriteAlbum(favorites, artist, track.album) ? "From a favorite album" : undefined;

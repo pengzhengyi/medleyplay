@@ -7497,6 +7497,75 @@ button.playing-kind[aria-expanded="true"] {
   vertical-align: -0.1em;
 }
 
+/*
+ * A name written as several artists: its songs, then each artist it lists as a capsule
+ * under it, the featured ones marked; its Keep and Split to the right.
+ */
+.split-name-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name actions"
+    "meta actions"
+    "artists actions"
+    "linked linked";
+}
+
+.split-name-row .tidy-name {
+  grid-area: name;
+}
+
+.split-name-row .tidy-meta {
+  grid-area: meta;
+}
+
+.split-name-row .tidy-actions {
+  grid-area: actions;
+}
+
+.split-name-artists {
+  display: flex;
+  grid-area: artists;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.split-name-artist {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+}
+
+.split-name-artist.split-name-featured {
+  border: 1px dashed var(--line);
+  background: transparent;
+}
+
+.split-name-feat {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.split-name-linked {
+  grid-area: linked;
+  margin: 0.3rem 0 0;
+  color: var(--caution);
+  font-size: 0.85rem;
+}
+
+.split-names-decided {
+  margin-top: 0.75rem;
+}
+
+.split-names-decided .split-names-decided-summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
 /* The shortcuts while ⌘ is held: over the page, taking no focus and no clicks. */
 
 .held-shortcuts {

@@ -319,6 +319,15 @@ not.
 
 ## The web client
 
+- **A section of Clean up,** *Split artist names*: each name written as several
+  artists, with its songs and the artists it lists as capsules, the featured ones
+  marked *feat.*, to *Keep* or *Split*; *Split all* splits every name not linked
+  to one artist, and a linked one says it may name one artist. The names decided
+  are listed folded away, each to *Undo*.
+- **A song by several artists counts under each:** in Artists, search, Insights,
+  and Radio's favorites, and opens from each artist's page or the name as written.
+  Now Playing names each artist with its own page and heart, and a song's menu goes
+  to each. Using a likely name for one of them changes only that one.
 - **A section of Clean up,** *Link artist names*, with how many names that may
   be looked up are not linked, counted in the rail's *Clean up* with the names to
   tidy: each name with its songs, most songs first.

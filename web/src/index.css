@@ -254,10 +254,22 @@ button[aria-disabled="true"] {
     /* The header's wordmark keeps the rail's full width. */
     --rail: 13.25rem;
 
+    /* How tall the minimized rail's band is, which the view leaves free at its top. */
+    --band: 3.75rem;
+
     grid-template:
       "top top" auto
-      "nav queue" auto
       "main queue" 1fr / minmax(0, 1fr) 20rem;
+  }
+
+  /*
+   * The view starts below the band, which sticks over it as it scrolls; what sticks
+   * in the view, such as a section bar or the songs' header, sticks below the band.
+   */
+  .library.rail-minimized main {
+    --stick-top: calc(var(--top-height, 0px) + var(--band));
+
+    padding-top: calc(var(--band) + 0.5rem);
   }
 
   /* The rail's menu names the view above it, so the view's own name needn't show twice. */
@@ -1148,7 +1160,7 @@ button[aria-disabled="true"] {
   max-width: 42rem;
 
   /* Clear of the header and the sections' names, which stay at the top. */
-  scroll-margin-top: calc(var(--top-height, 0px) + 4.5rem);
+  scroll-margin-top: calc(var(--stick-top, var(--top-height, 0px)) + 4.5rem);
   margin: 0 0 1.25rem;
   padding: 1.25rem 1.5rem;
   border-radius: 1.25rem;
@@ -1198,7 +1210,7 @@ button[aria-disabled="true"] {
 /* The sections' names, staying in view, each going to its section. */
 .settings-toc {
   position: sticky;
-  top: var(--top-height, 0);
+  top: var(--stick-top, var(--top-height, 0));
   z-index: 2;
   display: flex;
   align-items: center;
@@ -1261,7 +1273,7 @@ button[aria-disabled="true"] {
 }
 
 .clean-up-anchor {
-  scroll-margin-top: calc(var(--top-height, 0px) + 4rem);
+  scroll-margin-top: calc(var(--stick-top, var(--top-height, 0px)) + 4rem);
 }
 
 .settings-toc .fold-all {
@@ -2301,18 +2313,37 @@ button[aria-disabled="true"] {
     white-space: nowrap;
   }
 
+  /*
+   * Minimized, the rail is a band across the view's column, under the header and
+   * as clouded as it, so the view scrolls beneath it rather than showing through;
+   * its controls are the pill within.
+   */
   .views.minimized {
+    /* In the view's own area, so it sticks for as long as the view scrolls. */
+    grid-area: main;
     flex-direction: row;
-    justify-self: start;
+    align-items: center;
+    justify-self: stretch;
+    top: var(--top-height, 4.25rem);
     z-index: 1;
-    margin: 0.5rem 0 0 1.5rem;
-    padding: 0.3rem;
-    border-radius: 1rem;
+    height: var(--band);
+    margin: 0;
+    padding: 0 0 0 1.5rem;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--page) 82%, transparent);
+    box-shadow: none;
+    backdrop-filter: blur(12px);
   }
 
   .views.minimized .views-bar {
     gap: 0.25rem;
     margin: 0;
+    padding: 0.3rem;
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    box-shadow:
+      0 1px 2px hsl(var(--shadow-color) / 6%),
+      0 4px 14px -8px hsl(var(--shadow-color) / 14%);
   }
 
   .views.minimized .views-list,
@@ -2486,7 +2517,7 @@ button[aria-disabled="true"] {
 /* The header stays under the top bar while the songs scroll, a solid band with a rule. */
 .tracks thead th {
   position: sticky;
-  top: var(--top-height, 0);
+  top: var(--stick-top, var(--top-height, 0));
   z-index: 1;
   background: var(--page);
   box-shadow: inset 0 -1px 0 var(--line);

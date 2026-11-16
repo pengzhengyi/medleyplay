@@ -142,6 +142,8 @@ export function EditDetails({
   const [own, setOwn] = useState<Own>({});
   // The kind chosen, `null` to guess it again, or `undefined` while unchanged.
   const [kind, setKind] = useState<Kind | null | undefined>(undefined);
+  // A song's album, folded until opened: many songs are singles, on no album.
+  const [albumOpen, setAlbumOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
   const [readNote, setReadNote] = useState("");
@@ -382,10 +384,33 @@ export function EditDetails({
                 <legend>Song</legend>
                 {boxes("song")}
               </fieldset>
-              <fieldset className="detail-group">
-                <legend>Album</legend>
-                {boxes("album")}
-              </fieldset>
+              {(kind ?? details.kind.value) === "album" ? (
+                <fieldset className="detail-group">
+                  <legend>Album</legend>
+                  {boxes("album")}
+                </fieldset>
+              ) : (
+                <details
+                  className="detail-fold"
+                  open={albumOpen}
+                  onToggle={(event) => {
+                    setAlbumOpen(event.currentTarget.open);
+                  }}
+                >
+                  <summary className="detail-fold-summary">
+                    <span className="detail-fold-title">Album</span>
+                    <span className="detail-fold-value">
+                      {boxText(details, own, "album").trim() === ""
+                        ? "None, a single"
+                        : boxText(details, own, "album")}
+                    </span>
+                  </summary>
+                  <fieldset className="detail-group">
+                    <legend className="visually-hidden">Album</legend>
+                    {boxes("album")}
+                  </fieldset>
+                </details>
+              )}
             </div>
           </div>
         )}

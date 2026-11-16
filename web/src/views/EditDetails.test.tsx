@@ -880,3 +880,42 @@ describe("the kind", () => {
     expect(within(kind).getByText(why)).toBeVisible();
   });
 });
+
+describe("a song's album", () => {
+  const fold = (dialog: HTMLElement) =>
+    within(dialog).getByText("Album", { selector: ".detail-fold-title" }).closest("details");
+
+  it("is folded, saying a song on no album is a single", async () => {
+    const { dialog } = await renderDialog();
+
+    expect(fold(dialog)).not.toHaveAttribute("open");
+    expect(fold(dialog)).toHaveTextContent("AlbumNone, a single");
+  });
+
+  it("is folded, saying the album a song is on", async () => {
+    const { dialog } = await renderDialog(detailsOf(7, { album: "Re:Start" }));
+
+    expect(fold(dialog)).toHaveTextContent("AlbumRe:Start");
+  });
+
+  it("opens to be filled in when asked", async () => {
+    const { dialog } = await renderDialog();
+
+    await userEvent.click(within(dialog).getByText("None, a single"));
+
+    expect(fold(dialog)).toHaveAttribute("open");
+    expect(box(dialog, "Album")).toBeVisible();
+  });
+
+  it("is open for an album in one file, whose album it is", async () => {
+    const { dialog } = await renderDialog({
+      ...detailsOf(7),
+      kind: { value: "album", reason: "length" },
+    });
+
+    expect(within(dialog).queryByText("Album", { selector: ".detail-fold-title" })).toBeNull();
+    expect(within(dialog).getByRole("group", { name: "Album" })).toContainElement(
+      box(dialog, "Album"),
+    );
+  });
+});

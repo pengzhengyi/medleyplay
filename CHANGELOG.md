@@ -449,6 +449,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A song's album folds away** — in a song's *Edit details*, the album fields
+  fold to a line saying its album, or that it is a single, and open when pressed.
+
 - **The album's songs close when the mouse leaves** — opened from the album
   playing, by pointing or a click, they no longer stay until Escape; each song
   leads with a heart to favorite it.

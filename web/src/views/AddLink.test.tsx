@@ -81,6 +81,24 @@ describe("adding a video that was read", () => {
     expect(within(dialog).getByRole("button", { name: "Add" })).toBeEnabled();
   });
 
+  it("names the fields above the first part that has them, the parts below lined up under them", async () => {
+    const taken = lookupOf(3);
+    const lookup = {
+      ...taken,
+      parts: taken.parts.map((part) => (part.part === 1 ? { ...part, track_id: 4 } : part)),
+    };
+    const { dialog } = renderDialog(lookup);
+    await within(dialog).findByText("Mixtape");
+
+    const shown = (name: string) =>
+      within(dialog)
+        .getAllByText(name)
+        .map((label) => !label.classList.contains("visually-hidden"));
+
+    expect(shown("Title")).toEqual([true, false]);
+    expect(shown("Artist")).toEqual([true, false]);
+  });
+
   it("will not add a chosen part with no title", async () => {
     const { dialog } = renderDialog(lookupOf(1));
     await within(dialog).findByText("【MV】Night Drive");

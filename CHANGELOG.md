@@ -476,6 +476,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Adding from a site names its fields** — the parts' boxes say *Title* and
+  *Artist* above them, as *Quality* does, and the quality chosen no longer shows
+  cut off.
+
 - **Covers keep to a square** — a cover that isn't square, on a Radio shelf or
   an artist's or album's tile, is cropped to the tile rather than stretching it.
 

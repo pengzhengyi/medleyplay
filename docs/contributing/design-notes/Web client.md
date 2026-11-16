@@ -62,7 +62,7 @@ no router package.
 
 | View | Route | Shows |
 | --- | --- | --- |
-| Library | `#/library` | Every song and album, a split file's songs folded under it; see [The Library](#the-library) |
+| Library | `#/library`, `#/library?focus=<id>` | Every song and album, a split file's songs folded under it; see [The Library](#the-library) |
 | Radio | `#/radio` | *My station*, *Favorites*, and shelves of albums for the Account; see [Recommendations](Recommendations.md#the-radio-tab) |
 | Artists | `#/artists` | Each artist, with how many Tracks and how long; one opens its Tracks |
 | Albums | `#/albums` | Each album, under its album artist, or its artist when that is blank |
@@ -188,8 +188,8 @@ Track's kind is decided.
 ## A song's menu
 
 - **A "…" button holds a song's less frequent actions,** each an icon and
-  words: *Play next* and *Add to queue*, *Go to artist* and *Go to album*, and
-  *Add to playlist…*. Each song row has one, after its queue buttons, which a
+  words: *Play next* and *Add to queue*, *Go to artist* and *Go to album*,
+  *Show in Library*, *Rate*, and *Add to playlist…*. Each song row has one, after its queue buttons, which a
   phone hides, since the menu holds them; the player has one beside the heart,
   without the queue actions.
 - **A Track from a site** also has *Add the file yourself…*, which opens the
@@ -198,6 +198,12 @@ Track's kind is decided.
   [Manual downloads](Manual%20downloads.md#the-web-client).
 - **Go to** opens the artist's view, or the album's under its album artist, as
   the Albums view groups it.
+- **Show in Library** opens `#/library?focus=<id>`: the Library clears its
+  filters if they hide the song, unfolds the file it was split from, scrolls it
+  to the middle, focuses its title, and lights the row for a moment. Once shown,
+  the address drops `focus`, so going back doesn't scroll again.
+- **Rate** opens a submenu of five stars down to one, and *No rating*, the
+  song's own rating checked; it is saved at once, as the stars in a row are.
 - **Radix's dropdown menu** draws it: unstyled, it handles the arrow keys, Home
   and End, typeahead, Escape returning focus to the button, and keeping the
   menu on screen, and it draws in a portal, so a table row doesn't clip it. It

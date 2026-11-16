@@ -21,6 +21,7 @@ function renderMenu(queueing = true, track = MELT, findable: readonly string[] =
     onEditSongs: vi.fn(),
     onAddFile: vi.fn(),
     onSetKind: vi.fn(),
+    onRate: vi.fn(),
   };
   render(<TrackMenu track={track} actions={actions} queueing={queueing} />);
   return actions;
@@ -77,9 +78,11 @@ describe("a song's menu", () => {
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
       "Play next",
       "Add to queue",
+      "Show in Library",
       "Go to artist",
       "Go to album",
       "Open on RYM",
+      "Rate",
       "Add to playlist…",
       "Edit details…",
       "Mark as album",
@@ -95,9 +98,11 @@ describe("a song's menu", () => {
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
       "Play next",
       "Add to queue",
+      "Show in Library",
       "Go to artist",
       "Go to album",
       "Open on RYM",
+      "Rate",
       "Add to playlist…",
       "Edit details…",
       "Find details online",
@@ -134,9 +139,11 @@ describe("a song's menu", () => {
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
       "Play next",
       "Add to queue",
+      "Show in Library",
       "Go to artist",
       "Go to album",
       "Open on RYM",
+      "Rate",
       "Add to playlist…",
       "Edit details…",
       "Find on MusicBrainz",
@@ -163,7 +170,8 @@ describe("a song's menu", () => {
     await open();
 
     const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(items.slice(6, 9)).toEqual([
+    const edit = items.indexOf("Edit details…");
+    expect(items.slice(edit, edit + 3)).toEqual([
       "Edit details…",
       "Find details online",
       "Find on MusicBrainz",
@@ -178,9 +186,11 @@ describe("a song's menu", () => {
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
       "Play next",
       "Add to queue",
+      "Show in Library",
       "Go to artist",
       "Go to album",
       "Open on RYM",
+      "Rate",
       "Add to playlist…",
       "Edit details…",
       "Suggest details with AI",
@@ -216,6 +226,47 @@ describe("a song's menu", () => {
 
     expect(screen.queryByRole("menuitem", { name: "Play next" })).toBeNull();
     expect(screen.getByRole("menuitem", { name: "Go to album" })).toBeInTheDocument();
+  });
+
+  it("shows the song in the Library, scrolled to and lit", async () => {
+    renderMenu();
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Show in Library" }));
+
+    expect(location.hash).toBe("#/library?focus=1");
+  });
+
+  it("rates the song from its menu, from five stars to none", async () => {
+    const actions = renderMenu();
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Rate" }));
+    const stars = await screen.findAllByRole("menuitemradio");
+
+    expect(stars.map((star) => star.getAttribute("aria-label"))).toEqual([
+      "5 stars",
+      "4 stars",
+      "3 stars",
+      "2 stars",
+      "1 star",
+      "No rating",
+    ]);
+    expect(screen.getByRole("menuitemradio", { name: "No rating" })).toBeChecked();
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "4 stars" }));
+    expect(actions.onRate).toHaveBeenCalledWith(MELT, 4);
+  });
+
+  it("clears a song's rating from its menu", async () => {
+    const rated = { ...MELT, rating: 3 };
+    const actions = renderMenu(true, rated);
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Rate, 3 stars" }));
+    expect(await screen.findByRole("menuitemradio", { name: "3 stars" })).toBeChecked();
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "No rating" }));
+
+    expect(actions.onRate).toHaveBeenCalledWith(rated, null);
   });
 
   it("goes to the song's artist", async () => {

@@ -11,6 +11,9 @@
 import {
   ArrowSquareOutIcon,
   CaretDownIcon,
+  CaretRightIcon,
+  CheckIcon,
+  CrosshairIcon,
   DotsThreeIcon,
   ListPlusIcon,
   MicrophoneStageIcon,
@@ -18,6 +21,7 @@ import {
   PlaylistIcon,
   QueueIcon,
   ScissorsIcon,
+  StarIcon,
   SwapIcon,
   UploadSimpleIcon,
   VinylRecordIcon,
@@ -60,7 +64,14 @@ export interface TrackMenuActions {
   readonly onAddFile: (track: Track) => void;
   /** Make `track` a song or an album, for one whose Kind was guessed wrong. */
   readonly onSetKind: (track: Track, kind: Kind) => void;
+  /** Rate `track` from 1 to 5 stars, or `null` for no rating. */
+  readonly onRate: (track: Track, rating: number | null) => void;
 }
+
+/** The ratings offered, the most stars first. */
+const STARS = [5, 4, 3, 2, 1] as const;
+
+const starsOf = (stars: number) => `${String(stars)} ${stars === 1 ? "star" : "stars"}`;
 
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
 export function TrackMenu({
@@ -117,6 +128,15 @@ export function TrackMenu({
             </>
           )}
           <Item
+            icon={<CrosshairIcon />}
+            onSelect={() => {
+              onNavigate?.();
+              navigate({ view: "library", focus: track.id });
+            }}
+          >
+            Show in Library
+          </Item>
+          <Item
             icon={<MicrophoneStageIcon />}
             onSelect={() => {
               onNavigate?.();
@@ -163,6 +183,7 @@ export function TrackMenu({
             </Menu.Item>
           )}
           <Menu.Separator className="track-menu-line" />
+          <RateMenu track={track} container={container} onRate={actions.onRate} />
           <Item
             icon={<PlaylistIcon />}
             onSelect={() => {
@@ -266,6 +287,71 @@ export function MoreWays({
         </Menu.Content>
       </Menu.Portal>
     </Menu.Root>
+  );
+}
+
+/** *Rate*, opening the stars to choose from, the song's own rating checked. */
+function RateMenu({
+  track,
+  container,
+  onRate,
+}: {
+  readonly track: Track;
+  readonly container: HTMLElement | null | undefined;
+  readonly onRate: (track: Track, rating: number | null) => void;
+}) {
+  const rating = track.rating;
+  return (
+    <Menu.Sub>
+      <Menu.SubTrigger
+        className="track-menu-item"
+        aria-label={rating === null ? "Rate" : `Rate, ${starsOf(rating)}`}
+      >
+        <span className="track-menu-icon" aria-hidden>
+          <StarIcon weight={rating === null ? "regular" : "fill"} />
+        </span>
+        Rate
+        <CaretRightIcon className="track-menu-caret" aria-hidden />
+      </Menu.SubTrigger>
+      <Menu.Portal container={container}>
+        <Menu.SubContent className="track-menu" sideOffset={4} collisionPadding={8}>
+          <Menu.RadioGroup
+            className="track-menu-group"
+            value={rating === null ? "none" : String(rating)}
+            onValueChange={(value) => {
+              onRate(track, value === "none" ? null : Number(value));
+            }}
+          >
+            {STARS.map((stars) => (
+              <Menu.RadioItem
+                key={stars}
+                className="track-menu-item track-menu-stars"
+                value={String(stars)}
+                aria-label={starsOf(stars)}
+              >
+                {Array.from({ length: 5 }, (_, at) => (
+                  <StarIcon key={at} weight={at < stars ? "fill" : "regular"} aria-hidden />
+                ))}
+                <Chosen />
+              </Menu.RadioItem>
+            ))}
+            <Menu.RadioItem className="track-menu-item" value="none" aria-label="No rating">
+              No rating
+              <Chosen />
+            </Menu.RadioItem>
+          </Menu.RadioGroup>
+        </Menu.SubContent>
+      </Menu.Portal>
+    </Menu.Sub>
+  );
+}
+
+/** A check at the end of the rating chosen now. */
+function Chosen() {
+  return (
+    <Menu.ItemIndicator className="track-menu-chosen">
+      <CheckIcon aria-hidden />
+    </Menu.ItemIndicator>
   );
 }
 

@@ -7,6 +7,7 @@ describe("routes", () => {
   it.each<[string, Route]>([
     ["", { view: "library" }],
     ["#/library", { view: "library" }],
+    ["#/library?focus=12", { view: "library", focus: 12 }],
     ["#/songs", { view: "library" }],
     ["#/artists", { view: "artists" }],
     ["#/artist?name=ryo", { view: "artist", name: "ryo" }],
@@ -21,6 +22,11 @@ describe("routes", () => {
     ["#/clean-up", { view: "clean-up" }],
   ])("reads %s", (hash, route) => {
     expect(routeOf(hash)).toEqual(route);
+  });
+
+  it("ignores a song to show in the Library that isn't a number", () => {
+    expect(routeOf("#/library?focus=twelve")).toEqual({ view: "library" });
+    expect(routeOf("#/library?focus=")).toEqual({ view: "library" });
   });
 
   it("goes back to the Library for a route it doesn't know", () => {

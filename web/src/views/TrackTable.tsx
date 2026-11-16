@@ -104,6 +104,8 @@ type Column = ColumnDef<typeof features, Track>;
 const STARS = [1, 2, 3, 4, 5] as const;
 // A row with its cover, as measured; rows are measured once on screen.
 const ROW_HEIGHT = 54;
+/** How long a Track asked for stays lit once shown. */
+const LIT_MS = 2500;
 const SAVED = "medleyplay.columns.v1";
 
 /** Compare as people read names: by locale, numbers in order, ignoring case. */
@@ -265,12 +267,18 @@ export function TrackTable({
   empty,
   actions,
   songsIn,
+  focus,
+  onFocused,
 }: {
   readonly tracks: readonly Track[];
   readonly playingId: number | undefined;
   readonly empty: ReactNode;
   readonly actions: TrackActions;
   readonly songsIn?: ReadonlyMap<number, readonly Track[]> | undefined;
+  /** A Track to show: scrolled to, lit for a moment, and its title focused. */
+  readonly focus?: number | undefined;
+  /** Called once the Track asked for is shown, so it isn't shown again. */
+  readonly onFocused?: (() => void) | undefined;
 }) {
   const [layout, setLayout] = useState(savedLayout);
   useEffect(() => {
@@ -353,6 +361,55 @@ export function TrackTable({
     overscan: 8,
     scrollMargin: top,
   });
+  // A Track asked for: whatever hides it gives way once, then it is lit once, and the
+  // effect below scrolls to it.
+  const [lit, setLit] = useState<number | undefined>(undefined);
+  const [revealed, setRevealed] = useState<number | undefined>(undefined);
+  const [shown, setShown] = useState<number | undefined>(undefined);
+  const focusAt = focus === undefined ? -1 : rows.findIndex((row) => row.original.id === focus);
+  if (focus !== undefined && focusAt < 0 && revealed !== focus) {
+    // A filter hides it, or it is a song of a split file folded away, or in a folded group.
+    setRevealed(focus);
+    setColumnFilters([]);
+    const file = [...(songsIn ?? new Map<number, readonly Track[]>()).entries()].find(([, songs]) =>
+      songs.some((song) => song.id === focus),
+    )?.[0];
+    const parent = table.getCoreRowModel().rows.find((row) => row.original.id === file);
+    setExpanded((was) =>
+      parent === undefined || was === true ? true : { ...was, [parent.id]: true },
+    );
+  }
+  if (focus !== undefined && focusAt >= 0 && shown !== focus) {
+    setShown(focus);
+    setLit(focus);
+  }
+  useEffect(() => {
+    if (focus === undefined || focusAt < 0) {
+      return undefined;
+    }
+    virtual.scrollToIndex(focusAt, { align: "center" });
+    // Once its row is drawn: its title takes focus, and only then is the request done.
+    const moved = requestAnimationFrame(() => {
+      body.current
+        ?.querySelector<HTMLElement>(`tr[data-track="${String(focus)}"] button.title`)
+        ?.focus({ preventScroll: true });
+      onFocused?.();
+    });
+    return () => {
+      cancelAnimationFrame(moved);
+    };
+  }, [focus, focusAt, virtual, onFocused]);
+  useEffect(() => {
+    if (lit === undefined) {
+      return undefined;
+    }
+    const fade = setTimeout(() => {
+      setLit(undefined);
+    }, LIT_MS);
+    return () => {
+      clearTimeout(fade);
+    };
+  }, [lit]);
   const items = virtual.getVirtualItems();
   const before = (items[0]?.start ?? top) - top;
   const after = virtual.getTotalSize() - ((items.at(-1)?.end ?? top) - top);
@@ -612,10 +669,12 @@ export function TrackTable({
                       ? "last-child"
                       : "",
                     track.availability === "ok" ? "" : "unplayable",
+                    track.id === lit ? "lit" : "",
                   ]
                     .filter(Boolean)
                     .join(" ") || undefined
                 }
+                data-track={track.id}
                 aria-current={track.id === playingId ? "true" : undefined}
                 // A click on the row plays its song, as its title does; the title stays the
                 // control for the keyboard and screen readers.

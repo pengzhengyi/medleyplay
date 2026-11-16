@@ -21,7 +21,12 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.covers import MAX_COVER_BYTES, CoverType, cover_id, cover_type, is_cover_id
 from medleyplay.domain.details import Field
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.persistence.schema import ArtistHouseholdRow, ArtistRow, TrackValueRow
+from medleyplay.persistence.schema import (
+    AlbumCoverSearchRow,
+    ArtistHouseholdRow,
+    ArtistRow,
+    TrackValueRow,
+)
 
 COVERS_FOLDER = "covers"
 """Where covers are kept in the data folder."""
@@ -113,9 +118,10 @@ class CoverService:
         return None if kind is None or path.is_symlink() else (path, kind)
 
     def sweep(self) -> None:
-        """Remove every file in the covers folder that no value or artist's photo names.
+        """Remove every file in the covers folder that no value, artist's photo, or album names.
 
-        An artist's photo is the one Wikidata gave, or the household's own.
+        An artist's photo is the one Wikidata gave, or the household's own; an album's
+        covers are those found for it, to choose from.
         """
         if not self._folder.is_dir():
             return
@@ -130,6 +136,11 @@ class CoverService:
                 db.scalars(
                     select(ArtistHouseholdRow.photo).where(ArtistHouseholdRow.photo.is_not(None))
                 )
+            )
+            named.update(
+                str(each["cover"])
+                for covers in db.scalars(select(AlbumCoverSearchRow.covers))
+                for each in covers
             )
         for file in self._folder.iterdir():
             if file.name not in named:

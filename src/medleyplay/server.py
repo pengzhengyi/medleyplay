@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
+from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
 from medleyplay.application.artists import (
     ArtistService,
     artist_kinds,
@@ -180,6 +181,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
     enrich = enrich_track_kind(data_dir / COVERS_FOLDER, clock)
     artist_jobs = artist_kinds(clock, data_dir / COVERS_FOLDER)
+    cover_jobs = album_cover_kinds(clock, data_dir / COVERS_FOLDER)
     find_silences = find_silences_kind(clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
@@ -190,6 +192,8 @@ def build_services(  # noqa: PLR0913, PLR0915
         artist_jobs.names.name: artist_jobs.names,
         artist_jobs.choose.name: artist_jobs.choose,
         artist_jobs.describe.name: artist_jobs.describe,
+        cover_jobs.find.name: cover_jobs.find,
+        cover_jobs.choose.name: cover_jobs.choose,
         find_silences.name: find_silences,
         **(kinds or {}),
     }
@@ -280,6 +284,7 @@ def build_services(  # noqa: PLR0913, PLR0915
             changes.tell,
             covers_folder=data_dir / COVERS_FOLDER,
         ),
+        album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs),
     )
 
 

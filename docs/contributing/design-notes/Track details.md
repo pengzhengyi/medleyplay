@@ -290,7 +290,45 @@ values.
   lock screen through the Media Session's artwork, and in *Edit details* with the
   household's upload. An image that fails to load shows the stand-in instead.
 - **A cover no value names** is removed by the sweep at startup, so one replaced
-  or removed stays on disk until the server next starts.
+  or removed stays on disk until the server next starts. The covers found for an
+  album, below, are kept until found again.
+
+### An album's covers from MusicBrainz
+
+*Find covers on MusicBrainz*, among the cover's tools in *Edit details* and beside
+the album's cover in *Edit album*, shows the front covers of the album's releases
+MusicBrainz knows, to choose one. Nothing changes until one is chosen.
+
+- **Known by the album and its artist,** the album artist or else the artist, as
+  written, trimmed and folded: every song writing them alike shares what was found.
+  An album never looked up is looked up when the covers are first shown.
+- **Found by a Job in MusicBrainz's lane,** a second apart from its other requests:
+  a release search for the album and its artist (the album alone when there is no
+  artist), ranked as the enricher ranks releases, then each release's front cover
+  from the Cover Art Archive (`front-500`), until 8 covers are found or 12
+  releases tried. Releases of one album often share a cover, which is offered once,
+  for the better release; releases of one release group are kept apart, since a
+  reissue's cover is often its own.
+- **Fetched as the enricher's are, more strictly:** only a release id that is a
+  MusicBrainz id is asked for; a redirect is followed, at most twice, only to the
+  archive's own sites over HTTPS; a cover the archive doesn't have is none, its
+  refusing is a refusal, and any other failure fails the Job, which tries again,
+  rather than offering an empty grid.
+- **Kept as covers are,** each copied out of the Job's folder and named by its
+  bytes, with what tells its release apart: date, country, format, and number of
+  tracks. Looking again replaces what was found, and the AI's pick with it.
+- **An AI model's pick.** With an AI set up and the `ai-details` plugin on, the
+  web client asks once the covers are found: a Job in the AI's lane shows a model
+  the album, a few of its songs, and the releases, each a letter, and it answers
+  with one letter, or none, and why. Its pick is marked *AI pick* among the covers,
+  why in its tooltip, while those are the releases found; a pick among releases
+  found before is dropped.
+- **Choosing a cover** makes it the household's on the song, or on every song of
+  the album, as any detail is set.
+- **The API:** `GET /api/album-covers?album=…&artist=…` says what was found and
+  what is being asked; `POST /api/album-covers/find` and
+  `POST /api/album-covers/choose`, with `{album, artist}`, ask MusicBrainz and an
+  AI model, answering 202.
 
 ## Enrichers
 

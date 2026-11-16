@@ -45,14 +45,24 @@ class RecordingSearch(_Model):
     recordings: list[FoundRecording] = []
 
 
+class HitMedium(_Model):
+    """One medium of a release a search found: its format, such as `CD`."""
+
+    format: str | None = None
+
+
 class ReleaseHit(_Model):
-    """A release a release search found, with its score."""
+    """A release a release search found, with its score, and what tells it apart."""
 
     id: str
     title: str
     score: int
     status: str | None = None
     date: str | None = None
+    artist_credit: Annotated[list[Credit], Field(alias="artist-credit")] = []
+    country: str | None = None
+    track_count: Annotated[int | None, Field(alias="track-count")] = None
+    media: list[HitMedium] = []
 
 
 class ReleaseSearch(_Model):

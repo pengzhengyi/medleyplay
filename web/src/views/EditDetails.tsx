@@ -22,6 +22,7 @@ import {
   CaretRightIcon,
   CircleNotchIcon,
   DownloadSimpleIcon,
+  MagnifyingGlassIcon,
   MusicNoteSimpleIcon,
   MusicNotesIcon,
   ScissorsIcon,
@@ -68,6 +69,7 @@ import {
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
+import { CoverFinder } from "./CoverFinder";
 import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { ORIGIN_TAGS } from "./originTags";
@@ -110,6 +112,7 @@ export function EditDetails({
   onReadVideo,
   onSetCover,
   onRemoveCover,
+  onUseCover,
   findable,
   lookup,
   online,
@@ -124,6 +127,8 @@ export function EditDetails({
   readonly onReadVideo: (text: VideoText) => Promise<VideoRead>;
   readonly onSetCover: (image: Blob) => Promise<Details>;
   readonly onRemoveCover: () => Promise<Details>;
+  /** Make the cover `cover`, one found for the song's album, the household's own. */
+  readonly onUseCover: (cover: string) => Promise<Details>;
   readonly findable: readonly Lookup[];
   readonly lookup: TrackLookup | undefined;
   /** Whether medleyplay is Online, so a lookup asked runs now. */
@@ -150,6 +155,7 @@ export function EditDetails({
   const [readError, setReadError] = useState("");
   const [covering, setCovering] = useState(false);
   const [coverError, setCoverError] = useState("");
+  const [findingCovers, setFindingCovers] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   // Saying it saved is enough for a moment; the details shown are what was kept.
@@ -348,7 +354,24 @@ export function EditDetails({
                   }
                 }}
                 onRemove={() => void changeCover(onRemoveCover)}
+                {...(albumOf(details) === undefined
+                  ? {}
+                  : {
+                      findingCovers,
+                      onFindCovers: () => {
+                        setFindingCovers(!findingCovers);
+                      },
+                    })}
               />
+              {findingCovers && albumOf(details) !== undefined && (
+                <CoverFinder
+                  album={albumOf(details)?.album ?? ""}
+                  artist={albumOf(details)?.artist ?? ""}
+                  shown={shownCoverOf(details)}
+                  busy={saving || reading || covering}
+                  onUse={(cover) => void changeCover(() => onUseCover(cover))}
+                />
+              )}
               <LookupBar findable={findable} lookup={lookup} online={online} onFind={onFind} />
               {songs !== undefined && (
                 <button
@@ -515,6 +538,22 @@ function KindChoice({
   );
 }
 
+/** Return the cover the song shows, if any. */
+function shownCoverOf(details: Details): string | undefined {
+  const shown = details.shown.cover?.value;
+  return typeof shown === "string" && shown !== "" ? shown : undefined;
+}
+
+/** Return the song's album and its album artist, or else artist, or nothing for no album. */
+function albumOf(details: Details): { album: string; artist: string } | undefined {
+  const text = (detail: Detail) => {
+    const value = details.shown[detail]?.value;
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const album = text("album");
+  return album === "" ? undefined : { album, artist: text("album_artist") || text("artist") };
+}
+
 /**
  * The cover shown, large, and where it came from. Over it, on hover or focus, and
  * always on a touch screen: save it as an image, choose another, or remove the
@@ -528,6 +567,8 @@ function CoverBox({
   error,
   onChoose,
   onRemove,
+  findingCovers = false,
+  onFindCovers,
 }: {
   /** The song's title, which names a saved image. */
   readonly title: string;
@@ -538,10 +579,13 @@ function CoverBox({
   readonly error: string;
   readonly onChoose: (image: File) => void;
   readonly onRemove: () => void;
+  /** Whether the covers found for the song's album show; none for a song on no album. */
+  readonly findingCovers?: boolean;
+  readonly onFindCovers?: () => void;
 }) {
   const shown = details.shown.cover;
   const yours = details.origins.household?.cover !== undefined;
-  const cover = typeof shown?.value === "string" && shown.value !== "" ? shown.value : undefined;
+  const cover = shownCoverOf(details);
   const choose = cover === undefined ? "Add a cover" : "Replace the cover";
   return (
     <div className="cover-box">
@@ -582,6 +626,18 @@ function CoverBox({
               }}
             />
           </label>
+          {onFindCovers !== undefined && (
+            <button
+              type="button"
+              className="cover-tool"
+              aria-label="Find covers on MusicBrainz"
+              aria-expanded={findingCovers}
+              title="Find covers on MusicBrainz"
+              onClick={onFindCovers}
+            >
+              <MagnifyingGlassIcon weight="bold" aria-hidden />
+            </button>
+          )}
           {yours && (
             <button
               type="button"

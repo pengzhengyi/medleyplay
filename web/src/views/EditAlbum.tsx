@@ -8,10 +8,13 @@
  * in Edit details, instead.
  */
 
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useRef, useState } from "react";
 
 import type { Detail, Track } from "../api";
 import { albumArtistOf } from "../library/views";
+import { Cover } from "./Cover";
+import { CoverFinder } from "./CoverFinder";
 import { Modal } from "./Modal";
 
 /** The album details edited here, each with its label and how its songs show it. */
@@ -47,14 +50,19 @@ function sharedOf(songs: readonly Track[]): Record<AlbumDetail, string | undefin
   >;
 }
 
-/** Edit the album `songs` make up; `onSave` sets the changes on every one of them. */
+/**
+ * Edit the album `songs` make up; `onSave` sets the changes on every one of them, and
+ * `onUseCover` a cover found on MusicBrainz.
+ */
 export function EditAlbum({
   songs,
   onSave,
+  onUseCover,
   onClose,
 }: {
   readonly songs: readonly Track[];
   readonly onSave: (changes: AlbumChanges) => Promise<void>;
+  readonly onUseCover: (cover: string) => Promise<void>;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -67,6 +75,25 @@ export function EditAlbum({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cover, setCover] = useState(() => {
+    const covers = new Set(songs.map((song) => song.cover));
+    return covers.size === 1 ? ([...covers][0] ?? undefined) : undefined;
+  });
+  const [findingCovers, setFindingCovers] = useState(false);
+  const [usingCover, setUsingCover] = useState(false);
+  const [coverError, setCoverError] = useState("");
+  const chooseCover = async (chosen: string) => {
+    setUsingCover(true);
+    setCoverError("");
+    try {
+      await onUseCover(chosen);
+      setCover(chosen);
+    } catch (failure) {
+      setCoverError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setUsingCover(false);
+    }
+  };
 
   const changes: AlbumChanges = {};
   for (const { detail } of FIELDS) {
@@ -97,7 +124,7 @@ export function EditAlbum({
       ref={dialog}
       className="edit-album"
       labelledBy="edit-album-title"
-      locked={saving}
+      locked={saving || usingCover}
       onClose={onClose}
     >
       <form className="card" onSubmit={(event) => void save(event)}>
@@ -128,6 +155,35 @@ export function EditAlbum({
             </label>
           ))}
         </div>
+        {shared.album !== undefined && shared.album !== "" && (
+          <div className="edit-album-cover">
+            <Cover cover={cover ?? null} className="edit-album-cover-image" />
+            <button
+              type="button"
+              className="secondary outline edit-album-find"
+              aria-expanded={findingCovers}
+              onClick={() => {
+                setFindingCovers(!findingCovers);
+              }}
+            >
+              <MagnifyingGlassIcon weight="bold" aria-hidden /> Find covers on MusicBrainz
+            </button>
+          </div>
+        )}
+        {findingCovers && shared.album !== undefined && (
+          <CoverFinder
+            album={shared.album}
+            artist={shared.album_artist ?? ""}
+            shown={cover}
+            busy={usingCover}
+            onUse={(chosen) => void chooseCover(chosen)}
+          />
+        )}
+        {coverError !== "" && (
+          <p className="error" role="alert">
+            {coverError}
+          </p>
+        )}
         {error !== "" && (
           <p className="error" role="alert">
             {error}

@@ -631,6 +631,13 @@ export function Library({
       {editingAlbum !== undefined && (
         <EditAlbum
           songs={editingAlbum}
+          onUseCover={async (cover) => {
+            await library.setDetailsOn(
+              editingAlbum.map(({ id }) => id),
+              { cover },
+            );
+            setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
+          }}
           onSave={async (changes) => {
             const [first] = editingAlbum;
             await library.setDetailsOn(
@@ -666,6 +673,10 @@ export function Library({
           onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
           onSetCover={(image) => library.setCover(editing.track.id, image)}
           onRemoveCover={() => library.removeCover(editing.track.id)}
+          onUseCover={async (cover) => {
+            await library.saveDetails(editing.track.id, { cover });
+            return api.details(editing.track.id);
+          }}
           findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing.track))}
           lookup={library.lookups.get(editing.track.id)}
           online={library.mode?.online !== false}

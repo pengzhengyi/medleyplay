@@ -756,6 +756,31 @@ class ArtistSearchRow(Base):
     looked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class AlbumCoverSearchRow(Base):
+    """What a site last answered for an album: the covers of its releases, best first.
+
+    `key` is a hash of the album and its artist as written, folded. Each of `covers`
+    names its release and what tells it apart, and the cover holding its front cover.
+    `pick` is the release an AI model chose of `offered`, the releases it was shown,
+    with why, the model that answered and where, as they were then; `None` until one
+    chose, or when it chose none.
+    """
+
+    __tablename__ = "album_cover_search"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    album: Mapped[str] = mapped_column(String(512))
+    artist: Mapped[str] = mapped_column(String(512))
+    covers: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    offered: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    pick: Mapped[str | None] = mapped_column(String(36), default=None)
+    why: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    model: Mapped[str] = mapped_column(String(128), default="", server_default="")
+    host: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    chosen_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+
+
 class ArtistHouseholdRow(Base):
     """What the household chose for an artist, apart from what the sites said.
 

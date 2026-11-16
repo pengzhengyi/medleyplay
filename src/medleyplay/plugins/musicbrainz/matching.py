@@ -47,13 +47,15 @@ def recording_query(title: str, artist: str, album: str | None = None) -> str:
 
 
 def release_query(album: str, artist: str) -> str:
-    """Return the query for a release called `album` by `artist`.
+    """Return the query for a release called `album` by `artist`, or by anyone for no artist.
 
     ```text
     release:"生如夏花" AND artist:"朴树"
+    release:"生如夏花"
     ```
     """
-    return f'release:"{escape_lucene(album)}" AND artist:"{escape_lucene(artist)}"'
+    query = f'release:"{escape_lucene(album)}"'
+    return f'{query} AND artist:"{escape_lucene(artist)}"' if artist else query
 
 
 def artist_query(name: str) -> str:
@@ -95,10 +97,14 @@ class Candidate:
 
 def best(candidates: list[Candidate], album: str | None) -> Candidate | None:
     """Return the best candidate scoring at least `MIN_SCORE`, or `None` when none does."""
+    passing = ranked(candidates, album)
+    return passing[0] if passing else None
+
+
+def ranked(candidates: list[Candidate], album: str | None) -> list[Candidate]:
+    """Return the candidates scoring at least `MIN_SCORE`, best first."""
     passing = [each for each in candidates if each.score >= MIN_SCORE]
-    if not passing:
-        return None
-    return min(passing, key=lambda each: _rank(each, album))
+    return sorted(passing, key=lambda each: _rank(each, album))
 
 
 def _rank(candidate: Candidate, album: str | None) -> tuple[int, bool, bool, tuple[int, int, int]]:

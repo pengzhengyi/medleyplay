@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An album's cover from MusicBrainz** — *Find covers on MusicBrainz*, among a
+  song's cover tools and beside the album's cover in *Edit album*, shows the front
+  covers of the album's releases, with date, country, and format; with an AI set
+  up, the release a model picks is marked *AI pick*. Choosing one sets it on the
+  song, or on every song of the album. `GET /api/album-covers`, and
+  `POST /api/album-covers/find` and `/choose`, run the Jobs `find_covers` and
+  `choose_cover`; plugins answer the new `cover_finder` and `cover_chooser`.
+
 - **Downloaded says how many songs download** — its rail item, tab, and menu
   entry carry a count while songs download, as Clean up's does; a song added
   from a site shows in Downloaded at once, while it downloads, and stays there

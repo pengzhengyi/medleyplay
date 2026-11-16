@@ -343,6 +343,43 @@ export interface ArtistSuggestionState {
   readonly failure: string | null;
 }
 
+/** A release of an album, and what tells it apart from the others. */
+export interface CoverRelease {
+  readonly release_id: string;
+  readonly title: string;
+  readonly artist: string;
+  /** When it came out, as `1997`, `1997-05`, or `1997-05-21`; empty when unknown. */
+  readonly date: string;
+  readonly country: string;
+  /** Its media, such as `CD`, or `CD + DVD`. */
+  readonly format: string;
+  readonly tracks: number | null;
+}
+
+/** What is known of an album's covers on MusicBrainz, an AI model's pick, and what is asked. */
+export interface AlbumCovers {
+  /** The covers last found, best first, each with its release. */
+  readonly covers: readonly { readonly release: CoverRelease; readonly cover: string }[];
+  readonly found_at: string | null;
+  /** The release an AI model picked of those found, why, and who answered. */
+  readonly pick: {
+    readonly release_id: string;
+    readonly why: string;
+    readonly model: string;
+    readonly host: string;
+    readonly at: string;
+  } | null;
+  readonly finding: boolean;
+  readonly choosing: boolean;
+  /** Whether the asking waits for medleyplay to be Online. */
+  readonly waiting: boolean;
+  /** Why the last finding failed; only to the Account that asked, and to admins. */
+  readonly failure: string | null;
+  readonly choice_failure: string | null;
+  /** Whether an AI model may be asked to pick: one is set up, and none picked among these. */
+  readonly may_choose: boolean;
+}
+
 /** An artist's or album's name shown on Tracks with more than the name in it, tidied. */
 export interface NameToTidy {
   /** What the name names: an artist or album artist, or an album. */
@@ -997,6 +1034,18 @@ export const api = {
   /** Ask an AI model which name to show an artist by, and who it is; nothing changes. */
   suggestForArtist: (artistId: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/suggestion`),
+  /** What is known of the covers of the album `album` by `artist`, its album artist or artist. */
+  albumCovers: (album: string, artist: string) =>
+    call<AlbumCovers>(
+      "GET",
+      `/api/album-covers?${new URLSearchParams({ album, artist }).toString()}`,
+    ),
+  /** Ask MusicBrainz for the covers of an album's releases; nothing changes. */
+  findAlbumCovers: (album: string, artist: string) =>
+    call<null>("POST", "/api/album-covers/find", { album, artist }),
+  /** Ask an AI model which of an album's releases found is the album; nothing changes. */
+  chooseAlbumCover: (album: string, artist: string) =>
+    call<null>("POST", "/api/album-covers/choose", { album, artist }),
   /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */

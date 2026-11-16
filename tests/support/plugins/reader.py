@@ -63,6 +63,18 @@ The artist finder `musicbrainz` answers by the name asked about:
 | `披头士`, `甲壳虫`, `Beatles` | The Beatles at 100, going by each; a tribute band at 61 |
 | `Refuse` | refused |
 | any other | no artist |
+
+The cover finder `musicbrainz` answers by the album asked about:
+
+| Album | Answers |
+| --- | --- |
+| `Help!` | its 1965 vinyl and its 1987 CD, each with its cover |
+| `Forged` | one release, whose cover is no image |
+| `Refuse` | refused |
+| any other | no cover |
+
+The cover chooser `ai-details` picks the latest release offered, unless a song of the
+album is *Refused*, when the provider refuses the key, or *Silence*, when it picks none.
 """
 
 import re
@@ -75,6 +87,8 @@ from medleyplay.plugin_api import (
     ARTIST_DESCRIBER,
     ARTIST_FINDER,
     ARTIST_NAME_FINDER,
+    COVER_CHOOSER,
+    COVER_FINDER,
     TRACK_ENRICHER,
     AiFailure,
     AiFailureKind,
@@ -82,8 +96,10 @@ from medleyplay.plugin_api import (
     ArtistAlias,
     Chapter,
     ChooseArtists,
+    ChooseCover,
     ChosenArtist,
     ChosenArtists,
+    ChosenCover,
     CommunityRating,
     DescribeArtist,
     DescribedArtist,
@@ -92,10 +108,13 @@ from medleyplay.plugin_api import (
     EnrichTrack,
     FindArtist,
     FindArtistNames,
+    FindCovers,
     FindStatus,
     FoundArtist,
     FoundArtistNames,
     FoundArtists,
+    FoundCover,
+    FoundCovers,
     NetworkError,
     Plugin,
     RatedAs,
@@ -432,6 +451,68 @@ class ArtistDescriptions:
         )
 
 
+HELP_VINYL: Final = "0a1b2c3d-0000-4000-8000-000000001965"
+"""The 1965 vinyl of *Help!* the cover finder gives first."""
+HELP_CD: Final = "0a1b2c3d-0000-4000-8000-000000001987"
+"""The 1987 CD of *Help!*, which the cover chooser picks."""
+
+
+class Covers:
+    """Answers as MusicBrainz would for *Help!*, writing each cover into the folder asked for."""
+
+    def find(self, request: FindCovers) -> FoundCovers:
+        folder = Path(request.folder)
+        if request.album == "Refuse":
+            return FoundCovers(status=FindStatus.REFUSED, message="MusicBrainz refused.")
+        if request.album == "Forged":
+            (folder / HELP_VINYL).write_text("not an image", encoding="utf-8")
+            return FoundCovers(
+                covers=(FoundCover(release_id=HELP_VINYL, title="Forged", file=HELP_VINYL),)
+            )
+        if request.album != "Help!":
+            return FoundCovers()
+        (folder / HELP_VINYL).write_bytes(jpeg_image("Help! 1965"))
+        (folder / HELP_CD).write_bytes(jpeg_image("Help! 1987"))
+        return FoundCovers(
+            covers=(
+                FoundCover(
+                    release_id=HELP_VINYL,
+                    title="Help!",
+                    artist="The Beatles",
+                    date="1965-08-06",
+                    country="GB",
+                    format='12" Vinyl',
+                    tracks=14,
+                    file=HELP_VINYL,
+                ),
+                FoundCover(
+                    release_id=HELP_CD,
+                    title="Help!",
+                    artist="The Beatles",
+                    date="1987-04-30",
+                    country="GB",
+                    format="CD",
+                    tracks=14,
+                    file=HELP_CD,
+                ),
+            )
+        )
+
+
+class CoverChoices:
+    """Picks the latest release offered, as an AI model might for a remaster's songs."""
+
+    def choose(self, request: ChooseCover) -> ChosenCover:
+        if any(song.startswith("Refused") for song in request.songs):
+            return ChosenCover(status=FindStatus.REFUSED, message="The key was refused.")
+        if any(song.startswith("Silence") for song in request.songs):
+            return ChosenCover(ai_answered=request.ai[0].id)
+        latest = max(request.options, key=lambda option: option.date)
+        return ChosenCover(
+            release_id=latest.release_id, why="The CD, by its songs", ai_answered=request.ai[0].id
+        )
+
+
 def register(registry: Registry) -> None:
     """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
 
@@ -444,6 +525,8 @@ def register(registry: Registry) -> None:
     registry.add(ARTIST_NAME_FINDER, "wikipedia", ArtistNames())
     registry.add(ARTIST_CHOOSER, "ai-details", ArtistChoices())
     registry.add(ARTIST_DESCRIBER, "ai-details", ArtistDescriptions())
+    registry.add(COVER_FINDER, "musicbrainz", Covers())
+    registry.add(COVER_CHOOSER, "ai-details", CoverChoices())
 
 
 plugin = Plugin(api_version=1, register=register)

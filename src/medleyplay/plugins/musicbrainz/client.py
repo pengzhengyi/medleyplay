@@ -7,11 +7,13 @@ and `fmt=json`. A 503 is MusicBrainz's rate limit, so the client waits as long a
 MusicBrainz blocked medleyplay, which is a refusal.
 """
 
+import re
 import time
 from collections.abc import Callable
 from http import HTTPStatus
 from importlib.metadata import version
 from typing import Final
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
@@ -43,6 +45,13 @@ SEARCH_LIMIT: Final = 25
 ARTIST_LIMIT: Final = 10
 """The most artists an artist search asks for: a name rarely fits more."""
 MAX_REDIRECTS: Final = 5
+COVER_HOPS: Final = 2
+"""The most redirects followed to a cover."""
+ARCHIVE_HOSTS: Final = frozenset({"coverartarchive.org", "archive.org"})
+"""The hosts a cover is fetched from, with every host under `archive.org`."""
+_MUSICBRAINZ_ID: Final = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 
 type Sleep = Callable[[float], None]
 type Clock = Callable[[], float]
@@ -101,20 +110,40 @@ class MusicBrainzClient:
     def front_cover(self, release_id: str) -> bytes | None:
         """Return the release's front cover, 500 pixels wide, or `None` when there is no cover.
 
-        The Cover Art Archive redirects to the image. A cover that can't be fetched,
-        is larger than a cover may be, or is no image is no cover.
+        A cover that can't be fetched now is no cover either.
         """
-        self._pace()
         try:
-            with self._session.get(
-                f"{COVERS}/release/{release_id}/front-500", timeout=TIMEOUT, stream=True
-            ) as response:
-                if not response.ok:
-                    return None
-                data = _read_at_most(response, MAX_COVER_BYTES)
-        except requests.RequestException:
+            return self.release_cover(release_id)
+        except (NetworkError, RefusedError, ValueError):
             return None
-        return data if data is not None and is_cover_image(data) else None
+
+    def release_cover(self, release_id: str) -> bytes | None:
+        """Return the release's front cover, 500 pixels wide, or `None` when there is none.
+
+        The Cover Art Archive redirects to the image, and only a redirect to the
+        archive's own sites, over HTTPS, is followed, at most twice. A cover the archive
+        doesn't have, is larger than a cover may be, or is no image is none. The archive
+        refusing the request raises `RefusedError`; failing to answer, `NetworkError`.
+        """
+        if not is_release_id(release_id):
+            message = f"{release_id!r} is no MusicBrainz id."
+            raise ValueError(message)
+        self._pace()
+        url = f"{COVERS}/release/{release_id}/front-500"
+        try:
+            for _ in range(COVER_HOPS + 1):
+                with self._session.get(
+                    url, timeout=TIMEOUT, stream=True, allow_redirects=False
+                ) as response:
+                    if not response.is_redirect:
+                        return _cover_of(response)
+                    url = urljoin(url, response.headers.get("Location", ""))
+                if not _on_the_archive(url):
+                    return None
+        except requests.RequestException as error:
+            message = f"The Cover Art Archive couldn't be reached: {type(error).__name__}."
+            raise NetworkError(message) from error
+        return None
 
     def _json(self, url: str, params: dict[str, str], *, missing_ok: bool = False) -> object | None:
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -146,6 +175,36 @@ class MusicBrainzClient:
             self._sleep(self._next_at - now)
             now = self._next_at
         self._next_at = now + SPACING
+
+
+def is_release_id(text: str) -> bool:
+    """Return whether `text` is a MusicBrainz id, as a release's is."""
+    return _MUSICBRAINZ_ID.fullmatch(text) is not None
+
+
+def _on_the_archive(url: str) -> bool:
+    """Return whether `url` is on one of the Cover Art Archive's sites, over HTTPS."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    return (
+        parts.scheme == "https"
+        and parts.port in {None, 443}
+        and (host in ARCHIVE_HOSTS or host.endswith(".archive.org"))
+    )
+
+
+def _cover_of(response: requests.Response) -> bytes | None:
+    """Return the cover a response holds, `None` for none, raising for a failure."""
+    if response.status_code == HTTPStatus.NOT_FOUND:
+        return None
+    if response.status_code == HTTPStatus.FORBIDDEN:
+        message = "The Cover Art Archive refused the request (403)."
+        raise RefusedError(message)
+    if not response.ok:
+        message = f"The Cover Art Archive answered {response.status_code}."
+        raise NetworkError(message)
+    data = _read_at_most(response, MAX_COVER_BYTES)
+    return data if data is not None and is_cover_image(data) else None
 
 
 def _answer(response: requests.Response, *, missing_ok: bool) -> object | None:

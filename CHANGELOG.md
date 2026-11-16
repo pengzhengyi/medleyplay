@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`bilibili:` in the search box** — typing it chooses Bilibili to search, as
+  its toggle does, keeping what follows it; it is listed with the tags, and
+  Backspace in the empty box goes back to the Library.
+
 - **Split artist names in Clean up** — a new section lists each artist name
   written as several, such as *GUMI/MAYU* or *スズム feat. GUMI*, with the artists
   it lists (featured ones marked), to *Split* or *Keep*, or *Split all*; decided

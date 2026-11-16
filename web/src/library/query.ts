@@ -8,7 +8,8 @@
  *
  * asks for songs by Jay Chou rated four stars or more, with *love* in their title,
  * artist, or album. A value with a space is quoted. A word ending in `:` that names no
- * field, such as `re:`, is a plain word.
+ * field, such as `re:`, is a plain word. A site's name and `:`, such as `bilibili:`,
+ * searches that site instead, where one can be searched.
  */
 
 /** The fields a tag can name, in the order the help lists them. */
@@ -86,6 +87,24 @@ export function fieldTyped(
   return field === undefined || match === null
     ? undefined
     : { field, before: text.slice(0, match.index).trim() };
+}
+
+/**
+ * Return the site of `sites` that `text` names at a word's start with `:` (or `：`),
+ * as `bilibili:`, with the rest of `text` without it; `undefined` when it names none.
+ */
+export function siteTyped(
+  text: string,
+  sites: readonly string[],
+): { readonly site: string; readonly rest: string } | undefined {
+  for (const match of text.matchAll(/(?<=^|\s)([^\s:：]+)[:：]/gu)) {
+    const site = sites.find((each) => each === match[1]?.toLowerCase());
+    if (site !== undefined) {
+      const rest = text.slice(0, match.index) + text.slice(match.index + match[0].length);
+      return { site, rest: rest.trim() };
+    }
+  }
+  return undefined;
 }
 
 /**

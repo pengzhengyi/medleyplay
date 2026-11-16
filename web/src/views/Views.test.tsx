@@ -526,6 +526,49 @@ describe("search", () => {
     expect(location.hash).not.toContain("search");
   });
 
+  it("switches to Bilibili when bilibili: is typed, keeping what follows it", async () => {
+    open("", withBilibili());
+    const box = await screen.findByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "bilibili:BV1Xx");
+
+    const scope = screen.getByRole("radiogroup", { name: "Search in" });
+    expect(within(scope).getByRole("radio", { name: "Bilibili" })).toBeChecked();
+    expect(box).toHaveValue("BV1Xx");
+    expect(box).toHaveAttribute("placeholder", "Paste a Bilibili link or a BV or av code");
+  });
+
+  it("lists bilibili: among the tags to search by", async () => {
+    open("", withBilibili());
+    const box = await screen.findByRole("combobox", { name: "Search" });
+    await userEvent.click(box);
+
+    await userEvent.keyboard("{ArrowDown}");
+
+    const listed = screen.getByRole("listbox", { name: "Search by" });
+    await userEvent.click(within(listed).getByRole("option", { name: /^bilibili:/u }));
+    expect(screen.getByRole("radio", { name: "Bilibili" })).toBeChecked();
+  });
+
+  it("goes back to the Library on Backspace in an empty box with Bilibili chosen", async () => {
+    open("", withBilibili());
+    await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "{Backspace}");
+
+    expect(screen.getByRole("radio", { name: "Library" })).toBeChecked();
+  });
+
+  it("keeps a bilibili: typed as a word where only the Library can be searched", async () => {
+    open("");
+    const box = await screen.findByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "bilibili:melt");
+
+    expect(box).toHaveValue("bilibili:melt");
+  });
+
   it("offers no choice of where to search when only the Library can be", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });

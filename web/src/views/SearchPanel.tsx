@@ -17,8 +17,8 @@ export interface PanelOption {
   readonly content: ReactNode;
   readonly className: string;
   readonly title?: string;
-  /** What choosing it does: show a view, or start a tag in the box. */
-  readonly does: { readonly go: Route } | { readonly tag: Field };
+  /** What choosing it does: show a view, start a tag in the box, or search a site. */
+  readonly does: { readonly go: Route } | { readonly tag: Field } | { readonly site: string };
 }
 
 /**

@@ -42,6 +42,17 @@ export type Playing =
 
 const SONG: Playing = { kind: "song" };
 
+/**
+ * Return the song playing in `track`: the Track itself for a song, the song an album
+ * has reached, or `undefined` for a whole album in one file, which has none.
+ */
+export function songPlaying(track: Track, playing: Playing): Track | undefined {
+  if (track.kind !== "album") {
+    return track;
+  }
+  return playing.kind === "album" ? playing.songs[playing.current]?.track : undefined;
+}
+
 /** Return what plays now in `queue`, `position` seconds into its Track, looking Tracks up in `tracks`. */
 export function playingOf(queue: Queue, tracks: ReadonlyMap<number, Track>, position = 0): Playing {
   const now = current(queue);

@@ -28,20 +28,12 @@ import {
 } from "../library/favoriteGroups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf } from "../library/views";
-import type { AlbumSong, Playing } from "../player/albumNow";
+import { type AlbumSong, type Playing, songPlaying } from "../player/albumNow";
 import { hrefOf } from "../routes";
 import { FavoriteHeart } from "./FavoriteHeart";
 import { PlayingKind } from "./PlayingKind";
 import { SiteMark } from "./SiteMark";
 import { FavoriteButton } from "./Transport";
-
-/** The song `track` names in what plays now: itself, the song the position is in, or none. */
-function songOf(track: Track, playing: Playing): Track | undefined {
-  if (track.kind !== "album") {
-    return track;
-  }
-  return playing.kind === "album" ? playing.songs[playing.current]?.track : undefined;
-}
 
 export function NowPlayingNames({
   track,
@@ -72,7 +64,7 @@ export function NowPlayingNames({
   /** Called as a name's link leaves for its page. */
   readonly onNavigate: () => void;
 }) {
-  const song = songOf(track, playing);
+  const song = songPlaying(track, playing);
   const album = track.album !== "" ? track.album : track.kind === "album" ? track.title : "";
   const albumArtist = albumArtistOf(track);
   const mark = (

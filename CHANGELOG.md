@@ -488,6 +488,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Selected text takes the accent color** — highlighting text shows the accent
+  chosen in Appearance, not always jade.
+
 - **A minimized rail stays above the view** — it is a band under the header that
   the view scrolls beneath, rather than a pill the view's text showed through and
   that scrolled away; section bars and the songs' header stick below it.

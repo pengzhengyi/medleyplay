@@ -589,12 +589,37 @@ describe("editing a song's details", () => {
       });
     });
 
-    it("offers no covers to find for a song on no album", async () => {
-      const { dialog } = await renderDialog();
+    it("finds covers of an album file naming no album by its title", async () => {
+      const { calls } = serve({
+        [`GET /api/album-covers?${new URLSearchParams({ album: "ケビョウニンゲン", artist: "GUMI/MAYU" }).toString()}`]:
+          { body: albumCoversOf(["cover-a"]) },
+      });
+      const { dialog } = await renderDialog({
+        ...detailsOf(7),
+        kind: { value: "album", reason: "length" },
+      });
+
+      await userEvent.click(
+        within(dialog).getByRole("button", { name: "Find covers on MusicBrainz" }),
+      );
 
       expect(
-        within(dialog).queryByRole("button", { name: "Find covers on MusicBrainz" }),
-      ).toBeNull();
+        await within(dialog).findByRole("region", { name: "Covers on MusicBrainz" }),
+      ).toBeVisible();
+      expect(calls).toContain(
+        `GET /api/album-covers?${new URLSearchParams({ album: "ケビョウニンゲン", artist: "GUMI/MAYU" }).toString()}`,
+      );
+    });
+
+    it("says covers are found for a song once its album is filled in", async () => {
+      const { dialog } = await renderDialog();
+      const find = within(dialog).getByRole("button", { name: "Find covers on MusicBrainz" });
+
+      await userEvent.click(find);
+
+      expect(find).toHaveAttribute("aria-disabled", "true");
+      expect(find).toHaveAccessibleDescription("Fill in the album to find its covers.");
+      expect(within(dialog).queryByRole("region", { name: "Covers on MusicBrainz" })).toBeNull();
     });
 
     it("removes the household's cover", async () => {

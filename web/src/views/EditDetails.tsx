@@ -544,20 +544,24 @@ function shownCoverOf(details: Details): string | undefined {
   return typeof shown === "string" && shown !== "" ? shown : undefined;
 }
 
-/** Return the song's album and its album artist, or else artist, or nothing for no album. */
+/**
+ * Return the album to find covers of, and its album artist or else artist: the song's
+ * album, or the title of an album file naming none; nothing for a song on no album.
+ */
 function albumOf(details: Details): { album: string; artist: string } | undefined {
   const text = (detail: Detail) => {
     const value = details.shown[detail]?.value;
     return typeof value === "string" ? value.trim() : "";
   };
-  const album = text("album");
+  // A whole album in one file is often named only by its title.
+  const album = text("album") || (details.kind.value === "album" ? text("title") : "");
   return album === "" ? undefined : { album, artist: text("album_artist") || text("artist") };
 }
 
 /**
  * The cover shown, large, and where it came from. Over it, on hover or focus, and
  * always on a touch screen: save it as an image, choose another, or remove the
- * household's own.
+ * household's own. Under it, a way to find the album's covers on MusicBrainz.
  */
 function CoverBox({
   title,
@@ -579,8 +583,9 @@ function CoverBox({
   readonly error: string;
   readonly onChoose: (image: File) => void;
   readonly onRemove: () => void;
-  /** Whether the covers found for the song's album show; none for a song on no album. */
+  /** Whether the covers found for the song's album show. */
   readonly findingCovers?: boolean;
+  /** Show or hide the covers found; none for a song on no album, which can't be searched. */
   readonly onFindCovers?: () => void;
 }) {
   const shown = details.shown.cover;
@@ -626,18 +631,6 @@ function CoverBox({
               }}
             />
           </label>
-          {onFindCovers !== undefined && (
-            <button
-              type="button"
-              className="cover-tool"
-              aria-label="Find covers on MusicBrainz"
-              aria-expanded={findingCovers}
-              title="Find covers on MusicBrainz"
-              onClick={onFindCovers}
-            >
-              <MagnifyingGlassIcon weight="bold" aria-hidden />
-            </button>
-          )}
           {yours && (
             <button
               type="button"
@@ -667,6 +660,21 @@ function CoverBox({
           full={yours ? "Yours" : `From ${ORIGIN_LABELS[shown.origin]}`}
         />
       )}
+      <button
+        type="button"
+        className="secondary outline cover-find"
+        aria-label="Find covers on MusicBrainz"
+        aria-expanded={onFindCovers === undefined ? undefined : findingCovers}
+        aria-disabled={onFindCovers === undefined}
+        title={
+          onFindCovers === undefined
+            ? "Fill in the album to find its covers."
+            : "Find covers on MusicBrainz"
+        }
+        onClick={onFindCovers}
+      >
+        <MagnifyingGlassIcon weight="bold" aria-hidden /> Find covers
+      </button>
       {error !== "" && (
         <p className="error" role="alert">
           {error}

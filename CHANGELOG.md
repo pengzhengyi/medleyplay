@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Find covers from Edit details** — *Edit details* shows *Find covers* under the
+  cover, as *Edit album* does, rather than only as a tool over it. A whole album in
+  one file that names no album is searched by its title; a song on no album shows
+  the button unavailable, saying the album is needed.
+
 - **Artist ids for every song** — each artist the Library's songs name now has an
   id of its own, and every song is bound to its artist and album artist by id.
   Names linked to one MusicBrainz artist share one id, and an artist keeps its id

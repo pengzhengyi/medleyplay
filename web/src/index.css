@@ -5003,6 +5003,22 @@ dialog.modal::backdrop {
   gap: 0.45rem;
 }
 
+/* Under the cover, finding the album's covers on MusicBrainz, as the album editor offers. */
+.cover-box .cover-find {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.cover-box .cover-find[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .cover-frame {
   position: relative;
   width: 100%;
@@ -5300,10 +5316,23 @@ dialog.modal::backdrop {
     gap: 1rem;
   }
 
+  /* Dense, so the ways to fill sit beside the cover even when the covers found come first. */
   .edit-details-side {
     display: grid;
     grid-template-columns: 8rem minmax(0, 1fr);
+    grid-auto-flow: row dense;
     gap: 0.75rem 1rem;
+  }
+
+  .edit-details-side .cover-box {
+    grid-row: span 2;
+    grid-column: 1;
+  }
+
+  .edit-details-side .lookup-bar,
+  .edit-details-side .songs-entry {
+    grid-column: 2;
+    align-self: start;
   }
 
   .edit-details-side .paste-video,

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Split albums: Off, Ask first, or Auto** — a new setting in *Songs and
+  albums* says what becomes of a long file a song list was found for. Clean up
+  gains *Split albums*: each file with how long it is, who listed its songs, and
+  any doubt, to *Split*, *Keep* as one file, *Edit songs…*, or *Ask AI* for a
+  list; *Split all* splits every file with one. *Auto* splits a file whose list
+  can be trusted (the video's and the AI's agreeing, or one raising no doubt),
+  and asks the AI in the background, a few files at a time, about those with
+  video text and no list. Unsplitting a file keeps it as one. New:
+  `GET /api/split-offers`, `POST /api/split-offers/split` and `/keep`, and
+  `split_albums` in the settings.
+
 - **An album's cover from MusicBrainz** — *Find covers on MusicBrainz*, among a
   song's cover tools and beside the album's cover in *Edit album*, shows the front
   covers of the album's releases, with date, country, and format; with an AI set

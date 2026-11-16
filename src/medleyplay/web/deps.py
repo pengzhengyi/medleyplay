@@ -31,6 +31,7 @@ from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.silences import SilenceService
+from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import DeviceId
@@ -61,6 +62,7 @@ class Services:
     mode: ModeService
     details: DetailsService
     songs: SongsService
+    split_offers: SplitOfferService
     silences: SilenceService
     covers: CoverService
     enrichment: EnrichmentService
@@ -150,6 +152,10 @@ def _artists(services: Annotated[Services, Depends(_services)]) -> ArtistService
     return services.artists
 
 
+def _split_offers(services: Annotated[Services, Depends(_services)]) -> SplitOfferService:
+    return services.split_offers
+
+
 def _album_covers(services: Annotated[Services, Depends(_services)]) -> AlbumCoverService:
     return services.album_covers
 
@@ -211,6 +217,7 @@ PolicyDep = Annotated[PolicyService, Depends(_policy)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
 RatingsDep = Annotated[RatingsService, Depends(_ratings)]
 ArtistsDep = Annotated[ArtistService, Depends(_artists)]
+SplitOffersDep = Annotated[SplitOfferService, Depends(_split_offers)]
 AlbumCoversDep = Annotated[AlbumCoverService, Depends(_album_covers)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]

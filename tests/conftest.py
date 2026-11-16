@@ -52,6 +52,7 @@ from medleyplay.application.silences import (
     SilenceService,
     find_silences_kind,
 )
+from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -155,6 +156,16 @@ def ratings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) 
 @pytest.fixture
 def preferences(units: sessionmaker[Session], clock: FakeClock) -> PreferencesService:
     return PreferencesService(units, clock)
+
+
+@pytest.fixture
+def split_offers(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    songs: SongsService,
+    enrichment: EnrichmentService,
+) -> SplitOfferService:
+    return SplitOfferService(units, clock, songs, enrichment)
 
 
 @pytest.fixture
@@ -444,6 +455,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     mode: ModeService,
     details: DetailsService,
     songs: SongsService,
+    split_offers: SplitOfferService,
     silences: SilenceService,
     covers: CoverService,
     enrichment: EnrichmentService,
@@ -476,6 +488,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         mode=mode,
         details=details,
         songs=songs,
+        split_offers=split_offers,
         silences=silences,
         covers=covers,
         enrichment=enrichment,

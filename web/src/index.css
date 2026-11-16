@@ -1640,6 +1640,41 @@ button[aria-disabled="true"] {
   margin: 0;
 }
 
+/* Split albums: each choice on its line, what it does beneath its name. */
+.split-albums {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1.2rem 0 0;
+  padding: 0;
+  border: none;
+}
+
+.split-albums legend {
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+.split-albums .split-albums-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.split-albums-choice input {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+.split-albums-choice span {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.split-albums-choice small {
+  color: var(--muted);
+}
+
 .kind-guess-minutes input {
   width: 6rem;
   height: auto;
@@ -7392,6 +7427,45 @@ button.playing-kind[aria-expanded="true"] {
 .tidy-row .error {
   grid-column: 1 / -1;
   margin: 0.3rem 0 0;
+}
+
+/* A long file to split: its title and artist, then how long it is and who listed its songs. */
+.split-names {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  min-width: 0;
+}
+
+.split-artist {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* A phone gives a file's buttons a line of their own, under what is known of it. */
+@media (width <= 40rem) {
+  .split-row .tidy-actions {
+    grid-row: auto;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    margin-top: 0.4rem;
+  }
+}
+
+.split-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.split-hint:empty {
+  display: none;
+}
+
+.split-doubt {
+  margin-left: 0.35rem;
+  color: var(--caution);
+  vertical-align: -0.1em;
 }
 
 /* The shortcuts while ⌘ is held: over the page, taking no focus and no clicks. */

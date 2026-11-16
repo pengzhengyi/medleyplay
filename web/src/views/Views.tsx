@@ -19,6 +19,7 @@ import type {
   Mode,
   NameToTidy,
   Playlist,
+  SplitOffers,
   Track,
   WaitingDevice,
 } from "../api";
@@ -106,6 +107,7 @@ export interface ViewProps {
   readonly artistNames?: { readonly names: ArtistNames; readonly reload: () => void };
   /** The names to tidy, and a way to read them again; none, unless given. */
   readonly namesToTidy?: { readonly names: readonly NameToTidy[]; readonly reload: () => void };
+  readonly splitOffers?: { readonly names: SplitOffers; readonly reload: () => void };
   /** How many names wait to be cleaned up. */
   readonly toDo?: number;
 }
@@ -314,6 +316,13 @@ function viewOf(given: ViewProps) {
           tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
           artistNames={props.artistNames}
           tracks={props.tracks}
+          {...(props.splitOffers === undefined ? {} : { splits: props.splitOffers })}
+          onEditSongs={(trackId) => {
+            const file = props.tracks.find((track) => track.id === trackId);
+            if (file !== undefined) {
+              props.actions.onEditSongs(file);
+            }
+          }}
         />
       );
   }

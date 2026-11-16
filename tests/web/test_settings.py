@@ -16,6 +16,7 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "storage_limit": None,
         "removal_order": "least_favorite",
         "album_minutes": 20,
+        "split_albums": "approval",
         "revision": 0,
     }
 
@@ -80,3 +81,34 @@ def test_saving_without_the_album_length_keeps_the_one_saved(client: TestClient)
     saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
 
     assert (saved.json()["storage_limit"], saved.json()["album_minutes"]) == (TWENTY_GIB, None)
+
+
+def test_an_admin_has_long_files_split_by_a_list_that_can_be_trusted(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    saved = client.put(
+        "/api/settings", json={"storage_limit": None, "split_albums": "auto", "revision": 0}
+    )
+
+    assert saved.json()["split_albums"] == "auto"
+
+
+def test_saving_without_what_becomes_of_long_files_keeps_the_choice_saved(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    client.put("/api/settings", json={"storage_limit": None, "split_albums": "off", "revision": 0})
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert saved.json()["split_albums"] == "off"
+
+
+def test_what_becomes_of_long_files_is_one_of_three_choices(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    refused = client.put(
+        "/api/settings", json={"storage_limit": None, "split_albums": "always", "revision": 0}
+    )
+
+    assert refused.status_code == 422

@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
 
+import shared from "./splitDoubts.cases.json";
 import { countsDisagree, doubtsOf } from "./splitDoubts";
 
 const MINUTE = 60_000;
+
+/** The cases the server's split offers are judged by too, in minutes. */
+const SHARED: {
+  readonly cases: readonly {
+    readonly name: string;
+    readonly starts: readonly number[];
+    readonly length: number | null;
+    readonly long: readonly number[];
+    readonly few: boolean;
+  }[];
+} = shared;
 
 describe("what looks wrong with a split", () => {
   it("doubts a song so long it may be two", () => {
@@ -25,6 +37,17 @@ describe("what looks wrong with a split", () => {
 
   it("doubts nothing it can't measure: a start not typed yet, or a file of unknown length", () => {
     expect(doubtsOf([0, undefined], null)).toEqual({ long: new Set(), few: false });
+  });
+});
+
+describe("what looks wrong with a split, as the server judges it too", () => {
+  it.each(SHARED.cases)("judges $name", ({ starts, length, long, few }) => {
+    const doubts = doubtsOf(
+      starts.map((start) => start * MINUTE),
+      length === null ? null : length * MINUTE,
+    );
+
+    expect({ long: [...doubts.long], few: doubts.few }).toEqual({ long, few });
   });
 });
 

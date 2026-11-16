@@ -13,14 +13,14 @@ describe("moving between views", () => {
     expect(links.at(-2)).toBe(cleanUp);
     expect(links.at(-3)).toHaveAccessibleName(/^Insights/);
     expect(links.at(-1)).toHaveAccessibleName("Settings");
-    expect(cleanUp).toHaveAccessibleName("Clean up, 30 names to clean up");
+    expect(cleanUp).toHaveAccessibleName("Clean up, 30 to clean up");
     expect(cleanUp).toHaveAttribute("href", "#/clean-up");
   });
 
   it("gives Insights the count too, for a phone, whose tab bar leaves Clean up out", () => {
     render(<Nav route={{ view: "library" }} toDo={1} />);
 
-    const insights = screen.getByRole("link", { name: "Insights, 1 name to clean up" });
+    const insights = screen.getByRole("link", { name: "Insights, 1 to clean up" });
 
     expect(insights).toHaveTextContent("Insights1");
   });
@@ -56,9 +56,9 @@ describe("moving between views", () => {
     const nav = screen.getByRole("navigation", { name: "Views" });
     expect(nav).toHaveClass("collapsed");
     expect(screen.getByRole("link", { name: "Radio" })).toHaveAttribute("title", "Radio");
-    expect(screen.getByRole("link", { name: "Clean up, 2 names to clean up" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Clean up, 2 to clean up" })).toHaveAttribute(
       "title",
-      "Clean up, 2 names to clean up",
+      "Clean up, 2 to clean up",
     );
     const toggle = screen.getByRole("button", { name: "Show the views' names" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");

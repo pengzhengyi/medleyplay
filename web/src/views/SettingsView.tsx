@@ -34,6 +34,7 @@ import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { RatingsSettings } from "./RatingsSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
+import { SplitSettings } from "./SplitSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
@@ -198,12 +199,15 @@ export function SettingsView({
     network: <NetworkSettings admin={admin} mode={mode} onModeChecked={onModeChecked} />,
     devices: <DeviceSettings waiting={waitingDevices} />,
     kinds: (
-      <KindSettings
-        admin={admin}
-        settings={household}
-        onSettings={keepNewest}
-        onChanged={onKindsChanged}
-      />
+      <>
+        <KindSettings
+          admin={admin}
+          settings={household}
+          onSettings={keepNewest}
+          onChanged={onKindsChanged}
+        />
+        <SplitSettings admin={admin} settings={household} onSettings={keepNewest} />
+      </>
     ),
     ratings: <RatingsSettings onChanged={onRatingsChanged} />,
     storage: <StorageSettings admin={admin} settings={household} onSettings={keepNewest} />,

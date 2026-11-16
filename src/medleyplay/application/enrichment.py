@@ -16,7 +16,7 @@ Reset                   a stopped enricher an admin
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 from typing import Final
@@ -42,6 +42,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.community import link_is_on
 from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
 from medleyplay.domain.enrichers import (
+    AI_DETAILS,
     ENRICHERS,
     MESSAGES,
     Enricher,
@@ -77,6 +78,8 @@ from medleyplay.programs.info_json import MAX_START_MS
 
 ENRICH_KIND: Final = "enrich_track"
 SITE_TEXT: Final = "site"
+FAILED_ASK_WAIT: Final = timedelta(days=1)
+"""How long a Track whose asking of the AI failed waits before the AI is asked again for no one."""
 """Where the video's text came from when an enricher read it from a site."""
 
 type EnrichKind = JobKind[EnrichJob, EnrichedTrack]
@@ -411,6 +414,50 @@ class EnrichmentService:
             _request(enricher, found, shown_now, duration_ms, text, hint),
             requested_by,
         )
+
+    def ask_ai_about(self, track_ids: Sequence[TrackId], *, at_most: int) -> int:
+        """Ask the AI, for no one, about each Track never asked about with its text now.
+
+        At most `at_most` of the AI's Jobs run or wait at once, counting those already
+        queued; a Track whose last Job for the AI failed less than a day ago waits for
+        that day to pass. Return how many were queued.
+        """
+        enricher = AI_DETAILS
+        if not track_ids or not self._available(enricher):
+            return 0
+        now = self._clock()
+        with self._units() as db:
+            if db.get(EnricherStopRow, enricher.name) is not None:
+                return 0
+            set_up = is_set_up(db)
+            found = candidates(db, enricher, list(track_ids))
+        busy = sum(
+            view.job.target.endswith(f":{enricher.name}")
+            for view in self._jobs.active_of(ENRICH_KIND)
+        )
+        queued = 0
+        for track_id, candidate in found.items():
+            if busy + queued >= at_most:
+                break
+            target = enrich_target(track_id, enricher.name)
+            latest = self._jobs.latest(ENRICH_KIND, target)
+            failed_lately = (
+                latest is not None
+                and latest.state is JobState.FAILED
+                and latest.finished_at is not None
+                and now - latest.finished_at < FAILED_ASK_WAIT
+            )
+            if (
+                candidate.facts.asked_at is not None
+                or failed_lately
+                or (latest is not None and latest.state.is_active)
+                or why_not(candidate.facts, now, stopped=False, enricher=enricher, set_up=set_up)
+                is not None
+            ):
+                continue
+            self._submit(enricher, track_id, None)
+            queued += 1
+        return queued
 
     def find_details_for_all(self, caller: Account, name: str) -> int:
         """Queue the enricher for every eligible Track; admins only. Return how many were queued.

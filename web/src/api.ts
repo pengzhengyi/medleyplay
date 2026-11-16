@@ -777,6 +777,8 @@ export interface TrackDownload {
   readonly message: string;
   /** What made a Download that exists; `manual` for a file the household added. */
   readonly backend: string | null;
+  /** The Job downloading it, or the one that failed, to retry; `null` for none. */
+  readonly job_id: number | null;
 }
 
 /** A request the server refused; `status` is its HTTP status, and `code` names why, if it says. */
@@ -1075,6 +1077,8 @@ export const api = {
   /** Where a site Track's Download stands. */
   download: (trackId: number) =>
     call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),
+  /** Run a failed or cancelled Job again, as a new Job. */
+  retryJob: (jobId: number) => call<Job>("POST", `/api/jobs/${String(jobId)}/retry`),
   mode: () => call<Mode>("GET", "/api/mode"),
   /** Read the network and check the internet now; one reached is Online at once. */
   checkMode: () => call<Mode>("POST", "/api/mode/check"),

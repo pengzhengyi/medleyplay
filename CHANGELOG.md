@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **See why a download failed, and retry it** — the warning mark on a song
+  whose download failed opens why, as the server says it, with *Retry download*
+  and *Add the file…*; `GET /api/tracks/{id}/download` names the Job to retry as
+  `job_id`.
+
 - **Correct an artist name from Clean up** — in *Link artist names*, pressing a
   name's song count opens its songs; a name MusicBrainz doesn't know that starts
   with one the Library has, as *告五人2019超强音质的*, offers *Use 告五人* to show

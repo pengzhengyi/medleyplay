@@ -56,15 +56,20 @@ test("a Bilibili code opens the add dialog, and adding it makes a Track that dow
   await expect(
     row(page, "Night Drive").getByRole("button", { name: "Favorite Night Drive" }),
   ).toBeVisible();
-  await expect(row(page, "Night Drive").getByText("Download failed")).toBeHidden();
+  await expect(
+    row(page, "Night Drive").getByRole("button", { name: /^Download failed/ }),
+  ).toBeHidden();
 });
 
 test("a failed Download says so, and the file added by hand plays", async ({ page }) => {
   const dialog = await lookUp(page, "https://www.bilibili.com/video/BVrefused");
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(row(page, "BVrefused").getByText("Download failed")).toBeVisible();
+  await row(page, "BVrefused")
+    .getByRole("button", { name: /^Download failed/ })
+    .click();
+  await expect(page.getByRole("menu")).toContainText("Bilibili refused the login.");
 
-  await row(page, "BVrefused").getByRole("button", { name: "Add the file…" }).click();
+  await page.getByRole("menuitem", { name: "Add the file…" }).click();
   const adding = page.getByRole("dialog", { name: "Add the file for “BVrefused”" });
   await expect(adding.getByRole("status")).toHaveText(
     "The download failed: Bilibili refused the login.",
@@ -77,7 +82,9 @@ test("a failed Download says so, and the file added by hand plays", async ({ pag
   await adding.getByRole("button", { name: "Add", exact: true }).click();
 
   await expect(page.getByText("Added the file for “BVrefused”.")).toBeVisible();
-  await expect(row(page, "BVrefused").getByText("Download failed")).toBeHidden();
+  await expect(
+    row(page, "BVrefused").getByRole("button", { name: /^Download failed/ }),
+  ).toBeHidden();
   await page.getByRole("button", { name: "BVrefused", exact: true }).click();
   await expect
     .poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.currentTime))

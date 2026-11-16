@@ -71,7 +71,7 @@ import {
   SongFilters,
 } from "./SongFilters";
 import { KindMark } from "./KindMark";
-import { MoreWays, TrackMenu, type TrackMenuActions } from "./TrackMenu";
+import { DownloadFailed, MoreWays, TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { STATUS_ICONS } from "./statusIcons";
 
 /** What every cell may need: the page's callbacks, which Track is playing, and the songs of files. */
@@ -868,20 +868,7 @@ const COLUMNS: Column[] = [
             {track.title}
           </button>
           {!playable && <span className="why">{WHY[track.availability]}</span>}
-          {track.download_failed && (
-            <span className="why failed">
-              Download failed
-              <button
-                type="button"
-                className="add-file-link"
-                onClick={() => {
-                  actions.onAddFile(track);
-                }}
-              >
-                Add the file…
-              </button>
-            </span>
-          )}
+          {track.download_failed && <DownloadFailed track={track} onAddFile={actions.onAddFile} />}
           <span className="subtitle" aria-hidden>
             {track.artist}
           </span>

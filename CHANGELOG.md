@@ -491,6 +491,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Selected text takes the accent color** — highlighting text shows the accent
   chosen in Appearance, not always jade.
 
+- **The player's heart is Now Playing's** — while a whole album in one file plays,
+  the player's heart favorites the album, as Now Playing's does, rather than the
+  file; while a split file plays whole, it favorites the song playing.
+
 - **A minimized rail stays above the view** — it is a band under the header that
   the view scrolls beneath, rather than a pill the view's text showed through and
   that scrolled away; section bars and the songs' header stick below it.

@@ -10,12 +10,15 @@ import { QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
 import type { Track } from "../api";
+import { type FavoriteGroups, canFavorite, isFavoriteAlbum } from "../library/favoriteGroups";
+import { albumArtistOf } from "../library/views";
 import { formatTime } from "../format";
-import { albumSteps, albumTimeline, playingOf } from "../player/albumNow";
+import { albumSteps, albumTimeline, playingOf, songPlaying } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
+import { FavoriteHeart } from "./FavoriteHeart";
 import { AlbumCard, PlayingKind } from "./PlayingKind";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
@@ -28,6 +31,8 @@ export function PlayerBar({
   track,
   tracks,
   onFavorite,
+  favorites,
+  onFavoriteAlbum,
   menuActions,
   queueOpen,
   onToggleQueue,
@@ -38,6 +43,9 @@ export function PlayerBar({
   readonly track: Track | undefined;
   readonly tracks: ReadonlyMap<number, Track>;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
+  /** The artists and albums the Account favorited, for the heart of a whole album playing. */
+  readonly favorites: FavoriteGroups;
+  readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
   readonly menuActions: TrackMenuActions;
   /** Whether the queue is open over the page, as it can be on a narrow screen. */
   readonly queueOpen: boolean;
@@ -110,7 +118,15 @@ export function PlayerBar({
           <strong>{track?.title ?? "Nothing playing"}</strong>
           <span>{track?.artist ?? "Choose a Track to play it"}</span>
         </div>
-        {track !== undefined && <FavoriteButton track={track} onFavorite={onFavorite} />}
+        {track !== undefined && (
+          <PlayingHeart
+            track={track}
+            song={songPlaying(track, nowPlaying)}
+            favorites={favorites}
+            onFavorite={onFavorite}
+            onFavoriteAlbum={onFavoriteAlbum}
+          />
+        )}
         {track !== undefined && <TrackMenu track={track} actions={menuActions} queueing={false} />}
       </div>
       <Transport
@@ -147,5 +163,43 @@ export function PlayerBar({
         </span>
       </div>
     </section>
+  );
+}
+
+/**
+ * The heart of what plays, the one Now Playing shows: the song playing, or, for a whole
+ * album in one file, which has no song, the album.
+ */
+function PlayingHeart({
+  track,
+  song,
+  favorites,
+  onFavorite,
+  onFavoriteAlbum,
+}: {
+  readonly track: Track;
+  readonly song: Track | undefined;
+  readonly favorites: FavoriteGroups;
+  readonly onFavorite: (track: Track, favorite: boolean) => void;
+  readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
+}) {
+  if (song !== undefined) {
+    return <FavoriteButton track={song} onFavorite={onFavorite} />;
+  }
+  const artist = albumArtistOf(track);
+  if (track.album === "" || !canFavorite(track.album)) {
+    return <FavoriteButton track={track} onFavorite={onFavorite} />;
+  }
+  return (
+    <FavoriteHeart
+      kind="album"
+      name={track.album}
+      favorite={isFavoriteAlbum(favorites, artist, track.album)}
+      onChange={(favorite) => {
+        onFavoriteAlbum(artist, track.album, favorite);
+      }}
+      loved={0}
+      suggestionKey=""
+    />
   );
 }

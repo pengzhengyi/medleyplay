@@ -58,3 +58,26 @@ export const setRailMinimized: (minimized: boolean) => void = minimize;
 
 /** Whether the rail is minimized to the view shown in this browser. */
 export const useRailMinimized: () => boolean = useMinimized;
+
+/**
+ * What the rail calls each of its views. A view headed by its own name needs no heading
+ * while the rail is minimized: the rail's menu above it says the same.
+ */
+export const VIEW_LABELS = {
+  library: "Library",
+  radio: "Radio",
+  artists: "Artists",
+  albums: "Albums",
+  playlists: "Playlists",
+  downloaded: "Downloaded",
+  insights: "Insights",
+  "clean-up": "Clean up",
+  settings: "Settings",
+} as const;
+
+const RAIL_NAMES: ReadonlySet<string> = new Set(Object.values(VIEW_LABELS));
+
+/** Whether `title` is a view's own name in the rail, as *Library* is. */
+export function isRailNamed(title: string): boolean {
+  return RAIL_NAMES.has(title);
+}

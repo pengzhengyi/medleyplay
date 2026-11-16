@@ -39,6 +39,7 @@ import {
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
 import { querySaid } from "../library/query";
+import { isRailNamed } from "../rail";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
@@ -387,6 +388,8 @@ function ViewHeading({
   readonly children?: ReactNode;
 }) {
   const beside = [heart, edit].some((each) => each !== undefined && each !== false);
+  // A view headed by its rail name; a minimized rail's menu says it already.
+  const named = back === undefined && isRailNamed(title) ? true : undefined;
   return (
     <header className="view-heading">
       {back !== undefined && (
@@ -397,12 +400,16 @@ function ViewHeading({
       )}
       {beside ? (
         <div className="view-title">
-          <h2 className="section">{title}</h2>
+          <h2 className="section" data-rail-named={named}>
+            {title}
+          </h2>
           {heart}
           {edit}
         </div>
       ) : (
-        <h2 className="section">{title}</h2>
+        <h2 className="section" data-rail-named={named}>
+          {title}
+        </h2>
       )}
       {subtitle !== undefined && <p className="subtitle">{subtitle}</p>}
       {children !== undefined && children !== false && <p className="meta">{children}</p>}

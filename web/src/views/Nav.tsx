@@ -30,6 +30,7 @@ import {
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 
+import { VIEW_LABELS } from "../rail";
 import { type Route, hrefOf } from "../routes";
 
 type Top =
@@ -50,15 +51,15 @@ const TOPS: readonly {
   /** Shown under the view before it, and left out of a phone's tab bar. */
   readonly under?: boolean;
 }[] = [
-  { view: "library", label: "Library", icon: MusicNotesSimpleIcon },
-  { view: "radio", label: "Radio", icon: RadioIcon },
-  { view: "artists", label: "Artists", icon: MicrophoneStageIcon },
-  { view: "albums", label: "Albums", icon: VinylRecordIcon },
-  { view: "downloaded", label: "Downloaded", icon: DownloadSimpleIcon },
-  { view: "playlists", label: "Playlists", icon: PlaylistIcon },
-  { view: "insights", label: "Insights", icon: ChartBarIcon },
-  { view: "clean-up", label: "Clean up", icon: BroomIcon, under: true },
-  { view: "settings", label: "Settings", icon: GearSixIcon },
+  { view: "library", label: VIEW_LABELS.library, icon: MusicNotesSimpleIcon },
+  { view: "radio", label: VIEW_LABELS.radio, icon: RadioIcon },
+  { view: "artists", label: VIEW_LABELS.artists, icon: MicrophoneStageIcon },
+  { view: "albums", label: VIEW_LABELS.albums, icon: VinylRecordIcon },
+  { view: "playlists", label: VIEW_LABELS.playlists, icon: PlaylistIcon },
+  { view: "downloaded", label: VIEW_LABELS.downloaded, icon: DownloadSimpleIcon },
+  { view: "insights", label: VIEW_LABELS.insights, icon: ChartBarIcon },
+  { view: "clean-up", label: VIEW_LABELS["clean-up"], icon: BroomIcon, under: true },
+  { view: "settings", label: VIEW_LABELS.settings, icon: GearSixIcon },
 ];
 
 /** The top view a route belongs to: an artist's Tracks belong to Artists, and so on. */

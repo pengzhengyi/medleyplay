@@ -259,6 +259,16 @@ button[aria-disabled="true"] {
       "nav queue" auto
       "main queue" 1fr / minmax(0, 1fr) 20rem;
   }
+
+  /* The rail's menu names the view above it, so the view's own name needn't show twice. */
+  .library.rail-minimized .view-heading [data-rail-named] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .top {

@@ -53,7 +53,9 @@ export function RadioView({
   return (
     <>
       <header className="view-heading">
-        <h2 className="section">Radio</h2>
+        <h2 className="section" data-rail-named>
+          Radio
+        </h2>
       </header>
       <div className="stations">
         <section className="station" aria-label="My station">

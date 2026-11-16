@@ -66,7 +66,9 @@ export function CleanUpView({
   return (
     <>
       <header className="view-heading">
-        <h2 className="section">Clean up</h2>
+        <h2 className="section" data-rail-named>
+          Clean up
+        </h2>
         <p className="meta">{summaryOf(toTidy, toLink)}</p>
       </header>
       {toTidy === 0 && !linkable ? (

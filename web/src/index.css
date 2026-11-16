@@ -1810,9 +1810,12 @@ button[aria-disabled="true"] {
 }
 
 .avatar,
+/* A square, whatever the image's shape: one cell the tile's own size, the image cropped to it. */
 .cover-tile {
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
+  overflow: hidden;
   aspect-ratio: 1;
   margin-bottom: 0.35rem;
   border-radius: 0.9rem;

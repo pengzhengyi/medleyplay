@@ -907,6 +907,30 @@ describe("favorite artists and albums", () => {
 });
 
 describe("the Downloads under way", () => {
+  it("asks for the Tracks again when a Download is for a song not read yet, as one just added is", async () => {
+    let reads = 0;
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/tracks": () => {
+        reads += 1;
+        return {
+          body:
+            reads === 1 ? [trackOf(1, "Intro")] : [trackOf(1, "Intro"), trackOf(9, "Night Drive")],
+        };
+      },
+      "GET /api/downloads": { body: [downloadUnderWayOf(9)] },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+
+    await waitFor(() => {
+      expect([...result.current.tracks.values()].map((track) => track.title)).toEqual([
+        "Intro",
+        "Night Drive",
+      ]);
+    });
+    expect(asked(calls)).toBe(2);
+  });
+
   it("moves each on as its Job runs, and drops it once done", async () => {
     serve({
       ...signedIn([trackOf(9, "Night Drive")]),

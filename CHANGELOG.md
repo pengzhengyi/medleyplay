@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Downloaded says how many songs download** — its rail item, tab, and menu
+  entry carry a count while songs download, as Clean up's does; a song added
+  from a site shows in Downloaded at once, while it downloads, and stays there
+  if its download fails, with the way to retry it.
+
 - **Settings links to the Downloaded view** — in *Downloads and storage*,
   *Downloads* (and *Downloading*, while songs download) opens the Downloaded
   view, and each label now sits on its value's line.

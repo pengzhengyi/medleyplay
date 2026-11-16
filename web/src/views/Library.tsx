@@ -495,6 +495,7 @@ export function Library({
       <Nav
         route={route}
         toDo={toDo}
+        downloading={library.downloading.length}
         collapsed={railCollapsed}
         minimized={railMinimized}
         onToggle={() => {

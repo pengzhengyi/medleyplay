@@ -3,6 +3,7 @@
  *
  * *Clean up* sits under Insights, with how many names wait. A phone's tab bar has no
  * room for it, so there Insights carries the count, and opens with a way to it.
+ * *Downloaded* says how many songs download now.
  *
  * The rail can collapse to its icons, to leave the page more room; each then names its
  * view on hover, as its accessible name always does. Or it minimizes to the view
@@ -97,9 +98,12 @@ export function Nav({
   onToggle,
   onMinimize,
   account,
+  downloading = 0,
 }: {
   readonly route: Route;
   readonly toDo?: number;
+  /** How many songs download now. */
+  readonly downloading?: number;
   readonly collapsed?: boolean;
   readonly minimized?: boolean;
   readonly onToggle?: () => void;
@@ -108,7 +112,12 @@ export function Nav({
 }) {
   const top = topOf(route);
   const waiting = `${String(toDo)} ${toDo === 1 ? "name" : "names"} to clean up`;
-  const countedOf = (view: Top) => toDo > 0 && (view === "clean-up" || view === "insights");
+  const countOf = (view: Top) =>
+    view === "downloaded" ? downloading : view === "clean-up" || view === "insights" ? toDo : 0;
+  const saying = (view: Top) =>
+    view === "downloaded"
+      ? `${String(downloading)} ${downloading === 1 ? "song" : "songs"} downloading`
+      : waiting;
   const className = ["views", collapsed && "collapsed", minimized && "minimized"]
     .filter(Boolean)
     .join(" ");
@@ -116,7 +125,9 @@ export function Nav({
     <nav className={className} aria-label="Views" id="views">
       {(onToggle !== undefined || onMinimize !== undefined) && (
         <div className="views-bar">
-          {minimized && <ViewMenu top={top} toDo={toDo} account={account} />}
+          {minimized && (
+            <ViewMenu top={top} toDo={toDo} downloading={downloading} account={account} />
+          )}
           {onToggle !== undefined && !minimized && (
             <button
               type="button"
@@ -150,8 +161,9 @@ export function Nav({
       <ul className="views-list">
         {TOPS.map(({ view, label, icon: ViewIcon, under = false }) => {
           const current = view === top;
-          const counted = countedOf(view);
-          const named = counted ? `${label}, ${waiting}` : label;
+          const count = countOf(view);
+          const counted = count > 0;
+          const named = counted ? `${label}, ${saying(view)}` : label;
           return (
             <li key={view} className={under ? "under" : undefined}>
               <a
@@ -168,7 +180,7 @@ export function Nav({
                     className={view === "insights" ? "view-count on-phone" : "view-count"}
                     aria-hidden
                   >
-                    {toDo}
+                    {count}
                   </span>
                 )}
               </a>
@@ -189,10 +201,12 @@ export function Nav({
 function ViewMenu({
   top,
   toDo,
+  downloading,
   account,
 }: {
   readonly top: Top | undefined;
   readonly toDo: number;
+  readonly downloading: number;
   readonly account: NavAccount | undefined;
 }) {
   const shown = TOPS.find(({ view }) => view === top);
@@ -222,6 +236,11 @@ function ViewMenu({
                 {view === "clean-up" && toDo > 0 && (
                   <span className="menu-count" aria-hidden>
                     {toDo}
+                  </span>
+                )}
+                {view === "downloaded" && downloading > 0 && (
+                  <span className="menu-count" aria-hidden>
+                    {downloading}
                   </span>
                 )}
               </a>

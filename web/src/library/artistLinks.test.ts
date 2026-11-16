@@ -10,6 +10,7 @@ const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
   sort_name: "Beatles, The",
   disambiguation: "UK rock band",
   country: "GB",
+  photo: "beatles-photo",
   aliases: [
     { name: "披头士", locale: "zh", primary: true },
     { name: "甲壳虫", locale: "zh", primary: false },
@@ -50,6 +51,14 @@ describe("artist links", () => {
       "甲壳虫",
     ]);
     expect(links.aliasesOf(links.groupOf("Melt"))).toEqual([]);
+  });
+
+  it("know the photo of a linked artist, and none for a name alone", () => {
+    const links = linksOf(LINKED);
+
+    expect(links.photoOf(links.groupOf("甲壳虫"))).toBe("beatles-photo");
+    expect(links.photoOf(links.groupOf("Melt"))).toBeNull();
+    expect(NO_LINKS.photoOf(NO_LINKS.groupOf("Melt"))).toBeNull();
   });
 
   it("make a favorite of one name a favorite of every name linked with it", () => {

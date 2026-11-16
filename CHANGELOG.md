@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Artists show their photos** — an artist's tile among the Artists and in
+  search, and its row among the search's suggestions, show its photo, the
+  household's or Wikidata's, where it has one, and its initial where it has none.
+
 - **Search suggests as you type** — under the box, the artists a search names,
   each to open, to show only its songs in the Library, or only the albums it
   sings on, and *Group the Library by artist*; in an empty box, resting the

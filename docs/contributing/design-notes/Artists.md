@@ -187,6 +187,9 @@ nicknames such as *周董*, and Japanese and Korean names.
   keeps every artist's photo.
 - **Credited:** with the photo comes its page on Commons, which says who took it
   and under what license; the artist's page links to it.
+- **Shown** on the artist's page, on its tile among the Artists and in search, and
+  beside it among the search's suggestions, the household's photo in place of
+  Wikidata's; an artist with no photo, or a name linked to none, shows its initial.
 - **A photo Commons doesn't have,** or one that is no such image, is none, and
   the names are kept all the same. Commons refusing, or not answering, fails the
   Job as Wikidata doing so does, so the artist is asked again and keeps the photo

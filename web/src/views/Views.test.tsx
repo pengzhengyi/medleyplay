@@ -564,9 +564,13 @@ function withFavorites(favorites: {
 describe("an artist's page", () => {
   /**
    * The routes of `LIBRARY` with *ryo* linked to the composer MusicBrainz knows, or not,
-   * shown as `shownAs` when the household chose a name for it.
+   * shown as `shownAs` when the household chose a name for it, with `photo` its photo's cover.
    */
-  const withRyo = (linked: boolean, shownAs: string | null = null): Routes => ({
+  const withRyo = (
+    linked: boolean,
+    shownAs: string | null = null,
+    photo: string | null = null,
+  ): Routes => ({
     ...signedIn(LIBRARY, [favoritesPlaylistOf([1])]),
     "GET /api/artist-names": {
       body: {
@@ -578,6 +582,7 @@ describe("an artist's page", () => {
             country: "JP",
             aliases: [{ name: "supercell", locale: null, primary: false }],
             shown_as: shownAs,
+            photo,
           }),
         ],
       },
@@ -612,6 +617,28 @@ describe("an artist's page", () => {
 
     expect(screen.getByRole("dialog", { name: "Edit artist" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: /Shown as/u })).toHaveValue("supercell");
+  });
+
+  it("shows a linked artist's photo on its Artists tile, and an initial on one without", async () => {
+    open("#/artists", withRyo(true, null, "ryo-photo"));
+
+    const ryo = await screen.findByRole("link", { name: /ryo/u });
+    await waitFor(() => {
+      expect(ryo.querySelector(".avatar img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+    });
+    const unlinked = screen.getByRole("link", { name: /ルワン/u });
+    expect(unlinked.querySelector(".avatar img")).toBeNull();
+    expect(unlinked.querySelector(".avatar")).toHaveTextContent("ル");
+  });
+
+  it("shows a linked artist's photo beside it among the search's suggestions", async () => {
+    open("", withRyo(true, null, "ryo-photo"));
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "ryo");
+
+    const ryo = await screen.findByRole("option", { name: "ryo 2 songs" });
+    expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
   });
 
   it("is opened from the Artists by the name its songs write, and keeps its heart", async () => {

@@ -178,6 +178,36 @@ def test_a_failed_download_is_reported_with_its_link_and_the_failure_message(
     assert state.link == "https://www.bilibili.com/video/BVrefused?p=1"
 
 
+def test_a_failed_download_names_the_job_that_failed_so_it_can_be_retried(
+    site: Site, alice: Account
+) -> None:
+    added = add_first_part(site, alice, "BVrefused")
+    assert added.job is not None
+    site.wait_for(added.job.id, JobState.FAILED)
+
+    state = site.manual.state(added.track_id)
+
+    assert state.job_id == added.job.id
+
+
+def test_a_download_that_waits_names_its_job(
+    site: Site, alice: Account, units: sessionmaker[Session]
+) -> None:
+    track_id = _waiting_track(site, alice, units)
+    waiting = site.jobs.latest(DOWNLOAD_KIND, download_target(_source_of(units, track_id)))
+    assert waiting is not None
+
+    state = site.manual.state(track_id)
+
+    assert state.job_id == waiting.id
+
+
+def test_a_finished_download_names_no_job(site: Site, alice: Account) -> None:
+    track_id = _downloaded_part(site, alice)
+
+    assert site.manual.state(track_id).job_id is None
+
+
 def test_a_download_that_waits_is_reported_as_downloading(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:

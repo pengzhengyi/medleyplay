@@ -9,6 +9,7 @@
  */
 
 import {
+  ArrowClockwiseIcon,
   ArrowSquareOutIcon,
   CaretDownIcon,
   CaretRightIcon,
@@ -25,11 +26,12 @@ import {
   SwapIcon,
   UploadSimpleIcon,
   VinylRecordIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
-import type { Kind, Track } from "../api";
+import { type Kind, type Track, api } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf } from "../library/views";
@@ -364,7 +366,7 @@ function Item({
   readonly icon: ReactNode;
   readonly children: string;
   readonly disabled?: boolean;
-  readonly onSelect: () => void;
+  readonly onSelect: (event: Event) => void;
 }) {
   return (
     <Menu.Item className="track-menu-item" disabled={disabled} onSelect={onSelect}>
@@ -373,5 +375,110 @@ function Item({
       </span>
       {children}
     </Menu.Item>
+  );
+}
+
+/**
+ * *Download failed* on a song's row, opening why it failed, read when opened, with
+ * *Retry download* and *Add the file…*. Retrying runs the failed Job again; the menu
+ * stays open until the server answers, saying why if it refuses.
+ */
+export function DownloadFailed({
+  track,
+  onAddFile,
+}: {
+  readonly track: Track;
+  readonly onAddFile: (track: Track) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [why, setWhy] = useState<{ readonly message: string; readonly job: number | null }>();
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState("");
+  const read = () => {
+    setError("");
+    api.download(track.id).then(
+      (download) => {
+        setWhy({ message: download.message, job: download.job_id });
+      },
+      (failure: unknown) => {
+        setError(failure instanceof Error ? failure.message : String(failure));
+      },
+    );
+  };
+  const retry = (job: number) => {
+    setRetrying(true);
+    setError("");
+    api.retryJob(job).then(
+      () => {
+        setRetrying(false);
+        setOpen(false);
+      },
+      (failure: unknown) => {
+        setRetrying(false);
+        setError(failure instanceof Error ? failure.message : String(failure));
+      },
+    );
+  };
+  return (
+    <Menu.Root
+      modal={false}
+      open={open}
+      onOpenChange={(opening) => {
+        setOpen(opening);
+        if (opening) {
+          read();
+        }
+      }}
+    >
+      <Menu.Trigger asChild>
+        <button
+          type="button"
+          className="why failed"
+          aria-label={`Download failed: why, and what to do, for ${track.title}`}
+          title="Download failed: why, and what to do"
+        >
+          <WarningCircleIcon weight="bold" aria-hidden />
+          <CaretDownIcon weight="bold" aria-hidden />
+        </button>
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content
+          className="track-menu download-failed"
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+        >
+          <Menu.Label className="download-failed-why">
+            {why === undefined ? "Reading why it failed…" : why.message}
+          </Menu.Label>
+          {error !== "" && (
+            <p className="download-failed-error" role="alert">
+              {error}
+            </p>
+          )}
+          <Item
+            icon={<ArrowClockwiseIcon className={retrying ? "spin" : undefined} />}
+            disabled={why?.job == null || retrying}
+            onSelect={(event) => {
+              // Open until the server answers, so a refusal shows here.
+              event.preventDefault();
+              if (why?.job != null) {
+                retry(why.job);
+              }
+            }}
+          >
+            {retrying ? "Retrying…" : "Retry download"}
+          </Item>
+          <Item
+            icon={<UploadSimpleIcon />}
+            onSelect={() => {
+              onAddFile(track);
+            }}
+          >
+            Add the file…
+          </Item>
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }

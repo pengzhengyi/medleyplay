@@ -455,7 +455,10 @@ export function unreadableLookupOf(
   };
 }
 
-/** Where a site Track's Download stands: `status`, with `message` when it has one. */
+/**
+ * Where a site Track's Download stands: `status`, with `message` when it has one; one
+ * failed or downloading names its Job, numbered `trackId + 500`.
+ */
 export function downloadOf(
   trackId: number,
   status: TrackDownload["status"],
@@ -470,6 +473,7 @@ export function downloadOf(
     status,
     message,
     backend: status === "downloaded" ? "manual" : null,
+    job_id: status === "failed" || status === "downloading" ? trackId + 500 : null,
   };
 }
 

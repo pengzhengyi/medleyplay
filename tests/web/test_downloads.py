@@ -37,14 +37,19 @@ def small_limit_client(
     yield from signed_in_client(dataclasses.replace(services, manual_downloads=limited))
 
 
-def _failed_track(client: TestClient) -> int:
-    """Add a part whose Download fails at once, wait for that, and return its Track's id."""
+def _failed_download(client: TestClient) -> tuple[int, int]:
+    """Add a part whose Download fails at once, wait for that; return its Track's and Job's ids."""
     added = client.post("/api/links", json=ADD_REFUSED).json()[0]
     ends = time.monotonic() + 20
     while client.get(f"/api/jobs/{added['job']['id']}").json()["state"] != "failed":
         assert time.monotonic() < ends, "The Download never failed."
         time.sleep(0.05)
-    return int(added["track_id"])
+    return int(added["track_id"]), int(added["job"]["id"])
+
+
+def _failed_track(client: TestClient) -> int:
+    """Add a part whose Download fails at once, wait for that, and return its Track's id."""
+    return _failed_download(client)[0]
 
 
 def _put(
@@ -54,7 +59,7 @@ def _put(
 
 
 def test_a_failed_download_is_reported_with_its_link_and_why(site_client: TestClient) -> None:
-    track_id = _failed_track(site_client)
+    track_id, job_id = _failed_download(site_client)
 
     response = site_client.get(f"/api/tracks/{track_id}/download")
 
@@ -67,7 +72,19 @@ def test_a_failed_download_is_reported_with_its_link_and_why(site_client: TestCl
         "status": "failed",
         "message": "Bilibili refused the login.",
         "backend": None,
+        "job_id": job_id,
     }
+
+
+def test_a_failed_download_is_retried_through_the_job_it_names(site_client: TestClient) -> None:
+    track_id = _failed_track(site_client)
+    failed = site_client.get(f"/api/tracks/{track_id}/download").json()["job_id"]
+
+    retried = site_client.post(f"/api/jobs/{failed}/retry")
+
+    assert retried.status_code == 200
+    now = site_client.get(f"/api/tracks/{track_id}/download").json()
+    assert now["job_id"] == retried.json()["id"]
 
 
 def test_the_track_list_marks_a_failed_download_and_names_the_site(site_client: TestClient) -> None:
@@ -112,6 +129,7 @@ def test_a_file_in_the_body_becomes_the_tracks_download_and_plays(site_client: T
         "status": "downloaded",
         "message": "",
         "backend": "manual",
+        "job_id": None,
     }
     played = site_client.post(f"/api/tracks/{track_id}/playback").json()
     audio = site_client.get(played["audio_url"])

@@ -194,7 +194,8 @@ Track's kind is decided.
   without the queue actions.
 - **A Track from a site** also has *Add the file yourself…*, which opens the
   dialog for adding its audio file by hand; a Track whose Download failed shows
-  *Download failed* beside *Add the file…* in its row. See
+  a warning mark in its row, named *Download failed*, which opens why, *Retry
+  download*, and *Add the file…*. See
   [Manual downloads](Manual%20downloads.md#the-web-client).
 - **Go to** opens the artist's view, or the album's under its album artist, as
   the Albums view groups it.

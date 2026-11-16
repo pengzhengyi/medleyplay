@@ -6,7 +6,14 @@
  */
 
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
-import { type SubmitEvent, useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type SubmitEvent,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import type { AddedPart, LinkLookup, PartChoice } from "../api";
 import { partLink } from "../library/otherWays";
@@ -199,6 +206,9 @@ function ReadVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
     );
   };
 
+  // The fields are named above the first part that has them, one already added having none.
+  const labelled = rows.findIndex((row) => !row.taken);
+
   return (
     <form onSubmit={submit}>
       <p className="add-link-video">
@@ -206,7 +216,7 @@ function ReadVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
         <span className="add-link-uploader">{lookup.uploader}</span>
       </p>
       <ul className="parts">
-        {rows.map((row) => (
+        {rows.map((row, index) => (
           <li key={row.part} className="part">
             <label className="part-choice">
               <input
@@ -225,30 +235,34 @@ function ReadVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
             </label>
             {!row.taken && (
               <div className="part-fields">
-                <input
-                  type="text"
-                  className="part-input"
-                  aria-label={`Title of part ${String(row.part)}`}
-                  placeholder="Title"
-                  value={row.title}
-                  maxLength={512}
-                  disabled={!row.chosen}
-                  onChange={(event) => {
-                    change(row.part, { title: event.currentTarget.value });
-                  }}
-                />
-                <input
-                  type="text"
-                  className="part-input"
-                  aria-label={`Artist of part ${String(row.part)}`}
-                  placeholder="Artist"
-                  value={row.artist}
-                  maxLength={512}
-                  disabled={!row.chosen}
-                  onChange={(event) => {
-                    change(row.part, { artist: event.currentTarget.value });
-                  }}
-                />
+                <PartField label="Title" shown={index === labelled}>
+                  <input
+                    type="text"
+                    className="part-input"
+                    aria-label={`Title of part ${String(row.part)}`}
+                    placeholder="Title"
+                    value={row.title}
+                    maxLength={512}
+                    disabled={!row.chosen}
+                    onChange={(event) => {
+                      change(row.part, { title: event.currentTarget.value });
+                    }}
+                  />
+                </PartField>
+                <PartField label="Artist" shown={index === labelled}>
+                  <input
+                    type="text"
+                    className="part-input"
+                    aria-label={`Artist of part ${String(row.part)}`}
+                    placeholder="Artist"
+                    value={row.artist}
+                    maxLength={512}
+                    disabled={!row.chosen}
+                    onChange={(event) => {
+                      change(row.part, { artist: event.currentTarget.value });
+                    }}
+                  />
+                </PartField>
               </div>
             )}
           </li>
@@ -332,40 +346,46 @@ function UnreadableVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
         {drafts.map((draft, index) => (
           <li key={draft.key} className="part">
             <div className="part-fields numbered">
-              <input
-                type="number"
-                className="part-input part-number"
-                min={1}
-                max={MAX_PART_NUMBER}
-                aria-label={`Part number ${String(index + 1)}`}
-                placeholder="Part"
-                value={draft.part}
-                onChange={(event) => {
-                  change(draft.key, { part: event.currentTarget.value });
-                }}
-              />
-              <input
-                type="text"
-                className="part-input"
-                aria-label={`Title of part ${String(index + 1)}`}
-                placeholder="Title"
-                value={draft.title}
-                maxLength={512}
-                onChange={(event) => {
-                  change(draft.key, { title: event.currentTarget.value });
-                }}
-              />
-              <input
-                type="text"
-                className="part-input"
-                aria-label={`Artist of part ${String(index + 1)}`}
-                placeholder="Artist"
-                value={draft.artist}
-                maxLength={512}
-                onChange={(event) => {
-                  change(draft.key, { artist: event.currentTarget.value });
-                }}
-              />
+              <PartField label="Part" shown={index === 0}>
+                <input
+                  type="number"
+                  className="part-input part-number"
+                  min={1}
+                  max={MAX_PART_NUMBER}
+                  aria-label={`Part number ${String(index + 1)}`}
+                  placeholder="Part"
+                  value={draft.part}
+                  onChange={(event) => {
+                    change(draft.key, { part: event.currentTarget.value });
+                  }}
+                />
+              </PartField>
+              <PartField label="Title" shown={index === 0}>
+                <input
+                  type="text"
+                  className="part-input"
+                  aria-label={`Title of part ${String(index + 1)}`}
+                  placeholder="Title"
+                  value={draft.title}
+                  maxLength={512}
+                  onChange={(event) => {
+                    change(draft.key, { title: event.currentTarget.value });
+                  }}
+                />
+              </PartField>
+              <PartField label="Artist" shown={index === 0}>
+                <input
+                  type="text"
+                  className="part-input"
+                  aria-label={`Artist of part ${String(index + 1)}`}
+                  placeholder="Artist"
+                  value={draft.artist}
+                  maxLength={512}
+                  onChange={(event) => {
+                    change(draft.key, { artist: event.currentTarget.value });
+                  }}
+                />
+              </PartField>
               {drafts.length > 1 && (
                 <button
                   type="button"
@@ -445,5 +465,27 @@ function Footer({
         </button>
       </footer>
     </>
+  );
+}
+
+/**
+ * A part's field, named above its box on the first part only: the boxes of the parts
+ * below line up under it, as under a column's heading, and keep the name for a screen
+ * reader.
+ */
+function PartField({
+  label,
+  shown,
+  children,
+}: {
+  readonly label: string;
+  readonly shown: boolean;
+  readonly children: ReactNode;
+}) {
+  return (
+    <label className="part-field">
+      <span className={shown ? "part-field-label" : "visually-hidden"}>{label}</span>
+      {children}
+    </label>
   );
 }

@@ -263,16 +263,7 @@ not.
   tidy: each name with its songs, most songs first.
 - **A name's songs on hover:** hovering a name or its song count, or focusing the
   count, shows up to eight of its songs, as artist or album artist, with their
-  albums, and how many more. Pressing the count opens them, to correct: one song
-  in the Library, scrolled to and lit, and more on the name's page.
-- **A likely name for one MusicBrainz doesn't know:** a name that starts with
-  another the Library has, as *告五人2019超强音质的* starts with *告五人*, says
-  *likely 告五人* and offers *Use 告五人*, which shows its songs by that name, as
-  artist and as album artist, through the household's details. The longest such
-  name wins, compared folded; what follows it must be a digit, a space, or a
-  mark, unless the name is in a script written without spaces, such as Chinese,
-  so *Jay* is never offered for *Jayson*. Such a name lists first, as one ready
-  to act on.
+  albums, and how many more.
 - **Each name says where it stands:** *Look up* for one not looked up yet, with
   *Look up 17 names* above the list for all of them; *Looking it up on
   MusicBrainz…* while it is; *Tidy the name first* for a name that needs it; up to

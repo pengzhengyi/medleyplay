@@ -4405,12 +4405,33 @@ dialog.modal::backdrop {
 /* The unreadable form leads with the part's number, narrow, and ends with a remove button. */
 .part-fields.numbered {
   grid-template-columns: 4.5rem minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
 }
 
 .part-input,
 .quality-select {
   height: 2.4rem;
   margin: 0;
+}
+
+/* Pico's padding is taller than the box leaves, which cut the choice's text off below. */
+.quality-select {
+  padding-block: 0;
+  font-weight: 400;
+}
+
+/* A part's field, its name above it as Quality's is; the parts below line up under it. */
+.part-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.part-field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .file-input {

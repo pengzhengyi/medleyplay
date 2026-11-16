@@ -402,6 +402,23 @@ export function useLibrary(onSignedOut: () => void): Library {
     );
   };
 
+  // A Download can be for a song added since the Tracks were read, as one just added is.
+  const askedFor = useRef(new Set<number>());
+  const readAddedTracks = useEffectEvent(() => {
+    reloadTracks();
+  });
+  useEffect(() => {
+    const unread = downloading
+      .map(({ track_id }) => track_id)
+      .filter((id) => !store.confirmed.has(id) && !askedFor.current.has(id));
+    if (store.loaded && unread.length > 0) {
+      for (const id of unread) {
+        askedFor.current.add(id);
+      }
+      readAddedTracks();
+    }
+  }, [downloading, store]);
+
   /** Send `request`, signing out on a 401; then show the Track as the server now has it. */
   const changeDetails = async <T>(id: number, request: Promise<T>): Promise<T> => {
     let answer: T;

@@ -855,6 +855,16 @@ describe("the Downloaded view", () => {
     expect(songs()).toEqual(["Shiver"]);
   });
 
+  it("keeps a song whose download failed among the songs, to try again", async () => {
+    open(hrefOf({ view: "downloaded" }), {
+      ...downloading(),
+      ...signedIn([...LIBRARY, trackOf(7, "Lost Signal", { download_failed: true })]),
+    });
+
+    expect(await screen.findByRole("button", { name: "Lost Signal" })).toBeVisible();
+    expect(songs()).toEqual(["Shiver", "Lost Signal"]);
+  });
+
   it("shows no Downloading section while nothing downloads", async () => {
     open(hrefOf({ view: "downloaded" }));
 

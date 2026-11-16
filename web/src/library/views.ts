@@ -156,9 +156,12 @@ export function favoritesOf(tracks: readonly Track[]): Track[] {
     .sort((a, b) => b.added_at.localeCompare(a.added_at) || b.id - a.id);
 }
 
-/** Return the Tracks with a Download kept on the server, in the order given. */
+/**
+ * Return the Tracks with a Download kept on the server, and those whose download failed,
+ * to try again, in the order given.
+ */
 export function downloadedOf(tracks: readonly Track[]): Track[] {
-  return tracks.filter((track) => track.downloaded);
+  return tracks.filter((track) => track.downloaded || track.download_failed);
 }
 
 const haystacks = new WeakMap<Track, string>();

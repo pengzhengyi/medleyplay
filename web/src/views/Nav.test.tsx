@@ -25,10 +25,27 @@ describe("moving between views", () => {
     expect(insights).toHaveTextContent("Insights1");
   });
 
+  it("says on Downloaded how many songs download", () => {
+    render(<Nav route={{ view: "library" }} downloading={2} />);
+
+    const downloaded = screen.getByRole("link", { name: "Downloaded, 2 songs downloading" });
+
+    expect(downloaded).toHaveTextContent("Downloaded2");
+  });
+
+  it("minimized, says in the views' menu how many songs download", async () => {
+    render(<Nav route={{ view: "library" }} downloading={1} minimized onMinimize={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Library: choose a view" }));
+
+    expect(screen.getByRole("menuitem", { name: /^Downloaded/u })).toHaveTextContent("Downloaded1");
+  });
+
   it("shows no count while nothing waits", () => {
     render(<Nav route={{ view: "clean-up" }} />);
 
     expect(screen.getByRole("link", { name: "Clean up" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Downloaded" })).toHaveTextContent(/^Downloaded$/u);
     expect(screen.getByRole("link", { name: "Insights" })).toBeInTheDocument();
   });
 

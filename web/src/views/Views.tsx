@@ -281,8 +281,8 @@ function viewOf(given: ViewProps) {
           about={<Downloading downloads={given.downloading ?? []} tracks={given.tracks} />}
           empty={
             <p className="empty">
-              Nothing is downloaded yet. A song you add from a music site is kept here once its
-              download finishes.
+              Nothing is downloaded yet. A song you add from a music site shows here as soon as it
+              is added, while it downloads and after.
             </p>
           }
         >

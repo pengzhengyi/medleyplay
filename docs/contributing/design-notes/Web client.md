@@ -236,6 +236,25 @@ Track's kind is decided.
   for the accent. Without a cover, the blur is a gradient of the theme's accent.
 - **Paused, the cover settles back** a little, and grows again when the music
   plays; with reduced motion, it stays put and the view opens without rising.
+- **Dynamics move the cover behind it,** one of three effects chosen in
+  Settings, drawn by a shader over a 48-pixel copy of the cover, so each samples
+  a blur of it for free: *Flow*, three turning copies blended through slow
+  noise, as Apple Music's background moves; *Drift*, two enlarged copies turning
+  against each other; and *Mesh*, five colors of the cover's palette as lights
+  wandering. Or *Off*, the still blur.
+  - **It costs little:** the canvas is drawn at half the page's resolution,
+    about 30 times a second, and not at all while the page is hidden; the
+    WebGL library and shaders, 16 KB gzipped, load only when Now Playing shows
+    an effect. A new cover fades in over the last.
+  - **It fades in once drawn,** over the still blur, so without WebGL 2 the blur
+    shows as before; with reduced motion the effect is drawn still, once a cover.
+  <!-- cspell:ignore AMLL Vanta Granim -->
+  - **ogl draws it,** chosen over the libraries that do similar: the one
+    drawing Apple Music's own background, from AMLL, is AGPL; ShaderGradient
+    draws a glossy gradient of three colors, not the cover, at 273 KB gzipped
+    with three.js, and broke on the current three.js; Vanta and Granim have had
+    no release since 2022. ogl, in the public domain with no dependencies, gives
+    the WebGL plumbing; the effects are ours.
 - ***Up next*** shows the queue beside the song on a wide screen, and in the
   cover's place on a phone; Q opens and closes it there.
 - **The shortcuts work while it is open,** though it is a modal `<dialog>`: it
@@ -422,7 +441,10 @@ Track's kind is decided.
 One view, in sections, each saved on its own:
 
 - **Appearance:** the theme, the same choice as the header's switch; every
-  switch on the page shows the one chosen. And the accent color, jade unless
+  switch on the page shows the one chosen. *Dynamics*, what moves behind Now
+  Playing, kept per browser like the theme, as a device's graphics and battery
+  are its own: *Off*, *Flow* (the default), *Drift*, or *Mesh*, saying what the
+  chosen one shows. And the accent color, jade unless
   this browser chose another: a swatch opens react-colorful's color square and
   hue slider, a field takes a hex code, the dice roll a hue as strong as jade,
   and *Back to jade* forgets the choice.

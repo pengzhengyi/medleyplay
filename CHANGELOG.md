@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its toggle does, keeping what follows it; it is listed with the tags, and
   Backspace in the empty box goes back to the Library.
 
+- **Dynamics behind Now Playing** — the cover's colors move behind Now Playing, as
+  Apple Music's do: *Flow* (the cover flowing in slow folds), *Drift* (the cover
+  turning), or *Mesh* (its colors as wandering lights), chosen per browser in
+  Settings → Appearance, or *Off*. Drawn still with reduced motion, paused while
+  the page is hidden, and loaded only when Now Playing opens. Adds `ogl`.
+
 - **Split artist names in Clean up** — a new section lists each artist name
   written as several, such as *GUMI/MAYU* or *スズム feat. GUMI*, with the artists
   it lists (featured ones marked), to *Split* or *Keep*, or *Split all*; decided

@@ -26,6 +26,7 @@ import { formatBytes } from "../format";
 import { hrefOf } from "../routes";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 import { AccentPicker } from "./AccentPicker";
+import { DynamicsSwitch } from "./DynamicsSwitch";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
@@ -193,6 +194,10 @@ export function SettingsView({
         <ThemeSwitch />
         <p className="hint">The color of buttons, links, and what's playing.</p>
         <AccentPicker />
+        <p className="hint">
+          What moves behind Now Playing. Still when this device asks for less motion.
+        </p>
+        <DynamicsSwitch />
       </>
     ),
     "keyboard-shortcuts": <ShortcutSettings />,

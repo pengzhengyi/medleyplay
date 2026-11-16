@@ -80,6 +80,7 @@
   --pico-primary-hover-background: var(--accent);
   --pico-primary-inverse: var(--accent-ink);
   --pico-primary-focus: var(--accent-soft);
+  --pico-text-selection-color: color-mix(in srgb, var(--accent) 25%, transparent);
   --pico-form-element-background-color: var(--raised);
   --pico-form-element-border-color: var(--line);
   --pico-form-element-focus-color: var(--accent);
@@ -5943,6 +5944,7 @@ kbd {
   --pico-muted-border-color: var(--line);
   --pico-primary: var(--accent);
   --pico-primary-focus: var(--accent-soft);
+  --pico-text-selection-color: color-mix(in srgb, var(--accent) 25%, transparent);
 
   position: fixed;
   inset: 0;

@@ -488,6 +488,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Selected text takes the accent color** — highlighting text shows the accent
+  chosen in Appearance, not always jade.
+
 - **The player's heart is Now Playing's** — while a whole album in one file plays,
   the player's heart favorites the album, as Now Playing's does, rather than the
   file; while a split file plays whole, it favorites the song playing.

@@ -910,3 +910,20 @@ class TrackArtistRow(Base):
     artist_id: Mapped[str] = mapped_column(ForeignKey("library_artist.id"), index=True)
     written: Mapped[str] = mapped_column(String(512))
     """How the Track writes the artist's name."""
+    role: Mapped[str] = mapped_column(String(16), default="main", server_default="main")
+    """How the Track credits the artist: `main`, or `featured`."""
+
+
+class NameSplitRow(Base):
+    """What the household chose for an artist name written as several: split it, or keep it.
+
+    `parts` are the artists it is split into, each `{"written", "role"}`, in order.
+    """
+
+    __tablename__ = "name_split"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    written: Mapped[str] = mapped_column(String(512))
+    split: Mapped[bool]
+    parts: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
+    decided_at: Mapped[datetime] = mapped_column(UtcDateTime)

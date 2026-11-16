@@ -8,6 +8,7 @@ from fastapi import Cookie, Depends, Request
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService
+from medleyplay.application.artist_splits import ArtistSplitService
 from medleyplay.application.artists import ArtistService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import CoverService
@@ -72,6 +73,7 @@ class Services:
     remote: RemoteService
     ratings: RatingsService
     artists: ArtistService
+    artist_splits: ArtistSplitService
     album_covers: AlbumCoverService
 
 
@@ -152,6 +154,10 @@ def _artists(services: Annotated[Services, Depends(_services)]) -> ArtistService
     return services.artists
 
 
+def _artist_splits(services: Annotated[Services, Depends(_services)]) -> ArtistSplitService:
+    return services.artist_splits
+
+
 def _split_offers(services: Annotated[Services, Depends(_services)]) -> SplitOfferService:
     return services.split_offers
 
@@ -217,6 +223,7 @@ PolicyDep = Annotated[PolicyService, Depends(_policy)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
 RatingsDep = Annotated[RatingsService, Depends(_ratings)]
 ArtistsDep = Annotated[ArtistService, Depends(_artists)]
+ArtistSplitsDep = Annotated[ArtistSplitService, Depends(_artist_splits)]
 SplitOffersDep = Annotated[SplitOfferService, Depends(_split_offers)]
 AlbumCoversDep = Annotated[AlbumCoverService, Depends(_album_covers)]
 ModeDep = Annotated[ModeService, Depends(_mode)]

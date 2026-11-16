@@ -97,6 +97,9 @@ class TrackOut(BaseModel):
     album_rating: int | None = Field(
         description="Your rating of its album, from an import; it stands for `rating` when unset."
     )
+    artists: list[str] = Field(
+        description="The artists its artist names, as written: each one if the name was split."
+    )
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -128,6 +131,7 @@ class TrackOut(BaseModel):
             kind=track.kind,
             kind_reason=track.kind_reason,
             cover=details.cover,
+            artists=list(track.artists),
             community=None
             if track.community is None
             else CommunityRatingOut.of_rating(track.community),

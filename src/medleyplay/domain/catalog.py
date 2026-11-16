@@ -148,6 +148,8 @@ class Track:
     """What listeners on another site rated the song or its album; it only shows."""
     album_rating: int | None = None
     """The Account's rating of the Track's album, which stands for `rating` when that is unset."""
+    artists: tuple[str, ...] = ()
+    """The artists its artist names, as written: each one, if the name was split, or the name."""
 
 
 @dataclass(frozen=True)

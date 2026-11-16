@@ -52,6 +52,13 @@ export interface Library {
   readonly playlists: readonly Playlist[];
   /** The music sites a search could look in, such as `bilibili`. */
   readonly providers: readonly string[];
+  /** Whether an AI provider is set up and turned on, once the server has said. */
+  readonly aiSetUp: boolean | null;
+  /**
+   * Ask again what the server can do now, as after an AI provider is set up; resolves
+   * to whether one is, or `null` when the server didn't say.
+   */
+  readonly refreshFeatures: () => Promise<boolean | null>;
   /** Whether the server has listed the Tracks yet. */
   readonly loaded: boolean;
   /** Why the last request failed, or `""`. */
@@ -186,6 +193,25 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [store, dispatch] = useReducer(reduce, EMPTY);
   const [playlists, setPlaylists] = useState<readonly Playlist[]>([]);
   const [providers, setProviders] = useState<readonly string[]>([]);
+  const [aiSetUp, setAiSetUp] = useState<boolean | null>(null);
+  // Counts the reads of the features, so an answer to an older one is dropped.
+  const featureReads = useRef(0);
+  const loadFeatures = useCallback(() => {
+    const read = ++featureReads.current;
+    return api.features().then(
+      (features) => {
+        if (read === featureReads.current) {
+          setProviders(features.providers.source_resolver ?? []);
+          setAiSetUp(features.ai_set_up);
+        }
+        return features.ai_set_up;
+      },
+      () => {
+        // Without the features, a search looks only in the Library, and no AI hint shows.
+        return null;
+      },
+    );
+  }, []);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [waitingDevices, setWaitingDevices] = useState<readonly WaitingDevice[]>([]);
@@ -346,6 +372,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       });
       loadFindable();
       loadDownloading();
+      void loadFeatures();
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
@@ -353,14 +380,6 @@ export function useLibrary(onSignedOut: () => void): Library {
       }
     };
     load();
-    api.features().then(
-      (features) => {
-        setProviders(features.providers.source_resolver ?? []);
-      },
-      () => {
-        // Without the features, a search looks only in the Library.
-      },
-    );
     document.addEventListener("visibilitychange", onShown);
     const stopListening = listen(load, setMode, onJob, setWaitingDevices, setSpeaker, (command) => {
       for (const listener of commandListeners.current) {
@@ -371,7 +390,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
     };
-  }, [loadFindable, loadDownloading]);
+  }, [loadFindable, loadFeatures, loadDownloading]);
 
   /** Ask for the Tracks again; one that can't be read now shows on the next load. */
   const reloadTracks = () => {
@@ -495,6 +514,8 @@ export function useLibrary(onSignedOut: () => void): Library {
     tracks: tracksOf(store),
     playlists,
     providers,
+    aiSetUp,
+    refreshFeatures: loadFeatures,
     loaded: store.loaded,
     error,
     mode,

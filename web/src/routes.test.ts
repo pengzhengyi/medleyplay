@@ -19,6 +19,7 @@ describe("routes", () => {
     ["#/search?q=melt", { view: "search", query: "melt" }],
     ["#/insights", { view: "insights" }],
     ["#/settings", { view: "settings" }],
+    ["#/settings?section=ai", { view: "settings", section: "ai" }],
     ["#/clean-up", { view: "clean-up" }],
   ])("reads %s", (hash, route) => {
     expect(routeOf(hash)).toEqual(route);
@@ -39,6 +40,7 @@ describe("routes", () => {
     { view: "album", artist: "AC/DC & Friends", name: "Back in Black?" },
     { view: "artist", name: "" },
     { view: "search", query: "melt live #1" },
+    { view: "settings", section: "ai" },
   ])("writes and reads back %o, whatever its names hold", (route) => {
     expect(routeOf(hrefOf(route))).toEqual(route);
   });

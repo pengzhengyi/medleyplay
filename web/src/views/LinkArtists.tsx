@@ -36,6 +36,8 @@ import { unlinkedOf } from "../library/cleanUp";
 import { likelyNameOf } from "../library/likelyName";
 import { fold } from "../library/views";
 import { navigate } from "../routes";
+import { AiSetUpHint } from "./AiSetUpHint";
+import { useAiSetUp } from "./aiSetUp";
 
 /** The most artists offered for one name. */
 const OFFERED = 3;
@@ -132,10 +134,13 @@ export function LinkArtists({
       linkButtons.current.get(next.named.key)?.focus();
     }
   };
+  const noAi = useAiSetUp();
   const askAi = () => {
-    setError("");
-    api.recommendArtists().then(onChanged, (failure: unknown) => {
-      setError(failure instanceof Error ? failure.message : String(failure));
+    noAi.whenSetUp(() => {
+      setError("");
+      api.recommendArtists().then(onChanged, (failure: unknown) => {
+        setError(failure instanceof Error ? failure.message : String(failure));
+      });
     });
   };
   const linkAll = async () => {
@@ -166,7 +171,12 @@ export function LinkArtists({
               type="button"
               className="secondary outline dialog-button"
               disabled={asking}
-              title="Ask the AI which artist each name names; it links nothing"
+              aria-disabled={noAi.missing}
+              title={
+                noAi.missing
+                  ? noAi.why
+                  : "Ask the AI which artist each name names; it links nothing"
+              }
               onClick={askAi}
             >
               {asking ? (
@@ -177,6 +187,7 @@ export function LinkArtists({
               {asking ? "Asking the AI…" : "Ask AI"}
             </button>
           )}
+          {(toAsk > 0 || asking) && <AiSetUpHint />}
           {toLookUp.length > 0 && (
             <button
               type="button"

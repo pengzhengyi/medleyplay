@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ArtistName, ArtistNames, KnownArtist, Track } from "../api";
 import { artistNameOf, knownArtistOf, serve, trackOf } from "../testing/server";
+import { AiSetUpContext } from "./aiSetUp";
 import { LinkArtists } from "./LinkArtists";
 
 const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
@@ -237,6 +238,23 @@ describe("linking names to artists", () => {
 
     expect(server.calls).toContain("POST /api/artist-names/recommend");
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("can't ask an AI that isn't set up, and tells a member to ask an admin", async () => {
+    const { calls } = serve({});
+    render(
+      <AiSetUpContext value={{ missing: true, admin: false }}>
+        <LinkArtists names={namesOf(LOOKED_UP)} onChanged={vi.fn()} />
+      </AiSetUpContext>,
+    );
+    const list = screen.getByRole("region", { name: /Link artist names/ });
+    const button = within(list).getByRole("button", { name: "Ask AI" });
+
+    await userEvent.click(button);
+
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(calls).not.toContain("POST /api/artist-names/recommend");
+    expect(within(list).getByText("Ask an admin to set up AI")).toBeInTheDocument();
   });
 
   it("offers no Ask AI when every name it could ask about needs tidying first", () => {

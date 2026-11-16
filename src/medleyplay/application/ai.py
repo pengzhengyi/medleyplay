@@ -139,6 +139,11 @@ class AiService:
         with self._units() as db:
             return [_to_saved(row) for row in _in_order(db)]
 
+    def is_set_up(self) -> bool:
+        """Return whether a provider is set up and turned on; anyone may ask."""
+        with self._units() as db:
+            return is_set_up(db)
+
     def add(self, caller: Account, base_url: str, model: str, key: str | None) -> SavedProvider:
         """Add a provider after the others, with `key` when it needs one; admins only.
 

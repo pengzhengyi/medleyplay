@@ -688,6 +688,64 @@ describe("finding a song's details online", () => {
     expect(calls.filter((call) => call === "GET /api/enrichers/ai-details")).toHaveLength(2);
   });
 
+  it("says whether an AI provider is set up, and reads it again when asked", async () => {
+    let setUp = false;
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/features": () => ({
+        body: { multiple_accounts: false, providers: {}, ai_set_up: setUp },
+      }),
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.aiSetUp).toBe(false);
+    });
+
+    setUp = true;
+    act(() => {
+      void result.current.refreshFeatures();
+    });
+
+    await waitFor(() => {
+      expect(result.current.aiSetUp).toBe(true);
+    });
+    expect(calls.filter((call) => call === "GET /api/features")).toHaveLength(2);
+  });
+
+  it("keeps the newest answer on whether AI is set up when an older one comes later", async () => {
+    let release: () => void = () => undefined;
+    const older = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reads = 0;
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/features": () => {
+        reads += 1;
+        return reads === 1
+          ? { body: { multiple_accounts: false, providers: {}, ai_set_up: false }, after: older }
+          : { body: { multiple_accounts: false, providers: {}, ai_set_up: true } };
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(reads).toBe(1);
+    });
+
+    act(() => {
+      void result.current.refreshFeatures();
+    });
+    await waitFor(() => {
+      expect(result.current.aiSetUp).toBe(true);
+    });
+    await act(async () => {
+      release();
+      await older;
+    });
+
+    expect(result.current.aiSetUp).toBe(true);
+  });
+
   it("signs out when the server says the session is over", async () => {
     const onSignedOut = vi.fn();
     serve({

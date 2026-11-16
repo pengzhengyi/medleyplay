@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from medleyplay.domain.plugins import PluginState, PluginStatus
-from medleyplay.web.deps import AccountsDep, PluginsDep, SignedInAccount
+from medleyplay.web.deps import AccountsDep, AiDep, PluginsDep, SignedInAccount
 
 router = APIRouter(prefix="/api", tags=["plugins"])
 
@@ -17,6 +17,8 @@ class FeaturesOut(BaseModel):
     multiple_accounts: bool
     providers: Mapping[str, list[str]]
     """The keys that answer calls, for each extension point."""
+    ai_set_up: bool
+    """Whether an admin has set up an AI provider that is turned on."""
 
 
 class PluginOut(BaseModel):
@@ -35,10 +37,14 @@ class PluginOut(BaseModel):
 
 
 @router.get("/features")
-def features(_: SignedInAccount, accounts: AccountsDep, plugins: PluginsDep) -> FeaturesOut:
+def features(
+    _: SignedInAccount, accounts: AccountsDep, plugins: PluginsDep, ai: AiDep
+) -> FeaturesOut:
     """Return what this server can do now."""
     return FeaturesOut(
-        multiple_accounts=accounts.multiple_accounts, providers=plugins.available_keys()
+        multiple_accounts=accounts.multiple_accounts,
+        providers=plugins.available_keys(),
+        ai_set_up=ai.is_set_up(),
     )
 
 

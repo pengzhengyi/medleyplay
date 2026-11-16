@@ -16,6 +16,7 @@ import { fakeMedia } from "../testing/media";
 import { detailsOf, splitSongsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
+import { AiSetUpContext } from "./aiSetUp";
 
 /** *Bremen*, a whole album uploaded as one video. */
 const BREMEN = trackOf(104, "BV1dm4y1s7ak", { split: true });
@@ -78,42 +79,45 @@ async function renderEditor(
     onListen = vi.fn(),
     ai = AI_UNASKED,
     silences = NO_GAPS_KNOWN,
+    aiSetUp = { missing: false, admin: true },
   } = {},
 ) {
   const onClose = vi.fn();
   const load = vi.fn<(trackId: number) => Promise<Songs>>(() => Promise.resolve(songs));
   const dialogOf = (asked: AiAsk) => (
-    <EditDetails
-      track={BREMEN}
-      load={() => Promise.resolve(detailsOf(104))}
-      onSave={() => Promise.resolve()}
-      onReadVideo={() => Promise.reject(new Error("No video in this test."))}
-      onSetCover={() => Promise.reject(new Error("No cover in this test."))}
-      onRemoveCover={() => Promise.reject(new Error("No cover in this test."))}
-      findable={[]}
-      lookup={undefined}
-      online
-      onFind={vi.fn()}
-      songs={{
-        label: "3 songs",
-        editor: (
-          <SongsEditor
-            album={BREMEN}
-            load={load}
-            check={check}
-            artists={["ハチ"]}
-            ai={asked}
-            loadAudio={loadAudio}
-            silences={silences}
-            onListen={onListen}
-            onSave={onSave}
-            onUnsplit={onUnsplit}
-          />
-        ),
-      }}
-      startOnSongs
-      onClose={onClose}
-    />
+    <AiSetUpContext value={aiSetUp}>
+      <EditDetails
+        track={BREMEN}
+        load={() => Promise.resolve(detailsOf(104))}
+        onSave={() => Promise.resolve()}
+        onReadVideo={() => Promise.reject(new Error("No video in this test."))}
+        onSetCover={() => Promise.reject(new Error("No cover in this test."))}
+        onRemoveCover={() => Promise.reject(new Error("No cover in this test."))}
+        findable={[]}
+        lookup={undefined}
+        online
+        onFind={vi.fn()}
+        songs={{
+          label: "3 songs",
+          editor: (
+            <SongsEditor
+              album={BREMEN}
+              load={load}
+              check={check}
+              artists={["ハチ"]}
+              ai={asked}
+              loadAudio={loadAudio}
+              silences={silences}
+              onListen={onListen}
+              onSave={onSave}
+              onUnsplit={onUnsplit}
+            />
+          ),
+        }}
+        startOnSongs
+        onClose={onClose}
+      />
+    </AiSetUpContext>
   );
   const { rerender, unmount } = render(dialogOf(ai));
   const dialog = screen.getByRole("dialog");
@@ -361,7 +365,7 @@ describe("editing a file's songs", () => {
     );
   });
 
-  it("can't ask an AI that isn't set up, and says on hover where to set one up", async () => {
+  it("can't ask an AI that can't be asked about the file, and says so on hover", async () => {
     const ask = vi.fn();
     const { dialog } = await renderEditor(SPLIT, { ai: { ...AI_UNASKED, can: false, ask } });
     const button = within(dialog).getByRole("button", { name: "Fill with AI" });
@@ -369,8 +373,23 @@ describe("editing a file's songs", () => {
     await userEvent.click(button);
 
     expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(button).toHaveAccessibleDescription("Set up an AI provider in Settings to ask it");
+    expect(button).toHaveAccessibleDescription("The AI can't be asked about this file now");
     expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("links an admin to set up AI when no provider is", async () => {
+    const { dialog } = await renderEditor(SPLIT, {
+      ai: { ...AI_UNASKED, can: false },
+      aiSetUp: { missing: true, admin: true },
+    });
+
+    const button = within(dialog).getByRole("button", { name: "Fill with AI" });
+
+    expect(button).toHaveAccessibleDescription("No AI provider is set up; set one up in Settings");
+    expect(within(dialog).getByRole("link", { name: "Set up AI" })).toHaveAttribute(
+      "href",
+      "#/settings?section=ai",
+    );
   });
 
   it("types the songs as a list, starting from the rows, and keeps the songs it still names", async () => {

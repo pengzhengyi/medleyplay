@@ -468,6 +468,13 @@ songs editor.
   accept: no JSON schema, no tools,
   no streaming. A base URL is `http` or `https` with no login, query, or fragment,
   and `http` only for an address on the machine itself.
+- **With none set up, each *Ask AI* says how to set one up,** from `ai_set_up` in
+  `GET /api/features`, read again as the page loads and when Settings → AI changes.
+  The button says why on hover; pressed, it asks the server again and asks the AI
+  only if a provider was set up since. Beside it, an admin gets a *Set up AI* link
+  to `#/settings?section=ai`, which opens in a new tab from a dialog so nothing
+  typed there is lost, and a member *Ask an admin to set up AI*. It applies to the
+  artist editor, *Link artist names*, and the songs editor's *AI*.
 - **GitHub Copilot is asked through its SDK.** GitHub retired its Models API, the
   OpenAI-style endpoint, on 2026-07-30, and Copilot offers no chat endpoint of its
   own to an app, so the preset *GitHub Copilot* is a provider at

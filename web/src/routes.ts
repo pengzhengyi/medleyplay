@@ -21,7 +21,8 @@ export type Route =
   | { readonly view: "playlist"; readonly id: string }
   | { readonly view: "search"; readonly query: string }
   | { readonly view: "insights" }
-  | { readonly view: "settings" }
+  /** Settings; with `section`, opened at the section of that id, such as `ai`. */
+  | { readonly view: "settings"; readonly section?: string }
   | { readonly view: "clean-up" };
 
 const LIBRARY: Route = { view: "library" };
@@ -45,9 +46,12 @@ export function routeOf(hash: string): Route {
     case "downloaded":
     case "playlists":
     case "insights":
-    case "settings":
     case "clean-up":
       return { view: path };
+    case "settings": {
+      const section = params.get("section");
+      return section === null ? { view: "settings" } : { view: "settings", section };
+    }
     case "artist":
       return name === null ? LIBRARY : { view: "artist", name };
     case "album": {
@@ -76,6 +80,10 @@ export function hrefOf(route: Route): string {
       return `#/playlist?${new URLSearchParams({ id: route.id }).toString()}`;
     case "search":
       return `#/search?${new URLSearchParams({ q: route.query }).toString()}`;
+    case "settings":
+      return route.section === undefined
+        ? "#/settings"
+        : `#/settings?${new URLSearchParams({ section: route.section }).toString()}`;
     case "library":
       return route.focus === undefined ? "#/library" : `#/library?focus=${String(route.focus)}`;
     default:

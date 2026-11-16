@@ -192,7 +192,7 @@ The client raises one of two core errors:
 
 | Route | Who | Answers |
 | --- | --- | --- |
-| `GET /api/features` | Signed in | `multiple_accounts`, and the available keys of each extension point |
+| `GET /api/features` | Signed in | `multiple_accounts`, the available keys of each extension point, and `ai_set_up`: whether an AI provider is set up and turned on |
 | `GET /api/plugins` | Admin | Each plugin's state, the reason for it, and its keys |
 | `POST /api/plugins/{name}/reset` | Admin | Clears a fault; idempotent |
 

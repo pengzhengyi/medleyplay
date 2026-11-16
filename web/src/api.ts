@@ -222,6 +222,8 @@ export interface PlainPlaylist {
 export interface Features {
   readonly multiple_accounts: boolean;
   readonly providers: Readonly<Record<string, readonly string[]>>;
+  /** Whether an admin has set up an AI provider that is turned on. */
+  readonly ai_set_up: boolean;
 }
 
 /** How far a running Job has got: a fraction from 0 to 1 when known, and what it is doing. */

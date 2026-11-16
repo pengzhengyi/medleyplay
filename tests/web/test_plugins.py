@@ -31,7 +31,11 @@ def test_the_features_list_the_keys_that_answer_calls(plugin_client: TestClient)
 
     response = plugin_client.get("/api/features")
 
-    assert response.json() == {"multiple_accounts": True, "providers": {"echo": ["parrot"]}}
+    assert response.json() == {
+        "multiple_accounts": True,
+        "providers": {"echo": ["parrot"]},
+        "ai_set_up": False,
+    }
 
 
 def test_the_features_need_a_sign_in(plugin_client: TestClient) -> None:

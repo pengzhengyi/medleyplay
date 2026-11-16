@@ -70,6 +70,8 @@ import { formatStart, parseStart } from "../library/songTimes";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf } from "../library/aiAnswer";
 import { snapStarts } from "../library/snap";
+import { AiSetUpHint } from "./AiSetUpHint";
+import { useAiSetUp } from "./aiSetUp";
 import { OriginTag } from "./OriginTag";
 import { SongsControlsContext } from "./songsControls";
 
@@ -522,6 +524,7 @@ export function SongsEditor({
         : undefined;
   // Unavailable until something changes, so each says why on hover rather than being disabled.
   const noAi = !fromAi && (songs?.suggested.length ?? 0) === 0 && !ai.can;
+  const aiSetUp = useAiSetUp();
   const tooFewToSnap = rows.length < 2;
 
   const save = (event: SubmitEvent<HTMLFormElement>) => {
@@ -639,7 +642,9 @@ export function SongsEditor({
                     ? `The ${songCount(songs.suggested.length)} ${aiNameOf(songs.suggested_by)} suggested`
                     : ai.can
                       ? "Ask the AI for the songs"
-                      : "Set up an AI provider in Settings to ask it"
+                      : aiSetUp.missing
+                        ? aiSetUp.why
+                        : "The AI can't be asked about this file now"
               }
               onClick={() => {
                 if (noAi) {
@@ -663,6 +668,7 @@ export function SongsEditor({
               AI
               {aiStatus !== undefined && <span className="ai-status" aria-hidden />}
             </button>
+            {noAi && <AiSetUpHint newTab />}
             <button
               type="button"
               className="fill-button"

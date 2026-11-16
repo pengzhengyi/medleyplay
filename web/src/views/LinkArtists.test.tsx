@@ -458,6 +458,30 @@ describe("a name MusicBrainz knows no artist by", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
+  it("shows a song listing it among several artists by the likely name in its place alone", async () => {
+    const sent: unknown[] = [];
+    serve({
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 1 } };
+      },
+    });
+    const { list } = openList(namesOf(UNKNOWN, artistNameOf("告五人")), [
+      trackOf(5, "唯一", {
+        artist: "告五人2019超强音质的/周杰伦",
+        artists: ["告五人2019超强音质的", "周杰伦"],
+      }),
+    ]);
+
+    await userEvent.click(
+      within(rowOf(list, "告五人2019超强音质的")).getByRole("button", {
+        name: /^Show the songs of/,
+      }),
+    );
+
+    expect(sent).toEqual([{ track_ids: [5], values: { artist: "告五人/周杰伦" } }]);
+  });
+
   it("offers no name where none it starts with is in the Library", () => {
     const { list } = openList(namesOf(UNKNOWN, artistNameOf("Blue Room")));
 

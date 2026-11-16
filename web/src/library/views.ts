@@ -68,7 +68,7 @@ export function songsOf(tracks: readonly Track[]): Track[] {
  */
 export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist[] {
   if (links === undefined) {
-    return groups(tracks, (track) => track.artist).map(({ name, count, durationMs }) => ({
+    return groups(tracks, artistNamesOf).map(({ name, count, durationMs }) => ({
       name,
       link: name,
       count,
@@ -81,12 +81,18 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
     { names: Map<string, number>; count: number; durationMs: number }
   >();
   for (const track of tracks) {
-    const group = links.groupOf(track.artist);
-    const each = found.get(group) ?? { names: new Map<string, number>(), count: 0, durationMs: 0 };
-    each.names.set(track.artist, (each.names.get(track.artist) ?? 0) + 1);
-    each.count += 1;
-    each.durationMs += track.duration_ms ?? 0;
-    found.set(group, each);
+    for (const name of artistNamesOf(track)) {
+      const group = links.groupOf(name);
+      const each = found.get(group) ?? {
+        names: new Map<string, number>(),
+        count: 0,
+        durationMs: 0,
+      };
+      each.names.set(name, (each.names.get(name) ?? 0) + 1);
+      each.count += 1;
+      each.durationMs += track.duration_ms ?? 0;
+      found.set(group, each);
+    }
   }
   return [...found.entries()]
     .map(([group, { names, count, durationMs }]) => {
@@ -96,23 +102,33 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
     .sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.link, b.link));
 }
 
-/** Return the Tracks of the artist `name`, compared folded, in the order given. */
+/**
+ * Return the artists a Track counts under: each its artist names, if the name was split,
+ * or else the name as written, blank for none.
+ */
+export function artistNamesOf(track: Track): readonly string[] {
+  return track.artists.length > 0 ? track.artists : [track.artist];
+}
+
+/**
+ * Return the Tracks of the artist `name`, compared folded, in the order given: those
+ * naming it as one of their artists, or as their whole artist as written.
+ */
 export function tracksOfArtist(
   tracks: readonly Track[],
   name: string,
   links?: ArtistLinks,
 ): Track[] {
-  if (links === undefined) {
-    const key = fold(name);
-    return tracks.filter((track) => fold(track.artist) === key);
-  }
-  const group = links.groupOf(name);
-  return tracks.filter((track) => links.groupOf(track.artist) === group);
+  const keyOf = (each: string) => artistKeyOf(each, links);
+  const key = keyOf(name);
+  return tracks.filter((track) =>
+    [...artistNamesOf(track), track.artist].some((each) => keyOf(each) === key),
+  );
 }
 
 /** Return each album once, by its artist and then its name. */
 export function albumsOf(tracks: readonly Track[]): Album[] {
-  return groups(tracks, (track) => `${albumArtistOf(track)}\n${track.album}`)
+  return groups(tracks, (track) => [`${albumArtistOf(track)}\n${track.album}`])
     .map(({ first, count, durationMs, cover }) => ({
       artist: albumArtistOf(first),
       name: first.album,
@@ -219,7 +235,9 @@ export function search(tracks: readonly Track[], query: string, links?: ArtistLi
     };
   }
   // An artist or album is listed whole, with all its songs, when a song the tags keep is its.
-  const keptArtists = new Set(kept.map((track) => artistKeyOf(track.artist, links)));
+  const keptArtists = new Set(
+    kept.flatMap((track) => artistNamesOf(track).map((name) => artistKeyOf(name, links))),
+  );
   const keptAlbums = new Set(kept.map(albumKeyOf));
   const artistTags = asked.filter((tag) => tag.field === "artist");
   const artists = artistsOf(tracks, links).filter(
@@ -263,14 +281,17 @@ function fitting(tracks: readonly Track[], tag: Tag, links?: ArtistLinks): reado
   const value = fold(tag.value).trim();
   switch (tag.field) {
     case "artist": {
+      const namesOfTrack = (track: Track) => [
+        ...artistNamesOf(track),
+        track.artist,
+        albumArtistOf(track),
+      ];
       const names = new Set(
-        closestOf(
-          [...new Set(tracks.flatMap((track) => [track.artist, albumArtistOf(track)]))],
-          value,
-          (name) => namesOf(name, links),
+        closestOf([...new Set(tracks.flatMap(namesOfTrack))], value, (name) =>
+          namesOf(name, links),
         ),
       );
-      return tracks.filter((track) => names.has(track.artist) || names.has(albumArtistOf(track)));
+      return tracks.filter((track) => namesOfTrack(track).some((name) => names.has(name)));
     }
     case "album": {
       const names = new Set(
@@ -320,20 +341,21 @@ interface Group {
   readonly cover: string | null;
 }
 
-/** Group `tracks` by `nameOf`, folded, sorted by the name the first Track gives. */
-function groups(tracks: readonly Track[], nameOf: (track: Track) => string): Group[] {
+/** Group `tracks` by each name `namesOf` gives, folded, sorted by the name the first Track gives. */
+function groups(tracks: readonly Track[], namesOf: (track: Track) => readonly string[]): Group[] {
   const found = new Map<string, { -readonly [K in keyof Group]: Group[K] }>();
   for (const track of tracks) {
-    const name = nameOf(track);
-    const key = fold(name);
-    const group = found.get(key);
     const cover = track.cover === "" ? null : track.cover;
-    if (group === undefined) {
-      found.set(key, { name, first: track, count: 1, durationMs: track.duration_ms ?? 0, cover });
-    } else {
-      group.count += 1;
-      group.durationMs += track.duration_ms ?? 0;
-      group.cover ??= cover;
+    for (const name of namesOf(track)) {
+      const key = fold(name);
+      const group = found.get(key);
+      if (group === undefined) {
+        found.set(key, { name, first: track, count: 1, durationMs: track.duration_ms ?? 0, cover });
+      } else {
+        group.count += 1;
+        group.durationMs += track.duration_ms ?? 0;
+        group.cover ??= cover;
+      }
     }
   }
   return [...found.values()].sort((a, b) => collator.compare(a.name, b.name));

@@ -57,6 +57,20 @@ describe("insightsOf", () => {
     expect(insights.albums).toHaveLength(1);
   });
 
+  it("counts a song by several artists for each of them", () => {
+    const tracks = [
+      song(1, "GUMI/MAYU", "", 4, { artists: ["GUMI", "MAYU"] }),
+      song(2, "GUMI", "", 3),
+    ];
+
+    const insights = insightsOf(tracks, played([1, 1], [2, 1]));
+
+    expect(insights.artists.map(({ name, plays }) => [name, plays])).toEqual([
+      ["GUMI", 2],
+      ["MAYU", 1],
+    ]);
+  });
+
   it("lists an album under its album artist, or its artist when that is blank", () => {
     const tracks = [
       song(1, "Guest", "Hits", 4, { album_artist: "Various" }),

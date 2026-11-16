@@ -77,6 +77,37 @@ describe("artists", () => {
   });
 });
 
+describe("songs by several artists", () => {
+  /** *Melt* by GUMI/MAYU, split into GUMI and MAYU, and *Smile* by GUMI. */
+  const SONGS = [
+    trackOf(1, "Melt", { artist: "GUMI/MAYU", artists: ["GUMI", "MAYU"], duration_ms: 100_000 }),
+    trackOf(2, "Smile", { artist: "GUMI", duration_ms: 200_000 }),
+  ];
+
+  it("count under each artist they list", () => {
+    const artists = artistsOf(SONGS);
+
+    expect(artists.map((artist) => [artist.name, artist.count, artist.durationMs])).toEqual([
+      ["GUMI", 2, 300_000],
+      ["MAYU", 1, 100_000],
+    ]);
+  });
+
+  it("open from each artist, or from the name as written", () => {
+    expect(titles(tracksOfArtist(SONGS, "mayu"))).toEqual(["Melt"]);
+    expect(titles(tracksOfArtist(SONGS, "GUMI/MAYU"))).toEqual(["Melt"]);
+  });
+
+  it("are found under each artist they list", () => {
+    const found = search(SONGS, "mayu");
+    const tagged = search(SONGS, "artist:MAYU");
+
+    expect(found.artists.map((artist) => artist.name)).toEqual(["MAYU"]);
+    expect(titles(found.tracks)).toEqual(["Melt"]);
+    expect(titles(tagged.tracks)).toEqual(["Melt"]);
+  });
+});
+
 describe("artists linked as one", () => {
   /** *Help!* by The Beatles, two songs by 披头士, and *Melt* by ryo. */
   const SONGS = [

@@ -110,7 +110,13 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     community: null,
     album_rating: null,
     ...change,
+    artists: change.artists ?? namesOf(change.artist ?? "The Band"),
   };
+}
+
+/** The artists a Track writing `artist` lists while its name isn't split: the name, if any. */
+function namesOf(artist: string): readonly string[] {
+  return artist.trim() === "" ? [] : [artist.trim()];
 }
 
 /**

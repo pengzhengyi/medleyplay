@@ -27,7 +27,7 @@ import {
   isFavoriteArtist,
 } from "../library/favoriteGroups";
 import { siteNameOf } from "../library/videos";
-import { albumArtistOf } from "../library/views";
+import { albumArtistOf, artistNamesOf } from "../library/views";
 import { type AlbumSong, type Playing, songPlaying } from "../player/albumNow";
 import { hrefOf } from "../routes";
 import { FavoriteHeart } from "./FavoriteHeart";
@@ -141,28 +141,37 @@ export function NowPlayingNames({
         <div className="np-line np-by">
           {track.artist !== "" && (
             <span className="np-artist">
-              <span className="np-mark" title="Artist">
+              <span
+                className="np-mark"
+                title={artistNamesOf(track).length > 1 ? "Artists" : "Artist"}
+              >
                 <MicrophoneStageIcon weight="fill" aria-hidden />
               </span>
-              <a
-                className="np-artist-name"
-                href={hrefOf({ view: "artist", name: track.artist })}
-                onClick={onNavigate}
-              >
-                {track.artist}
-              </a>
-              {canFavorite(track.artist) && (
-                <FavoriteHeart
-                  kind="artist"
-                  name={track.artist}
-                  favorite={isFavoriteArtist(favorites, track.artist)}
-                  onChange={(favorite) => {
-                    onFavoriteArtist(track.artist, favorite);
-                  }}
-                  loved={0}
-                  suggestionKey=""
-                />
-              )}
+              {/* A song by several artists names each, each with its own page and heart. */}
+              {artistNamesOf(track).map((name, place) => (
+                <span key={name} className="np-artist-one">
+                  {place > 0 && <span className="np-artist-and">, </span>}
+                  <a
+                    className="np-artist-name"
+                    href={hrefOf({ view: "artist", name })}
+                    onClick={onNavigate}
+                  >
+                    {name}
+                  </a>
+                  {canFavorite(name) && (
+                    <FavoriteHeart
+                      kind="artist"
+                      name={name}
+                      favorite={isFavoriteArtist(favorites, name)}
+                      onChange={(favorite) => {
+                        onFavoriteArtist(name, favorite);
+                      }}
+                      loved={0}
+                      suggestionKey=""
+                    />
+                  )}
+                </span>
+              ))}
             </span>
           )}
           {track.video !== null && (

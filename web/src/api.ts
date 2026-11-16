@@ -48,6 +48,8 @@ export interface Track {
   readonly community: CommunityRating | null;
   /** Your rating of its album, from an import; it stands for `rating` when that is `null`. */
   readonly album_rating: number | null;
+  /** The artists its artist names, as written: each one if the name was split, or the name. */
+  readonly artists: readonly string[];
 }
 
 /** What listeners on another site rated a song, or the album it is on, out of 5. */
@@ -512,6 +514,27 @@ export interface OfferedFile {
   } | null;
   /** Whether its video's text was read, so the AI may be asked for a list. */
   readonly has_text: boolean;
+}
+
+/** An artist a name lists, as written, and how songs credit it. */
+export interface ArtistCredit {
+  readonly written: string;
+  readonly role: "main" | "featured";
+}
+
+/** A name written as several artists, the artists it lists, and how many songs show it. */
+export interface ArtistSplitOffer {
+  readonly written: string;
+  readonly artists: readonly ArtistCredit[];
+  readonly songs: number;
+  /** Whether it is linked to one MusicBrainz artist, so may name one artist. */
+  readonly linked: boolean;
+}
+
+/** The names offered to split into their artists, and those split or kept as written. */
+export interface ArtistSplits {
+  readonly offers: readonly ArtistSplitOffer[];
+  readonly decided: readonly { readonly written: string; readonly split: boolean }[];
 }
 
 /** The setting *Split albums*, and the long files offered under it. */
@@ -1091,6 +1114,17 @@ export const api = {
   /** Keep each file as one, so no song list is offered for it again. */
   keepFiles: (trackIds: readonly number[]) =>
     call<{ kept: number }>("POST", "/api/split-offers/keep", { track_ids: trackIds }),
+  /** The artist names written as several artists, to split, and those decided. */
+  artistSplits: () => call<ArtistSplits>("GET", "/api/artist-splits"),
+  /** Split each name into the artists it lists. */
+  splitArtistNames: (names: readonly string[]) =>
+    call<null>("POST", "/api/artist-splits/split", { names }),
+  /** Keep each name as written, as one artist. */
+  keepArtistNames: (names: readonly string[]) =>
+    call<null>("POST", "/api/artist-splits/keep", { names }),
+  /** Forget what was decided for each name, so it is offered again. */
+  forgetArtistNames: (names: readonly string[]) =>
+    call<null>("POST", "/api/artist-splits/forget", { names }),
   /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */

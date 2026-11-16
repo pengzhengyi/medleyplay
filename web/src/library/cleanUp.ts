@@ -3,7 +3,7 @@
  * files to split.
  */
 
-import type { ArtistNames, NameToTidy, SplitOffers } from "../api";
+import type { ArtistNames, ArtistSplits, NameToTidy, SplitOffers } from "../api";
 
 /** Return how many long files have a song list to split them by, unless offering is off. */
 export function toSplitOf(offers: SplitOffers | undefined): number {
@@ -18,16 +18,20 @@ export function unlinkedOf(names: ArtistNames): number {
 }
 
 /**
- * Return how many wait: names to tidy, names that may be linked and aren't, and long files
- * with a song list to split them by.
+ * Return how many wait: names to tidy, names that may be linked and aren't, long files
+ * with a song list to split them by, and artist names to split.
  */
 export function toDoOf(
   tidy: readonly NameToTidy[],
   artistNames: ArtistNames | undefined,
   offers?: SplitOffers,
+  artistSplits?: ArtistSplits,
 ): number {
   return (
-    tidy.length + (artistNames === undefined ? 0 : unlinkedOf(artistNames)) + toSplitOf(offers)
+    tidy.length +
+    (artistNames === undefined ? 0 : unlinkedOf(artistNames)) +
+    toSplitOf(offers) +
+    (artistSplits?.offers.length ?? 0)
   );
 }
 

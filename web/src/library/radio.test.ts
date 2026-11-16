@@ -280,6 +280,14 @@ describe("the favorites station", () => {
     );
   });
 
+  it("plays a song by several artists when one of them is a favorite", () => {
+    const duet = song(6, "朴树/许巍", "f", { artists: ["朴树", "许巍"] });
+
+    const [pick] = favoritePicks([duet], [], 1, seeded(4), NOW, FAVORITES);
+
+    expect(pick?.reason).toBe("By a favorite artist");
+  });
+
   it("plays every favorite once before any again, then starts over without the latest", () => {
     const again = favoritePicks(LOVED, [1, 2, 3], 2, seeded(3), NOW, FAVORITES).map(
       (pick) => pick.track.id,

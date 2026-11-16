@@ -169,8 +169,8 @@ export function enricherOf(
   return { name, available: true, stopped: null, eligible, mode: "manual", ...change };
 }
 
-/** A server with no plugins answering any extension point, and one Account. */
-export const NO_FEATURES: Features = { multiple_accounts: false, providers: {} };
+/** A server with no plugins answering any extension point, no AI provider, and one Account. */
+export const NO_FEATURES: Features = { multiple_accounts: false, providers: {}, ai_set_up: false };
 
 /** A Playlist named `name` holding the Tracks `trackIds`, in that order. */
 export function playlistOf(id: string, name: string, trackIds: readonly number[]): Playlist {

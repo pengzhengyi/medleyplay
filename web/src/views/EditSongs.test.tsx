@@ -16,6 +16,7 @@ import { fakeMedia } from "../testing/media";
 import { detailsOf, splitSongsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
+import { type AiSetUp, AiSetUpContext } from "./aiSetUp";
 
 /** *Bremen*, a whole album uploaded as one video. */
 const BREMEN = trackOf(104, "BV1dm4y1s7ak", { split: true });
@@ -58,6 +59,9 @@ const NO_GAPS_KNOWN: SilenceFinder = {
   find: () => Promise.resolve({ state: "no_tool", silences: [] }),
 };
 
+/** An AI provider set up, as the page says once the server has. */
+const SET_UP: AiSetUp = { missing: false, admin: true };
+
 /**
  * Open *Bremen*'s details on its songs, as its menu's *Edit songs…* does, its file
  * holding `songs`; the AI is as `ai` says, and `answerAi` shows it as it goes later.
@@ -78,6 +82,7 @@ async function renderEditor(
     onListen = vi.fn(),
     ai = AI_UNASKED,
     silences = NO_GAPS_KNOWN,
+    aiSetUp = SET_UP,
   } = {},
 ) {
   const onClose = vi.fn();
@@ -115,7 +120,9 @@ async function renderEditor(
       onClose={onClose}
     />
   );
-  const { rerender, unmount } = render(dialogOf(ai));
+  const { rerender, unmount } = render(dialogOf(ai), {
+    wrapper: ({ children }) => <AiSetUpContext value={aiSetUp}>{children}</AiSetUpContext>,
+  });
   const dialog = screen.getByRole("dialog");
   await within(dialog).findByRole("button", { name: "Add a song" });
   const media = fakeMedia(audioOf(dialog));
@@ -361,7 +368,7 @@ describe("editing a file's songs", () => {
     );
   });
 
-  it("can't ask an AI that isn't set up, and says on hover where to set one up", async () => {
+  it("can't ask an AI that can't be asked about the file, and says so on hover", async () => {
     const ask = vi.fn();
     const { dialog } = await renderEditor(SPLIT, { ai: { ...AI_UNASKED, can: false, ask } });
     const button = within(dialog).getByRole("button", { name: "Fill with AI" });
@@ -369,8 +376,23 @@ describe("editing a file's songs", () => {
     await userEvent.click(button);
 
     expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(button).toHaveAccessibleDescription("Set up an AI provider in Settings to ask it");
+    expect(button).toHaveAccessibleDescription("The AI can't be asked about this file now");
     expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("links an admin to set up AI when no provider is", async () => {
+    const { dialog } = await renderEditor(SPLIT, {
+      ai: { ...AI_UNASKED, can: false },
+      aiSetUp: { missing: true, admin: true },
+    });
+
+    const button = within(dialog).getByRole("button", { name: "Fill with AI" });
+
+    expect(button).toHaveAccessibleDescription("No AI provider is set up; set one up in Settings");
+    expect(within(dialog).getByRole("link", { name: "Set up AI" })).toHaveAttribute(
+      "href",
+      "#/settings?section=ai",
+    );
   });
 
   it("types the songs as a list, starting from the rows, and keeps the songs it still names", async () => {

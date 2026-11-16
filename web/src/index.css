@@ -7659,6 +7659,17 @@ button.playing-kind[aria-expanded="true"] {
   gap: 0.5rem;
 }
 
+/* Beside a button that asks the AI while no provider is set up: a link, or a word to a member. */
+.ai-set-up-hint {
+  align-self: center;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+small.ai-set-up-hint {
+  color: var(--pico-muted-color);
+}
+
 .edit-artist-ask-button {
   display: inline-flex;
   align-items: center;

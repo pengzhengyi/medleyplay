@@ -27,6 +27,8 @@ import {
 } from "../api";
 import { initialOf } from "../format";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
+import { AiSetUpHint } from "./AiSetUpHint";
+import { useAiSetUp } from "./aiSetUp";
 import { MAX_COVER_BYTES } from "./EditDetails";
 import { Modal } from "./Modal";
 
@@ -181,6 +183,7 @@ export function EditArtist({
   const [picturing, setPicturing] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const ai = useArtistSuggestion(artist.id);
+  const noAi = useAiSetUp();
   const suggested = ai.suggestion;
 
   const names = [
@@ -310,8 +313,15 @@ export function EditArtist({
                 type="button"
                 className="secondary outline edit-artist-ask-button"
                 disabled={ai.asking}
-                title="Ask the AI to suggest a name and a note; nothing changes until you save"
-                onClick={() => void ai.ask()}
+                aria-disabled={noAi.missing}
+                title={
+                  noAi.missing
+                    ? noAi.why
+                    : "Ask the AI to suggest a name and a note; nothing changes until you save"
+                }
+                onClick={() => {
+                  noAi.whenSetUp(() => void ai.ask());
+                }}
               >
                 {ai.asking ? (
                   <SpinnerGapIcon className="spin" aria-hidden />
@@ -324,6 +334,7 @@ export function EditArtist({
                     ? "Asking the AI…"
                     : "Ask AI"}
               </button>
+              <AiSetUpHint newTab />
             </div>
             <label className="edit-album-field">
               Shown as

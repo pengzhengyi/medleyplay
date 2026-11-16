@@ -52,6 +52,15 @@ def test_nothing_is_set_up_at_first(ai: AiService, units: sessionmaker[Session])
         assert not is_set_up(db)
 
 
+def test_a_provider_turned_on_is_set_up_and_one_turned_off_is_not(ai: AiService) -> None:
+    deepseek = _add_deepseek(ai)
+    on = ai.is_set_up()
+
+    ai.set_enabled(ADMIN, deepseek.id, enabled=False)
+
+    assert (on, ai.is_set_up()) == (True, False)
+
+
 def test_adding_keeps_the_key_in_the_keychain_and_the_address_and_model_in_the_catalog(
     ai: AiService, secrets: MemorySecrets, units: sessionmaker[Session], clock: FakeClock
 ) -> None:

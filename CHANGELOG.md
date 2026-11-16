@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ask AI says how to set up a provider when none is** — beside each *Ask AI*,
+  an admin gets a *Set up AI* link that opens Settings at its AI section, and a
+  member *Ask an admin to set up AI*; `GET /api/features` tells whether one is
+  set up as `ai_set_up`, and `#/settings?section=…` opens Settings at a section.
+
 - **Downloaded shows the songs downloading** — above the songs downloaded, each
   song still downloading shows its cover, its state (*Waiting for Online*,
   *42%*), and a bar that moves as the event stream tells of its progress.

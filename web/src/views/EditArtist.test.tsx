@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ArtistSuggestionState, KnownArtist } from "../api";
 import { artistSuggestionOf, knownArtistOf, serve } from "../testing/server";
+import { AiSetUpContext } from "./aiSetUp";
 import { EditArtist } from "./EditArtist";
 import { MAX_COVER_BYTES } from "./EditDetails";
 
@@ -33,6 +34,20 @@ function editing(artist: KnownArtist = BEATLES) {
   const onClose = vi.fn();
   render(<EditArtist artist={artist} written="披头士" onChanged={onChanged} onClose={onClose} />);
   return { onChanged, onClose };
+}
+
+/**
+ * The editor for the Beatles while no AI provider is set up, as an admin sees it;
+ * asked again, the server says one is set up as `setUpSince` says.
+ */
+function editingWithNoAi(setUpSince = false) {
+  render(
+    <AiSetUpContext
+      value={{ missing: true, admin: true, recheck: () => Promise.resolve(setUpSince) }}
+    >
+      <EditArtist artist={BEATLES} written="披头士" onChanged={vi.fn()} onClose={vi.fn()} />
+    </AiSetUpContext>,
+  );
 }
 
 afterEach(() => {
@@ -291,6 +306,36 @@ describe("asking the AI about an artist", () => {
     editing();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The key was refused.");
+  });
+
+  it("can't ask an AI that isn't set up, and links an admin to set one up", async () => {
+    const { calls } = serve({ [`GET ${SUGGESTION}`]: { body: UNASKED } });
+    editingWithNoAi();
+    const button = await screen.findByRole("button", { name: "Ask AI" });
+
+    await userEvent.click(button);
+
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAccessibleDescription("No AI provider is set up; set one up in Settings");
+    expect(calls).not.toContain(`POST ${SUGGESTION}`);
+    expect(screen.getByRole("link", { name: "Set up AI" })).toHaveAttribute(
+      "href",
+      "#/settings?section=ai",
+    );
+  });
+
+  it("asks after all when the server, asked again, says a provider was set up since", async () => {
+    const { calls } = serve({
+      [`GET ${SUGGESTION}`]: { body: UNASKED },
+      [`POST ${SUGGESTION}`]: { status: 202, body: { ...UNASKED, asking: true } },
+    });
+    editingWithNoAi(true);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+
+    await waitFor(() => {
+      expect(calls).toContain(`POST ${SUGGESTION}`);
+    });
   });
 
   it("says why the AI could not be asked, beside Ask AI", async () => {

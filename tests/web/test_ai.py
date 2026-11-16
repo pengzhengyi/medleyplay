@@ -170,6 +170,27 @@ def test_turning_a_provider_off_and_on_keeps_its_place(client: TestClient) -> No
     ]
 
 
+def test_the_features_tell_everyone_whether_a_provider_is_set_up(client: TestClient) -> None:
+    set_up_as_alice(client)
+    before = client.get("/api/features").json()["ai_set_up"]
+    _add(client, DEEPSEEK)
+    add_bob(client)
+    sign_in(client, "bob")
+
+    after = client.get("/api/features").json()["ai_set_up"]
+
+    assert (before, after) == (False, True)
+
+
+def test_a_provider_turned_off_is_not_set_up(client: TestClient) -> None:
+    set_up_as_alice(client)
+    deepseek = _add(client, DEEPSEEK)
+
+    client.put(f"/api/ai/providers/{deepseek}/enabled", json={"enabled": False})
+
+    assert client.get("/api/features").json()["ai_set_up"] is False
+
+
 def test_removing_a_provider_answers_204_also_when_it_is_gone_and_forgets_its_key(
     client: TestClient, secrets: MemorySecrets
 ) -> None:

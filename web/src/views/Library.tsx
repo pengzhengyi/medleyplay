@@ -51,6 +51,7 @@ import { ThemeSwitch } from "./ThemeSwitch";
 import { WaitingDevices } from "./WaitingDevices";
 import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
+import { AiSetUpContext } from "./aiSetUp";
 import { setRailCollapsed, setRailMinimized, useRailCollapsed, useRailMinimized } from "../rail";
 
 /** How long a notice, such as a song added to a Playlist, stays. */
@@ -80,6 +81,16 @@ export function Library({
   const library = useLibrary(onSignedOut);
   const byId = library.tracks;
   const tracks = useMemo(() => [...byId.values()], [byId]);
+  const admin = account.role === "admin";
+  const { refreshFeatures } = library;
+  const aiSetUp = useMemo(
+    () => ({
+      missing: library.aiSetUp === false,
+      admin,
+      recheck: () => refreshFeatures().then((setUp) => setUp === true),
+    }),
+    [library.aiSetUp, admin, refreshFeatures],
+  );
   // The artists a typed song list offers, each once.
   const artists = useMemo(
     () => [...new Set(tracks.map((track) => track.artist.trim()).filter((name) => name !== ""))],
@@ -405,7 +416,7 @@ export function Library({
     void api.signOut().finally(onSignedOut);
   };
 
-  return (
+  const page = (
     <div
       className={[
         "library",
@@ -500,7 +511,10 @@ export function Library({
             admin={account.role === "admin"}
             mode={library.mode}
             onModeChecked={library.modeChecked}
-            onEnrichersChanged={library.refreshFindable}
+            onEnrichersChanged={() => {
+              library.refreshFindable();
+              void library.refreshFeatures();
+            }}
             onKindsChanged={library.reloadTracks}
             onRatingsChanged={library.reloadTracks}
             waitingDevices={library.waitingDevices}
@@ -685,6 +699,7 @@ export function Library({
       <audio ref={audio} preload="auto" />
     </div>
   );
+  return <AiSetUpContext value={aiSetUp}>{page}</AiSetUpContext>;
 }
 
 /** A value that goes back to `cleared` a few seconds after it is set, as a notice fades. */

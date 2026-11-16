@@ -42,6 +42,7 @@ function withBilibili(): Routes {
   return signedIn(LIBRARY, [favoritesPlaylistOf([1])], {
     multiple_accounts: false,
     providers: { source_resolver: ["bilibili"] },
+    ai_set_up: false,
   });
 }
 

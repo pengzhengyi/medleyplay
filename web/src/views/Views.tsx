@@ -289,6 +289,7 @@ function viewOf(given: ViewProps) {
       return (
         <SettingsView
           admin={props.admin}
+          section={route.section}
           mode={props.mode}
           onModeChecked={props.onModeChecked}
           onEnrichersChanged={props.onEnrichersChanged}

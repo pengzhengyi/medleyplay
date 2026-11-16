@@ -3,7 +3,7 @@
  * Downloads may take.
  *
  * Each section saves on its own, and folds away under its heading; a bar of the
- * sections' names goes to one, opening it. Which are folded is this browser's
+ * sections' names goes to one, opening it, as a link naming a section does. Which are folded is this browser's
  * own. The storage limit is the household's, so only an admin changes it; a
  * member sees it and what it holds.
  */
@@ -79,9 +79,51 @@ function keepFolded(folded: ReadonlySet<SectionId>): void {
   }
 }
 
+/** Return `folded` with the section `id` names open, when it names one. */
+function openedAt(folded: ReadonlySet<SectionId>, id: string | undefined): ReadonlySet<SectionId> {
+  return new Set([...folded].filter((each) => each !== id));
+}
+
+/** Scroll to the section `id` names, if it is shown, and focus its heading. */
+function scrollTo(id: string): void {
+  document.getElementById(id)?.scrollIntoView({ block: "start" });
+  document.getElementById(`${id}-toggle`)?.focus({ preventScroll: true });
+}
+
+/** How long a linked section is kept in view while the sections above it load. */
+const SETTLING_MS = 2000;
+
+/**
+ * Scroll to the section `id` names again each time the page's size changes, as the
+ * sections above it load, for a moment or until the listener scrolls; return a stop.
+ */
+function keepInView(id: string): () => void {
+  if (typeof ResizeObserver === "undefined") {
+    return () => undefined;
+  }
+  const observer = new ResizeObserver(() => {
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+  });
+  const handOver = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+  const stop = () => {
+    observer.disconnect();
+    window.clearTimeout(timer);
+    for (const event of handOver) {
+      window.removeEventListener(event, stop);
+    }
+  };
+  const timer = window.setTimeout(stop, SETTLING_MS);
+  for (const event of handOver) {
+    window.addEventListener(event, stop, { passive: true });
+  }
+  observer.observe(document.body);
+  return stop;
+}
+
 /** The Settings view; `admin` may change what the household shares. */
 export function SettingsView({
   admin,
+  section,
   mode,
   onModeChecked,
   onEnrichersChanged,
@@ -90,6 +132,8 @@ export function SettingsView({
   waitingDevices = [],
 }: {
   readonly admin: boolean;
+  /** The id of the section to open and go to, as a link names it; the page shows them all. */
+  readonly section?: string | undefined;
   readonly mode: Mode | null;
   /** Show the Mode a check of the network came to. */
   readonly onModeChecked: (mode: Mode) => void;
@@ -102,7 +146,13 @@ export function SettingsView({
   /** The devices waiting for an answer, as the event stream last said. */
   readonly waitingDevices?: readonly WaitingDevice[];
 }) {
-  const [folded, setFolded] = useState(loadFolded);
+  const [folded, setFolded] = useState(() => openedAt(loadFolded(), section));
+  // The section a link last named, so naming another opens that one too.
+  const [named, setNamed] = useState(section);
+  if (named !== section) {
+    setNamed(section);
+    setFolded((held) => openedAt(held, section));
+  }
   // One copy for the sections that save the settings, so each saves at the latest revision.
   const [household, setHousehold] = useState<Settings | undefined>(undefined);
   const keepNewest = (read: Settings) => {
@@ -123,11 +173,16 @@ export function SettingsView({
     if (folded.has(id)) {
       fold(new Set([...folded].filter((each) => each !== id)));
     }
-    const section = document.getElementById(id);
-    section?.scrollIntoView({ block: "start" });
-    document.getElementById(`${id}-toggle`)?.focus({ preventScroll: true });
+    scrollTo(id);
   };
   const sections = SECTIONS.filter(({ id }) => admin || !ADMIN_ONLY.has(id));
+  useEffect(() => {
+    if (section === undefined) {
+      return undefined;
+    }
+    scrollTo(section);
+    return keepInView(section);
+  }, [section]);
   const allFolded = sections.every(({ id }) => folded.has(id));
   const contents: Record<SectionId, ReactNode> = {
     appearance: (

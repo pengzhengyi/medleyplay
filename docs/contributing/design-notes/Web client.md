@@ -69,7 +69,7 @@ no router package.
 | Playlists | `#/playlists` | *Favorites* first, then the Account's Playlists |
 | Downloaded | `#/downloaded` | The songs downloading, each with its state and a bar, then the Tracks with `downloaded`, in the song table |
 | Search | `#/search?q=…` | What the search found |
-| Settings | `#/settings` | See [Settings](#settings) |
+| Settings | `#/settings`, `#/settings?section=ai` | See [Settings](#settings); `section` opens and goes to the section of that id |
 | Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>) and to [link to one artist](Artists.md#the-web-client) |
 
 - **An artist's or album's Tracks** open at `#/artist?name=…` and
@@ -447,7 +447,8 @@ One view, in sections, each saved on its own:
 Each section folds under its heading, a button that says whether it is open;
 which are folded is kept per browser. A bar of the section names stays under the header as the page scrolls:
 choosing one opens that section, scrolls to it, and moves focus to its heading,
-and its last button folds or opens them all.
+and its last button folds or opens them all. A link that names a section, such as
+`#/settings?section=ai`, does the same on arrival.
 
 ## Listening on another device
 

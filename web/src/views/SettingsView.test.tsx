@@ -38,7 +38,41 @@ function open(
   onModeChecked: (mode: Mode) => void = vi.fn(),
   onKindsChanged: () => void = vi.fn(),
 ) {
-  const served = serve({
+  const served = serveSettings(routes, mode, metered);
+  render(
+    <SettingsView
+      admin={admin}
+      mode={mode}
+      onModeChecked={onModeChecked}
+      onEnrichersChanged={vi.fn()}
+      onKindsChanged={onKindsChanged}
+    />,
+  );
+  return served;
+}
+
+/** Open an admin's Settings at the section `section` names, as `#/settings?section=…` does. */
+function openAt(section: string) {
+  serveSettings();
+  render(
+    <SettingsView
+      admin
+      section={section}
+      mode={modeOf()}
+      onModeChecked={vi.fn()}
+      onEnrichersChanged={vi.fn()}
+      onKindsChanged={vi.fn()}
+    />,
+  );
+}
+
+/** Answer what each section reads: a 20 GB limit, no AI provider, nothing waiting. */
+function serveSettings(
+  routes: Routes = {},
+  mode: Mode = modeOf(),
+  metered: readonly MeteredNetwork[] = [],
+) {
+  return serve({
     "GET /api/settings": { body: LIMIT_20 },
     "GET /api/storage": { body: USING_2 },
     "GET /api/proxies/bilibili": { body: null },
@@ -58,16 +92,6 @@ function open(
     ...modeSettingsOf(mode, metered),
     ...routes,
   });
-  render(
-    <SettingsView
-      admin={admin}
-      mode={mode}
-      onModeChecked={onModeChecked}
-      onEnrichersChanged={vi.fn()}
-      onKindsChanged={onKindsChanged}
-    />,
-  );
-  return served;
 }
 
 /** The server on an iPhone hotspot an admin marked metered, so Offline. */
@@ -486,6 +510,24 @@ describe("the Settings sections", () => {
     expect(heading).toHaveAttribute("aria-expanded", "true");
     expect(heading).toHaveFocus();
     expect(await screen.findByText(/of 20 GB used/)).toBeVisible();
+  });
+
+  it("open at the one a link names, even when it was folded", () => {
+    localStorage.setItem("medleyplay.settings.folded.v1", JSON.stringify(["ai"]));
+
+    openAt("ai");
+
+    const heading = screen.getByRole("button", { name: "AI" });
+    expect(heading).toHaveAttribute("aria-expanded", "true");
+    expect(heading).toHaveFocus();
+  });
+
+  it("open as they were when a link names a section there is not", () => {
+    localStorage.setItem("medleyplay.settings.folded.v1", JSON.stringify(["ai"]));
+
+    openAt("nowhere");
+
+    expect(screen.getByRole("button", { name: "AI" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("fold all at once, and open all again", async () => {

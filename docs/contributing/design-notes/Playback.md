@@ -375,7 +375,14 @@ and the full views are in [Web client](Web%20client.md).
 - **Media Session:** the Track's metadata; the play, pause, previous, next, and
   seek-to actions, without seek-backward and seek-forward, which iOS would show
   in place of previous and next; `playbackState`; and `setPositionState` when the
-  position jumps or the Track loads, only once the duration is known.
+  position jumps or the Track loads, only once the duration is known. *Play* and
+  *pause* each ask for a state, not a change, since the system may send *pause*
+  once per earbud taken out.
+- **A change of audio devices pauses** (`devicechange`), so taking out earbuds or
+  unplugging headphones doesn't play on through the speakers. Any device counts,
+  a microphone or a camera too, since telling outputs apart needs microphone
+  permission. A plain-HTTP page has no devices to follow, and Safari reports them
+  only to a page allowed the microphone; there the system's *pause* does the work.
 - **The queue and the current position are saved in IndexedDB,** best effort. A
   restored position is applied, paused, once the Track's metadata loads; when the
   browser can't save, or has cleared it, the page starts with an empty queue.

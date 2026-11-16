@@ -488,6 +488,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Taking out earbuds pauses, and it stays paused** — the system's *pause* no
+  longer starts playing again when it comes twice, once per earbud, and a change
+  of audio devices pauses, so the music doesn't carry on through the speakers.
+
 - **Selected text takes the accent color** — highlighting text shows the accent
   chosen in Appearance, not always jade.
 

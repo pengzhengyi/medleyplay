@@ -1,8 +1,8 @@
-import { act, render, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
-import { fakeMedia } from "../testing/media";
+import { fakeMedia, fakeSystemMedia } from "../testing/media";
 import { serve, trackOf } from "../testing/server";
 import { type Player, usePlayer } from "./usePlayer";
 
@@ -39,7 +39,7 @@ function renderPlayer(tracks: readonly Track[]) {
     shown.player = player;
     return <audio ref={audio} />;
   }
-  const { container } = render(<Page />);
+  const { container, unmount } = render(<Page />);
   const element = container.querySelector("audio");
   if (element === null) {
     throw new Error("The player rendered no audio element.");
@@ -51,7 +51,7 @@ function renderPlayer(tracks: readonly Track[]) {
     }
     return shown.player;
   };
-  return { element, media, player };
+  return { element, media, player, unmount };
 }
 
 const playing = (player: () => Player, track: Track) =>
@@ -165,6 +165,115 @@ describe("pausing for other music", () => {
 
     expect(element.paused).toBe(true);
     expect(player().status.kind).not.toBe("playing");
+  });
+});
+
+describe("following the system's media keys and audio devices", () => {
+  let system: ReturnType<typeof fakeSystemMedia>;
+  beforeEach(() => {
+    system = fakeSystemMedia();
+  });
+  afterEach(() => {
+    // The player lets go of the system's media keys as it goes, so it goes first.
+    cleanup();
+    system.restore();
+  });
+
+  it("stays paused when the system asks to pause twice, as taking out both earbuds does", async () => {
+    serve(ANSWERS);
+    const { element, player } = renderPlayer([OTHER]);
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+    await playing(player, OTHER);
+
+    act(() => {
+      system.press("pause");
+    });
+    act(() => {
+      system.press("pause");
+    });
+
+    expect(element.paused).toBe(true);
+    expect(player().status.kind).toBe("paused");
+  });
+
+  it("plays on when the system asks to play while playing", async () => {
+    serve(ANSWERS);
+    const { media, player } = renderPlayer([OTHER]);
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+    await playing(player, OTHER);
+
+    act(() => {
+      system.press("play");
+    });
+
+    expect(player().status.kind).toBe("playing");
+    expect(media.pauses).toBe(0);
+  });
+
+  it("plays again when the system asks to play while paused", async () => {
+    serve(ANSWERS);
+    const { player } = renderPlayer([OTHER]);
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+    await playing(player, OTHER);
+    act(() => {
+      system.press("pause");
+    });
+
+    act(() => {
+      system.press("play");
+    });
+
+    await playing(player, OTHER);
+  });
+
+  it("pauses when an audio device comes or goes, so it doesn't play on aloud through another", async () => {
+    serve(ANSWERS);
+    const { element, player } = renderPlayer([OTHER]);
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+    await playing(player, OTHER);
+
+    act(() => {
+      system.changeDevices();
+    });
+
+    expect(element.paused).toBe(true);
+    expect(player().status.kind).toBe("paused");
+  });
+
+  it("no longer pauses for a change of devices once the player is gone", async () => {
+    serve(ANSWERS);
+    const { media, player, unmount } = renderPlayer([OTHER]);
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+    await playing(player, OTHER);
+    unmount();
+    const pauses = media.pauses;
+
+    system.changeDevices();
+
+    expect(media.pauses).toBe(pauses);
+  });
+
+  it("plays on a page told of no devices, as one over plain HTTP is", async () => {
+    system.restore();
+    system = fakeSystemMedia({ secure: false });
+    serve(ANSWERS);
+    const { player } = renderPlayer([OTHER]);
+
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+
+    await playing(player, OTHER);
   });
 });
 

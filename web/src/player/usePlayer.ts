@@ -357,18 +357,22 @@ export function usePlayer(
     // A new entry for the same Track is a new play, so its key decides.
   }, [key, trackId]);
 
-  const toggle = () => {
+  /** Play the current Track on from where it is, if it is loaded and paused. */
+  const resume = () => {
     const element = audio.current;
-    if (element?.getAttribute("src") == null) {
+    if (element?.getAttribute("src") == null || !element.paused) {
       return;
     }
-    if (element.paused) {
-      const forKey = playingKey.current;
-      element.play().catch((error: unknown) => {
-        failed(forKey, error);
-      });
+    const forKey = playingKey.current;
+    element.play().catch((error: unknown) => {
+      failed(forKey, error);
+    });
+  };
+  const toggle = () => {
+    if (audio.current?.paused === false) {
+      audio.current.pause();
     } else {
-      element.pause();
+      resume();
     }
   };
   /** Start the current Track over, as a new play, and play it if `play`. */
@@ -603,9 +607,12 @@ export function usePlayer(
   }, [status.kind]);
   const onAction = useEffectEvent((details: MediaSessionActionDetails) => {
     switch (details.action) {
+      // The system may ask twice, once per earbud taken out, so each asks for a state, not a change.
       case "play":
+        resume();
+        break;
       case "pause":
-        toggle();
+        audio.current?.pause();
         break;
       case "previoustrack":
         previous();
@@ -631,6 +638,22 @@ export function usePlayer(
       for (const action of actions) {
         navigator.mediaSession.setActionHandler(action, null);
       }
+    };
+  }, []);
+
+  // Earbuds taken out or headphones unplugged leave the sound to the next device, often
+  // the speakers, so a change of devices pauses. A page over plain HTTP has no devices.
+  useEffect(() => {
+    const devices = navigator.mediaDevices as MediaDevices | undefined;
+    if (devices === undefined) {
+      return;
+    }
+    const whenChanged = () => {
+      audio.current?.pause();
+    };
+    devices.addEventListener("devicechange", whenChanged);
+    return () => {
+      devices.removeEventListener("devicechange", whenChanged);
     };
   }, []);
 

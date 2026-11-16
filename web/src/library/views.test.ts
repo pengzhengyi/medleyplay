@@ -1,4 +1,4 @@
-// cspell:ignore supercell ｍｅｌｔ
+// cspell:ignore supercell ｍｅｌｔ beatls jsie
 import { describe, expect, it } from "vitest";
 
 import { artistNameOf, knownArtistOf, trackOf } from "../testing/server";
@@ -227,8 +227,120 @@ describe("search", () => {
     ]);
   });
 
-  it("finds nothing for a blank search", () => {
+  it("finds nothing for a blank search, or tags with no value yet", () => {
     expect(search(LIBRARY, "   ")).toEqual({ tracks: [], artists: [], albums: [] });
+    expect(search(LIBRARY, "artist: album:")).toEqual({ tracks: [], artists: [], albums: [] });
+  });
+
+  describe("loosely", () => {
+    /**
+     * | Title      | Artist      | Album  |
+     * | ---------- | ----------- | ------ |
+     * | Jealousy   | Queen       | Jazz   |
+     * | Yesterday  | The Beatles | Help!  |
+     * | 晴天        | Jay Chou    | 叶惠美  |
+     */
+    const SONGS = [
+      trackOf(1, "Jealousy", { artist: "Queen", album: "Jazz" }),
+      trackOf(2, "Yesterday", { artist: "The Beatles", album: "Help!" }),
+      trackOf(3, "晴天", { artist: "Jay Chou", album: "叶惠美" }),
+    ];
+
+    it("finds names with the letters typed in order, when some are left out", () => {
+      expect(titles(search(SONGS, "beatls").tracks)).toEqual(["Yesterday"]);
+      expect(search(SONGS, "jch").artists.map((artist) => artist.name)).toEqual(["Jay Chou"]);
+    });
+
+    it("lists names holding the words side by side first, however close a loose one is", () => {
+      const songs = [trackOf(9, "Beat Less", { artist: "", album: "" }), ...SONGS];
+
+      expect(titles(search(songs, "beatles").tracks)).toEqual(["Yesterday", "Beat Less"]);
+    });
+
+    it("leaves out a poor match, and matches fewer than three letters only side by side", () => {
+      expect(titles(search(SONGS, "jay").tracks)).toEqual(["晴天"]);
+      expect(titles(search(SONGS, "jy").tracks)).toEqual([]);
+    });
+  });
+
+  describe("with tags", () => {
+    /**
+     * | Title     | Artist      | Album      | Album artist | Rating | Heart |
+     * | --------- | ----------- | ---------- | ------------ | ------ | ----- |
+     * | 晴天       | Jay Chou    | 叶惠美      |              | 5      | ♥     |
+     * | 稻香       | Jay Chou    | 魔杰座      |              | 3      |       |
+     * | Love Song | Jessie Ware | Love       | Various      |        | ♥     |
+     * | Jay's Day | Nobody      | Jay Chou?  | Jay Chou     | 4      |       |
+     */
+    const SONGS = [
+      trackOf(1, "晴天", { artist: "Jay Chou", album: "叶惠美", rating: 5, favorite: true }),
+      trackOf(2, "稻香", { artist: "Jay Chou", album: "魔杰座", rating: 3 }),
+      trackOf(3, "Love Song", {
+        artist: "Jessie Ware",
+        album: "Love",
+        album_artist: "Various",
+        favorite: true,
+      }),
+      trackOf(4, "Jay's Day", {
+        artist: "Nobody",
+        album: "Jay Chou?",
+        album_artist: "Jay Chou",
+        rating: 4,
+      }),
+    ];
+
+    it("keeps the songs of an artist, by artist or album artist, listing only that artist", () => {
+      const found = search(SONGS, "artist:jay");
+
+      expect(titles(found.tracks)).toEqual(["晴天", "稻香", "Jay's Day"]);
+      expect(found.artists.map((artist) => artist.name)).toEqual(["Jay Chou"]);
+      expect(found.albums.map((album) => album.name)).toEqual(["Jay Chou?", "叶惠美", "魔杰座"]);
+    });
+
+    it("keeps names close to the tag, and loose ones only when none is", () => {
+      expect(titles(search(SONGS, "song:love").tracks)).toEqual(["Love Song"]);
+      expect(titles(search(SONGS, 'artist:"jsie wre"').tracks)).toEqual(["Love Song"]);
+    });
+
+    it("finds the words among the songs a tag keeps", () => {
+      expect(titles(search(SONGS, "artist:jay 稻").tracks)).toEqual(["稻香"]);
+      expect(titles(search(SONGS, "album:love song").tracks)).toEqual(["Love Song"]);
+    });
+
+    it("keeps songs rated at least so many stars, or with a heart or without", () => {
+      expect(titles(search(SONGS, "rating:4").tracks)).toEqual(["晴天", "Jay's Day"]);
+      expect(titles(search(SONGS, "favorite:yes").tracks)).toEqual(["晴天", "Love Song"]);
+      expect(titles(search(SONGS, "favorite:no").tracks)).toEqual(["稻香", "Jay's Day"]);
+    });
+
+    it("lists an album or artist whole when a song the tags keep is its", () => {
+      const found = search(SONGS, "rating:4");
+
+      expect(found.albums.map((album) => [album.name, album.count])).toEqual([
+        ["Jay Chou?", 1],
+        ["叶惠美", 1],
+      ]);
+      expect(found.artists.map((artist) => [artist.name, artist.count])).toEqual([
+        ["Jay Chou", 2],
+        ["Nobody", 1],
+      ]);
+    });
+
+    it("ignores a kind it doesn't know, as one still being typed", () => {
+      expect(titles(search(SONGS, "kind:so artist:jay").tracks)).toEqual([
+        "晴天",
+        "稻香",
+        "Jay's Day",
+      ]);
+    });
+
+    it("shows only the kind asked for", () => {
+      const found = search(SONGS, "kind:albums artist:jay");
+
+      expect(found.tracks).toEqual([]);
+      expect(found.artists).toEqual([]);
+      expect(found.albums.map((album) => album.name)).toEqual(["Jay Chou?", "叶惠美", "魔杰座"]);
+    });
   });
 });
 

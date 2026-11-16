@@ -195,6 +195,98 @@ describe("search", () => {
     expect(location.hash).toBe(`#/search?q=${encodeURIComponent("くじら")}`);
   });
 
+  it("turns a field typed into a tag, the words after it its value", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("searchbox", { name: "Search" });
+
+    await userEvent.type(box, "artist:ryo");
+
+    expect(box).toHaveAccessibleDescription("Artist:");
+    expect(box).toHaveValue("ryo");
+    await waitFor(() => {
+      expect(location.hash).toBe(hrefOf({ view: "search", query: "artist:ryo" }));
+    });
+  });
+
+  it("keeps a tag on Enter, leaving the box for plain words", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("searchbox", { name: "Search" });
+
+    await userEvent.type(box, "artist:ryo{Enter}melt");
+
+    expect(box).toHaveAccessibleDescription("Artist: ryo");
+    expect(box).toHaveValue("melt");
+    await waitFor(() => {
+      expect(location.hash).toBe(hrefOf({ view: "search", query: "artist:ryo melt" }));
+    });
+  });
+
+  it("chooses a tag with the first Backspace and removes it with the second", async () => {
+    open(`#/search?q=${encodeURIComponent('artist:ryo album:"Super cell"')}`);
+    const box = await screen.findByRole("searchbox", { name: "Search" });
+    expect(box).toHaveAccessibleDescription("Artist: ryo Album: Super cell");
+
+    await userEvent.type(box, "{Backspace}");
+
+    expect(screen.getByTitle("Press Backspace again to remove")).toHaveTextContent(
+      "Album: Super cell",
+    );
+
+    await userEvent.type(box, "{Backspace}");
+
+    expect(box).toHaveAccessibleDescription("Artist: ryo");
+    await waitFor(() => {
+      expect(location.hash).toBe(hrefOf({ view: "search", query: "artist:ryo" }));
+    });
+  });
+
+  it("removes a tag by its own button, and clears tags and words together", async () => {
+    open(`#/search?q=${encodeURIComponent("artist:ryo album:Supercell melt")}`);
+    const box = await screen.findByRole("searchbox", { name: "Search" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Artist: ryo" }));
+
+    expect(box).toHaveAccessibleDescription("Album: Supercell");
+    expect(screen.getByText("Artist: ryo removed.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+    expect(box).toHaveValue("");
+  });
+
+  it("clears the search, tags and all, on Escape", async () => {
+    open(`#/search?q=${encodeURIComponent("artist:ryo melt")}`);
+    const box = await screen.findByRole("searchbox", { name: "Search" });
+
+    await userEvent.type(box, "{Escape}");
+
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+    expect(box).toHaveValue("");
+  });
+
+  it("turns tags pasted into the box into tags", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("searchbox", { name: "Search" });
+    await userEvent.click(box);
+
+    await userEvent.paste("artist:ryo melt");
+
+    expect(box).toHaveAccessibleDescription("Artist: ryo");
+    expect(box).toHaveValue("melt");
+  });
+
+  it("titles the results by the tags and words asked", async () => {
+    open(`#/search?q=${encodeURIComponent('artist:"ryo" melt')}`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Results for Artist: ryo, “melt”" }),
+    ).toBeInTheDocument();
+  });
+
   it("opens a search from its link, the box holding what was searched", async () => {
     open("#/search?q=supercell");
 

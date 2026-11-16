@@ -49,6 +49,7 @@
     "fsyncs",
     "ftyp",
     "fulltitle",
+    "fuzzysort",
     "gaierror",
     "geteuid",
     "gethostname",

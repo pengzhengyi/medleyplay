@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Search by field, and loosely** — type `artist:`, `album:`, `song:`,
+  `kind:`, `rating:`, or `favorite:` and it becomes a tag in the box that the
+  words after it fill; Backspace chooses a tag, and a second removes it. Plain
+  words also find names with letters left out, so *jch* finds *Jay Chou*, after
+  the names that hold them exactly.
+
 - **Show a song in the Library, and rate it, from its menu** — a song's "…",
   in a row, the player, or the big picture, has *Show in Library*, which scrolls
   to the song and lights it, and *Rate*, a submenu of stars.

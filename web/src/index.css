@@ -300,16 +300,26 @@ button[aria-disabled="true"] {
   min-width: 0;
 }
 
+/* The field is the pill: the glass, the tags, then the box typed in, with one ring. */
 .search-field {
-  position: relative;
   display: flex;
   flex: 1 1 auto;
   align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
   margin: 0;
+  padding-left: 2.4rem;
+  border-radius: 999px;
+  background: var(--raised);
   color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+  position: relative;
 }
 
-/* The field is the whole pill, the glass over its padding, so its one ring is the pill's. */
+.search-field:focus-within {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
 .search-glass {
   position: absolute;
   left: 0.95rem;
@@ -317,22 +327,95 @@ button[aria-disabled="true"] {
 }
 
 .search-field input[type="search"] {
-  width: 100%;
+  flex: 1 1 6rem;
+  width: auto;
+  min-width: 6rem;
   height: auto;
   margin: 0;
-  padding: 0.4rem 0.95rem 0.4rem 2.4rem;
+  padding: 0.4rem 0.95rem 0.4rem 0;
   border: none;
   border-radius: 999px;
-  background: var(--raised);
+  background: transparent;
   color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow: none;
   font-size: 0.95rem;
 }
 
 .search-field input[type="search"]:focus,
 .search-field input[type="search"]:focus-visible {
   outline: none;
+  box-shadow: none;
+}
+
+/* Tags typed: capsules in the pill, the newest nearest the caret. */
+.search-tags {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+
+.search-tag {
+  flex: none;
+  max-width: 14rem;
+  overflow: hidden;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-tag-field {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.search-tag[data-picked] {
   box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* The tag's own remove button, quiet until pointed at. */
+.search-tag-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0 -0.2rem 0 0.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.7rem;
+  vertical-align: -0.15em;
+}
+
+.search-tag-remove:hover,
+.search-tag-remove:focus-visible {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* One clear for the whole search, tags and all, in place of the browser's own. */
+.search-field input[type="search"]::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-field .search-clear {
+  flex: none;
+  margin: 0 0.45rem 0 0;
+  color: var(--muted);
+}
+
+.search-words {
+  flex: none;
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .scope {

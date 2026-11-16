@@ -454,6 +454,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A minimized rail names the view once** — with the rail minimized, its menu
+  takes the place of a view's heading when the two say the same, as *Library*;
+  *Downloaded* now sits below *Playlists* in the rail.
+
 - **A song's album folds away** — in a song's *Edit details*, the album fields
   fold to a line saying its album, or that it is a single, and open when pressed.
 

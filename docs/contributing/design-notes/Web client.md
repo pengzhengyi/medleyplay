@@ -66,8 +66,8 @@ no router package.
 | Radio | `#/radio` | *My station*, *Favorites*, and shelves of albums for the Account; see [Recommendations](Recommendations.md#the-radio-tab) |
 | Artists | `#/artists` | Each artist, with how many Tracks and how long; one opens its Tracks |
 | Albums | `#/albums` | Each album, under its album artist, or its artist when that is blank |
-| Downloaded | `#/downloaded` | The Tracks with `downloaded`, in the song table |
 | Playlists | `#/playlists` | *Favorites* first, then the Account's Playlists |
+| Downloaded | `#/downloaded` | The Tracks with `downloaded`, in the song table |
 | Search | `#/search?q=…` | What the search found |
 | Settings | `#/settings` | See [Settings](#settings) |
 | Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>) and to [link to one artist](Artists.md#the-web-client) |
@@ -487,7 +487,10 @@ remembers both choices:
 - **Minimize or show it whole.** Minimized, the rail is one line above the view,
   the view shown and the way back; the view takes the rail's column. The view
   shown opens a menu of every view, with Clean up's count and, at its foot, who
-  is signed in and *Sign out*.
+  is signed in and *Sign out*. A view headed by its own name in the rail, as
+  *Library* is, then leaves its heading to that menu: the heading stays for a
+  screen reader, and what the view says under it shows under the menu. A view
+  with a name of its own, as an artist's, keeps its heading.
 
 Who is signed in sits at the rail's foot, as a round initial and the name,
 opening a menu with *Sign out*; the header leaves them out. Narrower, where

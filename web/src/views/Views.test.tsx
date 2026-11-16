@@ -129,6 +129,18 @@ describe("the views", () => {
     expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
   });
 
+  it("marks a view headed by its rail name, which a minimized rail's menu says instead", async () => {
+    open("");
+
+    const library = await screen.findByRole("heading", { name: "Library" });
+    expect(library).toHaveAttribute("data-rail-named");
+
+    open(`#/artist?name=${encodeURIComponent("ルワン")}`);
+
+    const artist = await screen.findByRole("heading", { name: "ルワン" });
+    expect(artist).not.toHaveAttribute("data-rail-named");
+  });
+
   it("opens the Radio tab, with the Account's own station", async () => {
     open("");
 

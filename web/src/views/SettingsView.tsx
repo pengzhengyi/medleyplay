@@ -163,7 +163,9 @@ export function SettingsView({
   return (
     <>
       <header className="view-heading">
-        <h2 className="section">Settings</h2>
+        <h2 className="section" data-rail-named>
+          Settings
+        </h2>
       </header>
       <nav className="settings-toc" aria-label="Settings sections">
         <ul>

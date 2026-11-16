@@ -1,5 +1,5 @@
 // cspell:ignore supercell ｍｅｌｔ
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -512,5 +512,18 @@ describe("editing an album from its page", () => {
 
     const editor = await screen.findByRole("dialog", { name: "Edit details" });
     expect(within(editor).queryByRole("button", { name: /^Save to/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("showing a song in the Library", () => {
+  it("moves to the song asked for, and leaves it out of the address once shown", async () => {
+    open("#/library?focus=3");
+
+    const title = await screen.findByRole("button", { name: "クジラ" });
+
+    await waitFor(() => {
+      expect(title).toHaveFocus();
+    });
+    expect(location.hash).toBe("#/library");
   });
 });

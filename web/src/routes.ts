@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 
 /** A view and what it shows. */
 export type Route =
-  | { readonly view: "library" }
+  /** The Library; with `focus`, scrolled to that Track, which is lit for a moment. */
+  | { readonly view: "library"; readonly focus?: number }
   | { readonly view: "radio" }
   | { readonly view: "artists" }
   | { readonly view: "artist"; readonly name: string }
@@ -34,7 +35,10 @@ export function routeOf(hash: string): Route {
   const params = new URLSearchParams(query);
   const name = params.get("name");
   switch (path) {
-    case "library":
+    case "library": {
+      const focus = params.get("focus") ?? "";
+      return /^\d+$/u.test(focus) ? { view: "library", focus: Number(focus) } : LIBRARY;
+    }
     case "radio":
     case "artists":
     case "albums":
@@ -72,6 +76,8 @@ export function hrefOf(route: Route): string {
       return `#/playlist?${new URLSearchParams({ id: route.id }).toString()}`;
     case "search":
       return `#/search?${new URLSearchParams({ q: route.query }).toString()}`;
+    case "library":
+      return route.focus === undefined ? "#/library" : `#/library?focus=${String(route.focus)}`;
     default:
       return `#/${route.view}`;
   }

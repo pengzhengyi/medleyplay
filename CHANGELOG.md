@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Show a song in the Library, and rate it, from its menu** — a song's "…",
+  in a row, the player, or the big picture, has *Show in Library*, which scrolls
+  to the song and lights it, and *Rate*, a submenu of stars.
+
 - **Fill one artist into every song** — in the songs editor, an artist typed
   into one row shows faintly in the rows with none, and Tab fills them all.
 

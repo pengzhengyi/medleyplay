@@ -2800,6 +2800,28 @@ details.dropdown[open] > summary.filter-summary {
   border-radius: 0 0.75rem 0.75rem 0;
 }
 
+/* A song asked for from a menu: lit, then fading back, so the eye finds it. */
+.tracks tbody tr.lit td {
+  background: var(--accent-soft);
+  animation: lit-fade 2.5s ease-in forwards;
+}
+
+@keyframes lit-fade {
+  70% {
+    background: var(--accent-soft);
+  }
+
+  100% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tracks tbody tr.lit td {
+    animation: none;
+  }
+}
+
 .tracks tbody tr:hover td {
   background: var(--surface);
 }
@@ -4078,6 +4100,29 @@ button.icon.heart.on:hover,
 
 .track-menu-item[data-highlighted] .track-menu-icon {
   color: var(--accent);
+}
+
+/* Radix marks a radio group with Pico's button-group role; here it is a plain list. */
+.track-menu-group {
+  display: block;
+  width: auto;
+  margin: 0;
+}
+
+.track-menu-group > .track-menu-item {
+  border-radius: 0.6rem;
+}
+
+.track-menu-stars {
+  gap: 0.15rem;
+  color: var(--accent);
+}
+
+.track-menu-caret,
+.track-menu-chosen {
+  display: inline-grid;
+  margin-left: auto;
+  color: var(--muted);
 }
 
 .track-menu-line {

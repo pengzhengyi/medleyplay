@@ -38,7 +38,7 @@ import {
   tracksOfArtist,
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
-import { type Route, hrefOf } from "../routes";
+import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
@@ -97,8 +97,12 @@ export interface ViewProps {
 
 /** The view `route` names; each route is a view of its own, opening with no filters on. */
 export function CurrentView(given: ViewProps) {
-  // Search stays one view while its words change, so typing keeps what it has found.
-  const key = given.route.view === "search" ? "search" : JSON.stringify(given.route);
+  // Search stays one view while its words change, so typing keeps what it has found; the
+  // Library stays one view while it shows a song asked for, then drops it from the address.
+  const key =
+    given.route.view === "search" || given.route.view === "library"
+      ? given.route.view
+      : JSON.stringify(given.route);
   return <Fragment key={key}>{viewOf(given)}</Fragment>;
 }
 
@@ -291,7 +295,7 @@ function viewOf(given: ViewProps) {
 }
 
 /** Every song and album, a split file's songs folded under it. */
-function LibraryItems({ tracks, playingId, actions }: ViewProps) {
+function LibraryItems({ tracks, playingId, actions, route }: ViewProps) {
   const items = useMemo(() => tracks.filter((track) => track.segment_of === null), [tracks]);
   const songsIn = useMemo(() => songsByFile(tracks), [tracks]);
   const played = inLibraryOrder(items, songsIn);
@@ -307,10 +311,17 @@ function LibraryItems({ tracks, playingId, actions }: ViewProps) {
         playingId={playingId}
         actions={actions}
         empty={<NoMusic />}
+        focus={route.view === "library" ? route.focus : undefined}
+        onFocused={showFocused}
       />
     </>
   );
 }
+
+/** Once the Track asked for is shown, the address drops it, so Back or a reload doesn't show it again. */
+const showFocused = () => {
+  navigate({ view: "library" }, { replace: true });
+};
 
 /** A heading, and Tracks in the song table. */
 function Songs({

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +21,7 @@ function renderTable(
   playingId?: number,
   statuses: ReadonlyMap<number, CoverStatus> = new Map(),
   songsIn?: ReadonlyMap<number, readonly Track[]>,
+  focus?: { readonly id: number; readonly onFocused: () => void },
 ) {
   const actions: TrackActions = {
     statusOf: (track) => statuses.get(track.id),
@@ -45,6 +46,8 @@ function renderTable(
       actions={actions}
       empty={<p>No music yet.</p>}
       songsIn={songsIn}
+      focus={focus?.id}
+      onFocused={focus?.onFocused}
     />,
   );
   return { actions, ...view };
@@ -834,5 +837,53 @@ describe("the Library", () => {
     await userEvent.selectOptions(screen.getByLabelText("Group by"), "Album");
 
     expect(shownTitles()).toEqual(["Melt", "傲慢的上校", "浮游", "生如夏花", "Bremen"]);
+  });
+});
+
+describe("showing a song asked for", () => {
+  it("lights the song and moves to its title, once", async () => {
+    const onFocused = vi.fn();
+    renderTable(LIBRARY, undefined, new Map(), undefined, { id: 3, onFocused });
+
+    const title = screen.getByRole("button", { name: "Let Down" });
+
+    await waitFor(() => {
+      expect(title).toHaveFocus();
+    });
+    expect(rowOf(title)).toHaveClass("lit");
+    expect(onFocused).toHaveBeenCalledOnce();
+  });
+
+  it("clears the filters that hide it", async () => {
+    const onFocused = vi.fn();
+    const { rerender, actions } = renderTable(LIBRARY);
+    const filters = await openFilters();
+    await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "Radiohead");
+
+    rerender(
+      <TrackTable
+        tracks={LIBRARY}
+        playingId={undefined}
+        actions={actions}
+        empty={<p>No music yet.</p>}
+        focus={5}
+        onFocused={onFocused}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "New Song" })).toHaveFocus();
+    });
+    expect(shownTitles()).toHaveLength(5);
+  });
+
+  it("opens the split file a song asked for is in", async () => {
+    const onFocused = vi.fn();
+    renderTable(ITEMS, undefined, new Map(), songsByFile(SONGS_OF_9), { id: 12, onFocused });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "浮游" })).toHaveFocus();
+    });
+    expect(rowOf(screen.getByRole("button", { name: "浮游" }))).toHaveClass("lit");
   });
 });

@@ -10,6 +10,7 @@ import type {
   Account,
   ArtistName,
   Details,
+  DownloadUnderWay,
   Enricher,
   Features,
   HistoryLength,
@@ -211,6 +212,7 @@ export function signedIn(
     "GET /api/favorites": { body: { artists: [], albums: [] } },
     "GET /api/features": { body: features },
     "GET /api/mode": { body: modeOf() },
+    "GET /api/downloads": { body: [] },
     ...preferencesOf(),
   };
 }
@@ -474,6 +476,20 @@ export function downloadOf(
     message,
     backend: status === "downloaded" ? "manual" : null,
     job_id: status === "failed" || status === "downloading" ? trackId + 500 : null,
+  };
+}
+
+/**
+ * Track `trackId`'s Download under way: its Job, numbered `trackId + 500`, queued and
+ * waiting for nothing, unless `job` says otherwise.
+ */
+export function downloadUnderWayOf(
+  trackId: number,
+  job: Partial<DownloadUnderWay["job"]> = {},
+): DownloadUnderWay {
+  return {
+    track_id: trackId,
+    job: { id: trackId + 500, state: "queued", progress: null, waits_for_online: false, ...job },
   };
 }
 

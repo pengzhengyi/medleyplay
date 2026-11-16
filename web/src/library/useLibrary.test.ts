@@ -6,6 +6,7 @@ import { PAGE_ID } from "../page";
 import {
   detailsOf,
   downloadOf,
+  downloadUnderWayOf,
   favoritesPlaylistOf,
   playlistOf,
   serve,
@@ -844,5 +845,116 @@ describe("favorite artists and albums", () => {
       expect(result.current.error).toBe("An album's name must be 1-512 characters.");
     });
     expect(result.current.favoriteGroups.albums.size).toBe(0);
+  });
+});
+
+describe("the Downloads under way", () => {
+  it("moves each on as its Job runs, and drops it once done", async () => {
+    serve({
+      ...signedIn([trackOf(9, "Night Drive")]),
+      "GET /api/downloads": { body: [downloadUnderWayOf(9)] },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.downloading.map(({ job }) => job.state)).toEqual(["queued"]);
+    });
+
+    act(() => {
+      stream().send("job", {
+        id: 509,
+        kind: "download_source",
+        state: "running",
+        progress: { fraction: 0.42, message: "" },
+      });
+    });
+
+    expect(result.current.downloading.map(({ job }) => job.progress?.fraction)).toEqual([0.42]);
+    act(() => {
+      stream().send("job", { id: 509, kind: "download_source", state: "succeeded" });
+    });
+    expect(result.current.downloading).toEqual([]);
+  });
+
+  it("asks for them again when a Download it doesn't hold starts", async () => {
+    const { calls } = serve(signedIn([trackOf(9, "Night Drive")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    act(() => {
+      stream().send("job", { id: 509, kind: "download_source", state: "queued" });
+    });
+
+    await waitFor(() => {
+      expect(calls.filter((call) => call === "GET /api/downloads")).toHaveLength(2);
+    });
+  });
+
+  it("follows each of several Job events told at once", async () => {
+    serve({
+      ...signedIn([trackOf(8, "Mixtape"), trackOf(9, "Night Drive")]),
+      "GET /api/downloads": { body: [downloadUnderWayOf(8), downloadUnderWayOf(9)] },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.downloading).toHaveLength(2);
+    });
+
+    act(() => {
+      stream().send("job", { id: 508, kind: "download_source", state: "succeeded" });
+      stream().send("job", { id: 509, kind: "download_source", state: "running" });
+    });
+
+    expect(result.current.downloading.map(({ job }) => [job.id, job.state])).toEqual([
+      [509, "running"],
+    ]);
+  });
+
+  it("keeps a Download that ended gone when an older list arrives after it", async () => {
+    let answer = (): void => undefined;
+    const late = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    serve({
+      ...signedIn([trackOf(9, "Night Drive")]),
+      "GET /api/downloads": { body: [downloadUnderWayOf(9)], after: late },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    act(() => {
+      stream().send("job", { id: 509, kind: "download_source", state: "succeeded" });
+    });
+    await act(async () => {
+      answer();
+      await late;
+    });
+
+    expect(result.current.downloading).toEqual([]);
+  });
+
+  it("asks once about a Download it can't find, however often its Job is told of", async () => {
+    const { calls } = serve(signedIn([trackOf(9, "Night Drive")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    for (const fraction of [0.1, 0.2, 0.3]) {
+      await act(async () => {
+        stream().send("job", {
+          id: 700,
+          kind: "download_source",
+          state: "running",
+          progress: { fraction, message: "" },
+        });
+        await Promise.resolve();
+      });
+    }
+
+    expect(calls.filter((call) => call === "GET /api/downloads")).toHaveLength(2);
   });
 });

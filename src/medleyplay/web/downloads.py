@@ -8,13 +8,16 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 from starlette.requests import ClientDisconnect
 
-from medleyplay.application.manual_downloads import DownloadStatus, TrackDownload
+from medleyplay.application.manual_downloads import DownloadStatus, DownloadUnderWay, TrackDownload
+from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import InvalidInputError, TooLargeError
 from medleyplay.web.deps import ManualDownloadsDep, SignedInAccount
 from medleyplay.web.ids import RowId
+from medleyplay.web.jobs import JobOut
 
 router = APIRouter(prefix="/api/tracks", tags=["downloads"])
+under_way_router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
 type FileName = Annotated[str, Query(min_length=1, max_length=255, examples=["night-drive.m4a"])]
 
@@ -96,3 +99,21 @@ async def _next(stream: AsyncIterator[bytes]) -> bytes | None:
         if chunk:
             return chunk
     return None
+
+
+class DownloadUnderWayOut(BaseModel):
+    """A Track whose Download a Job is getting, and that Job, with how far it has got."""
+
+    track_id: int
+    job: JobOut
+
+    @classmethod
+    def of(cls, download: DownloadUnderWay, viewer: Account) -> "DownloadUnderWayOut":
+        """Return the API view of `download` as `viewer` may see it."""
+        return cls(track_id=download.track_id, job=JobOut.of(download.job, viewer))
+
+
+@under_way_router.get("")
+def list_downloads(me: SignedInAccount, manual: ManualDownloadsDep) -> list[DownloadUnderWayOut]:
+    """Return each Download a Job is getting, the first asked for first, with its Track."""
+    return [DownloadUnderWayOut.of(each, me) for each in manual.downloading()]

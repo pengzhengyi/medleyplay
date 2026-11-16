@@ -143,6 +143,14 @@
   remove one.
 - **After adding,** the dialog closes and says how many Tracks were added and
   that they are downloading, or waiting for Online when the Mode is Offline.
+- ***Downloaded* shows the songs downloading** above those downloaded: each
+  one's cover, title, artist, and state (*Waiting*, *Waiting for Online*,
+  *Downloading*, or how far, such as *42%*) over a bar. A waiting song's bar is
+  still and empty; a running one moves until its Job says how far it has got.
+  The list is read once, then follows each `download_source` Job on the event
+  stream: its progress moves the bar, its end drops the song, and a Job the list
+  doesn't hold reads the list again, once for each such Job. Only the latest read
+  shows, and never with a Download whose Job has already ended.
 - **A failed Track** shows a warning mark where its availability shows, named
   *Download failed* in its tooltip and to a screen reader, small so the title
   keeps its room. It opens a menu that reads, when opened, why the Download
@@ -164,6 +172,7 @@
 | `POST /api/links` | Signed in | Now adds parts of a video that couldn't be read, with the household's details |
 | `GET /api/tracks/{id}/download` | Signed in | The Track's site Source: its link, whether it is downloaded, downloading, failed, or unavailable, and the failure's message; 409 without a site Source |
 | `PUT /api/tracks/{id}/download` | Signed in | Adds the file in the body as the Track's Download; 413 too large, 422 not audio, 409 no site Source |
+| `GET /api/downloads` | Signed in | The Downloads under way, oldest first: each Track and its Job, with the Job's state, progress, and whether it waits for Online |
 
 Tracks in every list gain `download_failed` and `site`.
 

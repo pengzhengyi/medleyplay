@@ -67,7 +67,7 @@ no router package.
 | Artists | `#/artists` | Each artist, with how many Tracks and how long; one opens its Tracks |
 | Albums | `#/albums` | Each album, under its album artist, or its artist when that is blank |
 | Playlists | `#/playlists` | *Favorites* first, then the Account's Playlists |
-| Downloaded | `#/downloaded` | The Tracks with `downloaded`, in the song table |
+| Downloaded | `#/downloaded` | The songs downloading, each with its state and a bar, then the Tracks with `downloaded`, in the song table |
 | Search | `#/search?q=…` | What the search found |
 | Settings | `#/settings` | See [Settings](#settings) |
 | Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>) and to [link to one artist](Artists.md#the-web-client) |

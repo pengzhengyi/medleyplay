@@ -504,6 +504,7 @@ export function Library({
             onKindsChanged={library.reloadTracks}
             onRatingsChanged={library.reloadTracks}
             waitingDevices={library.waitingDevices}
+            downloading={library.downloading}
             station={station}
             accountId={account.id}
             favorites={favorites}

@@ -224,11 +224,34 @@ export interface Features {
   readonly providers: Readonly<Record<string, readonly string[]>>;
 }
 
+/** How far a running Job has got: a fraction from 0 to 1 when known, and what it is doing. */
+export interface JobProgress {
+  readonly fraction: number | null;
+  readonly message: string;
+}
+
 /** A Job as the event stream sends it, as far as the client follows one. */
 export interface JobEvent {
   readonly id: number;
   readonly kind: string;
   readonly state: Job["state"];
+  /** What it works on, such as `source:12` for a Source's Download. */
+  readonly target?: string;
+  /** How far it has got, while it runs. */
+  readonly progress?: JobProgress | null;
+  /** Whether it needs the network, and waits while the Mode is Offline. */
+  readonly waits_for_online?: boolean;
+}
+
+/** A Track whose Download a Job is getting, and that Job, with how far it has got. */
+export interface DownloadUnderWay {
+  readonly track_id: number;
+  readonly job: {
+    readonly id: number;
+    readonly state: Job["state"];
+    readonly progress: JobProgress | null;
+    readonly waits_for_online: boolean;
+  };
 }
 
 /** The enricher that reads a Track's video details and cover from Bilibili. */
@@ -1077,6 +1100,8 @@ export const api = {
   /** Where a site Track's Download stands. */
   download: (trackId: number) =>
     call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),
+  /** Each Download a Job is getting, the first asked for first, with its Track. */
+  downloads: () => call<DownloadUnderWay[]>("GET", "/api/downloads"),
   /** Run a failed or cancelled Job again, as a new Job. */
   retryJob: (jobId: number) => call<Job>("POST", `/api/jobs/${String(jobId)}/retry`),
   mode: () => call<Mode>("GET", "/api/mode"),

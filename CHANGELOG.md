@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Downloaded shows the songs downloading** — above the songs downloaded, each
+  song still downloading shows its cover, its state (*Waiting for Online*,
+  *42%*), and a bar that moves as the event stream tells of its progress.
+
 - **See why a download failed, and retry it** — the warning mark on a song
   whose download failed opens why, as the server says it, with *Retry download*
   and *Add the file…*; `GET /api/tracks/{id}/download` names the Job to retry as

@@ -283,6 +283,16 @@ class JobService:
             )
             return None if row is None else to_job(row)
 
+    def active_of(self, kind: str) -> list[JobView]:
+        """Return the waiting, queued, and running Jobs of `kind`, oldest first."""
+        with self._units() as db:
+            rows = db.scalars(
+                select(JobRow)
+                .where(JobRow.kind == kind, JobRow.state.in_(ACTIVE_STATES))
+                .order_by(JobRow.id)
+            )
+            return [self._view(to_job(row)) for row in rows]
+
     def _publish(self, job_id: JobId) -> None:
         if self._events is not None:
             self._events.publish(job_id)

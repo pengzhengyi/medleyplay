@@ -37,11 +37,12 @@ def test_the_households_lyrics_are_shown_line_by_line(
     shown = client.get(f"/api/tracks/{song}/lyrics").json()
 
     assert put.status_code == 200
-    assert {key: shown[key] for key in ("origin", "synced", "instrumental", "plain")} == {
+    assert {key: shown[key] for key in ("origin", "synced", "instrumental", "plain", "text")} == {
         "origin": "household",
         "synced": True,
         "instrumental": False,
         "plain": "",
+        "text": MELT,
     }
     assert shown["lines"] == [
         {

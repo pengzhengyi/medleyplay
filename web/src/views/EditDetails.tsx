@@ -23,6 +23,7 @@ import {
   MusicNoteSimpleIcon,
   MusicNotesIcon,
   PlusIcon,
+  QuotesIcon,
   ScissorsIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
@@ -95,6 +96,7 @@ const MAX_VIDEO_TITLE = 1_000;
 const MAX_DESCRIPTION = 20_000;
 
 const SONGS_TITLE = "edit-songs-title";
+const LYRICS_TITLE = "edit-lyrics-title";
 
 /**
  * Edit `track`'s details, read with `load`; `onSave` sends the household's values
@@ -116,6 +118,7 @@ export function EditDetails({
   online,
   onFind,
   songs,
+  lyrics,
   startOnSongs = false,
   onClose,
 }: {
@@ -138,6 +141,8 @@ export function EditDetails({
   readonly onFind: (lookup: Lookup) => void;
   /** The way to its file's songs: what it is called, and the editor, which the dialog controls. */
   readonly songs?: { readonly label: string; readonly editor: ReactNode } | undefined;
+  /** The way to the song's lyrics: what it is called, and the editor, which the dialog controls. */
+  readonly lyrics?: { readonly label: string; readonly editor: ReactNode } | undefined;
   readonly startOnSongs?: boolean;
   readonly onClose: () => void;
 }) {
@@ -178,22 +183,26 @@ export function EditDetails({
       clearTimeout(hide);
     };
   }, [saved]);
-  const [panel, setPanel] = useState<"details" | "songs">(
+  const [panel, setPanel] = useState<"details" | "songs" | "lyrics">(
     startOnSongs && songs !== undefined ? "songs" : "details",
   );
   const [songsLocked, setSongsLocked] = useState(false);
   const songsEntry = useRef<HTMLButtonElement>(null);
-  // Focus follows the swap: to the songs' heading, and back to the way to them.
+  const lyricsEntry = useRef<HTMLButtonElement>(null);
+  // The panel left last, whose way back focus returns to.
+  const left = useRef<"songs" | "lyrics">("songs");
+  // Focus follows the swap: to the panel's heading, and back to the way to it.
   const swapped = useRef(false);
   useEffect(() => {
     if (!swapped.current) {
       swapped.current = true;
       return;
     }
-    if (panel === "songs") {
-      document.getElementById(SONGS_TITLE)?.focus();
+    if (panel === "details") {
+      (left.current === "lyrics" ? lyricsEntry : songsEntry).current?.focus();
     } else {
-      songsEntry.current?.focus();
+      left.current = panel;
+      document.getElementById(panel === "songs" ? SONGS_TITLE : LYRICS_TITLE)?.focus();
     }
   }, [panel]);
   const leaveSongs = useCallback(() => {
@@ -212,6 +221,19 @@ export function EditDetails({
       onDone: leaveSongs,
     }),
     [leaveSongs],
+  );
+  const leaveLyrics = useCallback(() => {
+    setSongsLocked(false);
+    setPanel("details");
+  }, []);
+  const lyricsControls = useMemo<SongsControls>(
+    () => ({
+      headingId: LYRICS_TITLE,
+      onBack: leaveLyrics,
+      onLock: setSongsLocked,
+      onDone: leaveLyrics,
+    }),
+    [leaveLyrics],
   );
 
   useEffect(() => {
@@ -389,7 +411,9 @@ export function EditDetails({
     <Modal
       ref={dialog}
       className="edit-details"
-      labelledBy={panel === "songs" ? SONGS_TITLE : "edit-details-title"}
+      labelledBy={
+        panel === "songs" ? SONGS_TITLE : panel === "lyrics" ? LYRICS_TITLE : "edit-details-title"
+      }
       describedBy="edit-details-song"
       locked={saving || reading || covering || songsLocked}
       onClose={onClose}
@@ -399,7 +423,12 @@ export function EditDetails({
           <SongsControlsContext value={controls}>{songs.editor}</SongsControlsContext>
         </div>
       )}
-      <form className="card" hidden={panel === "songs"} onSubmit={(event) => void save(event)}>
+      {panel === "lyrics" && lyrics !== undefined && (
+        <div className="card lyrics-card">
+          <SongsControlsContext value={lyricsControls}>{lyrics.editor}</SongsControlsContext>
+        </div>
+      )}
+      <form className="card" hidden={panel !== "details"} onSubmit={(event) => void save(event)}>
         <div className="edit-details-head">
           <h2 id="edit-details-title">Edit details</h2>
           {saved && !changed && !saving && (
@@ -463,6 +492,21 @@ export function EditDetails({
                 >
                   <ScissorsIcon aria-hidden />
                   <span className="songs-entry-label">{songs.label}</span>
+                  <CaretRightIcon aria-hidden />
+                </button>
+              )}
+              {lyrics !== undefined && (
+                <button
+                  ref={lyricsEntry}
+                  type="button"
+                  className="songs-entry"
+                  disabled={saving || reading || covering}
+                  onClick={() => {
+                    setPanel("lyrics");
+                  }}
+                >
+                  <QuotesIcon aria-hidden />
+                  <span className="songs-entry-label">{lyrics.label}</span>
                   <CaretRightIcon aria-hidden />
                 </button>
               )}

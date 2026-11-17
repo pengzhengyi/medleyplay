@@ -3,22 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Lyrics } from "../api";
+import { lyricsOf } from "../testing/server";
 import { LyricNow, LyricsPanel } from "./LyricsPanel";
 
 /** *Melt*, timed, its first line translated, a pause after its second. */
-const MELT: Lyrics = {
-  origin: "lrclib",
-  synced: true,
-  instrumental: false,
+const MELT: Lyrics = lyricsOf({
   lines: [
     { at_ms: 12_340, text: "朝目が覚めて", translation: "Waking up", words: [] },
     { at_ms: 15_500, text: "真っ先に思い浮かぶ", translation: "", words: [] },
     { at_ms: 20_000, text: "", translation: "", words: [] },
     { at_ms: 62_000, text: "君のこと", translation: "", words: [] },
   ],
-  plain: "",
-  found_at: "2026-11-17T12:00:00Z",
-};
+});
 
 /** Lyrics with no times, as written. */
 const PLAIN: Lyrics = {

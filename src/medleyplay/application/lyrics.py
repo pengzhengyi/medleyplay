@@ -22,9 +22,13 @@ from medleyplay.persistence.schema import TrackLyricsRow, TrackRow
 
 @dataclass(frozen=True)
 class ShownLyrics:
-    """The lyrics a song shows, where they came from, and when; none when it is instrumental."""
+    """The lyrics a song shows, where they came from, and when; none when it is instrumental.
+
+    `text` is as the source gave it, LRC or plain, from which `lyrics` were read.
+    """
 
     origin: LyricsOrigin
+    text: str
     lyrics: Lyrics
     instrumental: bool
     found_at: datetime
@@ -76,7 +80,9 @@ def shown_lyrics(db: Session, track_id: TrackId) -> ShownLyrics | None:
     for origin in LyricsOrigin:
         row = rows.get(origin)
         if row is not None:
-            return ShownLyrics(origin, parse_lyrics(row.text), row.instrumental, row.found_at)
+            return ShownLyrics(
+                origin, row.text, parse_lyrics(row.text), row.instrumental, row.found_at
+            )
     return None
 
 

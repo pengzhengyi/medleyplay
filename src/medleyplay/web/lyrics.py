@@ -42,6 +42,7 @@ class LyricsOut(BaseModel):
     instrumental: bool
     lines: list[LineOut]
     plain: str
+    text: str = Field(description="As their source gave them, LRC or plain, to edit.")
     found_at: datetime
 
     @staticmethod
@@ -64,6 +65,7 @@ class LyricsOut(BaseModel):
                 for line in lyrics.lines
             ],
             plain=lyrics.plain,
+            text=shown.text,
             found_at=shown.found_at,
         )
 

@@ -3,8 +3,8 @@
 > [!NOTE]
 > **Status: in part built.** Lyrics are kept per song and source, read from the
 > files, looked up on LRCLIB as songs come up, read and written through the API, and
-> shown while a song plays, as this note says. The editor and other sites are
-> planned, in that order.
+> shown while a song plays, and edited and synced in Edit details, as this note
+> says. Other sites are planned.
 
 ## Contents
 
@@ -15,6 +15,7 @@
 - [Looking lyrics up on LRCLIB](#looking-lyrics-up-on-lrclib)
 - [What the API shows](#what-the-api-shows)
 - [Showing them](#showing-them)
+- [Editing them](#editing-them)
 - [Testing](#testing)
 - [Planned](#planned)
 
@@ -111,7 +112,7 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `GET /api/tracks/{id}/lyrics` | Signed in | The lyrics the song shows: where they came from, whether timed or instrumental, each line with its time, translation, and timed words, or the plain text; `null` for none |
+| `GET /api/tracks/{id}/lyrics` | Signed in | The lyrics the song shows: where they came from, whether timed or instrumental, each line with its time, translation, and timed words, or the plain text, and the text as the source gave it, to edit; `null` for none |
 | `PUT /api/tracks/{id}/lyrics` | Signed in | The household's lyrics, `{text}` (LRC or plain) or `{instrumental: true}`; 422 for empty text |
 | `DELETE /api/tracks/{id}/lyrics` | Signed in | Drops the household's, answering what shows now |
 | `POST /api/enrichers/lyrics/tracks/{id}` | Signed in | Looks the song up now; `?again` for one found before |
@@ -136,6 +137,25 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
   read again when a lookup of the song's lyrics finishes.
 - **On a phone** the lyrics take the cover's place, as Up next does.
 
+## Editing them
+
+*Lyrics* in a song's Edit details opens the editor in place of the details, as the
+songs of a file open; a whole album in one file has none. It starts from the lyrics
+the song shows, as their source gave them, and says where they came from.
+
+- **As text:** LRC or plain, typed or pasted, or *Instrumental* for a song with no
+  lyrics.
+- **Synced to the song:** each line a row, its time beside it. The song plays from
+  its start, and Space, or *Stamp*, stamps the next line at the time played, then
+  moves on; a line pressed is stamped next. A line's time pressed plays from there,
+  and each line, or every line at once, moves a tenth of a second earlier or later.
+  Lines not stamped yet are counted, and saved as plain lines. Syncing writes the
+  text back as LRC, so the two modes edit the same lyrics.
+- **Saving** makes them the household's, which show over every other source's and
+  stop the song being looked up; *Remove yours* drops them, showing the next source's
+  again. Either goes back to the details, and the lyrics shown are read again. A
+  refusal, such as too many lines, shows in the editor, which stays open.
+
 ## Testing
 
 - **Reading:** LRC with several times on a line, an offset, translations, timed
@@ -154,15 +174,17 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
   playing and again on a finished lookup; the panel's lines, translation, pause,
   seeking, plain text, instrumental, none, and reading; the player's line; and Now
   Playing's button hiding both, remembered.
+- **Editing them:** LRC written from lines, each stamped, moved, or all shifted; the
+  editor starting from the lyrics shown, saving text or an instrumental, removing the
+  household's, a refusal, stamping with Space and *Stamp* only while the song plays,
+  and playing from the start and from a line; Edit details opening it in place and
+  going back.
 - **LRCLIB:** the client over a fake transport: what is asked, the search when the
   first ask finds nothing, the two-second window, the User-Agent, waiting out 429,
   503 too long, 403, 400, and an answer of another shape. No test contacts LRCLIB.
 
 ## Planned
 
-- **The editor:** in Edit details, LRC or plain text, and a mode that plays the song
-  and stamps each line as Space is pressed, each nudged by a tenth of a second, and
-  the whole shifted.
 - **Other sites:** more providers, such as NetEase, each turned on in Settings and
   asked after LRCLIB. NetEase offers no public API, so only its plain endpoints are
   used, never anything that copies its request signing.

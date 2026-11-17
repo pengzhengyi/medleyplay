@@ -150,6 +150,8 @@ export interface Lyrics {
   readonly instrumental: boolean;
   readonly lines: readonly LyricLine[];
   readonly plain: string;
+  /** As their source gave them, LRC or plain, to edit. */
+  readonly text: string;
   readonly found_at: string;
 }
 

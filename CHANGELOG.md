@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Edit and sync a song's lyrics** — *Lyrics* in a song's *Edit details* edits them
+  as LRC or plain text, or marks the song instrumental. *Sync to the song* plays it
+  and stamps each line as Space is pressed; a line's time plays from there, and a
+  line, or every line, moves a tenth of a second at a press. Saved lyrics are the
+  household's and show over every other source's; *Remove yours* drops them. New:
+  the lyrics API answers their `text`, as their source gave it.
+
 - **Lyrics as a song plays** — Now Playing shows the song's lyrics beside its cover,
   the line sung now large and the others dim, translations under their lines; a line
   pressed plays from there. The player shows the line sung now under the artist. The

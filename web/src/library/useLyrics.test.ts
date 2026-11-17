@@ -2,18 +2,11 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Lyrics } from "../api";
-import { serve } from "../testing/server";
+import { lyricsOf, serve } from "../testing/server";
 import { useLyrics } from "./useLyrics";
 
 /** *Melt*'s lyrics, found on LRCLIB: one timed line. */
-const MELT: Lyrics = {
-  origin: "lrclib",
-  synced: true,
-  instrumental: false,
-  lines: [{ at_ms: 12_340, text: "朝目が覚めて", translation: "", words: [] }],
-  plain: "",
-  found_at: "2026-11-17T12:00:00Z",
-};
+const MELT: Lyrics = lyricsOf();
 
 afterEach(() => {
   vi.unstubAllGlobals();

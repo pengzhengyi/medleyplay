@@ -51,6 +51,7 @@ import { CheckNetwork } from "./CheckNetwork";
 import { EditAlbum } from "./EditAlbum";
 import { EditDetails } from "./EditDetails";
 import { ListenOnDevice } from "./ListenOnDevice";
+import { LyricsEditor } from "./LyricsEditor";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
 import { AccountMenu, Nav } from "./Nav";
 import { NowPlaying } from "./NowPlaying";
@@ -191,15 +192,52 @@ export function Library({
   const playingId = current(player.queue)?.trackId;
   const playing = playingId === undefined ? undefined : byId.get(playingId);
   // The song playing, a song of a file playing whole too, whose lyrics show.
-  const song =
+  const songTime =
     playing === undefined
       ? undefined
-      : songTimeOf(playing, playingOf(player.queue, byId, player.position), player.position).song;
+      : songTimeOf(playing, playingOf(player.queue, byId, player.position), player.position);
+  const song = songTime?.song;
   const lyricsLookup = song === undefined ? undefined : library.lookups.get(song.id);
+  // Counts the household's lyrics saved or removed here, so the song playing reads its again.
+  const [lyricsEdits, setLyricsEdits] = useState(0);
   const lyrics = useLyrics(
     song?.id,
-    lyricsLookup?.enricher === LYRICS_ENRICHER ? lyricsLookup.state : undefined,
+    `${lyricsLookup?.enricher === LYRICS_ENRICHER ? lyricsLookup.state : ""}:${String(lyricsEdits)}`,
   );
+  /** The editor of `track`'s lyrics, syncing them to it as the player plays it. */
+  const lyricsOf = (track: Track) => {
+    if (track.kind === "album") {
+      return undefined;
+    }
+    const current = song?.id === track.id;
+    const edited = <T,>(change: Promise<T>) =>
+      change.then((answer) => {
+        setLyricsEdits((count) => count + 1);
+        return answer;
+      });
+    return {
+      label: "Lyrics",
+      editor: (
+        <LyricsEditor
+          load={() => api.lyrics(track.id)}
+          save={(text, instrumental) => edited(api.setLyrics(track.id, text, instrumental))}
+          forget={() => edited(api.forgetLyrics(track.id))}
+          player={{
+            current,
+            playing: current && player.status.kind === "playing",
+            seconds: current ? (songTime?.seconds ?? 0) : 0,
+            start: () => {
+              player.playNow(track);
+            },
+            toggle: player.toggle,
+            seek: (seconds) => {
+              player.seek((songTime?.from ?? 0) + seconds);
+            },
+          }}
+        />
+      ),
+    };
+  };
   // An enricher set to the next to play is asked about the song playing and the one after.
   useLookAhead([playingId, upNext(player.queue)[0]?.trackId], byId, library);
   // With nothing left playing, Now Playing closes, and the next song doesn't reopen it.
@@ -765,6 +803,7 @@ export function Library({
             actions.onFind(lookup, editing.track);
           }}
           songs={songsOf(editing.track)}
+          lyrics={lyricsOf(editing.track)}
           startOnSongs={editing.songs}
           onClose={() => {
             setEditing(undefined);

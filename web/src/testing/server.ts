@@ -5,6 +5,7 @@
 import { vi } from "vitest";
 
 import type {
+  Lyrics,
   CoverRelease,
   AlbumCovers,
   AiProvider,
@@ -648,5 +649,25 @@ export function helpFound(known: Partial<AlbumCovers> = {}): AlbumCovers {
     ],
     found_at: "2026-11-16T00:00:00Z",
     ...known,
+  };
+}
+
+/**
+ * *Melt*'s lyrics, found on LRCLIB, with `change` on top:
+ *
+ * ```text
+ * [00:12.34]朝目が覚めて
+ * ```
+ */
+export function lyricsOf(change: Partial<Lyrics> = {}): Lyrics {
+  return {
+    origin: "lrclib",
+    synced: true,
+    instrumental: false,
+    lines: [{ at_ms: 12_340, text: "朝目が覚めて", translation: "", words: [] }],
+    plain: "",
+    text: "[00:12.34]朝目が覚めて\n",
+    found_at: "2026-11-17T12:00:00Z",
+    ...change,
   };
 }

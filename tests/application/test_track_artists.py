@@ -177,3 +177,20 @@ def test_linking_the_last_name_of_an_artist_to_another_keeps_it_as_one_artist(
     enriching.artists.link(alice, "披头士", TRIBUTE)
 
     assert _artists(units, song).artists == (BoundArtist(artist_id=before, written="披头士"),)
+
+
+def test_a_songs_details_name_the_musicbrainz_artist_each_of_its_artists_is(
+    enriching: Enriching, alice: Account
+) -> None:
+    song = enriching.add_song("Yesterday", artist="Beatles")
+    unlinked = enriching.add_song("Creep", artist="Radio Head")
+    _looked_up(enriching, alice, "Beatles")
+    enriching.artists.link(alice, "Beatles", BEATLES)
+    enriching.finish_every_job()
+
+    view = enriching.details.details(song)
+
+    [bound] = view.artists
+    linked = view.linked[bound.artist_id]
+    assert (linked.musicbrainz_id, linked.name) == (BEATLES, "The Beatles")
+    assert enriching.details.details(unlinked).linked == {}

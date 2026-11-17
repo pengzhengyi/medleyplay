@@ -677,8 +677,8 @@ export function Library({
         <EditDetails
           track={editing.track}
           load={api.details}
-          onSave={async (values) => {
-            await library.saveDetails(editing.track.id, values);
+          onSave={async (values, artists) => {
+            await library.saveDetails(editing.track.id, values, artists);
             setNotice(`Saved the details of “${editing.track.title}”.`);
           }}
           onReadVideo={(text) => library.readVideoText(editing.track.id, text)}

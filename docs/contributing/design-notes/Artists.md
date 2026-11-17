@@ -17,6 +17,7 @@
 - [Linking a name](#linking-a-name)
 - [Each song's artists by id](#each-songs-artists-by-id)
 - [Names written as several artists](#names-written-as-several-artists)
+- [A song's artists one by one](#a-songs-artists-one-by-one)
 - [Asking an AI model](#asking-an-ai-model)
 - [Wikidata's names](#wikidatas-names)
 - [Wikidata's page and photo](#wikidatas-page-and-photo)
@@ -148,6 +149,32 @@ Michael Jackson/迈克尔·杰克逊   not offered: a name and its translation
 - **Each artist counts on its own:** the names listed to link are each artist a
   song shows, so *GUMI* and *MAYU* are linked apart, and an AI model reads each
   one's songs. A Track lists the artists its artist names, as written.
+
+## A song's artists one by one
+
+A name's decision binds every song writing it. One song can also have its artists
+chosen one by one in *Edit details*, each main or featured, and that choice wins
+over its name's decision.
+
+```text
+GUMI                       + MAYU               GUMI & MAYU
+スズム                      + GUMI, featured     スズム feat. GUMI
+DECO*27, ピノキオピー        + 初音ミク, featured   DECO*27 & ピノキオピー feat. 初音ミク
+```
+
+- **Kept per song** (`track_credits`): the artists in order, each `{written, role}`,
+  the main ones first. The song's household artist becomes them written as one name,
+  as above, so search, sort, and the Track's `artist` keep working.
+- **Bound as chosen** while the song's artist is that name. Any other change to its
+  artist, a bulk edit, tidying, choosing another origin's value, or dropping the
+  household's, forgets the choice, and the song is bound by its name again.
+- **Nothing is kept for no change:** the artists the song shows already, or one main
+  artist, which is just the artist as written.
+- **Refused:** no main artist, an artist named twice or blank, more than ten, the
+  artists of several songs at once, and a file split into songs, which takes its
+  artists from its songs.
+- **Clean up leaves it alone:** such a song's artist is neither offered to split nor
+  to tidy, though other songs writing the same name are.
 
 ## Asking an AI model
 
@@ -331,6 +358,15 @@ not.
   and Radio's favorites, and opens from each artist's page or the name as written.
   Now Playing names each artist with its own page and heart, and a song's menu goes
   to each. Using a likely name for one of them changes only that one.
+- **Edit details, one chip per artist:** *Add artist* beside the song's Artist turns
+  its artist into a chip and adds the next one typed, Enter adding it (not while a
+  word is being composed, as in Chinese or Japanese). Each chip shows the artist's
+  photo, or its initial, says whether it is linked, and has *+ feat.* to credit it
+  as featured and a way to remove it; featured chips are dashed. Removing down to
+  one main artist puts it back in the box, and removing the last main one makes the
+  first left main. Another origin's artist, used, replaces the chips. A song's
+  chips are saved only when they differ from the artists it shows; a file split
+  into songs offers none.
 - **A section of Clean up,** *Link artist names*, with how many names that may
   be looked up are not linked, counted in the rail's *Clean up* with the names to
   tidy: each name with its songs, most songs first.
@@ -432,7 +468,7 @@ not.
 - **Two artists of one name,** such as two singers called *Jay*: a name names
   one artist, so telling them apart song by song needs a name to name several,
   each song bound to one of them.
-- **Editing a song's artists one by one,** each a chip with its role, rather than
-  by the name's decision.
+- **An album artist chosen one by one,** as a song's artists are; it follows its
+  name's decision.
 - **Showing every linked artist in a chosen language** at once, rather than as
   written or by the name chosen for each.

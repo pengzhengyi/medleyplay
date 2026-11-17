@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A song's artists one by one** — *Add artist* in a song's *Edit details* turns its
+  artist into chips, one per artist, each with its photo, *+ feat.* to credit it as
+  featured, and a way to remove it. The song then counts under each artist, whatever
+  the decision for the name it writes, until its artist is changed another way.
+  `POST /api/tracks/details` takes `artists` for one song, and a Track's details list
+  `artists` with their roles and links (migration 0049, `track_credits`).
+
 - **Pictures an AI suggests for a cover or an artist's photo** — *Suggested by AI*,
   under *Find covers* and in *Edit artist*, shows the pictures a model names, each
   previewed from its own site; nothing is downloaded until *Approve*, which has the

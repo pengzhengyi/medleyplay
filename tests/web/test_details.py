@@ -286,3 +286,62 @@ def test_a_track_never_asked_of_the_ai_names_no_model(
     details = client.get(f"/api/tracks/{track_id}/details").json()
 
     assert details["ai_answered_by"] is None
+
+
+def test_a_songs_artists_are_chosen_one_by_one_and_listed_with_their_roles(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    chosen = client.post(
+        "/api/tracks/details",
+        json={
+            "track_ids": [track_id],
+            "values": {"title": "ケビョウニンゲン"},
+            "artists": [
+                {"written": "スズム", "role": "main"},
+                {"written": "GUMI", "role": "featured"},
+            ],
+        },
+    )
+    body = client.get(f"/api/tracks/{track_id}/details").json()
+
+    assert chosen.json() == {"changed": 1}
+    assert body["shown"]["artist"] == {"value": "スズム feat. GUMI", "origin": "household"}
+    assert body["artists_chosen"] is True
+    assert [(each["written"], each["role"], each["linked"]) for each in body["artists"]] == [
+        ("スズム", "main", None),
+        ("GUMI", "featured", None),
+    ]
+
+
+def test_a_tracks_artists_are_listed_as_it_shows_them(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    body = client.get(f"/api/tracks/{track_id}/details").json()
+
+    assert body["artists_chosen"] is False
+    assert [(each["written"], each["role"]) for each in body["artists"]] == [("The Band", "main")]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"values": {}, "artists": [{"written": "GUMI", "role": "lead"}]},
+        {"values": {"artist": "GUMI"}, "artists": [{"written": "GUMI", "role": "main"}]},
+    ],
+    ids=["an unknown role", "with the artist as written"],
+)
+def test_artists_chosen_that_no_song_could_credit_are_refused(
+    client: TestClient, catalog: CatalogService, body: dict[str, object]
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    response = client.post("/api/tracks/details", json={"track_ids": [track_id], **body})
+
+    assert response.status_code == 422

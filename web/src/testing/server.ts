@@ -24,10 +24,12 @@ import type {
   Playlist,
   Preferences,
   PreferencesChange,
+  Role,
   Song,
   Songs,
   SpeakerState,
   Track,
+  TrackArtist,
   TrackDownload,
   VideoText,
 } from "../api";
@@ -156,15 +158,28 @@ export function detailsOf(
   videoText: VideoText | null = null,
 ): Details {
   const origins = Object.keys(household).length > 0 ? { household, ...found } : found;
+  const shown = shownOf(origins);
+  const artist = String(shown.artist?.value ?? "").trim();
   return {
     track_id: trackId,
-    shown: shownOf(origins),
+    shown,
     found: shownOf(found),
     origins,
     video_text: videoText,
     kind: { value: "song", reason: "length" },
     ai_answered_by: null,
+    artists: artist === "" ? [] : [trackArtistOf(artist)],
+    artists_chosen: false,
   };
+}
+
+/** One artist a Track shows as `written`, credited as `role`, linked to none unless `linked`. */
+export function trackArtistOf(
+  written: string,
+  role: Role = "main",
+  linked: TrackArtist["linked"] = null,
+): TrackArtist {
+  return { written, role, artist_id: `artist-${written}`, linked };
 }
 
 /**

@@ -25,6 +25,7 @@ import {
   MagnifyingGlassIcon,
   MusicNoteSimpleIcon,
   MusicNotesIcon,
+  PlusIcon,
   ScissorsIcon,
   TrashIcon,
   UploadSimpleIcon,
@@ -41,6 +42,7 @@ import {
 } from "react";
 
 import {
+  type Credit,
   type Detail,
   type Details,
   type Kind,
@@ -69,6 +71,8 @@ import {
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
+import { onlyArtist, sameCredits, toggled, withCredit, withoutCredit } from "../library/credits";
+import { ArtistChips } from "./ArtistChips";
 import { CoverFinder } from "./CoverFinder";
 import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
@@ -123,7 +127,11 @@ export function EditDetails({
 }: {
   readonly track: Track;
   readonly load: (trackId: number) => Promise<Details>;
-  readonly onSave: (changes: Partial<Record<Detail, string | number | null>>) => Promise<void>;
+  /** Save the household's values changed, and the song's artists if chosen one by one. */
+  readonly onSave: (
+    changes: Partial<Record<Detail, string | number | null>>,
+    artists?: readonly Credit[],
+  ) => Promise<void>;
   readonly onReadVideo: (text: VideoText) => Promise<VideoRead>;
   readonly onSetCover: (image: Blob) => Promise<Details>;
   readonly onRemoveCover: () => Promise<Details>;
@@ -145,6 +153,12 @@ export function EditDetails({
   };
   const [details, setDetails] = useState<Details | undefined>(undefined);
   const [own, setOwn] = useState<Own>({});
+  // The song's artists as chips, or `undefined` while it has one artist in a box.
+  const [credits, setCredits] = useState<readonly Credit[] | undefined>(undefined);
+  // An artist typed among the chips, not added yet.
+  const [draft, setDraft] = useState("");
+  const [artistSaid, setArtistSaid] = useState("");
+  const artistBox = useRef<HTMLInputElement>(null);
   // The kind chosen, `null` to guess it again, or `undefined` while unchanged.
   const [kind, setKind] = useState<Kind | null | undefined>(undefined);
   // A song's album, folded until opened: many songs are singles, on no album.
@@ -213,6 +227,7 @@ export function EditDetails({
         if (open) {
           setDetails(loaded);
           setOwn(ownOf(loaded));
+          setCredits(chipsOf(loaded));
         }
       },
       (failure: unknown) => {
@@ -248,9 +263,20 @@ export function EditDetails({
     };
   }, [done, track.id, load]);
 
+  const chosen = credits === undefined ? undefined : withCredit(credits, draft);
+  // Chips name the artists in place of the box: unchanged, the artist is left as it is.
+  const artists =
+    chosen === undefined || details === undefined || sameCredits(chosen, details.artists)
+      ? undefined
+      : chosen;
   const changes =
-    details === undefined ? {} : { ...changesOf(details, own), ...kindChange(details, kind) };
-  const changed = Object.keys(changes).length > 0;
+    details === undefined
+      ? {}
+      : {
+          ...withoutArtist(changesOf(details, own), chosen !== undefined),
+          ...kindChange(details, kind),
+        };
+  const changed = Object.keys(changes).length > 0 || artists !== undefined;
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!changed) {
@@ -259,12 +285,14 @@ export function EditDetails({
     setSaving(true);
     setError("");
     try {
-      await onSave(changes);
+      await (artists === undefined ? onSave(changes) : onSave(changes, artists));
       // The details as saved, so what is shown is what is kept.
       const fresh = await load(track.id).catch(() => undefined);
       if (fresh !== undefined) {
         setDetails(fresh);
         setOwn(ownOf(fresh));
+        setCredits(chipsOf(fresh));
+        setDraft("");
         setKind(undefined);
       }
       setSaving(false);
@@ -300,10 +328,67 @@ export function EditDetails({
       setCovering(false);
     }
   };
+  const focusArtistBox = useCallback(() => {
+    artistBox.current?.focus();
+  }, []);
+  /** Show `next` as the chips, as the one artist in the box once one main artist is left. */
+  const showCredits = (next: readonly Credit[]) => {
+    const only = onlyArtist(next);
+    if (only === undefined) {
+      setCredits(next);
+    } else {
+      setCredits(undefined);
+      setOwn({ ...own, artist: only });
+      setTimeout(focusArtistBox);
+    }
+  };
+  const artistChips: ArtistChipsProps | undefined =
+    details === undefined || details.kind.reason === "split"
+      ? undefined
+      : {
+          credits,
+          draft,
+          said: artistSaid,
+          box: artistBox,
+          disabled: saving,
+          onAdd: () => {
+            const typed = credits === undefined ? boxText(details, own, "artist") : draft;
+            setCredits(withCredit(credits ?? [], typed));
+            setDraft("");
+            focusArtistBox();
+          },
+          onDraft: setDraft,
+          onToggle: (index) => {
+            if (credits !== undefined) {
+              setCredits(toggled(credits, index));
+            }
+          },
+          onRemove: (index) => {
+            if (credits !== undefined) {
+              const gone = credits[index];
+              setArtistSaid(gone === undefined ? "" : `Removed ${gone.written}`);
+              showCredits(withoutCredit(credits, index));
+            }
+          },
+          onFocusAdd: focusArtistBox,
+          onUse: (next) => {
+            setCredits(undefined);
+            setDraft("");
+            setOwn(next);
+          },
+        };
   const boxes = (group: DetailField["group"]) =>
     details !== undefined &&
     DETAIL_FIELDS.filter((field) => field.group === group).map((field) => (
-      <DetailBox key={field.name} field={field} details={details} own={own} onChange={setOwn} />
+      <DetailBox
+        key={field.name}
+        field={field}
+        details={details}
+        own={own}
+        onChange={setOwn}
+        chips={field.name === "artist" ? artistChips : undefined}
+        chipsChanged={artists !== undefined}
+      />
     ));
 
   return (
@@ -845,43 +930,120 @@ function noteOf(read: VideoRead): string {
     : `Read the video's details, but found no details in them.${songs}`;
 }
 
+/** The song's artists as chips in its Artist box, and what changes them. */
+interface ArtistChipsProps {
+  /** The chips, or `undefined` while the box holds one artist. */
+  readonly credits: readonly Credit[] | undefined;
+  /** The artist typed among the chips, not added yet. */
+  readonly draft: string;
+  /** What the last change to the chips was, said to screen readers. */
+  readonly said: string;
+  readonly box: React.RefObject<HTMLInputElement | null>;
+  readonly disabled: boolean;
+  /** Add what is typed as a chip, the box's artist first when there are no chips yet. */
+  readonly onAdd: () => void;
+  readonly onDraft: (draft: string) => void;
+  readonly onToggle: (index: number) => void;
+  readonly onRemove: (index: number) => void;
+  readonly onFocusAdd: () => void;
+  /** Use another origin's artist in place of the chips. */
+  readonly onUse: (own: Own) => void;
+}
+
 /** One detail's box, where its value comes from, and what other origins say. */
 function DetailBox({
   field,
   details,
   own,
   onChange,
+  chips,
+  chipsChanged = false,
 }: {
   readonly field: DetailField;
   readonly details: Details;
   readonly own: Own;
   readonly onChange: (own: Own) => void;
+  /** For the artist: its chips, which take the box's place once there are several. */
+  readonly chips?: ArtistChipsProps | undefined;
+  readonly chipsChanged?: boolean;
 }) {
   const { name, label, kind } = field;
   const id = `detail-${name}`;
   const typed = boxText(details, own, name);
   const yours = name in settle(details, own);
-  const origin = originOf(details, own, field);
+  const origin = chipsChanged
+    ? ({ text: "Yours", from: "household" } as const)
+    : originOf(details, own, field);
   const described = origin === undefined ? undefined : `${id}-origin`;
   const range = RANGES[name];
   const suggestion = suggestionOf(details, name);
+  const credits = chips?.credits;
+  const use = chips === undefined ? onChange : chips.onUse;
   return (
     <div className={`detail detail-${kind} detail-${name}`}>
-      <label htmlFor={id} className="detail-label">
-        {label}
-      </label>
+      <div className="detail-label-row">
+        <label htmlFor={id} className="detail-label">
+          {credits === undefined ? label : `${label}s`}
+        </label>
+        {chips !== undefined && (
+          <button
+            type="button"
+            className="link-button detail-add"
+            disabled={chips.disabled}
+            title="Credit another artist on this song"
+            onClick={chips.onAdd}
+          >
+            <PlusIcon weight="bold" aria-hidden />
+            Add artist
+          </button>
+        )}
+      </div>
+      {chips !== undefined && credits !== undefined && (
+        <ArtistChips
+          credits={credits}
+          shown={details.artists}
+          disabled={chips.disabled}
+          onToggle={chips.onToggle}
+          onRemove={chips.onRemove}
+          onFocusAdd={chips.onFocusAdd}
+        />
+      )}
+      {chips !== undefined && (
+        <span className="visually-hidden" aria-live="polite">
+          {chips.said}
+        </span>
+      )}
       <input
         id={id}
+        ref={chips?.box}
         className="detail-input"
         type={kind === "number" ? "number" : "text"}
         inputMode={kind === "number" ? "numeric" : undefined}
         min={range?.[0]}
         max={range?.[1]}
         maxLength={kind === "text" ? MAX_TEXT : undefined}
-        value={typed}
+        placeholder={credits === undefined ? undefined : "Add an artist"}
+        value={credits === undefined || chips === undefined ? typed : chips.draft}
         aria-describedby={described}
         onChange={(event) => {
-          onChange({ ...own, [name]: event.currentTarget.value });
+          if (credits !== undefined && chips !== undefined) {
+            chips.onDraft(event.currentTarget.value);
+          } else {
+            onChange({ ...own, [name]: event.currentTarget.value });
+          }
+        }}
+        onKeyDown={(event) => {
+          // Enter adds what is typed as a chip; with nothing typed, it saves, as in any box.
+          if (
+            chips !== undefined &&
+            credits !== undefined &&
+            event.key === "Enter" &&
+            !event.nativeEvent.isComposing &&
+            chips.draft.trim() !== ""
+          ) {
+            event.preventDefault();
+            chips.onAdd();
+          }
         }}
       />
       {origin !== undefined &&
@@ -903,7 +1065,7 @@ function DetailBox({
               aria-label={`Use “${value}”, from ${ORIGIN_LABELS[from]}`}
               title={`From ${ORIGIN_LABELS[from]}`}
               onClick={() => {
-                onChange({ ...own, [name]: value });
+                use({ ...own, [name]: value });
               }}
             >
               <Mark weight="bold" aria-hidden />
@@ -926,7 +1088,7 @@ function DetailBox({
             className="detail-alternative"
             aria-label={`Use “${suggestion}”, suggested by ${aiNameOf(details.ai_answered_by)}`}
             onClick={() => {
-              onChange({ ...own, [name]: suggestion });
+              use({ ...own, [name]: suggestion });
             }}
           >
             Use
@@ -966,6 +1128,24 @@ function originOf(
   return shownOf(foundOf(details))[name] === undefined
     ? undefined
     : { text: "Hidden, as your album differs" };
+}
+
+/** Return the song's artists as chips when it shows several, else `undefined` for one box. */
+function chipsOf(details: Details): readonly Credit[] | undefined {
+  return details.artists.length > 1
+    ? details.artists.map(({ written, role }) => ({ written, role }))
+    : undefined;
+}
+
+/** Return `changes` without the artist's when `chipped`: the chips say the artists then. */
+function withoutArtist(
+  changes: Partial<Record<Detail, string | number | null>>,
+  chipped: boolean,
+): Partial<Record<Detail, string | number | null>> {
+  if (!chipped) {
+    return changes;
+  }
+  return Object.fromEntries(Object.entries(changes).filter(([field]) => field !== "artist"));
 }
 
 function messageOf(failure: unknown): string {

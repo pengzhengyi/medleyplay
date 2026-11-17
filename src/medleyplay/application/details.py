@@ -18,8 +18,17 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.ai import answered_by_of
 from medleyplay.application.settings import read_settings
-from medleyplay.application.track_artists import bind
+from medleyplay.application.track_artists import (
+    BoundArtist,
+    LinkedArtist,
+    artists_of,
+    bind,
+    chosen_credits,
+    chosen_tracks,
+    linked_artists,
+)
 from medleyplay.domain.ai import AnsweredBy
+from medleyplay.domain.artist_split import Credit, checked_credits, credited_as
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import (
     TEXT_FIELDS,
@@ -52,6 +61,7 @@ from medleyplay.persistence.schema import (
     SegmentRow,
     SourceRow,
     TidyKeptRow,
+    TrackCreditsRow,
     TrackRow,
     TrackValueRow,
     VideoTextRow,
@@ -96,6 +106,12 @@ class DetailsView:
     """Whether the Track is a song or an album, and why."""
     ai_answered_by: AnsweredBy | None
     """The AI model that last suggested the `ai` values, if one has."""
+    artists: tuple[BoundArtist, ...]
+    """The artists the Track shows as its artists, in order, each with its role."""
+    artists_chosen: bool
+    """Whether the household chose the Track's artists one by one."""
+    linked: dict[str, LinkedArtist]
+    """The MusicBrainz artist each of `artists` is, by its id, for those linked."""
 
 
 @dataclass(frozen=True)
@@ -235,23 +251,55 @@ def set_household(
     now: datetime,
     *,
     replace: bool = False,
+    artists: Sequence[Credit] | None = None,
 ) -> None:
     """Set the household's values for the Track; `None` drops one, so the next origin shows.
 
     With `replace`, every household value not in `values` is dropped too. A kind
     is refused for a song of a split file, and *song* for a split file.
+
+    `artists` are the song's artists chosen one by one, in place of an `artist` value:
+    the song shows them written as one name and is bound to each. The artists it
+    shows already change nothing, and one main artist is just the artist. Any other
+    change to the household's artist forgets the artists chosen.
     """
     track = _require(db, track_id)
     kind = values.get(Field.KIND)
     if kind is not None:
         _check_kind(db, track, Kind(str(kind)))
+    values = dict(values)
+    chosen = None
+    if artists is not None:
+        chosen = _chosen(db, track, artists)
+        if chosen is not None:
+            values[Field.ARTIST] = credited_as(chosen)
+    before = chosen_credits(db, track_id)
     mine = (TrackValueRow.track_id == track_id) & (TrackValueRow.origin == Origin.HOUSEHOLD)
     dropped = mine if replace else mine & TrackValueRow.field.in_([str(field) for field in values])
     db.execute(delete(TrackValueRow).where(dropped))
     given = {field: value for field, value in values.items() if value is not None}
     db.add_all(_rows(track_id, Origin.HOUSEHOLD, given, now))
+    if replace or Field.ARTIST in values:
+        db.execute(delete(TrackCreditsRow).where(TrackCreditsRow.track_id == track_id))
+    if chosen is not None and len(chosen) > 1:
+        parts = [{"written": each.written, "role": str(each.role)} for each in chosen]
+        db.add(TrackCreditsRow(track_id=track_id, credits=parts, chosen_at=now))
     db.flush()
     refresh(db, track_id, now)
+    if chosen_credits(db, track_id) != before:
+        bind(db, track)
+
+
+def _chosen(db: Session, track: TrackRow, artists: Sequence[Credit]) -> tuple[Credit, ...] | None:
+    """Return the artists chosen for the song, or `None` when they are the ones it shows."""
+    if songs_of(db, TrackId(track.id)):
+        message = "A file split into songs takes its artists from its songs; edit those."
+        raise InvalidInputError(message)
+    chosen = checked_credits(artists)
+    shown = tuple(
+        Credit(each.written, each.role) for each in artists_of(db, TrackId(track.id)).artists
+    )
+    return None if chosen == shown else chosen
 
 
 def _check_kind(db: Session, track: TrackRow, kind: Kind) -> None:
@@ -389,10 +437,24 @@ class DetailsService:
             kind = kind_shown_of(db, _require(db, track_id))
             video_text = video_text_of(db, track_id)
             answered_by = answered_by_of(db, track_id)
+            artists = artists_of(db, track_id).artists
+            chosen = db.get(TrackCreditsRow, track_id) is not None
+            linked = linked_artists(db, {each.artist_id for each in artists})
         found = shown(
             {origin: kept for origin, kept in values.items() if origin is not Origin.HOUSEHOLD}
         )
-        return DetailsView(track_id, shown(values), found, values, video_text, kind, answered_by)
+        return DetailsView(
+            track_id,
+            shown(values),
+            found,
+            values,
+            video_text,
+            kind,
+            answered_by,
+            artists,
+            chosen,
+            linked,
+        )
 
     def read_video_text(self, track_id: TrackId, text: VideoText) -> VideoRead:
         """Read the video's text the household pasted as the Track's `video` values.
@@ -415,9 +477,16 @@ class DetailsService:
         self._changed()
         return self.details(track_id)
 
-    def set_on_many(self, track_ids: Iterable[TrackId], values: Mapping[str, object | None]) -> int:
+    def set_on_many(
+        self,
+        track_ids: Iterable[TrackId],
+        values: Mapping[str, object | None],
+        *,
+        artists: Sequence[Credit] | None = None,
+    ) -> int:
         """Set the given household values on every Track; `None` drops one. Return the count.
 
+        `artists` chooses one song's artists one by one, in place of its `artist`.
         Either every Track changes or none does.
         """
         given = {name: value for name, value in values.items() if value is not None}
@@ -425,13 +494,19 @@ class DetailsService:
         for name in set(values) - set(given):
             checked[field_named(name)] = None
         ids = list(dict.fromkeys(track_ids))
-        if not ids or not checked:
+        if not ids or not (checked or artists is not None):
             message = "Choose at least one Track and one detail."
+            raise InvalidInputError(message)
+        if artists is not None and len(ids) != 1:
+            message = "Choose the artists of one song at a time."
+            raise InvalidInputError(message)
+        if artists is not None and Field.ARTIST in checked:
+            message = "Give the song's artists either one by one or as written, not both."
             raise InvalidInputError(message)
         now = self._clock()
         with self._units.begin() as db:
             for track_id in ids:
-                set_household(db, track_id, checked, now)
+                set_household(db, track_id, checked, now, artists=artists)
         self._changed()
         return len(ids)
 
@@ -452,6 +527,7 @@ class DetailsService:
                     TrackRow.year,
                 ).order_by(TrackRow.id)
             ).all()
+            chosen = chosen_tracks(db)
         fields: dict[tuple[NameKind, str], set[Field]] = {}
         tracks: dict[tuple[NameKind, str], dict[TrackId, int | None]] = {}
         for track_id, artist, album_artist, album, year in rows:
@@ -463,6 +539,9 @@ class DetailsService:
             for kind, kind_fields in TIDIED_FIELDS.items():
                 for field in kind_fields:
                     written = shown_values[field]
+                    if field is Field.ARTIST and track_id in chosen:
+                        # The artists chosen one by one, written as one name of ours.
+                        continue
                     if written and (kind, written) not in kept:
                         fields.setdefault((kind, written), set()).add(field)
                         tracks.setdefault((kind, written), {})[TrackId(track_id)] = year
@@ -537,6 +616,7 @@ def _tidy_in(db: Session, kind: NameKind, written: str, tidied: Tidied, now: dat
     """
     showing = [getattr(TrackRow, str(field)) == written for field in TIDIED_FIELDS[kind]]
     tracks = db.scalars(select(TrackRow).where(or_(*showing)).order_by(TrackRow.id)).all()
+    chosen = chosen_tracks(db)
     for track in tracks:
         origins = shown(values_of(db, TrackId(track.id)))
         values: dict[Field, Value | None] = {
@@ -544,6 +624,7 @@ def _tidy_in(db: Session, kind: NameKind, written: str, tidied: Tidied, now: dat
             for field in TIDIED_FIELDS[kind]
             if getattr(track, str(field)) == written
             and origins[field].origin is not Origin.ALBUM_FILE
+            and not (field is Field.ARTIST and track.id in chosen)
         }
         if not values:
             continue

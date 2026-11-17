@@ -17,11 +17,14 @@ translation are written in two.
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
 from medleyplay.domain.artists import MIN_GLUED, MIN_SLASHED_LATIN, NO_ONE, artist_key
+from medleyplay.domain.details import MAX_TEXT
+from medleyplay.domain.errors import InvalidInputError
 
 _FEATURING: Final = re.compile(
     r"^(?P<main>.*?)\s*[(\[\uff08\u3010]?\s*\b(?:feat\.?|ft\.|featuring)\s+"
@@ -90,3 +93,51 @@ def _slashed(name: str) -> list[str]:
     if len({_EAST_ASIAN.search(part) is None for part in parts}) > 1:
         return [name]
     return parts
+
+
+def credited_as(credited: Sequence[Credit]) -> str:
+    """Return the artists a song credits as one name: the main ones, then those featured.
+
+    ```text
+    GUMI, MAYU                      GUMI & MAYU
+    周杰伦, 费玉清, 蔡依林           周杰伦, 费玉清 & 蔡依林
+    スズム; featuring GUMI           スズム feat. GUMI
+    ```
+    """
+    main = _listed([credit.written for credit in credited if credit.role is Role.MAIN])
+    featured = _listed([credit.written for credit in credited if credit.role is Role.FEATURED])
+    return f"{main} feat. {featured}" if featured else main
+
+
+def _listed(names: Sequence[str]) -> str:
+    """Return `names` as a list in words: `A`, `A & B`, or `A, B & C`."""
+    if len(names) < 2:  # noqa: PLR2004 -- one name, or none, is listed as itself
+        return "".join(names)
+    return f"{', '.join(names[:-1])} & {names[-1]}"
+
+
+MAX_CREDITS: Final = 10
+"""The most artists the household may choose for one song."""
+
+
+def checked_credits(credited: Sequence[Credit]) -> tuple[Credit, ...]:
+    """Return the artists chosen for a song, trimmed, the main ones first in their order.
+
+    Refused unless there are 1 to `MAX_CREDITS`, at least one main, each named in at
+    most `MAX_TEXT` characters, and no artist named twice.
+    """
+    trimmed = tuple(Credit(credit.written.strip(), credit.role) for credit in credited)
+    keys = [artist_key(credit.written) for credit in trimmed]
+    if not trimmed or len(trimmed) > MAX_CREDITS:
+        message = f"Choose 1 to {MAX_CREDITS} artists."
+        raise InvalidInputError(message)
+    if any(not credit.written or len(credit.written) > MAX_TEXT for credit in trimmed):
+        message = f"Name each artist in 1 to {MAX_TEXT} characters."
+        raise InvalidInputError(message)
+    if len(set(keys)) < len(keys):
+        message = "Name each artist once."
+        raise InvalidInputError(message)
+    if all(credit.role is Role.FEATURED for credit in trimmed):
+        message = "Choose at least one main artist."
+        raise InvalidInputError(message)
+    return tuple(sorted(trimmed, key=lambda credit: credit.role is Role.FEATURED))

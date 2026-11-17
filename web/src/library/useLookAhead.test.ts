@@ -50,6 +50,20 @@ describe("asking about the songs coming up", () => {
     expect(library.find).toHaveBeenCalledExactlyOnceWith("bilibili-details", 9);
   });
 
+  it("asks for the lyrics of a song of a split file by the song itself", () => {
+    const library = libraryOf({ lyrics: "next" }, { lyrics: [11] });
+    const tracks = byId([
+      trackOf(9, "Bremen", { split: true }),
+      trackOf(11, "Last", { segment_of: 9 }),
+    ]);
+
+    renderHook(() => {
+      useLookAhead([11], tracks, library);
+    });
+
+    expect(library.find).toHaveBeenCalledExactlyOnceWith("lyrics", 11);
+  });
+
   it("asks about a song once, however often it comes up, and never one it may not ask about", () => {
     const library = libraryOf({ "bilibili-details": "next" }, { "bilibili-details": [1] });
     const tracks = byId([trackOf(1, "Melt"), trackOf(2, "Shiver")]);

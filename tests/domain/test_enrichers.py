@@ -13,12 +13,16 @@ from medleyplay.domain.enrichers import (
     AI_DETAILS,
     ASK_AGAIN_AFTER,
     BILIBILI_DETAILS,
+    LYRICS,
     MUSICBRAINZ,
     Enricher,
+    EnricherMode,
     Ineligible,
+    LyricsHeld,
     SearchTerms,
     TrackFacts,
     enricher_named,
+    message_of,
     search_terms,
     text_subject,
     video_id_of,
@@ -435,3 +439,54 @@ def test_the_ai_is_asked_about_a_track_again_once_its_text_changes() -> None:
     assert subject != text_subject(TrackId(7), replace(text, description="00:00 生如夏花\n"))
     assert subject != text_subject(TrackId(7), replace(text, chapters=(Chapter(1, "生如夏花"),)))
     assert len(subject) <= 64
+
+
+def a_song_without_lyrics(
+    *,
+    is_segment: bool = False,
+    is_album: bool = False,
+    lyrics: LyricsHeld = LyricsHeld.NONE,
+    asked_at: datetime | None = None,
+) -> TrackFacts:
+    """A song with a title and artist to look its lyrics up by, never asked, with none yet."""
+    return TrackFacts("a key", is_segment, None, asked_at, is_album=is_album, lyrics_from=lyrics)
+
+
+def test_the_lyrics_of_a_song_are_looked_up_as_it_comes_up_by_default() -> None:
+    assert why_not(a_song_without_lyrics(), NOW, stopped=False, enricher=LYRICS) is None
+    assert LYRICS.default_mode is EnricherMode.NEXT
+    assert EnricherMode.ALL not in LYRICS.modes
+
+
+def test_the_lyrics_of_a_song_inside_a_longer_file_are_looked_up_by_its_own_words() -> None:
+    facts = a_song_without_lyrics(is_segment=True)
+
+    assert why_not(facts, NOW, stopped=False, enricher=LYRICS) is None
+
+
+def test_a_whole_album_has_no_lyrics_to_look_up() -> None:
+    facts = a_song_without_lyrics(is_album=True)
+
+    assert why_not(facts, NOW, stopped=False, enricher=LYRICS) is Ineligible.ALBUM
+
+
+def test_lyrics_the_household_or_the_files_have_are_never_looked_up_again() -> None:
+    facts = a_song_without_lyrics(lyrics=LyricsHeld.LOCAL)
+
+    assert why_not(facts, NOW, stopped=False, enricher=LYRICS, again=True) is Ineligible.HAS_LYRICS
+
+
+def test_lyrics_found_online_are_looked_up_again_only_when_asked() -> None:
+    facts = a_song_without_lyrics(lyrics=LyricsHeld.ONLINE)
+
+    assert why_not(facts, NOW, stopped=False, enricher=LYRICS) is Ineligible.HAS_LYRICS
+    assert why_not(facts, NOW, stopped=False, enricher=LYRICS, again=True) is None
+
+
+def test_a_song_whose_lyrics_were_not_found_is_looked_up_again_a_month_later() -> None:
+    soon = a_song_without_lyrics(asked_at=NOW - timedelta(days=29))
+    later = a_song_without_lyrics(asked_at=NOW - timedelta(days=30))
+
+    assert why_not(soon, NOW, stopped=False, enricher=LYRICS) is Ineligible.ASKED
+    assert why_not(later, NOW, stopped=False, enricher=LYRICS) is None
+    assert message_of(Ineligible.ASKED, LYRICS) == "This Track was looked up in the last 30 days."

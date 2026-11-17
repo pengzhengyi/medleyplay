@@ -43,6 +43,7 @@ from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
+from medleyplay.application.lyrics import LyricsService
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.network import probe_network
@@ -297,6 +298,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         artist_splits=ArtistSplitService(units, clock, changes.tell),
         album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
+        lyrics=LyricsService(units, clock, changes.tell),
     )
 
 

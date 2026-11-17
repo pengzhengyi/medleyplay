@@ -4,12 +4,14 @@
  *
  * The song playing and the one after it are each asked about once in the page, while
  * the enricher may be asked about them. A song of a split file is asked about through
- * its file, as any lookup is. What a lookup comes to shows on the song's row.
+ * its file, as any lookup is, unless the lookup asks about such a song itself, as lyrics
+ * do. What a lookup comes to shows on the song's row.
  */
 
 import { useEffect, useEffectEvent, useRef } from "react";
 
 import type { Track } from "../api";
+import { LOOKUPS } from "./lookups";
 import type { Library } from "./useLibrary";
 
 export function useLookAhead(
@@ -24,8 +26,9 @@ export function useLookAhead(
       if (id === undefined) {
         continue;
       }
-      const target = tracks.get(id)?.segment_of ?? id;
       for (const [enricher, mode] of library.modes) {
+        const forSong = LOOKUPS.some((lookup) => lookup.enricher === enricher && lookup.forSong);
+        const target = forSong ? id : (tracks.get(id)?.segment_of ?? id);
         const key = `${enricher}\n${String(target)}`;
         if (mode !== "next" || asked.current.has(key)) {
           continue;

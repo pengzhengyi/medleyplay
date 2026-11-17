@@ -451,6 +451,7 @@ config file turns them on, since each contacts a site or a provider.
 | `bilibili-details` | `video` | The video's text and cover through yt-dlp, for a video with an id | Built |
 | `musicbrainz` | `musicbrainz` | The MusicBrainz API and the Cover Art Archive, at most once a second | Built |
 | `ai-details` | `ai`, suggestions only | An AI model of the household's choice, with the household's key | Built |
+| `lyrics` | none: lyrics, as [Lyrics](Lyrics.md) says | LRCLIB, for a song's lyrics, at most once a second | Built |
 
 - **The site enricher is its own plugin,** not part of `bilibili`, so its faults
   never stop Downloads. It reuses the Bilibili plugin's yt-dlp wrapper and info

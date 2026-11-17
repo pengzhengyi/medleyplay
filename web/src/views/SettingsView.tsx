@@ -31,6 +31,7 @@ import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
 import { KindSettings } from "./KindSettings";
+import { LyricsSettings } from "./LyricsSettings";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { RatingsSettings } from "./RatingsSettings";
@@ -52,6 +53,7 @@ const SECTIONS = [
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
   { id: "musicbrainz", title: "MusicBrainz" },
+  { id: "lyrics", title: "Lyrics" },
   { id: "ai", title: "AI" },
 ] as const;
 
@@ -223,6 +225,7 @@ export function SettingsView({
       </>
     ),
     musicbrainz: <MusicBrainzSettings onChanged={onEnrichersChanged} />,
+    lyrics: <LyricsSettings onChanged={onEnrichersChanged} />,
     ai: <AiSettings onChanged={onEnrichersChanged} />,
   };
   return (

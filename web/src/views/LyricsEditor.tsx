@@ -32,6 +32,7 @@ const FROM: Record<LyricsOrigin, string> = {
   sidecar: "From the .lrc file beside it",
   tag: "From its tags",
   lrclib: "Found on LRCLIB",
+  netease: "Found on NetEase Cloud Music",
 };
 
 /** The player, as syncing the song's lyrics needs it. */

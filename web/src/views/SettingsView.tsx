@@ -32,6 +32,7 @@ import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
 import { KindSettings } from "./KindSettings";
 import { LyricsSettings } from "./LyricsSettings";
+import { LyricsSites } from "./LyricsSites";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { RatingsSettings } from "./RatingsSettings";
@@ -225,7 +226,12 @@ export function SettingsView({
       </>
     ),
     musicbrainz: <MusicBrainzSettings onChanged={onEnrichersChanged} />,
-    lyrics: <LyricsSettings onChanged={onEnrichersChanged} />,
+    lyrics: (
+      <>
+        <LyricsSettings onChanged={onEnrichersChanged} />
+        <LyricsSites settings={household} onSettings={keepNewest} />
+      </>
+    ),
     ai: <AiSettings onChanged={onEnrichersChanged} />,
   };
   return (

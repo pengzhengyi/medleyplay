@@ -6,6 +6,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
+from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import RemovalOrder, Settings, SplitAlbums
 from tests.support.factories import NewAccountFactory
 
@@ -24,6 +25,7 @@ def test_settings_never_saved_have_no_limit_at_revision_zero(settings: SettingsS
         removal_order=RemovalOrder.LEAST_FAVORITE,
         album_minutes=20,
         split_albums=SplitAlbums.APPROVAL,
+        lyrics_sites=(),
         revision=0,
     )
 
@@ -94,3 +96,22 @@ def test_a_length_for_an_album_outside_1_to_600_minutes_is_refused(
 
     with pytest.raises(InvalidInputError, match="album_minutes"):
         settings.put(alice, Settings(album_minutes=minutes, revision=0))
+
+
+def test_an_admin_turns_on_netease_to_be_asked_for_lyrics_lrclib_lacks(
+    settings: SettingsService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    settings.put(alice, Settings(lyrics_sites=(LyricsSite.NETEASE,)))
+
+    assert settings.get().lyrics_sites == (LyricsSite.NETEASE,)
+
+
+def test_a_lyrics_site_named_twice_is_refused(
+    settings: SettingsService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    with pytest.raises(InvalidInputError, match="lyrics_sites"):
+        settings.put(alice, Settings(lyrics_sites=(LyricsSite.NETEASE, LyricsSite.NETEASE)))

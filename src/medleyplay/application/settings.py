@@ -6,7 +6,7 @@ lower the limit over a newer change.
 
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session, sessionmaker
@@ -15,6 +15,7 @@ from medleyplay.application import Clock
 from medleyplay.application.changes import OnChange
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
+from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings, SplitAlbums
 from medleyplay.persistence.schema import SettingRow
 
@@ -32,6 +33,15 @@ class SettingsDocument(BaseModel):
     removal_order: RemovalOrder = RemovalOrder.LEAST_FAVORITE
     album_minutes: int | None = Field(default=ALBUM_MINUTES, ge=1, le=MAX_ALBUM_MINUTES)
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
+    lyrics_sites: tuple[LyricsSite, ...] = Field(default=(), max_length=len(LyricsSite))
+
+    @field_validator("lyrics_sites")
+    @classmethod
+    def _each_once(cls, sites: tuple[LyricsSite, ...]) -> tuple[LyricsSite, ...]:
+        if len(set(sites)) != len(sites):
+            message = "each site may be named once"
+            raise ValueError(message)
+        return sites
 
 
 class SettingsService:
@@ -65,6 +75,7 @@ class SettingsService:
                 removal_order=settings.removal_order,
                 album_minutes=settings.album_minutes,
                 split_albums=settings.split_albums,
+                lyrics_sites=settings.lyrics_sites,
             ).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
@@ -117,5 +128,6 @@ def read_settings(db: Session) -> Settings:
         removal_order=document.removal_order,
         album_minutes=document.album_minutes,
         split_albums=document.split_albums,
+        lyrics_sites=document.lyrics_sites,
         revision=row.revision,
     )

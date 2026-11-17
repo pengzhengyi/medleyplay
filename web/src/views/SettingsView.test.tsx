@@ -14,6 +14,7 @@ const LIMIT_20: Settings = {
   removal_order: "least_favorite",
   album_minutes: 20,
   split_albums: "approval",
+  lyrics_sites: [],
   revision: 2,
 };
 
@@ -218,6 +219,31 @@ describe("the MusicBrainz section", () => {
     expect(screen.queryByRole("region", { name: "MusicBrainz" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Go to MusicBrainz" })).toBeNull();
     expect(calls).not.toContain("GET /api/enrichers/musicbrainz");
+  });
+});
+
+describe("the Lyrics section", () => {
+  const lyrics = () => within(screen.getByRole("region", { name: "Lyrics" }));
+
+  it("turns NetEase on at once, to be asked for the lyrics LRCLIB lacks", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/enrichers/lyrics": { body: { ...enricherOf("lyrics", [1]), mode: "next" } },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, lyrics_sites: ["netease"], revision: 3 } };
+      },
+    });
+    const netease = await lyrics().findByRole("switch", {
+      name: "Also look on NetEase Cloud Music",
+    });
+
+    expect(netease).not.toBeChecked();
+    await userEvent.click(netease);
+
+    expect(await lyrics().findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...LIMIT_20, lyrics_sites: ["netease"] }]);
+    expect(netease).toBeChecked();
   });
 });
 

@@ -42,6 +42,7 @@ from medleyplay.programs.scan_covers import (
     images_beside,
     read_image,
 )
+from medleyplay.programs.scan_lyrics import LRC_EXTENSION, LyricsFile, lyrics_beside, read_lyrics
 
 REPORT_EVERY: Final = 1.0
 """Seconds between progress reports."""
@@ -64,12 +65,13 @@ class KnownFile(_Model):
     """What the last scan recorded about a file whose tags it read.
 
     `info_json` is the stamp of the `.info.json` beside it when the last scan found
-    one, and `cover_image` that of the image beside it.
+    one, `lrc` that of the `.lrc`, and `cover_image` that of the image beside it.
     """
 
     size: int
     modified_ns: int
     info_json: Stamp | None = None
+    lrc: Stamp | None = None
     cover_image: ImageStamp | None = None
 
 
@@ -106,8 +108,9 @@ class ScannedFile(_Model):
 
     An unchanged file has no fingerprint or tags. A file whose tags couldn't be read
     has the `error` instead. `info_json` is the sidecar beside the file, if there is
-    one, and `cover_image` the image beside it. `embedded_cover` is a copy of the
-    cover in the file's tags, which are reported without it.
+    one, `lyrics_file` the `.lrc`, and `cover_image` the image beside it.
+    `embedded_cover` is a copy of the cover in the file's tags, which are reported
+    without it.
     """
 
     path: LibraryPath
@@ -118,6 +121,7 @@ class ScannedFile(_Model):
     tags: Tags | None = None
     error: str = ""
     info_json: InfoJson | None = None
+    lyrics_file: LyricsFile | None = None
     cover_image: CoverImage | None = None
     embedded_cover: CoverFile | None = None
 
@@ -136,9 +140,10 @@ def run(request: ScanLibrary, context: JobContext) -> LibraryScan:
     check = context.call(CHECK_ROOT, kind, CheckRoot(root=request.root))
     if not check.readable:
         return LibraryScan(readable=False, message=check.message)
-    extensions = request.extensions | {"json", *COVER_EXTENSIONS}
+    extensions = request.extensions | {"json", LRC_EXTENSION, *COVER_EXTENSIONS}
     listing = context.call(LIST_FILES, kind, ListFiles(root=request.root, extensions=extensions))
     audio, sidecars, images = _split(listing.files, request.extensions)
+    lyrics_files = lyrics_beside(listing.files, {name_of(file.path) for file in audio})
     copies = CopyFolder(context.work_dir / COPIES_FOLDER)
     scanned: list[ScannedFile] = []
     reported = time.monotonic()
@@ -158,6 +163,12 @@ def run(request: ScanLibrary, context: JobContext) -> LibraryScan:
         if (sidecar := sidecars.get(name)) is not None:
             info = _info_json(request, sidecar, known, context)
             scanned_file = scanned_file.model_copy(update={"info_json": info})
+        if (lrc := lyrics_files.get(name)) is not None:
+            unchanged_lrc = known is not None and known.lrc == _stamp(lrc)
+            lyrics = read_lyrics(
+                request.root, lrc, context, unchanged=unchanged_lrc and not request.full
+            )
+            scanned_file = scanned_file.model_copy(update={"lyrics_file": lyrics})
         if (image := images.get(name)) is not None:
             beside = read_image(
                 request.root,

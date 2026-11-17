@@ -27,6 +27,8 @@ class Song:
     songs_in_it: tuple[float, ...] = ()
     """For a whole album in one file, how long each of its songs is: each a tone, a
     second of silence between them. The file is then as long as they are, not `seconds`."""
+    lyrics: tuple[str, ...] = ()
+    """The lyrics in its tags, each its own entry, as an MP3's `USLT` frames."""
 
 
 def wav_bytes(song: Song) -> bytes:
@@ -67,10 +69,11 @@ def mp3_bytes(song: Song) -> bytes:
 
 
 def id3_tag(song: Song) -> bytes:
-    """Return an ID3v2.3 tag holding the song's title, artist, album, and cover.
+    """Return an ID3v2.3 tag holding the song's title, artist, album, cover, and lyrics.
 
     The cover is an `APIC` frame of picture type 3, the front cover, with the media
-    type `image/jpeg`, whatever the bytes are.
+    type `image/jpeg`, whatever the bytes are. Each lyrics entry is a `USLT` frame of
+    its own, in UTF-8, the language `eng`, with no description.
     """
     frames = b"".join(
         _id3_frame(name, b"\x03" + value.encode())
@@ -78,6 +81,8 @@ def id3_tag(song: Song) -> bytes:
     )
     if song.cover:
         frames += _id3_frame("APIC", b"\x00image/jpeg\x00\x03\x00" + song.cover)
+    for text in song.lyrics:
+        frames += _id3_frame("USLT", b"\x03eng\x00" + text.encode())
     size = len(frames)
     syncsafe = bytes((size >> shift) & 0x7F for shift in (21, 14, 7, 0))
     return b"ID3\x03\x00\x00" + syncsafe + frames

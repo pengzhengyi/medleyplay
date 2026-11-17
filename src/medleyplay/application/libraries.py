@@ -10,7 +10,7 @@ from typing import Final
 from sqlalchemy import Select, delete, exists, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application import Clock, details
+from medleyplay.application import Clock, details, lyrics
 from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import (
@@ -37,6 +37,7 @@ from medleyplay.domain.libraries import (
     path_of_locator,
     scan_target,
 )
+from medleyplay.domain.lyrics import LyricsOrigin, parse_lyrics
 from medleyplay.domain.video_text import Chapter, VideoText
 from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
 from medleyplay.plugin_api import CHECK_ROOT, LIBRARY_BACKEND, TAG_READER, CheckRoot, LibraryRoot
@@ -49,13 +50,17 @@ from medleyplay.programs.scan_library import (
     ScannedFile,
     Stamp,
 )
+from medleyplay.programs.scan_lyrics import LyricsFile
 
 SCAN_KIND: Final = "scan_library"
 INFO_JSON: Final = "info_json"
 INFO_JSON_ERROR: Final = "info_json_error"
-_SIDECAR_KEYS: Final = frozenset({INFO_JSON, INFO_JSON_ERROR})
-"""The keys of a Source's details for its `.info.json`: its stamp, and why the last read failed."""
-READER_VERSION: Final = 3
+LRC: Final = "lrc"
+LRC_ERROR: Final = "lrc_error"
+_SIDECAR_KEYS: Final = frozenset({INFO_JSON, INFO_JSON_ERROR, LRC, LRC_ERROR})
+"""The keys of a Source's details for its `.info.json` and `.lrc`: each one's stamp, and why
+the last read failed."""
+READER_VERSION: Final = 4
 """What a scan reads from a file; raised when it reads more, so the next scan reads each again."""
 
 type ScanKind = JobKind[ScanLibrary, LibraryScan]
@@ -290,7 +295,10 @@ def _update(
 ) -> None:
     previous = dict(source.details or {})
     track_id = TrackId(source.track_id)
-    sidecar = _apply_info_json(db, track_id, file.info_json, previous, now)
+    sidecar = {
+        **_apply_info_json(db, track_id, file.info_json, previous, now),
+        **_apply_lrc(db, track_id, file.lyrics_file, previous, now),
+    }
     cover = apply_covers(file, previous, covers)
     if file.changed:
         source.fingerprint = file.fingerprint
@@ -368,6 +376,49 @@ def _apply_info_json(
     return kept
 
 
+def _apply_lrc(
+    db: Session,
+    track_id: TrackId,
+    lrc: LyricsFile | None,
+    previous: dict[str, object],
+    now: datetime,
+) -> dict[str, object]:
+    """Apply the `.lrc` the scan found beside the file; return what the Source keeps of it.
+
+    Lyrics read from it are the song's `sidecar` lyrics. One that couldn't be read
+    leaves the lyrics read before and notes the error until a later read succeeds; one
+    that was there last scan and isn't now takes its lyrics with it.
+    """
+    if lrc is None:
+        if LRC in previous:
+            lyrics.forget_lyrics(db, track_id, LyricsOrigin.SIDECAR)
+        return {}
+    kept: dict[str, object] = {LRC: {"size": lrc.size, "modified_ns": lrc.modified_ns}}
+    if lrc.retry:
+        # The last stamp read, if any, so the next scan reads this one again.
+        kept = {LRC: previous[LRC]} if LRC in previous else {}
+        kept[LRC_ERROR] = lrc.error
+    elif lrc.error:
+        kept[LRC_ERROR] = lrc.error
+    elif lrc.text is None:
+        if LRC_ERROR in previous:
+            kept[LRC_ERROR] = previous[LRC_ERROR]
+    elif (refused := _refusal_of(lrc.text)) is not None:
+        kept[LRC_ERROR] = refused
+    else:
+        lyrics.record_lyrics(db, track_id, LyricsOrigin.SIDECAR, lrc.text, now)
+    return kept
+
+
+def _refusal_of(text: str) -> str | None:
+    """Return why `text` can't be shown as lyrics, or `None` when it can."""
+    try:
+        parse_lyrics(text)
+    except InvalidInputError as error:
+        return str(error)
+    return None
+
+
 def _video_text(text: InfoText) -> VideoText | None:
     """Return the sidecar's text, or `None` when it has no words."""
     if not (text.title.strip() or text.description.strip() or text.chapters):
@@ -390,6 +441,10 @@ def _set_details(
         }
         if tags.track_number is not None:
             values[Field.TRACK_NUMBER] = tags.track_number
+        if tags.lyrics.strip() and _refusal_of(tags.lyrics) is None:
+            lyrics.record_lyrics(db, track_id, LyricsOrigin.TAG, tags.lyrics, now)
+        else:
+            lyrics.forget_lyrics(db, track_id, LyricsOrigin.TAG)
     if cover is not None:
         values[Field.COVER] = cover
     # The length first, so recording the values settles a split file's songs to it.
@@ -419,6 +474,7 @@ def _known_files(db: Session, library_id: LibraryId) -> dict[str, KnownFile]:
                 size=int(str(details["size"])),
                 modified_ns=int(str(details["modified_ns"])),
                 info_json=_stamp_of(details.get(INFO_JSON)),
+                lrc=_stamp_of(details.get(LRC)),
                 cover_image=image_stamp_of(details.get(COVER_IMAGE)),
             )
     return known

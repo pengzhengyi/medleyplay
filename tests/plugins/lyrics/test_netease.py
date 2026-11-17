@@ -3,8 +3,6 @@
 Every request goes to a fake transport: no test contacts music.163.com.
 """
 
-# cspell:ignore ＭＥＬＴ
-
 import pytest
 import requests
 
@@ -114,7 +112,7 @@ def test_the_first_result_of_the_songs_title_within_two_seconds_of_its_length_is
             searched(
                 melt(id=1, duration=300_000),
                 melt(id=2, name="Melt (Live)"),
-                melt(id=3, name="ＭＥＬＴ", duration=261_500),  # noqa: RUF001 -- full width, as typed
+                melt(id=3, name="ＭＥＬＴ", duration=261_500),  # noqa: RUF001 -- full width, as typed; cspell:disable-line
             ),
         )
         .answer(LYRIC, lyric())

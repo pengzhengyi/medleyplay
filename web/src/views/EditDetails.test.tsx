@@ -46,6 +46,8 @@ async function renderDialog(
     reloaded?: Details;
     /** The way to the songs of the song's file. */
     songs?: { readonly label: string; readonly editor: ReactNode };
+    /** The way to the song's lyrics. */
+    lyrics?: { readonly label: string; readonly editor: ReactNode };
   } = {},
 ) {
   const onClose = vi.fn();
@@ -67,6 +69,7 @@ async function renderDialog(
       online
       onFind={onFind}
       songs={more.songs}
+      lyrics={more.lyrics}
       onClose={onClose}
     />
   );
@@ -891,13 +894,13 @@ describe("looking a song up from its details", () => {
   });
 });
 
-/** A stand-in for the songs editor: its heading, and its way back. */
-function SongsStandIn() {
+/** A stand-in for the songs or lyrics editor: its heading, `title`, and its way back. */
+function PanelStandIn({ title }: { readonly title: string }) {
   const { headingId, onBack } = useContext(SongsControlsContext);
   return (
     <form>
       <h2 id={headingId} tabIndex={-1}>
-        Songs
+        {title}
       </h2>
       <button type="button" onClick={onBack}>
         Details
@@ -909,7 +912,7 @@ function SongsStandIn() {
 describe("the songs of a song's file", () => {
   it("open in place of the details, and the way back keeps what was typed", async () => {
     const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
-      songs: { label: "11 songs", editor: <SongsStandIn /> },
+      songs: { label: "11 songs", editor: <PanelStandIn title="Songs" /> },
     });
     await userEvent.type(within(dialog).getByRole("textbox", { name: "Title" }), "!");
 
@@ -929,6 +932,26 @@ describe("the songs of a song's file", () => {
     const { dialog } = await renderDialog();
 
     expect(within(dialog).queryByRole("button", { name: /songs/u })).not.toBeInTheDocument();
+  });
+});
+
+describe("the lyrics of a song", () => {
+  it("open in place of the details, and the way back returns to the way to them", async () => {
+    const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
+      lyrics: { label: "Lyrics", editor: <PanelStandIn title="Lyrics" /> },
+    });
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Lyrics" }));
+    const named = dialog.getAttribute("aria-labelledby");
+    const heading = within(dialog).getByRole("heading", { name: "Lyrics" });
+    const focused = document.activeElement;
+    const details = within(dialog).queryByRole("textbox", { name: "Title" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Details" }));
+
+    expect(named).toBe(heading.id);
+    expect(focused).toBe(heading);
+    expect(details).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Lyrics" })).toHaveFocus();
   });
 });
 

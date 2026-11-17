@@ -5897,6 +5897,188 @@ button.song-handle {
   font-size: 0.9rem;
 }
 
+/*
+ * Editing a song's lyrics, in place of its details: as text, or synced to the song,
+ * a line at a time, the line Space stamps next marked out.
+ */
+
+.lyrics-editor-head {
+  margin-bottom: 0.75rem;
+}
+
+.lyrics-editor-head .songs-title {
+  margin-bottom: 0.15rem;
+}
+
+.lyrics-editor-modes {
+  display: inline-flex;
+  gap: 0;
+  width: auto;
+  margin: 0 0 0.75rem;
+  padding: 0.15rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.lyrics-editor-modes .lyrics-mode {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.85rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.lyrics-editor-modes .lyrics-mode:hover:not(:disabled, [aria-pressed="true"]) {
+  color: var(--ink);
+}
+
+.lyrics-editor-modes .lyrics-mode[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.lyrics-editor-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lyrics-editor-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.lyrics-editor-text textarea {
+  min-height: 16rem;
+  margin: 0;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.lyrics-editor-instrumental {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.lyrics-sync:focus {
+  outline: none;
+}
+
+.lyrics-sync-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.lyrics-sync-time {
+  min-width: 3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-sync-bar .dialog-button {
+  margin-left: auto;
+}
+
+.lyrics-sync-shift {
+  display: inline-flex;
+  padding-left: 0.35rem;
+  border-left: 1px solid var(--line);
+}
+
+.lyrics-sync-hint {
+  margin: 0.5rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.lyrics-sync-lines {
+  max-height: min(22rem, 45dvh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+
+.lyrics-sync-line {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.1rem 0.35rem;
+  border-left: 3px solid transparent;
+}
+
+.lyrics-sync-line + .lyrics-sync-line {
+  border-top: 1px solid var(--line);
+}
+
+/* The line Space stamps next. */
+.lyrics-sync-line.next {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.lyrics-sync-line .icon {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1rem;
+}
+
+button.lyrics-sync-at,
+button.lyrics-sync-text {
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  border: none;
+  border-radius: 0.4rem;
+  background: transparent;
+  text-align: start;
+}
+
+button.lyrics-sync-at {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+button.lyrics-sync-at:disabled {
+  opacity: 0.6;
+}
+
+button.lyrics-sync-at:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+button.lyrics-sync-text {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+button.lyrics-sync-text:hover {
+  background: var(--accent-soft);
+}
+
+@media (width <= 36rem) {
+  .lyrics-sync-line {
+    grid-template-columns: 4.6rem minmax(0, 1fr) auto auto;
+  }
+}
+
 @media (width <= 36rem) {
   /* Start and title on one line; the artist and the buttons on the next. */
   .song-row {

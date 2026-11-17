@@ -589,6 +589,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A faster first load** — the songs are read first and alone, then what shows
+  around them once they are drawn, and what only some views need when the browser is
+  idle; the Library shows rows shaped like songs meanwhile. Now Playing, the
+  editors, and the Insights, Settings, and Clean up views load the first time they
+  open. On a Library of 1,590 songs, the first rows show in about 0.6 s instead of
+  3.2 s.
+
 - **One way to replace a cover or a photo** — a song's cover, an album's, and an
   artist's photo each show *Save image*, *Replace*, and *Remove* over the picture on
   hover. *Replace* opens a picture editor with a tab for each source: *Upload* (drop

@@ -2,6 +2,7 @@
 
 import itertools
 import socket
+import ssl
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import cast
@@ -15,6 +16,7 @@ from medleyplay.plugin_api import (
     fetch_public_image,
     is_public_address,
     pinned_connection,
+    tls_context,
 )
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 64
@@ -371,3 +373,10 @@ def test_a_pinned_connection_connects_to_the_address_and_checks_the_name() -> No
     assert connected == [(WIKIMEDIA, 443)]
     assert tls.wrapped == ["upload.wikimedia.org"]
     assert connection.host == "upload.wikimedia.org"
+
+
+def test_a_connection_checks_the_certificate_over_tls_1_2_or_later() -> None:
+    context = tls_context()
+
+    assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
+    assert (context.verify_mode, context.check_hostname) == (ssl.CERT_REQUIRED, True)

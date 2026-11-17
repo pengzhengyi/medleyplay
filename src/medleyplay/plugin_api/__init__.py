@@ -152,6 +152,7 @@ from medleyplay.plugin_api.public_fetch import (
     is_public_address,
     pinned_connection,
     resolve_host,
+    tls_context,
 )
 from medleyplay.plugin_api.sources import (
     BEST_QUALITY,
@@ -341,4 +342,5 @@ __all__ = [
     "public_host",
     "report_progress",
     "resolve_host",
+    "tls_context",
 ]

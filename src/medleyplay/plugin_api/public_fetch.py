@@ -125,6 +125,13 @@ class _PinnedConnection(http.client.HTTPConnection):
         self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
 
 
+def tls_context() -> ssl.SSLContext:
+    """Return a context that checks the certificate and its name, over TLS 1.2 or later."""
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return context
+
+
 def pinned_connection(
     address: str,
     host: str,
@@ -134,7 +141,7 @@ def pinned_connection(
     context: _Tls | None = None,
 ) -> http.client.HTTPConnection:
     """Return an HTTPS connection to `address` that checks the certificate names `host`."""
-    tls = context if context is not None else ssl.create_default_context()
+    tls = context if context is not None else tls_context()
     return _PinnedConnection(address, host, timeout, create, tls)
 
 

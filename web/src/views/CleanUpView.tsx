@@ -34,7 +34,7 @@ export function CleanUpView({
 }: {
   readonly tidy: Read<readonly NameToTidy[]>;
   readonly artistNames: Read<ArtistNames> | undefined;
-  /** The Library's songs, to show the songs of each name to link. */
+  /** The Library's Tracks, split files too, to show and rename the songs of each name to link. */
   readonly tracks?: readonly Track[];
   /** The long files to split, and a way to open one's songs. */
   readonly splits?: Read<SplitOffers>;

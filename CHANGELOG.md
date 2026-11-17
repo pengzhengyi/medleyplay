@@ -610,6 +610,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tidy and Use … work on names a split file writes** — tidying an album name
+  that only a split file's songs showed, as when the file named the album by its
+  title, changed nothing while saying it changed every song; now the file takes
+  the tidy name and its songs follow. *Use …* in Link artist names did nothing
+  for a name only a split file wrote; it now renames the file, and says so when no
+  song shows the name any more.
+
 - **An AI model now finds pictures for a cover or an artist** — it was asked for
   exact image links, which it rarely knows, so it mostly named none. It now names
   Wikipedia articles, in the language the album or artist is known in, and files on

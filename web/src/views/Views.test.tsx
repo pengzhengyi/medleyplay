@@ -916,3 +916,37 @@ describe("the Downloaded view", () => {
     expect(screen.queryByRole("region", { name: "Downloading" })).not.toBeInTheDocument();
   });
 });
+
+describe("cleaning up", () => {
+  it("renames a name only a split file writes on that file, which its songs follow", async () => {
+    const sent: unknown[] = [];
+    open("#/clean-up", {
+      ...signedIn([
+        trackOf(14, "郊游", { artist: "蛙池乐队", album_artist: "蛙池乐队", split: true }),
+        trackOf(588, "郊游", { artist: "蛙池", album_artist: "蛙池", segment_of: 14 }),
+      ]),
+      "GET /api/artist-names": {
+        body: {
+          names: [
+            { ...artistNameOf("蛙池乐队"), looked_at: "2026-11-15T12:00:00Z" },
+            artistNameOf("蛙池"),
+          ],
+          artists: [],
+        },
+      },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 1 } };
+      },
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Show the songs of 蛙池乐队 by 蛙池" }),
+    );
+
+    expect(sent).toEqual([
+      { track_ids: [14], values: { artist: "蛙池" } },
+      { track_ids: [14], values: { album_artist: "蛙池" } },
+    ]);
+  });
+});

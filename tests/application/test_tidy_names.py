@@ -193,6 +193,46 @@ def test_a_split_files_songs_follow_their_files_tidied_album(
     assert details.details(first.track_id).shown[Field.ALBUM] == Shown("Bremen", Origin.ALBUM_FILE)
 
 
+def test_a_split_file_named_only_by_its_title_takes_the_tidy_album_its_songs_show(
+    catalog: CatalogService, details: DetailsService, songs: SongsService
+) -> None:
+    edition = replace(
+        TrackDetailsFactory.album_file(), title="Rubber Soul(橡胶灵魂)", album="", album_artist=""
+    )
+    album = catalog.add_track(SourceKeyFactory.bilibili("BV1Sw41187vc"), edition)
+    first = songs.save(
+        album, [SongRow(None, Song(0, "Drive My Car")), SongRow(None, Song(150_000, "Girl"))]
+    ).songs[0]
+
+    changed = details.tidy_name(NameKind.ALBUM, "Rubber Soul(橡胶灵魂)")
+
+    assert changed == 2
+    assert details.details(album).shown[Field.ALBUM] == Shown("Rubber Soul", Origin.HOUSEHOLD)
+    assert details.details(first.track_id).shown[Field.ALBUM] == Shown(
+        "Rubber Soul", Origin.ALBUM_FILE
+    )
+    assert details.names_to_tidy() == []
+
+
+def test_a_split_files_songs_by_its_artist_follow_its_tidied_album_artist(
+    catalog: CatalogService, details: DetailsService, songs: SongsService
+) -> None:
+    edition = replace(TrackDetailsFactory.album_file(), artist=BEATLES, album_artist="")
+    album = catalog.add_track(SourceKeyFactory.bilibili("BV1Sw41187vc"), edition)
+    first = songs.save(
+        album, [SongRow(None, Song(0, "Drive My Car")), SongRow(None, Song(150_000, "Girl"))]
+    ).songs[0]
+
+    details.tidy_name(NameKind.ARTIST, BEATLES)
+
+    shown = details.details(first.track_id).shown
+    assert (shown[Field.ARTIST], shown[Field.ALBUM_ARTIST]) == (
+        Shown("The Beatles", Origin.ALBUM_FILE),
+        Shown("The Beatles", Origin.ALBUM_FILE),
+    )
+    assert details.names_to_tidy() == []
+
+
 def test_tidying_names_at_once_tidies_each_and_skips_any_already_tidy(
     catalog: CatalogService, details: DetailsService, alice: Account
 ) -> None:

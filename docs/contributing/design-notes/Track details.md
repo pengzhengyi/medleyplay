@@ -200,8 +200,10 @@ values.
   - ***Tidy*** sets the tidy name as the household's value wherever each song
     shows the name as written, and the name's year where a song shows none; a
     song showing another year keeps it, and the list counts those. A song of a
-    split file showing its file's value is left to follow the file, so a later
-    change to the file still reaches it. ***Keep***
+    split file showing its file's value follows the file: the file takes the tidy
+    name as its album, or as its album artist, even when it named the album only
+    by its title, so a later change to the file still reaches the song. A song's
+    own artist in its file's song list is tidied on the song. ***Keep***
     remembers the name as written, so it isn't offered again. Nothing is tidied
     without the household choosing it, and a tidied value is cleared in *Edit
     details* like any other of the household's.

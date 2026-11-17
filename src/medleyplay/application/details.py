@@ -610,28 +610,54 @@ class DetailsService:
 
 
 def _tidy_in(db: Session, kind: NameKind, written: str, tidied: Tidied, now: datetime) -> int:
-    """Show `tidied` on every Track showing `written` as a name of `kind`; return how many show it.
+    """Show `tidied` on every Track showing `written` as a name of `kind`; return how many change.
 
-    A song of a split file showing its file's value follows the file instead.
+    A song of a split file showing its file's value follows the file instead: the file
+    takes the name as its album, or as its album artist, which its songs show. A song's
+    own artist in its file's song list is the song's to tidy.
     """
     showing = [getattr(TrackRow, str(field)) == written for field in TIDIED_FIELDS[kind]]
     tracks = db.scalars(select(TrackRow).where(or_(*showing)).order_by(TrackRow.id)).all()
     chosen = chosen_tracks(db)
+    by_file: dict[TrackId, dict[Field, Value | None]] = {}
+    changed = 0
     for track in tracks:
         origins = shown(values_of(db, TrackId(track.id)))
-        values: dict[Field, Value | None] = {
-            field: tidied.name
-            for field in TIDIED_FIELDS[kind]
-            if getattr(track, str(field)) == written
-            and origins[field].origin is not Origin.ALBUM_FILE
-            and not (field is Field.ARTIST and track.id in chosen)
-        }
-        if not values:
-            continue
-        if track.year is None and tidied.year is not None:
+        values: dict[Field, Value | None] = {}
+        follows = False
+        for field in TIDIED_FIELDS[kind]:
+            if getattr(track, str(field)) != written or (
+                field is Field.ARTIST and track.id in chosen
+            ):
+                continue
+            segment = (
+                db.scalar(select(SegmentRow).where(SegmentRow.track_id == track.id))
+                if origins[field].origin is Origin.ALBUM_FILE
+                else None
+            )
+            if segment is None or (field is Field.ARTIST and segment.artist == written):
+                values[field] = tidied.name
+                continue
+            file_id = TrackId(
+                db.scalars(
+                    select(SourceRow.track_id).where(SourceRow.id == segment.album_source_id)
+                ).one()
+            )
+            held = Field.ALBUM if field is Field.ALBUM else Field.ALBUM_ARTIST
+            by_file.setdefault(file_id, {})[held] = tidied.name
+            follows = True
+        if values:
+            if track.year is None and tidied.year is not None:
+                values[Field.YEAR] = tidied.year
+            set_household(db, TrackId(track.id), values, now)
+        if values or follows:
+            changed += 1
+    for file_id, values in by_file.items():
+        file = _require(db, file_id)
+        if file.year is None and tidied.year is not None:
             values[Field.YEAR] = tidied.year
-        set_household(db, TrackId(track.id), values, now)
-    return len(tracks)
+        set_household(db, file_id, values, now)
+    return changed
 
 
 def _rows(

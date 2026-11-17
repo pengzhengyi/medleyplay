@@ -270,7 +270,10 @@ on the artist, apart from what the sites said.
 - **A note about it,** up to 1,000 characters, shown on its page.
 - **A photo of the household's,** in place of Wikidata's, kept as a cover is: a
   JPEG, PNG, or WebP image of at most 10 MiB, named by its bytes, and kept by the
-  sweep. Removing it shows Wikidata's again.
+  sweep. Removing it shows Wikidata's again. *Edit artist* also offers the
+  pictures an AI model names, as
+  [Track details](Track%20details.md#pictures-an-ai-model-names) says; one approved
+  is downloaded and becomes the household's photo.
 - **Only for an artist a site named,** as a linked name's is; any signed-in
   Account may choose, as any may edit a Track's details.
 
@@ -402,6 +405,7 @@ not.
 | `PUT /api/artists/{id}/details` | Signed in | Keep the name an artist is shown by and a note about it; an empty one is forgotten; 404 for an artist no site named |
 | `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
 | `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |
+| `POST /api/artists/{id}/photo/cover` | Signed in | Make a cover already kept the household's photo of the artist; 404 for no such cover |
 | `POST /api/artists/{id}/suggestion` | Signed in | Ask an AI model which name to show an artist by, and who it is; 202, or 404 for an artist no site named, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked about it already |
 | `GET /api/artists/{id}/suggestion` | Signed in | Whether a model is asked about the artist and whether that waits for medleyplay to be Online, what it last suggested, with the model that answered, and why the last asking failed, to the Account that asked and to admins |
 

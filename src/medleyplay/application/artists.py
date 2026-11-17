@@ -53,6 +53,7 @@ from medleyplay.domain.artists import (
     queries_for,
     suggested,
 )
+from medleyplay.domain.covers import cover_type, is_cover_id
 from medleyplay.domain.enrichers import AI_DETAILS, MUSICBRAINZ
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
@@ -561,6 +562,25 @@ class ArtistService:
             row = self._household(db, artist_id)
             row.photo, row.changed_at = name, self._clock()
             keep_cover(self._covers_folder, name, data)
+        self._changed()
+
+    def use_photo(self, artist_id: str, cover: str) -> None:
+        """Make the cover `cover`, already kept, the household's photo of the artist.
+
+        Such is an image fetched from a link a model suggested; any name that is no
+        cover kept is refused.
+        """
+        try:
+            with (self._covers_folder / cover).open("rb") as file:
+                kind = cover_type(file.read(12)) if is_cover_id(cover) else None
+        except OSError:
+            kind = None
+        if kind is None:
+            message = "There is no such cover."
+            raise NotFoundError(message)
+        with self._units.begin() as db:
+            row = self._household(db, artist_id)
+            row.photo, row.changed_at = cover, self._clock()
         self._changed()
 
     def remove_photo(self, artist_id: str) -> None:

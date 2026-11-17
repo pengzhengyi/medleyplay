@@ -184,7 +184,7 @@ class AlbumCoverService:
 
         `artist` is the album artist, else the artist; empty for none.
         """
-        album, artist = _checked(album, artist)
+        album, artist = checked_album(album, artist)
         if FINDER not in self._plugins.available_keys().get(COVER_FINDER.name, []):
             message = "Turn on the MusicBrainz plugin to find covers."
             raise ConflictError(message)
@@ -196,7 +196,7 @@ class AlbumCoverService:
 
         Asking while one has picked among the covers found asks nothing.
         """
-        album, artist = _checked(album, artist)
+        album, artist = checked_album(album, artist)
         if CHOOSER not in self._plugins.available_keys().get(COVER_CHOOSER.name, []):
             message = "Turn on the ai-details plugin to ask an AI model."
             raise ConflictError(message)
@@ -211,7 +211,7 @@ class AlbumCoverService:
                 raise ConflictError(message)
             if row is not None and row.chosen_at is not None and _picked_among(row, found):
                 return
-            songs = _songs_of(db, album, artist)
+            songs = songs_of(db, album, artist)
         request = ChooseCoverJob(
             album=album,
             artist=artist,
@@ -225,7 +225,7 @@ class AlbumCoverService:
 
     def covers(self, viewer: Account, album: str, artist: str) -> AlbumCovers:
         """Return what is known of the album's covers, and what is being asked."""
-        album, artist = _checked(album, artist)
+        album, artist = checked_album(album, artist)
         with self._units() as db:
             row = db.get(AlbumCoverSearchRow, album_key(album, artist))
             found = () if row is None else _covers_of(row)
@@ -254,7 +254,8 @@ class AlbumCoverService:
         )
 
 
-def _checked(album: str, artist: str) -> tuple[str, str]:
+def checked_album(album: str, artist: str) -> tuple[str, str]:
+    """Return the album and its artist trimmed, refusing an album unnamed or a name too long."""
     album, artist = album.strip(), artist.strip()
     if not album:
         message = "Name the album to find its covers."
@@ -291,7 +292,7 @@ def _pick_of(row: AlbumCoverSearchRow, found: tuple[FoundAlbumCover, ...]) -> Co
     )
 
 
-def _songs_of(db: Session, album: str, artist: str) -> tuple[str, ...]:
+def songs_of(db: Session, album: str, artist: str) -> tuple[str, ...]:
     """Return a few titles of the songs of the album, as the Library writes it."""
     key = album_key(album, artist)
     rows = db.execute(

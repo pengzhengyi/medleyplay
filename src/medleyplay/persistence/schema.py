@@ -798,6 +798,28 @@ class AlbumCoverSearchRow(Base):
     chosen_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
 
 
+class ImageLinksRow(Base):
+    """The links to pictures of an album or an artist an AI model last suggested.
+
+    `subject` says which it is, and `key` which one: for an album, a hash of it and its
+    artist as written, folded; for an artist, its id. Each of `links` holds its `url`,
+    the `page` showing it, if known, and `why`; once fetched, `cover`, the cover holding
+    the image, else `unavailable`, why there is no image there. `model` and `host` are
+    the model that answered and where, as they were then.
+    """
+
+    __tablename__ = "image_links"
+
+    subject: Mapped[str] = mapped_column(String(8), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512))
+    artist: Mapped[str] = mapped_column(String(512))
+    links: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    model: Mapped[str] = mapped_column(String(128))
+    host: Mapped[str] = mapped_column(String(255))
+    asked_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class ArtistHouseholdRow(Base):
     """What the household chose for an artist, apart from what the sites said.
 

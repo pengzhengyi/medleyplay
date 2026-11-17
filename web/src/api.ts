@@ -382,6 +382,53 @@ export interface AlbumCovers {
   readonly may_choose: boolean;
 }
 
+/** A link to a picture an AI model suggested, and what fetching it gave. */
+export interface SuggestedLink {
+  readonly url: string;
+  /** The page that shows the picture, if the model named one. */
+  readonly page: string | null;
+  readonly why: string;
+  /** The cover holding the picture, once fetched. */
+  readonly cover: string | null;
+  /** Why there is no picture at the link, once asked. */
+  readonly unavailable: string;
+  readonly fetching: boolean;
+  /** Why the last fetching failed; only to the Account that asked, and to admins. */
+  readonly failure: string | null;
+}
+
+/** The links an AI model last suggested for a picture, and what is asked. */
+export interface PictureLinks {
+  /** Best first. */
+  readonly links: readonly SuggestedLink[];
+  readonly model: string;
+  readonly host: string;
+  readonly asked_at: string | null;
+  readonly asking: boolean;
+  /** Whether the asking waits for medleyplay to be Online. */
+  readonly waiting: boolean;
+  readonly failure: string | null;
+  /** Whether an AI model may be asked: one is set up. */
+  readonly may_suggest: boolean;
+}
+
+/** What a picture is of: an album's cover, by its name and artist, or an artist's photo. */
+export type Pictured =
+  | { readonly kind: "album"; readonly album: string; readonly artist: string }
+  | { readonly kind: "artist"; readonly artistId: string };
+
+/** Where the links for a picture live in the API. */
+function picturePath(pictured: Pictured): string {
+  return pictured.kind === "album"
+    ? "/api/image-links/album"
+    : `/api/image-links/artist/${encodeURIComponent(pictured.artistId)}`;
+}
+
+/** What names an album in a request body; nothing for an artist, named in the path. */
+function pictureBody(pictured: Pictured): Record<string, string> {
+  return pictured.kind === "album" ? { album: pictured.album, artist: pictured.artist } : {};
+}
+
 /** An artist's or album's name shown on Tracks with more than the name in it, tidied. */
 export interface NameToTidy {
   /** What the name names: an artist or album artist, or an album. */
@@ -1106,6 +1153,26 @@ export const api = {
   /** Ask an AI model which of an album's releases found is the album; nothing changes. */
   chooseAlbumCover: (album: string, artist: string) =>
     call<null>("POST", "/api/album-covers/choose", { album, artist }),
+  /** The links an AI model last suggested for a picture, and what is asked. */
+  imageLinks: (pictured: Pictured) =>
+    call<PictureLinks>(
+      "GET",
+      pictured.kind === "album"
+        ? `${picturePath(pictured)}?${new URLSearchParams(pictureBody(pictured)).toString()}`
+        : picturePath(pictured),
+    ),
+  /** Ask an AI model for links to a picture; nothing is fetched. */
+  suggestImageLinks: (pictured: Pictured) =>
+    call<null>("POST", `${picturePath(pictured)}/suggest`, pictureBody(pictured)),
+  /** Fetch the picture at a link suggested; answers its cover when it was fetched before. */
+  approveImageLink: (pictured: Pictured, url: string) =>
+    call<{ readonly cover: string | null }>("POST", `${picturePath(pictured)}/approve`, {
+      ...pictureBody(pictured),
+      url,
+    }),
+  /** Make a cover already kept, such as a picture fetched, the household's photo of an artist. */
+  useArtistPhotoCover: (artistId: string, cover: string) =>
+    call<undefined>("POST", `/api/artists/${encodeURIComponent(artistId)}/photo/cover`, { cover }),
   /** The long files a song list was found for, to split or keep as one file. */
   splitOffers: () => call<SplitOffers>("GET", "/api/split-offers"),
   /** Split each file by the offer seen for it; one whose offer changed is left as it is. */

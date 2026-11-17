@@ -20,6 +20,8 @@ const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
 const DETAILS = "PUT /api/artists/b10bbbfc/details";
 const PHOTO = "/api/artists/b10bbbfc/photo";
 const SUGGESTION = "/api/artists/b10bbbfc/suggestion";
+/** The pictures an AI model suggested for the artist, read beside its photo. */
+const IMAGE_LINKS = "GET /api/image-links/artist/b10bbbfc";
 /** No AI model asked about the artist yet. */
 const UNASKED: ArtistSuggestionState = {
   asking: false,
@@ -139,7 +141,7 @@ describe("editing an artist", () => {
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
     });
-    expect(server.calls).toEqual([`GET ${SUGGESTION}`, `PUT ${PHOTO}`]);
+    expect(server.calls).toEqual([IMAGE_LINKS, `GET ${SUGGESTION}`, `PUT ${PHOTO}`]);
   });
 
   it("sends no photo past 10 MiB, and says so beside the photo", async () => {
@@ -151,7 +153,7 @@ describe("editing an artist", () => {
     await userEvent.upload(screen.getByLabelText("Replace the photo"), photo);
 
     expect(screen.getByRole("alert")).toHaveTextContent("A photo is at most 10 MiB.");
-    expect(server.calls).toEqual([`GET ${SUGGESTION}`]);
+    expect(server.calls).toEqual([IMAGE_LINKS, `GET ${SUGGESTION}`]);
   });
 
   it("says why a photo was refused, beside the photo", async () => {
@@ -198,7 +200,7 @@ describe("editing an artist", () => {
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
     });
-    expect(server.calls).toEqual([`GET ${SUGGESTION}`, `DELETE ${PHOTO}`]);
+    expect(server.calls).toEqual([IMAGE_LINKS, `GET ${SUGGESTION}`, `DELETE ${PHOTO}`]);
   });
 });
 

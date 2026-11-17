@@ -32,6 +32,7 @@ from medleyplay.application.devices import DeviceService
 from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.enrichment import EnrichKind, EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
+from medleyplay.application.image_links import ImageLinkService, image_link_kinds
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
@@ -313,6 +314,18 @@ def album_covers(
 
 
 @pytest.fixture
+def image_links(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    tmp_path: Path,
+) -> ImageLinkService:
+    covers = tmp_path / "data" / "covers"
+    return ImageLinkService(units, plugins, jobs, image_link_kinds(clock, covers), covers)
+
+
+@pytest.fixture
 def artists(
     units: sessionmaker[Session],
     clock: FakeClock,
@@ -473,6 +486,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     artists: ArtistService,
     artist_splits: ArtistSplitService,
     album_covers: AlbumCoverService,
+    image_links: ImageLinkService,
     clock: FakeClock,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
@@ -509,6 +523,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         artists=artists,
         artist_splits=artist_splits,
         album_covers=album_covers,
+        image_links=image_links,
     )
 
 

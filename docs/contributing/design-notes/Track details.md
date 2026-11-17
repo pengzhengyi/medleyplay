@@ -661,9 +661,9 @@ songs editor.
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `GET /api/tracks/{id}/details` | Signed in | Every field's shown value and origin, each origin's value, and the video's text read |
+| `GET /api/tracks/{id}/details` | Signed in | Every field's shown value and origin, each origin's value, the video's text read, and the artists the Track shows, each with its role and the MusicBrainz artist it is |
 | `PUT /api/tracks/{id}/details` | Signed in | The household's values for the Track, replacing its earlier ones |
-| `POST /api/tracks/details` | Signed in | Sets the given household values on many Tracks |
+| `POST /api/tracks/details` | Signed in | Sets the given household values on many Tracks; `artists`, for one song, chooses its artists one by one, as [Artists](Artists.md#a-songs-artists-one-by-one) says |
 | `POST /api/tracks/{id}/video-text` | Signed in | Reads a pasted title and description as the `video` origin; answers the details and the songs listed |
 | `GET /api/covers/{id}` | Signed in | A cover's image |
 | `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body; answers the details |

@@ -13,9 +13,10 @@ from pydantic import BaseModel, Field, StrictInt, StrictStr
 
 from medleyplay.application.details import DetailsView, NameToTidy, VideoRead
 from medleyplay.domain.ai import AnsweredBy
+from medleyplay.domain.artist_split import MAX_CREDITS, Credit, Role
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.details import MAX_TEXT, Kind, KindReason, Origin, Shown
 from medleyplay.domain.details import Field as Detail
-from medleyplay.domain.details import Kind, KindReason, Origin, Shown
 from medleyplay.domain.tidy import NameKind
 from medleyplay.domain.video_text import VideoText
 from medleyplay.web.deps import DetailsDep, SignedInAccount
@@ -77,6 +78,23 @@ class AnsweredByOut(BaseModel):
         return cls(model=answered.model, host=answered.host, at=answered.at)
 
 
+class LinkedArtistOut(BaseModel):
+    """The MusicBrainz artist one of a Track's artists is: its id, name, and photo's cover."""
+
+    musicbrainz_id: str
+    name: str
+    photo: str | None
+
+
+class TrackArtistOut(BaseModel):
+    """One artist a Track shows: as written, how the Track credits it, and who it is."""
+
+    written: str
+    role: Role
+    artist_id: str = Field(description="The Library's own id for the artist.")
+    linked: LinkedArtistOut | None = Field(description="The MusicBrainz artist, once linked.")
+
+
 class DetailsOut(BaseModel):
     """A Track's shown values, what each origin says, and what would show without the household.
 
@@ -93,6 +111,10 @@ class DetailsOut(BaseModel):
     kind: KindOut
     ai_answered_by: AnsweredByOut | None = Field(
         description="The AI model that last gave the `ai` values, as it was then; none if none."
+    )
+    artists: list[TrackArtistOut] = Field(description="The artists the Track shows, in order.")
+    artists_chosen: bool = Field(
+        description="Whether the household chose the Track's artists one by one."
     )
 
     @classmethod
@@ -111,6 +133,20 @@ class DetailsOut(BaseModel):
             else VideoTextOut(title=view.video_text.title, description=view.video_text.description),
             kind=KindOut(value=view.kind.kind, reason=view.kind.reason),
             ai_answered_by=AnsweredByOut.of(view.ai_answered_by),
+            artists=[
+                TrackArtistOut(
+                    written=each.written,
+                    role=each.role,
+                    artist_id=each.artist_id,
+                    linked=None
+                    if (linked := view.linked.get(each.artist_id)) is None
+                    else LinkedArtistOut(
+                        musicbrainz_id=linked.musicbrainz_id, name=linked.name, photo=linked.photo
+                    ),
+                )
+                for each in view.artists
+            ],
+            artists_chosen=view.artists_chosen,
         )
 
 
@@ -154,13 +190,24 @@ class HouseholdIn(BaseModel):
     )
 
 
+class CreditIn(BaseModel):
+    """One artist chosen for a song, as written, and how the song credits it."""
+
+    written: str = Field(max_length=MAX_TEXT)
+    role: Role
+
+
 class ManyIn(BaseModel):
-    """Household values to set on several Tracks; `null` drops one, so the next origin shows."""
+    """Household values to set on several Tracks; `null` drops one, so the next origin shows.
+
+    `artists` chooses one song's artists one by one, in place of `values.artist`.
+    """
 
     track_ids: Annotated[list[RowId], Field(min_length=1, max_length=10_000)]
     values: dict[str, DetailValue | None] = Field(
         examples=[{"album": "Re:Start", "album_artist": "wowaka"}]
     )
+    artists: Annotated[list[CreditIn], Field(max_length=MAX_CREDITS)] | None = None
 
 
 class ManyOut(BaseModel):
@@ -186,7 +233,11 @@ def put_details(
 @router.post("/details")
 def set_on_many(body: ManyIn, _: SignedInAccount, service: DetailsDep) -> ManyOut:
     """Set the given household values on every Track named; either all change or none."""
-    return ManyOut(changed=service.set_on_many(map(TrackId, body.track_ids), body.values))
+    artists = (
+        None if body.artists is None else [Credit(each.written, each.role) for each in body.artists]
+    )
+    changed = service.set_on_many(map(TrackId, body.track_ids), body.values, artists=artists)
+    return ManyOut(changed=changed)
 
 
 @router.post("/{track_id}/video-text")

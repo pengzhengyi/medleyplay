@@ -3,26 +3,31 @@
 An artist is the Library's own, under an id it keeps when it is linked to a MusicBrainz
 artist or unlinked. Each written name, folded, names one artist; names linked to one
 MusicBrainz artist name the same one. A name the household split is bound as each
-artist it lists, with how the song credits it. A Track's artists are bound again
-whenever its shown artist or album artist changes, and a name's Tracks whenever its
-link changes or it is split or kept.
+artist it lists, with how the song credits it; a song whose artists the household
+chose one by one is bound as those, while its artist is them written as one. A
+Track's artists are bound again whenever its shown artist or album artist changes,
+and a name's Tracks whenever its link changes or it is split or kept.
 """
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from medleyplay.domain.artist_split import Credit, Role, split_suggestion
+from medleyplay.domain.artist_split import Credit, Role, credited_as, split_suggestion
 from medleyplay.domain.artists import artist_key
 from medleyplay.domain.catalog import TrackId
 from medleyplay.persistence.schema import (
+    ArtistHouseholdRow,
     ArtistLinkRow,
     ArtistNameRow,
+    ArtistRow,
     LibraryArtistRow,
     NameSplitRow,
     TrackArtistRow,
+    TrackCreditsRow,
     TrackRow,
 )
 
@@ -60,6 +65,32 @@ def artists_of(db: Session, track_id: TrackId) -> TrackArtists:
     )
 
 
+@dataclass(frozen=True)
+class LinkedArtist:
+    """The MusicBrainz artist one of the Library's artists is, by its name and photo."""
+
+    musicbrainz_id: str
+    name: str
+    photo: str | None
+
+
+def linked_artists(db: Session, artist_ids: Iterable[str]) -> dict[str, LinkedArtist]:
+    """Return the MusicBrainz artist each of the Library's artists `artist_ids` is, if linked.
+
+    The household's photo of the artist shows in place of Wikidata's.
+    """
+    rows = db.execute(
+        select(LibraryArtistRow.id, ArtistRow, ArtistHouseholdRow.photo)
+        .join(ArtistRow, ArtistRow.id == LibraryArtistRow.musicbrainz_id)
+        .outerjoin(ArtistHouseholdRow, ArtistHouseholdRow.artist_id == ArtistRow.id)
+        .where(LibraryArtistRow.id.in_(list(artist_ids)))
+    )
+    return {
+        library_id: LinkedArtist(artist.id, artist.name, own_photo or artist.photo)
+        for library_id, artist, own_photo in rows
+    }
+
+
 def artist_names_of(db: Session, track_id: TrackId | None = None) -> dict[int, tuple[str, ...]]:
     """Return the artists each Track's artist names, as written, in order; or one Track's."""
     query = (
@@ -78,8 +109,14 @@ def artist_names_of(db: Session, track_id: TrackId | None = None) -> dict[int, t
 def bind(db: Session, track: TrackRow) -> None:
     """Bind the artist and album artist the Track shows, each to the artist its name names."""
     db.execute(delete(TrackArtistRow).where(TrackArtistRow.track_id == track.id))
+    chosen = chosen_credits(db, TrackId(track.id))
     for album_artist, shown in ((False, track.artist), (True, track.album_artist)):
-        for position, credit in enumerate(_credits(db, shown)):
+        credited = (
+            chosen
+            if not album_artist and chosen is not None and credited_as(chosen) == shown.strip()
+            else _credits(db, shown)
+        )
+        for position, credit in enumerate(credited):
             db.add(
                 TrackArtistRow(
                     track_id=track.id,
@@ -91,6 +128,19 @@ def bind(db: Session, track: TrackRow) -> None:
                 )
             )
     db.flush()
+
+
+def chosen_credits(db: Session, track_id: TrackId) -> tuple[Credit, ...] | None:
+    """Return the artists the household chose for the song one by one, if it did."""
+    row = db.get(TrackCreditsRow, track_id)
+    if row is None:
+        return None
+    return tuple(Credit(each["written"], Role(each["role"])) for each in row.credits)
+
+
+def chosen_tracks(db: Session) -> set[int]:
+    """Return the ids of the songs whose artists the household chose one by one."""
+    return set(db.scalars(select(TrackCreditsRow.track_id)))
 
 
 def rebind_written(db: Session, keys: set[str]) -> None:

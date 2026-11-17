@@ -120,6 +120,29 @@ export interface Details {
   readonly kind: { readonly value: Kind; readonly reason: KindReason };
   /** The AI model that last gave the `ai` values, as it was then; `null` if none has. */
   readonly ai_answered_by: AnsweredBy | null;
+  /** The artists the Track shows, in order, each with how it credits it and who it is. */
+  readonly artists: readonly TrackArtist[];
+  /** Whether the household chose the Track's artists one by one. */
+  readonly artists_chosen: boolean;
+}
+
+/** How a song credits an artist. */
+export type Role = "main" | "featured";
+
+/** One artist chosen for a song, as written, and how the song credits it. */
+export interface Credit {
+  readonly written: string;
+  readonly role: Role;
+}
+
+/** One artist a Track shows, and the MusicBrainz artist it is once linked. */
+export interface TrackArtist extends Credit {
+  readonly artist_id: string;
+  readonly linked: {
+    readonly musicbrainz_id: string;
+    readonly name: string;
+    readonly photo: string | null;
+  } | null;
 }
 
 /** The AI model that answered for a Track, the host it was asked at, and when. */
@@ -1107,10 +1130,17 @@ export const api = {
   track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
   details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),
   /** Set the household's values on the Tracks; `null` drops one. All change, or none. */
+  /** Set `values` on every Track; `artists` chooses one song's artists one by one instead. */
   setDetails: (
     trackIds: readonly number[],
     values: Partial<Record<Detail, string | number | null>>,
-  ) => call<{ changed: number }>("POST", "/api/tracks/details", { track_ids: trackIds, values }),
+    artists?: readonly Credit[],
+  ) =>
+    call<{ changed: number }>("POST", "/api/tracks/details", {
+      track_ids: trackIds,
+      values,
+      ...(artists === undefined ? {} : { artists }),
+    }),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
   artistNames: () => call<ArtistNames>("GET", "/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */

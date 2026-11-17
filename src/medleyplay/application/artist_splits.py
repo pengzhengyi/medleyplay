@@ -16,7 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.track_artists import rebind_written
+from medleyplay.application.track_artists import chosen_tracks, rebind_written
 from medleyplay.domain.artist_split import Credit, split_suggestion
 from medleyplay.domain.artists import artist_key
 from medleyplay.domain.errors import InvalidInputError
@@ -63,13 +63,20 @@ class ArtistSplitService:
         with self._units() as db:
             shown = db.execute(select(TrackRow.id, TrackRow.artist, TrackRow.album_artist)).all()
             decided = set(db.scalars(select(NameSplitRow.key)))
+            # A song whose artists were chosen one by one writes them as one name of ours.
+            chosen = chosen_tracks(db)
             linked = set(
                 db.scalars(select(ArtistLinkRow.key).where(ArtistLinkRow.artist_id.is_not(None)))
             )
         written: dict[str, Counter[str]] = {}
         songs: dict[str, set[int]] = {}
         for track_id, artist, album_artist in shown:
-            for name in {artist.strip(), album_artist.strip()} - {""}:
+            names = (
+                {album_artist.strip()}
+                if track_id in chosen
+                else {artist.strip(), album_artist.strip()}
+            )
+            for name in names - {""}:
                 key = artist_key(name)
                 if key not in decided:
                     written.setdefault(key, Counter())[name] += 1

@@ -5006,6 +5006,109 @@ dialog.modal::backdrop {
   padding-block: 0;
 }
 
+/* A label with a way to add to its box beside it, such as Artist's *Add artist*. */
+.detail-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.edit-details .detail-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+
+/* A song's artists, one chip each: main ones filled, featured ones dashed, as in Clean up. */
+.artist-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0 0 0.2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.artist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.15rem 0.2rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+}
+
+.artist-chip.featured {
+  border-color: var(--line);
+  border-style: dashed;
+  background: transparent;
+}
+
+.artist-chip-face {
+  display: grid;
+  overflow: hidden;
+  flex: none;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.artist-chip-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.artist-chip-name {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edit-details .artist-chip-role,
+.edit-details .artist-chip-remove {
+  display: inline-grid;
+  place-items: center;
+  width: auto;
+  height: 1.4rem;
+  margin: 0;
+  padding: 0 0.35rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+/* Not pressed, *+ feat.* is a way to credit the artist as featured, outlined as one. */
+.edit-details .artist-chip-role {
+  border: 1px dashed var(--line);
+}
+
+.edit-details .artist-chip-role:hover:not(:disabled, [aria-pressed="true"]),
+.edit-details .artist-chip-remove:hover:not(:disabled) {
+  background: var(--line);
+  color: inherit;
+}
+
+.edit-details .artist-chip-role[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .edit-details textarea.detail-input {
   height: auto;
   padding-block: 0.4rem;

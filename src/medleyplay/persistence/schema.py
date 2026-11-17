@@ -936,6 +936,22 @@ class TrackArtistRow(Base):
     """How the Track credits the artist: `main`, or `featured`."""
 
 
+class TrackCreditsRow(Base):
+    """The artists the household chose for one song, one by one, each `{"written", "role"}`.
+
+    They win over the decision for the name the song shows while that name is them
+    written as one; any other change to the song's artist forgets them.
+    """
+
+    __tablename__ = "track_credits"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    credits: Mapped[list[dict[str, str]]] = mapped_column(JSON)
+    chosen_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class NameSplitRow(Base):
     """What the household chose for an artist name written as several: split it, or keep it.
 

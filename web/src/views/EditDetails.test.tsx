@@ -12,6 +12,7 @@ import {
   albumCoversOf,
   detailsOf,
   serve,
+  trackArtistOf,
   trackOf,
 } from "../testing/server";
 import { EditDetails } from "./EditDetails";
@@ -993,5 +994,142 @@ describe("a song's album", () => {
     expect(within(dialog).getByRole("group", { name: "Album" })).toContainElement(
       box(dialog, "Album"),
     );
+  });
+});
+
+describe("a song's artists, one chip each", () => {
+  /** *ケビョウニンゲン*, whose video names スズム as its one artist. */
+  const ONE_ARTIST = detailsOf(7, {}, { video: { title: "ケビョウニンゲン", artist: "スズム" } });
+
+  /** The song showing スズム featuring GUMI, as the name it writes was split; GUMI linked. */
+  const SPLIT: Details = {
+    ...detailsOf(7, {}, { video: { title: "ケビョウニンゲン", artist: "スズム feat. GUMI" } }),
+    artists: [
+      trackArtistOf("スズム"),
+      trackArtistOf("GUMI", "featured", { musicbrainz_id: "gumi", name: "GUMI", photo: null }),
+    ],
+  };
+
+  const chips = (dialog: HTMLElement) =>
+    within(within(dialog).getByRole("list", { name: "Artists" }))
+      .getAllByRole("listitem")
+      .map((chip) => chip.textContent);
+
+  it("turns the artist into a chip and adds the next one typed", async () => {
+    const { dialog, onSave } = await renderDialog(ONE_ARTIST);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add artist" }));
+    await userEvent.type(box(dialog, "Artists"), "GUMI{Enter}");
+    const added = chips(dialog);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(added).toEqual([expect.stringContaining("スズム"), expect.stringContaining("GUMI")]);
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({}, [
+        { written: "スズム", role: "main" },
+        { written: "GUMI", role: "main" },
+      ]);
+    });
+  });
+
+  it("credits an artist as featured in its place", async () => {
+    const { dialog, onSave } = await renderDialog(ONE_ARTIST);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add artist" }));
+    await userEvent.type(box(dialog, "Artists"), "GUMI{Enter}");
+
+    const featured = within(dialog).getByRole("button", { name: "GUMI, featured" });
+    await userEvent.click(featured);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(featured).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({}, [
+        { written: "スズム", role: "main" },
+        { written: "GUMI", role: "featured" },
+      ]);
+    });
+  });
+
+  it("shows the artists a song shows as chips, saving nothing while they stay", async () => {
+    const { dialog } = await renderDialog(SPLIT);
+
+    expect(chips(dialog)).toEqual([
+      expect.stringContaining("not linked"),
+      expect.stringContaining("linked to GUMI"),
+    ]);
+    expect(within(dialog).getByRole("button", { name: "GUMI, featured" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("puts the one main artist left back in the box, focused, saying who went", async () => {
+    const { dialog, onSave } = await renderDialog(SPLIT);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove GUMI" }));
+    const listed = within(dialog).queryByRole("list", { name: "Artists" });
+    const focused = box(dialog, "Artist");
+    await waitFor(() => {
+      expect(focused).toHaveFocus();
+    });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(listed).toBeNull();
+    expect(within(dialog).getByText("Removed GUMI")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({ artist: "スズム" });
+    });
+  });
+
+  it("makes the artist left main once the last main one is removed", async () => {
+    const { dialog, onSave } = await renderDialog(SPLIT);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove スズム" }));
+    const left = (box(dialog, "Artist") as HTMLInputElement).value;
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(left).toBe("GUMI");
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({ artist: "GUMI" });
+    });
+  });
+
+  it("adds no chip with Enter while a word is being composed", async () => {
+    const { dialog } = await renderDialog(SPLIT);
+    const adding = box(dialog, "Artists");
+    await userEvent.type(adding, "初音ミク");
+
+    fireEvent.keyDown(adding, { key: "Enter", isComposing: true });
+
+    expect(chips(dialog)).toHaveLength(2);
+    expect(adding).toHaveValue("初音ミク");
+  });
+
+  it("uses another origin's artist in place of the chips", async () => {
+    const { dialog, onSave } = await renderDialog({
+      ...SPLIT,
+      origins: { ...SPLIT.origins, file_name: { title: "x", artist: "DECO*27" } },
+    });
+
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Use “DECO*27”, from the file's name" }),
+    );
+    const listed = within(dialog).queryByRole("list", { name: "Artists" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(listed).toBeNull();
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({ artist: "DECO*27" });
+    });
+  });
+
+  it("offers no chips for a file split into songs, which takes its artists from them", async () => {
+    const { dialog } = await renderDialog({
+      ...ONE_ARTIST,
+      kind: { value: "album", reason: "split" },
+    });
+
+    expect(within(dialog).queryByRole("button", { name: "Add artist" })).toBeNull();
   });
 });

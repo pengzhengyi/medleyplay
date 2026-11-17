@@ -8,6 +8,7 @@ import {
   type AddedPart,
   api,
   ApiError,
+  type Credit,
   type Detail,
   type Details,
   type EnricherMode,
@@ -110,6 +111,7 @@ export interface Library {
   readonly saveDetails: (
     id: number,
     changes: Partial<Record<Detail, string | number | null>>,
+    artists?: readonly Credit[],
   ) => Promise<void>;
   /**
    * Read a video's pasted text as the Track's `video` values; the Track then shows the
@@ -589,8 +591,8 @@ export function useLibrary(onSignedOut: () => void): Library {
       setError("");
       write(id, "rating", rating, api.setRating(id, rating));
     },
-    saveDetails: async (id, changes) => {
-      await changeDetails(id, api.setDetails([id], changes));
+    saveDetails: async (id, changes, artists) => {
+      await changeDetails(id, api.setDetails([id], changes, artists));
     },
     readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
     setCover: (id, image) => changeDetails(id, api.setCover(id, image)),

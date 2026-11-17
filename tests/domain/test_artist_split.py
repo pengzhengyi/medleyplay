@@ -2,7 +2,7 @@
 
 import pytest
 
-from medleyplay.domain.artist_split import Credit, Role, split_suggestion
+from medleyplay.domain.artist_split import Credit, Role, credited_as, split_suggestion
 
 
 def _main(*names: str) -> tuple[Credit, ...]:
@@ -69,3 +69,28 @@ def test_an_artist_featuring_others_is_offered_as_its_main_artists_and_the_featu
 )
 def test_a_name_naming_one_artist_or_no_one_is_not_offered(written: str) -> None:
     assert split_suggestion(written) is None
+
+
+@pytest.mark.parametrize(
+    ("credited", "shown"),
+    [
+        (_main("GUMI"), "GUMI"),
+        (_main("GUMI", "MAYU"), "GUMI & MAYU"),
+        (_main("周杰伦", "费玉清", "蔡依林"), "周杰伦, 费玉清 & 蔡依林"),
+        ((*_main("スズム"), *_featured("GUMI")), "スズム feat. GUMI"),
+        (
+            (*_main("DECO*27", "ピノキオピー"), *_featured("初音ミク", "GUMI")),
+            "DECO*27 & ピノキオピー feat. 初音ミク & GUMI",
+        ),
+    ],
+)
+def test_the_artists_chosen_for_a_song_are_shown_as_one_name(
+    credited: tuple[Credit, ...], shown: str
+) -> None:
+    assert credited_as(credited) == shown
+
+
+def test_featured_artists_are_shown_after_the_main_ones_whatever_their_order() -> None:
+    credited = (Credit("GUMI", Role.FEATURED), Credit("スズム", Role.MAIN))
+
+    assert credited_as(credited) == "スズム feat. GUMI"

@@ -34,6 +34,7 @@ from medleyplay.domain.enrichers import (
 )
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
 from medleyplay.domain.links import BILIBILI_SOURCE
+from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.video_text import VideoText
 from medleyplay.persistence.schema import (
     EnricherAskRow,
@@ -91,8 +92,9 @@ def candidates(
         # A song is looked up by its own words and length, a song inside a longer file too.
         words = _words(db, ids)
         lengths = _lengths(db, ids)
+        sites = read_settings(db).lyrics_sites
         subjects = {
-            track_id: _lyrics_key(words, track_id, lengths.get(track_id)) for track_id in ids
+            track_id: _lyrics_key(words, track_id, lengths.get(track_id), sites) for track_id in ids
         }
         videos = dict.fromkeys(ids)
         came_from = {}
@@ -146,11 +148,14 @@ def _key(words: dict[TrackId, OriginValues], track_id: TrackId, *, whole_album: 
 
 
 def _lyrics_key(
-    words: dict[TrackId, OriginValues], track_id: TrackId, duration_ms: int | None
+    words: dict[TrackId, OriginValues],
+    track_id: TrackId,
+    duration_ms: int | None,
+    sites: tuple[LyricsSite, ...],
 ) -> str | None:
-    """Return the subject a song's lyrics are looked up by: its words and its length."""
+    """Return the subject a song's lyrics are looked up by: its words, length, and the sites."""
     terms = search_terms(words.get(track_id, {}), whole_album=False)
-    return None if terms is None else lyrics_subject(terms, track_id, duration_ms)
+    return None if terms is None else lyrics_subject(terms, track_id, duration_ms, sites)
 
 
 def _lengths(db: Session, ids: set[TrackId]) -> dict[TrackId, int]:

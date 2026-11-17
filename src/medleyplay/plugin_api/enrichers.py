@@ -124,6 +124,13 @@ class AiFailure(_Model):
     status: Annotated[int, Field(ge=100, le=599)] | None = None
 
 
+class LyricsProvider(StrEnum):
+    """A site that answers the lyrics of a song."""
+
+    LRCLIB = "lrclib"
+    NETEASE = "netease"
+
+
 class EnrichTrack(_Model):
     """Ask what the site knows about a Track.
 
@@ -138,7 +145,8 @@ class EnrichTrack(_Model):
     proxy for the site, or `None`. `text` is the Track's video text, for an enricher
     that reads it, and `ai` the providers an enricher that asks an AI model asks, the
     first first, each next one when the one before fails. `hint` is a note the listener
-    added when asking the AI, on one line, or empty.
+    added when asking the AI, on one line, or empty. `lyrics_sites` are the sites the
+    household turned on to be asked for lyrics after an enricher's own, in order.
     """
 
     video: VideoId | None = None
@@ -153,6 +161,7 @@ class EnrichTrack(_Model):
         default=(), repr=False
     )
     hint: Annotated[str, StringConstraints(max_length=MAX_HINT)] = Field(default="", repr=False)
+    lyrics_sites: Annotated[tuple[LyricsProvider, ...], Field(max_length=4)] = ()
 
 
 class EnrichStatus(StrEnum):
@@ -196,12 +205,6 @@ class CommunityRating(_Model):
 
 MAX_LYRICS: Final = 64 * 1024
 """The most characters lyrics may hold."""
-
-
-class LyricsProvider(StrEnum):
-    """A site that answers the lyrics of a song."""
-
-    LRCLIB = "lrclib"
 
 
 class FoundLyrics(_Model):

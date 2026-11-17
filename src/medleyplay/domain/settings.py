@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from medleyplay.domain.lyrics import LyricsSite
+
 ALBUM_MINUTES: Final = 20
 """How long a file must be, by default, to be guessed an album."""
 
@@ -35,13 +37,15 @@ class Settings:
     `None` for no limit, so nothing is removed. A file no origin names the kind
     of is guessed an album when it is `album_minutes` long or longer; `None`
     guesses none, so it is a song. `split_albums` says what becomes of a long
-    file a song list was found for.
+    file a song list was found for. `lyrics_sites` are the sites asked for a song's
+    lyrics, in turn, when LRCLIB has none.
     """
 
     storage_limit: int | None = None
     removal_order: RemovalOrder = RemovalOrder.LEAST_FAVORITE
     album_minutes: int | None = ALBUM_MINUTES
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
+    lyrics_sites: tuple[LyricsSite, ...] = ()
     revision: int = 0
 
     @property

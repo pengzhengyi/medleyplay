@@ -127,7 +127,10 @@ export interface Details {
 }
 
 /** Where a song's lyrics came from: the first held of each shows. */
-export type LyricsOrigin = "household" | "sidecar" | "tag" | "lrclib";
+export type LyricsOrigin = "household" | "sidecar" | "tag" | "lrclib" | "netease";
+
+/** A site the household may turn on to be asked for the lyrics LRCLIB lacks. */
+export type LyricsSite = "netease";
 
 /** A word of a line of lyrics, and when it is sung, in milliseconds. */
 export interface LyricWord {
@@ -587,6 +590,8 @@ export interface Settings {
   readonly album_minutes: number | null;
   /** What becomes of a long file a song list was found for. */
   readonly split_albums: SplitAlbums;
+  /** The sites asked for a song's lyrics, in turn, when LRCLIB has none. */
+  readonly lyrics_sites: readonly LyricsSite[];
   readonly revision: number;
 }
 

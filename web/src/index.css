@@ -1675,6 +1675,20 @@ button[aria-disabled="true"] {
   margin: 0;
 }
 
+/* Lyrics sites: a switch for each site asked after LRCLIB, what it sends beneath it. */
+.lyrics-sites {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1.2rem 0 0;
+}
+
+.lyrics-sites-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
 /* Split albums: each choice on its line, what it does beneath its name. */
 .split-albums {
   display: grid;

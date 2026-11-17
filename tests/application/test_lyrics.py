@@ -13,14 +13,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.segments import SongsService
+from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Origin
 from medleyplay.domain.enrichers import LYRICS, EnricherMode
 from medleyplay.domain.errors import ConflictError, InvalidInputError
 from medleyplay.domain.jobs import JobState, JobView
-from medleyplay.domain.lyrics import Line, LyricsOrigin
+from medleyplay.domain.lyrics import Line, LyricsOrigin, LyricsSite
 from medleyplay.domain.segments import SongRow
+from medleyplay.domain.settings import Settings
 from medleyplay.domain.video_text import Song
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
@@ -103,6 +105,22 @@ def test_a_song_whose_lyrics_were_not_found_is_looked_up_again_a_month_later(
 
     assert _looked_up(enriching, alice, song).job.state is JobState.SUCCEEDED
     assert enriching.lyrics.lyrics(song) is None
+
+
+def test_a_song_lrclib_lacks_is_looked_up_on_netease_at_once_when_it_is_turned_on(
+    enriching: Enriching, alice: Account
+) -> None:
+    song = enriching.add_song("Elsewhere")
+    _looked_up(enriching, alice, song)
+    settings = SettingsService(enriching.units, enriching.clock)
+
+    settings.put(alice, Settings(lyrics_sites=(LyricsSite.NETEASE,)))
+    _looked_up(enriching, alice, song)
+
+    shown = enriching.lyrics.lyrics(song)
+    assert shown is not None
+    assert shown.origin is LyricsOrigin.NETEASE
+    assert shown.lyrics.lines[0] == Line(1_000, "Elsewhere")
 
 
 def test_lyrics_found_before_are_looked_up_again_when_asked(

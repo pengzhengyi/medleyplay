@@ -17,6 +17,7 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "removal_order": "least_favorite",
         "album_minutes": 20,
         "split_albums": "approval",
+        "lyrics_sites": [],
         "revision": 0,
     }
 
@@ -109,6 +110,30 @@ def test_what_becomes_of_long_files_is_one_of_three_choices(client: TestClient) 
 
     refused = client.put(
         "/api/settings", json={"storage_limit": None, "split_albums": "always", "revision": 0}
+    )
+
+    assert refused.status_code == 422
+
+
+def test_an_admin_turns_on_netease_for_lyrics_and_saving_without_it_keeps_it_on(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    turned_on = client.put(
+        "/api/settings", json={"storage_limit": None, "lyrics_sites": ["netease"], "revision": 0}
+    )
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert turned_on.json()["lyrics_sites"] == ["netease"]
+    assert saved.json()["lyrics_sites"] == ["netease"]
+
+
+def test_an_unknown_lyrics_site_is_refused(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    refused = client.put(
+        "/api/settings", json={"storage_limit": None, "lyrics_sites": ["qq"], "revision": 0}
     )
 
     assert refused.status_code == 422

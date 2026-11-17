@@ -22,6 +22,7 @@ from medleyplay.plugin_api import (
     EnrichStatus,
     EnrichTrack,
     FoundLyrics,
+    LyricsProvider,
     ShownDetail,
     SuggestedSong,
     VideoId,
@@ -45,7 +46,8 @@ class EnrichJob(_Model):
     for. `video` is the Track's video, when the enricher reads videos. `shown` is what
     the Track showed when the Job was queued, and `whole_album` says it is a whole album,
     by its Kind. `text` is the Track's video text, when the enricher reads it, and
-    `hint` a note the listener added when asking the AI again.
+    `hint` a note the listener added when asking the AI again. `lyrics_sites` are the
+    sites the household turned on to be asked for lyrics after LRCLIB.
     """
 
     enricher: str
@@ -57,6 +59,7 @@ class EnrichJob(_Model):
     whole_album: bool = False
     text: VideoText | None = None
     hint: str = ""
+    lyrics_sites: tuple[LyricsProvider, ...] = ()
 
 
 class EnrichedTrack(_Model):
@@ -97,6 +100,7 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
             text=request.text,
             ai=context.ai,
             hint=request.hint,
+            lyrics_sites=request.lyrics_sites,
         ),
     )
     if answer.status is EnrichStatus.REFUSED:

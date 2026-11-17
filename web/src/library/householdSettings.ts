@@ -34,7 +34,8 @@ export async function saveChange(held: Settings, change: SettingsChange): Promis
   }
   const now = await api.settings();
   const fields = Object.keys(change) as (keyof SettingsChange)[];
-  if (fields.some((field) => now[field] !== held[field])) {
+  // A field may be a list, read anew each time, so fields are compared by value.
+  if (fields.some((field) => JSON.stringify(now[field]) !== JSON.stringify(held[field]))) {
     return { outcome: "conflict", settings: now };
   }
   const again = await saveOver(now, change);

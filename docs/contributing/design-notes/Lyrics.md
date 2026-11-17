@@ -1,10 +1,10 @@
 # Lyrics
 
 > [!NOTE]
-> **Status: in part built.** Lyrics are kept per song and source, read from the
+> **Status: built.** Lyrics are kept per song and source, read from the
 > files, looked up on LRCLIB as songs come up, read and written through the API, and
 > shown while a song plays, and edited and synced in Edit details, as this note
-> says. Other sites are planned.
+> says, and looked up on NetEase Cloud Music once the household turns it on.
 
 ## Contents
 
@@ -13,11 +13,11 @@
 - [Reading lyrics](#reading-lyrics)
 - [Lyrics from the files](#lyrics-from-the-files)
 - [Looking lyrics up on LRCLIB](#looking-lyrics-up-on-lrclib)
+- [Looking lyrics up on NetEase](#looking-lyrics-up-on-netease)
 - [What the API shows](#what-the-api-shows)
 - [Showing them](#showing-them)
 - [Editing them](#editing-them)
 - [Testing](#testing)
-- [Planned](#planned)
 
 ## What it offers
 
@@ -37,6 +37,7 @@ as the source gave them, and the first held shows:
 | A `.lrc` file beside the audio, named as it is | `sidecar` | Built |
 | The audio's tags (ID3 USLT or SYLT, Vorbis LYRICS, MP4 ©lyr) | `tag` | Built |
 | LRCLIB, an open lyrics database | `lrclib` | Built |
+| NetEase Cloud Music, once turned on, for a song LRCLIB lacks | `netease` | Built |
 
 - **Instrumental is an answer:** a source may say a song has no lyrics, which shows
   as such and is kept as lyrics are.
@@ -108,6 +109,30 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
   title, artist, album, or length changes; one whose lyrics were found, only when
   someone asks again.
 
+## Looking lyrics up on NetEase
+
+- **Off until an admin turns it on:** Settings → Lyrics → *Also look on NetEase Cloud
+  Music* saves `lyrics_sites: ["netease"]` in the household's settings. The `lyrics`
+  enricher then asks NetEase for a song LRCLIB has no lyrics for, in the same Job; a
+  refusal or failure from LRCLIB answers without asking NetEase.
+- **Turning it on asks again:** the sites turned on are part of what a song is looked
+  up by, so a song LRCLIB didn't know is looked up again at once, rather than a month
+  later. With none turned on, a song is looked up by what it was before.
+- **Only its plain endpoints:** NetEase offers no public API. medleyplay asks
+  `GET /api/search/get` by title and artist, then `GET /api/song/lyric` by the id
+  found, as itself, with the User-Agent it sends LRCLIB; nothing copies the signing or
+  encryption NetEase's own apps use, and no header pretends to be a browser.
+- **Which result:** the first with the song's title, compared without case or width,
+  within two seconds of its length; of no known length, the first with its title and
+  one of its artists.
+- **What is kept:** the timed lyrics, a translation NetEase holds after them, each line
+  at the time of the line it translates, or that the song is instrumental. Lyrics too
+  long with their translation are kept without it.
+- **Politely:** one request a second at most, a timeout on each. A 403, or the code
+  NetEase answers a request it takes for a bot's, is a refusal, which stops the
+  enricher until an admin resets it; a busy answer fails the lookup without asking
+  again.
+
 ## What the API shows
 
 | Route | Who | Does |
@@ -116,6 +141,7 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
 | `PUT /api/tracks/{id}/lyrics` | Signed in | The household's lyrics, `{text}` (LRC or plain) or `{instrumental: true}`; 422 for empty text |
 | `DELETE /api/tracks/{id}/lyrics` | Signed in | Drops the household's, answering what shows now |
 | `POST /api/enrichers/lyrics/tracks/{id}` | Signed in | Looks the song up now; `?again` for one found before |
+| `PUT /api/settings` | Admin | `lyrics_sites`, the sites asked after LRCLIB: `[]` or `["netease"]`; left out, they stay as saved |
 
 ## Showing them
 
@@ -182,9 +208,10 @@ the song shows, as their source gave them, and says where they came from.
 - **LRCLIB:** the client over a fake transport: what is asked, the search when the
   first ask finds nothing, the two-second window, the User-Agent, waiting out 429,
   503 too long, 403, 400, and an answer of another shape. No test contacts LRCLIB.
-
-## Planned
-
-- **Other sites:** more providers, such as NetEase, each turned on in Settings and
-  asked after LRCLIB. NetEase offers no public API, so only its plain endpoints are
-  used, never anything that copies its request signing.
+- **NetEase:** the client over a fake transport: plain GETs naming medleyplay, a
+  second apart; the result taken by title and length, or title and artist; none
+  found, none held, an instrumental three ways, a translation, lyrics too long with
+  it and without it; a refusal by status and by code, busy answers, and answers of
+  another shape. NetEase asked only when turned on and LRCLIB has none, and a song
+  LRCLIB lacked looked up again at once when it is turned on. No test contacts
+  NetEase.

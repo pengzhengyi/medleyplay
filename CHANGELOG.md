@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Lyrics from NetEase Cloud Music** — Settings → Lyrics → *Also look on NetEase
+  Cloud Music* asks NetEase for the songs LRCLIB has no lyrics for, translations
+  included, and looks those songs up again at once. Off by default; only NetEase's
+  plain endpoints are used. New: the `lyrics_sites` setting.
+
 - **Edit and sync a song's lyrics** — *Lyrics* in a song's *Edit details* edits them
   as LRC or plain text, or marks the song instrumental. *Sync to the song* plays it
   and stamps each line as Space is pressed; a line's time plays from there, and a

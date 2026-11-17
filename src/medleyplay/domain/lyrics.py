@@ -41,11 +41,19 @@ class LyricsOrigin(StrEnum):
     """The audio file's own tags."""
     LRCLIB = "lrclib"
     """LRCLIB, the open lyrics database at lrclib.net."""
+    NETEASE = "netease"
+    """NetEase Cloud Music, asked when LRCLIB has none and the household turned it on."""
 
     @property
     def local(self) -> bool:
         """Whether the household or its files gave them, so no site's replace them."""
         return self in {LyricsOrigin.HOUSEHOLD, LyricsOrigin.SIDECAR, LyricsOrigin.TAG}
+
+
+class LyricsSite(StrEnum):
+    """A site the household may turn on to be asked for lyrics LRCLIB doesn't have."""
+
+    NETEASE = "netease"
 
 
 @dataclass(frozen=True)

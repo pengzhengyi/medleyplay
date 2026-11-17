@@ -61,6 +61,7 @@ For `lyrics`, the title the song shows says how it answers:
 | Title | Answers |
 | --- | --- |
 | `Nowhere` | no lyrics |
+| `Elsewhere` | none, but `lyrics_of(title)` from NetEase once the household turns it on |
 | `Instrumental` | an instrumental, with no lyrics |
 | `Plain` | plain lyrics, not timed |
 | `Refused` | refused |
@@ -596,6 +597,8 @@ class Lyricist:
         match title:
             case "Nowhere":
                 return Enriched()
+            case "Elsewhere" if LyricsProvider.NETEASE not in request.lyrics_sites:
+                return Enriched()
             case "Instrumental":
                 return Enriched(
                     lyrics=FoundLyrics(provider=LyricsProvider.LRCLIB, instrumental=True)
@@ -609,7 +612,8 @@ class Lyricist:
             case "Down":
                 message = "LRCLIB couldn't be reached."
                 raise NetworkError(message)
-        return Enriched(lyrics=FoundLyrics(provider=LyricsProvider.LRCLIB, text=lyrics_of(title)))
+        site = LyricsProvider.NETEASE if title == "Elsewhere" else LyricsProvider.LRCLIB
+        return Enriched(lyrics=FoundLyrics(provider=site, text=lyrics_of(title)))
 
 
 def register(registry: Registry) -> None:

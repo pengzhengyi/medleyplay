@@ -37,6 +37,7 @@ from medleyplay.domain.details import Field, Origin, Values, shown
 from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
 from medleyplay.domain.links import BILIBILI_SOURCE, CODE_LINK, parse_part_locator, part_link
+from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.video_text import VideoText
 
 ASK_AGAIN_AFTER: Final = timedelta(hours=24)
@@ -142,7 +143,7 @@ LYRICS: Final = Enricher(
     subject=Subject.LYRICS,
     spacing=timedelta(seconds=1),
     site=None,
-    source="LRCLIB",
+    source="a lyrics site",
     ask_again_after=timedelta(days=30),
     default_mode=EnricherMode.NEXT,
     # Every song at once would ask a free service about the whole Library.
@@ -301,12 +302,21 @@ class TrackFacts:
     """Which lyrics the song has already."""
 
 
-def lyrics_subject(terms: SearchTerms, track_id: TrackId, duration_ms: int | None) -> str:
+def lyrics_subject(
+    terms: SearchTerms,
+    track_id: TrackId,
+    duration_ms: int | None,
+    sites: tuple[LyricsSite, ...] = (),
+) -> str:
     """Return the subject that says a song's lyrics were looked up by these words and length.
 
-    A song whose words or length change, as a corrected title, is a new subject.
+    A song whose words or length change, as a corrected title, is a new subject, and so
+    is one asked of other `sites` after LRCLIB, as when the household turns one on.
     """
-    return hashlib.sha256(f"lyrics\x1f{terms.key(track_id)}\x1f{duration_ms}".encode()).hexdigest()
+    said = f"lyrics\x1f{terms.key(track_id)}\x1f{duration_ms}"
+    if sites:
+        said += "\x1f" + ",".join(sites)
+    return hashlib.sha256(said.encode()).hexdigest()
 
 
 def text_subject(track_id: TrackId, text: VideoText) -> str:

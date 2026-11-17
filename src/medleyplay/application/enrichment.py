@@ -31,6 +31,7 @@ from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.lyrics import lyrics_held, record_lyrics
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
+from medleyplay.application.settings import read_settings
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.ai import (
     ProviderFailed,
@@ -64,7 +65,7 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.jobs import Job, JobId, JobState
-from medleyplay.domain.lyrics import LyricsOrigin
+from medleyplay.domain.lyrics import LyricsOrigin, LyricsSite
 from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import (
     CommunityRatingRow,
@@ -79,6 +80,7 @@ from medleyplay.plugin_api import (
     TRACK_ENRICHER,
     CommunityRating,
     FoundLyrics,
+    LyricsProvider,
     RatedAs,
     ShownDetail,
 )
@@ -459,6 +461,7 @@ class EnrichmentService:
             duration_ms = db.scalar(select(TrackRow.duration_ms).where(TrackRow.id == track_id))
             set_up = is_set_up(db)
             text = details.video_text_of(db, track_id) if enricher.uses_ai else None
+            sites = read_settings(db).lyrics_sites if enricher.subject is Subject.LYRICS else ()
         reason = why_not(
             found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up, again=again
         )
@@ -469,7 +472,7 @@ class EnrichmentService:
         return self._jobs.submit(
             self._kind,
             enrich_target(track_id, enricher.name),
-            _request(enricher, found, shown_now, duration_ms, text, hint),
+            _request(enricher, found, shown_now, duration_ms, text, hint, sites),
             requested_by,
         )
 
@@ -566,6 +569,7 @@ def _request(
     duration_ms: int | None,
     text: VideoText | None,
     hint: str = "",
+    sites: tuple[LyricsSite, ...] = (),
 ) -> EnrichJob:
     subject = found.facts.subject
     if subject is None:  # pragma: no cover -- an eligible Track has something to ask about
@@ -583,6 +587,7 @@ def _request(
         whole_album=found.whole_album,
         text=None if text is None else _asked_text(text),
         hint=hint,
+        lyrics_sites=tuple(LyricsProvider(site.value) for site in sites),
     )
 
 

@@ -25,6 +25,7 @@ from medleyplay.persistence.schema import (
     AlbumCoverSearchRow,
     ArtistHouseholdRow,
     ArtistRow,
+    ImageLinksRow,
     TrackValueRow,
 )
 
@@ -121,7 +122,8 @@ class CoverService:
         """Remove every file in the covers folder that no value, artist's photo, or album names.
 
         An artist's photo is the one Wikidata gave, or the household's own; an album's
-        covers are those found for it, to choose from.
+        covers are those found for it, to choose from, and a picture fetched from a link
+        a model suggested is kept while that link stands.
         """
         if not self._folder.is_dir():
             return
@@ -141,6 +143,12 @@ class CoverService:
                 str(each["cover"])
                 for covers in db.scalars(select(AlbumCoverSearchRow.covers))
                 for each in covers
+            )
+            named.update(
+                str(each["cover"])
+                for links in db.scalars(select(ImageLinksRow.links))
+                for each in links
+                if each.get("cover")
             )
         for file in self._folder.iterdir():
             if file.name not in named:

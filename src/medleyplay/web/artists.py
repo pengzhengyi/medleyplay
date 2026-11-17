@@ -297,6 +297,20 @@ async def set_photo(
     await run_in_threadpool(service.set_photo, artist_id, bytes(data))
 
 
+class PhotoCoverIn(BaseModel):
+    """A cover already kept, such as an image fetched from a link a model suggested."""
+
+    cover: str = Field(min_length=64, max_length=64)
+
+
+@artists_router.post("/{artist_id}/photo/cover", status_code=status.HTTP_204_NO_CONTENT)
+def use_photo(
+    artist_id: _ArtistId, body: PhotoCoverIn, _: SignedInAccount, service: ArtistsDep
+) -> None:
+    """Make a cover already kept the household's photo of the artist."""
+    service.use_photo(artist_id, body.cover)
+
+
 @artists_router.delete("/{artist_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
 def remove_photo(artist_id: _ArtistId, _: SignedInAccount, service: ArtistsDep) -> None:
     """Drop the household's photo of the artist, so Wikidata's shows again."""

@@ -8031,6 +8031,61 @@ button.playing-kind[aria-expanded="true"] {
   object-fit: cover;
 }
 
+/* A picture an AI model suggests: shown from its site, then approved to download. */
+.cover-finder .image-link {
+  cursor: default;
+}
+
+/* The tile isn't a button: only its Approve is. */
+.cover-finder .image-link:hover:not(:disabled) {
+  border-color: transparent;
+}
+
+.image-link-picture {
+  position: relative;
+  display: grid;
+}
+
+.image-link-picture .cover-saving {
+  border-radius: 0.5rem;
+}
+
+.image-link-missing {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px dashed var(--line);
+  border-radius: 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.cover-finder .image-link-site {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.image-link-host {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cover-finder .image-link-site .image-link-page {
+  color: inherit;
+}
+
+.cover-finder .image-link-use {
+  width: 100%;
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+}
+
 .cover-choice-about {
   display: -webkit-box;
   overflow: hidden;

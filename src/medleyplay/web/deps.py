@@ -16,6 +16,7 @@ from medleyplay.application.details import DetailsService
 from medleyplay.application.devices import DeviceService
 from medleyplay.application.enrichment import EnrichmentService
 from medleyplay.application.events import Events
+from medleyplay.application.image_links import ImageLinkService
 from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
 from medleyplay.application.linked_accounts import LinkedAccountService
@@ -75,6 +76,7 @@ class Services:
     artists: ArtistService
     artist_splits: ArtistSplitService
     album_covers: AlbumCoverService
+    image_links: ImageLinkService
 
 
 def services_of(request: Request) -> Services:
@@ -166,6 +168,10 @@ def _album_covers(services: Annotated[Services, Depends(_services)]) -> AlbumCov
     return services.album_covers
 
 
+def _image_links(services: Annotated[Services, Depends(_services)]) -> ImageLinkService:
+    return services.image_links
+
+
 def _mode(services: Annotated[Services, Depends(_services)]) -> ModeService:
     return services.mode
 
@@ -226,6 +232,7 @@ ArtistsDep = Annotated[ArtistService, Depends(_artists)]
 ArtistSplitsDep = Annotated[ArtistSplitService, Depends(_artist_splits)]
 SplitOffersDep = Annotated[SplitOfferService, Depends(_split_offers)]
 AlbumCoversDep = Annotated[AlbumCoverService, Depends(_album_covers)]
+ImageLinksDep = Annotated[ImageLinkService, Depends(_image_links)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]

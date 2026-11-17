@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pictures an AI suggests for a cover or an artist's photo** — *Suggested by AI*,
+  under *Find covers* and in *Edit artist*, shows the pictures a model names, each
+  previewed from its own site; nothing is downloaded until *Approve*, which has the
+  server fetch it from a public HTTPS site (at most 10 MiB, a JPEG, PNG, or WebP
+  image) and use it as the album's cover or the artist's photo. New:
+  `GET /api/image-links/album` and `/artist/{id}`, their `suggest` and `approve`,
+  and `POST /api/artists/{id}/photo/cover`; the Jobs `suggest_images` and
+  `fetch_image`; and `fetch_public_image` in the plugin API.
+
 - **`bilibili:` in the search box** — typing it chooses Bilibili to search, as
   its toggle does, keeping what follows it; it is listed with the tags, and
   Backspace in the empty box goes back to the Library.

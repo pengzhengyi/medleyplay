@@ -5,7 +5,9 @@
  * The name and the note are saved together; a photo is set or removed at once, as a
  * song's cover is. An empty name shows the artist as most of its songs write it, and
  * removing the household's photo shows Wikidata's again. An AI model may be asked to
- * suggest a name and a note; each suggestion shows beside its field, to use or not.
+ * suggest a name and a note; each suggestion shows beside its field, to use or not. It
+ * may also be asked for pictures of the artist on the web, one of which, approved, is
+ * downloaded and becomes its photo.
  */
 
 import {
@@ -29,6 +31,7 @@ import { initialOf } from "../format";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
+import { ImageLinks } from "./ImageLinks";
 import { MAX_COVER_BYTES } from "./EditDetails";
 import { Modal } from "./Modal";
 
@@ -394,6 +397,12 @@ export function EditArtist({
             )}
           </div>
         </div>
+        <ImageLinks
+          pictured={{ kind: "artist", artistId: artist.id }}
+          shown={artist.photo}
+          busy={busy}
+          onUse={(cover) => void changePhoto(() => api.useArtistPhotoCover(artist.id, cover))}
+        />
         {error !== "" && (
           <p className="error" role="alert">
             {error}

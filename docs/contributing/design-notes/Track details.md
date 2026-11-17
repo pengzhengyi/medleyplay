@@ -334,6 +334,44 @@ MusicBrainz knows, to choose one. Nothing changes until one is chosen.
   `POST /api/album-covers/choose`, with `{album, artist}`, ask MusicBrainz and an
   AI model, answering 202.
 
+### Pictures an AI model names
+
+*Suggested by AI*, under the covers from MusicBrainz and under an artist's photo in
+*Edit artist*, shows the pictures an AI model names for the album's cover or for a
+photo of the artist, each from its own site. Nothing is downloaded until one is
+approved.
+
+- **Asked only when someone chooses *Ask AI*,** with an AI set up and the
+  `ai-details` plugin on: a Job in the AI's lane shows a model the album, its
+  artist, and a few of its songs, or the artist's name, and it answers with at
+  most 6 links to images, each with the page that shows it and why. Asking again
+  replaces what it named.
+- **Only links to public sites:** a link must be HTTPS on port 443 to a named host,
+  never an address, a `user@`, or a name like `*.local` or `*.internal`, at most
+  2,048 characters; a host whose name leads to any address that isn't public is
+  dropped before the links are kept. So the preview never points into the
+  household's network.
+- **Previewed by the browser,** as any web page would show the image, without a
+  referrer. A picture that won't load shows *Unavailable* and can't be approved.
+- **Approved, the server downloads it** in a Job of its own lane (`web-images`), as
+  far apart as the AI's requests, Online only. The fetch, in the plugin API so
+  every plugin shares it, checks each address the host leads to and connects to
+  that one, so a name that changes its answer can't lead elsewhere; follows at most
+  3 redirects, each checked again; and reads at most 10 MiB within 45 seconds.
+  Only a JPEG, PNG, or WebP image is kept, as covers are. A link with no image there
+  says why and may be tried again; a 429 or 5xx is tried again by the Job.
+- **Only a link the model named** is downloaded; any other is 404. A link
+  downloaded before answers with its cover at once, while that file is still kept.
+- **Used as a cover chosen from MusicBrainz is:** the household's cover on the song
+  or the album's songs, or the household's photo of the artist. The sweep keeps
+  each picture downloaded while its link is still named.
+- **The API:** `GET /api/image-links/album?album=…&artist=…` and
+  `GET /api/image-links/artist/{id}` say what was named, what was downloaded, and
+  what is being asked; `POST …/suggest` asks a model, and `POST …/approve` with
+  `{url}` (and `{album, artist}` for an album) downloads one, answering 202 with
+  the cover when it was downloaded before. `POST /api/artists/{id}/photo/cover`
+  makes a kept cover the artist's photo.
+
 ## Enrichers
 
 An *enricher* proposes values from somewhere the scan doesn't look. It is a
@@ -690,7 +728,9 @@ that reason. `GET /api/settings` gains `album_minutes`.
   429 and a lost connection, each passing over to the next provider, and no key
   ever in a message or a log. In real Jobs,
   the suggestion is recorded and shown nowhere, replaced by the next, and a
-  refused key stops the enricher. No test contacts a site, MusicBrainz, or a model.
+  refused key stops the enricher. The picture fetch runs against a fake resolver and
+  fake connections: addresses that aren't public, a host leading to one, redirects,
+  sizes, statuses, and a deadline. No test contacts a site, MusicBrainz, or a model.
 
 ## Left for later
 

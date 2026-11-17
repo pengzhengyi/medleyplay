@@ -23,6 +23,7 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.application.covers import COVERS_FOLDER, CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.application.enrichment import EnrichKind, EnrichmentService, enrich_track_kind
+from medleyplay.application.image_links import ImageLinkService, image_link_kinds
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.plugins import PluginService
@@ -53,6 +54,7 @@ class Enriching:
     kind: EnrichKind
     artists: ArtistService
     album_covers: AlbumCoverService
+    image_links: ImageLinkService
     jobs: JobService
     runner: JobRunner
     plugins: PluginService
@@ -165,6 +167,7 @@ def running_enrichment(
     choose = choose_artists_kind(clock)
     describe = describe_artist_kind(clock)
     album_covers = album_cover_kinds(clock, data_dir / COVERS_FOLDER)
+    image_links = image_link_kinds(clock, data_dir / COVERS_FOLDER)
     kinds: dict[str, AnyJobKind] = {
         kind.name: kind,
         find.name: find,
@@ -173,6 +176,8 @@ def running_enrichment(
         describe.name: describe,
         album_covers.find.name: album_covers.find,
         album_covers.choose.name: album_covers.choose,
+        image_links.suggest.name: image_links.suggest,
+        image_links.fetch.name: image_links.fetch,
     }
     with started_plugins(units, clock, "reader") as plugins:
         secrets = MemorySecrets()
@@ -205,6 +210,9 @@ def running_enrichment(
                     covers_folder=data_dir / COVERS_FOLDER,
                 ),
                 album_covers=AlbumCoverService(units, plugins, jobs, album_covers),
+                image_links=ImageLinkService(
+                    units, plugins, jobs, image_links, data_dir / COVERS_FOLDER
+                ),
                 jobs=jobs,
                 runner=runner,
                 plugins=plugins,

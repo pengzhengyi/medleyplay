@@ -89,6 +89,8 @@ from medleyplay.plugin_api import (
     ARTIST_NAME_FINDER,
     COVER_CHOOSER,
     COVER_FINDER,
+    IMAGE_FETCHER,
+    IMAGE_SUGGESTER,
     TRACK_ENRICHER,
     AiFailure,
     AiFailureKind,
@@ -106,6 +108,8 @@ from medleyplay.plugin_api import (
     Enriched,
     EnrichStatus,
     EnrichTrack,
+    FetchedImage,
+    FetchImage,
     FindArtist,
     FindArtistNames,
     FindCovers,
@@ -115,11 +119,15 @@ from medleyplay.plugin_api import (
     FoundArtists,
     FoundCover,
     FoundCovers,
+    ImageLink,
+    ImageSubject,
     NetworkError,
     Plugin,
     RatedAs,
     Registry,
+    SuggestedImages,
     SuggestedSong,
+    SuggestImages,
     VideoText,
 )
 from tests.support.images import jpeg_image, oversized_jpeg
@@ -513,10 +521,56 @@ class CoverChoices:
         )
 
 
+HELP_LINK: Final = "https://upload.wikimedia.org/wikipedia/en/e/e7/Help!_(The_Beatles_album).jpg"
+"""The link to *Help!*'s cover the image suggester names first; the fetcher has it."""
+HELP_GONE: Final = "https://upload.wikimedia.org/wikipedia/en/0/00/Help_gone.jpg"
+"""A link to *Help!*'s cover the image suggester names that has no image."""
+HELP_PAGE: Final = "https://en.wikipedia.org/wiki/Help!"
+HELP_FETCHED: Final = jpeg_image("Help! from the web")
+"""The image at `HELP_LINK`."""
+BEATLES_LINK: Final = "https://upload.wikimedia.org/wikipedia/commons/d/df/The_Fabs.JPG"
+"""The link to a photo of The Beatles the image suggester names; the fetcher has it."""
+BEATLES_FETCHED: Final = jpeg_image("The Beatles from the web")
+"""The image at `BEATLES_LINK`."""
+
+
+class ImageLinks:
+    """Names links as an AI model might: two to *Help!*'s cover, one to The Beatles.
+
+    A song *Refused* has the provider refuse the key, and any other album or artist
+    has it name no link.
+    """
+
+    def suggest(self, request: SuggestImages) -> SuggestedImages:
+        if any(song.startswith("Refused") for song in request.songs):
+            return SuggestedImages(status=FindStatus.REFUSED, message="The key was refused.")
+        links: tuple[ImageLink, ...] = ()
+        if request.subject is ImageSubject.ALBUM and request.name == "Help!":
+            links = (
+                ImageLink(url=HELP_LINK, page=HELP_PAGE, why="The album's article shows it"),
+                ImageLink(url=HELP_GONE),
+            )
+        if request.subject is ImageSubject.ARTIST and request.name == "The Beatles":
+            links = (ImageLink(url=BEATLES_LINK, why="A photo of the band"),)
+        return SuggestedImages(links=links, ai_answered=request.ai[0].id)
+
+
+class Images:
+    """Fetches as the web would: `HELP_LINK` and `BEATLES_LINK` hold images, nothing else."""
+
+    def fetch(self, request: FetchImage) -> FetchedImage:
+        images = {HELP_LINK: HELP_FETCHED, BEATLES_LINK: BEATLES_FETCHED}
+        if request.url not in images:
+            return FetchedImage(message="upload.wikimedia.org has no image there (404).")
+        (Path(request.folder) / "image").write_bytes(images[request.url])
+        return FetchedImage(file="image")
+
+
 def register(registry: Registry) -> None:
     """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
 
-    The rest are two artist finders, an artist chooser, and an artist describer.
+    The rest are two artist finders, an artist chooser and describer, a cover finder and
+    chooser, and an image suggester and fetcher.
     """
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
@@ -527,6 +581,8 @@ def register(registry: Registry) -> None:
     registry.add(ARTIST_DESCRIBER, "ai-details", ArtistDescriptions())
     registry.add(COVER_FINDER, "musicbrainz", Covers())
     registry.add(COVER_CHOOSER, "ai-details", CoverChoices())
+    registry.add(IMAGE_SUGGESTER, "ai-details", ImageLinks())
+    registry.add(IMAGE_FETCHER, "ai-details", Images())
 
 
 plugin = Plugin(api_version=1, register=register)

@@ -40,7 +40,7 @@ def scan_files(
 
 
 def known_after(found: dict[str, ScannedFile]) -> dict[str, KnownFile]:
-    """Return what a catalog keeps of a scan: each file's stamp, and its sidecar's and image's."""
+    """Return what a catalog keeps of a scan: each file's stamp, and its sidecars' and image's."""
     return {
         path: KnownFile(
             size=file.size,
@@ -48,6 +48,9 @@ def known_after(found: dict[str, ScannedFile]) -> dict[str, KnownFile]:
             info_json=None
             if file.info_json is None
             else Stamp(size=file.info_json.size, modified_ns=file.info_json.modified_ns),
+            lrc=None
+            if file.lyrics_file is None
+            else Stamp(size=file.lyrics_file.size, modified_ns=file.lyrics_file.modified_ns),
             cover_image=None
             if file.cover_image is None
             else ImageStamp(

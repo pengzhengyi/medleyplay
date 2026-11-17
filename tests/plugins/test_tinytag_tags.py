@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from medleyplay.domain import covers
-from medleyplay.plugin_api import FileRequest, LibraryRoot, ReadTags, Tags
+from medleyplay.plugin_api import MAX_LYRICS, FileRequest, LibraryRoot, ReadTags, Tags
 from medleyplay.plugin_api.covers import MAX_COVER_BYTES, is_cover_image
 from medleyplay.plugin_api.testing import check_tag_reader
 from medleyplay.plugins.fsspec_library.backends import ZipBackend
@@ -32,6 +32,33 @@ def test_the_reader_keeps_the_contract_and_reads_the_tags(tmp_path: Path) -> Non
     tags = check_tag_reader(TinytagReader(), ReadTags(local_path=str(tmp_path / "intro.wav")))
 
     assert tags == Tags(title="Intro", artist="The Band", album="Blue", duration_ms=2000)
+
+
+PLAIN = """\
+朝目が覚めて
+真っ先に思い浮かぶ"""
+TIMED = """\
+[00:12.34]朝目が覚めて
+[00:15.50]真っ先に思い浮かぶ"""
+
+
+def _lyrics_of(tmp_path: Path, *lyrics: str) -> str:
+    """Write an MP3 whose tags hold each of `lyrics`, and return the lyrics read from it."""
+    audio = tmp_path / "melt.mp3"
+    audio.write_bytes(mp3_bytes(Song("Melt", lyrics=lyrics)))
+    return TinytagReader().read_tags(ReadTags(local_path=str(audio))).lyrics
+
+
+def test_a_files_lyrics_are_read_with_its_tags(tmp_path: Path) -> None:
+    assert _lyrics_of(tmp_path, PLAIN) == PLAIN
+
+
+def test_of_several_lyrics_in_a_file_the_timed_ones_are_read(tmp_path: Path) -> None:
+    assert _lyrics_of(tmp_path, PLAIN, TIMED) == TIMED
+
+
+def test_lyrics_longer_than_a_song_could_have_are_left_unread(tmp_path: Path) -> None:
+    assert _lyrics_of(tmp_path, "la " * MAX_LYRICS) == ""
 
 
 def test_a_stored_zip_member_is_read_in_place(tmp_path: Path) -> None:

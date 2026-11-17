@@ -2,6 +2,7 @@
 
 import base64
 import io
+import re
 from pathlib import Path
 from typing import Final, override
 
@@ -9,6 +10,7 @@ from tinytag import TinyTag, TinyTagException
 
 from medleyplay.plugin_api import (
     MAX_COVER_BYTES,
+    MAX_LYRICS,
     TAG_READER,
     Plugin,
     ReadTags,
@@ -25,6 +27,8 @@ AUDIO_EXTENSIONS: Final = frozenset(
 MP4_EXTENSIONS: Final = frozenset({"m4a", "m4b", "mp4"})
 """The extensions of MP4 files, whose length can also be read from their fragments."""
 PROTECTED_EXTENSION: Final = "m4p"
+_TIMED: Final = re.compile(r"^\s*\[\d{1,3}:\d{1,2}", re.MULTILINE)
+"""A line of LRC timed as `[mm:ss`, which tells timed lyrics from plain ones."""
 
 
 class _Slice(io.RawIOBase):
@@ -101,6 +105,7 @@ class TinytagReader:
             track_number=tag.track,
             protected=self._protected,
             cover=cover,
+            lyrics=_lyrics(tag),
         )
 
 
@@ -110,6 +115,19 @@ def _encoded_cover(tag: TinyTag) -> str | None:
     if image is None or len(image.data) > MAX_COVER_BYTES or not is_cover_image(image.data):
         return None
     return base64.b64encode(image.data).decode("ascii")
+
+
+def _lyrics(tag: TinyTag) -> str:
+    """Return the file's lyrics: the first timed entry, else the first; none past `MAX_LYRICS`.
+
+    tinytag reads an MP3's `USLT` and `SYLT` frames, written as LRC, Vorbis comments'
+    `LYRICS`, and an MP4's `©lyr`, each entry its own.
+    """
+    entries = [str(entry) for entry in tag.other.get("lyrics", []) if str(entry).strip()]
+    chosen = next(
+        (entry for entry in entries if _TIMED.search(entry)), entries[0] if entries else ""
+    )
+    return chosen if len(chosen) <= MAX_LYRICS else ""
 
 
 def register(registry: Registry) -> None:

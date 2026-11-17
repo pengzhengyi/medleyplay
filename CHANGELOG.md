@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Lyrics from the files** — a scan reads the lyrics in a song's tags (ID3 USLT or
+  SYLT, Vorbis LYRICS, MP4 ©lyr) and a `.lrc` beside it, named as it is, in UTF-8,
+  UTF-16, or GBK. The `.lrc`'s show over the tags', and either over LRCLIB's, which
+  is then never asked. Every file is read once more on the next scan.
+
 - **Lyrics, looked up as songs come up** — a song's lyrics are looked up on LRCLIB
   (lrclib.net), an open lyrics database, as it plays and before it comes up next,
   timed line by line where LRCLIB times them; *Find lyrics* in a song's menu asks at

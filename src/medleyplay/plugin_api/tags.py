@@ -1,10 +1,11 @@
 """The tag reader: a file's title, artists, album, and duration, by file extension."""
 
 from datetime import timedelta
-from typing import Protocol
+from typing import Annotated, Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
+from medleyplay.plugin_api.enrichers import MAX_LYRICS
 from medleyplay.plugin_api.extension import ExtensionPoint
 
 
@@ -29,7 +30,8 @@ class Tags(_Model):
     `protected` is set for a file whose audio is locked to another player, such as
     an `.m4p` from the iTunes Store. `cover` is the file's embedded front cover as
     base64 text, present only when the image is a JPEG, PNG, or WebP of at most
-    `MAX_COVER_BYTES`; any other image is no cover.
+    `MAX_COVER_BYTES`; any other image is no cover. `lyrics` are the lyrics in its
+    tags, as LRC when they are timed, of at most `MAX_LYRICS` characters.
     """
 
     title: str = ""
@@ -40,6 +42,7 @@ class Tags(_Model):
     track_number: int | None = None
     protected: bool = False
     cover: str | None = None
+    lyrics: Annotated[str, StringConstraints(max_length=MAX_LYRICS)] = ""
 
 
 class TagReader(Protocol):

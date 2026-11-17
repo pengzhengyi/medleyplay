@@ -1,16 +1,17 @@
 # Lyrics
 
 > [!NOTE]
-> **Status: in part built.** Lyrics are kept per song and source, looked up on
-> LRCLIB as songs come up, and read and written through the API, as this note
-> says. Lyrics from the files, the lyrics shown while a song plays, the editor,
-> and other sites are planned, in that order.
+> **Status: in part built.** Lyrics are kept per song and source, read from the
+> files, looked up on LRCLIB as songs come up, and read and written through the
+> API, as this note says. The lyrics shown while a song plays, the editor, and other
+> sites are planned, in that order.
 
 ## Contents
 
 - [What it offers](#what-it-offers)
 - [Where lyrics come from](#where-lyrics-come-from)
 - [Reading lyrics](#reading-lyrics)
+- [Lyrics from the files](#lyrics-from-the-files)
 - [Looking lyrics up on LRCLIB](#looking-lyrics-up-on-lrclib)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
@@ -31,8 +32,8 @@ as the source gave them, and the first held shows:
 | Source | Origin | State |
 | --- | --- | --- |
 | What the household entered | `household` | Built |
-| A `.lrc` file beside the audio, named as it is | `sidecar` | Planned |
-| The audio's tags (ID3 USLT or SYLT, Vorbis LYRICS, MP4 ©lyr) | `tag` | Planned |
+| A `.lrc` file beside the audio, named as it is | `sidecar` | Built |
+| The audio's tags (ID3 USLT or SYLT, Vorbis LYRICS, MP4 ©lyr) | `tag` | Built |
 | LRCLIB, an open lyrics database | `lrclib` | Built |
 
 - **Instrumental is an answer:** a source may say a song has no lyrics, which shows
@@ -56,6 +57,26 @@ timed line is LRC; any other is plain lyrics, shown as written.
 
 - **Lines are in time order,** an empty one being a pause in the singing.
 - **At most** 64 KiB of text and 2,000 timed lines.
+
+## Lyrics from the files
+
+A Library scan reads both, and keeps them apart, so removing one leaves the other.
+
+- **The tags:** the tag reader returns a file's lyrics with its other tags. Of
+  several entries, as an MP3 may hold, the first timed one is read, else the first;
+  an ID3 `SYLT` frame comes as LRC. Lyrics longer than 64 KiB are left unread.
+  Tags read again without lyrics drop the `tag` lyrics.
+- **The `.lrc` beside the audio,** named as it is, in any case (`Melt.LRC` beside
+  `Melt.mp3`): read when new or changed, or by a full scan, as the `.info.json` is,
+  its stamp kept in the Source's details (`lrc`). It is read as UTF-8, with or
+  without a byte order mark, as UTF-16 with one, and otherwise as GB18030, which many
+  Chinese `.lrc` files are written in. One that can't be read as lyrics keeps the
+  lyrics read before and notes why (`lrc_error`); one that can't be opened is read
+  again next scan; one removed takes its lyrics with it.
+- **Every file is read once more:** the reader's version is 4, so the first scan
+  after this reads each file's tags again.
+- **A song inside a longer file** has none of its file's lyrics: the file's are the
+  whole album's.
 
 ## Looking lyrics up on LRCLIB
 
@@ -98,6 +119,11 @@ timed line is LRC; any other is plain lyrics, shown as written.
 
 - **Reading:** LRC with several times on a line, an offset, translations, timed
   words, pauses, plain text, and the limits.
+- **From the files:** the tag reader over MP3s holding lyrics, one, several, and too
+  many; the scan program over `.lrc` files in UTF-8, GBK, and with a byte order mark,
+  in capitals, with no audio, unchanged, changed, and unreadable; and real scans that
+  show the tags' lyrics, the `.lrc`'s over them, an `.lrc` added and removed, tags
+  that lose their lyrics, and an `.lrc` that can't be read.
 - **Which songs are asked about:** a whole album, a song inside a longer file, lyrics
   held, found, or not found, and asking again.
 - **Looking up:** real Jobs against the test plugin, which answers by title: lyrics
@@ -108,9 +134,6 @@ timed line is LRC; any other is plain lyrics, shown as written.
 
 ## Planned
 
-- **Lyrics from the files:** the scan keeps the audio's tags' lyrics and a `.lrc`
-  beside it apart, as `tag` and `sidecar`, so removing one leaves the other; the tag
-  reader reads one more field, so every file is read again once.
 - **Showing them:** a column beside the cover in Now Playing, the line sung now
   large and those sung dim, a line clicked seeking to it, translations under their
   lines; the line sung now under the title in the player; and an icon button that

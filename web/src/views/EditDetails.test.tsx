@@ -1,4 +1,12 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  type BoundFunctions,
+  fireEvent,
+  type queries,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ReactNode, useContext } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -526,11 +534,23 @@ describe("editing a song's details", () => {
       expect(within(dialog).getByText("From the video")).toBeInTheDocument();
     });
 
+    /** Open the picture editor from the cover's `label` tool, as *Add a cover*. */
+    async function pictureEditor(dialog: HTMLElement, label: string) {
+      await userEvent.click(within(dialog).getByRole("button", { name: `${label}…` }));
+      return within(screen.getByRole("dialog", { name: label }));
+    }
+
+    /** Choose `image` on the picture editor's Upload tab and use it. */
+    async function uploaded(editor: BoundFunctions<typeof queries>, image: File) {
+      await userEvent.upload(editor.getByLabelText("Choose a cover file"), image);
+      await userEvent.click(await editor.findByRole("button", { name: "Use this cover" }));
+    }
+
     it("uploads an image chosen as the household's cover, and shows it", async () => {
       const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7, { cover: COVER })));
       const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, { onSetCover });
 
-      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), PNG);
+      await uploaded(await pictureEditor(dialog, "Add a cover"), PNG);
 
       expect(onSetCover).toHaveBeenCalledExactlyOnceWith(PNG);
       expect(await within(dialog).findByRole("img", { name: "Cover" })).toHaveAttribute(
@@ -538,6 +558,7 @@ describe("editing a song's details", () => {
         `/api/covers/${COVER}`,
       );
       expect(within(dialog).getByText("Yours")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Add a cover" })).toBeNull();
     });
 
     it("offers the cover shown to save as an image, or to replace", async () => {
@@ -549,8 +570,8 @@ describe("editing a song's details", () => {
         { onSetCover },
       );
 
-      const saveImage = within(dialog).getByRole("link", { name: "Save the cover image" });
-      await userEvent.upload(within(dialog).getByLabelText("Replace the cover"), PNG);
+      const saveImage = within(dialog).getByRole("link", { name: "Save the image" });
+      await uploaded(await pictureEditor(dialog, "Replace the cover"), PNG);
 
       expect(saveImage).toHaveAttribute("href", `/api/covers/${COVER}`);
       expect(saveImage).toHaveAttribute("download");
@@ -573,21 +594,19 @@ describe("editing a song's details", () => {
           onUseCover,
         },
       );
+      const editor = await pictureEditor(dialog, "Add a cover");
 
-      await userEvent.click(
-        within(dialog).getByRole("button", { name: "Find covers on MusicBrainz" }),
-      );
-      const found = await within(dialog).findByRole("region", { name: "Covers on MusicBrainz" });
+      await userEvent.click(editor.getByRole("tab", { name: "MusicBrainz" }));
+      const found = await editor.findByRole("region", { name: "Covers on MusicBrainz" });
       await userEvent.click(
         within(found).getAllByRole("button", { name: /^Use the cover of/u })[1] ?? found,
       );
 
       expect(onUseCover).toHaveBeenCalledExactlyOnceWith("cover-b");
-      await waitFor(() => {
-        expect(
-          within(found).getAllByRole("button", { name: /^Use the cover of/u })[1],
-        ).toHaveAttribute("aria-pressed", "true");
-      });
+      expect(await within(dialog).findByRole("img", { name: "Cover" })).toHaveAttribute(
+        "src",
+        "/api/covers/cover-b",
+      );
     });
 
     it("finds covers of an album file naming no album by its title", async () => {
@@ -599,14 +618,11 @@ describe("editing a song's details", () => {
         ...detailsOf(7),
         kind: { value: "album", reason: "length" },
       });
+      const editor = await pictureEditor(dialog, "Add a cover");
 
-      await userEvent.click(
-        within(dialog).getByRole("button", { name: "Find covers on MusicBrainz" }),
-      );
+      await userEvent.click(editor.getByRole("tab", { name: "MusicBrainz" }));
 
-      expect(
-        await within(dialog).findByRole("region", { name: "Covers on MusicBrainz" }),
-      ).toBeVisible();
+      expect(await editor.findByRole("region", { name: "Covers on MusicBrainz" })).toBeVisible();
       expect(calls).toContain(
         `GET /api/album-covers?${new URLSearchParams({ album: "ケビョウニンゲン", artist: "GUMI/MAYU" }).toString()}`,
       );
@@ -614,13 +630,14 @@ describe("editing a song's details", () => {
 
     it("says covers are found for a song once its album is filled in", async () => {
       const { dialog } = await renderDialog();
-      const find = within(dialog).getByRole("button", { name: "Find covers on MusicBrainz" });
+      const editor = await pictureEditor(dialog, "Add a cover");
+      const find = editor.getByRole("tab", { name: "MusicBrainz" });
 
       await userEvent.click(find);
 
-      expect(find).toHaveAttribute("aria-disabled", "true");
-      expect(find).toHaveAccessibleDescription("Fill in the album to find its covers.");
-      expect(within(dialog).queryByRole("region", { name: "Covers on MusicBrainz" })).toBeNull();
+      expect(find).toBeDisabled();
+      expect(find).toHaveAttribute("title", "Fill in the album to find its covers.");
+      expect(editor.queryByRole("region", { name: "Covers on MusicBrainz" })).toBeNull();
     });
 
     it("removes the household's cover", async () => {
@@ -641,23 +658,25 @@ describe("editing a song's details", () => {
       const large = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "Poster.png", {
         type: "image/png",
       });
+      const editor = await pictureEditor(dialog, "Add a cover");
 
-      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), large);
+      await userEvent.upload(editor.getByLabelText("Choose a cover file"), large);
 
       expect(onSetCover).not.toHaveBeenCalled();
-      expect(within(dialog).getByRole("alert")).toHaveTextContent("at most 10 MiB");
+      expect(await editor.findByRole("alert")).toHaveTextContent("at most 10 MiB");
     });
 
-    it("keeps the dialog's other actions waiting while a cover uploads", async () => {
+    it("keeps the picture editor waiting while a cover uploads", async () => {
       const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
         onSetCover: () => new Promise<never>(() => undefined),
       });
+      const editor = await pictureEditor(dialog, "Add a cover");
 
-      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), PNG);
+      await uploaded(editor, PNG);
 
-      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
-      expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
-      expect(within(dialog).getByRole("status", { name: "Saving the cover…" })).toBeVisible();
+      expect(editor.getByRole("button", { name: "Use this cover" })).toBeDisabled();
+      expect(editor.getByRole("button", { name: "Cancel" })).toBeDisabled();
+      expect(editor.getByRole("status")).toHaveTextContent("Saving the cover…");
     });
 
     it("says the household chose no cover over a found one", async () => {
@@ -669,15 +688,16 @@ describe("editing a song's details", () => {
       expect(within(dialog).getByText("None, as you chose")).toBeInTheDocument();
     });
 
-    it("says why an image was refused", async () => {
+    it("says why an image was refused, in the picture editor", async () => {
       const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
         onSetCover: () =>
           Promise.reject(new ApiError(422, "A cover is a JPEG, PNG, or WebP image.")),
       });
+      const editor = await pictureEditor(dialog, "Add a cover");
 
-      await userEvent.upload(within(dialog).getByLabelText("Add a cover"), PNG);
+      await uploaded(editor, PNG);
 
-      expect(await within(dialog).findByRole("alert")).toHaveTextContent("JPEG, PNG, or WebP");
+      expect(await editor.findByRole("alert")).toHaveTextContent("JPEG, PNG, or WebP");
     });
   });
 });

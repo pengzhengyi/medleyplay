@@ -409,8 +409,9 @@ not.
   in a new tab. The links ask nothing of those sites; the household opens them. A
   name not linked yet offers *Link it to an artist*, which opens Clean up.
 - **Edit details** on a linked artist's page opens *Edit artist*: its photo, with
-  where it is from (*From Wikidata* or *Yours*), to replace or, when it is the
-  household's, remove at once; *Shown as*, offering every name it goes by, with
+  where it is from (*From Wikidata* or *Yours*), to replace in the picture editor
+  ([Track details](Track%20details.md#replacing-a-cover-or-a-photo)), uploading one
+  or asking an AI model, or, when it is the household's, remove at once; *Shown as*, offering every name it goes by, with
   the songs' own name as its placeholder; and *About*. *Save* keeps the name and
   the note together; until then *Cancel* forgets them. *Ask AI* above the fields
   asks a model for a name and a note, reads *Asking the AI…* with one spinner

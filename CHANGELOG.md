@@ -561,6 +561,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One way to replace a cover or a photo** — a song's cover, an album's, and an
+  artist's photo each show *Save image*, *Replace*, and *Remove* over the picture on
+  hover. *Replace* opens a picture editor with a tab for each source: *Upload* (drop
+  or choose a file, previewed before use), *MusicBrainz* (covers only), and *Ask AI*.
+  An album's cover can now be uploaded too. New dependencies: `@radix-ui/react-tabs`
+  and `react-dropzone`.
+
 - **Asking the AI again within a day asks first** instead of refusing: *Ask the AI
   again?* says another request may cost money and likely brings the same answer,
   and asks again once you agree. `GET /api/enrichers/{name}` lists the songs asked

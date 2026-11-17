@@ -27,9 +27,26 @@ const SUPERCELL: readonly Track[] = [
 function renderEditor(songs: readonly Track[] = SUPERCELL) {
   const onSave = vi.fn(() => Promise.resolve());
   const onUseCover = vi.fn<(cover: string) => Promise<void>>(() => Promise.resolve());
+  const onUploadCover = vi.fn<(image: File) => Promise<string>>(() =>
+    Promise.resolve("cover-uploaded"),
+  );
   const onClose = vi.fn();
-  render(<EditAlbum songs={songs} onSave={onSave} onUseCover={onUseCover} onClose={onClose} />);
-  return { onSave, onUseCover, onClose };
+  render(
+    <EditAlbum
+      songs={songs}
+      onSave={onSave}
+      onUseCover={onUseCover}
+      onUploadCover={onUploadCover}
+      onClose={onClose}
+    />,
+  );
+  return { onSave, onUseCover, onUploadCover, onClose };
+}
+
+/** Open the picture editor from the album's cover. */
+async function pictureEditor() {
+  await userEvent.click(screen.getByRole("button", { name: "Add a cover…" }));
+  return within(screen.getByRole("dialog", { name: "Add a cover" }));
 }
 
 describe("editing an album of songs of their own", () => {
@@ -68,7 +85,15 @@ describe("editing an album of songs of their own", () => {
 
   it("says why a save was refused, and stays open", async () => {
     const onSave = vi.fn(() => Promise.reject(new Error("The year is 1-9999.")));
-    render(<EditAlbum songs={SUPERCELL} onSave={onSave} onUseCover={vi.fn()} onClose={vi.fn()} />);
+    render(
+      <EditAlbum
+        songs={SUPERCELL}
+        onSave={onSave}
+        onUseCover={vi.fn()}
+        onUploadCover={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
 
     await userEvent.type(screen.getByRole("spinbutton", { name: "Year" }), "2009");
     await userEvent.click(screen.getByRole("button", { name: "Save to 2 songs" }));
@@ -89,20 +114,39 @@ describe("editing an album of songs of their own", () => {
         { body: albumCoversOf(["cover-a", "cover-b"]) },
     });
     const { onUseCover } = renderEditor();
+    const editor = await pictureEditor();
 
-    await userEvent.click(screen.getByRole("button", { name: "Find covers on MusicBrainz" }));
-    const found = await screen.findByRole("region", { name: "Covers on MusicBrainz" });
+    await userEvent.click(editor.getByRole("tab", { name: "MusicBrainz" }));
+    const found = await editor.findByRole("region", { name: "Covers on MusicBrainz" });
     const [, second] = within(found).getAllByRole("button", { name: /^Use the cover of/u });
     await userEvent.click(second ?? found);
 
     expect(onUseCover).toHaveBeenCalledExactlyOnceWith("cover-b");
-    expect(second).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("link", { name: "Save the image" })).toHaveAttribute(
+      "href",
+      "/api/covers/cover-b",
+    );
   });
 
-  it("offers no covers to find for songs on no album", () => {
+  it("uploads a cover from this device for every song, and shows it", async () => {
+    const { onUploadCover } = renderEditor();
+    const editor = await pictureEditor();
+    const image = new File(["png"], "Supercell.png", { type: "image/png" });
+
+    await userEvent.upload(editor.getByLabelText("Choose a cover file"), image);
+    await userEvent.click(await editor.findByRole("button", { name: "Use this cover" }));
+
+    expect(onUploadCover).toHaveBeenCalledExactlyOnceWith(image);
+    expect(await screen.findByRole("link", { name: "Save the image" })).toHaveAttribute(
+      "href",
+      "/api/covers/cover-uploaded",
+    );
+  });
+
+  it("offers no cover to replace for songs on no album", () => {
     renderEditor([trackOf(1, "Melt", { album: "" }), trackOf(2, "Shiver", { album: "" })]);
 
-    expect(screen.queryByRole("button", { name: "Find covers on MusicBrainz" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /cover…$/u })).toBeNull();
   });
 });
 

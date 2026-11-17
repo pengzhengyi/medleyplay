@@ -20,15 +20,10 @@
 
 import {
   CaretRightIcon,
-  CircleNotchIcon,
-  DownloadSimpleIcon,
-  MagnifyingGlassIcon,
   MusicNoteSimpleIcon,
   MusicNotesIcon,
   PlusIcon,
   ScissorsIcon,
-  TrashIcon,
-  UploadSimpleIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
 import {
@@ -48,6 +43,7 @@ import {
   type Kind,
   type KindReason,
   type Origin,
+  type Pictured,
   type Track,
   type VideoRead,
   type VideoText,
@@ -73,9 +69,10 @@ import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { onlyArtist, sameCredits, toggled, withCredit, withoutCredit } from "../library/credits";
 import { ArtistChips } from "./ArtistChips";
-import { CoverFinder } from "./CoverFinder";
 import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
+import { type CoverAlbum, PictureEditor } from "./PictureEditor";
+import { PictureFrame } from "./PictureFrame";
 import { ORIGIN_TAGS } from "./originTags";
 import { type SongsControls, SongsControlsContext } from "./songsControls";
 import { STATUS_ICONS } from "./statusIcons";
@@ -96,9 +93,6 @@ const RANGES: Partial<Record<Detail, readonly [number, number]>> = {
 /** How long a video's title and description may be, as the server takes them. */
 const MAX_VIDEO_TITLE = 1_000;
 const MAX_DESCRIPTION = 20_000;
-
-/** The largest cover the server takes, checked before an image is sent. */
-export const MAX_COVER_BYTES = 10 * 1024 * 1024;
 
 const SONGS_TITLE = "edit-songs-title";
 
@@ -169,7 +163,7 @@ export function EditDetails({
   const [readError, setReadError] = useState("");
   const [covering, setCovering] = useState(false);
   const [coverError, setCoverError] = useState("");
-  const [findingCovers, setFindingCovers] = useState(false);
+  const [replacingCover, setReplacingCover] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   // Saying it saved is enough for a moment; the details shown are what was kept.
@@ -431,30 +425,29 @@ export function EditDetails({
                 busy={saving || reading || covering}
                 covering={covering}
                 error={coverError}
-                onChoose={(image) => {
-                  if (image.size > MAX_COVER_BYTES) {
-                    setCoverError("A cover is at most 10 MiB.");
-                  } else {
-                    void changeCover(() => onSetCover(image));
-                  }
+                onReplace={() => {
+                  setReplacingCover(true);
                 }}
                 onRemove={() => void changeCover(onRemoveCover)}
-                {...(albumOf(details) === undefined
-                  ? {}
-                  : {
-                      findingCovers,
-                      onFindCovers: () => {
-                        setFindingCovers(!findingCovers);
-                      },
-                    })}
               />
-              {findingCovers && albumOf(details) !== undefined && (
-                <CoverFinder
-                  album={albumOf(details)?.album ?? ""}
-                  artist={albumOf(details)?.artist ?? ""}
-                  shown={shownCoverOf(details)}
-                  busy={saving || reading || covering}
-                  onUse={(cover) => void changeCover(() => onUseCover(cover))}
+              {replacingCover && (
+                <PictureEditor
+                  sources={{
+                    kind: "cover",
+                    of: track.title,
+                    shown: shownCoverOf(details),
+                    album: albumOf(details),
+                    pictured: picturedOf(albumOf(details)),
+                    upload: async (image) => {
+                      setDetails(await onSetCover(image));
+                    },
+                    use: async (cover) => {
+                      setDetails(await onUseCover(cover));
+                    },
+                  }}
+                  onClose={() => {
+                    setReplacingCover(false);
+                  }}
                 />
               )}
               <LookupBar findable={findable} lookup={lookup} online={online} onFind={onFind} />
@@ -633,7 +626,7 @@ function shownCoverOf(details: Details): string | undefined {
  * Return the album to find covers of, and its album artist or else artist: the song's
  * album, or the title of an album file naming none; nothing for a song on no album.
  */
-function albumOf(details: Details): { album: string; artist: string } | undefined {
+function albumOf(details: Details): CoverAlbum | undefined {
   const text = (detail: Detail) => {
     const value = details.shown[detail]?.value;
     return typeof value === "string" ? value.trim() : "";
@@ -643,10 +636,15 @@ function albumOf(details: Details): { album: string; artist: string } | undefine
   return album === "" ? undefined : { album, artist: text("album_artist") || text("artist") };
 }
 
+/** What a model is asked to picture for the song's cover: its album, when it has one. */
+function picturedOf(album: CoverAlbum | undefined): Pictured | undefined {
+  return album === undefined ? undefined : { kind: "album", ...album };
+}
+
 /**
  * The cover shown, large, and where it came from. Over it, on hover or focus, and
- * always on a touch screen: save it as an image, choose another, or remove the
- * household's own. Under it, a way to find the album's covers on MusicBrainz.
+ * always on a touch screen: save it as an image, replace it in the picture editor, or
+ * remove the household's own.
  */
 function CoverBox({
   title,
@@ -654,32 +652,33 @@ function CoverBox({
   busy,
   covering,
   error,
-  onChoose,
+  onReplace,
   onRemove,
-  findingCovers = false,
-  onFindCovers,
 }: {
   /** The song's title, which names a saved image. */
   readonly title: string;
   readonly details: Details;
   readonly busy: boolean;
-  /** Whether the household's cover is being saved or removed. */
+  /** Whether the household's cover is being removed. */
   readonly covering: boolean;
   readonly error: string;
-  readonly onChoose: (image: File) => void;
+  readonly onReplace: () => void;
   readonly onRemove: () => void;
-  /** Whether the covers found for the song's album show. */
-  readonly findingCovers?: boolean;
-  /** Show or hide the covers found; none for a song on no album, which can't be searched. */
-  readonly onFindCovers?: () => void;
 }) {
   const shown = details.shown.cover;
   const yours = details.origins.household?.cover !== undefined;
   const cover = shownCoverOf(details);
-  const choose = cover === undefined ? "Add a cover" : "Replace the cover";
   return (
     <div className="cover-box">
-      <div className="cover-frame">
+      <PictureFrame
+        replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
+        save={cover === undefined ? undefined : { href: coverUrl(cover), name: title }}
+        removeLabel="Remove your cover"
+        busy={busy}
+        saving={covering ? "Saving the cover…" : undefined}
+        onReplace={onReplace}
+        onRemove={yours ? onRemove : undefined}
+      >
         <span className="cover cover-box-image">
           {cover === undefined ? (
             <MusicNotesIcon weight="duotone" aria-hidden />
@@ -687,54 +686,7 @@ function CoverBox({
             <img src={coverUrl(cover)} alt="Cover" />
           )}
         </span>
-        <div className="cover-tools">
-          {cover !== undefined && (
-            <a
-              className="cover-tool"
-              href={coverUrl(cover)}
-              download={title}
-              aria-label="Save the cover image"
-              title="Save image"
-            >
-              <DownloadSimpleIcon weight="bold" aria-hidden />
-            </a>
-          )}
-          <label className={busy ? "cover-tool disabled" : "cover-tool"} title={choose}>
-            <UploadSimpleIcon weight="bold" aria-hidden />
-            <span className="visually-hidden">{choose}</span>
-            <input
-              type="file"
-              className="visually-hidden"
-              accept="image/jpeg,image/png,image/webp"
-              disabled={busy}
-              onChange={(event) => {
-                const chosen = event.currentTarget.files?.[0];
-                event.currentTarget.value = "";
-                if (chosen !== undefined) {
-                  onChoose(chosen);
-                }
-              }}
-            />
-          </label>
-          {yours && (
-            <button
-              type="button"
-              className="cover-tool"
-              disabled={busy}
-              aria-label="Remove your cover"
-              title="Remove your cover"
-              onClick={onRemove}
-            >
-              <TrashIcon weight="bold" aria-hidden />
-            </button>
-          )}
-        </div>
-        {covering && (
-          <span className="cover-saving" role="status" aria-label="Saving the cover…">
-            <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-          </span>
-        )}
-      </div>
+      </PictureFrame>
       {shown === undefined ? (
         <small className="detail-origin">No cover</small>
       ) : yours && cover === undefined ? (
@@ -745,21 +697,6 @@ function CoverBox({
           full={yours ? "Yours" : `From ${ORIGIN_LABELS[shown.origin]}`}
         />
       )}
-      <button
-        type="button"
-        className="secondary outline cover-find"
-        aria-label="Find covers on MusicBrainz"
-        aria-expanded={onFindCovers === undefined ? undefined : findingCovers}
-        aria-disabled={onFindCovers === undefined}
-        title={
-          onFindCovers === undefined
-            ? "Fill in the album to find its covers."
-            : "Find covers on MusicBrainz"
-        }
-        onClick={onFindCovers}
-      >
-        <MagnifyingGlassIcon weight="bold" aria-hidden /> Find covers
-      </button>
       {error !== "" && (
         <p className="error" role="alert">
           {error}

@@ -4,15 +4,13 @@
  * Opened, it shows what was found before, or, never asked, asks MusicBrainz at once; while MusicBrainz
  * or an AI model is asked, it reads again every few seconds. With an AI set up, a model
  * is asked which release the household most likely has, and its pick is marked. Nothing
- * changes until a cover is chosen. Below them, an AI model may be asked for pictures of
- * the album on the web, to approve one.
+ * changes until a cover is chosen.
  */
 
 import { CircleNotchIcon, SparkleIcon } from "@phosphor-icons/react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { type AlbumCovers, type CoverRelease, api, coverUrl } from "../api";
-import { ImageLinks } from "./ImageLinks";
 
 const READ_EVERY_MS = 2000;
 
@@ -111,77 +109,67 @@ export function CoverFinder({
   const failure = error || state?.failure;
   const pick = state?.pick ?? null;
   return (
-    <>
-      <section className="cover-finder" aria-label="Covers on MusicBrainz">
-        <div className="cover-finder-head">
-          <h4>Covers on MusicBrainz</h4>
-          {!finding && (
-            <button type="button" className="link-button" onClick={find}>
-              Look again
-            </button>
-          )}
-        </div>
-        {finding && state !== undefined && (
-          <p className="cover-finder-note" role="status">
-            <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-            {state.waiting
-              ? "Waiting for Online to look on MusicBrainz…"
-              : "Looking on MusicBrainz…"}
-          </p>
+    <section className="cover-finder" aria-label="Covers on MusicBrainz">
+      <div className="cover-finder-head">
+        <h4>Covers on MusicBrainz</h4>
+        {!finding && (
+          <button type="button" className="link-button" onClick={find}>
+            Look again
+          </button>
         )}
-        {failure && (
-          <p className="cover-finder-note error" role="alert">
-            {failure}
-          </p>
-        )}
-        {!finding && !failure && covers.length === 0 && (
-          <p className="cover-finder-note">MusicBrainz has no cover of this album.</p>
-        )}
-        {covers.length > 0 && (
-          <ul className="cover-finder-grid">
-            {covers.map(({ release, cover }) => {
-              const picked = pick !== null && pick.release_id === release.release_id ? pick : null;
-              const about = releaseAbout(release);
-              const named = about === "" ? release.title : `${release.title}, ${about}`;
-              return (
-                <li key={release.release_id}>
-                  <button
-                    type="button"
-                    className="cover-choice"
-                    aria-pressed={cover === shown}
-                    aria-label={`Use the cover of ${named}`}
-                    title={picked === null ? named : `${picked.model} picked this: ${picked.why}`}
-                    disabled={busy}
-                    onClick={() => {
-                      onUse(cover);
-                    }}
-                  >
-                    <img src={coverUrl(cover)} alt="" loading="lazy" decoding="async" />
-                    {picked !== null && (
-                      <span className="cover-pick">
-                        <SparkleIcon weight="fill" aria-hidden /> AI pick
-                      </span>
-                    )}
-                    <span className="cover-choice-about">{about || release.title}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {state?.choosing === true && (
-          <p className="cover-finder-note" role="status">
-            <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-            Asking the AI which fits…
-          </p>
-        )}
-      </section>
-      <ImageLinks
-        pictured={{ kind: "album", album, artist }}
-        shown={shown}
-        busy={busy}
-        onUse={onUse}
-      />
-    </>
+      </div>
+      {finding && state !== undefined && (
+        <p className="cover-finder-note" role="status">
+          <CircleNotchIcon weight="bold" className="spin" aria-hidden />
+          {state.waiting ? "Waiting for Online to look on MusicBrainz…" : "Looking on MusicBrainz…"}
+        </p>
+      )}
+      {failure && (
+        <p className="cover-finder-note error" role="alert">
+          {failure}
+        </p>
+      )}
+      {!finding && !failure && covers.length === 0 && (
+        <p className="cover-finder-note">MusicBrainz has no cover of this album.</p>
+      )}
+      {covers.length > 0 && (
+        <ul className="cover-finder-grid">
+          {covers.map(({ release, cover }) => {
+            const picked = pick !== null && pick.release_id === release.release_id ? pick : null;
+            const about = releaseAbout(release);
+            const named = about === "" ? release.title : `${release.title}, ${about}`;
+            return (
+              <li key={release.release_id}>
+                <button
+                  type="button"
+                  className="cover-choice"
+                  aria-pressed={cover === shown}
+                  aria-label={`Use the cover of ${named}`}
+                  title={picked === null ? named : `${picked.model} picked this: ${picked.why}`}
+                  disabled={busy}
+                  onClick={() => {
+                    onUse(cover);
+                  }}
+                >
+                  <img src={coverUrl(cover)} alt="" loading="lazy" decoding="async" />
+                  {picked !== null && (
+                    <span className="cover-pick">
+                      <SparkleIcon weight="fill" aria-hidden /> AI pick
+                    </span>
+                  )}
+                  <span className="cover-choice-about">{about || release.title}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {state?.choosing === true && (
+        <p className="cover-finder-note" role="status">
+          <CircleNotchIcon weight="bold" className="spin" aria-hidden />
+          Asking the AI which fits…
+        </p>
+      )}
+    </section>
   );
 }

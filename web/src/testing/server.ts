@@ -5,6 +5,7 @@
 import { vi } from "vitest";
 
 import type {
+  CoverRelease,
   AlbumCovers,
   AiProvider,
   ArtistSuggestion,
@@ -605,5 +606,47 @@ export function artistNameOf(name: string, artistId?: string | null): ArtistName
     candidates: [],
     suggested: null,
     finding: false,
+  };
+}
+
+export const VINYL: CoverRelease = {
+  release_id: "0a1b2c3d-0000-4000-8000-000000001965",
+  title: "Help!",
+  artist: "The Beatles",
+  date: "1965-08-06",
+  country: "GB",
+  format: '12" Vinyl',
+  tracks: 14,
+};
+export const CD: CoverRelease = {
+  ...VINYL,
+  release_id: "0a1b2c3d-0000-4000-8000-000000001987",
+  date: "1987-04-30",
+  format: "CD",
+};
+
+/** Nothing known of an album's covers: never looked up. */
+export const UNKNOWN_COVERS: AlbumCovers = {
+  covers: [],
+  found_at: null,
+  pick: null,
+  finding: false,
+  choosing: false,
+  waiting: false,
+  failure: null,
+  choice_failure: null,
+  may_choose: false,
+};
+
+/** *Help!*'s 1965 vinyl and 1987 CD found, `cover-1965` and `cover-1987`, with `known` on top. */
+export function helpFound(known: Partial<AlbumCovers> = {}): AlbumCovers {
+  return {
+    ...UNKNOWN_COVERS,
+    covers: [
+      { release: VINYL, cover: "cover-1965" },
+      { release: CD, cover: "cover-1987" },
+    ],
+    found_at: "2026-11-16T00:00:00Z",
+    ...known,
   };
 }

@@ -17,14 +17,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from medleyplay.application.details import OriginValues, text_of_row
+from medleyplay.application.lyrics import lyrics_held
 from medleyplay.application.segments import album_file_of
 from medleyplay.application.settings import read_settings
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Kind, Origin, kind_of
 from medleyplay.domain.enrichers import (
     Enricher,
+    LyricsHeld,
     Subject,
     TrackFacts,
+    lyrics_subject,
     search_terms,
     text_subject,
     video_id_of,
@@ -84,6 +87,15 @@ def candidates(
             for track_id in ids
         }
         videos = dict.fromkeys(ids)
+    elif enricher.subject is Subject.LYRICS:
+        # A song is looked up by its own words and length, a song inside a longer file too.
+        words = _words(db, ids)
+        lengths = _lengths(db, ids)
+        subjects = {
+            track_id: _lyrics_key(words, track_id, lengths.get(track_id)) for track_id in ids
+        }
+        videos = dict.fromkeys(ids)
+        came_from = {}
     else:
         words = _words(db, ids)
         subjects = {
@@ -91,6 +103,7 @@ def candidates(
         }
         videos = dict.fromkeys(ids)
         came_from = {}
+    held = lyrics_held(db) if enricher.subject is Subject.LYRICS else {}
     asked = _asked(db, enricher.name)
     found: dict[TrackId, Candidate] = {}
     for track_id, subject in subjects.items():
@@ -99,6 +112,8 @@ def candidates(
             is_segment=track_id in segments,
             text_came_from=came_from.get(track_id),
             asked_at=None if subject is None else asked.get(subject),
+            is_album=track_id in albums,
+            lyrics_from=held.get(track_id, LyricsHeld.NONE),
         )
         file_name = _file_name(sources.get(track_id, []))
         found[track_id] = Candidate(facts, file_name, videos[track_id], track_id in albums)
@@ -128,6 +143,19 @@ def _albums(db: Session, ids: set[TrackId], segments: set[int]) -> set[TrackId]:
 def _key(words: dict[TrackId, OriginValues], track_id: TrackId, *, whole_album: bool) -> str | None:
     terms = search_terms(words.get(track_id, {}), whole_album=whole_album)
     return None if terms is None else terms.key(track_id)
+
+
+def _lyrics_key(
+    words: dict[TrackId, OriginValues], track_id: TrackId, duration_ms: int | None
+) -> str | None:
+    """Return the subject a song's lyrics are looked up by: its words and its length."""
+    terms = search_terms(words.get(track_id, {}), whole_album=False)
+    return None if terms is None else lyrics_subject(terms, track_id, duration_ms)
+
+
+def _lengths(db: Session, ids: set[TrackId]) -> dict[TrackId, int]:
+    rows = db.execute(select(TrackRow.id, TrackRow.duration_ms))
+    return {TrackId(track_id): ms for track_id, ms in rows if track_id in ids and ms is not None}
 
 
 def _sources(

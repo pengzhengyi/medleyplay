@@ -21,6 +21,7 @@ from medleyplay.plugin_api import (
     CommunityRating,
     EnrichStatus,
     EnrichTrack,
+    FoundLyrics,
     ShownDetail,
     SuggestedSong,
     VideoId,
@@ -62,7 +63,8 @@ class EnrichedTrack(_Model):
     """What the enricher found: values and songs, or the video's text, and a copy of its cover.
 
     `ratings` are what the site's listeners rated the song and its album. `ai_answered`
-    and `ai_failures` say which AI provider answered and which failed first.
+    and `ai_failures` say which AI provider answered and which failed first. `lyrics`
+    are the song's lyrics, from an enricher that finds them.
     """
 
     enricher: str
@@ -74,6 +76,7 @@ class EnrichedTrack(_Model):
     cover: CoverFile | None = None
     ai_answered: str | None = None
     ai_failures: tuple[AiFailure, ...] = ()
+    lyrics: FoundLyrics | None = None
 
 
 def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
@@ -113,6 +116,7 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
         cover=copy,
         ai_answered=answer.ai_answered,
         ai_failures=answer.ai_failures,
+        lyrics=answer.lyrics,
     )
 
 

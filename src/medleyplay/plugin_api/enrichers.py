@@ -194,6 +194,31 @@ class CommunityRating(_Model):
     link: Annotated[str, StringConstraints(max_length=MAX_LINK)]
 
 
+MAX_LYRICS: Final = 64 * 1024
+"""The most characters lyrics may hold."""
+
+
+class LyricsProvider(StrEnum):
+    """A site that answers the lyrics of a song."""
+
+    LRCLIB = "lrclib"
+
+
+class FoundLyrics(_Model):
+    """A song's lyrics as a provider has them: LRC or plain text, or none, it being instrumental."""
+
+    provider: LyricsProvider
+    text: Annotated[str, StringConstraints(max_length=MAX_LYRICS)] = ""
+    instrumental: bool = False
+
+    @model_validator(mode="after")
+    def _words_or_instrumental(self) -> "FoundLyrics":
+        if bool(self.text.strip()) == self.instrumental:
+            message = "Lyrics hold words, or say the song is instrumental."
+            raise ValueError(message)
+        return self
+
+
 class Enriched(_Model):
     """What the site said, or why it said nothing.
 
@@ -203,7 +228,8 @@ class Enriched(_Model):
     bare name of an image the enricher wrote into the folder. `ratings` are what the
     site's listeners rated the song and its album, beside the values. An enricher that asks AI
     providers names in `ai_answered` the one whose answer it used, and lists in
-    `ai_failures` each one asked before it that gave none.
+    `ai_failures` each one asked before it that gave none. `lyrics` are the song's
+    lyrics, from an enricher that finds them, in place of values.
     """
 
     status: EnrichStatus = EnrichStatus.OK
@@ -215,9 +241,13 @@ class Enriched(_Model):
     ratings: Annotated[tuple[CommunityRating, ...], Field(max_length=MAX_RATINGS)] = ()
     ai_answered: Annotated[str, StringConstraints(max_length=64)] | None = None
     ai_failures: Annotated[tuple[AiFailure, ...], Field(max_length=MAX_AI_PROVIDERS)] = ()
+    lyrics: FoundLyrics | None = None
 
     @model_validator(mode="after")
     def _one_kind_of_answer(self) -> "Enriched":
+        if self.lyrics is not None and (self.values or self.video_text is not None):
+            message = "An answer holds lyrics, or values or the video's text, not both."
+            raise ValueError(message)
         if self.values and self.video_text is not None:
             message = "An answer holds values or the video's text, not both."
             raise ValueError(message)

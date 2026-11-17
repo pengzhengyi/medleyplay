@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Lyrics, looked up as songs come up** — a song's lyrics are looked up on LRCLIB
+  (lrclib.net), an open lyrics database, as it plays and before it comes up next,
+  timed line by line where LRCLIB times them; *Find lyrics* in a song's menu asks at
+  once, and Settings → Lyrics chooses *Next to play* or *Manually*. A song inside a
+  long file is asked about by its own title; the household's own lyrics come first.
+  Nothing shows them yet. New: the `lyrics` plugin and enricher, `GET`, `PUT`, and
+  `DELETE /api/tracks/{id}/lyrics` (migration 0050, `track_lyrics`).
+
 - **A song's artists one by one** — *Add artist* in a song's *Edit details* turns its
   artist into chips, one per artist, each with its photo, *+ feat.* to credit it as
   featured, and a way to remove it. The song then counts under each artist, whatever

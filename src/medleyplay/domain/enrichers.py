@@ -65,28 +65,46 @@ class Subject(StrEnum):
     """What a Track shows: its title and artist, or its album for a split file."""
     TEXT = "text"
     """A Track's video text, wherever it came from."""
+    LYRICS = "lyrics"
+    """A song's lyrics, by its title, artist, album, and length."""
+
+
+class LyricsHeld(StrEnum):
+    """Which lyrics a song has already, which decides whether its lyrics are looked up."""
+
+    NONE = "none"
+    LOCAL = "local"
+    """The household's own, or its files': never replaced by lyrics looked up."""
+    ONLINE = "online"
+    """Found online before: looked up again only when someone asks."""
 
 
 @dataclass(frozen=True)
 class Enricher:
     """An enricher the core asks: its name as a plugin key, and how it is asked.
 
-    `origin` is what its values are recorded as, `subject` what it is asked about,
-    `spacing` the least time between two of its calls, and `site` the site whose
-    proxy its calls go through, or `None` when the household has none for it. `source`
-    is what it asks, as a refusal names it, and `uses_ai` says it asks the AI provider,
-    which it does not until an admin has set it up. `rating_hosts` are the hosts the
-    pages of the ratings it answers may be on; an enricher with none answers no ratings.
+    `origin` is what its values are recorded as, or `None` for one that answers no
+    details, `subject` what it is asked about, `spacing` the least time between two of
+    its calls, and `site` the site whose proxy its calls go through, or `None` when the
+    household has none for it. `source` is what it asks, as a refusal names it, and
+    `uses_ai` says it asks the AI provider, which it does not until an admin has set it
+    up. `rating_hosts` are the hosts the pages of the ratings it answers may be on; an
+    enricher with none answers no ratings. A subject is asked about again
+    `ask_again_after` the last asking, and the household may choose among `modes`,
+    `default_mode` until it does.
     """
 
     name: str
-    origin: Origin
+    origin: Origin | None
     subject: Subject
     spacing: timedelta
     site: str | None
     source: str = "the site"
     uses_ai: bool = False
     rating_hosts: frozenset[str] = frozenset()
+    ask_again_after: timedelta = ASK_AGAIN_AFTER
+    default_mode: EnricherMode = EnricherMode.MANUAL
+    modes: frozenset[EnricherMode] = frozenset(EnricherMode)
 
     @property
     def lacking(self) -> "Ineligible":
@@ -118,7 +136,19 @@ AI_DETAILS: Final = Enricher(
     source="the AI provider",
     uses_ai=True,
 )
-ENRICHERS: Final = {each.name: each for each in (BILIBILI_DETAILS, MUSICBRAINZ, AI_DETAILS)}
+LYRICS: Final = Enricher(
+    name="lyrics",
+    origin=None,
+    subject=Subject.LYRICS,
+    spacing=timedelta(seconds=1),
+    site=None,
+    source="LRCLIB",
+    ask_again_after=timedelta(days=30),
+    default_mode=EnricherMode.NEXT,
+    # Every song at once would ask a free service about the whole Library.
+    modes=frozenset({EnricherMode.MANUAL, EnricherMode.NEXT}),
+)
+ENRICHERS: Final = {each.name: each for each in (BILIBILI_DETAILS, MUSICBRAINZ, AI_DETAILS, LYRICS)}
 
 
 def enricher_named(name: str) -> Enricher:
@@ -170,7 +200,9 @@ class Ineligible(StrEnum):
     NO_TEXT = "no_text"
     NOT_SET_UP = "not_set_up"
     SEGMENT = "segment"
+    ALBUM = "album"
     HAS_TEXT = "has_text"
+    HAS_LYRICS = "has_lyrics"
     ASKED = "asked"
     STOPPED = "stopped"
 
@@ -179,6 +211,7 @@ _LACKING: Final = {
     Subject.VIDEO: Ineligible.NO_VIDEO,
     Subject.WORDS: Ineligible.NO_WORDS,
     Subject.TEXT: Ineligible.NO_TEXT,
+    Subject.LYRICS: Ineligible.NO_WORDS,
 }
 MESSAGES: Final = {
     Ineligible.NO_VIDEO: "This Track has no video to look up.",
@@ -186,10 +219,21 @@ MESSAGES: Final = {
     Ineligible.NO_TEXT: "This Track has no video text for the AI to read.",
     Ineligible.NOT_SET_UP: "The AI provider is not set up yet. An admin can set it up in Settings.",
     Ineligible.SEGMENT: "A song inside a longer file takes its details from that file.",
+    Ineligible.ALBUM: "A whole album has no lyrics of its own; its songs do.",
     Ineligible.HAS_TEXT: "The video's text was read from a file or entered by the household.",
+    Ineligible.HAS_LYRICS: "This song has lyrics already.",
     Ineligible.ASKED: "This Track was looked up in the last 24 hours.",
     Ineligible.STOPPED: "Looking up Tracks here is stopped until an admin resets it.",
 }
+
+
+def message_of(reason: Ineligible, enricher: Enricher) -> str:
+    """Return why a Track is not asked for, as the household reads it."""
+    if reason is Ineligible.ASKED:
+        wait = enricher.ask_again_after
+        since = f"{wait.days} days" if wait.days > 1 else f"{wait // timedelta(hours=1)} hours"
+        return f"This Track was looked up in the last {since}."
+    return MESSAGES[reason]
 
 
 @dataclass(frozen=True)
@@ -251,6 +295,18 @@ class TrackFacts:
     """Where the Track's video text was read from, or `None` when it has none."""
     asked_at: datetime | None
     """When the subject was last asked about, or `None` when it never was."""
+    is_album: bool = False
+    """The Track is a whole album by its Kind."""
+    lyrics_from: LyricsHeld = LyricsHeld.NONE
+    """Which lyrics the song has already."""
+
+
+def lyrics_subject(terms: SearchTerms, track_id: TrackId, duration_ms: int | None) -> str:
+    """Return the subject that says a song's lyrics were looked up by these words and length.
+
+    A song whose words or length change, as a corrected title, is a new subject.
+    """
+    return hashlib.sha256(f"lyrics\x1f{terms.key(track_id)}\x1f{duration_ms}".encode()).hexdigest()
 
 
 def text_subject(track_id: TrackId, text: VideoText) -> str:
@@ -282,6 +338,8 @@ def why_not(
         return Ineligible.STOPPED
     if enricher.uses_ai and not set_up:
         return Ineligible.NOT_SET_UP
+    if enricher.subject is Subject.LYRICS:
+        return _why_not_lyrics(facts, now, enricher, again=again)
     return _why_not_track(facts, now, enricher, again=again and enricher.uses_ai)
 
 
@@ -294,6 +352,27 @@ def _why_not_track(
         return enricher.lacking
     if enricher.subject is Subject.VIDEO and facts.text_came_from in {"file", "household"}:
         return Ineligible.HAS_TEXT
-    if not again and facts.asked_at is not None and now - facts.asked_at < ASK_AGAIN_AFTER:
-        return Ineligible.ASKED
-    return None
+    return _asked(facts, now, enricher, again=again)
+
+
+def _why_not_lyrics(
+    facts: TrackFacts, now: datetime, enricher: Enricher, *, again: bool
+) -> Ineligible | None:
+    """A song's own words find its lyrics, a song inside a longer file's too."""
+    if facts.is_album:
+        return Ineligible.ALBUM
+    if facts.subject is None:
+        return enricher.lacking
+    if facts.lyrics_from is LyricsHeld.LOCAL or (
+        facts.lyrics_from is LyricsHeld.ONLINE and not again
+    ):
+        return Ineligible.HAS_LYRICS
+    return _asked(facts, now, enricher, again=again)
+
+
+def _asked(
+    facts: TrackFacts, now: datetime, enricher: Enricher, *, again: bool
+) -> Ineligible | None:
+    if again or facts.asked_at is None or now - facts.asked_at >= enricher.ask_again_after:
+        return None
+    return Ineligible.ASKED

@@ -33,7 +33,8 @@ CONFIG_FILE: Final = "medleyplay.toml"
 OFF_BY_DEFAULT: Final = frozenset({"ai-details", "bilibili", "bilibili-details", "musicbrainz"})
 """Plugins that are on only when the file turns them on: the two that read Bilibili, the one
 that reads MusicBrainz, and the one that asks an AI model, since each contacts a site that
-needs an account, a key, or a careful pace. The one that reads Wikidata, an open API, is on."""
+needs an account, a key, or a careful pace. The ones that read Wikidata and LRCLIB, open APIs,
+are on."""
 
 
 class ConfigError(Exception):

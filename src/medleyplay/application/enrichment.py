@@ -28,6 +28,7 @@ from medleyplay.application import Clock, details
 from medleyplay.application.ai import is_set_up, record_answered_by, record_answers
 from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
+from medleyplay.application.lyrics import lyrics_held, record_lyrics
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account, AccountId
@@ -48,8 +49,10 @@ from medleyplay.domain.enrichers import (
     Enricher,
     EnricherMode,
     Ineligible,
+    LyricsHeld,
     Subject,
     enricher_named,
+    message_of,
     why_not,
 )
 from medleyplay.domain.errors import (
@@ -60,6 +63,7 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.jobs import Job, JobId, JobState
+from medleyplay.domain.lyrics import LyricsOrigin
 from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import (
     CommunityRatingRow,
@@ -70,7 +74,13 @@ from medleyplay.persistence.schema import (
     TrackRow,
     VideoTextRow,
 )
-from medleyplay.plugin_api import TRACK_ENRICHER, CommunityRating, RatedAs, ShownDetail
+from medleyplay.plugin_api import (
+    TRACK_ENRICHER,
+    CommunityRating,
+    FoundLyrics,
+    RatedAs,
+    ShownDetail,
+)
 from medleyplay.plugin_api import Chapter as AskedChapter
 from medleyplay.plugin_api import VideoText as AnsweredText
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob
@@ -162,6 +172,11 @@ def _complete(
     if enricher.subject is Subject.VIDEO and _text_is_owned(db, track_id):
         return
     _record_ratings(db, track_id, enricher, found.ratings, now)
+    if found.lyrics is not None:
+        _record_found_lyrics(db, track_id, found.lyrics, now)
+        return
+    if enricher.origin is None:
+        return
     if enricher.origin is Origin.AI:
         _record_providers(db, found, now)
         _record_suggestion(db, track_id, found, now)
@@ -177,6 +192,14 @@ def _complete(
         values[Field.COVER] = cover
     if values:
         details.record(db, track_id, enricher.origin, values, now)
+
+
+def _record_found_lyrics(db: Session, track_id: TrackId, found: FoundLyrics, now: datetime) -> None:
+    """Keep the lyrics a site found for the song, unless the household or its files have some."""
+    if lyrics_held(db).get(track_id) is LyricsHeld.LOCAL:
+        return
+    origin = LyricsOrigin(found.provider.value)
+    record_lyrics(db, track_id, origin, found.text, now, instrumental=found.instrumental)
 
 
 def _record_ratings(
@@ -307,13 +330,16 @@ class EnrichmentService:
             available=self._available(enricher),
             stopped_at=None if stop is None else stop.stopped_at,
             reason="" if stop is None else stop.reason,
-            mode=EnricherMode.MANUAL if mode is None else EnricherMode(mode.mode),
+            mode=enricher.default_mode if mode is None else EnricherMode(mode.mode),
         )
 
     def set_mode(self, caller: Account, name: str, mode: EnricherMode) -> EnricherState:
         """Choose when the enricher is asked; admins only. Finding all asks at once."""
         _require_admin(caller)
         enricher = enricher_named(name)
+        if mode not in enricher.modes:
+            message = "That is not a way to ask this enricher."
+            raise InvalidInputError(message)
         with self._units.begin() as db:
             row = db.get(EnricherModeRow, enricher.name)
             if row is None:
@@ -370,12 +396,19 @@ class EnrichmentService:
         """
         enricher = enricher_named(name)
         note = check_hint(hint)
-        if (again or note) and not enricher.uses_ai:
-            message = "Only the AI is asked again or given a note."
+        if note and not enricher.uses_ai:
+            message = "Only the AI is given a note."
+            raise InvalidInputError(message)
+        if again and not (enricher.uses_ai or enricher.subject is Subject.LYRICS):
+            message = "Only the AI and lyrics are asked again."
             raise InvalidInputError(message)
         again = again or bool(note)
         if again and self._jobs.active(ENRICH_KIND, enrich_target(track_id, enricher.name)):
-            message = "The AI is still working on this Track; ask again once it answers."
+            message = (
+                "The AI is still working on this Track; ask again once it answers."
+                if enricher.uses_ai
+                else "This song's lyrics are still being looked up; ask again once they are."
+            )
             raise ConflictError(message)
         return self._submit(enricher, track_id, caller.id, again=again, hint=note)
 
@@ -407,7 +440,7 @@ class EnrichmentService:
             found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up, again=again
         )
         if reason is not None:
-            raise ConflictError(MESSAGES[reason])
+            raise ConflictError(message_of(reason, enricher))
         return self._jobs.submit(
             self._kind,
             enrich_target(track_id, enricher.name),

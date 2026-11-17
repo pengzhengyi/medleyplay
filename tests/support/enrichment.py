@@ -26,6 +26,7 @@ from medleyplay.application.enrichment import EnrichKind, EnrichmentService, enr
 from medleyplay.application.image_links import ImageLinkService, image_link_kinds
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
+from medleyplay.application.lyrics import LyricsService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
@@ -60,6 +61,7 @@ class Enriching:
     plugins: PluginService
     catalog: CatalogService
     details: DetailsService
+    lyrics: LyricsService
     covers: CoverService
     proxies: ProxyService
     ai: AiService
@@ -218,6 +220,7 @@ def running_enrichment(
                 plugins=plugins,
                 catalog=CatalogService(units, clock, online=online),
                 details=DetailsService(units, clock),
+                lyrics=LyricsService(units, clock),
                 covers=CoverService(units, clock, data_dir / COVERS_FOLDER),
                 proxies=proxies,
                 ai=ai,

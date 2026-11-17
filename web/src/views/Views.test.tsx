@@ -7,6 +7,7 @@ import { App } from "../App";
 import { hrefOf } from "../routes";
 import {
   type Routes,
+  artistIdOf,
   artistNameOf,
   detailsOf,
   downloadUnderWayOf,
@@ -583,16 +584,22 @@ function withFavorites(favorites: {
   readonly albums?: readonly (readonly [string, string])[];
 }): Routes {
   const read = {
-    artists: (favorites.artists ?? []).map((name) => ({ name })),
+    artists: (favorites.artists ?? []).map((name) => ({ id: artistIdOf(name) })),
     albums: (favorites.albums ?? []).map(([artist, name]) => ({ artist, name })),
   };
   return {
     ...signedIn(LIBRARY),
     "GET /api/favorites": { body: read },
-    "PUT /api/artists/favorite": (body) => {
-      const { name, favorite } = body as { name: string; favorite: boolean };
-      return { body: { ...read, artists: favorite ? [...read.artists, { name }] : [] } };
-    },
+    // Each artist of the Library, favorited by its id.
+    ...Object.fromEntries(
+      [...new Set(LIBRARY.flatMap((track) => track.artist_ids))].map((id) => [
+        `PUT /api/favorites/artists/${id}`,
+        (body: unknown) => {
+          const { favorite } = body as { favorite: boolean };
+          return { body: { ...read, artists: favorite ? [...read.artists, { id }] : [] } };
+        },
+      ]),
+    ),
     "PUT /api/albums/favorite": (body) => {
       const { artist, name, favorite } = body as {
         artist: string;
@@ -684,14 +691,27 @@ describe("an artist's page", () => {
     expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
   });
 
+  it("opens by the id of the Library's artist, headed by the name its songs write", async () => {
+    open(`#/artist?id=${artistIdOf("ryo")}`, withRyo(false));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "ryo" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Favorite artist ryo" })).toBeInTheDocument();
+  });
+
+  it("still opens by the name alone, as links made before ids do", async () => {
+    open("#/artist?name=RYO", withRyo(false));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "RYO" })).toBeVisible();
+  });
+
   it("is opened from the Artists by the name its songs write, and keeps its heart", async () => {
     open("#/artists", {
       ...withRyo(true, "Ryo the composer"),
-      "GET /api/favorites": { body: { artists: [{ name: "ryo" }], albums: [] } },
+      "GET /api/favorites": { body: { artists: [{ id: artistIdOf("ryo") }], albums: [] } },
     });
 
     const tile = await screen.findByRole("link", { name: /Favorite.*Ryo the composer/u });
-    expect(tile).toHaveAttribute("href", "#/artist?name=ryo");
+    expect(tile).toHaveAttribute("href", `#/artist?id=${artistIdOf("ryo")}&name=ryo`);
     await userEvent.click(tile);
 
     expect(
@@ -717,7 +737,7 @@ describe("favorite artists and albums", () => {
       "aria-pressed",
       "true",
     );
-    expect(calls).toContain("PUT /api/artists/favorite");
+    expect(calls).toContain(`PUT /api/favorites/artists/${artistIdOf("ryo")}`);
     await userEvent.click(within(screen.getByRole("main")).getByRole("link", { name: "Artists" }));
     expect(await screen.findByRole("link", { name: /Favorite.*ryo/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /ルワン/ })).not.toHaveAccessibleName(/Favorite/);

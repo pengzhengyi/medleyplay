@@ -27,7 +27,7 @@ import {
   isFavoriteArtist,
 } from "../library/favoriteGroups";
 import { siteNameOf } from "../library/videos";
-import { albumArtistOf, artistNamesOf } from "../library/views";
+import { albumArtistOf, artistNamesOf, artistRouteOf } from "../library/views";
 import { type AlbumSong, type Playing, songPlaying } from "../player/albumNow";
 import { hrefOf } from "../routes";
 import { FavoriteHeart } from "./FavoriteHeart";
@@ -153,7 +153,7 @@ export function NowPlayingNames({
                   {place > 0 && <span className="np-artist-and">, </span>}
                   <a
                     className="np-artist-name"
-                    href={hrefOf({ view: "artist", name })}
+                    href={hrefOf(artistRouteOf(track, place))}
                     onClick={onNavigate}
                   >
                     {name}

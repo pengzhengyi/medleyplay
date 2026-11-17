@@ -2,10 +2,10 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { FavoritesRead, Track } from "../api";
-import { favoriteGroupsOf } from "../library/favoriteGroups";
+import type { Track } from "../api";
+import type { FavoriteGroups } from "../library/favoriteGroups";
 import type { Station } from "../library/useStation";
-import { trackOf } from "../testing/server";
+import { favoriteGroupsNaming, trackOf } from "../testing/server";
 import { RadioView } from "./RadioView";
 
 const NOW = new Date("2026-11-06T12:00:00Z");
@@ -35,7 +35,7 @@ const LIBRARY = [
 function renderRadio(
   tracks: readonly Track[] = LIBRARY,
   playing?: Partial<Station>,
-  favorites?: FavoritesRead,
+  favorites?: FavoriteGroups,
 ) {
   const station: Station = {
     seed: undefined,
@@ -52,7 +52,7 @@ function renderRadio(
       onPlayAll={onPlayAll}
       accountId={1}
       now={NOW}
-      {...(favorites === undefined ? {} : { favorites: favoriteGroupsOf(favorites) })}
+      {...(favorites === undefined ? {} : { favorites })}
     />,
   );
   return { station, onPlayAll };
@@ -86,7 +86,7 @@ describe("the Radio tab", () => {
   });
 
   it("counts a song by a favorite artist as a favorite", () => {
-    renderRadio(LIBRARY, undefined, { artists: [{ name: "朴树" }], albums: [] });
+    renderRadio(LIBRARY, undefined, favoriteGroupsNaming(["朴树"]));
 
     expect(screen.getByRole("region", { name: "Favorites" })).toHaveTextContent(
       "Your 4 favorite songs",

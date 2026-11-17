@@ -387,15 +387,16 @@ class TrackStateRow(Base):
 
 
 class FavoriteArtistRow(Base):
-    """An artist one Account favorited, kept by its folded name while it is a favorite."""
+    """An artist of the Library's one Account favorited, kept by its id while it is a favorite."""
 
     __tablename__ = "favorite_artist"
 
     account_id: Mapped[int] = mapped_column(
         ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
     )
-    key: Mapped[str] = mapped_column(String(512), primary_key=True)
-    name: Mapped[str] = mapped_column(String(512))
+    artist_id: Mapped[str] = mapped_column(
+        ForeignKey("library_artist.id", ondelete="CASCADE"), primary_key=True
+    )
 
 
 class FavoriteAlbumRow(Base):

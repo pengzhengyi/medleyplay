@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { PAGE_ID } from "../page";
 import {
+  artistIdOf,
   detailsOf,
   downloadOf,
   downloadUnderWayOf,
@@ -845,17 +846,20 @@ describe("adding music by link and by file", () => {
 });
 
 describe("favorite artists and albums", () => {
-  it("loads them with the Tracks, matched as the Library names them", async () => {
+  it("loads them with the Tracks, artists by id and albums as the Library names them", async () => {
     serve({
       ...signedIn([trackOf(1, "Intro", { artist: "朴树" })]),
       "GET /api/favorites": {
-        body: { artists: [{ name: "朴树" }], albums: [{ artist: "朴树", name: "生如夏花" }] },
+        body: {
+          artists: [{ id: artistIdOf("朴树") }],
+          albums: [{ artist: "朴树", name: "生如夏花" }],
+        },
       },
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
 
     await waitFor(() => {
-      expect(result.current.favoriteGroups.artists.has("朴树")).toBe(true);
+      expect(result.current.favoriteGroups.artistIds.has(artistIdOf("朴树"))).toBe(true);
     });
     expect(result.current.favoriteGroups.albums.has("朴树\n生如夏花")).toBe(true);
   });
@@ -863,7 +867,9 @@ describe("favorite artists and albums", () => {
   it("favorites an artist at once, then shows what the server keeps", async () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro", { artist: "朴树" })]),
-      "PUT /api/artists/favorite": { body: { artists: [{ name: "朴树" }], albums: [] } },
+      [`PUT /api/favorites/artists/${artistIdOf("朴树")}`]: {
+        body: { artists: [{ id: artistIdOf("朴树") }], albums: [] },
+      },
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
     await waitFor(() => {
@@ -871,15 +877,15 @@ describe("favorite artists and albums", () => {
     });
 
     act(() => {
-      result.current.setArtistFavorite("朴树", true);
+      result.current.setArtistFavorite(artistIdOf("朴树"), true);
     });
-    const atOnce = result.current.favoriteGroups.artists.has("朴树");
+    const atOnce = result.current.favoriteGroups.artistIds.has(artistIdOf("朴树"));
 
     expect(atOnce).toBe(true);
     await waitFor(() => {
-      expect(calls).toContain("PUT /api/artists/favorite");
+      expect(calls).toContain(`PUT /api/favorites/artists/${artistIdOf("朴树")}`);
     });
-    expect(result.current.favoriteGroups.artists.has("朴树")).toBe(true);
+    expect(result.current.favoriteGroups.artistIds.has(artistIdOf("朴树"))).toBe(true);
   });
 
   it("takes an album's heart back, saying why, when the server refuses", async () => {

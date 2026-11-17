@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from medleyplay.domain.artist_split import Credit, Role, credited_as, split_suggestion
@@ -24,6 +25,7 @@ from medleyplay.persistence.schema import (
     ArtistLinkRow,
     ArtistNameRow,
     ArtistRow,
+    FavoriteArtistRow,
     LibraryArtistRow,
     NameSplitRow,
     TrackArtistRow,
@@ -91,18 +93,23 @@ def linked_artists(db: Session, artist_ids: Iterable[str]) -> dict[str, LinkedAr
     }
 
 
-def artist_names_of(db: Session, track_id: TrackId | None = None) -> dict[int, tuple[str, ...]]:
-    """Return the artists each Track's artist names, as written, in order; or one Track's."""
+def artist_names_of(
+    db: Session, track_id: TrackId | None = None
+) -> dict[int, tuple[tuple[str, str], ...]]:
+    """Return the artists each Track's artist names, in order, or one Track's.
+
+    Each is the name as the Track writes it, and the id of the artist it is bound to.
+    """
     query = (
-        select(TrackArtistRow.track_id, TrackArtistRow.written)
+        select(TrackArtistRow.track_id, TrackArtistRow.written, TrackArtistRow.artist_id)
         .where(TrackArtistRow.album_artist.is_(False))
         .order_by(TrackArtistRow.track_id, TrackArtistRow.position)
     )
     if track_id is not None:
         query = query.where(TrackArtistRow.track_id == track_id)
-    found: dict[int, list[str]] = {}
-    for each, written in db.execute(query):
-        found.setdefault(each, []).append(written)
+    found: dict[int, list[tuple[str, str]]] = {}
+    for each, written, artist_id in db.execute(query):
+        found.setdefault(each, []).append((written, artist_id))
     return {each: tuple(names) for each, names in found.items()}
 
 
@@ -186,6 +193,7 @@ def rebind_name(db: Session, name: str, musicbrainz_id: str | None) -> None:
     if joined is not None:
         _move(db, key, artist.id, joined.id)
         if only_name:
+            _move_favorites(db, artist.id, joined.id)
             db.delete(artist)
     elif only_name:
         artist.musicbrainz_id = musicbrainz_id
@@ -226,6 +234,20 @@ def _new_artist(db: Session, name: str, musicbrainz_id: str | None) -> LibraryAr
 
 def _names_of(db: Session, artist_id: str) -> list[str]:
     return list(db.scalars(select(ArtistNameRow.key).where(ArtistNameRow.artist_id == artist_id)))
+
+
+def _move_favorites(db: Session, from_id: str, to_id: str) -> None:
+    """Make every favorite of one artist a favorite of another, which it is joining."""
+    accounts = db.scalars(
+        select(FavoriteArtistRow.account_id).where(FavoriteArtistRow.artist_id == from_id)
+    ).all()
+    for account_id in accounts:
+        db.execute(
+            insert(FavoriteArtistRow)
+            .values(account_id=account_id, artist_id=to_id)
+            .on_conflict_do_nothing()
+        )
+    db.execute(delete(FavoriteArtistRow).where(FavoriteArtistRow.artist_id == from_id))
 
 
 def _move(db: Session, key: str, from_id: str, to_id: str) -> None:

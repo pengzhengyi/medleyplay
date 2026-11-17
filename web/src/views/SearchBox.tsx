@@ -318,7 +318,13 @@ export function SearchBox({
                     <span className="suggest-meta">{songCount(artist.count)}</span>
                   </>
                 ),
-                does: { go: { view: "artist", name: artist.link } },
+                does: {
+                  go: {
+                    view: "artist",
+                    name: artist.link,
+                    ...(artist.id !== undefined && { id: artist.id }),
+                  },
+                },
               },
               {
                 key: `${artist.link}-songs`,

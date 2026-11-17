@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Artists by id** — each song names the ids of its artists (`artist_ids`), an
+  artist's page opens by id (`#/artist?id=…`; links by name still open), and
+  favorite artists are kept by id, following an artist whose name joins another.
+  Changed: `PUT /api/artists/favorite` is now `PUT /api/favorites/artists/{id}`,
+  and `GET /api/favorites` lists artists as `{id}` (migration 0051).
+
 - **Lyrics from NetEase Cloud Music** — Settings → Lyrics → *Also look on NetEase
   Cloud Music* asks NetEase for the songs LRCLIB has no lyrics for, translations
   included, and looks those songs up again at once. Off by default; only NetEase's

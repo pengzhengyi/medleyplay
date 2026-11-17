@@ -26,7 +26,7 @@ from medleyplay.domain.details import Kind, KindReason
 from medleyplay.domain.history import DEFAULT_HISTORY_LENGTH, KEPT_PLAYS, Played
 from medleyplay.domain.playback import PlayId
 from medleyplay.web.deps import CatalogDep, SignedInAccount
-from medleyplay.web.ids import RowId
+from medleyplay.web.ids import ArtistIdPath, RowId
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -100,6 +100,9 @@ class TrackOut(BaseModel):
     artists: list[str] = Field(
         description="The artists its artist names, as written: each one if the name was split."
     )
+    artist_ids: list[str] = Field(
+        description="The id of the Library's artist each of `artists` is, in the same order."
+    )
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -132,6 +135,7 @@ class TrackOut(BaseModel):
             kind_reason=track.kind_reason,
             cover=details.cover,
             artists=list(track.artists),
+            artist_ids=list(track.artist_ids),
             community=None
             if track.community is None
             else CommunityRatingOut.of_rating(track.community),
@@ -146,9 +150,8 @@ class FavoriteIn(BaseModel):
 
 
 class ArtistFavoriteIn(BaseModel):
-    """Whether an artist is a favorite, named as the Library names it."""
+    """Whether an artist is a favorite."""
 
-    name: str = Field(max_length=MAX_FAVORITE_NAME_LENGTH)
     favorite: bool
 
 
@@ -161,9 +164,9 @@ class AlbumFavoriteIn(BaseModel):
 
 
 class FavoriteArtistOut(BaseModel):
-    """A favorite artist, by the name it was favorited under."""
+    """A favorite artist, by the id of the Library's artist, as a Track's `artist_ids` names it."""
 
-    name: str
+    id: str
 
 
 class FavoriteAlbumOut(BaseModel):
@@ -183,7 +186,7 @@ class FavoritesOut(BaseModel):
     def of(cls, favorites: Favorites) -> "FavoritesOut":
         """Return `favorites` as the API sends them."""
         return cls(
-            artists=[FavoriteArtistOut(name=name) for name in favorites.artists],
+            artists=[FavoriteArtistOut(id=artist_id) for artist_id in favorites.artists],
             albums=[
                 FavoriteAlbumOut(artist=album.artist, name=album.name) for album in favorites.albums
             ],
@@ -286,12 +289,15 @@ def get_favorites(me: SignedInAccount, catalog: CatalogDep) -> FavoritesOut:
     return FavoritesOut.of(catalog.favorites(me.id))
 
 
-@router.put("/artists/favorite")
+@router.put("/favorites/artists/{artist_id}")
 def set_artist_favorite(
-    body: ArtistFavoriteIn, me: SignedInAccount, catalog: CatalogDep
+    artist_id: ArtistIdPath,
+    body: ArtistFavoriteIn,
+    me: SignedInAccount,
+    catalog: CatalogDep,
 ) -> FavoritesOut:
-    """Mark or unmark an artist as your favorite, and return your favorites."""
-    catalog.set_artist_favorite(me.id, body.name, favorite=body.favorite)
+    """Mark or unmark one of the Library's artists as your favorite; 404 for no such artist."""
+    catalog.set_artist_favorite(me.id, artist_id, favorite=body.favorite)
     return FavoritesOut.of(catalog.favorites(me.id))
 
 

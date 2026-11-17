@@ -171,12 +171,19 @@ export function Library({
     splitOffers.offers,
     artistSplits.splits,
   );
-  const links = useMemo(() => linksOf(artistNames.names), [artistNames.names]);
-  // A favorite name makes every name linked with it a favorite, for Radio and the views.
+  const links = useMemo(() => linksOf(artistNames.names, tracks), [artistNames.names, tracks]);
+  // A favorite artist makes each of its names, and every name linked with one, a favorite.
   const favorites = useMemo(
     () => withLinkedFavorites(library.favoriteGroups, links),
     [library.favoriteGroups, links],
   );
+  // A heart names the artist as written; the server keeps the Library's artist that name is.
+  const favoriteArtist = (name: string, favorite: boolean) => {
+    const id = links.idOf(name);
+    if (id !== undefined) {
+      library.setArtistFavorite(id, favorite);
+    }
+  };
   const station = useStation(player, tracks, account.id, favorites);
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
@@ -616,7 +623,7 @@ export function Library({
             station={station}
             accountId={account.id}
             favorites={favorites}
-            onFavoriteArtist={library.setArtistFavorite}
+            onFavoriteArtist={favoriteArtist}
             onFavoriteAlbum={library.setAlbumFavorite}
             links={links}
             artistNames={artistNames}
@@ -696,7 +703,7 @@ export function Library({
           tracks={byId}
           onFavorite={actions.onFavorite}
           favorites={favorites}
-          onFavoriteArtist={library.setArtistFavorite}
+          onFavoriteArtist={favoriteArtist}
           onFavoriteAlbum={library.setAlbumFavorite}
           menuActions={actions}
           lyrics={lyrics}

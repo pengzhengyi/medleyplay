@@ -47,6 +47,7 @@ import {
   songsOf,
   albumArtistOf,
   tracksOfAlbum,
+  artistWrittenOf,
   tracksOfArtist,
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
@@ -161,20 +162,24 @@ function viewOf(given: ViewProps) {
     case "artists":
       return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
     case "artist": {
-      const songs = tracksOfArtist(props.tracks, route.name, props.links);
+      // A page opened by an artist's id shows its songs by the name most of them write.
+      const name =
+        (route.id === undefined ? undefined : artistWrittenOf(props.tracks, route.id)) ??
+        route.name;
+      const songs = tracksOfArtist(props.tracks, name, props.links);
       const known = props.artistNames?.names;
-      const group = (props.links ?? NO_LINKS).groupOf(route.name);
+      const group = (props.links ?? NO_LINKS).groupOf(name);
       const artist = group.startsWith("artist:")
         ? known?.artists.find((each) => `artist:${each.id}` === group)
         : undefined;
-      const named = known?.names.find((each) => fold(each.name.trim()) === fold(route.name.trim()));
-      const shown = artist?.shown_as ?? route.name;
+      const named = known?.names.find((each) => fold(each.name.trim()) === fold(name.trim()));
+      const shown = artist?.shown_as ?? name;
       const reload = props.artistNames?.reload;
       return (
         <Songs
           title={shown || UNKNOWN_ARTIST}
           about={
-            route.name !== "" && (
+            name !== "" && (
               <ArtistAbout
                 name={shown}
                 songs={songs}
@@ -188,7 +193,7 @@ function viewOf(given: ViewProps) {
             reload !== undefined && (
               <EditArtistButton
                 artist={artist}
-                written={mostWritten(songs) ?? route.name}
+                written={mostWritten(songs) ?? name}
                 onChanged={reload}
               />
             )
@@ -196,16 +201,16 @@ function viewOf(given: ViewProps) {
           back={{ view: "artists" }}
           backLabel="Artists"
           heart={
-            canFavorite(route.name) && (
+            canFavorite(name) && (
               <FavoriteHeart
                 kind="artist"
                 name={shown}
-                favorite={isFavoriteArtist(props.favorites, route.name)}
+                favorite={isFavoriteArtist(props.favorites, name)}
                 onChange={(favorite) => {
-                  props.onFavoriteArtist(route.name, favorite);
+                  props.onFavoriteArtist(name, favorite);
                 }}
                 loved={favoriteSongsSuggesting(songs)}
-                suggestionKey={`${String(props.accountId)}:artist:${fold(route.name.trim())}`}
+                suggestionKey={`${String(props.accountId)}:artist:${fold(name.trim())}`}
               />
             )
           }
@@ -507,7 +512,13 @@ function ArtistList({
           key={artist.link}
           className={isFavoriteArtist(favorites, artist.link) ? "favorite" : ""}
         >
-          <a href={hrefOf({ view: "artist", name: artist.link })}>
+          <a
+            href={hrefOf({
+              view: "artist",
+              name: artist.link,
+              ...(artist.id !== undefined && { id: artist.id }),
+            })}
+          >
             <span className="tile-frame">
               <Cover cover={links.photoOf(links.groupOf(artist.link))} className="avatar">
                 {initialOf(artist.name)}

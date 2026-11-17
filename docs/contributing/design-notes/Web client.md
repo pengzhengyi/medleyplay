@@ -72,8 +72,11 @@ no router package.
 | Settings | `#/settings`, `#/settings?section=ai` | See [Settings](#settings); `section` opens and goes to the section of that id |
 | Clean up | `#/clean-up` | The Library's names that could read better: to [tidy](<Track details.md>), to [split into the artists they list](Artists.md#names-written-as-several-artists), and to [link to one artist](Artists.md#the-web-client); and long files to [split by the list found](Segments.md#split-offers) |
 
-- **An artist's or album's Tracks** open at `#/artist?name=…` and
-  `#/album?artist=…&name=…`, in the song table, so a name with a `/` is safe.
+- **An artist's or album's Tracks** open at `#/artist?id=…&name=…` and
+  `#/album?artist=…&name=…`, in the song table, so a name with a `/` is safe. An
+  artist opens by the id of the Library's artist, headed by the name most of its
+  songs write; with no id, or one no song is bound to any more, by the name, so
+  `#/artist?name=…` links made before ids still open.
 - **Artists are the artist field as written:** `初音ミク/米津玄師` is an artist
   of its own, since splitting names on a separator guesses wrong as often as
   right. Names that differ only in case or width are one artist. A blank artist
@@ -429,13 +432,14 @@ Track's kind is decided.
   [Recommendations](Recommendations.md#how-songs-are-scored) says. They don't
   keep songs downloaded or put them in *Favorites*, which follow each song's
   own heart.
-- **The server keeps each by name:** `GET /api/favorites` lists them,
-  `PUT /api/artists/favorite` takes `{name, favorite}`, and
-  `PUT /api/albums/favorite` takes `{artist, name, favorite}`; each answers with
-  all of them, and each value is absolute. Names that differ only in case or
-  width are one favorite, and one no longer in the Library stays until it is
-  unfavorited. The client alone says which artist or album of the Library a
-  name is, folding names as the views do.
+- **The server keeps artists by id, albums by name:** `GET /api/favorites` lists
+  them, `PUT /api/favorites/artists/{id}` takes `{favorite}` for one of the
+  Library's artists, and `PUT /api/albums/favorite` takes `{artist, name,
+  favorite}`; each answers with all of them, and each value is absolute. A heart
+  names an artist as written, and the client sends the id its songs are bound to.
+  Album names that differ only in case or width are one favorite, and one no
+  longer in the Library stays until it is unfavorited; the client says which
+  album of the Library a name is, folding names as the views do.
 
 ## Settings
 

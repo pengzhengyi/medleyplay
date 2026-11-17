@@ -150,6 +150,8 @@ class Track:
     """The Account's rating of the Track's album, which stands for `rating` when that is unset."""
     artists: tuple[str, ...] = ()
     """The artists its artist names, as written: each one, if the name was split, or the name."""
+    artist_ids: tuple[str, ...] = ()
+    """The id of the Library's artist each of `artists` is bound to, in the same order."""
 
 
 @dataclass(frozen=True)
@@ -205,10 +207,10 @@ class FavoriteAlbum:
 
 @dataclass(frozen=True)
 class Favorites:
-    """The artists and albums an Account favorited, by the names it favorited them under.
+    """The artists an Account favorited, by the ids of the Library's artists, and its albums.
 
-    The client matches them to its artists and albums, so a name that no longer
-    matches stays until it is unfavorited.
+    Albums are kept by the names they were favorited under; the client matches them to
+    its albums, so a name that no longer matches stays until it is unfavorited.
     """
 
     artists: tuple[str, ...]

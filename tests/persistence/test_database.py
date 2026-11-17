@@ -839,3 +839,52 @@ def test_migrating_binds_every_tracks_artists_and_one_artist_per_musicbrainz_art
     assert ids[("Yesterday", False)] == ids[("Help!", False)]
     assert ids[("Creep", False)] == ids[("Creep", True)] != ids[("Yesterday", False)]
     assert linked == ["b10bbbfc"]
+
+
+def _favorites_of_alice_before_ids(connection: Connection) -> None:
+    """Alice's favorites by name: *Jay*, naming an artist, and *Nobody*, which no song shows."""
+    connection.execute(
+        text(
+            "INSERT INTO account (id, username, display_name, password_hash, role, created_at)"
+            " VALUES (1, 'alice', 'Alice', 'x', 'admin', '2026-11-18 00:00:00.000000')"
+        )
+    )
+    connection.execute(text("INSERT INTO library_artist (id, name) VALUES ('a1', 'Jay')"))
+    connection.execute(text("INSERT INTO artist_name (key, artist_id) VALUES ('jay', 'a1')"))
+    for key, name in (("jay", "Jay"), ("nobody", "Nobody")):
+        connection.execute(
+            text("INSERT INTO favorite_artist (account_id, key, name) VALUES (1, :key, :name)"),
+            {"key": key, "name": name},
+        )
+
+
+def test_migrating_keeps_each_favorite_artist_by_the_id_its_name_names(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0050")
+    with engine.begin() as connection:
+        _favorites_of_alice_before_ids(connection)
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        favorites = connection.execute(text("SELECT account_id, artist_id FROM favorite_artist"))
+        assert [tuple(each) for each in favorites] == [(1, "a1")]
+    engine.dispose()
+
+
+def test_undoing_favorites_by_id_keeps_each_by_every_name_of_its_artist(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0050")
+    with engine.begin() as connection:
+        _favorites_of_alice_before_ids(connection)
+        connection.execute(text("INSERT INTO artist_name (key, artist_id) VALUES ('周杰伦', 'a1')"))
+    migrate(engine)
+
+    _migrate_to(engine, "0050", down=True)
+
+    with engine.connect() as connection:
+        favorites = connection.execute(
+            text("SELECT account_id, key, name FROM favorite_artist ORDER BY key")
+        )
+        assert [tuple(each) for each in favorites] == [(1, "jay", "Jay"), (1, "周杰伦", "Jay")]
+    engine.dispose()

@@ -115,8 +115,13 @@ keeps the text and counts them as one.
   甲壳虫 relinked to a tribute band          甲壳虫's songs to an artist of its own
   ```
 
-- **Ids show nowhere yet.** Favorites, the artist page, and the web client go by
-  names; the ids are what two artists of one name will be told apart by.
+- **Each Track names its artists' ids,** `artist_ids`, beside the names it lists,
+  in the same order. An artist's page opens by its id, and favorites are kept by
+  id, so they are what two artists of one name will be told apart by.
+- **A favorite follows its artist:** a favorite artist is kept by id
+  (`favorite_artist`), and when its only name joins another artist, the favorite
+  is that artist's. Favorites kept by name before ids became the favorite of the
+  artist each name named; a name no song wrote was dropped.
 
 ## Names written as several artists
 
@@ -291,9 +296,9 @@ on the artist, apart from what the sites said.
 
 - **The name it is shown by,** up to 512 characters, in place of the name most of
   its songs write: in the Artists view, on its page, and in search, which finds it
-  by that name too. Empty, the songs' name shows again. Its page still opens, and
-  its favorite is still kept, by the name most of its songs write, so a name shown
-  never takes the songs of another artist who goes by it.
+  by that name too. Empty, the songs' name shows again. Its page opens and its
+  favorite is kept by its id, so a name shown never takes the songs of another
+  artist who goes by it.
 - **A note about it,** up to 1,000 characters, shown on its page.
 - **A photo of the household's,** in place of Wikidata's, kept as a cover is: a
   JPEG, PNG, or WebP image of at most 10 MiB, named by its bytes, and kept by the
@@ -424,7 +429,8 @@ not.
   chose or as most of its songs write it; on its page, headed by the same name,
   which lists every song of every name linked to it; in search, which finds it by
   any name it goes by, *甲壳虫* finding *The Beatles*; and in favorites and Radio,
-  where a favorite name makes every name linked with it a favorite. Each song
+  where a favorite artist makes each of its names, and every name linked with one,
+  a favorite. Each song
   keeps its artist as written.
 
 ## What the API shows
@@ -440,6 +446,7 @@ not.
 | `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
 | `POST /api/artist-names/recommend` | Signed in | Ask an AI model about up to 500 names looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked already |
 | `POST /api/artist-names/unlink` | Signed in | Forget a name's link |
+| `PUT /api/favorites/artists/{id}` | Signed in | Make one of the Library's artists, by id, your favorite, or not; answers with your favorites; 404 for no such artist |
 | `PUT /api/artists/{id}/details` | Signed in | Keep the name an artist is shown by and a note about it; an empty one is forgotten; 404 for an artist no site named |
 | `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
 | `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |

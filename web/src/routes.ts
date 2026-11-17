@@ -26,7 +26,11 @@ export type Route =
     }
   | { readonly view: "radio" }
   | { readonly view: "artists" }
-  | { readonly view: "artist"; readonly name: string }
+  /**
+   * An artist's page: the Library's artist `id`, or, with none or none known by it any more,
+   * the artist the name `name` names.
+   */
+  | { readonly view: "artist"; readonly name: string; readonly id?: string }
   /** The albums; with `artist`, only those the artist sings on. */
   | { readonly view: "albums"; readonly artist?: string }
   | { readonly view: "album"; readonly artist: string; readonly name: string }
@@ -76,8 +80,13 @@ export function routeOf(hash: string): Route {
       const section = params.get("section");
       return section === null ? { view: "settings" } : { view: "settings", section };
     }
-    case "artist":
+    case "artist": {
+      const id = params.get("id");
+      if (id !== null && id !== "") {
+        return { view: "artist", id, name: name ?? "" };
+      }
       return name === null ? LIBRARY : { view: "artist", name };
+    }
     case "album": {
       const artist = params.get("artist");
       return name === null || artist === null ? LIBRARY : { view: "album", artist, name };
@@ -97,7 +106,9 @@ export function routeOf(hash: string): Route {
 export function hrefOf(route: Route): string {
   switch (route.view) {
     case "artist":
-      return `#/artist?${new URLSearchParams({ name: route.name }).toString()}`;
+      return `#/artist?${new URLSearchParams(
+        route.id === undefined ? { name: route.name } : { id: route.id, name: route.name },
+      ).toString()}`;
     case "album":
       return `#/album?${new URLSearchParams({ artist: route.artist, name: route.name }).toString()}`;
     case "playlist":

@@ -136,6 +136,20 @@ def test_a_song_added_under_a_name_linked_before_joins_the_linked_artist(
     assert _artist_id(units, added) == _artist_id(units, linked)
 
 
+def test_a_favorite_artist_whose_only_name_joins_another_artist_is_that_artist_now(
+    enriching: Enriching, units: sessionmaker[Session], alice: Account
+) -> None:
+    kept = enriching.add_song("Yesterday", artist="披头士")
+    joining = enriching.add_song("Help!", artist="甲壳虫")
+    _looked_up(enriching, alice, "披头士", "甲壳虫")
+    enriching.artists.link(alice, "披头士", BEATLES)
+    enriching.catalog.set_artist_favorite(alice.id, _artist_id(units, joining), favorite=True)
+
+    enriching.artists.link(alice, "甲壳虫", BEATLES)
+
+    assert enriching.catalog.favorites(alice.id).artists == (_artist_id(units, kept),)
+
+
 def test_relinking_one_of_an_artists_names_moves_only_that_names_songs(
     enriching: Enriching, units: sessionmaker[Session], alice: Account
 ) -> None:

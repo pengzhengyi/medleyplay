@@ -1,15 +1,16 @@
 /**
  * @file Which of the Library's artist names are one artist, as the household linked them.
  *
- * Every Track keeps its artist as written. A name the household linked to an artist
- * MusicBrainz knows joins that artist's group, so *The Beatles*, *披头士*, and *甲壳虫*
- * are one artist in the Artists view, on an artist's page, in favorites, and in
- * search, which also finds an artist by any name it goes by. The artist is shown by
- * the name the household chose for it, if any. Any other name is a group of its
- * own, folded as the Library compares names.
+ * Every Track keeps its artist as written, and names the Library's artist each name is
+ * bound to. A name the household linked to an artist MusicBrainz knows joins that
+ * artist's group, so *The Beatles*, *披头士*, and *甲壳虫* are one artist in the Artists
+ * view, on an artist's page, in favorites, and in search, which also finds an artist by
+ * any name it goes by. The artist is shown by the name the household chose for it, if
+ * any. Any other name is the group of the Library's artist its songs are bound to, or,
+ * written by no song, a group of its own, folded as the Library compares names.
  */
 
-import type { ArtistNames } from "../api";
+import type { ArtistNames, Track } from "../api";
 import type { FavoriteGroups } from "./favoriteGroups";
 import { fold } from "./views";
 
@@ -25,6 +26,10 @@ export interface ArtistLinks {
   readonly shownAsOf: (group: string) => string | undefined;
   /** The cover holding the group's artist's photo, the household's or Wikidata's; none for a name alone. */
   readonly photoOf: (group: string) => string | null;
+  /** The id of the Library's artist the name names, as its songs are bound; none for a name no song writes. */
+  readonly idOf: (name: string) => string | undefined;
+  /** The folded names whose songs are bound to the Library's artist `id`. */
+  readonly namesOfId: (id: string) => readonly string[];
 }
 
 const own = (name: string) => fold(name.trim());
@@ -36,10 +41,23 @@ export const NO_LINKS: ArtistLinks = {
   namesOf: (group) => [group],
   shownAsOf: () => undefined,
   photoOf: () => null,
+  idOf: () => undefined,
+  namesOfId: () => [],
 };
 
-/** The links the server knows, as the client groups by them. */
-export function linksOf(found: ArtistNames): ArtistLinks {
+/** The links the server knows, and the artists `tracks` are bound to, as the client groups by them. */
+export function linksOf(found: ArtistNames, tracks: readonly Track[] = []): ArtistLinks {
+  const ids = new Map<string, string>();
+  const idNames = new Map<string, Set<string>>();
+  for (const track of tracks) {
+    track.artists.forEach((name, index) => {
+      const id = track.artist_ids[index];
+      if (id !== undefined) {
+        ids.set(own(name), id);
+        idNames.set(id, (idNames.get(id) ?? new Set()).add(own(name)));
+      }
+    });
+  }
   const groups = new Map<string, string>();
   const members = new Map<string, string[]>();
   for (const each of found.names) {
@@ -70,19 +88,30 @@ export function linksOf(found: ArtistNames): ArtistLinks {
     }
   }
   const photos = new Map(found.artists.map((artist) => [`artist:${artist.id}`, artist.photo]));
+  const idOf = (name: string) => ids.get(own(name));
   return {
-    groupOf: (name) => groups.get(own(name)) ?? own(name),
+    groupOf: (name) => groups.get(own(name)) ?? idOf(name) ?? own(name),
     aliasesOf: (group) => aliases.get(group) ?? [],
-    namesOf: (group) => members.get(group) ?? [group],
+    namesOf: (group) => members.get(group) ?? [...(idNames.get(group) ?? [group])],
     shownAsOf: (group) => shownAs.get(group),
     photoOf: (group) => photos.get(group) ?? null,
+    idOf,
+    namesOfId: (id) => [...(idNames.get(id) ?? [])],
   };
 }
 
-/** The favorites with every name linked with a favorite name made a favorite too. */
+/**
+ * The favorites with each favorite artist's names made favorites, and every name linked
+ * with one of those too.
+ */
 export function withLinkedFavorites(favorites: FavoriteGroups, links: ArtistLinks): FavoriteGroups {
   const artists = new Set(favorites.artists);
-  for (const name of favorites.artists) {
+  for (const id of favorites.artistIds) {
+    for (const name of links.namesOfId(id)) {
+      artists.add(name);
+    }
+  }
+  for (const name of [...artists]) {
     for (const linked of links.namesOf(links.groupOf(name))) {
       artists.add(linked);
     }

@@ -50,6 +50,8 @@ export interface Track {
   readonly album_rating: number | null;
   /** The artists its artist names, as written: each one if the name was split, or the name. */
   readonly artists: readonly string[];
+  /** The id of the Library's artist each of `artists` is, in the same order. */
+  readonly artist_ids: readonly string[];
 }
 
 /** What listeners on another site rated a song, or the album it is on, out of 5. */
@@ -932,7 +934,8 @@ export type PlaybackAnswer =
 
 /** The artists and albums an Account favorited, by the names it favorited them under. */
 export interface FavoritesRead {
-  readonly artists: readonly { readonly name: string }[];
+  /** Each favorite artist by the id of the Library's artist, as a Track's `artist_ids` names it. */
+  readonly artists: readonly { readonly id: string }[];
   readonly albums: readonly { readonly artist: string; readonly name: string }[];
 }
 
@@ -1390,9 +1393,9 @@ export const api = {
     call<Track>("PUT", `/api/tracks/${String(trackId)}/favorite`, { favorite }),
   /** The artists and albums you favorited. */
   favorites: () => call<FavoritesRead>("GET", "/api/favorites"),
-  /** Mark or unmark an artist as your favorite; answers with your favorites. */
-  setArtistFavorite: (name: string, favorite: boolean) =>
-    call<FavoritesRead>("PUT", "/api/artists/favorite", { name, favorite }),
+  /** Mark or unmark one of the Library's artists as your favorite; answers with your favorites. */
+  setArtistFavorite: (artistId: string, favorite: boolean) =>
+    call<FavoritesRead>("PUT", `/api/favorites/artists/${artistId}`, { favorite }),
   /** Mark or unmark an album as your favorite, under its album artist; answers likewise. */
   setAlbumFavorite: (artist: string, name: string, favorite: boolean) =>
     call<FavoritesRead>("PUT", "/api/albums/favorite", { artist, name, favorite }),

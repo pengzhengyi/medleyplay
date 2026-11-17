@@ -25,6 +25,12 @@ class ConflictError(MedleyplayError):
     """The request clashes with what already exists, such as a taken username."""
 
 
+class AskedRecentlyError(ConflictError):
+    """The AI was asked about the Track lately; asking it `again` is someone's choice."""
+
+    code: ClassVar[str | None] = "asked_recently"
+
+
 class OfflineError(ConflictError):
     """The request would contact a music site, and the Mode is Offline."""
 

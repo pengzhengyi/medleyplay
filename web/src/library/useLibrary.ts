@@ -81,6 +81,8 @@ export interface Library {
   readonly onCommand: (listener: (command: RemoteCommand) => void) => () => void;
   /** The Tracks each enricher may be asked about now, by the enricher's name. */
   readonly findable: ReadonlyMap<string, ReadonlySet<number>>;
+  /** The Tracks each enricher was asked about lately, asked again only when someone agrees. */
+  readonly askedRecently: ReadonlyMap<string, ReadonlySet<number>>;
   /** Ask the enrichers again which Tracks they may be asked about, as after one is set up. */
   readonly refreshFindable: () => void;
   /** Ask for the Tracks again, as after a setting changes what they show. */
@@ -227,6 +229,9 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
   }, []);
   const [findable, setFindable] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
+  const [askedRecently, setAskedRecently] = useState<ReadonlyMap<string, ReadonlySet<number>>>(
+    new Map(),
+  );
   const [modes, setModes] = useState<ReadonlyMap<string, EnricherMode>>(new Map());
   const [lookups, setLookups] = useState<ReadonlyMap<number, TrackLookup>>(new Map());
   const [favoriteGroups, setFavoriteGroups] = useState<FavoriteGroups>(NO_FAVORITES);
@@ -336,6 +341,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.enricher(enricher).then(
         (read) => {
           setFindable((now) => new Map(now).set(enricher, new Set(read.eligible)));
+          setAskedRecently((now) => new Map(now).set(enricher, new Set(read.asked_recently)));
           setModes((now) => new Map(now).set(enricher, read.mode));
         },
         () => {
@@ -544,6 +550,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     speaker,
     onCommand,
     findable,
+    askedRecently,
     refreshFindable: loadFindable,
     reloadTracks,
     modes,
@@ -566,10 +573,12 @@ export function useLibrary(onSignedOut: () => void): Library {
       jobOfTrack.current.set(id, job.id);
       setLookup(id, { enricher, state: job.state, message: job.failure_message });
       // Asked: the Job is queued, so the Track no longer offers it until the Job is done.
-      setFindable((now) => {
+      const without = (now: ReadonlyMap<string, ReadonlySet<number>>) => {
         const left = [...(now.get(enricher) ?? [])].filter((each) => each !== id);
         return new Map(now).set(enricher, new Set(left));
-      });
+      };
+      setFindable(without);
+      setAskedRecently(without);
     },
     setFavorite: (id, favorite) => {
       setError("");

@@ -59,6 +59,7 @@ def test_the_enricher_shows_that_it_is_on_and_which_tracks_it_may_be_asked_about
         "available": True,
         "stopped": None,
         "eligible": [eligible],
+        "asked_recently": [],
         "mode": "manual",
     }
 
@@ -75,6 +76,7 @@ def test_with_the_plugin_off_the_enricher_shows_as_unavailable_with_no_track(
         "available": False,
         "stopped": None,
         "eligible": [],
+        "asked_recently": [],
         "mode": "manual",
     }
 
@@ -237,6 +239,7 @@ def test_musicbrainz_shows_the_tracks_whose_words_it_may_search_for(
         "available": True,
         "stopped": None,
         "eligible": [song],
+        "asked_recently": [],
         "mode": "manual",
     }
 
@@ -336,6 +339,26 @@ def test_asking_the_ai_about_a_track_queues_a_job_that_suggests_its_details(
     assert details["origins"]["ai"]["artist"] == "Blue Room"
     assert "artist" not in details["shown"]
     assert KEY not in response.text + str(details)
+
+
+def test_a_track_the_ai_was_asked_about_today_is_asked_again_only_when_chosen(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    enrichers_client.post("/api/ai/providers", json=PROVIDER)
+    track_id = enriching.add_track_with_text("Night Drive")
+    asked = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}").json()
+    enriching.wait_for(JobId(asked["id"]), JobState.SUCCEEDED)
+
+    state = enrichers_client.get(f"/api/enrichers/{AI_NAME}").json()
+    refused = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}")
+    again = enrichers_client.post(
+        f"/api/enrichers/{AI_NAME}/tracks/{track_id}", json={"again": True}
+    )
+
+    assert (state["eligible"], state["asked_recently"]) == ([], [track_id])
+    assert (refused.status_code, refused.json()["code"]) == (409, "asked_recently")
+    assert again.status_code == 200
 
 
 def test_an_admin_chooses_to_find_all_and_every_track_is_queued_at_once(

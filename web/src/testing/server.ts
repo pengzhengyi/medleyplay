@@ -221,7 +221,15 @@ export function enricherOf(
   eligible: readonly number[] = [],
   change: Partial<Enricher> = {},
 ): Enricher {
-  return { name, available: true, stopped: null, eligible, mode: "manual", ...change };
+  return {
+    name,
+    available: true,
+    stopped: null,
+    eligible,
+    asked_recently: [],
+    mode: "manual",
+    ...change,
+  };
 }
 
 /** A server with no plugins answering any extension point, no AI provider, and one Account. */

@@ -520,6 +520,8 @@ export interface Enricher {
   readonly stopped: { readonly at: string; readonly reason: string } | null;
   /** The Tracks it may be asked about now; none while it is stopped or turned off. */
   readonly eligible: readonly number[];
+  /** The Tracks the AI was asked about lately, asked again only when someone chooses to. */
+  readonly asked_recently: readonly number[];
   readonly mode: EnricherMode;
 }
 

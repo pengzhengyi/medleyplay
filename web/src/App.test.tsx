@@ -280,6 +280,60 @@ describe("App", () => {
     expect(calls).toContain("POST /api/enrichers/ai-details/tracks/1");
   });
 
+  it("asks the AI again about a Track asked today only once someone agrees", async () => {
+    const sent: unknown[] = [];
+    serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/enrichers/ai-details": {
+        body: {
+          name: "ai-details",
+          available: true,
+          stopped: null,
+          eligible: [],
+          asked_recently: [1],
+        },
+      },
+      "POST /api/enrichers/ai-details/tracks/1": (body) => {
+        sent.push(body);
+        return { body: { id: 9, state: "queued", failure_message: "" } };
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Suggest details with AI" }));
+    const dialog = await screen.findByRole("dialog", { name: "Ask the AI again?" });
+    expect(sent).toEqual([]);
+    await user.click(within(dialog).getByRole("button", { name: "Ask again" }));
+
+    expect(await screen.findByText("Asking the AI about “Night Drive”.")).toBeInTheDocument();
+    expect(sent).toEqual([{ again: true, hint: "" }]);
+  });
+
+  it("asks before asking the AI again when the server says it was asked lately", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/enrichers/ai-details": {
+        body: { name: "ai-details", available: true, stopped: null, eligible: [1] },
+      },
+      "POST /api/enrichers/ai-details/tracks/1": {
+        status: 409,
+        body: {
+          detail: "This Track was looked up in the last 24 hours.",
+          code: "asked_recently",
+        },
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Suggest details with AI" }));
+
+    expect(await screen.findByRole("dialog", { name: "Ask the AI again?" })).toBeInTheDocument();
+  });
+
   it("says the lookup waits while medleyplay is Offline", async () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive")]),

@@ -550,6 +550,7 @@ describe("the Settings sections", () => {
       "Downloads and storage",
       "Bilibili",
       "MusicBrainz",
+      "Lyrics",
       "AI",
     ]);
 

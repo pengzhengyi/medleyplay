@@ -56,6 +56,17 @@ For `ai-details`, the title of the video text says how it answers:
 | `Second` | *Night Drive*, as the last provider, after the first refused |
 | any other | the title *Night Drive*, the artist *Blue Room*, an album, and a year |
 
+For `lyrics`, the title the song shows says how it answers:
+
+| Title | Answers |
+| --- | --- |
+| `Nowhere` | no lyrics |
+| `Instrumental` | an instrumental, with no lyrics |
+| `Plain` | plain lyrics, not timed |
+| `Refused` | refused |
+| `Down` | a `NetworkError` |
+| any other | `lyrics_of(title)`, timed |
+
 The artist finder `musicbrainz` answers by the name asked about:
 
 | Name | Answers |
@@ -119,8 +130,10 @@ from medleyplay.plugin_api import (
     FoundArtists,
     FoundCover,
     FoundCovers,
+    FoundLyrics,
     ImageLink,
     ImageSubject,
+    LyricsProvider,
     NetworkError,
     Plugin,
     RatedAs,
@@ -566,6 +579,39 @@ class Images:
         return FetchedImage(file="image")
 
 
+def lyrics_of(title: str) -> str:
+    """The timed lyrics the `lyrics` enricher answers for a song titled `title`."""
+    return f"[00:01.00]{title}\n[00:05.50]la la la\n"
+
+
+PLAIN_LYRICS: Final = "First line\nSecond line"
+"""The plain lyrics the `lyrics` enricher answers for a song titled *Plain*."""
+
+
+class Lyricist:
+    """Answers each song's lyrics as the table says."""
+
+    def enrich(self, request: EnrichTrack) -> Enriched:
+        title = str({each.field: each.value for each in request.shown}.get("title", ""))
+        match title:
+            case "Nowhere":
+                return Enriched()
+            case "Instrumental":
+                return Enriched(
+                    lyrics=FoundLyrics(provider=LyricsProvider.LRCLIB, instrumental=True)
+                )
+            case "Plain":
+                return Enriched(
+                    lyrics=FoundLyrics(provider=LyricsProvider.LRCLIB, text=PLAIN_LYRICS)
+                )
+            case "Refused":
+                return Enriched(status=EnrichStatus.REFUSED, message="HTTP Error 403.")
+            case "Down":
+                message = "LRCLIB couldn't be reached."
+                raise NetworkError(message)
+        return Enriched(lyrics=FoundLyrics(provider=LyricsProvider.LRCLIB, text=lyrics_of(title)))
+
+
 def register(registry: Registry) -> None:
     """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
 
@@ -575,6 +621,7 @@ def register(registry: Registry) -> None:
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
     registry.add(TRACK_ENRICHER, "ai-details", Suggester())
+    registry.add(TRACK_ENRICHER, "lyrics", Lyricist())
     registry.add(ARTIST_FINDER, "musicbrainz", Artists())
     registry.add(ARTIST_NAME_FINDER, "wikipedia", ArtistNames())
     registry.add(ARTIST_CHOOSER, "ai-details", ArtistChoices())

@@ -952,6 +952,24 @@ class TrackCreditsRow(Base):
     chosen_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class TrackLyricsRow(Base):
+    """A song's lyrics as one source has them: LRC or plain text, or none for an instrumental.
+
+    `origin` is where they came from: the household, a file beside the audio, the
+    audio's tags, or a site that finds lyrics.
+    """
+
+    __tablename__ = "track_lyrics"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    origin: Mapped[str] = mapped_column(String(16), primary_key=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    instrumental: Mapped[bool] = mapped_column(default=False)
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class NameSplitRow(Base):
     """What the household chose for an artist name written as several: split it, or keep it.
 

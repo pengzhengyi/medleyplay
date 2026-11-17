@@ -126,6 +126,33 @@ export interface Details {
   readonly artists_chosen: boolean;
 }
 
+/** Where a song's lyrics came from: the first held of each shows. */
+export type LyricsOrigin = "household" | "sidecar" | "tag" | "lrclib";
+
+/** A word of a line of lyrics, and when it is sung, in milliseconds. */
+export interface LyricWord {
+  readonly at_ms: number;
+  readonly text: string;
+}
+
+/** A line of lyrics, when it is sung, its translation or empty, and its words when timed. */
+export interface LyricLine {
+  readonly at_ms: number;
+  readonly text: string;
+  readonly translation: string;
+  readonly words: readonly LyricWord[];
+}
+
+/** The lyrics a song shows: timed `lines`, or `plain` text; none for an instrumental. */
+export interface Lyrics {
+  readonly origin: LyricsOrigin;
+  readonly synced: boolean;
+  readonly instrumental: boolean;
+  readonly lines: readonly LyricLine[];
+  readonly plain: string;
+  readonly found_at: string;
+}
+
 /** How a song credits an artist. */
 export type Role = "main" | "featured";
 
@@ -475,6 +502,8 @@ export const DETAILS_ENRICHER = "bilibili-details";
 export const MUSICBRAINZ_ENRICHER = "musicbrainz";
 /** The enricher that suggests a Track's details from its video text with an AI model. */
 export const AI_ENRICHER = "ai-details";
+/** The enricher that looks a song's lyrics up, on LRCLIB. */
+export const LYRICS_ENRICHER = "lyrics";
 
 /** An enricher: whether it can be asked, whether the site stopped it, and for which Tracks. */
 /**
@@ -1141,6 +1170,14 @@ export const api = {
       values,
       ...(artists === undefined ? {} : { artists }),
     }),
+  /** The lyrics the song shows, or `null` when no source has any. */
+  lyrics: (trackId: number) => call<Lyrics | null>("GET", `/api/tracks/${String(trackId)}/lyrics`),
+  /** Make `text` the household's lyrics for the song, or say it is instrumental. */
+  setLyrics: (trackId: number, text: string, instrumental = false) =>
+    call<Lyrics | null>("PUT", `/api/tracks/${String(trackId)}/lyrics`, { text, instrumental }),
+  /** Drop the household's lyrics for the song; answers what it shows now. */
+  forgetLyrics: (trackId: number) =>
+    call<Lyrics | null>("DELETE", `/api/tracks/${String(trackId)}/lyrics`),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
   artistNames: () => call<ArtistNames>("GET", "/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */

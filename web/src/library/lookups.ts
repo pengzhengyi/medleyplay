@@ -3,9 +3,15 @@
  * calls it, what is said once it is asked, and what its row shows while it runs.
  */
 
-import { GlobeIcon, type Icon, MusicNotesIcon, SparkleIcon } from "@phosphor-icons/react";
+import {
+  GlobeIcon,
+  type Icon,
+  MusicNotesIcon,
+  QuotesIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 
-import { AI_ENRICHER, DETAILS_ENRICHER, MUSICBRAINZ_ENRICHER } from "../api";
+import { AI_ENRICHER, DETAILS_ENRICHER, LYRICS_ENRICHER, MUSICBRAINZ_ENRICHER } from "../api";
 import type { TrackLookup } from "./useLibrary";
 
 /** One way to look a Track up online. */
@@ -20,6 +26,8 @@ export interface Lookup {
   /** What the Track's row says it is doing, such as `Looking up on MusicBrainz`. */
   readonly doing: string;
   readonly icon: Icon;
+  /** Whether a song inside a longer file is asked about itself, rather than through its file. */
+  readonly forSong?: boolean;
 }
 
 /** The lookups, in the order the menu offers them. */
@@ -47,6 +55,15 @@ export const LOOKUPS: readonly Lookup[] = [
     notice: (title) => `Asking the AI about “${title}”.`,
     doing: "Asking the AI",
     icon: SparkleIcon,
+  },
+  {
+    enricher: LYRICS_ENRICHER,
+    label: "Find lyrics",
+    short: "Lyrics",
+    notice: (title) => `Looking up the lyrics of “${title}”.`,
+    doing: "Looking up lyrics",
+    icon: QuotesIcon,
+    forSong: true,
   },
 ];
 

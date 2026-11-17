@@ -2,10 +2,10 @@
  * @file The part of Settings that runs one enricher for an admin: when it is asked, and a
  * reset after its site refused it.
  *
- * It is asked manually by default: only when someone chooses it. It can be asked
+ * Most are asked manually by default: only when someone chooses it. One can be asked
  * instead about the songs coming up to play, or about every Track it may be asked
- * about. Whichever is chosen, the first time a site refuses a request, the lookup
- * stops for good until it is reset here.
+ * about, among the ways the enricher allows. Whichever is chosen, the first time a site
+ * refuses a request, the lookup stops for good until it is reset here.
  */
 
 import { type ReactNode, useEffect, useEffectEvent, useId, useState } from "react";
@@ -25,6 +25,8 @@ export interface EnricherWords {
   readonly count: (tracks: number) => string;
   /** Says the lookup is turned off. */
   readonly off: string;
+  /** The ways it may be asked, when not every way. */
+  readonly modes?: readonly EnricherMode[];
 }
 
 /** Each mode, a word or two for it, and what it does. */
@@ -109,7 +111,8 @@ export function EnricherSettings({
     }, failed);
   };
 
-  const chosen = MODES.find((each) => each.mode === enricher?.mode) ?? MODES[0];
+  const offered = MODES.filter(({ mode }) => words.modes?.includes(mode) ?? true);
+  const chosen = offered.find((each) => each.mode === enricher?.mode) ?? offered[0];
   return (
     <>
       <h4>{words.heading}</h4>
@@ -127,7 +130,7 @@ export function EnricherSettings({
         <>
           <fieldset className="enricher-mode" aria-describedby={modeHint} disabled={saving}>
             <legend>Ask {words.site}</legend>
-            {MODES.map(({ mode, label }) => (
+            {offered.map(({ mode, label }) => (
               <label key={mode} className="enricher-mode-choice">
                 <input
                   className="enricher-mode-radio"

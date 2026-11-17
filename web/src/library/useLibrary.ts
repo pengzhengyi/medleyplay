@@ -35,6 +35,7 @@ import { PAGE_ID } from "../page";
 import type { Speaker } from "../player/remote";
 import { downloadEnded, followDownload } from "./downloading";
 import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
+import { afterNextPaint } from "./stages";
 import { LOOKUPS } from "./lookups";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
@@ -352,19 +353,29 @@ export function useLibrary(onSignedOut: () => void): Library {
   }, []);
 
   useEffect(() => {
-    // Each loads on its own, so Playlists that fail to load don't hide the songs.
+    // The songs are read first and alone, as the server answers one read faster than many;
+    // the rest once they are drawn. Each loads on its own, so Playlists that fail to load
+    // don't hide the songs.
+    let cancelRest: (() => void) | undefined;
     const load = () => {
+      cancelRest?.();
+      let drawn = false;
+      const readRest = () => {
+        if (!drawn) {
+          drawn = true;
+          cancelRest = afterNextPaint(loadRest);
+        }
+      };
       api.tracks().then(
         (tracks) => {
           dispatch({ type: "loaded", tracks });
+          readRest();
         },
         (failure: unknown) => {
           onFailure(failure);
+          readRest();
         },
       );
-      api.playlists().then(setPlaylists, (failure: unknown) => {
-        onFailure(failure);
-      });
       api.favorites().then(
         (read) => {
           if (favoritesUnanswered.current === 0) {
@@ -375,6 +386,11 @@ export function useLibrary(onSignedOut: () => void): Library {
           // Without them, no artist or album shows a heart until one is given.
         },
       );
+    };
+    const loadRest = () => {
+      api.playlists().then(setPlaylists, (failure: unknown) => {
+        onFailure(failure);
+      });
       api.mode().then(setMode, () => {
         // Without the Mode, the page shows nothing about it until the stream says.
       });
@@ -395,6 +411,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       }
     });
     return () => {
+      cancelRest?.();
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
     };

@@ -311,6 +311,7 @@ describe("search suggestions", () => {
 describe("playlists", () => {
   it("lists the server's Favorites once, first, then the Account's Playlists", async () => {
     open("#/playlists");
+    await screen.findByRole("link", { name: /^Mornings/u });
 
     const links = within(await screen.findByRole("list", { name: "Playlists" })).getAllByRole(
       "link",
@@ -643,7 +644,7 @@ describe("an artist's page", () => {
     open("#/artist?name=ryo", withRyo(true));
 
     const about = await screen.findByRole("region", { name: "About the artist" });
-    expect(within(about).getByText("ryo (supercell composer, JP)")).toBeInTheDocument();
+    expect(await within(about).findByText("ryo (supercell composer, JP)")).toBeInTheDocument();
     expect(within(about).getByRole("link", { name: "MusicBrainz" })).toHaveAttribute(
       "href",
       "https://musicbrainz.org/artist/ryo-id",
@@ -688,7 +689,10 @@ describe("an artist's page", () => {
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "ryo");
 
     const ryo = await screen.findByRole("option", { name: "ryo 2 songs" });
-    expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+    // The artist names, which hold the photo, are read once the page is idle.
+    await waitFor(() => {
+      expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+    });
   });
 
   it("opens by the id of the Library's artist, headed by the name its songs write", async () => {
@@ -812,6 +816,7 @@ describe("a file split into songs", () => {
 
   it("still plays whole in a Playlist that held it before it was split", async () => {
     open("#/playlists", routes());
+    await screen.findByRole("link", { name: /^Whole/u });
 
     const links = within(await screen.findByRole("list", { name: "Playlists" })).getAllByRole(
       "link",
@@ -832,7 +837,7 @@ describe("editing an album from its page", () => {
     });
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
-    const editor = screen.getByRole("dialog", { name: "Edit album" });
+    const editor = await screen.findByRole("dialog", { name: "Edit album" });
     await userEvent.type(within(editor).getByRole("textbox", { name: "Genre" }), "J-Pop");
     await userEvent.click(within(editor).getByRole("button", { name: "Save to 2 songs" }));
 

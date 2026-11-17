@@ -26,11 +26,23 @@
 
 ## Data
 
-- **The client loads the whole Library once:** `GET /api/tracks` and
-  `GET /api/playlists` when the page opens, keyed by id. Every view, sort, and
-  search is worked out in the browser from that data, with pure functions, so
-  moving between views asks the server nothing. Until the first answer, the
-  page says it is loading.
+- **The client loads the whole Library once:** `GET /api/tracks` when the page
+  opens, keyed by id. Every view, sort, and search is worked out in the browser
+  from that data, with pure functions, so moving between views asks the server
+  nothing. Until the first answer, the Library shows rows shaped like songs, still
+  under reduced motion, and tells a screen reader it is loading.
+- **The first load comes in stages,** as the server answers one read faster than
+  many at once, and reads sent beside the songs' made them wait:
+  1. the songs and the favorites, alone;
+  2. once the songs are drawn, the Playlists, the Mode, the Downloads under way,
+     the features, and what each enricher may be asked about;
+  3. once the browser is idle (or within two seconds), what only some views need:
+     the artist names, the names to tidy, the split offers, and the names to split.
+     These wait for the songs, and are read again as the songs change.
+- **What opens only when asked for loads then:** Now Playing, the editors (details,
+  an album, songs, lyrics), adding a link or a file, listening on another device,
+  and the Insights, Settings, and Clean up views each load the first time they
+  open, so the first page loads less script.
 - **A change the client makes shows at once.** Setting a favorite or a rating
   changes that field of that Track, then sends the absolute value. Each write
   has a number, and only the answer to a field's latest write counts, so quick

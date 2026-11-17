@@ -8,7 +8,7 @@ import {
   KeyboardIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AI_ENRICHER,
@@ -43,18 +43,12 @@ import { useSpeaker } from "../player/useSpeaker";
 import { stepVolume } from "../player/volume";
 import { hrefOf, navigate, useRoute } from "../routes";
 import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
-import { AddFile } from "./AddFile";
-import { AddLink } from "./AddLink";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { AskAiAgain } from "./AskAiAgain";
 import { CheckNetwork } from "./CheckNetwork";
-import { EditAlbum } from "./EditAlbum";
-import { EditDetails } from "./EditDetails";
-import { ListenOnDevice } from "./ListenOnDevice";
-import { LyricsEditor } from "./LyricsEditor";
-import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
+import type { AiAsk, SilenceFinder } from "./EditSongs";
+import { LibrarySkeleton } from "./LibrarySkeleton";
 import { AccountMenu, Nav } from "./Nav";
-import { NowPlaying } from "./NowPlaying";
 import { PlayOn, type PlaysOn } from "./PlayOn";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
@@ -68,6 +62,28 @@ import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
 import { AiSetUpContext } from "./aiSetUp";
 import { setRailCollapsed, setRailMinimized, useRailCollapsed, useRailMinimized } from "../rail";
+
+// What opens only when asked for loads then, so the first page has less to load.
+const AddFile = lazy(() => import("./AddFile").then((loaded) => ({ default: loaded.AddFile })));
+const AddLink = lazy(() => import("./AddLink").then((loaded) => ({ default: loaded.AddLink })));
+const EditAlbum = lazy(() =>
+  import("./EditAlbum").then((loaded) => ({ default: loaded.EditAlbum })),
+);
+const EditDetails = lazy(() =>
+  import("./EditDetails").then((loaded) => ({ default: loaded.EditDetails })),
+);
+const ListenOnDevice = lazy(() =>
+  import("./ListenOnDevice").then((loaded) => ({ default: loaded.ListenOnDevice })),
+);
+const LyricsEditor = lazy(() =>
+  import("./LyricsEditor").then((loaded) => ({ default: loaded.LyricsEditor })),
+);
+const NowPlaying = lazy(() =>
+  import("./NowPlaying").then((loaded) => ({ default: loaded.NowPlaying })),
+);
+const SongsEditor = lazy(() =>
+  import("./EditSongs").then((loaded) => ({ default: loaded.SongsEditor })),
+);
 
 /** How long a notice, such as a song added to a Playlist, stays. */
 const NOTICE_MS = 4000;
@@ -161,10 +177,12 @@ export function Library({
       setPlaysOn("computer");
     }, playOnFailedFor);
   };
-  const artistNames = useArtistNames(library.tracks);
-  const namesToTidy = useNamesToTidy(library.tracks);
-  const splitOffers = useSplitOffers(library.tracks);
-  const artistSplits = useArtistSplits(library.tracks);
+  // What only some views need is read once the songs are in, and again as they change.
+  const loadedTracks = library.loaded ? library.tracks : undefined;
+  const artistNames = useArtistNames(loadedTracks);
+  const namesToTidy = useNamesToTidy(loadedTracks);
+  const splitOffers = useSplitOffers(loadedTracks);
+  const artistSplits = useArtistSplits(loadedTracks);
   const toDo = toDoOf(
     namesToTidy.names,
     artistNames.names,
@@ -633,9 +651,7 @@ export function Library({
             toDo={toDo}
           />
         ) : (
-          <p className="empty" aria-busy="true">
-            Loading your music…
-          </p>
+          <LibrarySkeleton />
         )}
       </main>
       <QueuePanel player={player} sleep={sleep} tracks={byId} />
@@ -666,166 +682,169 @@ export function Library({
           )
         }
       />
-      {linking !== undefined && (
-        <AddLink
-          link={linking}
-          look={library.lookUpLink}
-          add={library.addLink}
-          onAdded={(count) => {
-            const songs = count === 1 ? "1 song" : `${String(count)} songs`;
-            const wait =
-              library.mode?.online === false ? " They wait until medleyplay is Online." : "";
-            setNotice(`Added ${songs}. They are downloading.${wait}`);
-          }}
-          onClose={() => {
-            setLinking(undefined);
-          }}
-        />
-      )}
-      {filing !== undefined && (
-        <AddFile
-          track={filing}
-          load={library.download}
-          upload={library.addFile}
-          onAdded={() => {
-            setNotice(`Added the file for “${filing.title}”.`);
-          }}
-          onClose={() => {
-            setFiling(undefined);
-          }}
-        />
-      )}
-      {nowPlaying && (
-        <NowPlaying
-          player={player}
-          sleep={sleep}
-          track={playing}
-          tracks={byId}
-          onFavorite={actions.onFavorite}
-          favorites={favorites}
-          onFavoriteArtist={favoriteArtist}
-          onFavoriteAlbum={library.setAlbumFavorite}
-          menuActions={actions}
-          lyrics={lyrics}
-          queueOpen={nowPlayingQueue}
-          onToggleQueue={() => {
-            setNowPlayingQueue((open) => !open);
-          }}
-          onClose={() => {
-            setNowPlayingOver(undefined);
-          }}
-        />
-      )}
-      {askingAgain !== undefined && (
-        <AskAiAgain
-          title={askingAgain.track.title}
-          onAsk={() => {
-            find(askingAgain.lookup, askingAgain.track, true);
-          }}
-          onClose={() => {
-            setAskingAgain(undefined);
-          }}
-        />
-      )}
-      {adding !== undefined && (
-        <AddToPlaylist
-          track={adding}
-          playlists={library.playlists}
-          onSave={(ids, newNames) => addTo(adding, ids, newNames)}
-          onClose={() => {
-            setAdding(undefined);
-          }}
-        />
-      )}
-      {editingAlbum !== undefined && (
-        <EditAlbum
-          songs={editingAlbum}
-          onUseCover={async (cover) => {
-            await library.setDetailsOn(
-              editingAlbum.map(({ id }) => id),
-              { cover },
-            );
-            setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
-          }}
-          // The image becomes the first song's cover, then every song's.
-          onUploadCover={async (image) => {
-            const [first] = editingAlbum;
-            const cover =
-              first === undefined
-                ? undefined
-                : (await library.setCover(first.id, image)).origins.household?.cover;
-            if (typeof cover !== "string") {
-              throw new Error("The cover could not be kept.");
-            }
-            await library.setDetailsOn(
-              editingAlbum.map(({ id }) => id),
-              { cover },
-            );
-            setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
-            return cover;
-          }}
-          onSave={async (changes) => {
-            const [first] = editingAlbum;
-            await library.setDetailsOn(
-              editingAlbum.map(({ id }) => id),
-              changes,
-            );
-            setNotice(`Saved the album of ${String(editingAlbum.length)} songs.`);
-            // A renamed album is found under its new name; one whose name was emptied, in Albums.
-            if (first !== undefined && ("album" in changes || "album_artist" in changes)) {
-              const name = changes.album === undefined ? first.album : changes.album;
-              const artist =
-                changes.album_artist === undefined ? albumArtistOf(first) : changes.album_artist;
-              navigate(
-                typeof name === "string" && typeof artist === "string"
-                  ? { view: "album", artist, name }
-                  : { view: "albums" },
+      {/* Each dialog loads when it first opens; until then, nothing shows in its place. */}
+      <Suspense fallback={null}>
+        {linking !== undefined && (
+          <AddLink
+            link={linking}
+            look={library.lookUpLink}
+            add={library.addLink}
+            onAdded={(count) => {
+              const songs = count === 1 ? "1 song" : `${String(count)} songs`;
+              const wait =
+                library.mode?.online === false ? " They wait until medleyplay is Online." : "";
+              setNotice(`Added ${songs}. They are downloading.${wait}`);
+            }}
+            onClose={() => {
+              setLinking(undefined);
+            }}
+          />
+        )}
+        {filing !== undefined && (
+          <AddFile
+            track={filing}
+            load={library.download}
+            upload={library.addFile}
+            onAdded={() => {
+              setNotice(`Added the file for “${filing.title}”.`);
+            }}
+            onClose={() => {
+              setFiling(undefined);
+            }}
+          />
+        )}
+        {nowPlaying && (
+          <NowPlaying
+            player={player}
+            sleep={sleep}
+            track={playing}
+            tracks={byId}
+            onFavorite={actions.onFavorite}
+            favorites={favorites}
+            onFavoriteArtist={favoriteArtist}
+            onFavoriteAlbum={library.setAlbumFavorite}
+            menuActions={actions}
+            lyrics={lyrics}
+            queueOpen={nowPlayingQueue}
+            onToggleQueue={() => {
+              setNowPlayingQueue((open) => !open);
+            }}
+            onClose={() => {
+              setNowPlayingOver(undefined);
+            }}
+          />
+        )}
+        {askingAgain !== undefined && (
+          <AskAiAgain
+            title={askingAgain.track.title}
+            onAsk={() => {
+              find(askingAgain.lookup, askingAgain.track, true);
+            }}
+            onClose={() => {
+              setAskingAgain(undefined);
+            }}
+          />
+        )}
+        {adding !== undefined && (
+          <AddToPlaylist
+            track={adding}
+            playlists={library.playlists}
+            onSave={(ids, newNames) => addTo(adding, ids, newNames)}
+            onClose={() => {
+              setAdding(undefined);
+            }}
+          />
+        )}
+        {editingAlbum !== undefined && (
+          <EditAlbum
+            songs={editingAlbum}
+            onUseCover={async (cover) => {
+              await library.setDetailsOn(
+                editingAlbum.map(({ id }) => id),
+                { cover },
               );
-            }
-          }}
-          onClose={() => {
-            setEditingAlbum(undefined);
-          }}
-        />
-      )}
-      {editing !== undefined && (
-        <EditDetails
-          track={editing.track}
-          load={api.details}
-          onSave={async (values, artists) => {
-            await library.saveDetails(editing.track.id, values, artists);
-            setNotice(`Saved the details of “${editing.track.title}”.`);
-          }}
-          onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
-          onSetCover={(image) => library.setCover(editing.track.id, image)}
-          onRemoveCover={() => library.removeCover(editing.track.id)}
-          onUseCover={async (cover) => {
-            await library.saveDetails(editing.track.id, { cover });
-            return api.details(editing.track.id);
-          }}
-          findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing.track))}
-          lookup={library.lookups.get(editing.track.id)}
-          online={library.mode?.online !== false}
-          onFind={(lookup) => {
-            actions.onFind(lookup, editing.track);
-          }}
-          songs={songsOf(editing.track)}
-          lyrics={lyricsOf(editing.track)}
-          startOnSongs={editing.songs}
-          onClose={() => {
-            setEditing(undefined);
-          }}
-        />
-      )}
-      {listening && (
-        <ListenOnDevice
-          username={account.username}
-          load={api.addresses}
-          onClose={() => {
-            setListening(false);
-          }}
-        />
-      )}
+              setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
+            }}
+            // The image becomes the first song's cover, then every song's.
+            onUploadCover={async (image) => {
+              const [first] = editingAlbum;
+              const cover =
+                first === undefined
+                  ? undefined
+                  : (await library.setCover(first.id, image)).origins.household?.cover;
+              if (typeof cover !== "string") {
+                throw new Error("The cover could not be kept.");
+              }
+              await library.setDetailsOn(
+                editingAlbum.map(({ id }) => id),
+                { cover },
+              );
+              setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
+              return cover;
+            }}
+            onSave={async (changes) => {
+              const [first] = editingAlbum;
+              await library.setDetailsOn(
+                editingAlbum.map(({ id }) => id),
+                changes,
+              );
+              setNotice(`Saved the album of ${String(editingAlbum.length)} songs.`);
+              // A renamed album is found under its new name; one whose name was emptied, in Albums.
+              if (first !== undefined && ("album" in changes || "album_artist" in changes)) {
+                const name = changes.album === undefined ? first.album : changes.album;
+                const artist =
+                  changes.album_artist === undefined ? albumArtistOf(first) : changes.album_artist;
+                navigate(
+                  typeof name === "string" && typeof artist === "string"
+                    ? { view: "album", artist, name }
+                    : { view: "albums" },
+                );
+              }
+            }}
+            onClose={() => {
+              setEditingAlbum(undefined);
+            }}
+          />
+        )}
+        {editing !== undefined && (
+          <EditDetails
+            track={editing.track}
+            load={api.details}
+            onSave={async (values, artists) => {
+              await library.saveDetails(editing.track.id, values, artists);
+              setNotice(`Saved the details of “${editing.track.title}”.`);
+            }}
+            onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
+            onSetCover={(image) => library.setCover(editing.track.id, image)}
+            onRemoveCover={() => library.removeCover(editing.track.id)}
+            onUseCover={async (cover) => {
+              await library.saveDetails(editing.track.id, { cover });
+              return api.details(editing.track.id);
+            }}
+            findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing.track))}
+            lookup={library.lookups.get(editing.track.id)}
+            online={library.mode?.online !== false}
+            onFind={(lookup) => {
+              actions.onFind(lookup, editing.track);
+            }}
+            songs={songsOf(editing.track)}
+            lyrics={lyricsOf(editing.track)}
+            startOnSongs={editing.songs}
+            onClose={() => {
+              setEditing(undefined);
+            }}
+          />
+        )}
+        {listening && (
+          <ListenOnDevice
+            username={account.username}
+            load={api.addresses}
+            onClose={() => {
+              setListening(false);
+            }}
+          />
+        )}
+      </Suspense>
       {listingShortcuts && (
         <ShortcutList
           onClose={() => {

@@ -42,7 +42,8 @@ async function playingIntro(routes: Routes = {}) {
 async function openNowPlaying() {
   const player = screen.getByRole("region", { name: "Player" });
   await userEvent.click(within(player).getByRole("button", { name: "Open Now Playing" }));
-  return screen.getByRole("dialog", { name: "Now Playing" });
+  // Now Playing loads the first time it opens.
+  return screen.findByRole("dialog", { name: "Now Playing" });
 }
 
 /** Press Next in `nowPlaying` until the queue runs out: Long Road, Outro, then past the end. */

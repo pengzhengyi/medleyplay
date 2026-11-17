@@ -35,6 +35,32 @@ afterEach(() => {
 });
 
 describe("the Library", () => {
+  it("reads its songs first and alone, and what shows around them once they are in", async () => {
+    let answer: (() => void) | undefined;
+    const songsAnswered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/tracks": { body: [trackOf(1, "Intro")], after: songsAnswered },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(calls).toContain("GET /api/tracks");
+    });
+    const before = [...calls];
+
+    answer?.();
+
+    await waitFor(() => {
+      expect(calls).toContain("GET /api/playlists");
+    });
+    expect(result.current.loaded).toBe(true);
+    expect(before).not.toContain("GET /api/playlists");
+    expect(before).not.toContain("GET /api/mode");
+    expect(before.filter((call) => call.startsWith("GET /api/enrichers/"))).toEqual([]);
+  });
+
   it("asks for the Tracks again when the event stream reconnects, not when it first opens", async () => {
     const { calls } = serve(signedIn([trackOf(1, "Intro")]));
     const { result } = renderHook(() => useLibrary(vi.fn()));
@@ -605,9 +631,15 @@ describe("finding a song's details online", () => {
       stream().send("job", { id: 4, kind: "enrich_track", state: "succeeded" });
       vi.advanceTimersByTime(1000);
     });
+    vi.useRealTimers();
 
     expect(asked(calls)).toBe(2);
-    expect(calls.filter((call) => call === "GET /api/enrichers/bilibili-details")).toHaveLength(2);
+    // What can be looked up is read once the Tracks are drawn again.
+    await waitFor(() => {
+      expect(calls.filter((call) => call === "GET /api/enrichers/bilibili-details")).toHaveLength(
+        2,
+      );
+    });
   });
 
   it("keeps what each enricher may be asked about apart", async () => {

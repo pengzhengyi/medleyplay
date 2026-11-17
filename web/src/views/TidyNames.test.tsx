@@ -31,7 +31,8 @@ const BEATLES: NameToTidy = {
 
 /** The section as Clean up shows it: the names read from the server, again after each change. */
 function Listed() {
-  const tidy = useNamesToTidy(undefined);
+  // The names are read as a Library's are, once its songs are in.
+  const tidy = useNamesToTidy("loaded");
   return <TidyNames names={tidy.names} onChanged={tidy.reload} />;
 }
 

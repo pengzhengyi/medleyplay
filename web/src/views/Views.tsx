@@ -11,7 +11,7 @@ import {
   ShuffleIcon,
   PencilSimpleIcon,
 } from "@phosphor-icons/react";
-import { Fragment, type ReactNode, useMemo } from "react";
+import { Fragment, type ReactNode, Suspense, lazy, useMemo } from "react";
 
 import type {
   ArtistNames,
@@ -60,12 +60,27 @@ import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
 import { FavoriteHeart } from "./FavoriteHeart";
 import type { Station } from "../library/useStation";
-import { InsightsView } from "./InsightsView";
 import { RadioView } from "./RadioView";
-import { SettingsView } from "./SettingsView";
-import { CleanUpView } from "./CleanUpView";
 import { EditArtistButton } from "./EditArtist";
 import { type TrackActions, TrackTable } from "./TrackTable";
+
+// Views most visits never open load when first opened, so the first page has less to load.
+const InsightsView = lazy(() =>
+  import("./InsightsView").then((loaded) => ({ default: loaded.InsightsView })),
+);
+const SettingsView = lazy(() =>
+  import("./SettingsView").then((loaded) => ({ default: loaded.SettingsView })),
+);
+const CleanUpView = lazy(() =>
+  import("./CleanUpView").then((loaded) => ({ default: loaded.CleanUpView })),
+);
+
+/** What shows while a view loads. */
+const LOADING_VIEW = (
+  <p className="empty" aria-busy="true">
+    Loading…
+  </p>
+);
 
 /** The route id of Favorites, the Playlist of favorites the server keeps for each Account. */
 export const FAVORITES = "favorites";
@@ -157,7 +172,13 @@ function viewOf(given: ViewProps) {
       );
     case "insights":
       return (
-        <InsightsView tracks={given.tracks} onPlay={props.actions.onPlay} toDo={props.toDo ?? 0} />
+        <Suspense fallback={LOADING_VIEW}>
+          <InsightsView
+            tracks={given.tracks}
+            onPlay={props.actions.onPlay}
+            toDo={props.toDo ?? 0}
+          />
+        </Suspense>
       );
     case "artists":
       return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
@@ -306,33 +327,37 @@ function viewOf(given: ViewProps) {
       return <SearchResults {...props} query={route.query} />;
     case "settings":
       return (
-        <SettingsView
-          admin={props.admin}
-          section={route.section}
-          mode={props.mode}
-          onModeChecked={props.onModeChecked}
-          onEnrichersChanged={props.onEnrichersChanged}
-          onKindsChanged={props.onKindsChanged}
-          onRatingsChanged={props.onRatingsChanged}
-          waitingDevices={props.waitingDevices}
-        />
+        <Suspense fallback={LOADING_VIEW}>
+          <SettingsView
+            admin={props.admin}
+            section={route.section}
+            mode={props.mode}
+            onModeChecked={props.onModeChecked}
+            onEnrichersChanged={props.onEnrichersChanged}
+            onKindsChanged={props.onKindsChanged}
+            onRatingsChanged={props.onRatingsChanged}
+            waitingDevices={props.waitingDevices}
+          />
+        </Suspense>
       );
     case "clean-up":
       return (
-        <CleanUpView
-          tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
-          artistNames={props.artistNames}
-          // A split file may be all that writes a name, so its songs' names are tidied through it.
-          tracks={given.tracks}
-          {...(props.splitOffers === undefined ? {} : { splits: props.splitOffers })}
-          {...(props.artistSplits === undefined ? {} : { artistSplits: props.artistSplits })}
-          onEditSongs={(trackId) => {
-            const file = props.tracks.find((track) => track.id === trackId);
-            if (file !== undefined) {
-              props.actions.onEditSongs(file);
-            }
-          }}
-        />
+        <Suspense fallback={LOADING_VIEW}>
+          <CleanUpView
+            tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
+            artistNames={props.artistNames}
+            // A split file may be all that writes a name, so its songs' names are tidied through it.
+            tracks={given.tracks}
+            {...(props.splitOffers === undefined ? {} : { splits: props.splitOffers })}
+            {...(props.artistSplits === undefined ? {} : { artistSplits: props.artistSplits })}
+            onEditSongs={(trackId) => {
+              const file = props.tracks.find((track) => track.id === trackId);
+              if (file !== undefined) {
+                props.actions.onEditSongs(file);
+              }
+            }}
+          />
+        </Suspense>
       );
   }
 }

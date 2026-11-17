@@ -689,7 +689,10 @@ describe("an artist's page", () => {
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "ryo");
 
     const ryo = await screen.findByRole("option", { name: "ryo 2 songs" });
-    expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+    // The artist names, which hold the photo, are read once the page is idle.
+    await waitFor(() => {
+      expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+    });
   });
 
   it("opens by the id of the Library's artist, headed by the name its songs write", async () => {

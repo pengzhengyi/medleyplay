@@ -819,6 +819,33 @@ describe("editing an album from its page", () => {
     expect(sent).toEqual([{ track_ids: [1, 2], values: { genre: "J-Pop" } }]);
   });
 
+  it("uploads a cover to the first song, then gives every song that cover", async () => {
+    const sent: unknown[] = [];
+    const { calls } = open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }), {
+      ...signedIn(LIBRARY),
+      "PUT /api/tracks/1/cover": { body: detailsOf(1, { cover: "cover-up" }) },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 2 } };
+      },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
+    const album = within(screen.getByRole("dialog", { name: "Edit album" }));
+    await userEvent.click(album.getByRole("button", { name: "Add a cover…" }));
+    const editor = within(screen.getByRole("dialog", { name: "Add a cover" }));
+
+    await userEvent.upload(
+      editor.getByLabelText("Choose a cover file"),
+      new File(["png"], "Supercell.png", { type: "image/png" }),
+    );
+    await userEvent.click(await editor.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ track_ids: [1, 2], values: { cover: "cover-up" } }]);
+    });
+    expect(calls).toContain("PUT /api/tracks/1/cover");
+  });
+
   it("edits an album that is one split file as that file, in Edit details", async () => {
     const jay = [
       trackOf(9, "Jay", { artist: "周杰伦", album: "Jay", kind: "album", split: true }),

@@ -6,7 +6,7 @@ import type { ArtistSuggestionState, KnownArtist } from "../api";
 import { artistSuggestionOf, knownArtistOf, serve } from "../testing/server";
 import { AiSetUpContext } from "./aiSetUp";
 import { EditArtist } from "./EditArtist";
-import { MAX_COVER_BYTES } from "./EditDetails";
+import { MAX_PICTURE_BYTES } from "./PictureEditor";
 
 /** The Beatles, with Wikidata's photo, going by 披头士 and 甲壳虫乐队 too. */
 const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
@@ -20,8 +20,6 @@ const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
 const DETAILS = "PUT /api/artists/b10bbbfc/details";
 const PHOTO = "/api/artists/b10bbbfc/photo";
 const SUGGESTION = "/api/artists/b10bbbfc/suggestion";
-/** The pictures an AI model suggested for the artist, read beside its photo. */
-const IMAGE_LINKS = "GET /api/image-links/artist/b10bbbfc";
 /** No AI model asked about the artist yet. */
 const UNASKED: ArtistSuggestionState = {
   asking: false,
@@ -50,6 +48,15 @@ function editingWithNoAi(setUpSince = false) {
       <EditArtist artist={BEATLES} written="披头士" onChanged={vi.fn()} onClose={vi.fn()} />
     </AiSetUpContext>,
   );
+}
+
+/** Replace the artist's photo with `photo`, from this device, in the picture editor. */
+async function uploadPhoto(photo: File) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Replace the photo…" }));
+  const editor = within(screen.getByRole("dialog", { name: "Replace the photo" }));
+  await user.upload(editor.getByLabelText("Choose a photo file"), photo);
+  return editor;
 }
 
 afterEach(() => {
@@ -126,48 +133,46 @@ describe("editing an artist", () => {
     expect(onChanged).not.toHaveBeenCalled();
   });
 
-  it("sets a photo of the household's at once", async () => {
+  it("sets a photo of the household's once it is used in the picture editor", async () => {
     const server = serve({
       [`GET ${SUGGESTION}`]: { body: UNASKED },
       [`PUT ${PHOTO}`]: { status: 204 },
     });
     const { onChanged } = editing();
+    const editor = await uploadPhoto(new File(["jpeg"], "beatles.jpg", { type: "image/jpeg" }));
 
-    await userEvent.upload(
-      screen.getByLabelText("Replace the photo"),
-      new File(["jpeg"], "beatles.jpg", { type: "image/jpeg" }),
-    );
+    await userEvent.click(await editor.findByRole("button", { name: "Use this photo" }));
 
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
     });
-    expect(server.calls).toEqual([IMAGE_LINKS, `GET ${SUGGESTION}`, `PUT ${PHOTO}`]);
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`, `PUT ${PHOTO}`]);
+    expect(screen.queryByRole("dialog", { name: "Replace the photo" })).toBeNull();
   });
 
-  it("sends no photo past 10 MiB, and says so beside the photo", async () => {
+  it("sends no photo past 10 MiB, and says so in the picture editor", async () => {
     const server = serve({ [`GET ${SUGGESTION}`]: { body: UNASKED } });
     const photo = new File(["jpeg"], "huge.jpg", { type: "image/jpeg" });
-    Object.defineProperty(photo, "size", { value: MAX_COVER_BYTES + 1 });
+    Object.defineProperty(photo, "size", { value: MAX_PICTURE_BYTES + 1 });
     editing();
 
-    await userEvent.upload(screen.getByLabelText("Replace the photo"), photo);
+    const editor = await uploadPhoto(photo);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("A photo is at most 10 MiB.");
-    expect(server.calls).toEqual([IMAGE_LINKS, `GET ${SUGGESTION}`]);
+    expect(await editor.findByRole("alert")).toHaveTextContent("A picture is at most 10 MiB.");
+    expect(editor.queryByRole("button", { name: "Use this photo" })).toBeNull();
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`]);
   });
 
-  it("says why a photo was refused, beside the photo", async () => {
+  it("says why a photo was refused, in the picture editor", async () => {
     serve({
       [`PUT ${PHOTO}`]: { status: 422, body: { detail: "That is no JPEG, PNG, or WebP image." } },
     });
     const { onChanged } = editing();
+    const editor = await uploadPhoto(new File(["gif"], "beatles.jpg", { type: "image/jpeg" }));
 
-    await userEvent.upload(
-      screen.getByLabelText("Replace the photo"),
-      new File(["gif"], "beatles.jpg", { type: "image/jpeg" }),
-    );
+    await userEvent.click(await editor.findByRole("button", { name: "Use this photo" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await editor.findByRole("alert")).toHaveTextContent(
       "That is no JPEG, PNG, or WebP image.",
     );
     expect(onChanged).not.toHaveBeenCalled();
@@ -200,7 +205,7 @@ describe("editing an artist", () => {
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
     });
-    expect(server.calls).toEqual([IMAGE_LINKS, `GET ${SUGGESTION}`, `DELETE ${PHOTO}`]);
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`, `DELETE ${PHOTO}`]);
   });
 });
 

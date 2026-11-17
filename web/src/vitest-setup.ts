@@ -1,6 +1,6 @@
 /**
  * @file Adds the Testing Library matchers to Vitest, stands in for media playback, pointer
- * capture, and dialogs, and unmounts between tests.
+ * capture, dialogs, and object URLs, and unmounts between tests.
  */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
@@ -34,6 +34,10 @@ HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
     this.dispatchEvent(new Event("close"));
   }
 };
+
+// jsdom makes no object URLs: every file shown from memory shows from this one.
+URL.createObjectURL = () => "blob:picture";
+URL.revokeObjectURL = () => undefined;
 
 afterEach(() => {
   cleanup();

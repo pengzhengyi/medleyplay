@@ -8,14 +8,14 @@
  * in Edit details, instead.
  */
 
-import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useRef, useState } from "react";
 
-import type { Detail, Track } from "../api";
+import { type Detail, type Track, coverUrl } from "../api";
 import { albumArtistOf } from "../library/views";
 import { Cover } from "./Cover";
-import { CoverFinder } from "./CoverFinder";
 import { Modal } from "./Modal";
+import { PictureEditor } from "./PictureEditor";
+import { PictureFrame } from "./PictureFrame";
 
 /** The album details edited here, each with its label and how its songs show it. */
 const FIELDS = [
@@ -51,18 +51,21 @@ function sharedOf(songs: readonly Track[]): Record<AlbumDetail, string | undefin
 }
 
 /**
- * Edit the album `songs` make up; `onSave` sets the changes on every one of them, and
- * `onUseCover` a cover found on MusicBrainz.
+ * Edit the album `songs` make up; `onSave` sets the changes on every one of them,
+ * `onUseCover` a cover found on MusicBrainz or approved from a model, and
+ * `onUploadCover` an image from this device, answering the cover it became.
  */
 export function EditAlbum({
   songs,
   onSave,
   onUseCover,
+  onUploadCover,
   onClose,
 }: {
   readonly songs: readonly Track[];
   readonly onSave: (changes: AlbumChanges) => Promise<void>;
   readonly onUseCover: (cover: string) => Promise<void>;
+  readonly onUploadCover: (image: File) => Promise<string>;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -79,21 +82,7 @@ export function EditAlbum({
     const covers = new Set(songs.map((song) => song.cover));
     return covers.size === 1 ? ([...covers][0] ?? undefined) : undefined;
   });
-  const [findingCovers, setFindingCovers] = useState(false);
-  const [usingCover, setUsingCover] = useState(false);
-  const [coverError, setCoverError] = useState("");
-  const chooseCover = async (chosen: string) => {
-    setUsingCover(true);
-    setCoverError("");
-    try {
-      await onUseCover(chosen);
-      setCover(chosen);
-    } catch (failure) {
-      setCoverError(failure instanceof Error ? failure.message : String(failure));
-    } finally {
-      setUsingCover(false);
-    }
-  };
+  const [replacingCover, setReplacingCover] = useState(false);
 
   const changes: AlbumChanges = {};
   for (const { detail } of FIELDS) {
@@ -124,7 +113,7 @@ export function EditAlbum({
       ref={dialog}
       className="edit-album"
       labelledBy="edit-album-title"
-      locked={saving || usingCover}
+      locked={saving}
       onClose={onClose}
     >
       <form className="card" onSubmit={(event) => void save(event)}>
@@ -157,32 +146,39 @@ export function EditAlbum({
         </div>
         {shared.album !== undefined && shared.album !== "" && (
           <div className="edit-album-cover">
-            <Cover cover={cover ?? null} className="edit-album-cover-image" />
-            <button
-              type="button"
-              className="secondary outline edit-album-find"
-              aria-expanded={findingCovers}
-              onClick={() => {
-                setFindingCovers(!findingCovers);
+            <PictureFrame
+              className="edit-album-frame"
+              replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
+              save={cover === undefined ? undefined : { href: coverUrl(cover), name: shared.album }}
+              busy={saving}
+              onReplace={() => {
+                setReplacingCover(true);
               }}
             >
-              <MagnifyingGlassIcon weight="bold" aria-hidden /> Find covers on MusicBrainz
-            </button>
+              <Cover cover={cover ?? null} className="edit-album-cover-image" />
+            </PictureFrame>
           </div>
         )}
-        {findingCovers && shared.album !== undefined && (
-          <CoverFinder
-            album={shared.album}
-            artist={shared.album_artist ?? ""}
-            shown={cover}
-            busy={usingCover}
-            onUse={(chosen) => void chooseCover(chosen)}
+        {replacingCover && shared.album !== undefined && (
+          <PictureEditor
+            sources={{
+              kind: "cover",
+              of: shared.album,
+              shown: cover,
+              album: { album: shared.album, artist: shared.album_artist ?? "" },
+              pictured: { kind: "album", album: shared.album, artist: shared.album_artist ?? "" },
+              upload: async (image) => {
+                setCover(await onUploadCover(image));
+              },
+              use: async (chosen) => {
+                await onUseCover(chosen);
+                setCover(chosen);
+              },
+            }}
+            onClose={() => {
+              setReplacingCover(false);
+            }}
           />
-        )}
-        {coverError !== "" && (
-          <p className="error" role="alert">
-            {coverError}
-          </p>
         )}
         {error !== "" && (
           <p className="error" role="alert">

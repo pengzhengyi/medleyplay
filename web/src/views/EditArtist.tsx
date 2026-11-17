@@ -5,19 +5,12 @@
  * The name and the note are saved together; a photo is set or removed at once, as a
  * song's cover is. An empty name shows the artist as most of its songs write it, and
  * removing the household's photo shows Wikidata's again. An AI model may be asked to
- * suggest a name and a note; each suggestion shows beside its field, to use or not. It
- * may also be asked for pictures of the artist on the web, one of which, approved, is
- * downloaded and becomes its photo.
+ * suggest a name and a note; each suggestion shows beside its field, to use or not.
+ * *Replace the photo* opens the picture editor, to upload one or ask an AI model for
+ * pictures of the artist on the web, one of which, approved, becomes its photo.
  */
 
-import {
-  CircleNotchIcon,
-  PencilSimpleIcon,
-  SparkleIcon,
-  SpinnerGapIcon,
-  TrashIcon,
-  UploadSimpleIcon,
-} from "@phosphor-icons/react";
+import { PencilSimpleIcon, SparkleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useEffect, useId, useRef, useState } from "react";
 
 import {
@@ -31,9 +24,9 @@ import { initialOf } from "../format";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
-import { ImageLinks } from "./ImageLinks";
-import { MAX_COVER_BYTES } from "./EditDetails";
 import { Modal } from "./Modal";
+import { PictureEditor } from "./PictureEditor";
+import { PictureFrame } from "./PictureFrame";
 
 /** The longest name an artist may be shown by, and the longest note about it. */
 const MAX_SHOWN_AS = 512;
@@ -185,6 +178,7 @@ export function EditArtist({
   const [error, setError] = useState("");
   const [picturing, setPicturing] = useState(false);
   const [photoError, setPhotoError] = useState("");
+  const [replacingPhoto, setReplacingPhoto] = useState(false);
   const ai = useArtistSuggestion(artist.id);
   const noAi = useAiSetUp();
   const suggested = ai.suggestion;
@@ -224,7 +218,7 @@ export function EditArtist({
   };
 
   const busy = saving || picturing;
-  const choose = artist.photo === null ? "Add a photo" : "Replace the photo";
+  const name = artist.shown_as ?? written;
   return (
     <Modal
       ref={dialog}
@@ -241,61 +235,34 @@ export function EditArtist({
         </p>
         <div className="edit-artist-body">
           <div className="edit-artist-photo">
-            <span className="edit-artist-image">
-              {artist.photo === null ? (
-                <span className="artist-initial">{initialOf(artist.shown_as ?? written)}</span>
-              ) : (
-                <img
-                  className="edit-artist-picture"
-                  src={coverUrl(artist.photo)}
-                  alt={`Photo of ${artist.shown_as ?? written}`}
-                />
-              )}
-              {picturing && (
-                <span className="cover-saving" role="status" aria-label="Saving the photo…">
-                  <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-                </span>
-              )}
-            </span>
-            <div className="edit-artist-photo-tools">
-              <label
-                className={busy ? "edit-artist-tool disabled" : "edit-artist-tool"}
-                title={choose}
-              >
-                <UploadSimpleIcon weight="bold" aria-hidden />
-                <span className="visually-hidden">{choose}</span>
-                <input
-                  type="file"
-                  className="visually-hidden"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={busy}
-                  onChange={(event) => {
-                    const chosen = event.currentTarget.files?.[0];
-                    event.currentTarget.value = "";
-                    if (chosen === undefined) {
-                      return;
-                    }
-                    if (chosen.size > MAX_COVER_BYTES) {
-                      setPhotoError("A photo is at most 10 MiB.");
-                    } else {
-                      void changePhoto(() => api.setArtistPhoto(artist.id, chosen));
-                    }
-                  }}
-                />
-              </label>
-              {artist.own_photo && (
-                <button
-                  type="button"
-                  className="edit-artist-tool"
-                  disabled={busy}
-                  aria-label="Remove your photo"
-                  title="Remove your photo"
-                  onClick={() => void changePhoto(() => api.removeArtistPhoto(artist.id))}
-                >
-                  <TrashIcon weight="bold" aria-hidden />
-                </button>
-              )}
-            </div>
+            <PictureFrame
+              className="edit-artist-frame"
+              replaceLabel={artist.photo === null ? "Add a photo" : "Replace the photo"}
+              save={artist.photo === null ? undefined : { href: coverUrl(artist.photo), name }}
+              removeLabel="Remove your photo"
+              busy={busy}
+              saving={picturing ? "Saving the photo…" : undefined}
+              onReplace={() => {
+                setReplacingPhoto(true);
+              }}
+              onRemove={
+                artist.own_photo
+                  ? () => void changePhoto(() => api.removeArtistPhoto(artist.id))
+                  : undefined
+              }
+            >
+              <span className="edit-artist-image">
+                {artist.photo === null ? (
+                  <span className="artist-initial">{initialOf(name)}</span>
+                ) : (
+                  <img
+                    className="edit-artist-picture"
+                    src={coverUrl(artist.photo)}
+                    alt={`Photo of ${name}`}
+                  />
+                )}
+              </span>
+            </PictureFrame>
             <small className={artist.own_photo ? "detail-origin yours" : "detail-origin"}>
               {artist.photo === null ? "No photo" : artist.own_photo ? "Yours" : "From Wikidata"}
             </small>
@@ -397,12 +364,27 @@ export function EditArtist({
             )}
           </div>
         </div>
-        <ImageLinks
-          pictured={{ kind: "artist", artistId: artist.id }}
-          shown={artist.photo}
-          busy={busy}
-          onUse={(cover) => void changePhoto(() => api.useArtistPhotoCover(artist.id, cover))}
-        />
+        {replacingPhoto && (
+          <PictureEditor
+            sources={{
+              kind: "photo",
+              of: name,
+              shown: artist.photo,
+              pictured: { kind: "artist", artistId: artist.id },
+              upload: async (image) => {
+                await api.setArtistPhoto(artist.id, image);
+                onChanged();
+              },
+              use: async (cover) => {
+                await api.useArtistPhotoCover(artist.id, cover);
+                onChanged();
+              },
+            }}
+            onClose={() => {
+              setReplacingPhoto(false);
+            }}
+          />
+        )}
         {error !== "" && (
           <p className="error" role="alert">
             {error}

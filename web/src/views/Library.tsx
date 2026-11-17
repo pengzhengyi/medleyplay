@@ -679,6 +679,23 @@ export function Library({
             );
             setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
           }}
+          // The image becomes the first song's cover, then every song's.
+          onUploadCover={async (image) => {
+            const [first] = editingAlbum;
+            const cover =
+              first === undefined
+                ? undefined
+                : (await library.setCover(first.id, image)).origins.household?.cover;
+            if (typeof cover !== "string") {
+              throw new Error("The cover could not be kept.");
+            }
+            await library.setDetailsOn(
+              editingAlbum.map(({ id }) => id),
+              { cover },
+            );
+            setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
+            return cover;
+          }}
           onSave={async (changes) => {
             const [first] = editingAlbum;
             await library.setDetailsOn(

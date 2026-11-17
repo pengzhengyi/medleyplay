@@ -138,7 +138,8 @@ values.
 - **How the dialog lays it out:** the cover large at the side, with the ways to
   fill the details in under it, and the fields beside them. Over the cover, on
   hover or focus, and always on a touch screen, are *Save image*, *Replace*,
-  and, for the household's own cover, *Remove*. Each value's origin is a small
+  and, for the household's own cover, *Remove*, as the album's cover in *Edit
+  album* and an artist's photo in *Edit artist* have them too. Each value's origin is a small
   tag, a mark and a word such as *BV* or *MB*, which says *From the video* in
   full in its tooltip and to screen readers. Each other origin's value carries
   its origin's mark.
@@ -295,15 +296,34 @@ values.
   or removed stays on disk until the server next starts. The covers found for an
   album, below, are kept until found again.
 
+### Replacing a cover or a photo
+
+*Replace* over a song's cover, an album's, or an artist's photo opens one picture
+editor, *Replace the cover* (or *Add a cover* when there is none), with a tab for each
+place a picture comes from, listed down its side and across the top on a phone:
+
+| Tab | Shows | For |
+| --- | --- | --- |
+| *Upload* | A panel to drop a picture on, or *Choose a file…*; the picture chosen shows before *Use this cover* | Every picture |
+| *MusicBrainz* | The covers of the album's releases, below | A cover of a song or an album |
+| *Ask AI* | The pictures an AI model names, below | Every picture |
+
+- **Nothing changes until a picture is used,** and using one closes the editor;
+  one that can't be used says why there, and the editor stays open.
+- **Upload** takes a JPEG, PNG, or WebP image of at most 10 MiB, checked before it
+  is sent. An album's upload becomes its first song's cover, and then every song's.
+- **A song on no album** can't look its cover up: *MusicBrainz* and *Ask AI* are
+  unavailable, saying the album is needed.
+- **Built on** Radix UI's tabs, which the dropdown menus' Radix packages already
+  bring, and `react-dropzone` for the drop panel.
+
 ### An album's covers from MusicBrainz
 
-*Find covers on MusicBrainz*, a button under the cover in *Edit details* and beside
-the album's cover in *Edit album*, shows the front covers of the album's releases
-MusicBrainz knows, to choose one. Nothing changes until one is chosen.
+The *MusicBrainz* tab of the picture editor shows the front covers of the album's
+releases MusicBrainz knows, to choose one. Nothing changes until one is chosen.
 
 - **Which album:** the song's album; for a whole album in one file naming none, its
-  title. A song on no album shows the button unavailable, saying the album is
-  needed.
+  title.
 
 - **Known by the album and its artist,** the album artist or else the artist, as
   written, trimmed and folded: every song writing them alike shares what was found.
@@ -338,8 +358,7 @@ MusicBrainz knows, to choose one. Nothing changes until one is chosen.
 
 ### Pictures an AI model names
 
-*Suggested by AI*, under the covers from MusicBrainz and under an artist's photo in
-*Edit artist*, shows the pictures an AI model names for the album's cover or for a
+The *Ask AI* tab of the picture editor shows the pictures an AI model names for the album's cover or for a
 photo of the artist, each from its own site. Nothing is downloaded until one is
 approved.
 

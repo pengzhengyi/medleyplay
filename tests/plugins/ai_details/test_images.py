@@ -20,8 +20,10 @@ from medleyplay.plugins.ai_details.client import MAX_ATTEMPTS, ChatClient
 from medleyplay.plugins.ai_details.images import (
     IMAGE_FILE,
     SYSTEM,
+    THUMB_WIDTH,
     AiImageSuggester,
     WebImageFetcher,
+    WikipediaImages,
 )
 from tests.support.ai import AiEndpointFactory, ChatReplyFactory, FakeAiFactory
 from tests.support.transport import FakeTransport, FakeWaits, Reply
@@ -52,8 +54,39 @@ def public_or_home(host: str) -> Sequence[str]:
 
 
 def suggester_over(fake: FakeTransport) -> AiImageSuggester:
-    """The suggester, asking `fake`, waiting for nothing, and looking names up offline."""
-    return AiImageSuggester(ChatClient(fake.session(), sleep=FakeWaits().sleep), public_or_home)
+    """The suggester asking `fake`, for Wikipedia too, waiting for nothing, looking up offline."""
+    return AiImageSuggester(
+        ChatClient(fake.session(), sleep=FakeWaits().sleep),
+        public_or_home,
+        WikipediaImages(fake.session()),
+    )
+
+
+ZH_API = "https://zh.wikipedia.org/w/api.php"
+TWELVE_THUMB = "https://upload.wikimedia.org/wikipedia/zh/thumb/1/12/Twelve.jpg/640px-Twelve.jpg"
+TWELVE_PAGE = "https://zh.wikipedia.org/wiki/%E5%8D%81%E4%BA%8C%E6%96%B0%E4%BD%9C"
+
+
+def article(
+    title: str, thumb: str | None, page: str, *, missing: bool = False
+) -> dict[str, object]:
+    """One page as Wikipedia's API answers it: its title, address, and lead image if it has one."""
+    found: dict[str, object] = {"title": title, "fullurl": page}
+    if missing:
+        found["missing"] = True
+    if thumb is not None:
+        found["thumbnail"] = {"source": thumb, "width": 640, "height": 640}
+    return found
+
+
+def wikipedia_answering(*pages: dict[str, object]) -> Reply:
+    """Wikipedia's API answering with `pages`, as `formatversion=2` shapes it."""
+    return Reply.json({"query": {"pages": list(pages)}})
+
+
+def asking_for_twelve(*images: dict[str, object]) -> FakeTransport:
+    """The model naming `images` for *12新作* by 周杰伦."""
+    return FakeAiFactory.answering(ChatReplyFactory.json_saying({"images": list(images)}))
 
 
 def test_the_links_the_model_names_are_suggested_in_its_order() -> None:
@@ -211,3 +244,96 @@ def test_a_link_with_no_image_is_answered_with_why_and_no_file(tmp_path: Path) -
         "upload.wikimedia.org has no image there (404): https://",
     )
     assert list(tmp_path.iterdir()) == []
+
+
+def test_the_model_is_pointed_to_wikipedia_articles_rather_than_asked_to_know_image_links() -> None:
+    assert "wikipedia" in SYSTEM
+    assert "empty list is better" not in SYSTEM
+
+
+def test_an_article_the_model_names_is_shown_by_its_lead_image() -> None:
+    fake = asking_for_twelve(
+        {"wikipedia": {"lang": "zh", "title": "十二新作"}, "why": "专辑条目的封面"}
+    ).answer(ZH_API, wikipedia_answering(article("十二新作", TWELVE_THUMB, TWELVE_PAGE)))
+
+    answer = suggester_over(fake).suggest(OK_COMPUTER)
+
+    assert answer.links == (ImageLink(url=TWELVE_THUMB, page=TWELVE_PAGE, why="专辑条目的封面"),)
+    asked = fake.urls().index(ZH_API)
+    assert fake.parameter("titles", asked) == "十二新作"
+    assert fake.parameter("pithumbsize", asked) == str(THUMB_WIDTH)
+    assert fake.parameter("pilicense", asked) == "any"
+    assert fake.parameter("redirects", asked) == "1"
+
+
+def test_articles_in_one_language_are_asked_about_at_once_and_kept_in_the_models_order() -> None:
+    second = "https://upload.wikimedia.org/wikipedia/zh/thumb/2/2b/Jay.jpg/640px-Jay.jpg"
+    fake = asking_for_twelve(
+        {"wikipedia": {"lang": "zh", "title": "十二新作"}},
+        {"url": COVER},
+        {"wikipedia": {"lang": "zh", "title": "周杰伦"}},
+    ).answer(
+        ZH_API,
+        wikipedia_answering(
+            article("周杰伦", second, "https://zh.wikipedia.org/wiki/Jay"),
+            article("十二新作", TWELVE_THUMB, TWELVE_PAGE),
+        ),
+    )
+
+    answer = suggester_over(fake).suggest(OK_COMPUTER)
+
+    assert [link.url for link in answer.links] == [TWELVE_THUMB, COVER, second]
+    assert fake.urls().count(ZH_API) == 1
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        article("十二新作", None, TWELVE_PAGE),
+        article("十二新作", None, TWELVE_PAGE, missing=True),
+    ],
+    ids=["no image", "no such article"],
+)
+def test_an_article_with_no_image_drops_out(page: dict[str, object]) -> None:
+    fake = asking_for_twelve(
+        {"wikipedia": {"lang": "zh", "title": "十二新作"}}, {"url": COVER}
+    ).answer(ZH_API, wikipedia_answering(page))
+
+    answer = suggester_over(fake).suggest(OK_COMPUTER)
+
+    assert answer.links == (ImageLink(url=COVER),)
+
+
+def test_an_article_in_no_real_language_is_never_asked_for() -> None:
+    fake = asking_for_twelve(
+        {"wikipedia": {"lang": "evil.example.com/x", "title": "十二新作"}}, {"url": COVER}
+    )
+
+    answer = suggester_over(fake).suggest(OK_COMPUTER)
+
+    assert answer.links == (ImageLink(url=COVER),)
+    assert all("wikipedia.org" not in url for url in fake.urls())
+
+
+def test_wikipedia_out_of_reach_leaves_the_other_links() -> None:
+    fake = asking_for_twelve(
+        {"wikipedia": {"lang": "zh", "title": "十二新作"}}, {"url": COVER}
+    ).answer(ZH_API, Reply(503))
+
+    answer = suggester_over(fake).suggest(OK_COMPUTER)
+
+    assert answer.links == (ImageLink(url=COVER),)
+
+
+def test_a_commons_file_is_linked_at_a_width_commons_keeps_ready() -> None:
+    fake = asking_for_twelve({"commons": "File:OK Computer.png", "why": "the cover"})
+
+    answer = suggester_over(fake).suggest(OK_COMPUTER)
+
+    assert answer.links == (
+        ImageLink(
+            url=f"https://commons.wikimedia.org/wiki/Special:FilePath/OK_Computer.png?width={THUMB_WIDTH}",
+            page="https://commons.wikimedia.org/wiki/File:OK_Computer.png",
+            why="the cover",
+        ),
+    )

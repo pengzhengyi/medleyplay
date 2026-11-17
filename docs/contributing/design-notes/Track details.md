@@ -344,8 +344,16 @@ approved.
 - **Asked only when someone chooses *Ask AI*,** with an AI set up and the
   `ai-details` plugin on: a Job in the AI's lane shows a model the album, its
   artist, and a few of its songs, or the artist's name, and it answers with at
-  most 6 links to images, each with the page that shows it and why. Asking again
-  replaces what it named.
+  most 6 places to find a picture, each with why. Asking again replaces what it
+  named.
+- **Places a model can name rightly:** a model rarely knows an image's exact
+  address, so it is asked for Wikipedia articles first (the album's, or the
+  artist's, in the language they are best known in, and in English too), then
+  files on Wikimedia Commons, and a link to an image only when it is sure of it. An
+  article is shown by its lead image, which the MediaWiki API names
+  (`prop=pageimages`, 640 pixels wide, following redirects), one request per
+  language; an article with no image, or one the API can't answer about, is left
+  out. A Commons file is linked through `Special:FilePath` at the same width.
 - **Only links to public sites:** a link must be HTTPS on port 443 to a named host,
   never an address, a `user@`, or a name like `*.local` or `*.internal`, at most
   2,048 characters; a host whose name leads to any address that isn't public is
@@ -729,7 +737,8 @@ that reason. `GET /api/settings` gains `album_minutes`.
   429 and a lost connection, each passing over to the next provider, and no key
   ever in a message or a log. In real Jobs,
   the suggestion is recorded and shown nowhere, replaced by the next, and a
-  refused key stops the enricher. The picture fetch runs against a fake resolver and
+  refused key stops the enricher. An article named is shown by the lead image a fake
+MediaWiki API names, batched per language, and left out when it has none. The picture fetch runs against a fake resolver and
   fake connections: addresses that aren't public, a host leading to one, redirects,
   sizes, statuses, and a deadline. No test contacts a site, MusicBrainz, or a model.
 

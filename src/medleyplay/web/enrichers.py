@@ -33,12 +33,16 @@ class EnricherOut(BaseModel):
     """Set after the site refused a request; nothing is asked until an admin resets it."""
     eligible: list[int]
     """The Tracks it may be asked about now; none while it is stopped or turned off."""
+    asked_recently: list[int]
+    """The Tracks the AI was asked about lately, asked again only when someone chooses to."""
     mode: EnricherMode
     """When the household has it asked: `manual`, `next` for the songs coming up, or `all`."""
 
     @classmethod
-    def of(cls, state: EnricherState, eligible: list[TrackId]) -> "EnricherOut":
-        """Return the API view of `state` and the Tracks it may be asked about."""
+    def of(
+        cls, state: EnricherState, eligible: list[TrackId], asked_recently: list[TrackId]
+    ) -> "EnricherOut":
+        """Return the API view of `state` and the Tracks it may be asked about, now or again."""
         stopped = (
             None
             if state.stopped_at is None
@@ -49,6 +53,7 @@ class EnricherOut(BaseModel):
             available=state.available,
             stopped=stopped,
             eligible=list(eligible) if state.available else [],
+            asked_recently=list(asked_recently) if state.available else [],
             mode=state.mode,
         )
 
@@ -78,7 +83,9 @@ class QueuedOut(BaseModel):
 @router.get("/{name}")
 def get_enricher(name: str, _: SignedInAccount, enrichment: EnrichmentDep) -> EnricherOut:
     """Return the enricher's state and the Tracks it may be asked about."""
-    return EnricherOut.of(enrichment.state(name), enrichment.eligible(name))
+    return EnricherOut.of(
+        enrichment.state(name), enrichment.eligible(name), enrichment.asked_recently(name)
+    )
 
 
 @router.post("/{name}/tracks/{track_id}")
@@ -112,7 +119,7 @@ def set_mode(
 ) -> EnricherOut:
     """Choose when the enricher is asked; admins only. Finding all queues every Track at once."""
     state = enrichment.set_mode(me, name, body.mode)
-    return EnricherOut.of(state, enrichment.eligible(name))
+    return EnricherOut.of(state, enrichment.eligible(name), enrichment.asked_recently(name))
 
 
 @router.post("/{name}/reset", status_code=status.HTTP_204_NO_CONTENT)

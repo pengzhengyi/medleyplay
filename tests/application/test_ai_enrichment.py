@@ -19,6 +19,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin
 from medleyplay.domain.enrichers import AI_DETAILS, ASK_AGAIN_AFTER, MUSICBRAINZ
 from medleyplay.domain.errors import (
+    AskedRecentlyError,
     ConflictError,
     ForbiddenError,
     InvalidInputError,
@@ -424,6 +425,19 @@ def test_a_track_is_asked_of_the_ai_once_a_day(
         enriching.enrichment.find_details(alice, track_id, NAME)
     clock.advance(ASK_AGAIN_AFTER)
     assert enriching.enrichment.eligible(NAME) == [track_id, other]
+
+
+def test_a_track_asked_of_the_ai_today_waits_for_someone_to_choose_to_ask_again(
+    enriching: Enriching, alice: Account, clock: FakeClock
+) -> None:
+    track_id = enriching.add_track_with_text("Night Drive")
+    _suggested(enriching, alice, track_id)
+
+    assert enriching.enrichment.asked_recently(NAME) == [track_id]
+    with pytest.raises(AskedRecentlyError, match="24 hours"):
+        enriching.enrichment.find_details(alice, track_id, NAME)
+    clock.advance(ASK_AGAIN_AFTER)
+    assert enriching.enrichment.asked_recently(NAME) == []
 
 
 def test_asking_the_ai_again_needs_no_wait_of_a_day(enriching: Enriching, alice: Account) -> None:

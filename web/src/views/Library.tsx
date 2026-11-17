@@ -10,7 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AI_ENRICHER, type Account, type Kind, type Track, api } from "../api";
+import { AI_ENRICHER, type Account, ApiError, type Kind, type Track, api } from "../api";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
@@ -35,6 +35,7 @@ import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddFile } from "./AddFile";
 import { AddLink } from "./AddLink";
 import { AddToPlaylist } from "./AddToPlaylist";
+import { AskAiAgain } from "./AskAiAgain";
 import { CheckNetwork } from "./CheckNetwork";
 import { EditAlbum } from "./EditAlbum";
 import { EditDetails } from "./EditDetails";
@@ -197,6 +198,10 @@ export function Library({
   // The link or code being added from Bilibili, and the Track whose file is being added by hand.
   const [linking, setLinking] = useState<string | undefined>(undefined);
   const [filing, setFiling] = useState<Track | undefined>(undefined);
+  // The Track whose lookup waits for someone to agree to ask the AI about it again.
+  const [askingAgain, setAskingAgain] = useState<
+    { readonly lookup: Lookup; readonly track: Track } | undefined
+  >(undefined);
   const [notice, setNotice] = useFading("");
   // Said to screen readers only: what the page shows where it happens, such as a lookup.
   const [said, setSaid] = useFading("");
@@ -242,6 +247,23 @@ export function Library({
       document.removeEventListener("visibilitychange", onShown);
     };
   }, [account.id]);
+
+  /** Ask `lookup` about `track`, `again` once someone agreed, and say how it went. */
+  const find = (lookup: Lookup, track: Track, again = false) => {
+    library.find(lookup.enricher, track.id, again ? { hint: "" } : undefined).then(
+      () => {
+        const wait = library.mode?.online === false ? " It waits until medleyplay is Online." : "";
+        setSaid(`${lookup.notice(track.title)}${wait}`);
+      },
+      (failure: unknown) => {
+        if (failure instanceof ApiError && failure.code === "asked_recently") {
+          setAskingAgain({ lookup, track });
+          return;
+        }
+        setSaid(failure instanceof Error ? failure.message : String(failure));
+      },
+    );
+  };
   const actions: TrackActions = {
     onPlay: player.playList,
     onPlayAll: player.playAll,
@@ -258,22 +280,19 @@ export function Library({
       setEditing({ track, songs: false });
     },
     onEditAlbum: setEditingAlbum,
+    // The AI asked about a Track lately is offered too, asked again once someone agrees.
     canFind: (lookup: Lookup, track: Track) =>
-      library.findable.get(lookup.enricher)?.has(track.id) ?? false,
+      (library.findable.get(lookup.enricher)?.has(track.id) ?? false) ||
+      (library.askedRecently.get(lookup.enricher)?.has(track.id) ?? false),
     // The song's cover shows the lookup as it goes; screen readers hear it asked.
     statusOf: (track: Track) =>
       coverStatusOf(library.lookups.get(track.id), library.mode?.online !== false),
     onFind: (lookup: Lookup, track: Track) => {
-      library.find(lookup.enricher, track.id).then(
-        () => {
-          const wait =
-            library.mode?.online === false ? " It waits until medleyplay is Online." : "";
-          setSaid(`${lookup.notice(track.title)}${wait}`);
-        },
-        (failure: unknown) => {
-          setSaid(failure instanceof Error ? failure.message : String(failure));
-        },
-      );
+      if (library.askedRecently.get(lookup.enricher)?.has(track.id) ?? false) {
+        setAskingAgain({ lookup, track });
+      } else {
+        find(lookup, track);
+      }
     },
     onAddFile: setFiling,
     // The row's mark shows the new Kind, and the notice says so, as a filter may hide the row.
@@ -626,6 +645,17 @@ export function Library({
           }}
           onClose={() => {
             setNowPlayingOver(undefined);
+          }}
+        />
+      )}
+      {askingAgain !== undefined && (
+        <AskAiAgain
+          title={askingAgain.track.title}
+          onAsk={() => {
+            find(askingAgain.lookup, askingAgain.track, true);
+          }}
+          onClose={() => {
+            setAskingAgain(undefined);
           }}
         />
       )}

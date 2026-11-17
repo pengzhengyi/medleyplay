@@ -527,8 +527,10 @@ def test_asking_again_within_a_day_is_refused(enriching: Enriching, alice: Accou
     track_id = enriching.add_song("Let Down")
     _found(enriching, alice, track_id)
 
-    with pytest.raises(ConflictError, match="24 hours"):
+    with pytest.raises(ConflictError, match="24 hours") as refused:
         enriching.enrichment.find_details(alice, track_id, NAME)
+    assert refused.value.code is None
+    assert enriching.enrichment.asked_recently(NAME) == []
 
 
 def test_two_tracks_with_the_same_words_are_each_asked_for(

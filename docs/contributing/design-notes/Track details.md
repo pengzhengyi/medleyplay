@@ -643,6 +643,11 @@ songs editor.
   Track's id and its video text, so pasting better text asks again at once.
   Someone asking it *again*, with a note or none, needs no wait; asking again
   while a Job still asks about the Track is refused, rather than the note lost.
+- **Asked again only when someone agrees.** A Track the AI was asked about in the
+  last day is still offered: the enricher lists it under `asked_recently`, and
+  asking about it without *again* is refused with the code `asked_recently`. The web
+  client then asks *Ask the AI again?*, saying another request may cost money and
+  likely brings the same answer, and asks *again* only once someone agrees.
 - **Where the suggestions are kept.** The values are the Track's `ai` origin,
   replaced whole by the next suggestion, so an answer that suggests nothing clears
   the last. A suggested song list is kept apart, one per Track, only when it is a
@@ -677,7 +682,7 @@ songs editor.
 | `GET /api/covers/{id}` | Signed in | A cover's image |
 | `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body; answers the details |
 | `DELETE /api/tracks/{id}/cover` | Signed in | Drops the household's cover, so the next origin's shows |
-| `GET /api/enrichers/{name}` | Signed in | Whether the enricher is on, why the site stopped it if it did, its mode, and the Tracks it may be asked about |
+| `GET /api/enrichers/{name}` | Signed in | Whether the enricher is on, why the site stopped it if it did, its mode, the Tracks it may be asked about, and those the AI was asked about lately (`asked_recently`) |
 | `POST /api/enrichers/{name}/tracks/{id}` | Signed in | Queues the Track's Job, or returns the one already active; 409 with why when the Track is not eligible |
 | `PUT /api/enrichers/{name}/mode` | Admin | Sets the mode, `manual`, `next`, or `all`; answers the enricher, and with `all` queues every eligible Track first |
 | `POST /api/enrichers/{name}/find-all` | Admin | Queues every eligible Track and answers how many |

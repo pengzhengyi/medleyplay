@@ -165,6 +165,37 @@ describe("splitting long files in Clean up", () => {
     });
   });
 
+  it("asks the AI again about a file asked about today once someone agrees", async () => {
+    const sent: unknown[] = [];
+    serve({
+      "POST /api/enrichers/ai-details/tracks/9": (body) => {
+        sent.push(body);
+        return body === undefined
+          ? {
+              status: 409,
+              body: {
+                detail: "This Track was looked up in the last 24 hours.",
+                code: "asked_recently",
+              },
+            }
+          : { body: { id: 1 } };
+      },
+    });
+    cleanUp([MIXTAPE]);
+    await userEvent.click(
+      section().getByRole("button", { name: "Ask the AI for the songs of Mixtape" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Ask the AI again?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Ask again" }));
+
+    expect(sent).toEqual([undefined, { again: true, hint: "" }]);
+    await waitFor(() => {
+      expect(section().getByText(/the AI is asked for its songs/u)).toBeVisible();
+    });
+    expect(section().queryByRole("alert")).toBeNull();
+  });
+
   it("opens a file's songs to split it by hand", async () => {
     const { onEditSongs } = cleanUp([LIVE]);
 

@@ -561,6 +561,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Asking the AI again within a day asks first** instead of refusing: *Ask the AI
+  again?* says another request may cost money and likely brings the same answer,
+  and asks again once you agree. `GET /api/enrichers/{name}` lists the songs asked
+  lately as `asked_recently`, and asking about one is refused with that code.
+
 - **Dynamics move smoothly** — the effect behind Now Playing is drawn on every frame
   the display shows, rather than about 30 times a second, from a finer, blurred copy
   of the cover, so its colors flow without stepping.

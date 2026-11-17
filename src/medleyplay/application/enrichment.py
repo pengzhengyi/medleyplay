@@ -56,6 +56,7 @@ from medleyplay.domain.enrichers import (
     why_not,
 )
 from medleyplay.domain.errors import (
+    AskedRecentlyError,
     ConflictError,
     ForbiddenError,
     InvalidInputError,
@@ -378,6 +379,28 @@ class EnrichmentService:
             if why_not(found.facts, now, stopped=False, enricher=enricher, set_up=set_up) is None
         ]
 
+    def asked_recently(self, name: str) -> list[TrackId]:
+        """Return the Tracks the AI was asked about lately, and may be asked `again`.
+
+        Each is eligible but for the wait since it was last asked; for any other enricher,
+        or while it is stopped, there are none.
+        """
+        enricher = enricher_named(name)
+        if not enricher.uses_ai:
+            return []
+        now = self._clock()
+        with self._units() as db:
+            if db.get(EnricherStopRow, enricher.name) is not None:
+                return []
+            set_up = is_set_up(db)
+            found = candidates(db, enricher, None)
+        return [
+            track_id
+            for track_id, each in found.items()
+            if why_not(each.facts, now, stopped=False, enricher=enricher, set_up=set_up)
+            is Ineligible.ASKED
+        ]
+
     def find_details(
         self,
         caller: Account,
@@ -439,6 +462,8 @@ class EnrichmentService:
         reason = why_not(
             found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up, again=again
         )
+        if reason is Ineligible.ASKED and enricher.uses_ai:
+            raise AskedRecentlyError(message_of(reason, enricher))
         if reason is not None:
             raise ConflictError(message_of(reason, enricher))
         return self._jobs.submit(

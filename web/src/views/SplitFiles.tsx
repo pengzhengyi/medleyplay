@@ -5,15 +5,17 @@
  * listed it, and what makes it doubtful. *Split* splits it by that list, as it was
  * shown; *Keep* keeps it as one file, so nothing is offered for it again; *Edit songs…*
  * opens its songs to split by hand. A file with no list may have an AI asked for one,
- * from its video's text. *Split all* splits every file with a list at once.
+ * from its video's text, asked again once someone agrees when it was asked in the last
+ * 24 hours. *Split all* splits every file with a list at once.
  */
 
 import { ScissorsIcon, SparkleIcon, WarningIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 
-import { type OfferedFile, type SplitDoubt, api } from "../api";
+import { AI_ENRICHER, ApiError, type OfferedFile, type SplitDoubt, api } from "../api";
 import { formatMinutes } from "../format";
 import { AiSetUpHint } from "./AiSetUpHint";
+import { AskAiAgain } from "./AskAiAgain";
 import { useAiSetUp } from "./aiSetUp";
 
 /** What makes a list doubtful, in words. */
@@ -53,6 +55,8 @@ export function SplitFiles({
   const ai = useAiSetUp();
   const [busy, setBusy] = useState(false);
   const [asked, setAsked] = useState<ReadonlySet<number>>(new Set());
+  // The file the AI was asked about lately, waiting for someone to agree to ask again.
+  const [askingAgain, setAskingAgain] = useState<OfferedFile | undefined>(undefined);
   // Why a file couldn't be split, kept, or asked about, by its Track; 0 for all of them.
   const [errors, setErrors] = useState<ReadonlyMap<number, string>>(new Map());
   const offered = files.filter((file) => file.offer !== null);
@@ -70,6 +74,20 @@ export function SplitFiles({
       onChanged();
     }
   };
+  /** Ask the AI for the songs of `file`, `again` once someone agreed to. */
+  const askAi = (file: OfferedFile, again = false) =>
+    run(file.track_id, async () => {
+      try {
+        await api.findDetails(AI_ENRICHER, file.track_id, again ? { hint: "" } : undefined);
+      } catch (failure) {
+        if (failure instanceof ApiError && failure.code === "asked_recently") {
+          setAskingAgain(file);
+          return;
+        }
+        throw failure;
+      }
+      setAsked((now) => new Set(now).add(file.track_id));
+    });
   const split = (chosen: readonly OfferedFile[]) =>
     api.splitFiles(
       chosen.flatMap((file) =>
@@ -178,10 +196,7 @@ export function SplitFiles({
                       disabled={busy}
                       onClick={() => {
                         ai.whenSetUp(() => {
-                          void run(file.track_id, async () => {
-                            await api.findDetails("ai-details", file.track_id);
-                            setAsked((now) => new Set(now).add(file.track_id));
-                          });
+                          void askAi(file);
                         });
                       }}
                     >
@@ -214,6 +229,17 @@ export function SplitFiles({
             );
           })}
         </ul>
+      )}
+      {askingAgain !== undefined && (
+        <AskAiAgain
+          title={askingAgain.title}
+          onAsk={() => {
+            void askAi(askingAgain, true);
+          }}
+          onClose={() => {
+            setAskingAgain(undefined);
+          }}
+        />
       )}
     </section>
   );

@@ -1,32 +1,41 @@
 /**
  * @file The artists and albums the Account favorited, matched to the Library's names.
  *
- * The server keeps each by the name it was favorited under; the client alone says
- * which artist or album that is, folding names as the Albums view does, so a name
- * differing in case or width is the same one. They tune Radio; they don't keep songs
- * downloaded or put them in Favorites, which follow each song's own heart.
+ * The server keeps each artist by the id of the Library's artist, and each album by the
+ * name it was favorited under; the client says which names those are, folding names as
+ * the Albums view does, so a name differing in case or width is the same one. They tune
+ * Radio; they don't keep songs downloaded or put them in Favorites, which follow each
+ * song's own heart.
  */
 
 import type { FavoritesRead, Track } from "../api";
 import { fold, songsOf } from "./views";
 
-/** The favorite artists and albums, by their folded names. */
+/** The favorite artists and albums. */
 export interface FavoriteGroups {
+  /** The favorite artists, by the ids of the Library's artists, as the server keeps them. */
+  readonly artistIds: ReadonlySet<string>;
+  /** The folded names of the favorite artists, as the Library writes them; see `withLinkedFavorites`. */
   readonly artists: ReadonlySet<string>;
   /** Each album as its folded album artist and name, a line apart. */
   readonly albums: ReadonlySet<string>;
 }
 
-export const NO_FAVORITES: FavoriteGroups = { artists: new Set(), albums: new Set() };
+export const NO_FAVORITES: FavoriteGroups = {
+  artistIds: new Set(),
+  artists: new Set(),
+  albums: new Set(),
+};
 
 /** An album as `FavoriteGroups` holds it. */
 export const albumKey = (artist: string, name: string): string =>
   `${fold(artist.trim())}\n${fold(name.trim())}`;
 
-/** The favorites the server sent, as the client matches them. */
+/** The favorites the server sent, the artists by id, until their names are known. */
 export function favoriteGroupsOf(read: FavoritesRead): FavoriteGroups {
   return {
-    artists: new Set(read.artists.map(({ name }) => fold(name.trim()))),
+    artistIds: new Set(read.artists.map(({ id }) => id)),
+    artists: new Set(),
     albums: new Set(read.albums.map(({ artist, name }) => albumKey(artist, name))),
   };
 }

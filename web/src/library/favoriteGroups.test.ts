@@ -1,7 +1,7 @@
 // cspell:ignore ＲＡＤＩＯＨＥＡＤ Budokan
 import { describe, expect, it } from "vitest";
 
-import { trackOf } from "../testing/server";
+import { favoriteGroupsNaming, trackOf } from "../testing/server";
 import {
   canFavorite,
   favoriteGroupsOf,
@@ -11,11 +11,15 @@ import {
 } from "./favoriteGroups";
 
 describe("favorite artists and albums", () => {
+  it("keeps the artists the server sent by id, their names not known yet", () => {
+    const favorites = favoriteGroupsOf({ artists: [{ id: "a1" }], albums: [] });
+
+    expect([...favorites.artistIds]).toEqual(["a1"]);
+    expect([...favorites.artists]).toEqual([]);
+  });
+
   it("matches the names the Library uses, whatever their case or width", () => {
-    const favorites = favoriteGroupsOf({
-      artists: [{ name: "radiohead" }],
-      albums: [{ artist: "朴树", name: "生如夏花" }],
-    });
+    const favorites = favoriteGroupsNaming(["radiohead"], [{ artist: "朴树", name: "生如夏花" }]);
 
     expect(isFavoriteArtist(favorites, "Radiohead")).toBe(true);
     expect(isFavoriteArtist(favorites, "ＲＡＤＩＯＨＥＡＤ")).toBe(true);

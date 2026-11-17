@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Track } from "../api";
-import { trackOf } from "../testing/server";
-import { favoriteGroupsOf } from "./favoriteGroups";
+import { favoriteGroupsNaming, trackOf } from "../testing/server";
 import {
   albumShelves,
   canSuggest,
@@ -46,10 +45,7 @@ describe("taste", () => {
   });
 
   it("likes a song by a favorite artist or from a favorite album a half more, once", () => {
-    const favorites = favoriteGroupsOf({
-      artists: [{ name: "朴树" }],
-      albums: [{ artist: "朴树", name: "生如夏花" }],
-    });
+    const favorites = favoriteGroupsNaming(["朴树"], [{ artist: "朴树", name: "生如夏花" }]);
 
     const byArtist = tasteOf(song(1, "朴树", "我去2000年"), favorites);
     const onAlbumByArtist = tasteOf(song(2, "朴树", "生如夏花"), favorites);
@@ -219,7 +215,7 @@ describe("my station", () => {
 
   it("starts from a favorite artist's song when no song is liked yet", () => {
     const songs = [song(1, "A", "a"), song(2, "朴树", "b"), song(3, "C", "c")];
-    const favorites = favoriteGroupsOf({ artists: [{ name: "朴树" }], albums: [] });
+    const favorites = favoriteGroupsNaming(["朴树"]);
 
     for (let run = 0; run < 20; run += 1) {
       expect(stationSeed(songs, seeded(run), favorites)?.id).toBe(2);
@@ -252,10 +248,7 @@ describe("the favorites station", () => {
     song(4, "D", "d"),
     song(5, "E", "e", { favorite: true, rating: 1 }),
   ];
-  const FAVORITES = favoriteGroupsOf({
-    artists: [{ name: "朴树" }],
-    albums: [{ artist: "C", name: "c" }],
-  });
+  const FAVORITES = favoriteGroupsNaming(["朴树"], [{ artist: "C", name: "c" }]);
 
   it("plays only favorites: hearted, by a favorite artist, or from a favorite album", () => {
     const ids = favoritePicks(LOVED, [], 3, seeded(1), NOW, FAVORITES).map((pick) => pick.track.id);

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ArtistNames, KnownArtist } from "../api";
-import { artistNameOf, knownArtistOf } from "../testing/server";
+import { artistIdOf, artistNameOf, knownArtistOf, trackOf } from "../testing/server";
 import { NO_LINKS, linksOf, withLinkedFavorites } from "./artistLinks";
 import { NO_FAVORITES } from "./favoriteGroups";
 
@@ -59,6 +59,27 @@ describe("artist links", () => {
     expect(links.photoOf(links.groupOf("甲壳虫"))).toBe("beatles-photo");
     expect(links.photoOf(links.groupOf("Melt"))).toBeNull();
     expect(NO_LINKS.photoOf(NO_LINKS.groupOf("Melt"))).toBeNull();
+  });
+
+  it("name the Library's artist each name's songs are bound to", () => {
+    const links = linksOf(LINKED, [trackOf(1, "Melt", { artist: "Melt" })]);
+
+    expect(links.idOf("ｍｅｌｔ")).toBe(artistIdOf("Melt"));
+    expect(links.groupOf("Melt")).toBe(artistIdOf("Melt"));
+    expect(links.namesOfId(artistIdOf("Melt"))).toEqual(["melt"]);
+    expect(links.idOf("Nobody")).toBeUndefined();
+  });
+
+  it("make a favorite artist's names favorites, and every name linked with them", () => {
+    const favorites = { ...NO_FAVORITES, artistIds: new Set([artistIdOf("甲壳虫")]) };
+    const tracks = [
+      trackOf(1, "Help!", { artist: "甲壳虫" }),
+      trackOf(2, "Yesterday", { artist: "披头士" }),
+    ];
+
+    const linked = withLinkedFavorites(favorites, linksOf(LINKED, tracks));
+
+    expect([...linked.artists].sort()).toEqual(["披头士", "甲壳虫"].sort());
   });
 
   it("make a favorite of one name a favorite of every name linked with it", () => {

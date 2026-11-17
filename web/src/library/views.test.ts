@@ -1,12 +1,14 @@
 // cspell:ignore supercell ｍｅｌｔ beatls jsie
 import { describe, expect, it } from "vitest";
 
-import { artistNameOf, knownArtistOf, trackOf } from "../testing/server";
+import { artistIdOf, artistNameOf, knownArtistOf, trackOf } from "../testing/server";
 import { linksOf } from "./artistLinks";
 import {
   albumFileOf,
   albumsOf,
+  artistRouteOf,
   artistsOf,
+  artistWrittenOf,
   downloadedOf,
   favoritesOf,
   fold,
@@ -69,6 +71,36 @@ describe("artists", () => {
       ["supercell", 1, 300_000],
       ["ルワン", 1, 264_000],
     ]);
+  });
+
+  it("names each artist by the id of the Library's artist its songs are bound to", () => {
+    const artists = artistsOf(LIBRARY);
+
+    expect(artists.map((artist) => [artist.link, artist.id])).toEqual([
+      ["", undefined],
+      ["ryo", artistIdOf("ryo")],
+      ["supercell", artistIdOf("supercell")],
+      ["ルワン", artistIdOf("ルワン")],
+    ]);
+  });
+
+  it("finds the name an artist is written as most, by its id", () => {
+    expect(artistWrittenOf(LIBRARY, artistIdOf("ryo"))).toBe("ryo");
+    expect(artistWrittenOf(LIBRARY, "artist-nobody")).toBeUndefined();
+  });
+
+  it("goes to the page of each of a song's artists by its id", () => {
+    const melt = trackOf(1, "Melt", { artist: "GUMI/MAYU", artists: ["GUMI", "MAYU"] });
+
+    expect(artistRouteOf(melt, 1)).toEqual({
+      view: "artist",
+      name: "MAYU",
+      id: artistIdOf("MAYU"),
+    });
+    expect(artistRouteOf(trackOf(2, "Untitled", { artist: "" }), 0)).toEqual({
+      view: "artist",
+      name: "",
+    });
   });
 
   it("opens an artist's Tracks by the name as written, in any case or width", () => {

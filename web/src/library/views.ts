@@ -7,6 +7,7 @@
  */
 
 import type { Track } from "../api";
+import type { Route } from "../routes";
 import type { ArtistLinks } from "./artistLinks";
 import { closestOf, ranked } from "./fuzzy";
 import { type Tag, parseQuery } from "./query";
@@ -28,6 +29,8 @@ export interface Artist extends Listed {
   readonly name: string;
   /** The name most of its Tracks write, which opens its page and keeps its heart. */
   readonly link: string;
+  /** The id of the Library's artist its Tracks are bound to; none for Tracks with no artist. */
+  readonly id?: string;
 }
 
 /** An album, under its album artist, or its artist when that is blank. */
@@ -67,13 +70,15 @@ export function songsOf(tracks: readonly Track[]): Track[] {
  * and then by the name its Tracks write.
  */
 export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist[] {
+  const ids = artistIdsOf(tracks);
+  const withId = <T extends { readonly link: string }>(artist: T): T & { readonly id?: string } => {
+    const id = ids.get(fold(artist.link.trim()));
+    return id === undefined ? artist : { ...artist, id };
+  };
   if (links === undefined) {
-    return groups(tracks, artistNamesOf).map(({ name, count, durationMs }) => ({
-      name,
-      link: name,
-      count,
-      durationMs,
-    }));
+    return groups(tracks, artistNamesOf).map(({ name, count, durationMs }) =>
+      withId({ name, link: name, count, durationMs }),
+    );
   }
   // Names linked to one artist are one, named as the household chose, or as most of its Tracks write it.
   const found = new Map<
@@ -97,9 +102,47 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
   return [...found.entries()]
     .map(([group, { names, count, durationMs }]) => {
       const link = [...names].reduce((best, next) => (next[1] > best[1] ? next : best))[0];
-      return { name: links.shownAsOf(group) ?? link, link, count, durationMs };
+      return withId({ name: links.shownAsOf(group) ?? link, link, count, durationMs });
     })
     .sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.link, b.link));
+}
+
+/** Return the id of the Library's artist each name, folded, is bound to by the Tracks writing it. */
+function artistIdsOf(tracks: readonly Track[]): Map<string, string> {
+  const ids = new Map<string, string>();
+  for (const track of tracks) {
+    track.artists.forEach((name, place) => {
+      const id = track.artist_ids[place];
+      if (id !== undefined) {
+        ids.set(fold(name.trim()), id);
+      }
+    });
+  }
+  return ids;
+}
+
+/** Return the name the Library's artist `id` is written as by most of the Tracks bound to it. */
+export function artistWrittenOf(tracks: readonly Track[], id: string): string | undefined {
+  const written = new Map<string, number>();
+  for (const track of tracks) {
+    track.artist_ids.forEach((each, place) => {
+      const name = track.artists[place];
+      if (each === id && name !== undefined) {
+        written.set(name, (written.get(name) ?? 0) + 1);
+      }
+    });
+  }
+  return [...written].reduce<[string, number] | undefined>(
+    (best, next) => (best === undefined || next[1] > best[1] ? next : best),
+    undefined,
+  )?.[0];
+}
+
+/** Return the route to the page of the Track's artist at `place`, by the Library's artist it is. */
+export function artistRouteOf(track: Track, place: number): Route {
+  const name = artistNamesOf(track)[place] ?? "";
+  const id = track.artist_ids[place];
+  return id === undefined ? { view: "artist", name } : { view: "artist", name, id };
 }
 
 /**

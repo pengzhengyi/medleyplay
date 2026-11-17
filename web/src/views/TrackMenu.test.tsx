@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { trackOf } from "../testing/server";
+import { artistIdOf, trackOf } from "../testing/server";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 
 /** Melt by ryo, on the album Supercell, which is listed under its album artist, supercell. */
@@ -269,13 +269,13 @@ describe("a song's menu", () => {
     expect(actions.onRate).toHaveBeenCalledWith(rated, null);
   });
 
-  it("goes to the song's artist", async () => {
+  it("goes to the song's artist, by the Library's artist its name is", async () => {
     renderMenu();
     await open();
 
     await userEvent.click(screen.getByRole("menuitem", { name: "Go to artist" }));
 
-    expect(location.hash).toBe("#/artist?name=ryo");
+    expect(location.hash).toBe(`#/artist?id=${artistIdOf("ryo")}&name=ryo`);
   });
 
   it("goes to the song's album, under its album artist", async () => {

@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
-import { type FavoriteGroups, NO_FAVORITES, albumKey } from "../library/favoriteGroups";
+import { type FavoriteGroups, NO_FAVORITES } from "../library/favoriteGroups";
 import type { Playing } from "../player/albumNow";
 import { hrefOf } from "../routes";
-import { trackOf } from "../testing/server";
+import { favoriteGroupsNaming, trackOf } from "../testing/server";
 import { NowPlayingNames } from "./NowPlayingNames";
 
 /** 可爱女人, by 周杰伦, from the album *Jay*, playing as a song of its own. */
@@ -77,7 +77,7 @@ describe("what Now Playing names", () => {
     renderNames(
       LOVELY,
       { kind: "song" },
-      { artists: new Set(), albums: new Set([albumKey("周杰伦", "Jay")]) },
+      favoriteGroupsNaming([], [{ artist: "周杰伦", name: "Jay" }]),
     );
 
     expect(screen.getByRole("button", { name: "Favorite album Jay" })).toHaveAttribute(

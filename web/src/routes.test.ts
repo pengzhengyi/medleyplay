@@ -14,6 +14,8 @@ describe("routes", () => {
     ["#/songs", { view: "library" }],
     ["#/artists", { view: "artists" }],
     ["#/artist?name=ryo", { view: "artist", name: "ryo" }],
+    ["#/artist?id=a1&name=ryo", { view: "artist", id: "a1", name: "ryo" }],
+    ["#/artist?id=a1", { view: "artist", id: "a1", name: "" }],
     ["#/albums", { view: "albums" }],
     ["#/album?artist=ryo&name=Supercell", { view: "album", artist: "ryo", name: "Supercell" }],
     ["#/downloaded", { view: "downloaded" }],
@@ -44,6 +46,7 @@ describe("routes", () => {
 
   it.each<Route>([
     { view: "artist", name: "初音ミク/米津玄師" },
+    { view: "artist", id: "0f3a", name: "Jay" },
     { view: "album", artist: "AC/DC & Friends", name: "Back in Black?" },
     { view: "artist", name: "" },
     { view: "search", query: "melt live #1" },

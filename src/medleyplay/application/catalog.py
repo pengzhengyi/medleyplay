@@ -70,6 +70,7 @@ from medleyplay.persistence.schema import (
     FavoriteAlbumRow,
     FavoriteArtistRow,
     JobRow,
+    LibraryArtistRow,
     LibraryRow,
     PlaylistEntryRow,
     PlaylistRow,
@@ -185,7 +186,8 @@ class CatalogService:
                     album_from_ms=album_from_ms,
                     community=community.get(TrackId(track.id)),
                     album_rating=rated.stars_of(*library_album_of(track)),
-                    artists=artists.get(track.id, ()),
+                    artists=tuple(written for written, _ in artists.get(track.id, ())),
+                    artist_ids=tuple(artist_id for _, artist_id in artists.get(track.id, ())),
                 )
                 for track, state in rows
             ]
@@ -226,7 +228,8 @@ class CatalogService:
             album_from_ms=album_from_ms,
             community=community.get(track_id),
             album_rating=album_rating,
-            artists=artists,
+            artists=tuple(written for written, _ in artists),
+            artist_ids=tuple(artist_id for _, artist_id in artists),
         )
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
@@ -235,12 +238,13 @@ class CatalogService:
         return self.get_track(account_id, track_id)
 
     def favorites(self, account_id: AccountId) -> Favorites:
-        """Return the artists and albums `account_id` favorited, by name."""
+        """Return the artists `account_id` favorited, by id, and its albums, by name."""
         with self._units() as db:
             artists = db.scalars(
-                select(FavoriteArtistRow.name)
+                select(FavoriteArtistRow.artist_id)
+                .join(LibraryArtistRow, LibraryArtistRow.id == FavoriteArtistRow.artist_id)
                 .where(FavoriteArtistRow.account_id == account_id)
-                .order_by(FavoriteArtistRow.key)
+                .order_by(LibraryArtistRow.name, LibraryArtistRow.id)
             ).all()
             albums = db.execute(
                 select(FavoriteAlbumRow.artist, FavoriteAlbumRow.album)
@@ -252,21 +256,24 @@ class CatalogService:
             albums=tuple(FavoriteAlbum(artist=artist, name=album) for artist, album in albums),
         )
 
-    def set_artist_favorite(self, account_id: AccountId, name: str, *, favorite: bool) -> None:
-        """Mark or unmark the artist `name` as one of `account_id`'s favorites."""
-        shown, key = favorite_name(name, what="An artist's name")
+    def set_artist_favorite(self, account_id: AccountId, artist_id: str, *, favorite: bool) -> None:
+        """Mark or unmark the Library's artist `artist_id` as one of `account_id`'s favorites."""
         with self._units.begin() as db:
+            if db.get(LibraryArtistRow, artist_id) is None:
+                message = "There is no such artist."
+                raise NotFoundError(message)
             if not favorite:
                 db.execute(
                     delete(FavoriteArtistRow).where(
-                        FavoriteArtistRow.account_id == account_id, FavoriteArtistRow.key == key
+                        FavoriteArtistRow.account_id == account_id,
+                        FavoriteArtistRow.artist_id == artist_id,
                     )
                 )
                 return
             db.execute(
                 insert(FavoriteArtistRow)
-                .values(account_id=account_id, key=key, name=shown)
-                .on_conflict_do_update(index_elements=["account_id", "key"], set_={"name": shown})
+                .values(account_id=account_id, artist_id=artist_id)
+                .on_conflict_do_nothing()
             )
 
     def set_album_favorite(
@@ -793,6 +800,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     community: CommunityRating | None = None,
     album_rating: int | None = None,
     artists: tuple[str, ...] = (),
+    artist_ids: tuple[str, ...] = (),
 ) -> Track:
     kind = kind_of(
         None if track.kind is None else Kind(track.kind),
@@ -832,6 +840,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         community=community,
         album_rating=album_rating,
         artists=artists or ((track.artist.strip(),) if track.artist.strip() else ()),
+        artist_ids=artist_ids,
     )
 
 

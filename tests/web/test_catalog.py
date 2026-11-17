@@ -440,28 +440,49 @@ def test_a_play_without_a_time_zone_answers_422(
     assert response.status_code == 422
 
 
-def test_favorite_artists_and_albums_are_put_as_absolute_values_and_listed(
-    client: TestClient,
+def _band_of(client: TestClient, catalog: CatalogService) -> str:
+    """Add "Intro" by The Band, and return the id of the artist it is bound to."""
+    track_id = _one_track(catalog)
+    [artist_id] = client.get(f"/api/tracks/{track_id}").json()["artist_ids"]
+    return str(artist_id)
+
+
+def test_a_track_names_the_id_of_each_artist_it_shows(
+    client: TestClient, catalog: CatalogService
 ) -> None:
     set_up_as_alice(client)
+    track_id = _one_track(catalog)
 
-    artist = client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True})
+    track = client.get(f"/api/tracks/{track_id}").json()
+
+    assert track["artists"] == ["The Band"]
+    assert [len(each) for each in track["artist_ids"]] == [32]
+
+
+def test_favorite_artists_and_albums_are_put_as_absolute_values_and_listed(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    band = _band_of(client, catalog)
+
+    artist = client.put(f"/api/favorites/artists/{band}", json={"favorite": True})
     album = client.put(
         "/api/albums/favorite", json={"artist": "朴树", "name": "生如夏花", "favorite": True}
     )
-    again = client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True})
+    again = client.put(f"/api/favorites/artists/{band}", json={"favorite": True})
 
     assert (artist.status_code, album.status_code, again.status_code) == (200, 200, 200)
     assert again.json() == {
-        "artists": [{"name": "朴树"}],
+        "artists": [{"id": band}],
         "albums": [{"artist": "朴树", "name": "生如夏花"}],
     }
     assert client.get("/api/favorites").json() == again.json()
 
 
-def test_unfavoriting_an_album_leaves_the_rest(client: TestClient) -> None:
+def test_unfavoriting_an_album_leaves_the_rest(client: TestClient, catalog: CatalogService) -> None:
     set_up_as_alice(client)
-    client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True})
+    band = _band_of(client, catalog)
+    client.put(f"/api/favorites/artists/{band}", json={"favorite": True})
     client.put(
         "/api/albums/favorite", json={"artist": "朴树", "name": "生如夏花", "favorite": True}
     )
@@ -470,20 +491,19 @@ def test_unfavoriting_an_album_leaves_the_rest(client: TestClient) -> None:
         "/api/albums/favorite", json={"artist": "朴树", "name": "生如夏花", "favorite": False}
     )
 
-    assert left.json() == {"artists": [{"name": "朴树"}], "albums": []}
+    assert left.json() == {"artists": [{"id": band}], "albums": []}
 
 
-def test_a_favorite_artist_with_no_name_answers_422(client: TestClient) -> None:
+def test_favoriting_an_artist_no_song_is_bound_to_answers_404(client: TestClient) -> None:
     set_up_as_alice(client)
 
-    assert (
-        client.put("/api/artists/favorite", json={"name": " ", "favorite": True}).status_code == 422
-    )
+    answer = client.put(f"/api/favorites/artists/{'0' * 32}", json={"favorite": True})
+
+    assert answer.status_code == 404
 
 
 def test_favorite_artists_and_albums_need_a_signed_in_account(client: TestClient) -> None:
     assert client.get("/api/favorites").status_code == 401
     assert (
-        client.put("/api/artists/favorite", json={"name": "朴树", "favorite": True}).status_code
-        == 401
+        client.put(f"/api/favorites/artists/{'0' * 32}", json={"favorite": True}).status_code == 401
     )

@@ -35,7 +35,6 @@ import { PAGE_ID } from "../page";
 import type { Speaker } from "../player/remote";
 import { downloadEnded, followDownload } from "./downloading";
 import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
-import { fold } from "./views";
 import { LOOKUPS } from "./lookups";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
@@ -103,7 +102,8 @@ export interface Library {
   readonly setFavorite: (id: number, favorite: boolean) => void;
   /** The artists and albums the Account favorited. */
   readonly favoriteGroups: FavoriteGroups;
-  readonly setArtistFavorite: (name: string, favorite: boolean) => void;
+  /** Mark or unmark the Library's artist `artistId` as a favorite. */
+  readonly setArtistFavorite: (artistId: string, favorite: boolean) => void;
   readonly setAlbumFavorite: (artist: string, name: string, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
   /**
@@ -585,8 +585,8 @@ export function useLibrary(onSignedOut: () => void): Library {
       write(id, "favorite", favorite, api.setFavorite(id, favorite));
     },
     favoriteGroups,
-    setArtistFavorite: (name, favorite) => {
-      writeFavorite("artists", fold(name.trim()), favorite, api.setArtistFavorite(name, favorite));
+    setArtistFavorite: (artistId, favorite) => {
+      writeFavorite("artistIds", artistId, favorite, api.setArtistFavorite(artistId, favorite));
     },
     setAlbumFavorite: (artist, name, favorite) => {
       writeFavorite(

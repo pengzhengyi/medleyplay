@@ -37,6 +37,8 @@ import type {
 } from "../api";
 import { HISTORY_LENGTHS } from "../api";
 import { type Origins, type Values, shownOf } from "../library/details";
+import { type FavoriteGroups, albumKey } from "../library/favoriteGroups";
+import { fold } from "../library/views";
 import { type SavedShortcuts, openAccount } from "../shortcuts";
 
 /** An answer: a status and a JSON body. */
@@ -115,7 +117,17 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     album_rating: null,
     ...change,
     artists: change.artists ?? namesOf(change.artist ?? "The Band"),
+    artist_ids:
+      change.artist_ids ?? (change.artists ?? namesOf(change.artist ?? "The Band")).map(artistIdOf),
   };
+}
+
+/**
+ * The id of the Library's artist a name names, as the server binds a name no one linked:
+ * one artist for each name, compared folded.
+ */
+export function artistIdOf(name: string): string {
+  return `artist-${fold(name.trim())}`;
 }
 
 /** The artists a Track writing `artist` lists while its name isn't split: the name, if any. */
@@ -669,5 +681,21 @@ export function lyricsOf(change: Partial<Lyrics> = {}): Lyrics {
     text: "[00:12.34]朝目が覚めて\n",
     found_at: "2026-11-17T12:00:00Z",
     ...change,
+  };
+}
+
+/**
+ * The favorites of an Account that hearted the artists `artists` and the albums `albums`,
+ * as the Library sees them once it knows each artist's songs: by the id of the Library's
+ * artist each name names, and by the name.
+ */
+export function favoriteGroupsNaming(
+  artists: readonly string[],
+  albums: readonly { readonly artist: string; readonly name: string }[] = [],
+): FavoriteGroups {
+  return {
+    artistIds: new Set(artists.map(artistIdOf)),
+    artists: new Set(artists.map((name) => fold(name.trim()))),
+    albums: new Set(albums.map(({ artist, name }) => albumKey(artist, name))),
   };
 }

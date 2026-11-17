@@ -67,6 +67,7 @@ function manySongs(count: number): Track[] {
     title: `Song ${String(i + 1)}`,
     artist: `Artist ${String(i % 40)}`,
     artists: [`Artist ${String(i % 40)}`],
+    artist_ids: [`artist-${String(i % 40)}`],
     album: `Album ${String(i % 90)}`,
     album_artist: "",
     year: null,

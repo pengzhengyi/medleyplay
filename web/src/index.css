@@ -3867,6 +3867,12 @@ button.icon.heart.on:hover,
   font-size: 0.85rem;
 }
 
+/* The line sung now, under the artist. */
+.player .names .lyric-now {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
 :is(.player, .now-playing) .controls {
   display: flex;
   align-items: center;
@@ -6423,6 +6429,10 @@ kbd {
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
 }
 
+.np-stage.lyrics-open {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 34rem);
+}
+
 .np-main {
   --np-width: min(30rem, 100%, 48dvh);
 
@@ -6629,12 +6639,14 @@ kbd {
   width: auto;
 }
 
-.np-queue-toggle {
+.np-queue-toggle,
+.np-lyrics-toggle {
   color: var(--muted);
   font-size: 1.3rem;
 }
 
-.np-queue-toggle.on {
+.np-queue-toggle.on,
+.np-lyrics-toggle.on {
   color: var(--ink);
   background: var(--accent-soft);
 }
@@ -6657,7 +6669,104 @@ kbd {
   backdrop-filter: blur(24px);
 }
 
-/* On a phone, Up next takes the cover's place. */
+/* The lyrics beside the cover: the line sung now large and bright, the others dim. */
+.lyrics-panel {
+  display: grid;
+  align-self: stretch;
+  width: 100%;
+  min-height: 0;
+  max-height: min(78dvh, 48rem);
+}
+
+.lyrics-lines {
+  margin: 0;
+  padding: 30% 0 55%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(transparent, #000 14%, #000 78%, transparent);
+  list-style: none;
+  scroll-behavior: smooth;
+}
+
+.lyrics-panel .lyric {
+  margin: 0;
+  list-style: none;
+}
+
+.lyric-line {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: inherit;
+  font-size: clamp(1.3rem, 2.1vw, 1.95rem);
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: start;
+  opacity: 0.36;
+  cursor: pointer;
+  transition: opacity 260ms;
+}
+
+.lyric-line:hover {
+  background: rgb(127 127 127 / 12%);
+}
+
+.lyric-line:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.lyric.sung .lyric-line {
+  opacity: 0.26;
+}
+
+.lyric.now .lyric-line {
+  opacity: 1;
+}
+
+.lyric-pause {
+  font-size: 0.7em;
+}
+
+.lyric-translation {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.62em;
+  font-weight: 500;
+}
+
+.lyrics-plain {
+  margin: 0;
+  padding: 1rem 0.6rem;
+  overflow-y: auto;
+  font-size: 1.15rem;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.lyrics-none {
+  align-self: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-lines {
+    scroll-behavior: auto;
+  }
+
+  .lyric-line {
+    transition: none;
+  }
+}
+
+/* On a phone, Up next or the lyrics take the cover's place. */
 @media (width <= 48rem) {
   .np-body {
     padding-inline: 1.25rem;
@@ -6667,18 +6776,22 @@ kbd {
     --np-width: min(100%, 26rem);
   }
 
-  .np-stage.queue-open {
+  .np-stage:is(.queue-open, .lyrics-open) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
     gap: 1rem;
   }
 
-  .np-stage.queue-open .np-main {
+  .np-stage:is(.queue-open, .lyrics-open) .np-main {
     order: 2;
   }
 
-  .np-stage.queue-open .np-art {
+  .np-stage:is(.queue-open, .lyrics-open) .np-art {
     display: none;
+  }
+
+  .lyrics-panel {
+    max-height: none;
   }
 
   .np-names h2 {

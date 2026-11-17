@@ -9,15 +9,17 @@
 import { QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
-import type { Track } from "../api";
+import type { Lyrics, Track } from "../api";
 import { type FavoriteGroups, canFavorite, isFavoriteAlbum } from "../library/favoriteGroups";
 import { albumArtistOf } from "../library/views";
+import { songTimeOf, useLyricsHidden } from "../lyrics";
 import { albumSteps, albumTimeline, playingOf, songPlaying } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { hintOf, useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { FavoriteHeart } from "./FavoriteHeart";
+import { LyricNow } from "./LyricsPanel";
 import { AlbumCard, PlayingKind } from "./PlayingKind";
 import { PlayTime } from "./PlayTime";
 import { SeekBar } from "./SeekBar";
@@ -25,7 +27,7 @@ import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { FavoriteButton, Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
 
-/** The current Track and its controls. */
+/** The current Track and its controls, with the line of its `lyrics` sung now unless hidden. */
 export function PlayerBar({
   player,
   track,
@@ -34,6 +36,7 @@ export function PlayerBar({
   favorites,
   onFavoriteAlbum,
   menuActions,
+  lyrics,
   queueOpen,
   onToggleQueue,
   onOpenNowPlaying,
@@ -47,6 +50,8 @@ export function PlayerBar({
   readonly favorites: FavoriteGroups;
   readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
   readonly menuActions: TrackMenuActions;
+  /** The lyrics of the song playing: `null` for none, `undefined` while they are read. */
+  readonly lyrics: Lyrics | null | undefined;
   /** Whether the queue is open over the page, as it can be on a narrow screen. */
   readonly queueOpen: boolean;
   readonly onToggleQueue: () => void;
@@ -56,6 +61,7 @@ export function PlayerBar({
 }) {
   const { status, position, duration } = player;
   const keys = useBindings();
+  const lyricsHidden = useLyricsHidden();
   const nowPlaying = playingOf(player.queue, tracks, position);
   const timeline = albumTimeline(nowPlaying, position, (song, seconds) => {
     player.playAt(song.entry.key, seconds);
@@ -117,6 +123,9 @@ export function PlayerBar({
         <div className="names">
           <strong>{track?.title ?? "Nothing playing"}</strong>
           <span>{track?.artist ?? "Choose a Track to play it"}</span>
+          {track !== undefined && !lyricsHidden && (
+            <LyricNow lyrics={lyrics} seconds={songTimeOf(track, nowPlaying, position).seconds} />
+          )}
         </div>
         {track !== undefined && (
           <PlayingHeart

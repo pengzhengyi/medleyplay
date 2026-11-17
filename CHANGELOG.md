@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Lyrics as a song plays** — Now Playing shows the song's lyrics beside its cover,
+  the line sung now large and the others dim, translations under their lines; a line
+  pressed plays from there. The player shows the line sung now under the artist. The
+  *Lyrics* button beside Up next shows or hides them, remembered in this browser.
+
 - **Lyrics from the files** — a scan reads the lyrics in a song's tags (ID3 USLT or
   SYLT, Vorbis LYRICS, MP4 ©lyr) and a `.lrc` beside it, named as it is, in UTF-8,
   UTF-16, or GBK. The `.lrc`'s show over the tags', and either over LRCLIB's, which

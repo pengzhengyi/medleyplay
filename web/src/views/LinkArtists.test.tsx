@@ -458,6 +458,23 @@ describe("a name MusicBrainz knows no artist by", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
+  it("says no song shows it any more, rather than seeming to do nothing", async () => {
+    const { calls } = serve({});
+    const { list, onChanged } = openList(namesOf(UNKNOWN, artistNameOf("告五人")));
+
+    await userEvent.click(
+      within(rowOf(list, "告五人2019超强音质的")).getByRole("button", {
+        name: /^Show the songs of/,
+      }),
+    );
+
+    expect(await within(list).findByRole("alert")).toHaveTextContent(
+      "No song shows “告五人2019超强音质的” any more.",
+    );
+    expect(calls).toEqual([]);
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
   it("shows a song listing it among several artists by the likely name in its place alone", async () => {
     const sent: unknown[] = [];
     serve({

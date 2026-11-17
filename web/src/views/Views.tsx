@@ -317,7 +317,8 @@ function viewOf(given: ViewProps) {
         <CleanUpView
           tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
           artistNames={props.artistNames}
-          tracks={props.tracks}
+          // A split file may be all that writes a name, so its songs' names are tidied through it.
+          tracks={given.tracks}
           {...(props.splitOffers === undefined ? {} : { splits: props.splitOffers })}
           {...(props.artistSplits === undefined ? {} : { artistSplits: props.artistSplits })}
           onEditSongs={(trackId) => {

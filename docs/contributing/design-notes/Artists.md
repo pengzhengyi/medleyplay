@@ -377,7 +377,8 @@ not.
 - **A likely name for one MusicBrainz doesn't know:** a name that starts with
   another the Library has, as *告五人2019超强音质的* starts with *告五人*, says
   *likely 告五人* and offers *Use 告五人*, which shows its songs by that name, as
-  artist and as album artist, through the household's details. The longest such
+  artist and as album artist, through the household's details; a split file
+  that writes the name takes it too, and its songs follow. The longest such
   name wins, compared folded; what follows it must be a digit, a space, or a
   mark, unless the name is in a script written without spaces, such as Chinese,
   so *Jay* is never offered for *Jayson*. Such a name lists first, as one ready

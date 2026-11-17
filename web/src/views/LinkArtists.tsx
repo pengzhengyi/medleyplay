@@ -571,10 +571,13 @@ async function renamed(songs: readonly Track[], from: string, to: string): Promi
       artists.set(artist, [...(artists.get(artist) ?? []), song.id]);
     }
   }
+  const asAlbumArtist = songs.filter((song) => where(song.album_artist)).map((song) => song.id);
+  if (artists.size === 0 && asAlbumArtist.length === 0) {
+    throw new Error(`No song shows “${from}” any more.`);
+  }
   for (const [artist, ids] of artists) {
     await api.setDetails(ids, { artist });
   }
-  const asAlbumArtist = songs.filter((song) => where(song.album_artist)).map((song) => song.id);
   if (asAlbumArtist.length > 0) {
     await api.setDetails(asAlbumArtist, { album_artist: to });
   }

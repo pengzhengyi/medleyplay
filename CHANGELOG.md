@@ -605,6 +605,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An AI model now finds pictures for a cover or an artist** — it was asked for
+  exact image links, which it rarely knows, so it mostly named none. It now names
+  Wikipedia articles, in the language the album or artist is known in, and files on
+  Wikimedia Commons, each shown by its lead image from the MediaWiki API.
+
 - **Taking out earbuds pauses, and it stays paused** — the system's *pause* no
   longer starts playing again when it comes twice, once per earbud, and a change
   of audio devices pauses, so the music doesn't carry on through the speakers.

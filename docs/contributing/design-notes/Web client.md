@@ -237,13 +237,13 @@ Track's kind is decided.
 - **Paused, the cover settles back** a little, and grows again when the music
   plays; with reduced motion, it stays put and the view opens without rising.
 - **Dynamics move the cover behind it,** one of three effects chosen in
-  Settings, drawn by a shader over a 48-pixel copy of the cover, so each samples
-  a blur of it for free: *Flow*, three turning copies blended through slow
+  Settings, drawn by a shader over a blurred 160-pixel copy of the cover, fine
+  enough to blend smoothly as it moves: *Flow*, three turning copies blended through slow
   noise, as Apple Music's background moves; *Drift*, two enlarged copies turning
   against each other; and *Mesh*, five colors of the cover's palette as lights
   wandering. Or *Off*, the still blur.
-  - **It costs little:** the canvas is drawn at half the page's resolution,
-    about 30 times a second, and not at all while the page is hidden; the
+  - **Smooth, and still cheap:** the canvas is drawn on every frame the display
+    shows, at half the page's resolution, and not at all while the page is hidden; the
     WebGL library and shaders, 16 KB gzipped, load only when Now Playing shows
     an effect. A new cover fades in over the last.
   - **It fades in once drawn,** over the still blur, so without WebGL 2 the blur

@@ -553,6 +553,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Dynamics move smoothly** — the effect behind Now Playing is drawn on every frame
+  the display shows, rather than about 30 times a second, from a finer, blurred copy
+  of the cover, so its colors flow without stepping.
+- **Compact dialog buttons** — a dialog's own buttons, such as *Close*, *Save*, and
+  *Cancel*, are one compact height everywhere, as tall as their words need.
+
 - **The time playing stands apart from the length** — in the player and an
   album's songs, the running time reads first and the length it runs to steps
   back, fainter.

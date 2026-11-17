@@ -2,11 +2,12 @@
 /**
  * @file Dynamics drawn: one of a few shaders over the cover, on a canvas behind Now Playing.
  *
- * The cover is read once into a small copy, 48 pixels square, so every effect samples a
- * blur of it for free; *Mesh* reads its palette instead. A new cover fades in over the
- * last. The canvas is drawn at half the page's resolution and about 30 times a second,
- * as nothing in it is sharp or quick, and not at all while the page is hidden. Still,
- * for a device asking for less motion, it is drawn only when the cover changes.
+ * The cover is read once into a blurred copy, 160 pixels square, fine enough that its
+ * colors still blend smoothly as an effect enlarges and turns it; *Mesh* reads its
+ * palette instead. A new cover fades in over the last. The canvas is drawn on every
+ * frame the display shows, so the motion is smooth, at half the page's resolution, as
+ * nothing in it is sharp, and not at all while the page is hidden. Still, for a device
+ * asking for less motion, it is drawn only when the cover changes.
  *
  * This module is loaded only when Now Playing shows an effect, so the page without one
  * never loads the WebGL library.
@@ -18,13 +19,13 @@ import type { Dynamics } from "../../dynamics";
 import { type Color, paletteOf } from "../../library/palette";
 
 /** The size of the copy of the cover each effect samples, in pixels a side. */
-const COPY = 48;
+const COPY = 160;
+/** How far the copy is blurred, in its own pixels, so no detail of the cover shows. */
+const COPY_BLUR = 6;
 /** How many colors *Mesh* blends. */
 const COLORS = 5;
 /** How long a new cover takes to fade in, in milliseconds. */
 const FADE_MS = 1600;
-/** The least time between two frames, in milliseconds: about 30 a second. */
-const FRAME_MS = 32;
 /** How many canvas pixels each CSS pixel has; the effects are blurred, so few are needed. */
 const RESOLUTION = 0.5;
 
@@ -152,7 +153,6 @@ export function run(
 
   let fadeFrom = 0;
   let frame = 0;
-  let drawnAt = 0;
   let hasCover = false;
   let stopped = false;
 
@@ -163,10 +163,7 @@ export function run(
   };
   const loop = (now: number) => {
     frame = requestAnimationFrame(loop);
-    if (now - drawnAt >= FRAME_MS) {
-      drawnAt = now;
-      draw(now);
-    }
+    draw(now);
   };
   const play = () => {
     cancelAnimationFrame(frame);
@@ -214,7 +211,7 @@ export function run(
         if (context === null) {
           return;
         }
-        context.filter = "blur(2px)";
+        context.filter = `blur(${String(COPY_BLUR)}px)`;
         context.drawImage(image, 0, 0, COPY, COPY);
         const colors = listOf(paletteOf(context.getImageData(0, 0, COPY, COPY).data, COLORS));
         // The cover shown so far becomes the one faded from.

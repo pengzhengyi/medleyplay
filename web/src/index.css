@@ -227,6 +227,23 @@ button[aria-disabled="true"] {
   white-space: nowrap;
 }
 
+/*
+ * A dialog's or a section's own actions (Save, Close, Cancel): one compact height
+ * everywhere, as tall as its words need, with an icon beside them when it has one.
+ */
+.dialog-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: auto;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0 1rem;
+  line-height: 1;
+}
+
 /* A busy button that shows its own spinner in its icon's place leaves out Pico's. */
 [aria-busy="true"]:has(.spin)::before {
   display: none;
@@ -4637,21 +4654,6 @@ dialog.modal::backdrop {
   padding-block: 0;
 }
 
-.add-to-playlist .dialog-button,
-.edit-album .dialog-button,
-.edit-artist .dialog-button {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  width: auto;
-  height: 2.6rem;
-  margin: 0;
-  padding: 0 1rem;
-  white-space: nowrap;
-}
-
 .add-to-playlist .error {
   margin: 0.75rem 0 0;
   color: #d1495b;
@@ -4660,6 +4662,7 @@ dialog.modal::backdrop {
 
 .dialog-buttons {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 1rem;
@@ -4786,18 +4789,6 @@ dialog.modal::backdrop {
   color: #d1495b;
   font-size: 0.9rem;
   overflow-wrap: anywhere;
-}
-
-.add-link .dialog-button,
-.add-file .dialog-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  width: auto;
-  height: 2.6rem;
-  margin: 0;
-  padding: 0 1rem;
 }
 
 /* Below the parts, apart from the folded other ways that follow it. */
@@ -5417,13 +5408,6 @@ dialog.modal::backdrop {
   background: var(--accent-soft);
 }
 
-.edit-details .dialog-button {
-  width: auto;
-  margin: 0;
-  padding: 0 1rem;
-  height: 2.6rem;
-}
-
 .edit-details .error {
   margin: 0;
   color: #d1495b;
@@ -5909,13 +5893,6 @@ button.song-handle {
   font-size: 0.85rem;
 }
 
-.songs-panel .dialog-button {
-  width: auto;
-  margin: 0;
-  padding: 0 1rem;
-  height: 2.6rem;
-}
-
 /* While the list is typed, its own buttons stand for the dialog's. */
 .songs-panel .dialog-buttons[hidden] {
   display: none;
@@ -6209,11 +6186,6 @@ kbd {
 .shortcut-list .dialog-buttons {
   align-items: center;
   justify-content: space-between;
-}
-
-.shortcut-list .dialog-button {
-  width: auto;
-  margin: 0;
 }
 
 .shortcut-settings {
@@ -7484,13 +7456,6 @@ button.playing-kind[aria-expanded="true"] {
   text-align: center;
 }
 
-.clean-up-section .dialog-button {
-  width: auto;
-  height: 2.2rem;
-  margin: 0;
-  padding: 0 0.9rem;
-}
-
 /* A phone reaches Clean up from Settings, as its tab bar has no room for it. */
 
 .clean-up-link {
@@ -7865,12 +7830,6 @@ button.playing-kind[aria-expanded="true"] {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-}
-
-.clean-up-head .clean-up-head-actions .dialog-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
 }
 
 /* A name's songs, shown over the list when its name or song count is hovered or focused. */

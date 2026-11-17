@@ -8595,10 +8595,16 @@ small.ai-set-up-hint {
   min-height: 22rem;
 }
 
+/* The sources as one menu: a tinted rail, the one chosen raised in it. */
 .picture-editor-sources {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-self: start;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--line) 35%, transparent);
 }
 
 .picture-editor-source {
@@ -8607,9 +8613,9 @@ small.ai-set-up-hint {
   gap: 0.5rem;
   width: 100%;
   margin: 0;
-  padding: 0.55rem 0.75rem;
+  padding: 0.5rem 0.7rem;
   border: none;
-  border-radius: 0.7rem;
+  border-radius: 0.6rem;
   background: transparent;
   color: inherit;
   font-size: 0.95rem;
@@ -8617,12 +8623,9 @@ small.ai-set-up-hint {
   cursor: pointer;
 }
 
-.picture-editor-source:hover {
-  background: var(--accent-soft);
-}
-
 .picture-editor-source[data-state="active"] {
-  background: var(--accent-soft);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 14%);
   color: var(--accent);
   font-weight: 600;
 }
@@ -8638,10 +8641,19 @@ small.ai-set-up-hint {
   border-radius: 0.5rem;
 }
 
-.picture-editor-source:focus-visible,
+/* Inside its edge, so a source's ring never runs into the one beside it. */
+.picture-editor-source:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .picture-editor-panel:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.picture-editor-source:hover:not([data-state="active"], :disabled) {
+  background: var(--accent-soft);
 }
 
 .picture-editor-note {

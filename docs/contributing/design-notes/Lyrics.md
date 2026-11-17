@@ -2,9 +2,9 @@
 
 > [!NOTE]
 > **Status: in part built.** Lyrics are kept per song and source, read from the
-> files, looked up on LRCLIB as songs come up, and read and written through the
-> API, as this note says. The lyrics shown while a song plays, the editor, and other
-> sites are planned, in that order.
+> files, looked up on LRCLIB as songs come up, read and written through the API, and
+> shown while a song plays, as this note says. The editor and other sites are
+> planned, in that order.
 
 ## Contents
 
@@ -14,6 +14,7 @@
 - [Lyrics from the files](#lyrics-from-the-files)
 - [Looking lyrics up on LRCLIB](#looking-lyrics-up-on-lrclib)
 - [What the API shows](#what-the-api-shows)
+- [Showing them](#showing-them)
 - [Testing](#testing)
 - [Planned](#planned)
 
@@ -115,6 +116,26 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
 | `DELETE /api/tracks/{id}/lyrics` | Signed in | Drops the household's, answering what shows now |
 | `POST /api/enrichers/lyrics/tracks/{id}` | Signed in | Looks the song up now; `?again` for one found before |
 
+## Showing them
+
+- **Beside the cover in Now Playing,** in the place Up next takes, which they give
+  way to: timed lyrics follow the song, the line sung now large and bright, those
+  before and after it dim, each translation small under its line, a pause in the
+  singing a small ♪. The line sung now sits a third of the way down, and the list
+  scrolls smoothly to it, at once under reduced motion. Scrolling it oneself stops it
+  following for four seconds. A line pressed plays from its time.
+- **Plain lyrics** read as written; an instrumental says *Instrumental*; a song with
+  none says *No lyrics for this song*; nothing shows while they are read.
+- **The line sung now in the player,** under the artist, in the accent color;
+  nothing between lines or for plain lyrics.
+- **The *Lyrics* button** beside Up next in Now Playing shows or hides both, and this
+  browser remembers it; they show until it is pressed. Pressed while Up next is open,
+  it shows the lyrics in its place.
+- **Which song's:** the song playing, a song of a file playing whole too, whose time
+  counts from where the file reaches it; a whole album in one file has none. They are
+  read again when a lookup of the song's lyrics finishes.
+- **On a phone** the lyrics take the cover's place, as Up next does.
+
 ## Testing
 
 - **Reading:** LRC with several times on a line, an offset, translations, timed
@@ -128,16 +149,17 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
   held, found, or not found, and asking again.
 - **Looking up:** real Jobs against the test plugin, which answers by title: lyrics
   timed and plain, an instrumental, nothing, a refusal, and a failure.
+- **Showing them:** the line at a time (before the first, at each start, past the
+  last), how far into a song of a file playing whole; reading them for the song
+  playing and again on a finished lookup; the panel's lines, translation, pause,
+  seeking, plain text, instrumental, none, and reading; the player's line; and Now
+  Playing's button hiding both, remembered.
 - **LRCLIB:** the client over a fake transport: what is asked, the search when the
   first ask finds nothing, the two-second window, the User-Agent, waiting out 429,
   503 too long, 403, 400, and an answer of another shape. No test contacts LRCLIB.
 
 ## Planned
 
-- **Showing them:** a column beside the cover in Now Playing, the line sung now
-  large and those sung dim, a line clicked seeking to it, translations under their
-  lines; the line sung now under the title in the player; and an icon button that
-  shows or hides them, remembered.
 - **The editor:** in Edit details, LRC or plain text, and a mode that plays the song
   and stamps each line as Space is pressed, each nudged by a tenth of a second, and
   the whole shifted.

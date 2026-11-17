@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { serve, signedIn, trackOf } from "../testing/server";
+import { type Routes, serve, signedIn, trackOf } from "../testing/server";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -12,10 +12,11 @@ afterEach(() => {
 
 /**
  * A signed-in page playing Intro, by The Band from the album Blue, with Long Road and
- * Outro up next.
+ * Outro up next; the server answers `routes` too.
  */
-async function playingIntro() {
+async function playingIntro(routes: Routes = {}) {
   const served = serve({
+    ...routes,
     "PUT /api/tracks/1/favorite": { body: trackOf(1, "Intro", { favorite: true }) },
     ...signedIn([trackOf(1, "Intro"), trackOf(2, "Long Road"), trackOf(3, "Outro")]),
     ...Object.fromEntries(
@@ -270,5 +271,60 @@ describe("Now Playing", () => {
       expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
     });
     expect(window.location.hash).toContain("#/album");
+  });
+});
+
+describe("the lyrics in Now Playing", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("shows the song's lyrics beside the cover, and hides them when asked, as this browser remembers", async () => {
+    await playingIntro({
+      "GET /api/tracks/1/lyrics": {
+        body: {
+          origin: "tag",
+          synced: true,
+          instrumental: false,
+          lines: [{ at_ms: 0, text: "Here we go", translation: "", words: [] }],
+          plain: "",
+          found_at: "2026-11-17T12:00:00Z",
+        },
+      },
+    });
+    const nowPlaying = await openNowPlaying();
+    const lyrics = await within(nowPlaying).findByRole("region", { name: "Lyrics" });
+    expect(await within(lyrics).findByRole("button", { name: "Here we go" })).toBeVisible();
+
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Lyrics" }));
+
+    expect(within(nowPlaying).queryByRole("region", { name: "Lyrics" })).toBeNull();
+    expect(within(nowPlaying).getByRole("button", { name: "Lyrics" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(localStorage.getItem("medleyplay.lyrics")).toBe("hidden");
+  });
+
+  it("shows the line sung now under the artist in the player, until hidden", async () => {
+    await playingIntro({
+      "GET /api/tracks/1/lyrics": {
+        body: {
+          origin: "tag",
+          synced: true,
+          instrumental: false,
+          lines: [{ at_ms: 0, text: "Here we go", translation: "", words: [] }],
+          plain: "",
+          found_at: "2026-11-17T12:00:00Z",
+        },
+      },
+    });
+    const player = screen.getByRole("region", { name: "Player" });
+
+    expect(await within(player).findByText("Here we go")).toBeVisible();
+    const nowPlaying = await openNowPlaying();
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Lyrics" }));
+
+    expect(within(player).queryByText("Here we go")).toBeNull();
   });
 });

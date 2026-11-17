@@ -227,7 +227,8 @@ Track's kind is decided.
 - **The song playing, over the whole screen:** its cover large, over the same
   cover blurred far past recognition, then its title, its artist and album as
   links to their views, the position with the time gone and left, the
-  player's controls, the volume, and *Up next*.
+  player's controls, the volume, *Lyrics*, and *Up next*. Beside it show the song's
+  lyrics, or *Up next* when it is open ([Lyrics](Lyrics.md#showing-them)).
 - **It opens from the player's cover,** which shows on every width for that,
   or with F, and closes with Escape, its close button, F again, or by going to
   another view, as its artist and album links and its menu's *Go to* do.

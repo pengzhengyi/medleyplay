@@ -1,18 +1,20 @@
 /**
  * @file Now Playing: the song playing over the whole screen, its cover large over a
- * blur of itself, with the player's controls and, when asked, what plays next.
+ * blur of itself, with the player's controls and, beside them, its lyrics or, when
+ * asked, what plays next.
  *
  * It opens from the player's cover and closes with Escape, its close button, or by
  * going to another view. The keyboard shortcuts work while it is open, and the song's
  * menu and the queue's announcements are drawn inside it, since the page behind is inert.
  */
 
-import { CaretDownIcon, QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, QueueIcon, QuotesIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
-import { type Track, coverUrl } from "../api";
+import { type Lyrics, type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
 import type { FavoriteGroups } from "../library/favoriteGroups";
+import { setLyricsHidden, songTimeOf, useLyricsHidden } from "../lyrics";
 import { albumSteps, albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import type { SleepTimer } from "../player/useSleepTimer";
@@ -22,13 +24,17 @@ import { Cover } from "./Cover";
 import { NowPlayingNames } from "./NowPlayingNames";
 import { AlbumCard } from "./PlayingKind";
 import { Dynamics } from "./Dynamics";
+import { LyricsPanel } from "./LyricsPanel";
 import { QueuePanel } from "./QueuePanel";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
 
-/** `track`, playing in `player`, over the whole screen; `queueOpen` shows Up next beside it. */
+/**
+ * `track`, playing in `player`, over the whole screen, with the song's `lyrics` beside
+ * it unless this browser hides them; `queueOpen` shows Up next there instead.
+ */
 export function NowPlaying({
   player,
   sleep,
@@ -39,6 +45,7 @@ export function NowPlaying({
   onFavoriteArtist,
   onFavoriteAlbum,
   menuActions,
+  lyrics,
   queueOpen,
   onToggleQueue,
   onClose,
@@ -54,6 +61,8 @@ export function NowPlaying({
   readonly onFavoriteArtist: (name: string, favorite: boolean) => void;
   readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
   readonly menuActions: TrackMenuActions;
+  /** The lyrics of the song playing: `null` for none, `undefined` while they are read. */
+  readonly lyrics: Lyrics | null | undefined;
   readonly queueOpen: boolean;
   readonly onToggleQueue: () => void;
   readonly onClose: () => void;
@@ -83,6 +92,9 @@ export function NowPlaying({
   const shownDuration = timeline === undefined ? duration : timeline.length;
   const remaining =
     shownDuration === undefined ? undefined : Math.max(0, shownDuration - shownPosition);
+  const lyricsHidden = useLyricsHidden();
+  const lyricsOpen = !lyricsHidden && !queueOpen;
+  const song = songTimeOf(track, nowPlaying, position);
   return (
     <dialog
       ref={ref}
@@ -127,7 +139,11 @@ export function NowPlaying({
             />
           </span>
         </header>
-        <div className={queueOpen ? "np-stage queue-open" : "np-stage"}>
+        <div
+          className={
+            queueOpen ? "np-stage queue-open" : lyricsOpen ? "np-stage lyrics-open" : "np-stage"
+          }
+        >
           <div className="np-main">
             <div className={status.kind === "playing" ? "np-art" : "np-art resting"}>
               <Cover cover={track.cover} />
@@ -194,6 +210,23 @@ export function NowPlaying({
               )}
               <button
                 type="button"
+                className={lyricsOpen ? "icon np-lyrics-toggle on" : "icon np-lyrics-toggle"}
+                aria-label="Lyrics"
+                aria-pressed={lyricsOpen}
+                title={lyricsOpen ? "Hide the lyrics" : "Show the lyrics"}
+                onClick={() => {
+                  if (queueOpen) {
+                    onToggleQueue();
+                    setLyricsHidden(false);
+                  } else {
+                    setLyricsHidden(lyricsOpen);
+                  }
+                }}
+              >
+                <QuotesIcon weight={lyricsOpen ? "fill" : "regular"} aria-hidden />
+              </button>
+              <button
+                type="button"
                 className={queueOpen ? "icon np-queue-toggle on" : "icon np-queue-toggle"}
                 aria-label="Up next"
                 aria-expanded={queueOpen}
@@ -211,6 +244,15 @@ export function NowPlaying({
               </p>
             )}
           </div>
+          {lyricsOpen && (
+            <LyricsPanel
+              lyrics={song.song === undefined ? null : lyrics}
+              seconds={song.seconds}
+              onSeek={(seconds) => {
+                player.seek(song.from + seconds);
+              }}
+            />
+          )}
           {queueOpen && (
             <QueuePanel
               id="now-playing-queue"

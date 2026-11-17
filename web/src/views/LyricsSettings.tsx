@@ -17,7 +17,7 @@ const WORDS: EnricherWords = {
     <>
       Looks up a song&apos;s lyrics on LRCLIB (lrclib.net), an open lyrics database, sending its
       title, artist, album, and length, at most once a second. A song whose lyrics you entered, or
-      whose files hold them, is never looked up; one LRCLIB doesn&apos;t know is asked again a month
+      whose files hold them, is never looked up; one LRCLIB does not know is asked again a month
       later.
     </>
   ),

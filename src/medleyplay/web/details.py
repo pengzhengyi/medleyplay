@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, StrictInt, StrictStr
 from medleyplay.application.details import DetailsView, NameToTidy, VideoRead
 from medleyplay.domain.ai import AnsweredBy
 from medleyplay.domain.artist_split import MAX_CREDITS, Credit, Role
+from medleyplay.domain.artists import artist_key
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import MAX_TEXT, Kind, KindReason, Origin, Shown
 from medleyplay.domain.details import Field as Detail
@@ -86,6 +87,15 @@ class LinkedArtistOut(BaseModel):
     photo: str | None
 
 
+class NamesakeOut(BaseModel):
+    """Another artist going by a name a Track writes: its songs and albums, and who it is."""
+
+    artist_id: str = Field(description="The Library's own id for the artist.")
+    songs: int
+    albums: list[str] = Field(description="The albums most of its songs are on, up to two.")
+    linked: LinkedArtistOut | None = Field(description="The MusicBrainz artist, once linked.")
+
+
 class TrackArtistOut(BaseModel):
     """One artist a Track shows: as written, how the Track credits it, and who it is."""
 
@@ -93,6 +103,9 @@ class TrackArtistOut(BaseModel):
     role: Role
     artist_id: str = Field(description="The Library's own id for the artist.")
     linked: LinkedArtistOut | None = Field(description="The MusicBrainz artist, once linked.")
+    namesakes: list[NamesakeOut] = Field(
+        description="The other artists going by the name, in its order; none when it names one."
+    )
 
 
 class DetailsOut(BaseModel):
@@ -138,11 +151,16 @@ class DetailsOut(BaseModel):
                     written=each.written,
                     role=each.role,
                     artist_id=each.artist_id,
-                    linked=None
-                    if (linked := view.linked.get(each.artist_id)) is None
-                    else LinkedArtistOut(
-                        musicbrainz_id=linked.musicbrainz_id, name=linked.name, photo=linked.photo
-                    ),
+                    linked=_linked_out(view, each.artist_id),
+                    namesakes=[
+                        NamesakeOut(
+                            artist_id=other.artist_id,
+                            songs=other.songs,
+                            albums=list(other.albums),
+                            linked=_linked_out(view, other.artist_id),
+                        )
+                        for other in view.namesakes.get(artist_key(each.written), ())
+                    ],
                 )
                 for each in view.artists
             ],
@@ -174,6 +192,15 @@ class VideoReadOut(BaseModel):
                 for song in read.songs
             ],
         )
+
+
+def _linked_out(view: DetailsView, artist_id: str) -> LinkedArtistOut | None:
+    linked = view.linked.get(artist_id)
+    if linked is None:
+        return None
+    return LinkedArtistOut(
+        musicbrainz_id=linked.musicbrainz_id, name=linked.name, photo=linked.photo
+    )
 
 
 def _shown_out(values: Mapping[Detail, Shown]) -> dict[str, ShownOut]:
@@ -228,6 +255,27 @@ def put_details(
 ) -> DetailsOut:
     """Make `values` the household's values for the Track, replacing its earlier ones."""
     return DetailsOut.of(service.put_household(TrackId(track_id), body.values))
+
+
+class NamesakeIn(BaseModel):
+    """Which artist going by a name a song writes the song is: one by its id, or another."""
+
+    name: str = Field(max_length=MAX_TEXT, examples=["Jay"])
+    artist_id: str | None = Field(
+        pattern=r"^[0-9a-f]{32}$",
+        description="One of the artists the name names; `null` for another artist called so.",
+    )
+
+
+@router.put("/{track_id}/namesake")
+def choose_namesake(
+    track_id: RowId, body: NamesakeIn, _: SignedInAccount, service: DetailsDep
+) -> DetailsOut:
+    """Bind the song's artist `name` to one artist going by it, or to another, new one.
+
+    Only this song moves, while it writes the name; songs added to its album later follow.
+    """
+    return DetailsOut.of(service.choose_artist(TrackId(track_id), body.name, body.artist_id))
 
 
 @router.post("/details")

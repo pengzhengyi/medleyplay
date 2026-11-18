@@ -195,9 +195,10 @@ export function Library({
     () => withLinkedFavorites(library.favoriteGroups, links),
     [library.favoriteGroups, links],
   );
-  // A heart names the artist as written; the server keeps the Library's artist that name is.
-  const favoriteArtist = (name: string, favorite: boolean) => {
-    const id = links.idOf(name);
+  // A heart names the artist as written, and the artist it is bound to where the song says;
+  // the server keeps the Library's artist.
+  const favoriteArtist = (name: string, favorite: boolean, bound?: string) => {
+    const id = bound ?? links.idOf(name);
     if (id !== undefined) {
       library.setArtistFavorite(id, favorite);
     }
@@ -820,6 +821,12 @@ export function Library({
             onUseCover={async (cover) => {
               await library.saveDetails(editing.track.id, { cover });
               return api.details(editing.track.id);
+            }}
+            onChooseArtist={async (written, id) => {
+              const fresh = await api.chooseNamesake(editing.track.id, written, id);
+              library.reloadTracks();
+              artistNames.reload();
+              return fresh;
             }}
             findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing.track))}
             lookup={library.lookups.get(editing.track.id)}

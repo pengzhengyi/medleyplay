@@ -515,7 +515,7 @@ export function useLibrary(onSignedOut: () => void): Library {
 
   /** Show `key` favorited or not at once, then as the server answers, or as it was if refused. */
   const writeFavorite = (
-    group: keyof FavoriteGroups,
+    group: "artistIds" | "artists" | "albums",
     key: string,
     favorite: boolean,
     send: Promise<FavoritesRead>,

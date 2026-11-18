@@ -13,6 +13,7 @@ import type {
   ArtistSuggestion,
   Account,
   ArtistName,
+  ArtistNames,
   Details,
   DownloadUnderWay,
   Enricher,
@@ -27,6 +28,7 @@ import type {
   Playlist,
   Preferences,
   PreferencesChange,
+  Namesake,
   Role,
   Song,
   Songs,
@@ -123,6 +125,32 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
   };
 }
 
+/** The id of another artist called Jay than the name's first, as its own songs are bound. */
+export const OTHER_JAY = "artist-jay-blue-night";
+
+/** The name Jay naming two artists: the one it named first, and another, `OTHER_JAY`. */
+export function twoJaysNames(): ArtistNames {
+  return {
+    names: [{ ...artistNameOf("Jay"), artist_ids: [artistIdOf("Jay"), OTHER_JAY] }],
+    artists: [],
+  };
+}
+
+/**
+ * A song by each artist called Jay, the other's last:
+ *
+ * ```text
+ * 1  星晴         Jay    on Jay           the name's first
+ * 2  Blue Night   Jay    on Blue Night    OTHER_JAY
+ * ```
+ */
+export function twoJaysSongs(): Track[] {
+  return [
+    trackOf(1, "星晴", { artist: "Jay", album: "Jay" }),
+    trackOf(2, "Blue Night", { artist: "Jay", album: "Blue Night", artist_ids: [OTHER_JAY] }),
+  ];
+}
+
 /**
  * The id of the Library's artist a name names, as the server binds a name no one linked:
  * one artist for each name, compared folded.
@@ -188,13 +216,25 @@ export function detailsOf(
   };
 }
 
-/** One artist a Track shows as `written`, credited as `role`, linked to none unless `linked`. */
+/**
+ * One artist a Track shows as `written`, credited as `role`, linked to none unless `linked`,
+ * and the one artist going by its name unless `namesakes` go by it too.
+ */
 export function trackArtistOf(
   written: string,
   role: Role = "main",
   linked: TrackArtist["linked"] = null,
+  namesakes: readonly Namesake[] = [],
 ): TrackArtist {
-  return { written, role, artist_id: `artist-${written}`, linked };
+  return { written, role, artist_id: `artist-${written}`, linked, namesakes };
+}
+
+/**
+ * Another artist going by a name, `artist-<id>`, unlinked: one song on *Blue Night* unless
+ * `change` says otherwise.
+ */
+export function namesakeOf(id: string, change: Partial<Namesake> = {}): Namesake {
+  return { artist_id: `artist-${id}`, songs: 1, albums: ["Blue Night"], linked: null, ...change };
 }
 
 /**
@@ -724,5 +764,6 @@ export function favoriteGroupsNaming(
     artistIds: new Set(artists.map(artistIdOf)),
     artists: new Set(artists.map((name) => fold(name.trim()))),
     albums: new Set(albums.map(({ artist, name }) => albumKey(artist, name))),
+    isNamesake: () => false,
   };
 }

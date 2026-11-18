@@ -172,14 +172,28 @@ export interface Credit {
   readonly role: Role;
 }
 
+/** The MusicBrainz artist one of the Library's artists is, once linked. */
+export interface LinkedArtist {
+  readonly musicbrainz_id: string;
+  readonly name: string;
+  readonly photo: string | null;
+}
+
+/** Another artist going by a name a Track writes: how many songs it has, and on which albums. */
+export interface Namesake {
+  readonly artist_id: string;
+  readonly songs: number;
+  /** The albums most of its songs are on, up to two. */
+  readonly albums: readonly string[];
+  readonly linked: LinkedArtist | null;
+}
+
 /** One artist a Track shows, and the MusicBrainz artist it is once linked. */
 export interface TrackArtist extends Credit {
   readonly artist_id: string;
-  readonly linked: {
-    readonly musicbrainz_id: string;
-    readonly name: string;
-    readonly photo: string | null;
-  } | null;
+  readonly linked: LinkedArtist | null;
+  /** The other artists going by the name, in its order; none when it names one. */
+  readonly namesakes: readonly Namesake[];
 }
 
 /** The AI model that answered for a Track, the host it was asked at, and when. */
@@ -369,6 +383,8 @@ export interface ArtistName {
   readonly finding: boolean;
   /** What an AI model last recommended linking it to, while it isn't linked. */
   readonly recommendation?: ArtistRecommendation | null;
+  /** The Library's artists the name names, its first first; several when artists share it. */
+  readonly artist_ids?: readonly string[];
 }
 
 /** Every artist name the Library shows, most Tracks first, and the artists they name. */
@@ -1195,6 +1211,12 @@ export const api = {
   tracks: () => call<Track[]>("GET", "/api/tracks"),
   track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
   details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),
+  /** Bind the song's artist `name` to one of the artists going by it, or `null` for another. */
+  chooseNamesake: (trackId: number, name: string, artistId: string | null) =>
+    call<Details>("PUT", `/api/tracks/${String(trackId)}/namesake`, {
+      name,
+      artist_id: artistId,
+    }),
   /** Set the household's values on the Tracks; `null` drops one. All change, or none. */
   /** Set `values` on every Track; `artists` chooses one song's artists one by one instead. */
   setDetails: (

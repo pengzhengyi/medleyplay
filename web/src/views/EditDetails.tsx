@@ -77,6 +77,7 @@ import { PictureFrame } from "./PictureFrame";
 import { ORIGIN_TAGS } from "./originTags";
 import { type SongsControls, SongsControlsContext } from "./songsControls";
 import { STATUS_ICONS } from "./statusIcons";
+import { WhichArtist } from "./WhichArtist";
 
 /** How long *Saved* shows beside the heading once the details are saved. */
 const SAVED_MS = 2500;
@@ -113,6 +114,7 @@ export function EditDetails({
   onSetCover,
   onRemoveCover,
   onUseCover,
+  onChooseArtist,
   findable,
   lookup,
   online,
@@ -134,6 +136,8 @@ export function EditDetails({
   readonly onRemoveCover: () => Promise<Details>;
   /** Make the cover `cover`, one found for the song's album, the household's own. */
   readonly onUseCover: (cover: string) => Promise<Details>;
+  /** Bind the song's artist `written` to the artist `id` going by it, or to another for `null`. */
+  readonly onChooseArtist?: (written: string, id: string | null) => Promise<Details>;
   readonly findable: readonly Lookup[];
   readonly lookup: TrackLookup | undefined;
   /** Whether medleyplay is Online, so a lookup asked runs now. */
@@ -168,6 +172,7 @@ export function EditDetails({
   const [readError, setReadError] = useState("");
   const [covering, setCovering] = useState(false);
   const [coverError, setCoverError] = useState("");
+  const [choosingArtist, setChoosingArtist] = useState(false);
   const [replacingCover, setReplacingCover] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -332,6 +337,21 @@ export function EditDetails({
       setReading(false);
     }
   };
+  /** Bind the song's artist `written` to another artist going by its name at once. */
+  const chooseArtist = async (written: string, id: string | null) => {
+    if (onChooseArtist === undefined) {
+      return;
+    }
+    setChoosingArtist(true);
+    setError("");
+    try {
+      setDetails(await onChooseArtist(written, id));
+    } catch (failure) {
+      setError(messageOf(failure));
+    } finally {
+      setChoosingArtist(false);
+    }
+  };
   /** Save the cover change `change` makes at once, and show the details it answers. */
   const changeCover = async (change: () => Promise<Details>) => {
     setCovering(true);
@@ -366,7 +386,12 @@ export function EditDetails({
           draft,
           said: artistSaid,
           box: artistBox,
-          disabled: saving,
+          disabled: saving || choosingArtist,
+          ...(onChooseArtist !== undefined && {
+            onChoose: (written: string, id: string | null) => {
+              void chooseArtist(written, id);
+            },
+          }),
           onAdd: () => {
             const typed = credits === undefined ? boxText(details, own, "artist") : draft;
             setCredits(withCredit(credits ?? [], typed));
@@ -921,6 +946,8 @@ interface ArtistChipsProps {
   readonly said: string;
   readonly box: React.RefObject<HTMLInputElement | null>;
   readonly disabled: boolean;
+  /** Bind the song's artist `written` to the artist `id` going by it, or to another for `null`. */
+  readonly onChoose?: (written: string, id: string | null) => void;
   /** Add what is typed as a chip, the box's artist first when there are no chips yet. */
   readonly onAdd: () => void;
   readonly onDraft: (draft: string) => void;
@@ -967,16 +994,25 @@ function DetailBox({
           {credits === undefined ? label : `${label}s`}
         </label>
         {chips !== undefined && (
-          <button
-            type="button"
-            className="link-button detail-add"
-            disabled={chips.disabled}
-            title="Credit another artist on this song"
-            onClick={chips.onAdd}
-          >
-            <PlusIcon weight="bold" aria-hidden />
-            Add artist
-          </button>
+          <span className="detail-actions">
+            {chips.onChoose !== undefined && (
+              <WhichArtist
+                artists={details.artists}
+                disabled={chips.disabled}
+                onChoose={chips.onChoose}
+              />
+            )}
+            <button
+              type="button"
+              className="link-button detail-add"
+              disabled={chips.disabled}
+              title="Credit another artist on this song"
+              onClick={chips.onAdd}
+            >
+              <PlusIcon weight="bold" aria-hidden />
+              Add artist
+            </button>
+          </span>
         )}
       </div>
       {chips !== undefined && credits !== undefined && (

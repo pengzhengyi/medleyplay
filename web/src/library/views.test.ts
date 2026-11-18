@@ -1,7 +1,15 @@
 // cspell:ignore supercell ｍｅｌｔ beatls jsie
 import { describe, expect, it } from "vitest";
 
-import { artistIdOf, artistNameOf, knownArtistOf, trackOf } from "../testing/server";
+import {
+  OTHER_JAY,
+  artistIdOf,
+  artistNameOf,
+  knownArtistOf,
+  trackOf,
+  twoJaysNames,
+  twoJaysSongs,
+} from "../testing/server";
 import { linksOf } from "./artistLinks";
 import {
   albumFileOf,
@@ -217,6 +225,36 @@ describe("artists linked as one", () => {
         "甲壳虫乐队",
       ]);
     });
+  });
+});
+
+describe("two artists of one name", () => {
+  /** A song by each Jay, and a second by the name's first, on *范特西*. */
+  const SONGS = [...twoJaysSongs(), trackOf(3, "简单爱", { artist: "Jay", album: "范特西" })];
+  const LINKS = linksOf(twoJaysNames(), SONGS);
+
+  it("are listed apart, by the album most of their songs are on, each by its id", () => {
+    const artists = artistsOf(SONGS, LINKS);
+
+    expect(artists.map((artist) => [artist.name, artist.id, artist.count, artist.onAlbum])).toEqual(
+      [
+        ["Jay", OTHER_JAY, 1, "Blue Night"],
+        ["Jay", artistIdOf("Jay"), 2, "Jay"],
+      ],
+    );
+  });
+
+  it("each open only their own songs", () => {
+    expect(titles(tracksOfArtist(SONGS, "Jay", LINKS, OTHER_JAY))).toEqual(["Blue Night"]);
+    expect(titles(tracksOfArtist(SONGS, "Jay", LINKS, artistIdOf("Jay")))).toEqual([
+      "星晴",
+      "简单爱",
+    ]);
+    expect(titles(tracksOfArtist(SONGS, "Jay", LINKS))).toEqual(["星晴", "简单爱"]);
+  });
+
+  it("name no album for an artist no other one listed shares its name with", () => {
+    expect(artistsOf(SONGS.slice(0, 1), LINKS)[0]?.onAlbum).toBeUndefined();
   });
 });
 

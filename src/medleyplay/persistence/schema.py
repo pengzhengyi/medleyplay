@@ -927,14 +927,18 @@ class LibraryArtistRow(Base):
 
 
 class ArtistNameRow(Base):
-    """The artist a written name, folded, names."""
+    """An artist a written name, folded, names; a name names several when artists share it.
+
+    `position` orders a name's artists: its first, at 0, is the one it named first.
+    """
 
     __tablename__ = "artist_name"
 
     key: Mapped[str] = mapped_column(String(512), primary_key=True)
     artist_id: Mapped[str] = mapped_column(
-        ForeignKey("library_artist.id", ondelete="CASCADE"), index=True
+        ForeignKey("library_artist.id", ondelete="CASCADE"), primary_key=True, index=True
     )
+    position: Mapped[int] = mapped_column(default=0, server_default="0")
 
 
 class TrackArtistRow(Base):
@@ -953,6 +957,21 @@ class TrackArtistRow(Base):
     """How the Track writes the artist's name."""
     role: Mapped[str] = mapped_column(String(16), default="main", server_default="main")
     """How the Track credits the artist: `main`, or `featured`."""
+
+
+class TrackArtistChoiceRow(Base):
+    """The artist the household chose for a song among the artists its name `key` names."""
+
+    __tablename__ = "track_artist_choice"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    artist_id: Mapped[str] = mapped_column(
+        ForeignKey("library_artist.id", ondelete="CASCADE"), index=True
+    )
+    chosen_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class TrackCreditsRow(Base):

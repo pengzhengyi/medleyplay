@@ -6,7 +6,7 @@ import type { Track } from "../api";
 import { type FavoriteGroups, NO_FAVORITES } from "../library/favoriteGroups";
 import type { Playing } from "../player/albumNow";
 import { hrefOf } from "../routes";
-import { favoriteGroupsNaming, trackOf } from "../testing/server";
+import { artistIdOf, favoriteGroupsNaming, trackOf } from "../testing/server";
 import { NowPlayingNames } from "./NowPlayingNames";
 
 /** 可爱女人, by 周杰伦, from the album *Jay*, playing as a song of its own. */
@@ -69,7 +69,7 @@ describe("what Now Playing names", () => {
     await userEvent.click(screen.getByRole("button", { name: "Favorite artist 周杰伦" }));
 
     expect(onFavoriteAlbum).toHaveBeenCalledWith("周杰伦", "Jay", true);
-    expect(onFavoriteArtist).toHaveBeenCalledWith("周杰伦", true);
+    expect(onFavoriteArtist).toHaveBeenCalledWith("周杰伦", true, artistIdOf("周杰伦"));
     expect(onFavorite).not.toHaveBeenCalled();
   });
 

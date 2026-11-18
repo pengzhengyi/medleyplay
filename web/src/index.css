@@ -19,6 +19,7 @@
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --caution: #8a4b00;
   --caution-soft: rgb(196 120 20 / 14%);
+
   /* Saying yes and no: using a suggestion, and dismissing it. */
   --yes: #1d8a3e;
   --no: #c4362b;
@@ -1165,6 +1166,7 @@ button[aria-disabled="true"] {
 }
 
 .photo-suggestion-art {
+  border-radius: 50%;
   outline: 2px dashed var(--accent);
   outline-offset: 3px;
   transition: outline-color 0.15s;
@@ -1225,14 +1227,14 @@ button[aria-disabled="true"] {
   grid-column: 1 / -1;
 }
 
-.photo-suggestion-control svg {
+.photo-suggestion-icon {
   font-size: 1.35rem;
   opacity: 0;
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 70%));
   transition: opacity 0.15s;
 }
 
-.photo-suggestion-controls:is(:hover, :focus-within) svg {
+.photo-suggestion-controls:is(:hover, :focus-within) .photo-suggestion-icon {
   opacity: 0.7;
 }
 
@@ -1240,17 +1242,18 @@ button[aria-disabled="true"] {
   background: rgb(0 0 0 / 38%);
 }
 
-.photo-suggestion-controls .photo-suggestion-control:is(:hover, :focus-visible) svg {
+.photo-suggestion-control:is(:hover, :focus-visible) .photo-suggestion-icon {
   opacity: 1;
 }
 
 @media (hover: none) {
-  .photo-suggestion-control svg {
+  .photo-suggestion-icon {
     opacity: 0.85;
   }
 }
 
-.photo-suggestion-frame:has(.photo-suggestion-use:is(:hover, :focus-visible)) .photo-suggestion-art {
+.photo-suggestion-frame:has(.photo-suggestion-use:is(:hover, :focus-visible))
+  .photo-suggestion-art {
   outline-color: var(--yes);
   outline-style: solid;
 }
@@ -1291,10 +1294,6 @@ button[aria-disabled="true"] {
   list-style: none;
 }
 
-.photo-suggestion-item .photo-suggestion-art {
-  border-radius: 50%;
-}
-
 .photo-suggestion-picture {
   display: block;
   width: 6rem;
@@ -1313,20 +1312,6 @@ button[aria-disabled="true"] {
   color: var(--ink);
   font-weight: 600;
   text-decoration: none;
-}
-
-/* An artist's photo on its page, round, its tools inside the circle. */
-.cover-frame.artist-frame {
-  flex: none;
-  width: 7.5rem;
-  overflow: hidden;
-  border-radius: 50%;
-  box-shadow: var(--lift);
-}
-
-.cover-frame.artist-frame .cover-tools {
-  border-radius: 0;
-  padding-bottom: 0.6rem;
 }
 
 .artist-credit {
@@ -8836,6 +8821,20 @@ button.playing-kind[aria-expanded="true"] {
 .cover-frame.edit-artist-frame .cover-tools {
   border-radius: 0;
   padding-bottom: 0.9rem;
+}
+
+/* An artist's photo on its page, round, its tools inside the circle. */
+.cover-frame.artist-frame {
+  flex: none;
+  width: 7.5rem;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: var(--lift);
+}
+
+.cover-frame.artist-frame .cover-tools {
+  border-radius: 0;
+  padding-bottom: 0.6rem;
 }
 
 .edit-artist-picture {

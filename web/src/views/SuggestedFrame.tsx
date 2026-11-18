@@ -64,7 +64,7 @@ export function SuggestedFrame({
           title="Choose another photo"
           onClick={onChange}
         >
-          <PencilSimpleIcon weight="bold" aria-hidden />
+          <PencilSimpleIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
         </button>
         <button
           type="button"
@@ -74,7 +74,7 @@ export function SuggestedFrame({
           title="Dismiss"
           onClick={onDismiss}
         >
-          <XIcon weight="bold" aria-hidden />
+          <XIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
         </button>
         <button
           type="button"
@@ -84,7 +84,7 @@ export function SuggestedFrame({
           title="Use this photo"
           onClick={onUse}
         >
-          <CheckIcon weight="bold" aria-hidden />
+          <CheckIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
         </button>
       </div>
       <span className="photo-suggestion-tag" aria-hidden>

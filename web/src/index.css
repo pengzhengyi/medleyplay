@@ -1148,7 +1148,7 @@ button[aria-disabled="true"] {
   display: grid;
   flex: none;
   justify-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .photo-suggestion-frame {

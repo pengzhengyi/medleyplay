@@ -886,9 +886,9 @@ describe("editing an album from its page", () => {
       },
     });
     await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
-    const album = within(screen.getByRole("dialog", { name: "Edit album" }));
+    const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
     await userEvent.click(album.getByRole("button", { name: "Add a cover…" }));
-    const editor = within(screen.getByRole("dialog", { name: "Add a cover" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
 
     await userEvent.upload(
       editor.getByLabelText("Choose a cover file"),
@@ -900,6 +900,61 @@ describe("editing an album from its page", () => {
       expect(sent).toEqual([{ track_ids: [1, 2], values: { cover: "cover-up" } }]);
     });
     expect(calls).toContain("PUT /api/tracks/1/cover");
+  });
+
+  it("uploads a cover from the album's own cover, giving every song that cover", async () => {
+    const sent: unknown[] = [];
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }), {
+      ...signedIn(LIBRARY),
+      "PUT /api/tracks/1/cover": { body: detailsOf(1, { cover: "cover-up" }) },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 2 } };
+      },
+    });
+    const about = within(await screen.findByRole("region", { name: "About the album" }));
+    await userEvent.click(about.getByRole("button", { name: "Add a cover…" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+
+    await userEvent.upload(
+      editor.getByLabelText("Choose a cover file"),
+      new File(["png"], "Supercell.png", { type: "image/png" }),
+    );
+    await userEvent.click(await editor.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ track_ids: [1, 2], values: { cover: "cover-up" } }]);
+    });
+  });
+
+  it("gives a cover from the page of an album that is one split file to that file", async () => {
+    const sent: unknown[] = [];
+    const jay = [
+      trackOf(9, "Jay", { artist: "周杰伦", album: "Jay", kind: "album", split: true }),
+      trackOf(11, "可爱女人", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+      trackOf(12, "完美主义", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+    ];
+    open(hrefOf({ view: "album", artist: "周杰伦", name: "Jay" }), {
+      ...signedIn(jay),
+      "PUT /api/tracks/9/cover": { body: detailsOf(9, { cover: "jay-cover" }) },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 1 } };
+      },
+    });
+    const about = within(await screen.findByRole("region", { name: "About the album" }));
+    await userEvent.click(about.getByRole("button", { name: "Add a cover…" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+
+    await userEvent.upload(
+      editor.getByLabelText("Choose a cover file"),
+      new File(["png"], "Jay.png", { type: "image/png" }),
+    );
+    await userEvent.click(await editor.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ track_ids: [9], values: { cover: "jay-cover" } }]);
+    });
   });
 
   it("edits an album that is one split file as that file, in Edit details", async () => {

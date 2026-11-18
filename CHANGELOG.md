@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An album's cover on its page** — under the heading, with *Save* and *Replace* on
+  hover; *Replace* opens the picture editor (upload, MusicBrainz, or Ask AI) without
+  going through *Edit details*.
+
 - **A suggested photo for an artist with none** — its page shows the picture on
   Deezer most likely of it, the AI's pick or the most followed going by its name,
   tagged as a suggestion, to use in one click. Settings → Deezer can have the AI

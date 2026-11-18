@@ -132,13 +132,13 @@ export function ArtistPictureFinder({
   const choosing = state?.choosing === true;
   const failure = error || (state?.failure ?? state?.choice_failure);
   // An AI model is offered while one may be asked, or to say how to set one up.
-  const askable = !finding && pictures.length > 1 && (state.may_choose || noAi.missing);
+  const aiOffered = !finding && pictures.length > 1 && (state.may_choose || noAi.missing);
   return (
     <section className="cover-finder" aria-label="Pictures on Deezer">
       <div className="cover-finder-head">
         <h4>Pictures on Deezer</h4>
         <span className="cover-finder-actions">
-          {askable && (
+          {aiOffered && (
             <>
               <button
                 type="button"
@@ -177,7 +177,7 @@ export function ArtistPictureFinder({
           )}
         </span>
       </div>
-      {askable && note !== undefined && (
+      {aiOffered && note !== undefined && (
         <form
           id={noteId}
           className="picture-note"
@@ -191,6 +191,7 @@ export function ArtistPictureFinder({
           </label>
           <input
             id={`${noteId}-text`}
+            className="picture-note-text"
             type="text"
             value={note}
             maxLength={500}
@@ -258,7 +259,7 @@ export function ArtistPictureFinder({
       )}
       {pick !== null && !choosing && (
         <p className="cover-finder-note picture-pick-why">
-          <SparkleIcon aria-hidden />
+          <SparkleIcon className="picture-pick-mark" aria-hidden />
           <span>
             {`${pick.model} picked it: ${pick.why}`}
             {pick.hint !== "" && (

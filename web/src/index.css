@@ -8538,7 +8538,7 @@ button.playing-kind[aria-expanded="true"] {
   margin: 0 0 0.6rem;
 }
 
-.picture-note input {
+.picture-note-text {
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -8567,7 +8567,7 @@ button.playing-kind[aria-expanded="true"] {
   margin-top: 0.6rem;
 }
 
-.picture-pick-why svg {
+.picture-pick-mark {
   flex: none;
   margin-top: 0.2rem;
   color: var(--accent);

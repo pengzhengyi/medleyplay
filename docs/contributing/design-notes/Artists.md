@@ -383,6 +383,27 @@ used, and one used becomes the household's photo.
   and to admins. Deezer busy (HTTP 429, a server error, or its quota error) or out
   of reach fails it as a network failure does; an answer of another shape is an
   error.
+- **Pick by AI:** with two or more pictures found and an AI provider set up, *Pick by
+  AI* asks an AI model which is of the artist, in the AI's shared lane. The model is
+  shown the artist's name, what tells it apart and its country, up to eight other
+  names it goes by, a few of its songs, and each picture's artist by name and
+  following, a letter each, never the picture itself, since a text model can't see
+  it:
+
+  ```text
+  artist: The Beatles (GB)
+  also known as: 披头士; Beatles
+  songs: Yesterday
+  pictures:
+  a. The Beatles (4,100,000 fans)
+  b. The Beatles Revival
+  ```
+
+  *Refine* adds the listener's note, such as *the band, not a tribute act*, sent as
+  a message of its own, up to 500 characters. The picture picked is marked *AI pick*
+  with a dashed ring, says which model picked it and why, with the note, and takes
+  the focus, so Enter uses it. The pick is kept until the pictures are found again;
+  asking again with the same note among the same pictures asks nothing.
 
 ## What an AI model suggests for an artist
 
@@ -547,6 +568,7 @@ not.
 | `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |
 | `POST /api/artists/{id}/photo/cover` | Signed in | Make a cover already kept the household's photo of the artist; 404 for no such cover |
 | `GET /api/artists/{id}/pictures` | Signed in | The pictures Deezer last had of the artist, the most followed first, when they were found, whether Deezer is asked now and whether that waits for medleyplay to be Online, why the last asking failed, to the Account that asked and to admins, and whether Deezer is turned on; 404 for an artist no site named |
+| `POST /api/artists/{id}/pictures/choose` | Signed in | Ask an AI model which picture found is of the artist, with the listener's `hint`, up to 500 characters; 202, or 404 for an artist no site named, 409 before any picture is found, while no AI provider is set up, or while the `ai-details` plugin is off, 422 for a longer note. `GET …/pictures` then shows the `pick`: its cover, why, the model, its host, when, and the note; and `choosing`, `choice_failure`, and `may_choose` |
 | `POST /api/artists/{id}/pictures/find` | Signed in | Ask Deezer for pictures of the artists going by the artist's name; 202, or 404 for an artist no site named, or 409 until Deezer is turned on in Settings or while the `deezer` plugin is off |
 | `PUT /api/settings` | Admin | `picture_sites`, the sites asked for pictures of an artist: `[]` or `["deezer"]`; left out, they stay as saved |
 | `POST /api/artists/{id}/suggestion` | Signed in | Ask an AI model which name to show an artist by, and who it is; 202, or 404 for an artist no site named, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked about it already |
@@ -558,7 +580,8 @@ not.
 - **The plugins** are tested with no socket opened: `musicbrainz` against a
   hand-made artist search in MusicBrainz's shape, `wikipedia` against
   Wikidata's real answers for The Beatles' names and a hand-made image statement
-  in Wikidata's shape, `deezer` against a hand-made artist search in Deezer's
+  in Wikidata's shape, the picture chooser of `ai-details` against a fake chat
+  client, `deezer` against a hand-made artist search in Deezer's
   shape and its error answers, and the artist chooser and describer of
   `ai-details` against a fake chat client.
 - **The service** runs real Jobs against the test plugin `reader`, whose finder

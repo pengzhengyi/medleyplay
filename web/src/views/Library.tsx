@@ -30,6 +30,8 @@ import { linksOf, withLinkedFavorites } from "../library/artistLinks";
 import { useArtistNames } from "../library/useArtistNames";
 import { useNamesToTidy } from "../library/useNamesToTidy";
 import { useArtistSplits } from "../library/useArtistSplits";
+import { useMissingPhotos } from "../library/useMissingPhotos";
+import { usePhotoLookAhead } from "../library/usePhotoLookAhead";
 import { useSharedNames } from "../library/useSharedNames";
 import { useSplitOffers } from "../library/useSplitOffers";
 import { toDoOf } from "../library/cleanUp";
@@ -185,12 +187,14 @@ export function Library({
   const splitOffers = useSplitOffers(loadedTracks);
   const artistSplits = useArtistSplits(loadedTracks);
   const sharedNames = useSharedNames(loadedTracks);
+  const missingPhotos = useMissingPhotos(loadedTracks);
   const toDo = toDoOf(
     namesToTidy.names,
     artistNames.names,
     splitOffers.offers,
     artistSplits.splits,
     sharedNames.names,
+    missingPhotos.artists,
   );
   const links = useMemo(() => linksOf(artistNames.names, tracks), [artistNames.names, tracks]);
   // A favorite artist makes each of its names, and every name linked with one, a favorite.
@@ -269,6 +273,7 @@ export function Library({
   };
   // An enricher set to the next to play is asked about the song playing and the one after.
   useLookAhead([playingId, upNext(player.queue)[0]?.trackId], byId, library);
+  usePhotoLookAhead([playingId, upNext(player.queue)[0]?.trackId]);
   // With nothing left playing, Now Playing closes, and the next song doesn't reopen it.
   if (nowPlayingOver !== undefined && playing === undefined && library.loaded) {
     setNowPlayingOver(undefined);
@@ -653,6 +658,7 @@ export function Library({
             splitOffers={{ names: splitOffers.offers, reload: splitOffers.reload }}
             artistSplits={{ names: artistSplits.splits, reload: artistSplits.reload }}
             sharedNames={sharedNames}
+            missingPhotos={missingPhotos}
             toDo={toDo}
           />
         ) : (

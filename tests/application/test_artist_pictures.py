@@ -6,6 +6,7 @@ photo until the household uses one.
 """
 
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,13 +14,13 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.artist_pictures import ArtistPictures
+from medleyplay.application.artist_pictures import ArtistPictures, MissingPhoto
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
-from medleyplay.domain.settings import Settings
-from medleyplay.persistence.schema import ArtistAliasRow, ArtistRow, JobRow
+from medleyplay.domain.settings import PhotoSearch, Settings
+from medleyplay.persistence.schema import ArtistAliasRow, ArtistRow, JobRow, TrackRow
 from medleyplay.programs.find_pictures import ChoosePictureJob
 from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
@@ -283,3 +284,103 @@ def test_no_picture_is_suggested_when_none_goes_by_the_artists_names(
 
     found = enriching.artist_pictures.pictures(alice, BEATLES)
     assert (len(found.pictures), found.suggested) == (2, None)
+
+
+def _photo_search(enriching: Enriching, alice: Account, search: PhotoSearch) -> None:
+    """Turn Deezer on, with the artists with no photo looked up as `search` says."""
+    settings = SettingsService(enriching.units, enriching.clock)
+    settings.put(
+        alice,
+        replace(settings.get(), picture_sites=(PictureSite.DEEZER,), find_artist_photos=search),
+    )
+
+
+def _photo_dropped(enriching: Enriching) -> None:
+    """Drop the photo Wikidata gave The Beatles, so they have none."""
+    with enriching.units.begin() as db:
+        db.get_one(ArtistRow, BEATLES).photo = None
+
+
+def _song(enriching: Enriching) -> int:
+    with enriching.units() as db:
+        return db.scalars(select(TrackRow.id)).one()
+
+
+def test_an_artist_with_no_photo_is_listed_with_its_songs_until_looked_up(
+    enriching: Enriching,
+) -> None:
+    _photo_dropped(enriching)
+
+    missing = enriching.artist_pictures.missing()
+
+    assert missing == (
+        MissingPhoto(
+            artist_id=BEATLES,
+            name="The Beatles",
+            songs=1,
+            suggested=None,
+            picked=False,
+            found=False,
+            finding=False,
+        ),
+    )
+
+
+def test_an_artist_with_a_photo_is_not_listed(enriching: Enriching) -> None:
+    assert enriching.artist_pictures.missing() == ()
+
+
+def test_the_artists_of_the_songs_up_next_are_looked_up_and_their_photo_suggested(
+    enriching: Enriching, alice: Account
+) -> None:
+    _photo_dropped(enriching)
+    _photo_search(enriching, alice, PhotoSearch.UP_NEXT)
+
+    asked = enriching.artist_pictures.find_missing(alice, [_song(enriching)])
+    enriching.finish_every_job()
+
+    [missing] = enriching.artist_pictures.missing()
+    found = enriching.artist_pictures.pictures(alice, BEATLES)
+    assert asked == 1
+    assert (missing.found, missing.suggested) == (True, found.pictures[0].cover)
+
+
+def test_an_artist_looked_up_before_is_not_looked_up_again(
+    enriching: Enriching, alice: Account
+) -> None:
+    _photo_dropped(enriching)
+    _photo_search(enriching, alice, PhotoSearch.UP_NEXT)
+    enriching.artist_pictures.find_missing(alice, [_song(enriching)])
+    enriching.finish_every_job()
+
+    assert enriching.artist_pictures.find_missing(alice, [_song(enriching)]) == 0
+
+
+def test_every_artist_is_looked_up_only_while_the_household_has_every_one_looked_up(
+    enriching: Enriching, alice: Account
+) -> None:
+    _photo_dropped(enriching)
+    _photo_search(enriching, alice, PhotoSearch.UP_NEXT)
+    before = enriching.artist_pictures.find_missing(alice, None)
+    _photo_search(enriching, alice, PhotoSearch.MISSING)
+
+    after = enriching.artist_pictures.find_missing(alice, None)
+
+    assert (before, after) == (0, 1)
+
+
+def test_no_artist_is_looked_up_on_its_own_while_the_household_has_none_looked_up(
+    enriching: Enriching, alice: Account
+) -> None:
+    _photo_dropped(enriching)
+    _photo_search(enriching, alice, PhotoSearch.OFF)
+
+    assert enriching.artist_pictures.find_missing(alice, [_song(enriching)]) == 0
+
+
+def test_no_artist_is_looked_up_on_its_own_while_deezer_is_off(
+    enriching: Enriching, alice: Account
+) -> None:
+    _photo_dropped(enriching)
+
+    assert enriching.artist_pictures.find_missing(alice, [_song(enriching)]) == 0

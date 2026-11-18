@@ -3,10 +3,18 @@
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.persistence.schema import ArtistPictureSearchRow, ArtistRow
+from medleyplay.application.catalog import CatalogService
+from medleyplay.persistence.schema import (
+    ArtistPictureSearchRow,
+    ArtistRow,
+    LibraryArtistRow,
+    TrackArtistRow,
+)
 from tests.support.api import set_up_as_alice
+from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
 
 
 def _beatles_known(units: sessionmaker[Session]) -> None:
@@ -178,3 +186,49 @@ def test_artist_pictures_are_for_signed_in_accounts(client: TestClient) -> None:
     assert client.get("/api/artists/b10bbbfc/pictures").status_code == 401
     assert client.post("/api/artists/b10bbbfc/pictures/find").status_code == 401
     assert client.post("/api/artists/b10bbbfc/pictures/choose", json={}).status_code == 401
+    assert client.get("/api/artist-photos/missing").status_code == 401
+
+
+def test_an_artist_with_no_photo_is_listed_as_missing_one(
+    client: TestClient, units: sessionmaker[Session], catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+    track = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song("Help!"))
+    with units.begin() as db:
+        [artist_id] = db.scalars(
+            select(TrackArtistRow.artist_id).where(TrackArtistRow.track_id == track)
+        ).all()
+        db.get_one(LibraryArtistRow, artist_id).musicbrainz_id = "b10bbbfc"
+
+    missing = client.get("/api/artist-photos/missing").json()
+
+    assert missing == {
+        "artists": [
+            {
+                "artist_id": "b10bbbfc",
+                "name": "The Beatles",
+                "songs": 1,
+                "suggested": None,
+                "picked": False,
+                "found": False,
+                "finding": False,
+            }
+        ]
+    }
+
+
+def test_no_artist_is_looked_up_on_its_own_while_deezer_is_off(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.post("/api/artist-photos/find", json={"track_ids": [1]})
+
+    assert response.json() == {"asked": 0}
+
+
+def test_the_artists_of_at_most_fifty_songs_are_looked_up_at_once(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.post("/api/artist-photos/find", json={"track_ids": list(range(51))})
+
+    assert response.status_code == 422

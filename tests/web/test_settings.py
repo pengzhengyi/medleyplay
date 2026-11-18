@@ -20,6 +20,7 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "lyrics_sites": [],
         "picture_sites": [],
         "pick_pictures_by_ai": False,
+        "find_artist_photos": "up_next",
         "revision": 0,
     }
 

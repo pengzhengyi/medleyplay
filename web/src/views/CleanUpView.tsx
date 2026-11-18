@@ -10,8 +10,23 @@
 import { CheckIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
-import type { ArtistNames, ArtistSplits, NameToTidy, SharedName, SplitOffers, Track } from "../api";
-import { inOrderOfWaiting, toSplitOf, toTellApartOf, unlinkedOf } from "../library/cleanUp";
+import type {
+  ArtistNames,
+  ArtistSplits,
+  MissingPhoto,
+  NameToTidy,
+  SharedName,
+  SplitOffers,
+  Track,
+} from "../api";
+import {
+  inOrderOfWaiting,
+  photosToUseOf,
+  toSplitOf,
+  toTellApartOf,
+  unlinkedOf,
+} from "../library/cleanUp";
+import { FindPhotos } from "./FindPhotos";
 import { LinkArtists } from "./LinkArtists";
 import { SharedNames } from "./SharedNames";
 import { SplitArtistNames } from "./SplitArtistNames";
@@ -32,6 +47,7 @@ export function CleanUpView({
   splits,
   artistSplits,
   sharedNames,
+  missingPhotos,
   onEditSongs,
 }: {
   readonly tidy: Read<readonly NameToTidy[]>;
@@ -44,6 +60,11 @@ export function CleanUpView({
   readonly artistSplits?: Read<ArtistSplits>;
   /** The names that may name several artists, to tell apart by album or keep as one. */
   readonly sharedNames?: Read<readonly SharedName[]>;
+  /** The artists linked to MusicBrainz with no photo, each with any photo suggested. */
+  readonly missingPhotos?: {
+    readonly artists: readonly MissingPhoto[];
+    readonly reload: () => void;
+  };
   readonly onEditSongs?: (trackId: number) => void;
 }) {
   const toSplitNames = artistSplits?.names.offers.length ?? 0;
@@ -57,6 +78,8 @@ export function CleanUpView({
   const linkable = artistNames?.names.names.some((each) => each.look_up !== "never") ?? false;
   const toTellApart = toTellApartOf(sharedNames?.names);
   const sharing = (sharedNames?.names.length ?? 0) > 0;
+  const toUse = photosToUseOf(missingPhotos?.artists);
+  const photoless = (missingPhotos?.artists.length ?? 0) > 0;
   const sections = inOrderOfWaiting<Section>([
     ...(toTidy > 0
       ? [
@@ -111,6 +134,16 @@ export function CleanUpView({
           },
         ]
       : []),
+    ...(missingPhotos !== undefined && photoless
+      ? [
+          {
+            id: "clean-up-photos",
+            title: "Find artist photos",
+            waiting: toUse,
+            body: <FindPhotos artists={missingPhotos.artists} onChanged={missingPhotos.reload} />,
+          },
+        ]
+      : []),
     ...(artistNames !== undefined && linkable
       ? [
           {
@@ -134,9 +167,11 @@ export function CleanUpView({
         <h2 className="section" data-rail-named>
           Clean up
         </h2>
-        <p className="meta">{summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart)}</p>
+        <p className="meta">
+          {summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart, toUse)}
+        </p>
       </header>
-      {toTidy === 0 && !linkable && !splitting && !splittingNames && !sharing ? (
+      {toTidy === 0 && !linkable && !splitting && !splittingNames && !sharing && !photoless ? (
         <p className="empty">
           Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
           split into songs, show here.
@@ -202,6 +237,7 @@ function summaryOf(
   toSplit: number,
   toSplitNames: number,
   toTellApart: number,
+  toUse: number,
 ): string {
   const waiting = [
     toTidy > 0 && `${String(toTidy)} ${toTidy === 1 ? "name" : "names"} to tidy`,
@@ -210,6 +246,7 @@ function summaryOf(
     toLink > 0 && `${String(toLink)} to link`,
     toTellApart > 0 &&
       `${String(toTellApart)} shared ${toTellApart === 1 ? "name" : "names"} to tell apart`,
+    toUse > 0 && `${String(toUse)} artist ${toUse === 1 ? "photo" : "photos"} to use`,
     toSplit > 0 && `${String(toSplit)} ${toSplit === 1 ? "file" : "files"} to split`,
   ].filter(Boolean);
   return waiting.length === 0 ? "Every name is tidy and linked." : waiting.join(", ");

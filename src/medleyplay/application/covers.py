@@ -2,8 +2,8 @@
 
 A cover's file is named by the SHA-256 of its bytes, so the songs of an album share
 one file, and a name never changes while its content stands. An artist's photo is
-kept as a cover too. A cover no value or artist names any more is removed by the
-sweep.
+kept as a cover too, as are the pictures found of an artist. A cover no value, artist,
+or album names any more is removed by the sweep.
 """
 
 import contextlib
@@ -24,6 +24,7 @@ from medleyplay.domain.errors import InvalidInputError
 from medleyplay.persistence.schema import (
     AlbumCoverSearchRow,
     ArtistHouseholdRow,
+    ArtistPictureSearchRow,
     ArtistRow,
     ImageLinksRow,
     TrackValueRow,
@@ -119,14 +120,22 @@ class CoverService:
         return None if kind is None or path.is_symlink() else (path, kind)
 
     def sweep(self) -> None:
-        """Remove every file in the covers folder that no value, artist's photo, or album names.
+        """Remove every file in the covers folder that no value, artist, or album names.
 
-        An artist's photo is the one Wikidata gave, or the household's own; an album's
-        covers are those found for it, to choose from, and a picture fetched from a link
-        a model suggested is kept while that link stands.
+        An artist's photo is the one Wikidata gave, or the household's own; an artist's
+        pictures and an album's covers are those found for it, to choose from, and a
+        picture fetched from a link a model suggested is kept while that link stands.
+        Pictures found of an artist whose files are gone are forgotten, so it is looked
+        up again.
         """
         if not self._folder.is_dir():
             return
+        with self._units.begin() as db:
+            for search in db.scalars(select(ArtistPictureSearchRow)):
+                if not all(
+                    (self._folder / str(each["cover"])).is_file() for each in search.pictures
+                ):
+                    db.delete(search)
         with self._units() as db:
             named = set(
                 db.scalars(
@@ -143,6 +152,11 @@ class CoverService:
                 str(each["cover"])
                 for covers in db.scalars(select(AlbumCoverSearchRow.covers))
                 for each in covers
+            )
+            named.update(
+                str(each["cover"])
+                for pictures in db.scalars(select(ArtistPictureSearchRow.pictures))
+                for each in pictures
             )
             named.update(
                 str(each["cover"])

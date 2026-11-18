@@ -171,7 +171,12 @@ export function CleanUpView({
           {summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart, toUse)}
         </p>
       </header>
-      {toTidy === 0 && !linkable && !splitting && !splittingNames && !sharing && !missingAnyPhoto ? (
+      {toTidy === 0 &&
+      !linkable &&
+      !splitting &&
+      !splittingNames &&
+      !sharing &&
+      !missingAnyPhoto ? (
         <p className="empty">
           Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
           split into songs, show here.

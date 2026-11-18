@@ -79,7 +79,7 @@ export function CleanUpView({
   const toTellApart = toTellApartOf(sharedNames?.names);
   const sharing = (sharedNames?.names.length ?? 0) > 0;
   const toUse = photosToUseOf(missingPhotos?.artists);
-  const photoless = (missingPhotos?.artists.length ?? 0) > 0;
+  const missingAnyPhoto = (missingPhotos?.artists.length ?? 0) > 0;
   const sections = inOrderOfWaiting<Section>([
     ...(toTidy > 0
       ? [
@@ -134,7 +134,7 @@ export function CleanUpView({
           },
         ]
       : []),
-    ...(missingPhotos !== undefined && photoless
+    ...(missingPhotos !== undefined && missingAnyPhoto
       ? [
           {
             id: "clean-up-photos",
@@ -171,7 +171,12 @@ export function CleanUpView({
           {summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart, toUse)}
         </p>
       </header>
-      {toTidy === 0 && !linkable && !splitting && !splittingNames && !sharing && !photoless ? (
+      {toTidy === 0 &&
+      !linkable &&
+      !splitting &&
+      !splittingNames &&
+      !sharing &&
+      !missingAnyPhoto ? (
         <p className="empty">
           Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
           split into songs, show here.

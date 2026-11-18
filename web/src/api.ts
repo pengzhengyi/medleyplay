@@ -476,6 +476,20 @@ export interface ArtistPictures {
   readonly failure: string | null;
   /** Whether the household turned Deezer on in Settings. */
   readonly may_find: boolean;
+  /** The picture an AI model picked among those found, if one was asked. */
+  readonly pick: PicturePick | null;
+  readonly choosing: boolean;
+  /** Why the last asking failed; only to the Account that asked, and to admins. */
+  readonly choice_failure: string | null;
+  /** Whether an AI model may be asked which picture is of the artist. */
+  readonly may_choose: boolean;
+}
+
+/** The picture an AI model picked, why, which model answered, and the note it was asked with. */
+export interface PicturePick extends AnsweredBy {
+  readonly cover: string;
+  readonly why: string;
+  readonly hint: string;
 }
 
 /** A link to a picture an AI model suggested, and what fetching it gave. */
@@ -1310,6 +1324,9 @@ export const api = {
   /** Ask Deezer for pictures of the artists going by an artist's name; nothing changes. */
   findArtistPictures: (artistId: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/find`),
+  /** Ask an AI model which picture found is of an artist, with what the listener says. */
+  chooseArtistPicture: (artistId: string, hint: string) =>
+    call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/choose`, { hint }),
   /** What is known of the covers of the album `album` by `artist`, its album artist or artist. */
   albumCovers: (album: string, artist: string) =>
     call<AlbumCovers>(

@@ -826,7 +826,9 @@ class ArtistPictureSearchRow(Base):
 
     Each of `pictures` is `{"name", "fans", "cover"}`: the name the site knows the
     artist by, how many follow it there, or `None`, and the cover holding the picture,
-    the most followed first.
+    the most followed first. `pick` is the cover an AI model picked, at `chosen_at`,
+    among the covers `offered`, why, the model and its host, and the note it was asked
+    with; `None` when it picked none, and `chosen_at` `None` when none was asked.
     """
 
     __tablename__ = "artist_picture_search"
@@ -837,6 +839,13 @@ class ArtistPictureSearchRow(Base):
     site: Mapped[str] = mapped_column(String(16), primary_key=True)
     pictures: Mapped[list[dict[str, object]]] = mapped_column(JSON)
     found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    offered: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    pick: Mapped[str | None] = mapped_column(String(128), default=None)
+    why: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    hint: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    model: Mapped[str] = mapped_column(String(128), default="", server_default="")
+    host: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    chosen_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
 
 
 class ArtistHouseholdRow(Base):

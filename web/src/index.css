@@ -8515,6 +8515,68 @@ button.playing-kind[aria-expanded="true"] {
   font-size: 0.75rem;
 }
 
+.cover-finder-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.3rem 0.85rem;
+}
+
+.cover-finder-head .picture-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The listener's note to the AI, under the heading while Refine is open. */
+.picture-note {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+}
+
+.picture-note input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding-block: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.picture-note .dialog-button {
+  margin: 0;
+}
+
+/* The picture an AI model picked: a dashed ring in the accent, until one is used. */
+.cover-finder .cover-choice.picked {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.cover-finder .cover-choice.picked[aria-pressed="true"] {
+  border-style: solid;
+}
+
+.picture-pick-why {
+  align-items: flex-start;
+  margin-top: 0.6rem;
+}
+
+.picture-pick-why svg {
+  flex: none;
+  margin-top: 0.2rem;
+  color: var(--accent);
+}
+
+.picture-pick-hint {
+  font-style: italic;
+}
+
 /* How many follow an artist on Deezer, under its name. */
 .picture-fans {
   margin-top: -0.2rem;

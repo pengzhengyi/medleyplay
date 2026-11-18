@@ -9,14 +9,19 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.artist_pictures import ArtistPictures
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import PictureSite
-from medleyplay.domain.errors import ConflictError, NotFoundError
+from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.settings import Settings
+from medleyplay.persistence.schema import JobRow
+from medleyplay.programs.find_pictures import ChoosePictureJob
+from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -46,6 +51,28 @@ def enriching(
 def _deezer_turned_on(enriching: Enriching, alice: Account) -> None:
     settings = SettingsService(enriching.units, enriching.clock)
     settings.put(alice, Settings(picture_sites=(PictureSite.DEEZER,)))
+
+
+def _found(enriching: Enriching, alice: Account) -> ArtistPictures:
+    """Turn Deezer on, set DeepSeek up, and find The Beatles' pictures."""
+    _deezer_turned_on(enriching, alice)
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+    enriching.artist_pictures.find(alice, BEATLES)
+    enriching.finish_every_job()
+    return enriching.artist_pictures.pictures(alice, BEATLES)
+
+
+def _chosen(enriching: Enriching, alice: Account, hint: str = "") -> ArtistPictures:
+    """Ask a model which of The Beatles' pictures is of them, and return what it picked."""
+    enriching.artist_pictures.choose(alice, BEATLES, hint)
+    enriching.finish_every_job()
+    return enriching.artist_pictures.pictures(alice, BEATLES)
+
+
+def _choices_asked(enriching: Enriching) -> list[ChoosePictureJob]:
+    with enriching.units() as db:
+        asked = db.scalars(select(JobRow.request).where(JobRow.kind == "choose_picture")).all()
+    return [ChoosePictureJob.model_validate(each) for each in asked]
 
 
 def test_the_pictures_deezer_has_of_an_artist_are_found_and_kept_most_followed_first(
@@ -112,3 +139,115 @@ def test_an_artist_no_site_named_has_no_pictures_to_find(
 
     with pytest.raises(NotFoundError):
         enriching.artist_pictures.find(alice, "00000000-0000-4000-8000-000000000000")
+
+
+def test_an_ai_model_picks_the_picture_of_the_artist_with_why_and_who_answered(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+    assert (found.may_choose, found.pick) == (True, None)
+
+    chosen = _chosen(enriching, alice)
+
+    assert chosen.pick is not None
+    assert (chosen.pick.cover, chosen.pick.why, chosen.pick.model, chosen.pick.host) == (
+        found.pictures[0].cover,
+        "The most followed",
+        "deepseek-flash",
+        "api.deepseek.com",
+    )
+    assert chosen.choosing is False
+
+
+def test_the_model_is_shown_the_artist_its_other_names_its_songs_and_each_picture(
+    enriching: Enriching, alice: Account
+) -> None:
+    _found(enriching, alice)
+
+    _chosen(enriching, alice, "the band, not a tribute")
+
+    [asked] = _choices_asked(enriching)
+    assert (asked.artist, asked.about, asked.hint) == (
+        "The Beatles",
+        "GB",
+        "the band, not a tribute",
+    )
+    assert "披头士" in asked.other_names
+    assert asked.songs == ("Yesterday",)
+    assert [(each.name, each.fans) for each in asked.options] == [
+        ("The Beatles", 4_100_000),
+        ("The Beatles", 120),
+    ]
+
+
+def test_asking_again_with_another_note_asks_again_and_keeps_the_note(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+    _chosen(enriching, alice)
+
+    again = _chosen(enriching, alice, "the  tribute act")
+
+    assert again.pick is not None
+    assert (again.pick.cover, again.pick.hint) == (found.pictures[1].cover, "the tribute act")
+
+
+def test_asking_again_with_the_same_note_asks_nothing(enriching: Enriching, alice: Account) -> None:
+    _found(enriching, alice)
+    _chosen(enriching, alice, "the band")
+
+    _chosen(enriching, alice, "the band")
+
+    assert len(_choices_asked(enriching)) == 1
+
+
+def test_finding_again_forgets_the_pick_among_the_pictures_found_before(
+    enriching: Enriching, alice: Account
+) -> None:
+    _found(enriching, alice)
+    _chosen(enriching, alice)
+
+    enriching.artist_pictures.find(alice, BEATLES)
+    enriching.finish_every_job()
+
+    assert enriching.artist_pictures.pictures(alice, BEATLES).pick is None
+
+
+def test_the_ai_provider_refusing_says_why_and_picks_nothing(
+    enriching: Enriching, alice: Account
+) -> None:
+    _found(enriching, alice)
+
+    chosen = _chosen(enriching, alice, "Refuse")
+
+    assert chosen.pick is None
+    assert chosen.choice_failure is not None
+    assert "refused" in chosen.choice_failure
+
+
+def test_asking_which_picture_before_any_is_found_is_refused(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.ai.add(alice, DEEPSEEK, "deepseek-flash", None)
+
+    with pytest.raises(ConflictError, match="Find the artist's pictures"):
+        enriching.artist_pictures.choose(alice, BEATLES)
+
+
+def test_no_model_may_be_asked_until_an_ai_provider_is_set_up(
+    enriching: Enriching, alice: Account
+) -> None:
+    _deezer_turned_on(enriching, alice)
+    enriching.artist_pictures.find(alice, BEATLES)
+    enriching.finish_every_job()
+
+    with pytest.raises(ConflictError, match="Set up an AI provider"):
+        enriching.artist_pictures.choose(alice, BEATLES)
+    assert enriching.artist_pictures.pictures(alice, BEATLES).may_choose is False
+
+
+def test_a_note_too_long_for_the_ai_is_refused(enriching: Enriching, alice: Account) -> None:
+    _found(enriching, alice)
+
+    with pytest.raises(InvalidInputError):
+        enriching.artist_pictures.choose(alice, BEATLES, "x" * 501)

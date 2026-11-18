@@ -1095,7 +1095,6 @@ button[aria-disabled="true"] {
   color: var(--muted);
 }
 
-/* About an artist, under its heading: a round mosaic of its covers, then what is known. */
 /* An album's cover on its page, your rating beside it. */
 .album-about {
   display: flex;
@@ -1124,6 +1123,7 @@ button[aria-disabled="true"] {
   object-fit: cover;
 }
 
+/* About an artist, under its heading: a round mosaic of its covers, then what is known. */
 .artist-about {
   display: flex;
   align-items: center;

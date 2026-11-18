@@ -2,19 +2,21 @@
  * @file Finding photos of artists with none, a section of Clean up.
  *
  * Each artist linked to MusicBrainz with no photo for which Deezer has a picture that
- * fits shows it, ringed and tagged as a suggestion, to use in one click; *Use all* uses
- * every one. The rest are counted: those Deezer has nothing for, and those not looked up
+ * fits shows it, ringed and tagged as a suggestion, to use or dismiss in one click, or to
+ * choose another in the photo editor; *Use all* uses every one. The rest are counted: those Deezer has nothing for, and those not looked up
  * yet, which are looked up as their songs come up next, or all at once on opening Clean
  * up, as Settings → Deezer says. While Deezer is asked, it reads again every few seconds.
  */
 
-import { CircleNotchIcon, SparkleIcon, UserCircleIcon } from "@phosphor-icons/react";
+import { CircleNotchIcon, UserCircleIcon } from "@phosphor-icons/react";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { type MissingPhoto, api } from "../api";
 import { photosToUseOf } from "../library/cleanUp";
 import { hrefOf } from "../routes";
+import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { Cover } from "./Cover";
+import { SuggestedFrame } from "./SuggestedFrame";
 
 const READ_EVERY_MS = 3000;
 
@@ -29,6 +31,8 @@ export function FindPhotos({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // The artist whose photo is chosen in the photo editor, if any.
+  const [changing, setChanging] = useState<MissingPhoto>();
   const readAgain = useEffectEvent(onChanged);
   // Opened, every artist with no photo is looked up, while the household has every one be.
   useEffect(() => {
@@ -75,6 +79,18 @@ export function FindPhotos({
       onChanged();
     }
   };
+  const dismiss = async (artist: MissingPhoto & { readonly suggested: string }) => {
+    setBusy(true);
+    setError("");
+    try {
+      await api.dismissArtistPicture(artist.artist_id, artist.suggested);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setBusy(false);
+      onChanged();
+    }
+  };
   return (
     <section className="clean-up-section" aria-labelledby="find-photos-title">
       <header className="clean-up-head">
@@ -113,18 +129,21 @@ export function FindPhotos({
         <ul className="photo-suggestions" aria-label="Photos suggested">
           {suggested.map((each) => (
             <li key={each.artist_id} className="photo-suggestion-item">
-              <div className="photo-suggestion-frame">
+              <SuggestedFrame
+                of={each.name}
+                why={
+                  each.picked ? "An AI model picked this" : "Going by this artist's name on Deezer"
+                }
+                picked={each.picked}
+                busy={busy}
+                onUse={() => void use([each])}
+                onDismiss={() => void dismiss(each)}
+                onChange={() => {
+                  setChanging(each);
+                }}
+              >
                 <Cover cover={each.suggested} className="photo-suggestion-picture" />
-                <span className="photo-suggestion-tag" aria-hidden>
-                  {each.picked ? (
-                    <>
-                      <SparkleIcon weight="fill" /> AI pick
-                    </>
-                  ) : (
-                    "Suggested"
-                  )}
-                </span>
-              </div>
+              </SuggestedFrame>
               <a
                 className="photo-suggestion-name"
                 href={hrefOf({ view: "artist", name: each.name })}
@@ -134,15 +153,6 @@ export function FindPhotos({
               <span className="tidy-meta">
                 {each.songs === 1 ? "1 song" : `${String(each.songs)} songs`}
               </span>
-              <button
-                type="button"
-                className="secondary outline dialog-button"
-                aria-label={`Use the photo suggested for ${each.name}`}
-                disabled={busy}
-                onClick={() => void use([each])}
-              >
-                Use
-              </button>
             </li>
           ))}
         </ul>
@@ -165,6 +175,17 @@ export function FindPhotos({
             </>
           )}
         </p>
+      )}
+      {changing !== undefined && (
+        <ArtistPhotoEditor
+          artistId={changing.artist_id}
+          name={changing.name}
+          shown={null}
+          onChanged={onChanged}
+          onClose={() => {
+            setChanging(undefined);
+          }}
+        />
       )}
     </section>
   );

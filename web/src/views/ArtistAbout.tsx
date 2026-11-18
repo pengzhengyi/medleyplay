@@ -2,7 +2,8 @@
  * @file What is known of an artist, under its page's heading: its photo, or covers of
  * its albums, who MusicBrainz says it is, the other names it goes by, and where to
  * read more. An artist linked to MusicBrainz with no photo shows one suggested from
- * Deezer instead of its covers, to use in one click, while Deezer is on.
+ * Deezer instead of its covers, to use in one click, while Deezer is on; and its photo,
+ * or its covers while it has none, open the photo editor from their tools.
  *
  * The links only open the sites in a new tab; nothing here asks them anything.
  */
@@ -10,11 +11,13 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 
-import type { KnownArtist, Track } from "../api";
+import { type KnownArtist, type Track, coverUrl } from "../api";
 import { initialOf } from "../format";
 import { albumsOf, fold } from "../library/views";
 import { hrefOf } from "../routes";
+import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { Cover } from "./Cover";
+import { PictureFrame } from "./PictureFrame";
 import { SuggestedPhoto } from "./SuggestedPhoto";
 
 /** How many album covers the mosaic shows. */
@@ -73,8 +76,8 @@ function placesOf(name: string, artist: KnownArtist | undefined) {
 /**
  * About the artist `name`: `songs` are its songs, `artist` the one it is linked to,
  * if any, and `toLink` says whether it could be linked to one on Clean up.
- * `onPhotoUsed`, given, offers a photo suggested for an artist with none, and is
- * called once it is used.
+ * `onPhotoUsed`, given, offers a photo suggested for an artist with none and a way to
+ * replace its photo, and is called once a photo is used.
  */
 export function ArtistAbout({
   name,
@@ -94,6 +97,7 @@ export function ArtistAbout({
     .slice(0, MOSAIC);
   const others = artist === undefined ? [] : otherNames(artist, name);
   const [allNames, setAllNames] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   const hidden = allNames ? 0 : Math.max(0, others.length - NAMES_SHOWN);
   const photo = artist?.photo ?? null;
   const credit = overHttps(artist?.photo_page ?? null);
@@ -110,20 +114,49 @@ export function ArtistAbout({
       )}
     </div>
   );
+  const shown =
+    photo === null ? (
+      mosaic
+    ) : (
+      <div className="artist-art tiles-1" role="img" aria-label={`Photo of ${name}`}>
+        <Cover cover={photo} className="artist-tile">
+          <span className="artist-initial">{initialOf(name)}</span>
+        </Cover>
+      </div>
+    );
+  // A linked artist's photo, or its covers while it has none, opens the photo editor.
+  const framed =
+    artist === undefined || onPhotoUsed === undefined ? (
+      shown
+    ) : (
+      <PictureFrame
+        className="artist-frame"
+        replaceLabel={photo === null ? "Add a photo" : "Replace the photo"}
+        save={photo === null ? undefined : { href: coverUrl(photo), name }}
+        onReplace={() => {
+          setReplacing(true);
+        }}
+      >
+        {shown}
+      </PictureFrame>
+    );
   return (
     <section className="artist-about" aria-label="About the artist">
-      {photo === null ? (
-        artist !== undefined && onPhotoUsed !== undefined ? (
-          <SuggestedPhoto artistId={artist.id} name={name} fallback={mosaic} onUsed={onPhotoUsed} />
-        ) : (
-          mosaic
-        )
+      {photo === null && artist !== undefined && onPhotoUsed !== undefined ? (
+        <SuggestedPhoto artistId={artist.id} name={name} fallback={framed} onUsed={onPhotoUsed} />
       ) : (
-        <div className="artist-art tiles-1" role="img" aria-label={`Photo of ${name}`}>
-          <Cover cover={photo} className="artist-tile">
-            <span className="artist-initial">{initialOf(name)}</span>
-          </Cover>
-        </div>
+        framed
+      )}
+      {replacing && artist !== undefined && onPhotoUsed !== undefined && (
+        <ArtistPhotoEditor
+          artistId={artist.id}
+          name={name}
+          shown={photo}
+          onChanged={onPhotoUsed}
+          onClose={() => {
+            setReplacing(false);
+          }}
+        />
       )}
       <div className="artist-facts">
         {artist !== undefined && <p className="artist-who">{describe(artist)}</p>}

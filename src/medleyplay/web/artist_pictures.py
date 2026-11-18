@@ -11,11 +11,17 @@ from typing import Annotated
 from fastapi import APIRouter, Path, status
 from pydantic import BaseModel, Field
 
-from medleyplay.application.artist_pictures import ArtistPictures, PicturePick
+from medleyplay.application.artist_pictures import (
+    MAX_FIND_TRACKS,
+    ArtistPictures,
+    MissingPhoto,
+    PicturePick,
+)
 from medleyplay.plugin_api import MAX_HINT
 from medleyplay.web.deps import ArtistPicturesDep, SignedInAccount
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
+photos_router = APIRouter(prefix="/api/artist-photos", tags=["artists"])
 
 type _ArtistId = Annotated[str, Path(max_length=64)]
 
@@ -128,3 +134,65 @@ def choose(
 ) -> None:
     """Ask an AI model which picture found is of the artist; nothing is changed."""
     service.choose(me, artist_id, body.hint)
+
+
+class MissingPhotoOut(BaseModel):
+    """An artist linked to MusicBrainz with no photo, and the photo suggested for it."""
+
+    artist_id: str
+    name: str
+    songs: int
+    suggested: str | None = Field(description="The cover suggested as its photo, if any.")
+    picked: bool = Field(description="Whether an AI model picked the one suggested.")
+    found: bool = Field(description="Whether Deezer was asked about it.")
+    finding: bool
+
+    @staticmethod
+    def of(missing: MissingPhoto) -> "MissingPhotoOut":
+        """Return an artist with no photo as the API shows it."""
+        return MissingPhotoOut(
+            artist_id=missing.artist_id,
+            name=missing.name,
+            songs=missing.songs,
+            suggested=missing.suggested,
+            picked=missing.picked,
+            found=missing.found,
+            finding=missing.finding,
+        )
+
+
+class MissingPhotosOut(BaseModel):
+    """Every artist linked to MusicBrainz with no photo, those with a photo suggested first."""
+
+    artists: list[MissingPhotoOut]
+
+
+class FindPhotosIn(BaseModel):
+    """The songs whose artists with no photo to look up, or `null` for every such artist."""
+
+    track_ids: list[int] | None = Field(default=None, max_length=MAX_FIND_TRACKS)
+
+
+class FoundPhotosOut(BaseModel):
+    """How many artists Deezer is asked about."""
+
+    asked: int
+
+
+@photos_router.get("/missing")
+def missing_photos(_: SignedInAccount, service: ArtistPicturesDep) -> MissingPhotosOut:
+    """Return every artist linked to MusicBrainz with no photo, and the photo suggested."""
+    return MissingPhotosOut(artists=[MissingPhotoOut.of(each) for each in service.missing()])
+
+
+@photos_router.post("/find")
+def find_photos(
+    body: FindPhotosIn, me: SignedInAccount, service: ArtistPicturesDep
+) -> FoundPhotosOut:
+    """Ask Deezer about the artists with no photo never looked up, as the household chose.
+
+    The songs up next ask about their artists while the household has those looked up;
+    `null` asks about every one while it has every one looked up; otherwise, or while
+    Deezer is off, nothing is asked.
+    """
+    return FoundPhotosOut(asked=service.find_missing(me, body.track_ids))

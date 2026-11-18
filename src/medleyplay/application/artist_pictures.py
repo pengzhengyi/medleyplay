@@ -12,15 +12,20 @@ Asking again among the same pictures with the same note asks nothing. The pictur
 suggested is the model's pick, else the one whose artist goes by one of the artist's
 names, most followed first; the household may have a model asked as soon as pictures
 are found.
+
+Without anyone asking, the site is asked about the artists linked to MusicBrainz that
+have no photo and were never looked up: those of the songs up next, or every one, as
+the household chooses in Settings; each is a Job of the site's lane, a moment apart.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 from typing import Final
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
@@ -34,6 +39,7 @@ from medleyplay.domain.artists import PictureSite, artist_key, likeliest_picture
 from medleyplay.domain.enrichers import AI_DETAILS
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
+from medleyplay.domain.settings import PhotoSearch
 from medleyplay.persistence.schema import (
     ArtistAliasRow,
     ArtistHouseholdRow,
@@ -173,6 +179,27 @@ class ArtistPictures:
     auto_pick: bool = False
 
 
+@dataclass(frozen=True)
+class MissingPhoto:
+    """An artist linked to MusicBrainz with no photo, how many songs it has, and its suggestion.
+
+    `suggested` is the cover suggested as its photo, `picked` whether an AI model picked
+    it, `found` whether the site was asked about it, and `finding` whether it is now.
+    """
+
+    artist_id: str
+    name: str
+    songs: int
+    suggested: str | None
+    picked: bool
+    found: bool
+    finding: bool
+
+
+MAX_FIND_TRACKS: Final = 50
+"""The most songs whose artists are asked about at once."""
+
+
 class ArtistPictureService:
     """Finds pictures of an artist on the site the household turned on."""
 
@@ -255,7 +282,6 @@ class ArtistPictureService:
             names = _every_name_of(db, artist_id)
         found = () if row is None else _pictures_of(row)
         pick = None if row is None else _pick_of(row, found)
-        likeliest = likeliest_picture(names, [(each.name, each.fans) for each in found])
         finding = self._jobs.latest(FIND_PICTURES_KIND, find_pictures_target(artist_id))
         choosing = self._jobs.latest(CHOOSE_PICTURE_KIND, choose_picture_target(artist_id))
         asking = [job for job in (finding, choosing) if job is not None and job.state.is_active]
@@ -273,11 +299,89 @@ class ArtistPictureService:
             may_choose=ai
             and bool(found)
             and CHOOSER in self._plugins.available_keys().get(PICTURE_CHOOSER.name, []),
-            suggested=pick.cover
-            if pick is not None
-            else (None if likeliest is None else found[likeliest].cover),
+            suggested=_suggested(names, found, pick),
             auto_pick=settings.pick_pictures_by_ai,
         )
+
+    def missing(self) -> tuple[MissingPhoto, ...]:
+        """Return every artist linked to MusicBrainz with no photo, suggested ones first.
+
+        Then most songs first.
+        """
+        with self._units() as db:
+            songs = _without_photo(db, None)
+            rows = {
+                row.artist_id: row
+                for row in db.scalars(
+                    select(ArtistPictureSearchRow).where(
+                        ArtistPictureSearchRow.artist_id.in_(songs)
+                        & (ArtistPictureSearchRow.site == SITE.value)
+                    )
+                )
+            }
+            named = {artist_id: _name_of(db, artist_id) for artist_id in songs}
+            names = {artist_id: _every_name_of(db, artist_id) for artist_id in songs}
+        found: list[MissingPhoto] = []
+        for artist_id, count in songs.items():
+            row = rows.get(artist_id)
+            pictures = () if row is None else _pictures_of(row)
+            pick = None if row is None else _pick_of(row, pictures)
+            found.append(
+                MissingPhoto(
+                    artist_id=artist_id,
+                    name=named[artist_id],
+                    songs=count,
+                    suggested=_suggested(names[artist_id], pictures, pick),
+                    picked=pick is not None,
+                    found=row is not None,
+                    finding=self._finding(artist_id),
+                )
+            )
+        found.sort(key=lambda each: (each.suggested is None, -each.songs, each.name))
+        return tuple(found)
+
+    def find_missing(self, caller: Account, track_ids: Iterable[int] | None) -> int:
+        """Ask the site about the artists with no photo never looked up; return how many.
+
+        `track_ids` names the songs whose artists are asked about, the songs up next,
+        while the household has those asked about; `None` asks about every one, while
+        the household has every one asked about. Otherwise, or while the site is off,
+        nothing is asked.
+        """
+        wanted = None if track_ids is None else list(dict.fromkeys(track_ids))
+        if wanted is not None and len(wanted) > MAX_FIND_TRACKS:
+            message = f"Ask about the artists of at most {MAX_FIND_TRACKS} songs at once."
+            raise InvalidInputError(message)
+        with self._units() as db:
+            settings = read_settings(db)
+            choice = PhotoSearch.MISSING if wanted is None else PhotoSearch.UP_NEXT
+            allowed = (
+                SITE in settings.picture_sites
+                and settings.find_artist_photos in {choice, PhotoSearch.MISSING}
+                and SITE.value in self._plugins.available_keys().get(PICTURE_FINDER.name, [])
+            )
+            if not allowed:
+                return 0
+            looked = set(
+                db.scalars(
+                    select(ArtistPictureSearchRow.artist_id).where(
+                        ArtistPictureSearchRow.site == SITE.value
+                    )
+                )
+            )
+            asking = [
+                (artist_id, _name_of(db, artist_id))
+                for artist_id in _without_photo(db, wanted)
+                if artist_id not in looked and not self._finding(artist_id)
+            ]
+        for artist_id, name in asking:
+            request = FindPicturesJob(artist_id=artist_id, name=name, finder=SITE.value)
+            self._jobs.submit(self._kinds.find, find_pictures_target(artist_id), request, caller.id)
+        return len(asking)
+
+    def _finding(self, artist_id: str) -> bool:
+        job = self._jobs.latest(FIND_PICTURES_KIND, find_pictures_target(artist_id))
+        return job is not None and job.state.is_active
 
 
 def _name_of(db: Session, artist_id: str) -> str:
@@ -306,6 +410,34 @@ def _pictures_of(row: ArtistPictureSearchRow) -> tuple[FoundPicture, ...]:
         )
         for each in row.pictures
     )
+
+
+def _suggested(
+    names: list[str], found: tuple[FoundPicture, ...], pick: PicturePick | None
+) -> str | None:
+    """Return the cover suggested as the artist's photo: the pick, else the likeliest."""
+    if pick is not None:
+        return pick.cover
+    likeliest = likeliest_picture(names, [(each.name, each.fans) for each in found])
+    return None if likeliest is None else found[likeliest].cover
+
+
+def _without_photo(db: Session, track_ids: list[int] | None) -> dict[str, int]:
+    """Return the artists linked to MusicBrainz with no photo, and how many songs each has.
+
+    With `track_ids`, only the artists of those songs.
+    """
+    bound = (
+        select(LibraryArtistRow.musicbrainz_id, func.count(func.distinct(TrackArtistRow.track_id)))
+        .join(TrackArtistRow, TrackArtistRow.artist_id == LibraryArtistRow.id)
+        .join(ArtistRow, ArtistRow.id == LibraryArtistRow.musicbrainz_id)
+        .outerjoin(ArtistHouseholdRow, ArtistHouseholdRow.artist_id == ArtistRow.id)
+        .where(ArtistRow.photo.is_(None) & ArtistHouseholdRow.photo.is_(None))
+        .group_by(LibraryArtistRow.musicbrainz_id)
+    )
+    if track_ids is not None:
+        bound = bound.where(TrackArtistRow.track_id.in_(track_ids))
+    return {artist_id: count for artist_id, count in db.execute(bound) if artist_id is not None}
 
 
 def _picked_among(row: ArtistPictureSearchRow, found: tuple[FoundPicture, ...]) -> bool:

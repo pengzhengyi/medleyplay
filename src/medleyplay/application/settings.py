@@ -18,7 +18,13 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
 from medleyplay.domain.lyrics import LyricsSite
-from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings, SplitAlbums
+from medleyplay.domain.settings import (
+    ALBUM_MINUTES,
+    PhotoSearch,
+    RemovalOrder,
+    Settings,
+    SplitAlbums,
+)
 from medleyplay.persistence.schema import SettingRow
 
 SETTINGS_ROW: Final = 1
@@ -38,6 +44,7 @@ class SettingsDocument(BaseModel):
     lyrics_sites: tuple[LyricsSite, ...] = Field(default=(), max_length=len(LyricsSite))
     picture_sites: tuple[PictureSite, ...] = Field(default=(), max_length=len(PictureSite))
     pick_pictures_by_ai: bool = False
+    find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
 
     @field_validator("lyrics_sites", "picture_sites")
     @classmethod
@@ -82,6 +89,7 @@ class SettingsService:
                 lyrics_sites=settings.lyrics_sites,
                 picture_sites=settings.picture_sites,
                 pick_pictures_by_ai=settings.pick_pictures_by_ai,
+                find_artist_photos=settings.find_artist_photos,
             ).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
@@ -137,5 +145,6 @@ def read_settings(db: Session) -> Settings:
         lyrics_sites=document.lyrics_sites,
         picture_sites=document.picture_sites,
         pick_pictures_by_ai=document.pick_pictures_by_ai,
+        find_artist_photos=document.find_artist_photos,
         revision=row.revision,
     )

@@ -414,6 +414,17 @@ used, and one used becomes the household's photo.
   one, as *Jay Chou* holds *周杰伦* in *周杰伦 Jay Chou*; a picture matching no name
   is never suggested. It is ringed in dashes and tagged *Suggested* or *AI pick*,
   says why on hover, and *Use photo* under it makes it the household's photo.
+- **Looked up without anyone asking:** Settings → Deezer → *Look up photos of artists
+  with none* (`find_artist_photos`) chooses which artists linked to MusicBrainz with
+  no photo, and never looked up, Deezer is asked about on its own: those of the song
+  playing and the one after it (*Songs up next*, the default), every one, asked when
+  Clean up opens (*Every artist*), or none (*Only when asked*). Each song is sent
+  once in the page; each artist is a Job of Deezer's lane, as when someone looks.
+- **A section of Clean up,** *Find artist photos*, counted in the rail's *Clean up*:
+  each artist with no photo for which a picture is suggested, ringed and tagged as on
+  its page, with its songs and *Use*; *Use all* uses every one. The rest are counted:
+  those Deezer has nothing that fits for, and those not looked up yet, pointing to
+  the setting.
 
 ## What an AI model suggests for an artist
 
@@ -580,7 +591,9 @@ not.
 | `GET /api/artists/{id}/pictures` | Signed in | The pictures Deezer last had of the artist, the most followed first, when they were found, whether Deezer is asked now and whether that waits for medleyplay to be Online, why the last asking failed, to the Account that asked and to admins, and whether Deezer is turned on; 404 for an artist no site named |
 | `POST /api/artists/{id}/pictures/choose` | Signed in | Ask an AI model which picture found is of the artist, with the listener's `hint`, up to 500 characters; 202, or 404 for an artist no site named, 409 before any picture is found, while no AI provider is set up, or while the `ai-details` plugin is off, 422 for a longer note. `GET …/pictures` then shows the `pick`: its cover, why, the model, its host, when, and the note; and `choosing`, `choice_failure`, and `may_choose`; and `suggested`, the cover suggested as its photo, and `auto_pick` |
 | `POST /api/artists/{id}/pictures/find` | Signed in | Ask Deezer for pictures of the artists going by the artist's name; 202, or 404 for an artist no site named, or 409 until Deezer is turned on in Settings or while the `deezer` plugin is off |
-| `PUT /api/settings` | Admin | `picture_sites`, the sites asked for pictures of an artist: `[]` or `["deezer"]`, and `pick_pictures_by_ai`, whether a model is asked as soon as pictures are found; left out, each stays as saved |
+| `PUT /api/settings` | Admin | `picture_sites`, the sites asked for pictures of an artist: `[]` or `["deezer"]`; `pick_pictures_by_ai`, whether a model is asked as soon as pictures are found; and `find_artist_photos`, which artists with no photo are looked up on their own: `up_next`, `missing`, or `off`; left out, each stays as saved |
+| `GET /api/artist-photos/missing` | Signed in | Every artist linked to MusicBrainz with no photo, those with a photo suggested first, then most songs: its name, songs, the cover suggested, whether an AI model picked it, whether Deezer was asked about it, and whether it is now |
+| `POST /api/artist-photos/find` | Signed in | Ask Deezer about the artists with no photo, never looked up, of up to 50 songs (`track_ids`), while the household has the songs up next looked up, or of every one for `null`, while it has every one looked up; answers how many were asked about, 0 while Deezer is off |
 | `POST /api/artists/{id}/suggestion` | Signed in | Ask an AI model which name to show an artist by, and who it is; 202, or 404 for an artist no site named, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked about it already |
 | `GET /api/artists/{id}/suggestion` | Signed in | Whether a model is asked about the artist and whether that waits for medleyplay to be Online, what it last suggested, with the model that answered, and why the last asking failed, to the Account that asked and to admins |
 

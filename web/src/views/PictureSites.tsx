@@ -5,13 +5,33 @@
  * Deezer is asked only when someone looks for a photo of an artist, or opens the page of
  * one with none, by the artist's name, through its public API. A second switch has an AI
  * model asked which picture is of the artist as soon as they are found, rather than when
- * someone asks. Each choice saves at once.
+ * someone asks, and a choice says which artists with no photo are looked up without anyone
+ * asking, for Clean up to suggest a photo of each. Each choice saves at once.
  */
 
 import { useState } from "react";
 
-import type { Settings } from "../api";
+import type { PhotoSearch, Settings } from "../api";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+
+/** Which artists with no photo are looked up without anyone asking, and what each means. */
+const SEARCHES: readonly {
+  readonly value: PhotoSearch;
+  readonly label: string;
+  readonly about: string;
+}[] = [
+  {
+    value: "up_next",
+    label: "Songs up next",
+    about: "The artists of the song playing and the one after it.",
+  },
+  {
+    value: "missing",
+    label: "Every artist",
+    about: "Every artist linked to MusicBrainz with no photo, a few requests at a time.",
+  },
+  { value: "off", label: "Only when asked", about: "Only an artist whose photo you look for." },
+];
 
 /** The switches that turn Deezer, and picking its pictures by AI, on or off, for an admin. */
 export function PictureSites({
@@ -76,6 +96,27 @@ export function PictureSites({
         Off, the AI is asked only when you press Pick by AI. On, it is asked once for each artist
         whose pictures are found, which your AI provider may charge for.
       </small>
+      <fieldset className="split-albums" disabled={saving || !on}>
+        <legend>Look up photos of artists with none</legend>
+        {SEARCHES.map((search) => (
+          <label key={search.value} className="split-albums-choice">
+            <input
+              type="radio"
+              name="find-artist-photos"
+              value={search.value}
+              checked={settings.find_artist_photos === search.value}
+              onChange={() => void save({ find_artist_photos: search.value })}
+            />
+            <span>
+              <strong>{search.label}</strong>
+              <small>{search.about}</small>
+            </span>
+          </label>
+        ))}
+        <small className="hint">
+          A photo found for each waits in Clean up, to use in one click.
+        </small>
+      </fieldset>
       {error !== "" && <p role="alert">{error}</p>}
       <p className="hint saved" role="status">
         {note}

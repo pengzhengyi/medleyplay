@@ -11,6 +11,19 @@ ALBUM_MINUTES: Final = 20
 """How long a file must be, by default, to be guessed an album."""
 
 
+class PhotoSearch(StrEnum):
+    """Which artists with no photo the picture sites are asked about without anyone asking.
+
+    `UP_NEXT` asks about the artists of the song playing and the one after it; `MISSING`
+    about every artist linked to MusicBrainz that has none; `OFF` about none, so a site
+    is asked only when someone looks for a photo.
+    """
+
+    OFF = "off"
+    UP_NEXT = "up_next"
+    MISSING = "missing"
+
+
 class SplitAlbums(StrEnum):
     """What becomes of a long file a song list was found for, while it is one file.
 
@@ -40,7 +53,8 @@ class Settings:
     guesses none, so it is a song. `split_albums` says what becomes of a long
     file a song list was found for. `picture_sites` are the sites that may be asked for
     pictures of an artist, and `pick_pictures_by_ai` says whether an AI model is asked
-    which is of the artist as soon as they are found. `lyrics_sites` are the sites
+    which is of the artist as soon as they are found; `find_artist_photos` says which
+    artists with no photo they are asked about without anyone asking. `lyrics_sites` are the sites
     asked for a song's lyrics, in turn, when LRCLIB has none.
     """
 
@@ -51,6 +65,7 @@ class Settings:
     lyrics_sites: tuple[LyricsSite, ...] = ()
     picture_sites: tuple[PictureSite, ...] = ()
     pick_pictures_by_ai: bool = False
+    find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
     revision: int = 0
 
     @property

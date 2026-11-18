@@ -1192,6 +1192,53 @@ button[aria-disabled="true"] {
   font-size: 0.75rem;
 }
 
+/* Clean up's photos suggested: a grid of artists, each ringed and tagged as on its page. */
+.photo-suggestions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 1.25rem 1rem;
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-suggestion-item {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  text-align: center;
+  list-style: none;
+}
+
+.photo-suggestion-picture {
+  display: block;
+  width: 6rem;
+  height: 6rem;
+  margin: 0;
+  border-radius: 50%;
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+  object-fit: cover;
+}
+
+.photo-suggestion-item .photo-suggestion-frame {
+  margin-bottom: 0.6rem;
+}
+
+.photo-suggestion-name {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.photo-suggestion-item .dialog-button {
+  margin: 0.15rem 0 0;
+  padding: 0.15rem 0.9rem;
+  font-size: 0.8rem;
+}
+
 .artist-credit {
   margin: 0.25rem 0 0;
   font-size: 0.75rem;

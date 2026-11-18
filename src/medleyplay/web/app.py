@@ -111,6 +111,7 @@ ROUTERS: Final = (
     artists.router,
     artists.artists_router,
     artist_pictures.router,
+    artist_pictures.photos_router,
     artist_splits.router,
     shared_names.router,
     album_covers.router,

@@ -1,0 +1,142 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { MissingPhoto } from "../api";
+import { toDoOf } from "../library/cleanUp";
+import { serve } from "../testing/server";
+import { CleanUpView } from "./CleanUpView";
+
+const FIND = "POST /api/artist-photos/find";
+
+/** An artist with no photo, by `name`, with `change` on top: not looked up yet. */
+function missing(artistId: string, name: string, change: Partial<MissingPhoto> = {}) {
+  return {
+    artist_id: artistId,
+    name,
+    songs: 3,
+    suggested: null,
+    picked: false,
+    found: false,
+    finding: false,
+    ...change,
+  } satisfies MissingPhoto;
+}
+
+/** The Beatles, with a photo suggested by name; 周杰伦, by an AI's pick. */
+const SUGGESTED = [
+  missing("beatles", "The Beatles", { suggested: "picture-beatles", found: true }),
+  missing("chou", "周杰伦", { suggested: "picture-chou", picked: true, found: true, songs: 1 }),
+];
+
+function cleanUp(artists: readonly MissingPhoto[]) {
+  const reload = vi.fn();
+  render(
+    <CleanUpView
+      tidy={{ names: [], reload: vi.fn() }}
+      artistNames={undefined}
+      missingPhotos={{ artists, reload }}
+    />,
+  );
+  return { reload };
+}
+
+const section = () => within(screen.getByRole("region", { name: /^Find artist photos/u }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("finding artist photos in Clean up", () => {
+  it("counts each photo suggested", () => {
+    expect(
+      toDoOf([], undefined, undefined, undefined, undefined, [...SUGGESTED, missing("x", "X")]),
+    ).toBe(2);
+  });
+
+  it("shows each photo suggested, tagged, with its artist's songs", () => {
+    serve({ [FIND]: { body: { asked: 0 } } });
+    cleanUp(SUGGESTED);
+
+    const [beatles, chou] = within(
+      section().getByRole("list", { name: "Photos suggested" }),
+    ).getAllByRole("listitem");
+
+    expect(within(beatles ?? document.body).getByText("Suggested")).toBeVisible();
+    expect(within(beatles ?? document.body).getByText("3 songs")).toBeVisible();
+    expect(within(chou ?? document.body).getByText("AI pick")).toBeVisible();
+    expect(within(chou ?? document.body).getByRole("link", { name: "周杰伦" })).toHaveAttribute(
+      "href",
+      "#/artist?name=%E5%91%A8%E6%9D%B0%E4%BC%A6",
+    );
+  });
+
+  it("uses a photo suggested in one click", async () => {
+    const sent: unknown[] = [];
+    serve({
+      [FIND]: { body: { asked: 0 } },
+      "POST /api/artists/beatles/photo/cover": (body) => {
+        sent.push(body);
+        return { body: null };
+      },
+    });
+    const { reload } = cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the photo suggested for The Beatles" }),
+    );
+
+    expect(sent).toEqual([{ cover: "picture-beatles" }]);
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it("uses every photo suggested at once", async () => {
+    const { calls } = serve({
+      [FIND]: { body: { asked: 0 } },
+      "POST /api/artists/beatles/photo/cover": { body: null },
+      "POST /api/artists/chou/photo/cover": { body: null },
+    });
+    cleanUp(SUGGESTED);
+
+    await userEvent.click(section().getByRole("button", { name: "Use all 2" }));
+
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        "POST /api/artists/beatles/photo/cover",
+        "POST /api/artists/chou/photo/cover",
+      ]),
+    );
+  });
+
+  it("counts the artists Deezer has nothing for and those not looked up, saying where that is set", () => {
+    serve({ [FIND]: { body: { asked: 0 } } });
+    cleanUp([missing("a", "A", { found: true }), missing("b", "B"), missing("c", "C")]);
+
+    expect(
+      section().getByText(
+        /^1 artist has no picture on Deezer that fits; 2 artists aren't looked up yet\./u,
+      ),
+    ).toBeVisible();
+    expect(section().getByRole("link", { name: "Settings → Deezer" })).toHaveAttribute(
+      "href",
+      "#/settings?section=deezer",
+    );
+  });
+
+  it("asks once, on opening, for every artist with no photo to be looked up", async () => {
+    const sent: unknown[] = [];
+    serve({
+      [FIND]: (body) => {
+        sent.push(body);
+        return { body: { asked: 1 } };
+      },
+    });
+    const { reload } = cleanUp([missing("b", "B")]);
+
+    await vi.waitFor(() => {
+      expect(reload).toHaveBeenCalled();
+    });
+
+    expect(sent).toEqual([{ track_ids: null }]);
+  });
+});

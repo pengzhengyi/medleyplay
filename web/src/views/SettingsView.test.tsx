@@ -291,6 +291,24 @@ describe("the Deezer section", () => {
     expect(sent).toEqual([{ ...deezerOn, pick_pictures_by_ai: true }]);
   });
 
+  it("looks up photos of every artist with none, once chosen", async () => {
+    const sent: unknown[] = [];
+    const deezerOn: Settings = { ...LIMIT_20, picture_sites: ["deezer"] };
+    open(true, {
+      "GET /api/settings": { body: deezerOn },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...deezerOn, find_artist_photos: "missing", revision: 3 } };
+      },
+    });
+    const deezer = within(screen.getByRole("region", { name: "Deezer" }));
+
+    await userEvent.click(await deezer.findByRole("radio", { name: /^Every artist/u }));
+
+    expect(await deezer.findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...deezerOn, find_artist_photos: "missing" }]);
+  });
+
   it("offers no AI pick while Deezer is off", async () => {
     open(true);
     const deezer = within(screen.getByRole("region", { name: "Deezer" }));

@@ -56,23 +56,25 @@ export function SuggestedPhoto({
   };
   return (
     <div className="photo-suggestion">
-      <div
-        className="artist-art tiles-1 photo-suggestion-art"
-        role="img"
-        aria-label={`Suggested photo of ${name}: ${why}`}
-        title={why}
-      >
-        <Cover cover={suggested} className="artist-tile" />
+      <div className="photo-suggestion-frame">
+        <div
+          className="artist-art tiles-1 photo-suggestion-art"
+          role="img"
+          aria-label={`Suggested photo of ${name}: ${why}`}
+          title={why}
+        >
+          <Cover cover={suggested} className="artist-tile" />
+        </div>
+        <span className="photo-suggestion-tag" aria-hidden>
+          {pick === null ? (
+            "Suggested"
+          ) : (
+            <>
+              <SparkleIcon weight="fill" /> AI pick
+            </>
+          )}
+        </span>
       </div>
-      <span className="photo-suggestion-tag" aria-hidden>
-        {pick === null ? (
-          "Suggested"
-        ) : (
-          <>
-            <SparkleIcon weight="fill" /> AI pick
-          </>
-        )}
-      </span>
       <button
         type="button"
         className="dialog-button photo-suggestion-use"

@@ -1145,11 +1145,14 @@ button[aria-disabled="true"] {
  * the ring's lower edge, and Use photo under it.
  */
 .photo-suggestion {
-  position: relative;
   display: grid;
   flex: none;
   justify-items: center;
   gap: 0.75rem;
+}
+
+.photo-suggestion-frame {
+  position: relative;
 }
 
 .photo-suggestion-art {
@@ -1159,7 +1162,7 @@ button[aria-disabled="true"] {
 
 .photo-suggestion-tag {
   position: absolute;
-  top: 6.6rem;
+  bottom: -0.55rem;
   left: 50%;
   display: inline-flex;
   align-items: center;

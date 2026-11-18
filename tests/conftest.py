@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
-from medleyplay.application.artist_pictures import ArtistPictureService, find_pictures_kind
+from medleyplay.application.artist_pictures import ArtistPictureService, artist_picture_kinds
 from medleyplay.application.artist_splits import ArtistSplitService
 from medleyplay.application.artists import (
     ArtistKinds,
@@ -332,7 +332,7 @@ def artist_pictures(
     tmp_path: Path,
 ) -> ArtistPictureService:
     return ArtistPictureService(
-        units, plugins, jobs, find_pictures_kind(clock, tmp_path / "data" / "covers")
+        units, plugins, jobs, artist_picture_kinds(clock, tmp_path / "data" / "covers")
     )
 
 

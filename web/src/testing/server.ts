@@ -713,6 +713,10 @@ export const UNKNOWN_PICTURES: ArtistPictures = {
   waiting: false,
   failure: null,
   may_find: true,
+  pick: null,
+  choosing: false,
+  choice_failure: null,
+  may_choose: false,
 };
 
 /**

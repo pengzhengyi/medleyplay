@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pick by AI** in an artist's Deezer pictures — an AI model is asked which
+  picture is of the artist, from each picture's artist name and following and what
+  is known of the artist; *Refine* adds a note saying which artist you mean. The
+  pick is marked and takes the focus. New: `POST /api/artists/{id}/pictures/choose`
+  and the `pick` in `GET /api/artists/{id}/pictures` (migration 0055).
+
 - **Artists sharing a name** — a section of Clean up lists each name MusicBrainz
   knows two or more artists by exactly, and each name already naming several, with
   its songs by album. Choose who each album is by, one of the name's artists or one

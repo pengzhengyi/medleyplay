@@ -19,6 +19,7 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "split_albums": "approval",
         "lyrics_sites": [],
         "picture_sites": [],
+        "pick_pictures_by_ai": False,
         "revision": 0,
     }
 
@@ -152,6 +153,20 @@ def test_an_admin_turns_on_deezer_for_artist_pictures_and_saving_without_it_keep
 
     assert turned_on.json()["picture_sites"] == ["deezer"]
     assert saved.json()["picture_sites"] == ["deezer"]
+
+
+def test_an_admin_has_pictures_picked_by_ai_and_saving_without_it_keeps_it(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    turned_on = client.put(
+        "/api/settings", json={"storage_limit": None, "pick_pictures_by_ai": True, "revision": 0}
+    )
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert turned_on.json()["pick_pictures_by_ai"] is True
+    assert saved.json()["pick_pictures_by_ai"] is True
 
 
 def test_an_unknown_picture_site_is_refused(client: TestClient) -> None:

@@ -177,4 +177,19 @@ describe("finding an artist's pictures on Deezer", () => {
 
     expect(screen.queryByRole("button", { name: "Pick by AI" })).toBeNull();
   });
+
+  it("asks the AI at once, once, when the household has it pick as soon as found", async () => {
+    const { calls } = serve({
+      [PICTURES]: reading(beatlesPictures({ may_choose: true, auto_pick: true })),
+      [CHOOSE]: { body: null },
+    });
+    finder();
+
+    // Each asking reads again, so a second read shows whether it asked again.
+    await vi.waitFor(() => {
+      expect(calls.filter((call) => call === PICTURES).length).toBeGreaterThanOrEqual(2);
+    });
+
+    expect(calls.filter((call) => call === CHOOSE)).toHaveLength(1);
+  });
 });

@@ -2,16 +2,18 @@
  * @file *Deezer*, in Settings: whether Deezer is asked for pictures of an artist, to choose
  * its photo from.
  *
- * Deezer is asked only when someone looks for a photo of an artist, by the artist's name,
- * through its public API. The choice saves at once.
+ * Deezer is asked only when someone looks for a photo of an artist, or opens the page of
+ * one with none, by the artist's name, through its public API. A second switch has an AI
+ * model asked which picture is of the artist as soon as they are found, rather than when
+ * someone asks. Each choice saves at once.
  */
 
 import { useState } from "react";
 
-import type { PictureSite, Settings } from "../api";
+import type { Settings } from "../api";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 
-/** The switch that turns Deezer on or off, for an admin. */
+/** The switches that turn Deezer, and picking its pictures by AI, on or off, for an admin. */
 export function PictureSites({
   settings,
   onSettings,
@@ -28,13 +30,12 @@ export function PictureSites({
   }
   const on = settings.picture_sites.includes("deezer");
 
-  const turn = async (deezer: boolean) => {
+  const save = async (change: Partial<Settings>) => {
     setSaving(true);
     setNote("");
     setError("");
-    const sites: readonly PictureSite[] = deezer ? ["deezer"] : [];
     try {
-      const { outcome, settings: now } = await saveChange(settings, { picture_sites: sites });
+      const { outcome, settings: now } = await saveChange(settings, change);
       onSettings(now);
       setNote(outcome === "conflict" ? CHANGED_ELSEWHERE : "Saved.");
     } catch (failure) {
@@ -52,14 +53,28 @@ export function PictureSites({
           role="switch"
           checked={on}
           disabled={saving}
-          onChange={(event) => void turn(event.target.checked)}
+          onChange={(event) => void save({ picture_sites: event.target.checked ? ["deezer"] : [] })}
         />
         Find artist photos on Deezer
       </label>
       <small className="hint">
-        Asked by the artist's name when you look for a photo of an artist, a few requests at a time.
-        What Deezer has shows beside the other ways to add a photo; nothing changes until you use
-        one.
+        Asked by the artist's name when you look for a photo of an artist, or open the page of one
+        with none, a few requests at a time. A photo that fits is suggested there; nothing changes
+        until you use one.
+      </small>
+      <label className="lyrics-sites-switch">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={settings.pick_pictures_by_ai}
+          disabled={saving || !on}
+          onChange={(event) => void save({ pick_pictures_by_ai: event.target.checked })}
+        />
+        Pick by AI as soon as pictures are found
+      </label>
+      <small className="hint">
+        Off, the AI is asked only when you press Pick by AI. On, it is asked once for each artist
+        whose pictures are found, which your AI provider may charge for.
       </small>
       {error !== "" && <p role="alert">{error}</p>}
       <p className="hint saved" role="status">

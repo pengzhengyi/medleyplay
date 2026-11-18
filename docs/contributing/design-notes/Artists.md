@@ -404,6 +404,16 @@ used, and one used becomes the household's photo.
   with a dashed ring, says which model picked it and why, with the note, and takes
   the focus, so Enter uses it. The pick is kept until the pictures are found again;
   asking again with the same note among the same pictures asks nothing.
+- **Picked as soon as found,** when an admin turns on Settings → Deezer → *Pick by AI
+  as soon as pictures are found* (`pick_pictures_by_ai`): once pictures are found,
+  the client asks the model once, with no note, as it does an album's covers.
+- **A suggested photo on the artist's page:** an artist linked to MusicBrainz with no
+  photo shows a suggested one in place of its album covers, while Deezer is on,
+  looked up as the tab looks it up. It is the AI's pick, else the most followed
+  picture whose artist goes by one of the artist's names, exactly before holding
+  one, as *Jay Chou* holds *周杰伦* in *周杰伦 Jay Chou*; a picture matching no name
+  is never suggested. It is ringed in dashes and tagged *Suggested* or *AI pick*,
+  says why on hover, and *Use photo* under it makes it the household's photo.
 
 ## What an AI model suggests for an artist
 
@@ -568,9 +578,9 @@ not.
 | `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |
 | `POST /api/artists/{id}/photo/cover` | Signed in | Make a cover already kept the household's photo of the artist; 404 for no such cover |
 | `GET /api/artists/{id}/pictures` | Signed in | The pictures Deezer last had of the artist, the most followed first, when they were found, whether Deezer is asked now and whether that waits for medleyplay to be Online, why the last asking failed, to the Account that asked and to admins, and whether Deezer is turned on; 404 for an artist no site named |
-| `POST /api/artists/{id}/pictures/choose` | Signed in | Ask an AI model which picture found is of the artist, with the listener's `hint`, up to 500 characters; 202, or 404 for an artist no site named, 409 before any picture is found, while no AI provider is set up, or while the `ai-details` plugin is off, 422 for a longer note. `GET …/pictures` then shows the `pick`: its cover, why, the model, its host, when, and the note; and `choosing`, `choice_failure`, and `may_choose` |
+| `POST /api/artists/{id}/pictures/choose` | Signed in | Ask an AI model which picture found is of the artist, with the listener's `hint`, up to 500 characters; 202, or 404 for an artist no site named, 409 before any picture is found, while no AI provider is set up, or while the `ai-details` plugin is off, 422 for a longer note. `GET …/pictures` then shows the `pick`: its cover, why, the model, its host, when, and the note; and `choosing`, `choice_failure`, and `may_choose`; and `suggested`, the cover suggested as its photo, and `auto_pick` |
 | `POST /api/artists/{id}/pictures/find` | Signed in | Ask Deezer for pictures of the artists going by the artist's name; 202, or 404 for an artist no site named, or 409 until Deezer is turned on in Settings or while the `deezer` plugin is off |
-| `PUT /api/settings` | Admin | `picture_sites`, the sites asked for pictures of an artist: `[]` or `["deezer"]`; left out, they stay as saved |
+| `PUT /api/settings` | Admin | `picture_sites`, the sites asked for pictures of an artist: `[]` or `["deezer"]`, and `pick_pictures_by_ai`, whether a model is asked as soon as pictures are found; left out, each stays as saved |
 | `POST /api/artists/{id}/suggestion` | Signed in | Ask an AI model which name to show an artist by, and who it is; 202, or 404 for an artist no site named, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked about it already |
 | `GET /api/artists/{id}/suggestion` | Signed in | Whether a model is asked about the artist and whether that waits for medleyplay to be Online, what it last suggested, with the model that answered, and why the last asking failed, to the Account that asked and to admins |
 

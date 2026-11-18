@@ -44,6 +44,13 @@ class SettingsIn(BaseModel):
             "The sites that may be asked for pictures of an artist. Left out, they stay as saved."
         ),
     )
+    pick_pictures_by_ai: bool = Field(
+        default=False,
+        description=(
+            "Whether an AI model is asked which picture is of an artist as soon as they are"
+            " found, rather than when someone asks. Left out, it stays as saved."
+        ),
+    )
     revision: int = Field(ge=0)
 
 
@@ -56,6 +63,7 @@ class SettingsOut(BaseModel):
     split_albums: SplitAlbums
     lyrics_sites: tuple[LyricsSite, ...]
     picture_sites: tuple[PictureSite, ...]
+    pick_pictures_by_ai: bool
     revision: int
 
     @classmethod
@@ -68,6 +76,7 @@ class SettingsOut(BaseModel):
             split_albums=settings.split_albums,
             lyrics_sites=settings.lyrics_sites,
             picture_sites=settings.picture_sites,
+            pick_pictures_by_ai=settings.pick_pictures_by_ai,
             revision=settings.revision,
         )
 
@@ -106,6 +115,11 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
                 body.picture_sites
                 if "picture_sites" in body.model_fields_set
                 else saved_before.picture_sites
+            ),
+            pick_pictures_by_ai=(
+                body.pick_pictures_by_ai
+                if "pick_pictures_by_ai" in body.model_fields_set
+                else saved_before.pick_pictures_by_ai
             ),
             revision=body.revision,
         ),

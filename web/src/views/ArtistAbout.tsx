@@ -1,7 +1,8 @@
 /**
  * @file What is known of an artist, under its page's heading: its photo, or covers of
  * its albums, who MusicBrainz says it is, the other names it goes by, and where to
- * read more.
+ * read more. An artist linked to MusicBrainz with no photo shows one suggested from
+ * Deezer instead of its covers, to use in one click, while Deezer is on.
  *
  * The links only open the sites in a new tab; nothing here asks them anything.
  */
@@ -14,6 +15,7 @@ import { initialOf } from "../format";
 import { albumsOf, fold } from "../library/views";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { SuggestedPhoto } from "./SuggestedPhoto";
 
 /** How many album covers the mosaic shows. */
 const MOSAIC = 4;
@@ -71,17 +73,21 @@ function placesOf(name: string, artist: KnownArtist | undefined) {
 /**
  * About the artist `name`: `songs` are its songs, `artist` the one it is linked to,
  * if any, and `toLink` says whether it could be linked to one on Clean up.
+ * `onPhotoUsed`, given, offers a photo suggested for an artist with none, and is
+ * called once it is used.
  */
 export function ArtistAbout({
   name,
   songs,
   artist,
   toLink,
+  onPhotoUsed,
 }: {
   readonly name: string;
   readonly songs: readonly Track[];
   readonly artist: KnownArtist | undefined;
   readonly toLink: boolean;
+  readonly onPhotoUsed?: () => void;
 }) {
   const covers = albumsOf(songs)
     .flatMap((album) => (album.cover === null ? [] : [album.cover]))
@@ -91,20 +97,27 @@ export function ArtistAbout({
   const hidden = allNames ? 0 : Math.max(0, others.length - NAMES_SHOWN);
   const photo = artist?.photo ?? null;
   const credit = overHttps(artist?.photo_page ?? null);
+  const mosaic = (
+    <div
+      className={`artist-art tiles-${String(covers.length)}`}
+      role="img"
+      aria-label={`Album covers of ${name}`}
+    >
+      {covers.length === 0 ? (
+        <span className="artist-initial">{initialOf(name)}</span>
+      ) : (
+        covers.map((cover) => <Cover key={cover} cover={cover} className="artist-tile" />)
+      )}
+    </div>
+  );
   return (
     <section className="artist-about" aria-label="About the artist">
       {photo === null ? (
-        <div
-          className={`artist-art tiles-${String(covers.length)}`}
-          role="img"
-          aria-label={`Album covers of ${name}`}
-        >
-          {covers.length === 0 ? (
-            <span className="artist-initial">{initialOf(name)}</span>
-          ) : (
-            covers.map((cover) => <Cover key={cover} cover={cover} className="artist-tile" />)
-          )}
-        </div>
+        artist !== undefined && onPhotoUsed !== undefined ? (
+          <SuggestedPhoto artistId={artist.id} name={name} fallback={mosaic} onUsed={onPhotoUsed} />
+        ) : (
+          mosaic
+        )
       ) : (
         <div className="artist-art tiles-1" role="img" aria-label={`Photo of ${name}`}>
           <Cover cover={photo} className="artist-tile">

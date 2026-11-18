@@ -49,6 +49,8 @@ def test_nothing_is_known_of_an_artists_pictures_until_asked(
         "choosing": False,
         "choice_failure": None,
         "may_choose": False,
+        "suggested": None,
+        "auto_pick": False,
     }
 
 

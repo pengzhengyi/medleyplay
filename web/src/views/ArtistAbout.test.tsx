@@ -1,9 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { KnownArtist } from "../api";
-import { knownArtistOf, trackOf } from "../testing/server";
+import { beatlesPictures, knownArtistOf, serve, trackOf } from "../testing/server";
 import { ArtistAbout } from "./ArtistAbout";
 
 /** The Beatles as MusicBrainz knows them, going by 披头士 and 甲壳虫乐队 too. */
@@ -179,5 +179,92 @@ describe("about an artist", () => {
       "href",
       "#/clean-up",
     );
+  });
+});
+
+describe("a photo suggested for an artist with none", () => {
+  const PICTURES = `GET /api/artists/${BEATLES.id}/pictures`;
+  const USE = `POST /api/artists/${BEATLES.id}/photo/cover`;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function about(onPhotoUsed = vi.fn()) {
+    render(
+      <ArtistAbout
+        name="The Beatles"
+        songs={[songOn(1, "Help!", "help.jpg")]}
+        artist={BEATLES}
+        toLink={false}
+        onPhotoUsed={onPhotoUsed}
+      />,
+    );
+    return onPhotoUsed;
+  }
+
+  it("stands in for the covers, saying it is a suggestion and why", async () => {
+    serve({ [PICTURES]: { body: beatlesPictures({ suggested: "picture-beatles" }) } });
+    about();
+
+    const photo = await screen.findByRole("img", { name: /^Suggested photo of The Beatles/u });
+
+    expect(photo).toHaveAccessibleName(
+      "Suggested photo of The Beatles: Deezer's The Beatles, 4.1M fans, going by this artist's name",
+    );
+    expect(screen.getByText("Suggested")).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Album covers of The Beatles" })).toBeNull();
+  });
+
+  it("says when the AI picked it, and why", async () => {
+    const pick = {
+      cover: "picture-tribute",
+      why: "The tribute act asked for",
+      hint: "",
+      model: "deepseek-flash",
+      host: "api.deepseek.com",
+      at: "2026-11-19T00:00:00Z",
+    };
+    serve({
+      [PICTURES]: { body: beatlesPictures({ suggested: "picture-tribute", pick }) },
+    });
+    about();
+
+    expect(
+      await screen.findByRole("img", {
+        name: "Suggested photo of The Beatles: deepseek-flash picked this: The tribute act asked for",
+      }),
+    ).toBeVisible();
+    expect(screen.getByText("AI pick")).toBeVisible();
+  });
+
+  it("is used in one click", async () => {
+    const sent: unknown[] = [];
+    serve({
+      [PICTURES]: { body: beatlesPictures({ suggested: "picture-beatles" }) },
+      [USE]: (body) => {
+        sent.push(body);
+        return { body: null };
+      },
+    });
+    const onPhotoUsed = about();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Use the suggested photo of The Beatles" }),
+    );
+
+    expect(sent).toEqual([{ cover: "picture-beatles" }]);
+    expect(onPhotoUsed).toHaveBeenCalled();
+  });
+
+  it("leaves the covers while nothing is suggested", async () => {
+    const { calls } = serve({ [PICTURES]: { body: beatlesPictures() } });
+    about();
+
+    await vi.waitFor(() => {
+      expect(calls).toContain(PICTURES);
+    });
+
+    expect(screen.getByRole("img", { name: "Album covers of The Beatles" })).toBeVisible();
   });
 });

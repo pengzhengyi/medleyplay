@@ -7,6 +7,7 @@ from medleyplay.domain.artists import (
     LookUp,
     artist_key,
     going_by_exactly,
+    likeliest_picture,
     may_look_up,
     queries_for,
     suggested,
@@ -133,3 +134,27 @@ def test_parts_going_by_two_artists_suggest_neither() -> None:
     other = Candidate(Artist("b2", "米津玄師", "", "", "JP"), 100, ())
 
     assert suggested("初音ミク/米津玄師", [miku, other]) is None
+
+
+def test_the_likeliest_picture_is_of_an_artist_going_by_one_of_the_names_most_followed_first() -> (
+    None
+):
+    pictures = [("The Beatles Tribute", 58_855), ("The Beatles", 120), ("the beatles", 4_100_000)]
+
+    assert likeliest_picture(["披头士", "The Beatles"], pictures) == 2
+
+
+def test_a_picture_going_by_a_name_exactly_beats_one_holding_it_however_followed() -> None:
+    pictures = [("The Beatles Tribute", 58_855), ("Beatles", 120)]
+
+    assert likeliest_picture(["Beatles"], pictures) == 1
+
+
+def test_a_picture_holding_a_name_is_likely_when_none_goes_by_one() -> None:
+    pictures = [("Queen Tribute", 10), ("周杰伦 Jay Chou", 58_855)]
+
+    assert likeliest_picture(["周杰伦"], pictures) == 1
+
+
+def test_no_picture_is_likely_when_none_goes_by_or_holds_a_name() -> None:
+    assert likeliest_picture(["The Beatles"], [("Queen", 9_000_000), ("A", None)]) is None

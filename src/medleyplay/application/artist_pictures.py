@@ -8,7 +8,10 @@ Settings, and nothing changes the artist's photo until the household uses a pict
 
 An AI model may be asked which picture is of the artist, with a note from the listener
 saying which artist they mean; its pick is kept until the pictures are found again.
-Asking again among the same pictures with the same note asks nothing.
+Asking again among the same pictures with the same note asks nothing. The picture
+suggested is the model's pick, else the one whose artist goes by one of the artist's
+names, most followed first; the household may have a model asked as soon as pictures
+are found.
 """
 
 from dataclasses import dataclass
@@ -27,7 +30,7 @@ from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.application.settings import read_settings
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.artists import PictureSite, artist_key
+from medleyplay.domain.artists import PictureSite, artist_key, likeliest_picture
 from medleyplay.domain.enrichers import AI_DETAILS
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
@@ -152,6 +155,8 @@ class ArtistPictures:
     that asked and to admins. `may_find` says the household turned the site on.
     `pick` is the picture an AI model picked, `choosing` says one is asked now,
     `choice_failure` why the last asking failed, and `may_choose` that one may be asked.
+    `suggested` is the cover suggested as the artist's photo, and `auto_pick` says the
+    household has a model asked as soon as pictures are found.
     """
 
     pictures: tuple[FoundPicture, ...]
@@ -164,6 +169,8 @@ class ArtistPictures:
     choosing: bool = False
     choice_failure: str | None = None
     may_choose: bool = False
+    suggested: str | None = None
+    auto_pick: bool = False
 
 
 class ArtistPictureService:
@@ -242,9 +249,13 @@ class ArtistPictureService:
         with self._units() as db:
             _name_of(db, artist_id)
             row = db.get(ArtistPictureSearchRow, (artist_id, SITE.value))
-            turned_on = SITE in read_settings(db).picture_sites
+            settings = read_settings(db)
+            turned_on = SITE in settings.picture_sites
             ai = is_set_up(db)
+            names = _every_name_of(db, artist_id)
         found = () if row is None else _pictures_of(row)
+        pick = None if row is None else _pick_of(row, found)
+        likeliest = likeliest_picture(names, [(each.name, each.fans) for each in found])
         finding = self._jobs.latest(FIND_PICTURES_KIND, find_pictures_target(artist_id))
         choosing = self._jobs.latest(CHOOSE_PICTURE_KIND, choose_picture_target(artist_id))
         asking = [job for job in (finding, choosing) if job is not None and job.state.is_active]
@@ -256,12 +267,16 @@ class ArtistPictureService:
             waiting=any(job.state is JobState.WAITING or not self._jobs.online() for job in asking),
             failure=_failure(finding, viewer),
             may_find=turned_on,
-            pick=None if row is None else _pick_of(row, found),
+            pick=pick,
             choosing=choosing is not None and choosing.state.is_active,
             choice_failure=_failure(choosing, viewer),
             may_choose=ai
             and bool(found)
             and CHOOSER in self._plugins.available_keys().get(PICTURE_CHOOSER.name, []),
+            suggested=pick.cover
+            if pick is not None
+            else (None if likeliest is None else found[likeliest].cover),
+            auto_pick=settings.pick_pictures_by_ai,
         )
 
 
@@ -309,6 +324,15 @@ def _pick_of(row: ArtistPictureSearchRow, found: tuple[FoundPicture, ...]) -> Pi
         at=row.chosen_at,
         hint=row.hint,
     )
+
+
+def _every_name_of(db: Session, artist_id: str) -> list[str]:
+    """Return every name the artist goes by: the household's for it, MusicBrainz's, and aliases."""
+    artist = db.get_one(ArtistRow, artist_id)
+    household = db.get(ArtistHouseholdRow, artist_id)
+    aliases = db.scalars(select(ArtistAliasRow.name).where(ArtistAliasRow.artist_id == artist_id))
+    shown = [household.shown_as] if household is not None and household.shown_as else []
+    return [*shown, artist.name, artist.sort_name, *aliases]
 
 
 def _other_names(db: Session, artist_id: str, name: str) -> tuple[str, ...]:

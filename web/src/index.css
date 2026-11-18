@@ -1140,6 +1140,55 @@ button[aria-disabled="true"] {
   object-fit: cover;
 }
 
+/*
+ * A photo suggested for an artist with none: ringed in the accent's dashes, its tag on
+ * the ring's lower edge, and Use photo under it.
+ */
+.photo-suggestion {
+  position: relative;
+  display: grid;
+  flex: none;
+  justify-items: center;
+  gap: 0.75rem;
+}
+
+.photo-suggestion-art {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+
+.photo-suggestion-tag {
+  position: absolute;
+  top: 6.6rem;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.photo-suggestion-use {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.2rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.photo-suggestion .error {
+  max-width: 9rem;
+  margin: 0;
+  font-size: 0.75rem;
+}
+
 .artist-credit {
   margin: 0.25rem 0 0;
   font-size: 0.75rem;

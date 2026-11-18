@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A suggested photo for an artist with none** — its page shows the picture on
+  Deezer most likely of it, the AI's pick or the most followed going by its name,
+  tagged as a suggestion, to use in one click. Settings → Deezer can have the AI
+  pick as soon as pictures are found. New: `suggested` and `auto_pick` in
+  `GET /api/artists/{id}/pictures`, and the setting `pick_pictures_by_ai`.
+
 - **Pick by AI** in an artist's Deezer pictures — an AI model is asked which
   picture is of the artist, from each picture's artist name and following and what
   is known of the artist; *Refine* adds a note saying which artist you mean. The

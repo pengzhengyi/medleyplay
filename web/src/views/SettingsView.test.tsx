@@ -16,6 +16,7 @@ const LIMIT_20: Settings = {
   split_albums: "approval",
   lyrics_sites: [],
   picture_sites: [],
+  pick_pictures_by_ai: false,
   revision: 2,
 };
 
@@ -266,6 +267,36 @@ describe("the Deezer section", () => {
     expect(await deezer.findByText("Saved.")).toBeVisible();
     expect(sent).toEqual([{ ...LIMIT_20, picture_sites: ["deezer"] }]);
     expect(finding).toBeChecked();
+  });
+
+  it("has the AI pick each artist's picture as soon as they are found, once Deezer is on", async () => {
+    const sent: unknown[] = [];
+    const deezerOn: Settings = { ...LIMIT_20, picture_sites: ["deezer"] };
+    open(true, {
+      "GET /api/settings": { body: deezerOn },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...deezerOn, pick_pictures_by_ai: true, revision: 3 } };
+      },
+    });
+    const deezer = within(screen.getByRole("region", { name: "Deezer" }));
+    const picking = await deezer.findByRole("switch", {
+      name: "Pick by AI as soon as pictures are found",
+    });
+
+    await userEvent.click(picking);
+
+    expect(await deezer.findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...deezerOn, pick_pictures_by_ai: true }]);
+  });
+
+  it("offers no AI pick while Deezer is off", async () => {
+    open(true);
+    const deezer = within(screen.getByRole("region", { name: "Deezer" }));
+
+    expect(
+      await deezer.findByRole("switch", { name: "Pick by AI as soon as pictures are found" }),
+    ).toBeDisabled();
   });
 
   it("is only for admins", async () => {

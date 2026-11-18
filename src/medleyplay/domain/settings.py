@@ -39,8 +39,9 @@ class Settings:
     of is guessed an album when it is `album_minutes` long or longer; `None`
     guesses none, so it is a song. `split_albums` says what becomes of a long
     file a song list was found for. `picture_sites` are the sites that may be asked for
-    pictures of an artist. `lyrics_sites` are the sites asked for a song's
-    lyrics, in turn, when LRCLIB has none.
+    pictures of an artist, and `pick_pictures_by_ai` says whether an AI model is asked
+    which is of the artist as soon as they are found. `lyrics_sites` are the sites
+    asked for a song's lyrics, in turn, when LRCLIB has none.
     """
 
     storage_limit: int | None = None
@@ -49,6 +50,7 @@ class Settings:
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
     lyrics_sites: tuple[LyricsSite, ...] = ()
     picture_sites: tuple[PictureSite, ...] = ()
+    pick_pictures_by_ai: bool = False
     revision: int = 0
 
     @property

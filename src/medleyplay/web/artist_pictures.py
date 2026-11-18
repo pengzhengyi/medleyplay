@@ -70,6 +70,15 @@ class ArtistPicturesOut(BaseModel):
         description="Why the last asking failed; only to the Account that asked, and to admins."
     )
     may_choose: bool = Field(description="Whether an AI model may be asked which picture fits.")
+    suggested: str | None = Field(
+        description=(
+            "The cover suggested as the artist's photo: the AI's pick, else the most followed"
+            " whose artist goes by one of the artist's names; none when no picture does."
+        )
+    )
+    auto_pick: bool = Field(
+        description="Whether the household has an AI model asked as soon as pictures are found."
+    )
 
     @staticmethod
     def of(known: ArtistPictures) -> "ArtistPicturesOut":
@@ -88,6 +97,8 @@ class ArtistPicturesOut(BaseModel):
             choosing=known.choosing,
             choice_failure=known.choice_failure,
             may_choose=known.may_choose,
+            suggested=known.suggested,
+            auto_pick=known.auto_pick,
         )
 
 

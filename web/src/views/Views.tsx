@@ -214,6 +214,7 @@ function viewOf(given: ViewProps) {
                 toLink={
                   !namesake && named !== undefined && !named.linked && named.look_up === "yes"
                 }
+                {...(reload === undefined ? {} : { onPhotoUsed: reload })}
               />
             )
           }

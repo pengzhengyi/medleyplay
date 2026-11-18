@@ -16,6 +16,7 @@ const HELD: Settings = {
   split_albums: "approval",
   lyrics_sites: [],
   picture_sites: [],
+  pick_pictures_by_ai: false,
   revision: 2,
 };
 

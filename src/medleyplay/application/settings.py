@@ -37,6 +37,7 @@ class SettingsDocument(BaseModel):
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
     lyrics_sites: tuple[LyricsSite, ...] = Field(default=(), max_length=len(LyricsSite))
     picture_sites: tuple[PictureSite, ...] = Field(default=(), max_length=len(PictureSite))
+    pick_pictures_by_ai: bool = False
 
     @field_validator("lyrics_sites", "picture_sites")
     @classmethod
@@ -80,6 +81,7 @@ class SettingsService:
                 split_albums=settings.split_albums,
                 lyrics_sites=settings.lyrics_sites,
                 picture_sites=settings.picture_sites,
+                pick_pictures_by_ai=settings.pick_pictures_by_ai,
             ).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
@@ -134,5 +136,6 @@ def read_settings(db: Session) -> Settings:
         split_albums=document.split_albums,
         lyrics_sites=document.lyrics_sites,
         picture_sites=document.picture_sites,
+        pick_pictures_by_ai=document.pick_pictures_by_ai,
         revision=row.revision,
     )

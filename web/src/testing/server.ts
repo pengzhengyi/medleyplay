@@ -717,6 +717,8 @@ export const UNKNOWN_PICTURES: ArtistPictures = {
   choosing: false,
   choice_failure: null,
   may_choose: false,
+  suggested: null,
+  auto_pick: false,
 };
 
 /**

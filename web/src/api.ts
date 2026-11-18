@@ -483,6 +483,10 @@ export interface ArtistPictures {
   readonly choice_failure: string | null;
   /** Whether an AI model may be asked which picture is of the artist. */
   readonly may_choose: boolean;
+  /** The cover suggested as the artist's photo: the AI's pick, else the likeliest by name. */
+  readonly suggested: string | null;
+  /** Whether the household has an AI model asked as soon as pictures are found. */
+  readonly auto_pick: boolean;
 }
 
 /** The picture an AI model picked, why, which model answered, and the note it was asked with. */
@@ -649,6 +653,8 @@ export interface Settings {
   readonly lyrics_sites: readonly LyricsSite[];
   /** The sites asked for pictures of an artist, to choose its photo from. */
   readonly picture_sites: readonly PictureSite[];
+  /** Whether an AI model is asked which picture is of an artist as soon as they are found. */
+  readonly pick_pictures_by_ai: boolean;
   readonly revision: number;
 }
 

@@ -18,7 +18,7 @@ and scored high by the site; or else the one going by a part, when no other does
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -155,6 +155,35 @@ def going_by_exactly(name: str, candidates: Sequence[Candidate]) -> tuple[str, .
         for each in candidates
         if each.score >= SUGGESTED_SCORE and each.goes_by(name)
     )
+
+
+MIN_HELD: Final = 2
+"""The shortest name a picture's artist name may hold, or be held in, to count."""
+
+
+def likeliest_picture(
+    names: Iterable[str], pictures: Sequence[tuple[str, int | None]]
+) -> int | None:
+    """Return the place of the picture most likely of an artist going by `names`, if one is.
+
+    Each picture is its artist's name on the site and how many follow it. One going by
+    a name exactly beats one whose name holds a name, or is held in one; among those,
+    the most followed. One matching no name is never likely.
+    """
+    keys = {key for key in (artist_key(name) for name in names) if len(key) >= MIN_HELD}
+
+    def match(name: str) -> int:
+        key = artist_key(name)
+        if key in keys:
+            return 2
+        held = len(key) >= MIN_HELD and any(each in key or key in each for each in keys)
+        return 1 if held else 0
+
+    ranked = [(match(name), fans or 0, -at) for at, (name, fans) in enumerate(pictures)]
+    if not ranked:
+        return None
+    best = max(ranked)
+    return -best[2] if best[0] > 0 else None
 
 
 def _parts(name: str) -> tuple[str, ...]:

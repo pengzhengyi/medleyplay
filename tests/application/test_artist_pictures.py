@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
@@ -19,7 +19,7 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.settings import Settings
-from medleyplay.persistence.schema import JobRow
+from medleyplay.persistence.schema import ArtistAliasRow, ArtistRow, JobRow
 from medleyplay.programs.find_pictures import ChoosePictureJob
 from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
@@ -251,3 +251,35 @@ def test_a_note_too_long_for_the_ai_is_refused(enriching: Enriching, alice: Acco
 
     with pytest.raises(InvalidInputError):
         enriching.artist_pictures.choose(alice, BEATLES, "x" * 501)
+
+
+def test_the_picture_suggested_is_the_most_followed_going_by_the_artists_name(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+
+    assert found.suggested == found.pictures[0].cover
+
+
+def test_the_picture_an_ai_model_picked_is_the_one_suggested(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+
+    chosen = _chosen(enriching, alice, "the tribute act")
+
+    assert chosen.suggested == found.pictures[1].cover
+
+
+def test_no_picture_is_suggested_when_none_goes_by_the_artists_names(
+    enriching: Enriching, alice: Account
+) -> None:
+    _found(enriching, alice)
+
+    with enriching.units.begin() as db:
+        renamed = db.get_one(ArtistRow, BEATLES)
+        renamed.name, renamed.sort_name = "Queen", "Queen"
+        db.execute(delete(ArtistAliasRow).where(ArtistAliasRow.artist_id == BEATLES))
+
+    found = enriching.artist_pictures.pictures(alice, BEATLES)
+    assert (len(found.pictures), found.suggested) == (2, None)

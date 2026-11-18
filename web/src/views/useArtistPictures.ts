@@ -1,6 +1,6 @@
 /**
  * @file The pictures Deezer has of an artist, read from the server, with a way to look
- * again and to ask an AI model which is of the artist.
+ * again, to ask an AI model which is of the artist, and to dismiss the one suggested.
  *
  * Read, an artist never looked up is looked up at once, once Deezer is on; and, when the
  * household has a model asked as soon as pictures are found, a model is asked, once.
@@ -21,13 +21,15 @@ function messageOf(failure: unknown): string {
 
 /**
  * What is known of the pictures of the artist `artistId`, why a request failed, and a way
- * to look on Deezer again and to ask a model which is of the artist, with a note.
+ * to look on Deezer again, to ask a model which is of the artist, with a note, and to
+ * dismiss a picture suggested.
  */
 export function useArtistPictures(artistId: string): {
   readonly state: ArtistPictures | undefined;
   readonly error: string;
   readonly find: () => void;
   readonly choose: (hint: string) => void;
+  readonly dismiss: (cover: string) => void;
 } {
   const [state, setState] = useState<ArtistPictures>();
   // Counts the reads asked for, so each asks the server again.
@@ -60,6 +62,14 @@ export function useArtistPictures(artistId: string): {
         setError(messageOf(failure));
         readAgain();
       });
+    });
+  };
+  const dismiss = (cover: string) => {
+    setError("");
+    setState((was) => (was === undefined ? was : { ...was, suggested: null }));
+    api.dismissArtistPicture(artistId, cover).then(readAgain, (failure: unknown) => {
+      setError(messageOf(failure));
+      readAgain();
     });
   };
   const onRead = useEffectEvent((known: ArtistPictures) => {
@@ -111,5 +121,5 @@ export function useArtistPictures(artistId: string): {
       clearTimeout(timer);
     };
   }, [state]);
-  return { state, error, find, choose };
+  return { state, error, find, choose, dismiss };
 }

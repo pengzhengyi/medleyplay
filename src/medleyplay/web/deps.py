@@ -34,6 +34,7 @@ from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import SilenceService
 from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
@@ -77,6 +78,7 @@ class Services:
     ratings: RatingsService
     artists: ArtistService
     artist_splits: ArtistSplitService
+    shared_names: SharedNameService
     album_covers: AlbumCoverService
     artist_pictures: ArtistPictureService
     image_links: ImageLinkService
@@ -164,6 +166,10 @@ def _artist_splits(services: Annotated[Services, Depends(_services)]) -> ArtistS
     return services.artist_splits
 
 
+def _shared_names(services: Annotated[Services, Depends(_services)]) -> SharedNameService:
+    return services.shared_names
+
+
 def _split_offers(services: Annotated[Services, Depends(_services)]) -> SplitOfferService:
     return services.split_offers
 
@@ -242,6 +248,7 @@ PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
 RatingsDep = Annotated[RatingsService, Depends(_ratings)]
 ArtistsDep = Annotated[ArtistService, Depends(_artists)]
 ArtistSplitsDep = Annotated[ArtistSplitService, Depends(_artist_splits)]
+SharedNamesDep = Annotated[SharedNameService, Depends(_shared_names)]
 SplitOffersDep = Annotated[SplitOfferService, Depends(_split_offers)]
 AlbumCoversDep = Annotated[AlbumCoverService, Depends(_album_covers)]
 ArtistPicturesDep = Annotated[ArtistPictureService, Depends(_artist_pictures)]

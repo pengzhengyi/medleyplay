@@ -33,6 +33,7 @@ import {
 } from "../api";
 import { answeredOf } from "../library/aiAnswer";
 import { unlinkedOf } from "../library/cleanUp";
+import { describeKnown } from "../library/knownArtists";
 import { likelyNameOf } from "../library/likelyName";
 import { fold } from "../library/views";
 import { navigate } from "../routes";
@@ -340,7 +341,7 @@ function NameRow({
             <span className="link-to">
               {named.artist_id === null
                 ? "Not on MusicBrainz"
-                : `Linked to ${describe(artists.get(named.artist_id))}`}
+                : `Linked to ${describeKnown(artists.get(named.artist_id))}`}
             </span>
             {named.finding && (
               <span className="link-to">
@@ -380,7 +381,7 @@ function NameRow({
                       onPick(artist.id);
                     }}
                   />
-                  <span>{describe(artist)}</span>
+                  <span>{describeKnown(artist)}</span>
                   {marked && ai !== null && artist.id === aiPick ? (
                     <span className="link-tag ai" title={`${ai.why} ${answeredOf(ai) ?? ""}`}>
                       <SparkleIcon aria-hidden /> {ai.model} suggests
@@ -490,15 +491,6 @@ function NameRow({
       )}
     </li>
   );
-}
-
-/** Name an artist as the list shows it: its name, what tells it apart, and its country. */
-function describe(artist: KnownArtist | undefined): string {
-  if (artist === undefined) {
-    return "an artist no longer known";
-  }
-  const about = [artist.disambiguation, artist.country].filter(Boolean).join(", ");
-  return about === "" ? artist.name : `${artist.name} (${about})`;
 }
 
 /**

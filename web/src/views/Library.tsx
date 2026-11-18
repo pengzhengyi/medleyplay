@@ -30,6 +30,7 @@ import { linksOf, withLinkedFavorites } from "../library/artistLinks";
 import { useArtistNames } from "../library/useArtistNames";
 import { useNamesToTidy } from "../library/useNamesToTidy";
 import { useArtistSplits } from "../library/useArtistSplits";
+import { useSharedNames } from "../library/useSharedNames";
 import { useSplitOffers } from "../library/useSplitOffers";
 import { toDoOf } from "../library/cleanUp";
 import { albumArtistOf } from "../library/views";
@@ -183,11 +184,13 @@ export function Library({
   const namesToTidy = useNamesToTidy(loadedTracks);
   const splitOffers = useSplitOffers(loadedTracks);
   const artistSplits = useArtistSplits(loadedTracks);
+  const sharedNames = useSharedNames(loadedTracks);
   const toDo = toDoOf(
     namesToTidy.names,
     artistNames.names,
     splitOffers.offers,
     artistSplits.splits,
+    sharedNames.names,
   );
   const links = useMemo(() => linksOf(artistNames.names, tracks), [artistNames.names, tracks]);
   // A favorite artist makes each of its names, and every name linked with one, a favorite.
@@ -649,6 +652,7 @@ export function Library({
             namesToTidy={namesToTidy}
             splitOffers={{ names: splitOffers.offers, reload: splitOffers.reload }}
             artistSplits={{ names: artistSplits.splits, reload: artistSplits.reload }}
+            sharedNames={sharedNames}
             toDo={toDo}
           />
         ) : (

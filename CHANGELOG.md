@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Artists sharing a name** — a section of Clean up lists each name MusicBrainz
+  knows two or more artists by exactly, and each name already naming several, with
+  its songs by album. Choose who each album is by, one of the name's artists or one
+  MusicBrainz knows, and confirm; the songs are linked to it, and songs added later
+  wait to be confirmed. A name may instead be kept as one. New:
+  `GET /api/shared-names`, `PUT /api/shared-names/albums`, and
+  `POST /api/shared-names/keep` and `/forget` (migration 0054).
+
 - **Two artists of one name** — a name may name several artists, such as two
   singers called *Jay*. *Which Jay?* beside a song's Artist in *Edit details* binds
   the song to another artist going by the name, or to a new one; a song added to an

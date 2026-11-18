@@ -51,6 +51,7 @@ from medleyplay.application.ratings import RatingsService
 from medleyplay.application.remote import RemoteService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import (
     FindSilencesKind,
     SilenceService,
@@ -160,6 +161,13 @@ def ratings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) 
 @pytest.fixture
 def preferences(units: sessionmaker[Session], clock: FakeClock) -> PreferencesService:
     return PreferencesService(units, clock)
+
+
+@pytest.fixture
+def shared_names(
+    units: sessionmaker[Session], clock: FakeClock, changes: list[str]
+) -> SharedNameService:
+    return SharedNameService(units, clock, changes.append)
 
 
 @pytest.fixture
@@ -505,6 +513,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     ratings: RatingsService,
     artists: ArtistService,
     artist_splits: ArtistSplitService,
+    shared_names: SharedNameService,
     album_covers: AlbumCoverService,
     artist_pictures: ArtistPictureService,
     image_links: ImageLinkService,
@@ -544,6 +553,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         ratings=ratings,
         artists=artists,
         artist_splits=artist_splits,
+        shared_names=shared_names,
         album_covers=album_covers,
         artist_pictures=artist_pictures,
         image_links=image_links,

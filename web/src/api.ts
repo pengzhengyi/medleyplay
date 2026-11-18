@@ -688,6 +688,43 @@ export interface ArtistSplits {
   readonly decided: readonly { readonly written: string; readonly split: boolean }[];
 }
 
+/** One of the Library's artists a name names, the MusicBrainz artist it is, and its songs of the name. */
+export interface ArtistOfName {
+  readonly artist_id: string;
+  readonly musicbrainz_id: string | null;
+  readonly songs: number;
+}
+
+/** The songs of one album writing a name that are by one artist. */
+export interface AlbumSongs {
+  /** As most of its songs write it; empty for songs on none. */
+  readonly album: string;
+  readonly track_ids: readonly number[];
+  readonly artist_id: string;
+  /** Whether the household chose the artist of every one of them. */
+  readonly confirmed: boolean;
+}
+
+/** A name that may name several artists, the artists it names, and its songs by album. */
+export interface SharedName {
+  readonly name: string;
+  /** The Library's artists the name names, its first first. */
+  readonly artists: readonly ArtistOfName[];
+  /** The MusicBrainz artists going by the name exactly, scored high, best first. */
+  readonly known: readonly string[];
+  /** Whether the household keeps the name as naming one artist. */
+  readonly kept: boolean;
+  /** Whether songs of it wait to be confirmed, or it waits to be told apart. */
+  readonly waiting: boolean;
+  /** The name's songs by album and artist, most songs first. */
+  readonly albums: readonly AlbumSongs[];
+}
+
+/** Songs of a name, and the artist they are by: one of the Library's, or one MusicBrainz knows. */
+export type SongsBy =
+  | { readonly track_ids: readonly number[]; readonly artist_id: string }
+  | { readonly track_ids: readonly number[]; readonly musicbrainz_id: string };
+
 /** The setting *Split albums*, and the long files offered under it. */
 export interface SplitOffers {
   readonly setting: SplitAlbums;
@@ -1324,6 +1361,17 @@ export const api = {
   /** Forget what was decided for each name, so it is offered again. */
   forgetArtistNames: (names: readonly string[]) =>
     call<null>("POST", "/api/artist-splits/forget", { names }),
+  /** The names that may name several artists, most songs first. */
+  sharedNames: () => call<{ names: SharedName[] }>("GET", "/api/shared-names"),
+  /** Bind each album's songs of a name to the artist chosen for them, confirming them. */
+  tellApart: (name: string, albums: readonly SongsBy[]) =>
+    call<null>("PUT", "/api/shared-names/albums", { name, albums }),
+  /** Keep each name as naming one artist. */
+  keepSharedNames: (names: readonly string[]) =>
+    call<null>("POST", "/api/shared-names/keep", { names }),
+  /** Forget that each name is kept as one, so it waits to be told apart again. */
+  forgetSharedNames: (names: readonly string[]) =>
+    call<null>("POST", "/api/shared-names/forget", { names }),
   /** The artist and album names written with more than the name in them, tidied. */
   namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */

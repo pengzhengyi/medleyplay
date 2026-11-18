@@ -5,11 +5,10 @@
 > Library's artist names up on MusicBrainz, linking each to one artist, asking an
 > AI model which artist each name stands for, adding the names, page, and photo
 > Wikidata knows each linked artist by, counting linked names as one artist across
-> the Library, telling two artists of one name apart song by song, and keeping what
-> the household chooses for an artist, with an AI model's suggestions and the
-> pictures Deezer has of it. Tidying a name written with
-> more than the name in it is in
-> [Track details](Track%20details.md).
+> the Library, telling two artists of one name apart song by song or album by album,
+> and keeping what the household chooses for an artist, with an AI model's
+> suggestions and the pictures Deezer has of it. Tidying a name written with more
+> than the name in it is in [Track details](Track%20details.md).
 
 ## Contents
 
@@ -210,7 +209,27 @@ Jay   → Jay           星晴, 简单爱 (on Jay, 范特西)     the name's fir
 - **An artist left with no song goes:** once no song is bound to an artist that
   isn't its name's first, it leaves the name, and, with no other name and no
   MusicBrainz link, the Library, with its favorites. A name's first stays.
-- **Linking a name links its first artist;** the others stay apart from MusicBrainz.
+- **Linking a name links its first artist;** the others are linked by telling the
+  name apart in Clean up.
+- **Telling a name apart, album by album,** in Clean up's *Artists sharing a name*:
+  a name is listed when MusicBrainz knows two or more artists going by it exactly,
+  each scored 90 or more, or when it names several of the Library's artists
+  already. Its songs show by album and by the artist each is bound to now, and each
+  album may be chosen to be by one of the name's artists or by an artist MusicBrainz
+  knows by the name. Confirming makes the choice each song's own, so its songs are
+  *confirmed*; a song added later goes where its album went and waits to be
+  confirmed. Nothing changes on its own.
+- **An album chosen to be by a MusicBrainz artist** is bound to the Library's
+  artist linked to it, which the name then names too. With none linked yet, the
+  artist its songs are bound to now is linked to it, unless that one is linked or
+  chosen already; else a new artist is. The album with the most songs goes first, so
+  it keeps the artist it had, and its favorites. Every song is bound before any
+  artist left with none leaves the name, so albums may trade artists at once.
+- **The name follows its first artist:** a first artist left with no song of the
+  name gives it up to the next, and the name stays linked to whichever MusicBrainz
+  artist its first is.
+- **Kept as one:** a name naming one artist may be kept as one instead, so it waits
+  no more (`name_kept`); telling it apart into one artist keeps it so too.
 
 ## Asking an AI model
 
@@ -428,6 +447,13 @@ not.
   first left main. Another origin's artist, used, replaces the chips. A song's
   chips are saved only when they differ from the artists it shows; a file split
   into songs offers none.
+- **A section of Clean up,** *Artists sharing a name*, counted in the rail's
+  *Clean up*: each name waiting says why it is listed, then each album with its
+  song count, titles on hover, a check once confirmed, and who it is by, to
+  change: the name's artists, each as the MusicBrainz artist it is or by the album
+  most of its songs are on, then the artists MusicBrainz knows by the name. *Confirm*
+  sends every album; *Keep as one* is offered while the name names one artist. Names
+  done fold away, each to change and *Save*, or to *Undo* keeping it as one.
 - **A section of Clean up,** *Link artist names*, with how many names that may
   be looked up are not linked, counted in the rail's *Clean up* with the names to
   tidy: each name with its songs, most songs first.
@@ -511,6 +537,10 @@ not.
 | `POST /api/artist-names/recommend` | Signed in | Ask an AI model about up to 500 names looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked already |
 | `POST /api/artist-names/unlink` | Signed in | Forget a name's link |
 | `PUT /api/tracks/{id}/namesake` | Signed in | Bind the song's artist `name` to one of the artists going by it, by its id, or to another, new one for `null`; answers the song's details, where each artist lists the others going by its name (`namesakes`), with their songs and albums. 404 for an id the name doesn't name, 422 for a name the song doesn't write |
+| `GET /api/shared-names` | Signed in | Every name that may name several artists, most songs first: the Library's artists it names, with the MusicBrainz artist each is and its songs; the MusicBrainz artists going by it exactly; whether it is kept as one, and waits; and its songs by album and artist, each saying whether it is confirmed |
+| `PUT /api/shared-names/albums` | Signed in | Tell a name apart: each album's songs, by `track_ids`, with the `artist_id` of one of the name's artists or the `musicbrainz_id` of an artist MusicBrainz knows; confirms them. 404 for an artist the name doesn't name or MusicBrainz never named, 422 for a song not writing the name or an album given neither or both |
+| `POST /api/shared-names/keep` | Signed in | Keep up to 500 names as naming one artist |
+| `POST /api/shared-names/forget` | Signed in | Forget that up to 500 names are kept as one |
 | `PUT /api/favorites/artists/{id}` | Signed in | Make one of the Library's artists, by id, your favorite, or not; answers with your favorites; 404 for no such artist |
 | `PUT /api/artists/{id}/details` | Signed in | Keep the name an artist is shown by and a note about it; an empty one is forgotten; 404 for an artist no site named |
 | `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
@@ -541,14 +571,14 @@ not.
 - **Artist ids** are tested through adding, editing, splitting, linking, and
   unlinking songs, and the migration that binds every song already in the
   Library; two artists of one name through choosing for a song, adding songs to an
-  album chosen for, and an artist left with no song.
+  album chosen for, and an artist left with no song; telling a name apart through
+  *Jay*, which `reader` answers with two artists going by it exactly and one
+  close, including albums trading artists at once.
 
 ## Left for later
 
-- **Telling two artists of one name apart in Clean up:** linking a name to several
-  MusicBrainz artists, a name MusicBrainz knows two or more artists by exactly
-  flagged as one that may name several, and its songs confirmed album by album.
-  Until then another artist of a name is chosen song by song and is never linked.
+- **Old links to an artist by name** open the name's first artist, even when the
+  name names several.
 - **An album artist chosen one by one,** as a song's artists are; it follows its
   name's decision.
 - **Showing every linked artist in a chosen language** at once, rather than as

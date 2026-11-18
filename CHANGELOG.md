@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Two artists of one name** — a name may name several artists, such as two
+  singers called *Jay*. *Which Jay?* beside a song's Artist in *Edit details* binds
+  the song to another artist going by the name, or to a new one; a song added to an
+  album later goes where the album's songs went. Each is its own artist in the
+  Artists view, told apart by its album, with its own page and favorite. New:
+  `PUT /api/tracks/{id}/namesake`, `namesakes` on each of a song's artists, and
+  `artist_ids` on each artist name (migration 0053).
+
 - **Artist photos from Deezer** — *Edit artist* → *Replace* has a *Deezer* tab
   showing the pictures Deezer has of the artists going by the artist's name, the
   most followed first, to use one as its photo. Off until an admin turns on

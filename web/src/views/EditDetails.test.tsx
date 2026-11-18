@@ -19,6 +19,7 @@ import {
   TAGGED_ORIGINS,
   albumCoversOf,
   detailsOf,
+  namesakeOf,
   serve,
   trackArtistOf,
   trackOf,
@@ -38,6 +39,7 @@ async function renderDialog(
     onSetCover?: (image: Blob) => Promise<Details>;
     onRemoveCover?: () => Promise<Details>;
     onUseCover?: (cover: string) => Promise<Details>;
+    onChooseArtist?: (written: string, id: string | null) => Promise<Details>;
     /** The lookups the song may be asked about now. */
     findable?: readonly Lookup[];
     /** The lookup last asked about the song. */
@@ -64,6 +66,7 @@ async function renderDialog(
         more.onRemoveCover ?? (() => Promise.reject(new Error("No cover in this test.")))
       }
       onUseCover={more.onUseCover ?? (() => Promise.reject(new Error("No cover in this test.")))}
+      {...(more.onChooseArtist !== undefined && { onChooseArtist: more.onChooseArtist })}
       findable={more.findable ?? []}
       lookup={lookup}
       online
@@ -1174,5 +1177,72 @@ describe("a song's artists, one chip each", () => {
     });
 
     expect(within(dialog).queryByRole("button", { name: "Add artist" })).toBeNull();
+  });
+});
+
+describe("which artist going by a name a song is by", () => {
+  /** The song by Jay, the name's first artist, where another Jay has three songs on *Blue Night*. */
+  const BY_JAY: Details = {
+    ...detailsOf(7, {}, { video: { title: "星晴", artist: "Jay" } }),
+    artists: [
+      trackArtistOf("Jay", "main", null, [
+        namesakeOf("jay-2", { songs: 3, albums: ["Blue Night"] }),
+      ]),
+    ],
+  };
+
+  const openMenu = async (dialog: HTMLElement) => {
+    await userEvent.click(within(dialog).getByRole("button", { name: "Which Jay?" }));
+    return screen.findByRole("menu");
+  };
+
+  it("offers another artist called the song's artist, and binds the song to it at once", async () => {
+    const onChooseArtist = vi.fn(() => Promise.resolve(BY_JAY));
+    const { dialog, onSave } = await renderDialog(BY_JAY, undefined, undefined, {
+      onChooseArtist,
+    });
+
+    const menu = await openMenu(dialog);
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Another artist called Jay" }),
+    );
+
+    expect(onChooseArtist).toHaveBeenCalledWith("Jay", null);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("tells the other artists going by the name apart by their albums, and binds to one", async () => {
+    const onChooseArtist = vi.fn(() => Promise.resolve(BY_JAY));
+    const { dialog } = await renderDialog(BY_JAY, undefined, undefined, { onChooseArtist });
+
+    const menu = await openMenu(dialog);
+    const now = within(menu).getByRole("menuitemradio", { name: "The one it is by now" });
+    await userEvent.click(
+      within(menu).getByRole("menuitemradio", { name: "On Blue Night · 3 songs" }),
+    );
+
+    expect(now).toHaveAttribute("aria-checked", "true");
+    expect(onChooseArtist).toHaveBeenCalledWith("Jay", "artist-jay-2");
+  });
+
+  it("says why the server refused a choice, and stays open", async () => {
+    const onChooseArtist = vi.fn(() => Promise.reject(new ApiError(404, "No artist called Jay.")));
+    const { dialog, onClose } = await renderDialog(BY_JAY, undefined, undefined, {
+      onChooseArtist,
+    });
+
+    const menu = await openMenu(dialog);
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Another artist called Jay" }),
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("No artist called Jay.");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("is not offered where the artist can't be chosen", async () => {
+    const { dialog } = await renderDialog(BY_JAY);
+
+    expect(within(dialog).queryByRole("button", { name: "Which Jay?" })).toBeNull();
   });
 });

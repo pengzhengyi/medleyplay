@@ -5,8 +5,9 @@
 > Library's artist names up on MusicBrainz, linking each to one artist, asking an
 > AI model which artist each name stands for, adding the names, page, and photo
 > Wikidata knows each linked artist by, counting linked names as one artist across
-> the Library, and keeping what the household chooses for an artist, with an AI
-> model's suggestions and the pictures Deezer has of it. Tidying a name written with
+> the Library, telling two artists of one name apart song by song, and keeping what
+> the household chooses for an artist, with an AI model's suggestions and the
+> pictures Deezer has of it. Tidying a name written with
 > more than the name in it is in
 > [Track details](Track%20details.md).
 
@@ -19,6 +20,7 @@
 - [Each song's artists by id](#each-songs-artists-by-id)
 - [Names written as several artists](#names-written-as-several-artists)
 - [A song's artists one by one](#a-songs-artists-one-by-one)
+- [Two artists of one name](#two-artists-of-one-name)
 - [Asking an AI model](#asking-an-ai-model)
 - [Wikidata's names](#wikidatas-names)
 - [Wikidata's page and photo](#wikidatas-page-and-photo)
@@ -99,7 +101,8 @@ keeps the text and counts them as one.
 ## Each song's artists by id
 
 - **The Library's own artists:** each written name, folded, names one artist of
-  the Library's, under an id of its own. Names linked to one MusicBrainz artist
+  the Library's, under an id of its own, or several when artists share it (see
+  [Two artists of one name](#two-artists-of-one-name)). Names linked to one MusicBrainz artist
   name one artist, which records that MusicBrainz id; no two artists record the
   same one.
 - **Every song is bound** to the artist its artist names and the one its album
@@ -182,6 +185,32 @@ DECO*27, ピノキオピー        + 初音ミク, featured   DECO*27 & ピノ�
   artists from its songs.
 - **Clean up leaves it alone:** such a song's artist is neither offered to split nor
   to tidy, though other songs writing the same name are.
+
+## Two artists of one name
+
+Two artists may go by one name, such as two singers called *Jay*. The name then
+names several of the Library's artists, the one it named first first, and each song
+writing it is bound to one of them.
+
+```text
+Jay   → Jay           星晴, 简单爱 (on Jay, 范特西)     the name's first
+      → another Jay   Blue Night (on Blue Night)       chosen for Blue Night
+```
+
+- **Which one a song is by:** the one the household chose for the song; else the
+  one it chose for most of the album's other songs writing the name, so a song
+  added to an album goes where its album went; else the name's first. An album is
+  its name and its album artist, or its artist when that is blank, folded.
+- **Chosen one song at a time** in *Edit details*: the song's artist offers the other
+  artists going by its name, each told apart by the albums its songs are on, and
+  *Another artist called Jay*, which adds an artist of the Library's own by the
+  name. A choice is kept per song and name (`track_artist_choice`), saved at once,
+  and moves that song alone; it is forgotten once the song no longer writes the
+  name.
+- **An artist left with no song goes:** once no song is bound to an artist that
+  isn't its name's first, it leaves the name, and, with no other name and no
+  MusicBrainz link, the Library, with its favorites. A name's first stays.
+- **Linking a name links its first artist;** the others stay apart from MusicBrainz.
 
 ## Asking an AI model
 
@@ -452,6 +481,14 @@ not.
   suggestion shows beneath its field as *deepseek-flash suggests “甲壳虫乐队”*, its
   reason and model in the tooltip, with *Use*, until the field says the same. Why
   an asking failed shows beside *Ask AI*.
+- **Two artists of one name are two:** in the Artists view, each a tile of its own,
+  the two told apart by the album most of their songs are on (*on Blue Night*);
+  each with its own page, opened by its id, listing only its own songs; and each its
+  own favorite, in Now Playing's hearts and Radio too. A link by the name alone
+  opens the name's first. *Which Jay?* beside a song's Artist in *Edit details*
+  lists, under each of its artists, *The one it is by now*, checked, each other
+  artist going by the name as *On Blue Night · 3 songs*, and *Another artist called
+  Jay*; choosing one moves the song at once.
 - **Linked names are one artist** in the Artists view, named as the household
   chose or as most of its songs write it; on its page, headed by the same name,
   which lists every song of every name linked to it; in search, which finds it by
@@ -468,11 +505,12 @@ not.
 | `POST /api/artist-splits/split` | Signed in | Split up to 500 names into the artists each lists; 422 for a name naming one |
 | `POST /api/artist-splits/keep` | Signed in | Keep up to 500 names as written |
 | `POST /api/artist-splits/forget` | Signed in | Forget what was decided for up to 500 names, so each is offered again |
-| `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, and whether it is being asked now; and every artist those name, with its aliases, and its Wikidata page and photo once Wikidata has answered |
+| `GET /api/artist-names` | Signed in | Every name, most Tracks first: its Tracks, whether it may be looked up, its link, what MusicBrainz answered and when, the suggestion, whether it is being asked now, and the ids of the Library's artists it names, its first first; and every artist those name, with its aliases, and its Wikidata page and photo once Wikidata has answered |
 | `POST /api/artist-names/look-up` | Signed in | Ask about up to 500 names at once; each not linked, and that may be looked up, gets a Job. Answers how many were asked about, or 409 while the `musicbrainz` plugin is off |
 | `PUT /api/artist-names/link` | Signed in | Link a name to an artist MusicBrainz named, or to none, and ask Wikidata the artist's names; 404 for an artist never named |
 | `POST /api/artist-names/recommend` | Signed in | Ask an AI model about up to 500 names looked up and not linked; answers how many were asked about, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked already |
 | `POST /api/artist-names/unlink` | Signed in | Forget a name's link |
+| `PUT /api/tracks/{id}/namesake` | Signed in | Bind the song's artist `name` to one of the artists going by it, by its id, or to another, new one for `null`; answers the song's details, where each artist lists the others going by its name (`namesakes`), with their songs and albums. 404 for an id the name doesn't name, 422 for a name the song doesn't write |
 | `PUT /api/favorites/artists/{id}` | Signed in | Make one of the Library's artists, by id, your favorite, or not; answers with your favorites; 404 for no such artist |
 | `PUT /api/artists/{id}/details` | Signed in | Keep the name an artist is shown by and a note about it; an empty one is forgotten; 404 for an artist no site named |
 | `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
@@ -502,13 +540,15 @@ not.
 - **Shared lanes** are tested with two lanes sharing one name.
 - **Artist ids** are tested through adding, editing, splitting, linking, and
   unlinking songs, and the migration that binds every song already in the
-  Library.
+  Library; two artists of one name through choosing for a song, adding songs to an
+  album chosen for, and an artist left with no song.
 
 ## Left for later
 
-- **Two artists of one name,** such as two singers called *Jay*: a name names
-  one artist, so telling them apart song by song needs a name to name several,
-  each song bound to one of them.
+- **Telling two artists of one name apart in Clean up:** linking a name to several
+  MusicBrainz artists, a name MusicBrainz knows two or more artists by exactly
+  flagged as one that may name several, and its songs confirmed album by album.
+  Until then another artist of a name is chosen song by song and is never linked.
 - **An album artist chosen one by one,** as a song's artists are; it follows its
   name's decision.
 - **Showing every linked artist in a chosen language** at once, rather than as

@@ -31,6 +31,8 @@ export interface Artist extends Listed {
   readonly link: string;
   /** The id of the Library's artist its Tracks are bound to; none for Tracks with no artist. */
   readonly id?: string;
+  /** The album most of its Tracks are on, when another artist listed goes by its name. */
+  readonly onAlbum?: string;
 }
 
 /** An album, under its album artist, or its artist when that is blank. */
@@ -80,31 +82,70 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
       withId({ name, link: name, count, durationMs }),
     );
   }
-  // Names linked to one artist are one, named as the household chose, or as most of its Tracks write it.
+  // Names linked to one artist are one, named as the household chose, or as most of its Tracks
+  // write it; two artists going by one name are two, each by its id.
   const found = new Map<
     string,
-    { names: Map<string, number>; count: number; durationMs: number }
+    {
+      names: Map<string, number>;
+      albums: Map<string, number>;
+      count: number;
+      durationMs: number;
+      id?: string;
+    }
   >();
   for (const track of tracks) {
-    for (const name of artistNamesOf(track)) {
-      const group = links.groupOf(name);
+    artistNamesOf(track).forEach((name, place) => {
+      const id = track.artist_ids[place];
+      const group = links.groupOfBound(name, id);
       const each = found.get(group) ?? {
         names: new Map<string, number>(),
+        albums: new Map<string, number>(),
         count: 0,
         durationMs: 0,
       };
       each.names.set(name, (each.names.get(name) ?? 0) + 1);
+      if (track.album.trim() !== "") {
+        each.albums.set(track.album, (each.albums.get(track.album) ?? 0) + 1);
+      }
       each.count += 1;
       each.durationMs += track.duration_ms ?? 0;
+      if (each.id === undefined && id !== undefined) {
+        each.id = id;
+      }
       found.set(group, each);
-    }
+    });
   }
-  return [...found.entries()]
-    .map(([group, { names, count, durationMs }]) => {
-      const link = [...names].reduce((best, next) => (next[1] > best[1] ? next : best))[0];
-      return withId({ name: links.shownAsOf(group) ?? link, link, count, durationMs });
-    })
-    .sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.link, b.link));
+  const listed = [...found.values()].map(({ names, albums, count, durationMs, id }) => {
+    const link = mostOf(names) ?? "";
+    const group = links.groupOfBound(link, id);
+    const artist = { name: links.shownAsOf(group) ?? link, link, count, durationMs };
+    return { artist: id === undefined ? withId(artist) : { ...artist, id }, album: mostOf(albums) };
+  });
+  const shared = new Map<string, number>();
+  for (const { artist } of listed) {
+    shared.set(fold(artist.name), (shared.get(fold(artist.name)) ?? 0) + 1);
+  }
+  return listed
+    .map(({ artist, album }): Artist =>
+      album !== undefined && (shared.get(fold(artist.name)) ?? 0) > 1
+        ? { ...artist, onAlbum: album }
+        : artist,
+    )
+    .sort(
+      (a, b) =>
+        collator.compare(a.name, b.name) ||
+        collator.compare(a.link, b.link) ||
+        collator.compare(a.onAlbum ?? "", b.onAlbum ?? ""),
+    );
+}
+
+/** Return the key `counts` counts most, the first of those counted alike; none for no keys. */
+function mostOf(counts: ReadonlyMap<string, number>): string | undefined {
+  return [...counts].reduce<[string, number] | undefined>(
+    (best, next) => (best === undefined || next[1] > best[1] ? next : best),
+    undefined,
+  )?.[0];
 }
 
 /** Return the id of the Library's artist each name, folded, is bound to by the Tracks writing it. */
@@ -155,18 +196,27 @@ export function artistNamesOf(track: Track): readonly string[] {
 
 /**
  * Return the Tracks of the artist `name`, compared folded, in the order given: those
- * naming it as one of their artists, or as their whole artist as written.
+ * naming it as one of their artists, or as their whole artist as written. With `id`,
+ * another artist called `name` than the name's first has only the Tracks bound to it,
+ * and the first only those that aren't.
  */
 export function tracksOfArtist(
   tracks: readonly Track[],
   name: string,
   links?: ArtistLinks,
+  id?: string,
 ): Track[] {
-  const keyOf = (each: string) => artistKeyOf(each, links);
-  const key = keyOf(name);
-  return tracks.filter((track) =>
-    [...artistNamesOf(track), track.artist].some((each) => keyOf(each) === key),
-  );
+  const keyOf = (each: string, bound?: string) =>
+    links === undefined ? fold(each) : links.groupOfBound(each, bound);
+  const key = keyOf(name, id);
+  return tracks.filter((track) => {
+    const names = artistNamesOf(track);
+    const whole = !names.some((each) => fold(each.trim()) === fold(track.artist.trim()));
+    return (
+      names.some((each, place) => keyOf(each, track.artist_ids[place]) === key) ||
+      (whole && keyOf(track.artist) === key)
+    );
+  });
 }
 
 /** Return each album once, by its artist and then its name. */

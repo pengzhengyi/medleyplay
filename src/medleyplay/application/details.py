@@ -21,11 +21,14 @@ from medleyplay.application.settings import read_settings
 from medleyplay.application.track_artists import (
     BoundArtist,
     LinkedArtist,
+    Namesake,
     artists_of,
     bind,
+    choose_artist,
     chosen_credits,
     chosen_tracks,
     linked_artists,
+    namesakes_of,
 )
 from medleyplay.domain.ai import AnsweredBy
 from medleyplay.domain.artist_split import Credit, checked_credits, credited_as
@@ -111,7 +114,9 @@ class DetailsView:
     artists_chosen: bool
     """Whether the household chose the Track's artists one by one."""
     linked: dict[str, LinkedArtist]
-    """The MusicBrainz artist each of `artists` is, by its id, for those linked."""
+    """The MusicBrainz artist each of `artists` and `namesakes` is, by its id, for those linked."""
+    namesakes: dict[str, tuple[Namesake, ...]]
+    """The other artists each name of `artists` names, by the name folded, if it names several."""
 
 
 @dataclass(frozen=True)
@@ -439,7 +444,12 @@ class DetailsService:
             answered_by = answered_by_of(db, track_id)
             artists = artists_of(db, track_id).artists
             chosen = db.get(TrackCreditsRow, track_id) is not None
-            linked = linked_artists(db, {each.artist_id for each in artists})
+            namesakes = namesakes_of(db, track_id)
+            linked = linked_artists(
+                db,
+                {each.artist_id for each in artists}
+                | {each.artist_id for others in namesakes.values() for each in others},
+            )
         found = shown(
             {origin: kept for origin, kept in values.items() if origin is not Origin.HOUSEHOLD}
         )
@@ -454,7 +464,19 @@ class DetailsService:
             artists,
             chosen,
             linked,
+            namesakes,
         )
+
+    def choose_artist(self, track_id: TrackId, written: str, artist_id: str | None) -> DetailsView:
+        """Bind the song's artist written `written` to `artist_id`, one of those the name names.
+
+        `None` binds it to another artist called so, new to the Library. Only this song
+        moves, while it writes the name.
+        """
+        with self._units.begin() as db:
+            choose_artist(db, _require(db, track_id), written, artist_id, self._clock())
+        self._changed()
+        return self.details(track_id)
 
     def read_video_text(self, track_id: TrackId, text: VideoText) -> VideoRead:
         """Read the video's text the household pasted as the Track's `video` values.

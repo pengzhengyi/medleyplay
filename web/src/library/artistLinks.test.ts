@@ -2,9 +2,17 @@
 import { describe, expect, it } from "vitest";
 
 import type { ArtistNames, KnownArtist } from "../api";
-import { artistIdOf, artistNameOf, knownArtistOf, trackOf } from "../testing/server";
+import {
+  OTHER_JAY,
+  artistIdOf,
+  artistNameOf,
+  knownArtistOf,
+  trackOf,
+  twoJaysNames,
+  twoJaysSongs,
+} from "../testing/server";
 import { NO_LINKS, linksOf, withLinkedFavorites } from "./artistLinks";
-import { NO_FAVORITES } from "./favoriteGroups";
+import { NO_FAVORITES, isFavoriteArtist } from "./favoriteGroups";
 
 const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
   sort_name: "Beatles, The",
@@ -88,5 +96,46 @@ describe("artist links", () => {
     const linked = withLinkedFavorites(favorites, linksOf(LINKED));
 
     expect([...linked.artists].sort()).toEqual(["披头士", "甲壳虫"].sort());
+  });
+});
+
+/** Jay naming two artists, and a song by each. */
+const TWO_JAYS = twoJaysNames();
+const JAYS_SONGS = twoJaysSongs();
+
+describe("two artists of one name", () => {
+  it("keep another artist called a name apart from the name's first", () => {
+    const links = linksOf(TWO_JAYS, JAYS_SONGS);
+
+    expect(links.groupOfBound("Jay", OTHER_JAY)).toBe(OTHER_JAY);
+    expect(links.groupOfBound("Jay", artistIdOf("Jay"))).toBe(links.groupOf("Jay"));
+    expect(links.groupOfBound("Jay", undefined)).toBe(links.groupOf("Jay"));
+  });
+
+  it("name the name's first artist as the one a name names", () => {
+    const links = linksOf(TWO_JAYS, JAYS_SONGS);
+
+    expect(links.idOf("Jay")).toBe(artistIdOf("Jay"));
+    expect(links.namesOfId(artistIdOf("Jay"))).toEqual(["jay"]);
+    expect(links.namesOfId(OTHER_JAY)).toEqual([]);
+  });
+
+  it("keep another artist called a name a favorite by its id alone", () => {
+    const favorites = { ...NO_FAVORITES, artistIds: new Set([OTHER_JAY]) };
+
+    const linked = withLinkedFavorites(favorites, linksOf(TWO_JAYS, JAYS_SONGS));
+
+    expect(isFavoriteArtist(linked, "Jay", OTHER_JAY)).toBe(true);
+    expect(isFavoriteArtist(linked, "Jay", artistIdOf("Jay"))).toBe(false);
+    expect(isFavoriteArtist(linked, "Jay")).toBe(false);
+  });
+
+  it("keep the name's first a favorite apart from another artist called it", () => {
+    const favorites = { ...NO_FAVORITES, artistIds: new Set([artistIdOf("Jay")]) };
+
+    const linked = withLinkedFavorites(favorites, linksOf(TWO_JAYS, JAYS_SONGS));
+
+    expect(isFavoriteArtist(linked, "Jay", artistIdOf("Jay"))).toBe(true);
+    expect(isFavoriteArtist(linked, "Jay", OTHER_JAY)).toBe(false);
   });
 });

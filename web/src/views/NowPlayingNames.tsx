@@ -57,7 +57,7 @@ export function NowPlayingNames({
   readonly moving: boolean;
   readonly favorites: FavoriteGroups;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
-  readonly onFavoriteArtist: (name: string, favorite: boolean) => void;
+  readonly onFavoriteArtist: (name: string, favorite: boolean, id?: string) => void;
   readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
   readonly onPlaySong: (song: AlbumSong) => void;
   readonly onEditSongs: (track: Track) => void;
@@ -162,9 +162,9 @@ export function NowPlayingNames({
                     <FavoriteHeart
                       kind="artist"
                       name={name}
-                      favorite={isFavoriteArtist(favorites, name)}
+                      favorite={isFavoriteArtist(favorites, name, track.artist_ids[place])}
                       onChange={(favorite) => {
-                        onFavoriteArtist(name, favorite);
+                        onFavoriteArtist(name, favorite, track.artist_ids[place]);
                       }}
                       loved={0}
                       suggestionKey=""

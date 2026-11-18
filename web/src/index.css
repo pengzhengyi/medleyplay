@@ -8811,3 +8811,22 @@ small.ai-set-up-hint {
     animation: none;
   }
 }
+
+/* Beside a label, the ways to change its box, such as Artist's *Which Jay?* and *Add artist*. */
+.detail-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.2rem 0.8rem;
+}
+
+/* Which artist going by a name a song is by: each told apart by its albums, on one line. */
+.which-artist {
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+.which-artist-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

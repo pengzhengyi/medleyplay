@@ -58,7 +58,7 @@ export function NowPlaying({
   readonly onFavorite: (track: Track, favorite: boolean) => void;
   /** The artists and albums the Account favorited. */
   readonly favorites: FavoriteGroups;
-  readonly onFavoriteArtist: (name: string, favorite: boolean) => void;
+  readonly onFavoriteArtist: (name: string, favorite: boolean, id?: string) => void;
   readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
   readonly menuActions: TrackMenuActions;
   /** The lyrics of the song playing: `null` for none, `undefined` while they are read. */

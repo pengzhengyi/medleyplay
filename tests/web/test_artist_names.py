@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.artists import KnownArtist
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.artists import Alias, Artist
-from medleyplay.domain.catalog import SourceKey, TrackDetails
+from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
 from medleyplay.domain.covers import MAX_COVER_BYTES
 from medleyplay.persistence.schema import ArtistRow, ArtistSuggestionRow
 from medleyplay.web.artists import ArtistOut
@@ -17,16 +17,19 @@ from tests.support.api import set_up_as_alice
 from tests.support.images import gif_image, png_image
 
 
-def _song_by(catalog: CatalogService, artist: str, title: str = "Song") -> None:
+def _song_by(catalog: CatalogService, artist: str, title: str = "Song") -> TrackId:
     """Add a Library file whose tags name `artist`."""
-    catalog.add_track(SourceKey("library", f"1/Music/{title}.m4a"), TrackDetails(title, artist))
+    return catalog.add_track(
+        SourceKey("library", f"1/Music/{title}.m4a"), TrackDetails(title, artist)
+    )
 
 
 def test_the_artist_names_in_the_library_are_listed(
     client: TestClient, catalog: CatalogService
 ) -> None:
     set_up_as_alice(client)
-    _song_by(catalog, "披头士")
+    song = _song_by(catalog, "披头士")
+    [artist_id] = client.get(f"/api/tracks/{song}").json()["artist_ids"]
 
     body = client.get("/api/artist-names").json()
 
@@ -44,6 +47,7 @@ def test_the_artist_names_in_the_library_are_listed(
                 "suggested": None,
                 "finding": False,
                 "recommendation": None,
+                "artist_ids": [artist_id],
             }
         ],
         "artists": [],

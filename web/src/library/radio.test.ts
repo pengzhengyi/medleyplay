@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import type { Track } from "../api";
-import { favoriteGroupsNaming, trackOf } from "../testing/server";
+import {
+  artistIdOf,
+  favoriteGroupsNaming,
+  trackOf,
+  twoJaysNames,
+  twoJaysSongs,
+} from "../testing/server";
+import { linksOf, withLinkedFavorites } from "./artistLinks";
+import { NO_FAVORITES } from "./favoriteGroups";
 import {
   albumShelves,
   canSuggest,
@@ -56,6 +64,16 @@ describe("taste", () => {
     const other = tasteOf(song(4, "许巍", "时光·漫步"), favorites);
 
     expect([byArtist, onAlbumByArtist, byAlbumArtist, other]).toEqual([0.5, 0.5, 0.5, 0]);
+  });
+
+  it("likes a song by a favorite artist more, but not one by another artist of its name", () => {
+    const songs = twoJaysSongs();
+    const favorites = withLinkedFavorites(
+      { ...NO_FAVORITES, artistIds: new Set([artistIdOf("Jay")]) },
+      linksOf(twoJaysNames(), songs),
+    );
+
+    expect(songs.map((each) => tasteOf(each, favorites))).toEqual([0.5, 0]);
   });
 });
 

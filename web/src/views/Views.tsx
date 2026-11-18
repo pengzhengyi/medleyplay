@@ -116,7 +116,8 @@ export interface ViewProps {
   readonly accountId: number;
   /** The artists and albums the Account favorited, and ways to change them. */
   readonly favorites: FavoriteGroups;
-  readonly onFavoriteArtist: (name: string, favorite: boolean) => void;
+  /** Favorite the artist written `name`, or not: the one bound to `id`, else the one the name names. */
+  readonly onFavoriteArtist: (name: string, favorite: boolean, id?: string) => void;
   readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
   /** Which artist names are one artist, as the household linked them; none, unless given. */
   readonly links?: ArtistLinks;
@@ -187,9 +188,12 @@ function viewOf(given: ViewProps) {
       const name =
         (route.id === undefined ? undefined : artistWrittenOf(props.tracks, route.id)) ??
         route.name;
-      const songs = tracksOfArtist(props.tracks, name, props.links);
+      // Another artist called the name than its first has its own songs, kept by its id.
+      const links = props.links ?? NO_LINKS;
+      const namesake = route.id !== undefined && links.isNamesake(route.id);
+      const songs = tracksOfArtist(props.tracks, name, props.links, route.id);
       const known = props.artistNames?.names;
-      const group = (props.links ?? NO_LINKS).groupOf(name);
+      const group = links.groupOfBound(name, route.id);
       const artist = group.startsWith("artist:")
         ? known?.artists.find((each) => `artist:${each.id}` === group)
         : undefined;
@@ -205,7 +209,9 @@ function viewOf(given: ViewProps) {
                 name={shown}
                 songs={songs}
                 artist={artist}
-                toLink={named !== undefined && !named.linked && named.look_up === "yes"}
+                toLink={
+                  !namesake && named !== undefined && !named.linked && named.look_up === "yes"
+                }
               />
             )
           }
@@ -226,12 +232,14 @@ function viewOf(given: ViewProps) {
               <FavoriteHeart
                 kind="artist"
                 name={shown}
-                favorite={isFavoriteArtist(props.favorites, name)}
+                favorite={isFavoriteArtist(props.favorites, name, route.id)}
                 onChange={(favorite) => {
-                  props.onFavoriteArtist(name, favorite);
+                  props.onFavoriteArtist(name, favorite, route.id);
                 }}
                 loved={favoriteSongsSuggesting(songs)}
-                suggestionKey={`${String(props.accountId)}:artist:${fold(name.trim())}`}
+                suggestionKey={`${String(props.accountId)}:artist:${
+                  namesake ? (route.id ?? "") : fold(name.trim())
+                }`}
               />
             )
           }
@@ -534,8 +542,8 @@ function ArtistList({
     <ul className="groups" aria-label="Artists">
       {artists.map((artist) => (
         <li
-          key={artist.link}
-          className={isFavoriteArtist(favorites, artist.link) ? "favorite" : ""}
+          key={artist.id ?? artist.link}
+          className={isFavoriteArtist(favorites, artist.link, artist.id) ? "favorite" : ""}
         >
           <a
             href={hrefOf({
@@ -545,12 +553,18 @@ function ArtistList({
             })}
           >
             <span className="tile-frame">
-              <Cover cover={links.photoOf(links.groupOf(artist.link))} className="avatar">
+              <Cover
+                cover={links.photoOf(links.groupOfBound(artist.link, artist.id))}
+                className="avatar"
+              >
                 {initialOf(artist.name)}
               </Cover>
-              {isFavoriteArtist(favorites, artist.link) && <FavoriteBadge />}
+              {isFavoriteArtist(favorites, artist.link, artist.id) && <FavoriteBadge />}
             </span>
             <span className="group-name">{artist.name || UNKNOWN_ARTIST}</span>
+            {artist.onAlbum !== undefined && (
+              <span className="group-meta group-album">on {artist.onAlbum}</span>
+            )}
             <span className="group-meta">{formatLength(artist.count, artist.durationMs)}</span>
           </a>
         </li>

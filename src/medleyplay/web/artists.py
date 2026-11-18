@@ -130,6 +130,10 @@ class ArtistNameOut(BaseModel):
     recommendation: RecommendationOut | None = Field(
         default=None, description="What an AI model last recommended, while it isn't linked."
     )
+    artist_ids: list[str] = Field(
+        default_factory=list,
+        description="The Library's artists the name names, its first first; several share it.",
+    )
 
     @classmethod
     def of(cls, named: ArtistName) -> "ArtistNameOut":
@@ -145,6 +149,7 @@ class ArtistNameOut(BaseModel):
             candidates=[CandidateOut(artist_id=i, score=s) for i, s in named.candidates],
             suggested=named.suggested,
             finding=named.finding,
+            artist_ids=list(named.artist_ids),
             recommendation=None
             if named.recommendation is None
             else RecommendationOut(

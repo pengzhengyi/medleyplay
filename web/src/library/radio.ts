@@ -62,9 +62,7 @@ export function tasteOf(track: Track, favorites: FavoriteGroups = NO_FAVORITES):
   const artist = albumArtistOf(track);
   // Once, however many of its groups are favorites, so a group can't outweigh a heart.
   const inFavoriteGroup =
-    byFavoriteArtist(track, favorites) ||
-    isFavoriteArtist(favorites, artist) ||
-    isFavoriteAlbum(favorites, artist, track.album);
+    byFavoriteArtist(track, favorites) || isFavoriteAlbum(favorites, artist, track.album);
   return (
     (track.favorite ? 1 : 0) +
     ((ratingOf(track) ?? 3) - 3) / 2 +
@@ -135,9 +133,18 @@ const same = (a: string, b: string) => {
 const shareAnArtist = (a: Track, b: Track) =>
   artistNamesOf(a).some((name) => artistNamesOf(b).some((other) => same(name, other)));
 
-/** Whether a favorite artist sings the song: one it lists, or its artist as written. */
+/**
+ * Whether a favorite artist sings the song: one it lists, by the artist it is bound to,
+ * its artist as written, or its album artist.
+ */
 function byFavoriteArtist(track: Track, favorites: FavoriteGroups): boolean {
-  return [...artistNamesOf(track), track.artist].some((name) => isFavoriteArtist(favorites, name));
+  const names = artistNamesOf(track);
+  const whole = !names.some((name) => fold(name.trim()) === fold(track.artist.trim()));
+  return (
+    names.some((name, place) => isFavoriteArtist(favorites, name, track.artist_ids[place])) ||
+    (whole && isFavoriteArtist(favorites, track.artist)) ||
+    (track.album_artist.trim() !== "" && isFavoriteArtist(favorites, track.album_artist))
+  );
 }
 
 const sharesGenre = (a: Track, b: Track) => {
@@ -338,7 +345,7 @@ function favoriteReason(track: Track, favorites: FavoriteGroups): string | undef
   if (track.favorite) {
     return "A favorite";
   }
-  if (byFavoriteArtist(track, favorites) || isFavoriteArtist(favorites, artist)) {
+  if (byFavoriteArtist(track, favorites)) {
     return "By a favorite artist";
   }
   return isFavoriteAlbum(favorites, artist, track.album) ? "From a favorite album" : undefined;

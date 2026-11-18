@@ -19,12 +19,15 @@ export interface FavoriteGroups {
   readonly artists: ReadonlySet<string>;
   /** Each album as its folded album artist and name, a line apart. */
   readonly albums: ReadonlySet<string>;
+  /** Whether the Library's artist `id` shares its name with the name's first, so its name says nothing. */
+  readonly isNamesake: (id: string) => boolean;
 }
 
 export const NO_FAVORITES: FavoriteGroups = {
   artistIds: new Set(),
   artists: new Set(),
   albums: new Set(),
+  isNamesake: () => false,
 };
 
 /** An album as `FavoriteGroups` holds it. */
@@ -37,11 +40,18 @@ export function favoriteGroupsOf(read: FavoritesRead): FavoriteGroups {
     artistIds: new Set(read.artists.map(({ id }) => id)),
     artists: new Set(),
     albums: new Set(read.albums.map(({ artist, name }) => albumKey(artist, name))),
+    isNamesake: () => false,
   };
 }
 
-export const isFavoriteArtist = (favorites: FavoriteGroups, name: string): boolean =>
-  favorites.artists.has(fold(name.trim()));
+/**
+ * Whether the artist written `name` is a favorite: by its name, or, when a song binds it
+ * to `id`, another artist called so than the name's first, by that id alone.
+ */
+export const isFavoriteArtist = (favorites: FavoriteGroups, name: string, id?: string): boolean =>
+  id !== undefined && favorites.isNamesake(id)
+    ? favorites.artistIds.has(id)
+    : favorites.artists.has(fold(name.trim()));
 
 export const isFavoriteAlbum = (favorites: FavoriteGroups, artist: string, name: string): boolean =>
   favorites.albums.has(albumKey(artist, name));

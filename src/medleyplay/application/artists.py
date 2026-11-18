@@ -23,7 +23,7 @@ answers is kept as a suggestion, which the household may use or not.
 
 from collections import Counter
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
@@ -39,7 +39,7 @@ from medleyplay.application.covers import checked_cover, keep_cover
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
-from medleyplay.application.track_artists import rebind_name
+from medleyplay.application.track_artists import every_name_artists, rebind_name
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import (
     MAX_ABOUT,
@@ -297,6 +297,8 @@ class ArtistName:
     finding: bool
     recommendation: Recommendation | None = None
     """What an AI model last recommended for the name, while it isn't linked."""
+    artist_ids: tuple[str, ...] = ()
+    """The Library's artists the name names, its first first; several when artists share it."""
 
 
 @dataclass(frozen=True)
@@ -344,6 +346,7 @@ class ArtistService:
             searches = {row.key: row for row in db.scalars(select(ArtistSearchRow))}
             recommended = {row.key: row for row in db.scalars(select(ArtistRecommendationRow))}
             artists = _known(db)
+            library = every_name_artists(db)
         known_by = _known_by(artists, {row.artist_id for row in links.values()})
         written: dict[str, Counter[str]] = {}
         tracks: dict[str, set[int]] = {}
@@ -353,7 +356,10 @@ class ArtistService:
             tracks.setdefault(key, set()).add(track_id)
         read = _Read(links, searches, artists, known_by, recommended)
         found = [
-            self._name_of(key, forms.most_common(1)[0][0], len(tracks[key]), read)
+            replace(
+                self._name_of(key, forms.most_common(1)[0][0], len(tracks[key]), read),
+                artist_ids=library.get(key, ()),
+            )
             for key, forms in written.items()
         ]
         found.sort(key=lambda each: (-each.tracks, each.key))

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { hrefOf } from "../routes";
 import {
+  OTHER_JAY,
   type Routes,
   artistIdOf,
   artistNameOf,
@@ -18,6 +19,8 @@ import {
   serve,
   signedIn,
   trackOf,
+  twoJaysNames,
+  twoJaysSongs,
 } from "../testing/server";
 
 /**
@@ -724,6 +727,34 @@ describe("an artist's page", () => {
     expect(
       screen.getByRole("button", { name: "Favorite artist Ryo the composer" }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("two artists of one name", () => {
+  /** A Library with a song by each artist called Jay. */
+  const twoJays = (): Routes => ({
+    ...signedIn(twoJaysSongs(), [favoritesPlaylistOf([])]),
+    "GET /api/artist-names": { body: twoJaysNames() },
+  });
+
+  it("are listed apart among the artists, each by the album its songs are on", async () => {
+    open("#/artists", twoJays());
+
+    const other = await screen.findByRole("link", { name: /Jay.*on Blue Night/u });
+    expect(other).toHaveAttribute("href", `#/artist?id=${OTHER_JAY}&name=Jay`);
+    expect(screen.getByRole("link", { name: /Jay.*on Jay/u })).toHaveAttribute(
+      "href",
+      `#/artist?id=${artistIdOf("Jay")}&name=Jay`,
+    );
+  });
+
+  it("each open a page of their own songs", async () => {
+    open(`#/artist?id=${OTHER_JAY}&name=Jay`, twoJays());
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Jay" })).toBeVisible();
+    await waitFor(() => {
+      expect(songs()).toEqual(["Blue Night"]);
+    });
   });
 });
 

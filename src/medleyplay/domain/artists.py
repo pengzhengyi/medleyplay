@@ -145,6 +145,18 @@ def suggested(name: str, candidates: Sequence[Candidate]) -> str | None:
     return next(iter(by_part)) if len(by_part) == 1 else None
 
 
+def going_by_exactly(name: str, candidates: Sequence[Candidate]) -> tuple[str, ...]:
+    """Return the ids of the artists scored high going by the whole name `name`, best first.
+
+    Two or more say the name may name several artists.
+    """
+    return tuple(
+        each.artist.id
+        for each in candidates
+        if each.score >= SUGGESTED_SCORE and each.goes_by(name)
+    )
+
+
 def _parts(name: str) -> tuple[str, ...]:
     """Return the names a name is written as, divided by slashes or where scripts meet."""
     slashed = [part for part in _SLASH.split(name.strip()) if part]

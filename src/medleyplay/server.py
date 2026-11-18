@@ -58,6 +58,7 @@ from medleyplay.application.remote import RemoteService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
+from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import SilenceService, find_silences_kind
 from medleyplay.application.split_offers import LibrarySweep, SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
@@ -299,6 +300,7 @@ def build_services(  # noqa: PLR0913, PLR0915
             covers_folder=data_dir / COVERS_FOLDER,
         ),
         artist_splits=ArtistSplitService(units, clock, changes.tell),
+        shared_names=SharedNameService(units, clock, changes.tell),
         album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs),
         artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),

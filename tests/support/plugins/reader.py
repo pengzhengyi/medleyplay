@@ -73,6 +73,7 @@ The artist finder `musicbrainz` answers by the name asked about:
 | Name | Answers |
 | --- | --- |
 | `披头士`, `甲壳虫`, `Beatles` | The Beatles at 100, going by each; a tribute band at 61 |
+| `Jay` | Jay Chou at 100 and a rapper called Jay at 95, both going by it; The Jays at 80 |
 | `Refuse` | refused |
 | any other | no artist |
 
@@ -391,6 +392,30 @@ TRIBUTE: Final = FoundArtist(
     score=61,
 )
 
+JAY_CHOU: Final = FoundArtist(
+    id="a3c1f0e2-0000-4000-8000-00000000c40e",
+    name="周杰伦",
+    sort_name="Chou, Jay",
+    country="TW",
+    score=100,
+    aliases=(ArtistAlias(name="Jay Chou"), ArtistAlias(name="Jay")),
+)
+JAY_RAPPER: Final = FoundArtist(
+    id="5e7b2d9a-0000-4000-8000-0000000a7a9e",
+    name="Jay",
+    sort_name="Jay",
+    disambiguation="UK rapper",
+    country="GB",
+    score=95,
+)
+THE_JAYS: Final = FoundArtist(
+    id="c0ffee00-0000-4000-8000-0000000ae750",
+    name="The Jays",
+    sort_name="Jays, The",
+    country="US",
+    score=80,
+)
+
 
 class Artists:
     """Answers each scripted name as the table says."""
@@ -398,6 +423,8 @@ class Artists:
     def find(self, request: FindArtist) -> FoundArtists:
         if request.name in {"披头士", "甲壳虫", "Beatles"}:
             return FoundArtists(artists=(BEATLES, TRIBUTE))
+        if request.name == "Jay":
+            return FoundArtists(artists=(JAY_CHOU, JAY_RAPPER, THE_JAYS))
         if request.name == "Refuse":
             return FoundArtists(status=FindStatus.REFUSED, message="MusicBrainz refused.")
         return FoundArtists()

@@ -6,6 +6,7 @@ from medleyplay.domain.artists import (
     Candidate,
     LookUp,
     artist_key,
+    going_by_exactly,
     may_look_up,
     queries_for,
     suggested,
@@ -62,6 +63,24 @@ def test_two_artists_going_by_the_name_suggest_neither() -> None:
     other = Candidate(Artist("7e1a9b2c", "披头士", "", "a Shanghai band", "CN"), 100, ())
 
     assert suggested("披头士", [_beatles(), other]) is None
+
+
+def test_every_artist_scored_high_going_by_the_name_exactly_goes_by_it() -> None:
+    shanghai = Candidate(Artist("7e1a9b2c", "披头士", "", "a Shanghai band", "CN"), 95, ())
+
+    found = going_by_exactly("披头士", [_beatles(), shanghai, Candidate(TRIBUTE, 61, ())])
+
+    assert found == (BEATLES.id, shanghai.artist.id)
+
+
+def test_an_artist_going_by_the_name_but_scored_low_does_not_go_by_it_exactly() -> None:
+    shanghai = Candidate(Artist("7e1a9b2c", "披头士", "", "a Shanghai band", "CN"), 89, ())
+
+    assert going_by_exactly("披头士", [_beatles(), shanghai]) == (BEATLES.id,)
+
+
+def test_an_artist_going_by_a_part_of_the_name_does_not_go_by_it_exactly() -> None:
+    assert going_by_exactly("披头士/Beatles", [_beatles()]) == ()
 
 
 def test_the_sort_name_counts_as_a_name() -> None:

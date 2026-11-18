@@ -4,7 +4,9 @@ An artist is the Library's own, under an id it keeps when it is linked to a Musi
 artist or unlinked. Each written name, folded, names one artist, or several when
 artists share it; names linked to one MusicBrainz artist name the same one. A song
 writing a name naming several is bound to the one the household chose for it, else
-the one it chose for most of the album's other songs, else the name's first. A name
+the one it chose for most of the album's other songs, else the name's first. Songs
+may be chosen for album by album too, each album by one of the name's artists or by
+a MusicBrainz artist. A name
 the household split is bound as each artist it lists, with how the song credits it; a
 song whose artists the household chose one by one is bound as those, while its artist
 is them written as one. A Track's artists are bound again whenever its shown artist or
@@ -127,6 +129,22 @@ def bind(db: Session, track: TrackRow) -> None:
     A choice among the artists of a name the Track no longer writes is forgotten, and
     another artist of a name left with no song bound to it leaves the name.
     """
+    bind_all(db, [track])
+
+
+def bind_all(db: Session, tracks: Iterable[TrackRow]) -> None:
+    """Bind each of `tracks`, as `bind` does, before any artist left with no song leaves a name.
+
+    So songs may trade artists at once.
+    """
+    before: set[str] = set()
+    for track in tracks:
+        before |= _bind(db, track)
+    _drop_unbound(db, before)
+
+
+def _bind(db: Session, track: TrackRow) -> set[str]:
+    """Bind the Track's artists, returning the ids of the artists it was bound to before."""
     before = set(
         db.scalars(select(TrackArtistRow.artist_id).where(TrackArtistRow.track_id == track.id))
     )
@@ -157,7 +175,7 @@ def bind(db: Session, track: TrackRow) -> None:
         )
     )
     db.flush()
-    _drop_unbound(db, before)
+    return before
 
 
 @dataclass(frozen=True)
@@ -263,6 +281,127 @@ def choose_artist(
     bind(db, track)
 
 
+@dataclass(frozen=True)
+class SongsBy:
+    """Songs chosen to be by one of the Library's artists, or by one MusicBrainz knows.
+
+    Exactly one of `artist_id` and `musicbrainz_id` is given.
+    """
+
+    track_ids: tuple[TrackId, ...]
+    artist_id: str | None = None
+    musicbrainz_id: str | None = None
+
+
+def assign_songs(db: Session, written: str, chosen: Iterable[SongsBy], now: datetime) -> None:
+    """Bind the songs writing the name `written` to the artist chosen for each, among its artists.
+
+    A MusicBrainz artist is the Library's artist linked to it, which the name then names
+    too. With none linked yet, the artist the songs are bound to now is linked to it,
+    unless that one is linked or chosen already; else a new artist is. The most songs
+    go first, so they keep the artist they had. A first artist left with no song of
+    the name gives it up to the next, and the name stays linked to its first artist.
+    """
+    key = artist_key(written)
+    bound = {
+        row.track_id: row.artist_id
+        for row in db.scalars(select(TrackArtistRow))
+        if artist_key(row.written) == key
+    }
+    groups = sorted(chosen, key=lambda each: -len(each.track_ids))
+    for each in groups:
+        if (each.artist_id is None) == (each.musicbrainz_id is None):
+            message = "Choose one artist for each album."
+            raise InvalidInputError(message)
+        if not each.track_ids or not set(each.track_ids) <= bound.keys():
+            message = f"Each song chosen must write {written.strip()} as one of its artists."
+            raise InvalidInputError(message)
+    named = list(artists_named(db, key))
+    taken = {each.artist_id for each in groups if each.artist_id is not None}
+    targets: dict[TrackId, str] = {}
+    for each in groups:
+        artist_id = each.artist_id
+        if artist_id is None:
+            artist_id = _artist_linked(db, written, each, bound, taken)
+            taken.add(artist_id)
+        elif artist_id not in named:
+            message = f"No artist called {written.strip()} has that id."
+            raise NotFoundError(message)
+        if artist_id not in named:
+            db.add(ArtistNameRow(key=key, artist_id=artist_id, position=len(named)))
+            named.append(artist_id)
+        targets |= dict.fromkeys(each.track_ids, artist_id)
+    for track_id, artist_id in targets.items():
+        db.execute(
+            insert(TrackArtistChoiceRow)
+            .values(track_id=track_id, key=key, artist_id=artist_id, chosen_at=now)
+            .on_conflict_do_update(
+                index_elements=["track_id", "key"],
+                set_={"artist_id": artist_id, "chosen_at": now},
+            )
+        )
+    db.flush()
+    bind_all(db, db.scalars(select(TrackRow).where(TrackRow.id.in_(targets))).all())
+    _give_up_unbound_first(db, key)
+    _link_to_first(db, key, written.strip(), now)
+
+
+def _artist_linked(
+    db: Session, written: str, songs: SongsBy, bound: dict[int, str], taken: set[str]
+) -> str:
+    """Return the id of the Library's artist linked to the MusicBrainz artist the songs are by."""
+    if songs.musicbrainz_id is None or db.get(ArtistRow, songs.musicbrainz_id) is None:
+        message = "MusicBrainz hasn't named that artist for any name here."
+        raise NotFoundError(message)
+    linked = _linked_to(db, songs.musicbrainz_id)
+    if linked is not None:
+        return linked.id
+    current = Counter(bound[track_id] for track_id in songs.track_ids).most_common(1)[0][0]
+    artist = db.get_one(LibraryArtistRow, current)
+    if artist.musicbrainz_id is None and current not in taken:
+        artist.musicbrainz_id = songs.musicbrainz_id
+        db.flush()
+        return artist.id
+    return _new_artist(db, written.strip(), songs.musicbrainz_id).id
+
+
+def _give_up_unbound_first(db: Session, key: str) -> None:
+    """Have the name's first artist give it up to the next, if no song writing it is bound to it."""
+    rows = db.scalars(
+        select(ArtistNameRow).where(ArtistNameRow.key == key).order_by(ArtistNameRow.position)
+    ).all()
+    if len(rows) < 2:  # noqa: PLR2004 -- a first and a next
+        return
+    first = rows[0].artist_id
+    songs = db.scalars(select(TrackArtistRow.written).where(TrackArtistRow.artist_id == first))
+    if any(artist_key(each) == key for each in songs):
+        return
+    db.delete(rows[0])
+    db.flush()
+    for position, row in enumerate(rows[1:]):
+        row.position = position
+    artist = db.get(LibraryArtistRow, first)
+    if artist is not None and artist.musicbrainz_id is None and not _names_of(db, first):
+        db.delete(artist)
+    db.flush()
+
+
+def _link_to_first(db: Session, key: str, written: str, now: datetime) -> None:
+    """Link the name to the MusicBrainz artist its first artist is linked to, if it is."""
+    first = _first_of(db, key)
+    if first is None:
+        return
+    musicbrainz_id = db.get_one(LibraryArtistRow, first.artist_id).musicbrainz_id
+    if musicbrainz_id is None:
+        return
+    link = db.get(ArtistLinkRow, key)
+    if link is None:
+        db.add(ArtistLinkRow(key=key, name=written, artist_id=musicbrainz_id, linked_at=now))
+    elif link.artist_id != musicbrainz_id:
+        link.name, link.artist_id, link.linked_at = written, musicbrainz_id, now
+    db.flush()
+
+
 def chosen_credits(db: Session, track_id: TrackId) -> tuple[Credit, ...] | None:
     """Return the artists the household chose for the song one by one, if it did."""
     row = db.get(TrackCreditsRow, track_id)
@@ -347,7 +486,7 @@ def _artist_for(db: Session, track: TrackRow, written: str) -> str:
 
 def _albums_choice(db: Session, track: TrackRow, key: str, named: tuple[str, ...]) -> str | None:
     """Return the artist chosen for most of the album's other songs writing `key`, if any was."""
-    album = _album_of(track)
+    album = album_of(track)
     if album is None:
         return None
     chosen = db.execute(
@@ -355,13 +494,13 @@ def _albums_choice(db: Session, track: TrackRow, key: str, named: tuple[str, ...
         .join(TrackRow, TrackRow.id == TrackArtistChoiceRow.track_id)
         .where((TrackArtistChoiceRow.key == key) & (TrackArtistChoiceRow.track_id != track.id))
     )
-    votes = Counter(artist_id for artist_id, other in chosen if _album_of(other) == album)
+    votes = Counter(artist_id for artist_id, other in chosen if album_of(other) == album)
     if not votes:
         return None
     return max(named, key=lambda artist_id: votes[artist_id])
 
 
-def _album_of(track: TrackRow) -> tuple[str, str] | None:
+def album_of(track: TrackRow) -> tuple[str, str] | None:
     """Return the album the Track is on, folded, by its album artist or else its artist."""
     album = fold(track.album.strip())
     if not album:

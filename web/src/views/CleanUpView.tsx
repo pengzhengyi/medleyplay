@@ -10,9 +10,10 @@
 import { CheckIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
-import type { ArtistNames, ArtistSplits, NameToTidy, SplitOffers, Track } from "../api";
-import { inOrderOfWaiting, toSplitOf, unlinkedOf } from "../library/cleanUp";
+import type { ArtistNames, ArtistSplits, NameToTidy, SharedName, SplitOffers, Track } from "../api";
+import { inOrderOfWaiting, toSplitOf, toTellApartOf, unlinkedOf } from "../library/cleanUp";
 import { LinkArtists } from "./LinkArtists";
+import { SharedNames } from "./SharedNames";
 import { SplitArtistNames } from "./SplitArtistNames";
 import { SplitFiles } from "./SplitFiles";
 import { TidyNames } from "./TidyNames";
@@ -30,6 +31,7 @@ export function CleanUpView({
   tracks = [],
   splits,
   artistSplits,
+  sharedNames,
   onEditSongs,
 }: {
   readonly tidy: Read<readonly NameToTidy[]>;
@@ -40,6 +42,8 @@ export function CleanUpView({
   readonly splits?: Read<SplitOffers>;
   /** The artist names written as several artists, to split or keep. */
   readonly artistSplits?: Read<ArtistSplits>;
+  /** The names that may name several artists, to tell apart by album or keep as one. */
+  readonly sharedNames?: Read<readonly SharedName[]>;
   readonly onEditSongs?: (trackId: number) => void;
 }) {
   const toSplitNames = artistSplits?.names.offers.length ?? 0;
@@ -51,6 +55,8 @@ export function CleanUpView({
     splits !== undefined && splits.names.setting !== "off" && splits.names.files.length > 0;
   const toLink = artistNames === undefined ? 0 : unlinkedOf(artistNames.names);
   const linkable = artistNames?.names.names.some((each) => each.look_up !== "never") ?? false;
+  const toTellApart = toTellApartOf(sharedNames?.names);
+  const sharing = (sharedNames?.names.length ?? 0) > 0;
   const sections = inOrderOfWaiting<Section>([
     ...(toTidy > 0
       ? [
@@ -88,6 +94,23 @@ export function CleanUpView({
           },
         ]
       : []),
+    ...(sharedNames !== undefined && sharing
+      ? [
+          {
+            id: "clean-up-shared-names",
+            title: "Artists sharing a name",
+            waiting: toTellApart,
+            body: (
+              <SharedNames
+                names={sharedNames.names}
+                known={artistNames?.names.artists ?? []}
+                tracks={tracks}
+                onChanged={sharedNames.reload}
+              />
+            ),
+          },
+        ]
+      : []),
     ...(artistNames !== undefined && linkable
       ? [
           {
@@ -111,9 +134,9 @@ export function CleanUpView({
         <h2 className="section" data-rail-named>
           Clean up
         </h2>
-        <p className="meta">{summaryOf(toTidy, toLink, toSplit, toSplitNames)}</p>
+        <p className="meta">{summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart)}</p>
       </header>
-      {toTidy === 0 && !linkable && !splitting && !splittingNames ? (
+      {toTidy === 0 && !linkable && !splitting && !splittingNames && !sharing ? (
         <p className="empty">
           Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
           split into songs, show here.
@@ -173,12 +196,20 @@ function SectionBar({ sections }: { readonly sections: readonly Section[] }) {
   );
 }
 
-function summaryOf(toTidy: number, toLink: number, toSplit: number, toSplitNames: number): string {
+function summaryOf(
+  toTidy: number,
+  toLink: number,
+  toSplit: number,
+  toSplitNames: number,
+  toTellApart: number,
+): string {
   const waiting = [
     toTidy > 0 && `${String(toTidy)} ${toTidy === 1 ? "name" : "names"} to tidy`,
     toSplitNames > 0 &&
       `${String(toSplitNames)} artist ${toSplitNames === 1 ? "name" : "names"} to split`,
     toLink > 0 && `${String(toLink)} to link`,
+    toTellApart > 0 &&
+      `${String(toTellApart)} shared ${toTellApart === 1 ? "name" : "names"} to tell apart`,
     toSplit > 0 && `${String(toSplit)} ${toSplit === 1 ? "file" : "files"} to split`,
   ].filter(Boolean);
   return waiting.length === 0 ? "Every name is tidy and linked." : waiting.join(", ");

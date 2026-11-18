@@ -7959,6 +7959,82 @@ button.playing-kind[aria-expanded="true"] {
   font-size: 0.85rem;
 }
 
+/*
+ * A name shared by artists: why it is listed under it, its Keep as one and Confirm to the
+ * right, then each album in rows that line up: its name, its songs, whether confirmed,
+ * and who it is by. On a phone, who it is by goes under the album.
+ */
+.shared-name-row {
+  grid-template-areas:
+    "name actions"
+    "meta actions"
+    "albums albums";
+}
+
+.shared-name-row .tidy-name {
+  grid-area: name;
+}
+
+.shared-name-row .tidy-meta {
+  grid-area: meta;
+}
+
+.shared-name-row .tidy-actions {
+  grid-area: actions;
+}
+
+.shared-albums {
+  display: grid;
+  grid-area: albums;
+  grid-template-columns: minmax(0, 1fr) auto 1rem minmax(11rem, 18rem);
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shared-album {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  margin: 0;
+}
+
+.shared-album-name {
+  overflow-wrap: anywhere;
+}
+
+.shared-album-songs {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.shared-album-confirmed {
+  grid-column: 3;
+  color: var(--accent);
+}
+
+.shared-album-artist {
+  grid-column: 4;
+  width: 100%;
+  margin: 0;
+  padding: 0.25rem 2rem 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+@media (width <= 560px) {
+  .shared-albums {
+    grid-template-columns: minmax(0, 1fr) auto 1rem;
+  }
+
+  .shared-album-artist {
+    grid-column: 1 / -1;
+  }
+}
+
 .split-names-decided {
   margin-top: 0.75rem;
 }

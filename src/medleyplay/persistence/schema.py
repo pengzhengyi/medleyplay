@@ -974,6 +974,16 @@ class TrackArtistChoiceRow(Base):
     chosen_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class NameKeptRow(Base):
+    """A name MusicBrainz knows several artists by, which the household keeps as naming one."""
+
+    __tablename__ = "name_kept"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    written: Mapped[str] = mapped_column(String(512))
+    kept_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class TrackCreditsRow(Base):
     """The artists the household chose for one song, one by one, each `{"written", "role"}`.
 

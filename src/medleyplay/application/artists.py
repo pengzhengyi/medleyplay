@@ -49,6 +49,7 @@ from medleyplay.domain.artists import (
     Candidate,
     LookUp,
     artist_key,
+    going_by_exactly,
     may_look_up,
     queries_for,
     suggested,
@@ -872,6 +873,22 @@ def _complete_names(
         # Such as a full disk: the photo there was stays, rather than none.
         pass
     row.names_at = clock()
+
+
+def names_going_by(db: Session) -> dict[str, tuple[str, ...]]:
+    """Return the MusicBrainz artists scored high going by each name looked up exactly, by key."""
+    artists = _known(db)
+    found: dict[str, tuple[str, ...]] = {}
+    for search in db.scalars(select(ArtistSearchRow)):
+        candidates = [
+            Candidate(artists[id_].artist, score, artists[id_].aliases)
+            for id_, score in _found_of(search)
+            if id_ in artists
+        ]
+        going_by = going_by_exactly(search.name, candidates)
+        if going_by:
+            found[search.key] = going_by
+    return found
 
 
 def _with_known(found: tuple[tuple[str, int], ...], known: set[str]) -> tuple[tuple[str, int], ...]:

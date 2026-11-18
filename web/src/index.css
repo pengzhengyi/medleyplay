@@ -8538,8 +8538,10 @@ button.playing-kind[aria-expanded="true"] {
   margin: 0 0 0.6rem;
 }
 
-.picture-note-text {
-  flex: 1;
+/* Pico sizes a form's fields and submit to the full width; the note takes what Ask leaves. */
+.picture-note .picture-note-text {
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
   margin: 0;
   padding-block: 0.3rem;
@@ -8547,6 +8549,8 @@ button.playing-kind[aria-expanded="true"] {
 }
 
 .picture-note .dialog-button {
+  flex: none;
+  width: auto;
   margin: 0;
 }
 

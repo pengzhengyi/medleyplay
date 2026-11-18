@@ -57,7 +57,12 @@ export function WhichArtist({
           {label}
         </button>
       </Menu.Trigger>
-      <Menu.Content className="track-menu which-artist" align="end" sideOffset={4}>
+      <Menu.Content
+        className="track-menu which-artist"
+        align="end"
+        sideOffset={4}
+        collisionPadding={8}
+      >
         {artists.map((artist, index) => (
           <Fragment key={artist.artist_id}>
             {index > 0 && <Menu.Separator className="track-menu-line" />}

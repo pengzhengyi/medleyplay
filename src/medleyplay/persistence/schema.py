@@ -821,6 +821,24 @@ class ImageLinksRow(Base):
     asked_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class ArtistPictureSearchRow(Base):
+    """What a site last answered for an artist: pictures of the artists going by its name.
+
+    Each of `pictures` is `{"name", "fans", "cover"}`: the name the site knows the
+    artist by, how many follow it there, or `None`, and the cover holding the picture,
+    the most followed first.
+    """
+
+    __tablename__ = "artist_picture_search"
+
+    artist_id: Mapped[str] = mapped_column(
+        ForeignKey("artist.id", ondelete="CASCADE"), primary_key=True
+    )
+    site: Mapped[str] = mapped_column(String(16), primary_key=True)
+    pictures: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class ArtistHouseholdRow(Base):
     """What the household chose for an artist, apart from what the sites said.
 

@@ -23,6 +23,7 @@ from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
+from medleyplay.application.artist_pictures import ArtistPictureService, find_pictures_kind
 from medleyplay.application.artist_splits import ArtistSplitService
 from medleyplay.application.artists import (
     ArtistService,
@@ -187,6 +188,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     artist_jobs = artist_kinds(clock, data_dir / COVERS_FOLDER)
     cover_jobs = album_cover_kinds(clock, data_dir / COVERS_FOLDER)
     link_jobs = image_link_kinds(clock, data_dir / COVERS_FOLDER)
+    picture_jobs = find_pictures_kind(clock, data_dir / COVERS_FOLDER)
     find_silences = find_silences_kind(clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
@@ -198,6 +200,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         artist_jobs.choose.name: artist_jobs.choose,
         artist_jobs.describe.name: artist_jobs.describe,
         cover_jobs.find.name: cover_jobs.find,
+        picture_jobs.name: picture_jobs,
         cover_jobs.choose.name: cover_jobs.choose,
         link_jobs.suggest.name: link_jobs.suggest,
         link_jobs.fetch.name: link_jobs.fetch,
@@ -297,6 +300,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         ),
         artist_splits=ArtistSplitService(units, clock, changes.tell),
         album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs),
+        artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         lyrics=LyricsService(units, clock, changes.tell),
     )

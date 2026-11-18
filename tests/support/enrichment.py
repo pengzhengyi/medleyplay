@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
+from medleyplay.application.artist_pictures import ArtistPictureService, find_pictures_kind
 from medleyplay.application.artists import (
     ArtistKinds,
     ArtistService,
@@ -55,6 +56,7 @@ class Enriching:
     kind: EnrichKind
     artists: ArtistService
     album_covers: AlbumCoverService
+    artist_pictures: ArtistPictureService
     image_links: ImageLinkService
     jobs: JobService
     runner: JobRunner
@@ -170,7 +172,9 @@ def running_enrichment(
     describe = describe_artist_kind(clock)
     album_covers = album_cover_kinds(clock, data_dir / COVERS_FOLDER)
     image_links = image_link_kinds(clock, data_dir / COVERS_FOLDER)
+    pictures = find_pictures_kind(clock, data_dir / COVERS_FOLDER)
     kinds: dict[str, AnyJobKind] = {
+        pictures.name: pictures,
         kind.name: kind,
         find.name: find,
         find_names.name: find_names,
@@ -212,6 +216,7 @@ def running_enrichment(
                     covers_folder=data_dir / COVERS_FOLDER,
                 ),
                 album_covers=AlbumCoverService(units, plugins, jobs, album_covers),
+                artist_pictures=ArtistPictureService(units, plugins, jobs, pictures),
                 image_links=ImageLinkService(
                     units, plugins, jobs, image_links, data_dir / COVERS_FOLDER
                 ),

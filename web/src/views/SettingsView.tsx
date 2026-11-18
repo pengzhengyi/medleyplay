@@ -33,6 +33,7 @@ import { DeviceSettings } from "./DeviceSettings";
 import { KindSettings } from "./KindSettings";
 import { LyricsSettings } from "./LyricsSettings";
 import { LyricsSites } from "./LyricsSites";
+import { PictureSites } from "./PictureSites";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { RatingsSettings } from "./RatingsSettings";
@@ -54,6 +55,7 @@ const SECTIONS = [
   { id: "storage", title: "Downloads and storage" },
   { id: "bilibili", title: "Bilibili" },
   { id: "musicbrainz", title: "MusicBrainz" },
+  { id: "deezer", title: "Deezer" },
   { id: "lyrics", title: "Lyrics" },
   { id: "ai", title: "AI" },
 ] as const;
@@ -61,7 +63,13 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** The sections only an admin sees: they run lookups for every Track, or let devices in. */
-const ADMIN_ONLY: ReadonlySet<SectionId> = new Set(["devices", "bilibili", "musicbrainz", "ai"]);
+const ADMIN_ONLY: ReadonlySet<SectionId> = new Set([
+  "devices",
+  "bilibili",
+  "musicbrainz",
+  "deezer",
+  "ai",
+]);
 
 const FOLDED = "medleyplay.settings.folded.v1";
 
@@ -226,6 +234,7 @@ export function SettingsView({
       </>
     ),
     musicbrainz: <MusicBrainzSettings onChanged={onEnrichersChanged} />,
+    deezer: <PictureSites settings={household} onSettings={keepNewest} />,
     lyrics: (
       <>
         <LyricsSettings onChanged={onEnrichersChanged} />

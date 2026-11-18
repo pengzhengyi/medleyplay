@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
+from medleyplay.application.artist_pictures import ArtistPictureService, find_pictures_kind
 from medleyplay.application.artist_splits import ArtistSplitService
 from medleyplay.application.artists import (
     ArtistKinds,
@@ -315,6 +316,19 @@ def album_covers(
 
 
 @pytest.fixture
+def artist_pictures(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    tmp_path: Path,
+) -> ArtistPictureService:
+    return ArtistPictureService(
+        units, plugins, jobs, find_pictures_kind(clock, tmp_path / "data" / "covers")
+    )
+
+
+@pytest.fixture
 def image_links(
     units: sessionmaker[Session],
     clock: FakeClock,
@@ -492,6 +506,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     artists: ArtistService,
     artist_splits: ArtistSplitService,
     album_covers: AlbumCoverService,
+    artist_pictures: ArtistPictureService,
     image_links: ImageLinkService,
     lyrics: LyricsService,
     clock: FakeClock,
@@ -530,6 +545,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         artists=artists,
         artist_splits=artist_splits,
         album_covers=album_covers,
+        artist_pictures=artist_pictures,
         image_links=image_links,
         lyrics=lyrics,
     )

@@ -6,7 +6,8 @@
 > AI model which artist each name stands for, adding the names, page, and photo
 > Wikidata knows each linked artist by, counting linked names as one artist across
 > the Library, and keeping what the household chooses for an artist, with an AI
-> model's suggestions. Tidying a name written with more than the name in it is in
+> model's suggestions and the pictures Deezer has of it. Tidying a name written with
+> more than the name in it is in
 > [Track details](Track%20details.md).
 
 ## Contents
@@ -22,6 +23,7 @@
 - [Wikidata's names](#wikidatas-names)
 - [Wikidata's page and photo](#wikidatas-page-and-photo)
 - [What the household chooses](#what-the-household-chooses)
+- [Pictures on Deezer](#pictures-on-deezer)
 - [What an AI model suggests for an artist](#what-an-ai-model-suggests-for-an-artist)
 - [The web client](#the-web-client)
 - [What the API shows](#what-the-api-shows)
@@ -309,6 +311,31 @@ on the artist, apart from what the sites said.
 - **Only for an artist a site named,** as a linked name's is; any signed-in
   Account may choose, as any may edit a Track's details.
 
+## Pictures on Deezer
+
+The *Deezer* tab of an artist's picture editor shows the pictures Deezer has of the
+artists going by its name, to choose its photo from. Nothing changes until one is
+used, and one used becomes the household's photo.
+
+- **Off until an admin turns it on:** Settings → Deezer → *Find artist photos on
+  Deezer* saves `picture_sites: ["deezer"]` in the household's settings, and the
+  built-in `deezer` plugin must be on. Until then the tab says so and asks nothing.
+- **Asked when the tab opens** for an artist never asked about, or on *Look again*:
+  one Job in the plugin's own lane, at least 2 seconds after the one before, by the
+  name the household shows the artist by, else MusicBrainz's.
+- **Only Deezer's public API:** one plain GET of
+  `https://api.deezer.com/search/artist?q=<name>&limit=25`, which needs no key or
+  account, naming medleyplay, then each artist's 1000-pixel picture, a quarter of a
+  second apart, fetched only from Deezer's image site (`*.dzcdn.net`) over HTTPS.
+- **At most 8 pictures, the most followed artist first,** each with the name Deezer
+  knows it by and how many follow it. Deezer's blank picture is left out, as is one
+  that is no JPEG, PNG, or WebP image, or is larger than 10 MiB.
+- **Kept as covers are,** named by their bytes; each finding replaces the one before.
+- **Deezer refusing** (HTTP 403) fails the Job, saying why to the Account that asked
+  and to admins. Deezer busy (HTTP 429, a server error, or its quota error) or out
+  of reach fails it as a network failure does; an answer of another shape is an
+  error.
+
 ## What an AI model suggests for an artist
 
 An AI model may be asked, for one linked artist, which name to show it by and who
@@ -451,6 +478,9 @@ not.
 | `PUT /api/artists/{id}/photo` | Signed in | Make the image in the body the household's photo of the artist; 413 past 10 MiB, 422 for no JPEG, PNG, or WebP image |
 | `DELETE /api/artists/{id}/photo` | Signed in | Drop the household's photo, so Wikidata's shows again |
 | `POST /api/artists/{id}/photo/cover` | Signed in | Make a cover already kept the household's photo of the artist; 404 for no such cover |
+| `GET /api/artists/{id}/pictures` | Signed in | The pictures Deezer last had of the artist, the most followed first, when they were found, whether Deezer is asked now and whether that waits for medleyplay to be Online, why the last asking failed, to the Account that asked and to admins, and whether Deezer is turned on; 404 for an artist no site named |
+| `POST /api/artists/{id}/pictures/find` | Signed in | Ask Deezer for pictures of the artists going by the artist's name; 202, or 404 for an artist no site named, or 409 until Deezer is turned on in Settings or while the `deezer` plugin is off |
+| `PUT /api/settings` | Admin | `picture_sites`, the sites asked for pictures of an artist: `[]` or `["deezer"]`; left out, they stay as saved |
 | `POST /api/artists/{id}/suggestion` | Signed in | Ask an AI model which name to show an artist by, and who it is; 202, or 404 for an artist no site named, or 409 while the `ai-details` plugin is off, no AI provider is set up, or a model is asked about it already |
 | `GET /api/artists/{id}/suggestion` | Signed in | Whether a model is asked about the artist and whether that waits for medleyplay to be Online, what it last suggested, with the model that answered, and why the last asking failed, to the Account that asked and to admins |
 
@@ -460,13 +490,15 @@ not.
 - **The plugins** are tested with no socket opened: `musicbrainz` against a
   hand-made artist search in MusicBrainz's shape, `wikipedia` against
   Wikidata's real answers for The Beatles' names and a hand-made image statement
-  in Wikidata's shape, and the artist chooser and describer of `ai-details`
-  against a fake chat client.
+  in Wikidata's shape, `deezer` against a hand-made artist search in Deezer's
+  shape and its error answers, and the artist chooser and describer of
+  `ai-details` against a fake chat client.
 - **The service** runs real Jobs against the test plugin `reader`, whose finder
   answers *披头士* with The Beatles and a tribute band, and whose name finder
   answers for The Beatles as Wikidata would, whose chooser recommends The
-  Beatles unless a song is a tribute, and whose describer suggests the first
-  Chinese name after the songs' own.
+  Beatles unless a song is a tribute, whose describer suggests the first
+  Chinese name after the songs' own, and whose picture finder answers two
+  pictures of The Beatles and refuses *Refuse*.
 - **Shared lanes** are tested with two lanes sharing one name.
 - **Artist ids** are tested through adding, editing, splitting, linking, and
   unlinking songs, and the migration that binds every song already in the

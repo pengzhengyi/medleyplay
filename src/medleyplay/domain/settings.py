@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.lyrics import LyricsSite
 
 ALBUM_MINUTES: Final = 20
@@ -37,7 +38,8 @@ class Settings:
     `None` for no limit, so nothing is removed. A file no origin names the kind
     of is guessed an album when it is `album_minutes` long or longer; `None`
     guesses none, so it is a song. `split_albums` says what becomes of a long
-    file a song list was found for. `lyrics_sites` are the sites asked for a song's
+    file a song list was found for. `picture_sites` are the sites that may be asked for
+    pictures of an artist. `lyrics_sites` are the sites asked for a song's
     lyrics, in turn, when LRCLIB has none.
     """
 
@@ -46,6 +48,7 @@ class Settings:
     album_minutes: int | None = ALBUM_MINUTES
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
     lyrics_sites: tuple[LyricsSite, ...] = ()
+    picture_sites: tuple[PictureSite, ...] = ()
     revision: int = 0
 
     @property

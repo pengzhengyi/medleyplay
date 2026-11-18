@@ -167,6 +167,16 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(digits).replace(/\.0$/, "")} ${UNITS[unit] ?? "bytes"}`;
 }
 
+const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+
+/** Write how many follow an artist, such as `4.1M fans` or `1 fan`; empty when unknown. */
+export function formatFans(fans: number | null): string {
+  if (fans === null) {
+    return "";
+  }
+  return fans === 1 ? "1 fan" : `${compact.format(fans)} fans`;
+}
+
 const letters = new Intl.Segmenter();
 
 /** Return the first letter of `name` as a person sees it, such as `初` or `É`. */

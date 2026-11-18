@@ -4,6 +4,7 @@ The revision guards every change, so a form left open in a forgotten tab can't
 lower the limit over a newer change.
 """
 
+from enum import StrEnum
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.changes import OnChange
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
 from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings, SplitAlbums
@@ -34,10 +36,11 @@ class SettingsDocument(BaseModel):
     album_minutes: int | None = Field(default=ALBUM_MINUTES, ge=1, le=MAX_ALBUM_MINUTES)
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
     lyrics_sites: tuple[LyricsSite, ...] = Field(default=(), max_length=len(LyricsSite))
+    picture_sites: tuple[PictureSite, ...] = Field(default=(), max_length=len(PictureSite))
 
-    @field_validator("lyrics_sites")
+    @field_validator("lyrics_sites", "picture_sites")
     @classmethod
-    def _each_once(cls, sites: tuple[LyricsSite, ...]) -> tuple[LyricsSite, ...]:
+    def _each_once[Site: StrEnum](cls, sites: tuple[Site, ...]) -> tuple[Site, ...]:
         if len(set(sites)) != len(sites):
             message = "each site may be named once"
             raise ValueError(message)
@@ -76,6 +79,7 @@ class SettingsService:
                 album_minutes=settings.album_minutes,
                 split_albums=settings.split_albums,
                 lyrics_sites=settings.lyrics_sites,
+                picture_sites=settings.picture_sites,
             ).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
@@ -129,5 +133,6 @@ def read_settings(db: Session) -> Settings:
         album_minutes=document.album_minutes,
         split_albums=document.split_albums,
         lyrics_sites=document.lyrics_sites,
+        picture_sites=document.picture_sites,
         revision=row.revision,
     )

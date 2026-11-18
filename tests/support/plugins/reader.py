@@ -85,6 +85,14 @@ The cover finder `musicbrainz` answers by the album asked about:
 | `Refuse` | refused |
 | any other | no cover |
 
+The picture finder `deezer` answers by the artist's name:
+
+| Name | Answers |
+| --- | --- |
+| `The Beatles` | two artists going by it, each with a picture, the most followed first |
+| `Refuse` | refused |
+| any other | no picture |
+
 The cover chooser `ai-details` picks the latest release offered, unless a song of the
 album is *Refused*, when the provider refuses the key, or *Silence*, when it picks none.
 """
@@ -103,6 +111,7 @@ from medleyplay.plugin_api import (
     COVER_FINDER,
     IMAGE_FETCHER,
     IMAGE_SUGGESTER,
+    PICTURE_FINDER,
     TRACK_ENRICHER,
     AiFailure,
     AiFailureKind,
@@ -125,6 +134,7 @@ from medleyplay.plugin_api import (
     FindArtist,
     FindArtistNames,
     FindCovers,
+    FindPictures,
     FindStatus,
     FoundArtist,
     FoundArtistNames,
@@ -132,6 +142,8 @@ from medleyplay.plugin_api import (
     FoundCover,
     FoundCovers,
     FoundLyrics,
+    FoundPicture,
+    FoundPictures,
     ImageLink,
     ImageSubject,
     LyricsProvider,
@@ -479,6 +491,25 @@ HELP_CD: Final = "0a1b2c3d-0000-4000-8000-000000001987"
 """The 1987 CD of *Help!*, which the cover chooser picks."""
 
 
+class Pictures:
+    """Answers as Deezer would for *The Beatles*, writing each picture into the folder asked for."""
+
+    def find(self, request: FindPictures) -> FoundPictures:
+        folder = Path(request.folder)
+        if request.artist == "Refuse":
+            return FoundPictures(status=FindStatus.REFUSED, message="Deezer refused.")
+        if request.artist != "The Beatles":
+            return FoundPictures()
+        (folder / "1.jpg").write_bytes(jpeg_image("The Beatles"))
+        (folder / "2.jpg").write_bytes(jpeg_image("The Beatles Tribute"))
+        return FoundPictures(
+            pictures=(
+                FoundPicture(name="The Beatles", fans=4_100_000, file="1.jpg"),
+                FoundPicture(name="The Beatles", fans=120, file="2.jpg"),
+            )
+        )
+
+
 class Covers:
     """Answers as MusicBrainz would for *Help!*, writing each cover into the folder asked for."""
 
@@ -631,6 +662,7 @@ def register(registry: Registry) -> None:
     registry.add(ARTIST_CHOOSER, "ai-details", ArtistChoices())
     registry.add(ARTIST_DESCRIBER, "ai-details", ArtistDescriptions())
     registry.add(COVER_FINDER, "musicbrainz", Covers())
+    registry.add(PICTURE_FINDER, "deezer", Pictures())
     registry.add(COVER_CHOOSER, "ai-details", CoverChoices())
     registry.add(IMAGE_SUGGESTER, "ai-details", ImageLinks())
     registry.add(IMAGE_FETCHER, "ai-details", Images())

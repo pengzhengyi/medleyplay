@@ -18,6 +18,7 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "album_minutes": 20,
         "split_albums": "approval",
         "lyrics_sites": [],
+        "picture_sites": [],
         "revision": 0,
     }
 
@@ -134,6 +135,30 @@ def test_an_unknown_lyrics_site_is_refused(client: TestClient) -> None:
 
     refused = client.put(
         "/api/settings", json={"storage_limit": None, "lyrics_sites": ["qq"], "revision": 0}
+    )
+
+    assert refused.status_code == 422
+
+
+def test_an_admin_turns_on_deezer_for_artist_pictures_and_saving_without_it_keeps_it_on(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    turned_on = client.put(
+        "/api/settings", json={"storage_limit": None, "picture_sites": ["deezer"], "revision": 0}
+    )
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert turned_on.json()["picture_sites"] == ["deezer"]
+    assert saved.json()["picture_sites"] == ["deezer"]
+
+
+def test_an_unknown_picture_site_is_refused(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    refused = client.put(
+        "/api/settings", json={"storage_limit": None, "picture_sites": ["spotify"], "revision": 0}
     )
 
     assert refused.status_code == 422

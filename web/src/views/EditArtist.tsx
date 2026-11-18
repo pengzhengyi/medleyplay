@@ -6,8 +6,9 @@
  * song's cover is. An empty name shows the artist as most of its songs write it, and
  * removing the household's photo shows Wikidata's again. An AI model may be asked to
  * suggest a name and a note; each suggestion shows beside its field, to use or not.
- * *Replace the photo* opens the picture editor, to upload one or ask an AI model for
- * pictures of the artist on the web, one of which, approved, becomes its photo.
+ * *Replace the photo* opens the picture editor, to upload one, choose one of the pictures
+ * Deezer has, or ask an AI model for pictures of the artist on the web, one of which,
+ * approved, becomes its photo.
  */
 
 import { PencilSimpleIcon, SparkleIcon, SpinnerGapIcon } from "@phosphor-icons/react";
@@ -370,6 +371,7 @@ export function EditArtist({
               kind: "photo",
               of: name,
               shown: artist.photo,
+              artistId: artist.id,
               pictured: { kind: "artist", artistId: artist.id },
               upload: async (image) => {
                 await api.setArtistPhoto(artist.id, image);

@@ -8439,6 +8439,13 @@ button.playing-kind[aria-expanded="true"] {
   font-size: 0.75rem;
 }
 
+/* How many follow an artist on Deezer, under its name. */
+.picture-fans {
+  margin-top: -0.2rem;
+  font-size: 0.68rem;
+  opacity: 0.8;
+}
+
 .cover-choice-about {
   display: -webkit-box;
   overflow: hidden;

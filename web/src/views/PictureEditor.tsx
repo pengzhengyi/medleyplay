@@ -2,9 +2,11 @@
  * @file Replacing a cover or a photo: one editor, a tab for each place a picture comes from.
  *
  * *Upload* takes a picture from this device, dropped or chosen, and shows it before it is
- * used; *MusicBrainz* shows the covers of the album's releases; *Ask AI* shows the
- * pictures a model suggests. Using one closes the editor; nothing changes before that.
- * An artist's photo has no MusicBrainz tab, and a song on no album can't be looked up.
+ * used; *MusicBrainz* shows the covers of the album's releases; *Deezer* shows its
+ * pictures of the artists going by an artist's name; *Ask AI* shows the pictures a model
+ * suggests. Using one closes the editor; nothing changes before that. A cover has no
+ * Deezer tab, an artist's photo no MusicBrainz tab, and a song on no album can't be
+ * looked up.
  */
 
 import {
@@ -12,12 +14,14 @@ import {
   ImageSquareIcon,
   SparkleIcon,
   UploadSimpleIcon,
+  UserSquareIcon,
 } from "@phosphor-icons/react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { type FileRejection, useDropzone } from "react-dropzone";
 
 import type { Pictured } from "../api";
+import { ArtistPictureFinder } from "./ArtistPictureFinder";
 import { CoverFinder } from "./CoverFinder";
 import { ImageLinks } from "./ImageLinks";
 import { Modal } from "./Modal";
@@ -44,11 +48,13 @@ export interface PictureSources {
   readonly shown: string | null | undefined;
   /** The album to look up, for a cover; none for a song on no album. */
   readonly album?: CoverAlbum | undefined;
+  /** The artist to find pictures of on Deezer, for a photo. */
+  readonly artistId?: string | undefined;
   /** What a model is asked to picture; none when nothing can be asked. */
   readonly pictured?: Pictured | undefined;
   /** Use the picture `image`, uploaded from this device. */
   readonly upload: (image: File) => Promise<void>;
-  /** Use the picture `cover`, chosen from MusicBrainz or approved from a model. */
+  /** Use the picture `cover`, chosen from MusicBrainz or Deezer, or approved from a model. */
   readonly use: (cover: string) => Promise<void>;
 }
 
@@ -76,7 +82,7 @@ export function PictureEditor({
   const id = useId();
   const [using, setUsing] = useState(false);
   const [error, setError] = useState("");
-  const { kind, of, shown, album, pictured } = sources;
+  const { kind, of, shown, album, artistId, pictured } = sources;
   const noun = kind === "cover" ? "cover" : "photo";
 
   /** Make the change `change` makes, and close once it is made. */
@@ -109,6 +115,9 @@ export function PictureEditor({
             why: album === undefined ? "Fill in the album to find its covers." : undefined,
           },
         ]
+      : []),
+    ...(artistId !== undefined
+      ? [{ value: "deezer", label: "Deezer", icon: <UserSquareIcon weight="bold" aria-hidden /> }]
       : []),
     {
       value: "ai",
@@ -158,6 +167,16 @@ export function PictureEditor({
                 album={album.album}
                 artist={album.artist}
                 shown={shown ?? undefined}
+                busy={using}
+                onUse={(cover) => void change(() => sources.use(cover))}
+              />
+            </Tabs.Content>
+          )}
+          {artistId !== undefined && (
+            <Tabs.Content value="deezer" className="picture-editor-panel">
+              <ArtistPictureFinder
+                artistId={artistId}
+                shown={shown}
                 busy={using}
                 onUse={(cover) => void change(() => sources.use(cover))}
               />

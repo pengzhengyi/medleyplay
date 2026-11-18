@@ -8,6 +8,7 @@ import type {
   Lyrics,
   CoverRelease,
   AlbumCovers,
+  ArtistPictures,
   AiProvider,
   ArtistSuggestion,
   Account,
@@ -660,6 +661,32 @@ export function helpFound(known: Partial<AlbumCovers> = {}): AlbumCovers {
       { release: CD, cover: "cover-1987" },
     ],
     found_at: "2026-11-16T00:00:00Z",
+    ...known,
+  };
+}
+
+/** Nothing known of the pictures Deezer has of an artist: never looked up, Deezer on. */
+export const UNKNOWN_PICTURES: ArtistPictures = {
+  pictures: [],
+  found_at: null,
+  finding: false,
+  waiting: false,
+  failure: null,
+  may_find: true,
+};
+
+/**
+ * The Beatles' pictures on Deezer, `picture-beatles` of the band, 4.1M fans, and
+ * `picture-tribute` of a tribute band no count is known of, with `known` on top.
+ */
+export function beatlesPictures(known: Partial<ArtistPictures> = {}): ArtistPictures {
+  return {
+    ...UNKNOWN_PICTURES,
+    pictures: [
+      { name: "The Beatles", fans: 4_100_000, cover: "picture-beatles" },
+      { name: "The Beatles Revival", fans: null, cover: "picture-tribute" },
+    ],
+    found_at: "2026-11-18T00:00:00Z",
     ...known,
   };
 }

@@ -97,6 +97,12 @@ class Candidate:
         return any(artist_key(each) == key for each in names if each)
 
 
+class PictureSite(StrEnum):
+    """A site the household may turn on to be asked for pictures of an artist."""
+
+    DEEZER = "deezer"
+
+
 class LookUp(StrEnum):
     """Whether a name may be looked up."""
 

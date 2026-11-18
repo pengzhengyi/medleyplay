@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings, SplitAlbums
 from medleyplay.web.deps import SettingsDep, SignedInAccount
@@ -37,6 +38,12 @@ class SettingsIn(BaseModel):
             " Left out, they stay as saved."
         ),
     )
+    picture_sites: tuple[PictureSite, ...] = Field(
+        default=(),
+        description=(
+            "The sites that may be asked for pictures of an artist. Left out, they stay as saved."
+        ),
+    )
     revision: int = Field(ge=0)
 
 
@@ -48,6 +55,7 @@ class SettingsOut(BaseModel):
     album_minutes: int | None
     split_albums: SplitAlbums
     lyrics_sites: tuple[LyricsSite, ...]
+    picture_sites: tuple[PictureSite, ...]
     revision: int
 
     @classmethod
@@ -59,6 +67,7 @@ class SettingsOut(BaseModel):
             album_minutes=settings.album_minutes,
             split_albums=settings.split_albums,
             lyrics_sites=settings.lyrics_sites,
+            picture_sites=settings.picture_sites,
             revision=settings.revision,
         )
 
@@ -92,6 +101,11 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
                 body.lyrics_sites
                 if "lyrics_sites" in body.model_fields_set
                 else saved_before.lyrics_sites
+            ),
+            picture_sites=(
+                body.picture_sites
+                if "picture_sites" in body.model_fields_set
+                else saved_before.picture_sites
             ),
             revision=body.revision,
         ),

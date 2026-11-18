@@ -306,6 +306,7 @@ place a picture comes from, listed down its side and across the top on a phone:
 | --- | --- | --- |
 | *Upload* | A panel to drop a picture on, or *Choose a file…*; the picture chosen shows before *Use this cover* | Every picture |
 | *MusicBrainz* | The covers of the album's releases, below | A cover of a song or an album |
+| *Deezer* | The pictures Deezer has of the artists going by the artist's name ([Artists](Artists.md#pictures-on-deezer)) | An artist's photo |
 | *Ask AI* | The pictures an AI model names, below | Every picture |
 
 - **Nothing changes until a picture is used,** and using one closes the editor;

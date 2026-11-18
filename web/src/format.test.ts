@@ -4,6 +4,7 @@ import {
   formatMinutes,
   formatTimeLeft,
   formatBytes,
+  formatFans,
   formatLength,
   formatListened,
   formatLibraryLength,
@@ -23,6 +24,19 @@ describe("formatTime", () => {
   it("writes an unknown length as dashes", () => {
     expect(formatTime(undefined)).toBe("–:––");
     expect(formatTime(Number.NaN)).toBe("–:––");
+  });
+});
+
+describe("formatFans", () => {
+  it.each([
+    [4_100_000, "4.1M fans"],
+    [12_345, "12.3K fans"],
+    [120, "120 fans"],
+    [1, "1 fan"],
+    [0, "0 fans"],
+    [null, ""],
+  ])("writes %s followers as %j", (fans, written) => {
+    expect(formatFans(fans)).toBe(written);
   });
 });
 

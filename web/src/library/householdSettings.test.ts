@@ -15,6 +15,7 @@ const HELD: Settings = {
   album_minutes: 20,
   split_albums: "approval",
   lyrics_sites: [],
+  picture_sites: [],
   revision: 2,
 };
 

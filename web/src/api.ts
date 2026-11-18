@@ -134,6 +134,9 @@ export type LyricsOrigin = "household" | "sidecar" | "tag" | "lrclib" | "netease
 /** A site the household may turn on to be asked for the lyrics LRCLIB lacks. */
 export type LyricsSite = "netease";
 
+/** A site asked for pictures of an artist, once the household turns it on. */
+export type PictureSite = "deezer";
+
 /** A word of a line of lyrics, and when it is sung, in milliseconds. */
 export interface LyricWord {
   readonly at_ms: number;
@@ -439,6 +442,26 @@ export interface AlbumCovers {
   readonly may_choose: boolean;
 }
 
+/** What is known of the pictures Deezer has of an artist, and what is asked. */
+export interface ArtistPictures {
+  /** The pictures last found, the most followed artist first. */
+  readonly pictures: readonly {
+    /** The name Deezer knows the artist by. */
+    readonly name: string;
+    /** How many follow the artist on Deezer, if known. */
+    readonly fans: number | null;
+    readonly cover: string;
+  }[];
+  readonly found_at: string | null;
+  readonly finding: boolean;
+  /** Whether the asking waits for medleyplay to be Online. */
+  readonly waiting: boolean;
+  /** Why the last finding failed; only to the Account that asked, and to admins. */
+  readonly failure: string | null;
+  /** Whether the household turned Deezer on in Settings. */
+  readonly may_find: boolean;
+}
+
 /** A link to a picture an AI model suggested, and what fetching it gave. */
 export interface SuggestedLink {
   readonly url: string;
@@ -594,6 +617,8 @@ export interface Settings {
   readonly split_albums: SplitAlbums;
   /** The sites asked for a song's lyrics, in turn, when LRCLIB has none. */
   readonly lyrics_sites: readonly LyricsSite[];
+  /** The sites asked for pictures of an artist, to choose its photo from. */
+  readonly picture_sites: readonly PictureSite[];
   readonly revision: number;
 }
 
@@ -1220,6 +1245,12 @@ export const api = {
   /** Ask an AI model which name to show an artist by, and who it is; nothing changes. */
   suggestForArtist: (artistId: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/suggestion`),
+  /** What is known of the pictures Deezer has of an artist, and what is asked. */
+  artistPictures: (artistId: string) =>
+    call<ArtistPictures>("GET", `/api/artists/${encodeURIComponent(artistId)}/pictures`),
+  /** Ask Deezer for pictures of the artists going by an artist's name; nothing changes. */
+  findArtistPictures: (artistId: string) =>
+    call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/find`),
   /** What is known of the covers of the album `album` by `artist`, its album artist or artist. */
   albumCovers: (album: string, artist: string) =>
     call<AlbumCovers>(

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Artist photos from Deezer** — *Edit artist* → *Replace* has a *Deezer* tab
+  showing the pictures Deezer has of the artists going by the artist's name, the
+  most followed first, to use one as its photo. Off until an admin turns on
+  Settings → Deezer → *Find artist photos on Deezer*; only Deezer's public API is
+  asked. New: the `deezer` plugin, the `picture_sites` setting, and
+  `GET /api/artists/{id}/pictures`, `POST /api/artists/{id}/pictures/find`
+  (migration 0052).
+
 - **Artists by id** — each song names the ids of its artists (`artist_ids`), an
   artist's page opens by id (`#/artist?id=…`; links by name still open), and
   favorite artists are kept by id, following an artist whose name joins another.

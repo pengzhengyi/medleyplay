@@ -15,6 +15,7 @@ const LIMIT_20: Settings = {
   album_minutes: 20,
   split_albums: "approval",
   lyrics_sites: [],
+  picture_sites: [],
   revision: 2,
 };
 
@@ -244,6 +245,34 @@ describe("the Lyrics section", () => {
     expect(await lyrics().findByText("Saved.")).toBeVisible();
     expect(sent).toEqual([{ ...LIMIT_20, lyrics_sites: ["netease"] }]);
     expect(netease).toBeChecked();
+  });
+});
+
+describe("the Deezer section", () => {
+  it("turns Deezer on at once, to be asked for pictures of artists", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, picture_sites: ["deezer"], revision: 3 } };
+      },
+    });
+    const deezer = within(screen.getByRole("region", { name: "Deezer" }));
+    const finding = await deezer.findByRole("switch", { name: "Find artist photos on Deezer" });
+
+    expect(finding).not.toBeChecked();
+    await userEvent.click(finding);
+
+    expect(await deezer.findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...LIMIT_20, picture_sites: ["deezer"] }]);
+    expect(finding).toBeChecked();
+  });
+
+  it("is only for admins", async () => {
+    open(false);
+
+    expect(await screen.findByRole("button", { name: "Go to Lyrics" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Go to Deezer" })).toBeNull();
   });
 });
 
@@ -576,6 +605,7 @@ describe("the Settings sections", () => {
       "Downloads and storage",
       "Bilibili",
       "MusicBrainz",
+      "Deezer",
       "Lyrics",
       "AI",
     ]);

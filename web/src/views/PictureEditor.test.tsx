@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { helpFound, serve } from "../testing/server";
+import { beatlesPictures, helpFound, serve } from "../testing/server";
 import { MAX_PICTURE_BYTES, PictureEditor, type PictureSources } from "./PictureEditor";
 
 const COVERS = `GET /api/album-covers?${new URLSearchParams({ album: "Help!", artist: "The Beatles" }).toString()}`;
@@ -19,6 +19,18 @@ function helpCover(change: Partial<PictureSources> = {}): PictureSources {
     use: vi.fn(() => Promise.resolve()),
     ...change,
   };
+}
+
+/** The Beatles' photo, none yet, to add from this device, Deezer, or the AI. */
+function beatlesPhoto(): PictureSources {
+  return helpCover({
+    kind: "photo",
+    of: "The Beatles",
+    shown: null,
+    album: undefined,
+    artistId: "b10bbbfc",
+    pictured: { kind: "artist", artistId: "b10bbbfc" },
+  });
 }
 
 function editing(sources: PictureSources) {
@@ -139,26 +151,35 @@ describe("the picture editor", () => {
     }
   });
 
-  it("offers an artist's photo from this device or from the AI, MusicBrainz having none", () => {
+  it("offers an artist's photo from this device, Deezer, or the AI, MusicBrainz having none", () => {
     serve({});
 
-    render(
-      <PictureEditor
-        sources={helpCover({
-          kind: "photo",
-          of: "The Beatles",
-          shown: null,
-          album: undefined,
-          pictured: { kind: "artist", artistId: "b10bbbfc" },
-        })}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<PictureEditor sources={beatlesPhoto()} onClose={vi.fn()} />);
 
     const dialog = within(screen.getByRole("dialog", { name: "Add a photo" }));
     expect(dialog.getAllByRole("tab").map((tab) => tab.textContent.trim())).toEqual([
       "Upload",
+      "Deezer",
       "Ask AI",
     ]);
+  });
+
+  it("uses a picture found on Deezer as the artist's photo, and closes", async () => {
+    serve({ "GET /api/artists/b10bbbfc/pictures": { body: beatlesPictures() } });
+    const sources = beatlesPhoto();
+    const onClose = vi.fn();
+    render(<PictureEditor sources={sources} onClose={onClose} />);
+    const dialog = within(screen.getByRole("dialog", { name: "Add a photo" }));
+    const user = userEvent.setup();
+
+    await user.click(dialog.getByRole("tab", { name: "Deezer" }));
+    await user.click(
+      await dialog.findByRole("button", { name: /^Use the picture of The Beatles,/u }),
+    );
+
+    expect(sources.use).toHaveBeenCalledWith("picture-beatles");
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledOnce();
+    });
   });
 });

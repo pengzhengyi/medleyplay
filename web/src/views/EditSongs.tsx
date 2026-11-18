@@ -104,6 +104,8 @@ export interface AiAsk {
   readonly ask: () => void;
   /** Ask the AI again at once, with a note of the listener's, which may be empty. */
   readonly askAgain: (hint: string) => void;
+  /** Stop asking the AI, while it waits or works. */
+  readonly stop: () => void;
 }
 
 /** Reads what is known of the gaps in a file's audio, and finds them. */
@@ -164,6 +166,8 @@ export function SongsEditor({
   const [songs, setSongs] = useState<Songs | undefined>(undefined);
   const [rows, setRows] = useState<readonly Row[]>([]);
   const [typing, setTyping] = useState(false);
+  // The songs the list typed comes to, once it checks clean.
+  const [listed, setListed] = useState<readonly Song[] | undefined>(undefined);
   const [fillNote, setFillNote] = useState("");
   const [askedAi, setAskedAi] = useState(false);
   // Whether the rows are the AI's answer as it gave it, so pressing AI asks again.
@@ -272,12 +276,16 @@ export function SongsEditor({
    * Fill the rows from `list`, keeping each song it still names, and say where it came
    * from; `byAi` says the list is the AI's answer.
    */
-  const fill = (list: readonly Song[], from: string, byAi = false) => {
+  /** The rows `list` comes to, each keeping the song it most likely is of those now. */
+  const rowsOfList = (list: readonly Song[]) => {
     const ids = keptIds(
       rows.map((row) => ({ id: row.id, title: row.title, startMs: startOf(row) })),
       list,
     );
-    edit(list.map((song, index) => rowOf(song, ids[index] ?? null)));
+    return list.map((song, index) => rowOf(song, ids[index] ?? null));
+  };
+  const fill = (list: readonly Song[], from: string, byAi = false) => {
+    edit(rowsOfList(list));
     setFillNote(`${songCount(list.length)} ${from}${byAi ? ", starts estimated" : ""}`);
     setFromAi(byAi);
   };
@@ -514,6 +522,23 @@ export function SongsEditor({
   const kept = new Set(rows.flatMap((row) => (row.id === null ? [] : [row.id])));
   const removing = songs?.songs.filter((song) => !kept.has(song.id)).length ?? 0;
   const thinking = askedAi && !aiDone;
+  /** Stop asking the AI; the rows stay as they are. */
+  const stopAi = () => {
+    ai.stop();
+    setAskedAi(false);
+    setFillNote("Stopped asking the AI.");
+  };
+  // Left while the AI is asked, as on Details or closing, the asking stops: nothing waits on it.
+  const stopOnLeaving = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    stopOnLeaving.current = thinking ? ai.stop : undefined;
+  });
+  useEffect(
+    () => () => {
+      stopOnLeaving.current?.();
+    },
+    [],
+  );
   // What the AI button shows of the AI: working on it, its songs in use, or why it failed.
   const aiStatus = thinking
     ? "working"
@@ -527,14 +552,15 @@ export function SongsEditor({
   const aiSetUp = useAiSetUp();
   const tooFewToSnap = rows.length < 2;
 
-  const save = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const sent = rowsIn(rows, songs?.length_ms ?? null);
+  /** Save `saved`, asking first when that removes songs. */
+  const saveRows = (saved: readonly Row[], confirmed: boolean) => {
+    const sent = rowsIn(saved, songs?.length_ms ?? null);
     if (typeof sent === "string") {
       setError(sent);
       return;
     }
-    if (removing > 0 && confirming !== "save") {
+    const keeps = new Set(saved.flatMap((row) => (row.id === null ? [] : [row.id])));
+    if (!confirmed && (songs?.songs.some((song) => !keeps.has(song.id)) ?? false)) {
       setConfirming("save");
       return;
     }
@@ -542,6 +568,21 @@ export function SongsEditor({
       await onSave(sent, songs?.songs.map((song) => song.id) ?? []);
       onDone();
     });
+  };
+  const save = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!typing) {
+      saveRows(rows, confirming === "save");
+      return;
+    }
+    if (listed === undefined) {
+      return;
+    }
+    // The list becomes the rows, shown while they save, or while removing songs is asked.
+    const next = rowsOfList(listed);
+    fill(listed, "from the list");
+    setTyping(false);
+    saveRows(next, false);
   };
   const unsplit = () => {
     if (confirming !== "unsplit") {
@@ -630,23 +671,31 @@ export function SongsEditor({
               type="button"
               className="fill-button ai-button"
               data-status={aiStatus}
-              disabled={busy || thinking}
+              disabled={busy}
               aria-disabled={noAi}
-              aria-label={fromAi ? "Ask the AI again" : "Fill with AI"}
-              aria-expanded={fromAi ? askingAgain : undefined}
+              aria-label={
+                thinking ? "Stop asking the AI" : fromAi ? "Ask the AI again" : "Fill with AI"
+              }
+              aria-expanded={fromAi && !thinking ? askingAgain : undefined}
               aria-busy={thinking}
               title={
-                fromAi
-                  ? "Ask the AI again, with a note if you like"
-                  : songs.suggested.length > 0
-                    ? `The ${songCount(songs.suggested.length)} ${aiNameOf(songs.suggested_by)} suggested`
-                    : ai.can
-                      ? "Ask the AI for the songs"
-                      : aiSetUp.missing
-                        ? aiSetUp.why
-                        : "The AI can't be asked about this file now"
+                thinking
+                  ? "Stop asking the AI"
+                  : fromAi
+                    ? "Ask the AI again, with a note if you like"
+                    : songs.suggested.length > 0
+                      ? `The ${songCount(songs.suggested.length)} ${aiNameOf(songs.suggested_by)} suggested`
+                      : ai.can
+                        ? "Ask the AI for the songs"
+                        : aiSetUp.missing
+                          ? aiSetUp.why
+                          : "The AI can't be asked about this file now"
               }
               onClick={() => {
+                if (thinking) {
+                  stopAi();
+                  return;
+                }
                 if (noAi) {
                   return;
                 }
@@ -763,13 +812,7 @@ export function SongsEditor({
                 initial={listTextOf(rows)}
                 check={(text) => check(album.id, text)}
                 artists={artists}
-                onUse={(list) => {
-                  setTyping(false);
-                  fill(list, "from the list");
-                }}
-                onCancel={() => {
-                  setTyping(false);
-                }}
+                onListed={setListed}
               />
             </Suspense>
           )}
@@ -895,8 +938,8 @@ export function SongsEditor({
           {error}
         </p>
       )}
-      <footer className="dialog-buttons" hidden={typing}>
-        {split && (
+      <footer className="dialog-buttons">
+        {split && !typing && (
           <button
             type="button"
             className="secondary outline dialog-button songs-unsplit"
@@ -909,20 +952,12 @@ export function SongsEditor({
           </button>
         )}
         <button
-          type="button"
-          className="secondary outline dialog-button"
-          disabled={busy}
-          onClick={onBack}
-        >
-          Cancel
-        </button>
-        <button
           type="submit"
           className="dialog-button"
-          disabled={songs === undefined || busy || typing}
+          disabled={songs === undefined || busy || (typing && listed === undefined)}
           aria-busy={busy}
         >
-          {confirming === "save" ? `Save and remove ${songCount(removing)}` : "Save songs"}
+          {confirming === "save" ? `Save and remove ${songCount(removing)}` : "Save"}
         </button>
       </footer>
     </form>

@@ -4716,7 +4716,42 @@ dialog.modal::backdrop {
 
 .modal h2 {
   margin-bottom: 0.9rem;
+  padding-right: 2rem;
   font-size: 1.1rem;
+}
+
+/* Closing, at the card's top right, apart from what the dialog does at its foot. */
+.modal-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.modal-close:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.modal-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.modal-close:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Adding a song to Playlists. */
@@ -5822,20 +5857,6 @@ button.songs-back:hover {
 .list-problem {
   margin: 0;
   list-style: none;
-}
-
-.list-editor-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-
-.list-editor-button {
-  width: auto;
-  margin: 0;
-  padding: 0.35rem 0.9rem;
-  font-size: 0.85rem;
 }
 
 /* A button that reads as a link, such as a problem's line. */

@@ -185,13 +185,14 @@ describe("editing an artist", () => {
     expect(screen.queryByRole("button", { name: "Remove your photo" })).toBeNull();
   });
 
-  it("offers to cancel once something changed, and to close before", async () => {
-    editing();
-    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
-
+  it("closes from its ✕ without saving, its only button besides Save", async () => {
+    const { onClose } = editing();
     await userEvent.type(screen.getByRole("textbox", { name: "About" }), "Four lads.");
 
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });
 
   it("removes the household's own photo, so Wikidata's shows again", async () => {

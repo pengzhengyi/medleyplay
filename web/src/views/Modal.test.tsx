@@ -40,6 +40,27 @@ function requestClose(dialog: HTMLElement) {
 }
 
 describe("a modal", () => {
+  it("closes from the ✕ at its top right", async () => {
+    const { dialog, onClose } = renderModal();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(dialog).not.toHaveAttribute("open");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("offers no ✕ to press while locked", () => {
+    renderModal(true);
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+  });
+
+  it("focuses its own first field on opening, not the ✕", () => {
+    renderModal();
+
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveFocus();
+  });
+
   it("closes on a close request such as the Back button", () => {
     const { dialog, onClose } = renderModal();
 

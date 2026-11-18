@@ -631,6 +631,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Dialogs close from a ✕ at their top right,** with Escape and a click outside as
+  before; their footers hold only what they do, so *Save* stands alone. The main
+  action reads *Save* (not *Save songs*, *Save to 2 songs*, or *Use these songs*),
+  and the song list's *Back to the songs* is gone, as pressing *List* again does
+  the same. A song list's *Save* fills the songs and saves them at once.
+
 - **A faster first load** — the songs are read first and alone, then what shows
   around them once they are drawn, and what only some views need when the browser is
   idle; the Library shows rows shaped like songs meanwhile. Now Playing, the
@@ -693,6 +699,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- **Asking the AI for a file's songs can be stopped:** pressing *AI* again while it
+  asks, or closing the editor, cancels the lookup, so no AI round runs for nothing.
 
 - **Tidy and Use … work on names a split file writes** — tidying an album name
   that only a split file's songs showed, as when the file named the album by its

@@ -394,14 +394,6 @@ export function EditArtist({
         )}
         <footer className="dialog-buttons">
           <button
-            type="button"
-            className="secondary outline dialog-button"
-            disabled={saving}
-            onClick={() => dialog.current?.close()}
-          >
-            {changed ? "Cancel" : "Close"}
-          </button>
-          <button
             type="submit"
             className="dialog-button"
             disabled={!changed || busy}

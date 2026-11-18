@@ -151,9 +151,6 @@ export function EditDetails({
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const close = () => {
-    dialog.current?.close();
-  };
   const [details, setDetails] = useState<Details | undefined>(undefined);
   const [own, setOwn] = useState<Own>({});
   // The song's artists as chips, or `undefined` while it has one artist in a box.
@@ -590,14 +587,6 @@ export function EditDetails({
           </p>
         )}
         <footer className="dialog-buttons">
-          <button
-            type="button"
-            className="secondary outline dialog-button"
-            disabled={saving || reading || covering}
-            onClick={close}
-          >
-            {changed ? "Cancel" : "Close"}
-          </button>
           <button
             type="submit"
             className="dialog-button"

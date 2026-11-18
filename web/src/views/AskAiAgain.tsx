@@ -40,9 +40,6 @@ export function AskAiAgain({
           another request, which may cost money, and it will likely answer the same.
         </p>
         <footer className="dialog-buttons">
-          <button type="button" className="secondary outline dialog-button" onClick={close}>
-            Cancel
-          </button>
           <button
             type="button"
             className="dialog-button"

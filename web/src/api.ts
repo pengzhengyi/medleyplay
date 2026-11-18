@@ -1528,6 +1528,8 @@ export const api = {
   downloads: () => call<DownloadUnderWay[]>("GET", "/api/downloads"),
   /** Run a failed or cancelled Job again, as a new Job. */
   retryJob: (jobId: number) => call<Job>("POST", `/api/jobs/${String(jobId)}/retry`),
+  /** Cancel a Job the Account asked for; cancelling one that ended changes nothing. */
+  cancelJob: (jobId: number) => call<Job>("POST", `/api/jobs/${String(jobId)}/cancel`),
   mode: () => call<Mode>("GET", "/api/mode"),
   /** Read the network and check the internet now; one reached is Online at once. */
   checkMode: () => call<Mode>("POST", "/api/mode/check"),

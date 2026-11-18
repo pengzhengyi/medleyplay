@@ -2,10 +2,11 @@
  * @file A modal: a card over a dimmed page, open while it is on the page.
  *
  * A native modal `<dialog>`, so focus stays in it and the page behind is inert.
- * Escape or a click outside the card closes it, unless it is `locked`; so does
- * `ref.current.close()`.
+ * The ✕ at its top right, Escape, or a click outside the card closes it, unless it is
+ * `locked`; so does `ref.current.close()`. Its own buttons are only what it does.
  */
 
+import { XIcon } from "@phosphor-icons/react";
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 
 /**
@@ -70,6 +71,17 @@ export function Modal({
       }}
     >
       {children}
+      {/* Last, so opening focuses the dialog's own first field rather than this. */}
+      <button
+        type="button"
+        className="modal-close"
+        aria-label="Close"
+        title="Close (Esc)"
+        disabled={locked}
+        onClick={() => ref.current?.close()}
+      >
+        <XIcon weight="bold" aria-hidden />
+      </button>
     </dialog>
   );
 }

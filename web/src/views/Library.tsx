@@ -429,6 +429,11 @@ export function Library({
           // The lookup's state says why, beside the AI button.
         });
       },
+      stop: () => {
+        library.stopFinding(file.id).catch(() => {
+          // A Job that can't be cancelled has ended; its answer lands as any does.
+        });
+      },
     };
     return {
       label: file.split && count > 0 ? `${String(count)} songs` : "Split into songs",

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.artist_pictures import ArtistPictures
+from medleyplay.application.covers import COVERS_FOLDER
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import PictureSite
@@ -283,3 +284,26 @@ def test_no_picture_is_suggested_when_none_goes_by_the_artists_names(
 
     found = enriching.artist_pictures.pictures(alice, BEATLES)
     assert (len(found.pictures), found.suggested) == (2, None)
+
+
+def test_the_sweep_keeps_the_pictures_found_of_an_artist(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+
+    enriching.covers.sweep()
+
+    covers = enriching.data_dir / COVERS_FOLDER
+    assert all((covers / each.cover).is_file() for each in found.pictures)
+
+
+def test_pictures_whose_files_are_gone_are_forgotten_so_the_artist_is_looked_up_again(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+    (enriching.data_dir / COVERS_FOLDER / found.pictures[0].cover).unlink()
+
+    enriching.covers.sweep()
+
+    forgotten = enriching.artist_pictures.pictures(alice, BEATLES)
+    assert (forgotten.pictures, forgotten.found_at, forgotten.suggested) == ((), None, None)

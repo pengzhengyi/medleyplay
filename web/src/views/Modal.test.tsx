@@ -55,6 +55,23 @@ describe("a modal", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
   });
 
+  it("focuses itself on opening while it has no field yet, not the ✕", () => {
+    const onClose = vi.fn();
+    function Empty() {
+      const ref = useRef<HTMLDialogElement>(null);
+      return (
+        <Modal ref={ref} className="test" labelledBy="empty-title" onClose={onClose}>
+          <div className="card">
+            <h2 id="empty-title">Loading</h2>
+          </div>
+        </Modal>
+      );
+    }
+    render(<Empty />);
+
+    expect(screen.getByRole("dialog", { name: "Loading" })).toHaveFocus();
+  });
+
   it("focuses its own first field on opening, not the ✕", () => {
     renderModal();
 

@@ -4720,6 +4720,11 @@ dialog.modal::backdrop {
   font-size: 1.1rem;
 }
 
+/* The card and its ✕: as big as the card, which the dialog centers. */
+.modal-frame {
+  position: relative;
+}
+
 /* Closing, at the card's top right, apart from what the dialog does at its foot. */
 .modal-close {
   position: absolute;
@@ -4739,11 +4744,6 @@ dialog.modal::backdrop {
   cursor: pointer;
 }
 
-.modal-close:hover:not(:disabled) {
-  background: var(--accent-soft);
-  color: var(--ink);
-}
-
 .modal-close:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -4752,6 +4752,11 @@ dialog.modal::backdrop {
 .modal-close:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.modal-close:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--ink);
 }
 
 /* Adding a song to Playlists. */
@@ -4820,6 +4825,11 @@ dialog.modal::backdrop {
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+
+/* As wide as its words, Save too: Pico stretches a form's submit button across the form. */
+.dialog-buttons .dialog-button {
+  width: auto;
 }
 
 /* Adding a video from Bilibili, and adding a Track's file by hand. */

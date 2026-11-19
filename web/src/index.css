@@ -8749,15 +8749,18 @@ button.playing-kind[aria-expanded="true"] {
 .picture-note .picture-note-text {
   flex: 1 1 auto;
   width: auto;
+  height: auto;
   min-width: 0;
   margin: 0;
   padding-block: 0.3rem;
   font-size: 0.85rem;
 }
 
+/* Ask stands as tall as the note beside it. */
 .picture-note .dialog-button {
   flex: none;
   width: auto;
+  height: auto;
   margin: 0;
 }
 

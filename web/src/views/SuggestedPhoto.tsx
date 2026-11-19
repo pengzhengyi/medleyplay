@@ -1,18 +1,20 @@
 /**
  * @file A photo suggested for an artist that has none, from the pictures Deezer has of it.
  *
- * It stands where the photo would, ringed and tagged as a suggestion, with *Use photo*
- * under it, which makes it the artist's photo in one click. The suggestion is the one an
- * AI model picked, else the most followed whose artist goes by one of the artist's names;
- * Deezer is looked to as the photo editor does. With none, `fallback` shows in its place.
+ * It stands where the photo would, ringed and tagged as a suggestion, and is its own
+ * controls: use it in one click, dismiss it, or choose another in the photo editor. The
+ * suggestion is the one an AI model picked, else the most followed whose artist goes by
+ * one of the artist's names; one dismissed is never suggested again. Deezer is looked
+ * to as the photo editor does. With none, `fallback` shows in its place.
  */
 
-import { CircleNotchIcon, SparkleIcon } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
 
 import { api } from "../api";
 import { formatFans } from "../format";
+import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { Cover } from "./Cover";
+import { SuggestedFrame } from "./SuggestedFrame";
 import { useArtistPictures } from "./useArtistPictures";
 
 /** The photo suggested for the artist `artistId`, called `name`, or `fallback` while none is. */
@@ -25,16 +27,40 @@ export function SuggestedPhoto({
   readonly artistId: string;
   readonly name: string;
   readonly fallback: ReactNode;
-  /** Called once the photo is used, so the artist is read again. */
+  /** Called once a photo is used, so the artist is read again. */
   readonly onUsed: () => void;
 }) {
-  const { state } = useArtistPictures(artistId);
+  const { state, error: readError, dismiss } = useArtistPictures(artistId);
   const [using, setUsing] = useState(false);
   const [error, setError] = useState("");
+  const [changing, setChanging] = useState(false);
   const suggested = state?.suggested ?? null;
   const picture = state?.pictures.find((each) => each.cover === suggested);
+  const editor = changing && (
+    <ArtistPhotoEditor
+      artistId={artistId}
+      name={name}
+      shown={null}
+      onChanged={onUsed}
+      onClose={() => {
+        setChanging(false);
+      }}
+    />
+  );
+  const failure = [error, readError].find((each) => each !== "");
+  const problem = failure !== undefined && (
+    <p className="error" role="alert">
+      {failure}
+    </p>
+  );
   if (state === undefined || suggested === null || picture === undefined) {
-    return fallback;
+    return (
+      <>
+        {fallback}
+        {problem}
+        {editor}
+      </>
+    );
   }
   const pick = state.pick;
   const fans = formatFans(picture.fans);
@@ -48,49 +74,32 @@ export function SuggestedPhoto({
     try {
       await api.useArtistPhotoCover(artistId, suggested);
       onUsed();
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+    } catch (failed) {
+      setError(failed instanceof Error ? failed.message : String(failed));
     } finally {
       setUsing(false);
     }
   };
   return (
     <div className="photo-suggestion">
-      <div className="photo-suggestion-frame">
-        <div
-          className="artist-art tiles-1 photo-suggestion-art"
-          role="img"
-          aria-label={`Suggested photo of ${name}: ${why}`}
-          title={why}
-        >
-          <Cover cover={suggested} className="artist-tile" />
-        </div>
-        <span className="photo-suggestion-tag" aria-hidden>
-          {pick === null ? (
-            "Suggested"
-          ) : (
-            <>
-              <SparkleIcon weight="fill" /> AI pick
-            </>
-          )}
-        </span>
-      </div>
-      <button
-        type="button"
-        className="dialog-button photo-suggestion-use"
-        aria-label={`Use the suggested photo of ${name}`}
-        disabled={using}
-        aria-busy={using}
-        onClick={() => void use()}
+      <SuggestedFrame
+        of={name}
+        why={why}
+        picked={pick !== null}
+        className="artist-art tiles-1"
+        busy={using}
+        onUse={() => void use()}
+        onDismiss={() => {
+          dismiss(suggested);
+        }}
+        onChange={() => {
+          setChanging(true);
+        }}
       >
-        {using && <CircleNotchIcon weight="bold" className="spin" aria-hidden />}
-        Use photo
-      </button>
-      {error !== "" && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+        <Cover cover={suggested} className="artist-tile" />
+      </SuggestedFrame>
+      {problem}
+      {editor}
     </div>
   );
 }

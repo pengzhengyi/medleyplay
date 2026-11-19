@@ -3,7 +3,14 @@
  * files to split.
  */
 
-import type { ArtistNames, ArtistSplits, NameToTidy, SharedName, SplitOffers } from "../api";
+import type {
+  ArtistNames,
+  ArtistSplits,
+  MissingPhoto,
+  NameToTidy,
+  SharedName,
+  SplitOffers,
+} from "../api";
 
 /** Return how many long files have a song list to split them by, unless offering is off. */
 export function toSplitOf(offers: SplitOffers | undefined): number {
@@ -22,9 +29,15 @@ export function toTellApartOf(names: readonly SharedName[] | undefined): number 
   return names?.filter((each) => each.waiting).length ?? 0;
 }
 
+/** Return how many artists with no photo have one suggested, to use. */
+export function photosToUseOf(artists: readonly MissingPhoto[] | undefined): number {
+  return artists?.filter((each) => each.suggested !== null).length ?? 0;
+}
+
 /**
  * Return how many wait: names to tidy, names that may be linked and aren't, long files
- * with a song list to split them by, artist names to split, and names to tell apart.
+ * with a song list to split them by, artist names to split, names to tell apart, and
+ * photos suggested for artists with none.
  */
 export function toDoOf(
   tidy: readonly NameToTidy[],
@@ -32,13 +45,15 @@ export function toDoOf(
   offers?: SplitOffers,
   artistSplits?: ArtistSplits,
   sharedNames?: readonly SharedName[],
+  missingPhotos?: readonly MissingPhoto[],
 ): number {
   return (
     tidy.length +
     (artistNames === undefined ? 0 : unlinkedOf(artistNames)) +
     toSplitOf(offers) +
     (artistSplits?.offers.length ?? 0) +
-    toTellApartOf(sharedNames)
+    toTellApartOf(sharedNames) +
+    photosToUseOf(missingPhotos)
   );
 }
 

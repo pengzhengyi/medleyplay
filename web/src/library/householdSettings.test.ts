@@ -17,6 +17,7 @@ const HELD: Settings = {
   lyrics_sites: [],
   picture_sites: [],
   pick_pictures_by_ai: false,
+  find_artist_photos: "up_next",
   revision: 2,
 };
 

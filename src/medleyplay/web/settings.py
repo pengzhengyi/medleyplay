@@ -5,7 +5,13 @@ from pydantic import BaseModel, Field
 
 from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.lyrics import LyricsSite
-from medleyplay.domain.settings import ALBUM_MINUTES, RemovalOrder, Settings, SplitAlbums
+from medleyplay.domain.settings import (
+    ALBUM_MINUTES,
+    PhotoSearch,
+    RemovalOrder,
+    Settings,
+    SplitAlbums,
+)
 from medleyplay.web.deps import SettingsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -51,6 +57,14 @@ class SettingsIn(BaseModel):
             " found, rather than when someone asks. Left out, it stays as saved."
         ),
     )
+    find_artist_photos: PhotoSearch = Field(
+        default=PhotoSearch.UP_NEXT,
+        description=(
+            "Which artists with no photo the picture sites are asked about without anyone"
+            " asking: those of the songs up next (up_next), every one (missing), or none"
+            " (off). Left out, it stays as saved."
+        ),
+    )
     revision: int = Field(ge=0)
 
 
@@ -64,6 +78,7 @@ class SettingsOut(BaseModel):
     lyrics_sites: tuple[LyricsSite, ...]
     picture_sites: tuple[PictureSite, ...]
     pick_pictures_by_ai: bool
+    find_artist_photos: PhotoSearch
     revision: int
 
     @classmethod
@@ -77,6 +92,7 @@ class SettingsOut(BaseModel):
             lyrics_sites=settings.lyrics_sites,
             picture_sites=settings.picture_sites,
             pick_pictures_by_ai=settings.pick_pictures_by_ai,
+            find_artist_photos=settings.find_artist_photos,
             revision=settings.revision,
         )
 
@@ -120,6 +136,11 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
                 body.pick_pictures_by_ai
                 if "pick_pictures_by_ai" in body.model_fields_set
                 else saved_before.pick_pictures_by_ai
+            ),
+            find_artist_photos=(
+                body.find_artist_photos
+                if "find_artist_photos" in body.model_fields_set
+                else saved_before.find_artist_photos
             ),
             revision=body.revision,
         ),

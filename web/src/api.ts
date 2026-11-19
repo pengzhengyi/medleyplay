@@ -655,7 +655,26 @@ export interface Settings {
   readonly picture_sites: readonly PictureSite[];
   /** Whether an AI model is asked which picture is of an artist as soon as they are found. */
   readonly pick_pictures_by_ai: boolean;
+  /** Which artists with no photo the picture sites are asked about without anyone asking. */
+  readonly find_artist_photos: PhotoSearch;
   readonly revision: number;
+}
+
+/** The artists with no photo looked up on their own: of the songs up next, every one, or none. */
+export type PhotoSearch = "off" | "up_next" | "missing";
+
+/** An artist linked to MusicBrainz with no photo, and the photo suggested for it. */
+export interface MissingPhoto {
+  readonly artist_id: string;
+  readonly name: string;
+  readonly songs: number;
+  /** The cover suggested as its photo, if any. */
+  readonly suggested: string | null;
+  /** Whether an AI model picked the one suggested. */
+  readonly picked: boolean;
+  /** Whether Deezer was asked about it. */
+  readonly found: boolean;
+  readonly finding: boolean;
 }
 
 /** What becomes of a long file a song list was found for: nothing, offered, or split when trusted. */
@@ -1330,9 +1349,19 @@ export const api = {
   /** Ask Deezer for pictures of the artists going by an artist's name; nothing changes. */
   findArtistPictures: (artistId: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/find`),
+  /** Every artist linked to MusicBrainz with no photo, those with a photo suggested first. */
+  missingPhotos: () => call<{ artists: MissingPhoto[] }>("GET", "/api/artist-photos/missing"),
+  /** Ask Deezer about the artists with no photo of `trackIds`, or every one for `null`. */
+  findPhotos: (trackIds: readonly number[] | null) =>
+    call<{ asked: number }>("POST", "/api/artist-photos/find", { track_ids: trackIds }),
   /** Ask an AI model which picture found is of an artist, with what the listener says. */
   chooseArtistPicture: (artistId: string, hint: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/choose`, { hint }),
+  /** Suggest the picture `cover` no more as the artist's photo; nothing else changes. */
+  dismissArtistPicture: (artistId: string, cover: string) =>
+    call<undefined>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/dismiss`, {
+      cover,
+    }),
   /** What is known of the covers of the album `album` by `artist`, its album artist or artist. */
   albumCovers: (album: string, artist: string) =>
     call<AlbumCovers>(

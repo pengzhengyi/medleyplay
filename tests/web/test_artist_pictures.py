@@ -90,6 +90,32 @@ def test_the_pictures_found_are_listed_most_followed_first(
     assert (known["found_at"], known["may_find"]) == ("2026-11-02T00:00:00Z", True)
 
 
+def test_a_picture_dismissed_is_suggested_no_more(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _beatles_known(units)
+    with units.begin() as db:
+        db.add(
+            ArtistPictureSearchRow(
+                artist_id="b10bbbfc",
+                site="deezer",
+                pictures=[
+                    {"name": "The Beatles", "fans": 4_100_000, "cover": "a1"},
+                    {"name": "The Beatles Tribute", "fans": None, "cover": "b2"},
+                ],
+                found_at=datetime(2026, 11, 2, tzinfo=UTC),
+            )
+        )
+
+    response = client.post("/api/artists/b10bbbfc/pictures/dismiss", json={"cover": "a1"})
+    refused = client.post("/api/artists/b10bbbfc/pictures/dismiss", json={"cover": "c3"})
+
+    assert response.status_code == 204
+    assert client.get("/api/artists/b10bbbfc/pictures").json()["suggested"] == "b2"
+    assert refused.status_code == 422
+
+
 def test_the_picture_an_ai_model_picked_is_listed_with_why_and_the_note(
     client: TestClient, units: sessionmaker[Session]
 ) -> None:
@@ -186,6 +212,8 @@ def test_artist_pictures_are_for_signed_in_accounts(client: TestClient) -> None:
     assert client.get("/api/artists/b10bbbfc/pictures").status_code == 401
     assert client.post("/api/artists/b10bbbfc/pictures/find").status_code == 401
     assert client.post("/api/artists/b10bbbfc/pictures/choose", json={}).status_code == 401
+    dismissed = client.post("/api/artists/b10bbbfc/pictures/dismiss", json={"cover": "a1"})
+    assert dismissed.status_code == 401
     assert client.get("/api/artist-photos/missing").status_code == 401
 
 

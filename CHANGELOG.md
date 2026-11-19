@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An album's cover on its page** — under the heading, with *Save* and *Replace* on
+  hover; *Replace* opens the picture editor (upload, MusicBrainz, or Ask AI) without
+  going through *Edit details*.
+
+- **A suggested photo is its own controls** — on an artist's page and in Clean up,
+  its lower half uses it, its upper right dismisses it (never suggested again), and
+  its upper left opens the photo editor; the ring turns green or red to say which.
+  An artist's photo opens the photo editor from the page itself. New:
+  `POST /api/artists/{id}/pictures/dismiss` (migration 0056).
+
 - **Find artist photos** in Clean up — a photo suggested from Deezer for each artist
   with none, used one by one or all at once. Settings → Deezer chooses which artists
   are looked up on their own: those of the songs up next (the default), every one,

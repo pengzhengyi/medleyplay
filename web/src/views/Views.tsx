@@ -56,6 +56,7 @@ import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../l
 import { querySaid } from "../library/query";
 import { isRailNamed } from "../rail";
 import { type Route, hrefOf, navigate } from "../routes";
+import { AlbumAbout } from "./AlbumAbout";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
@@ -311,7 +312,23 @@ function viewOf(given: ViewProps) {
               </button>
             )
           }
-          about={<AlbumRatingNote artist={route.artist} album={route.name} />}
+          about={
+            <AlbumAbout
+              album={route.name}
+              artist={route.artist}
+              // A split file's songs share its cover, so the file is what changes.
+              songs={file === undefined ? songs : [file]}
+              cover={file?.cover ?? albumsOf(songs)[0]?.cover ?? null}
+              {...(route.name === ""
+                ? {}
+                : {
+                    onUse: props.actions.onUseAlbumCover,
+                    onUpload: props.actions.onUploadAlbumCover,
+                  })}
+            >
+              <AlbumRatingNote artist={route.artist} album={route.name} />
+            </AlbumAbout>
+          }
           {...props}
           empty={<p className="empty">No songs from this album are in your Library now.</p>}
         >

@@ -829,6 +829,8 @@ class ArtistPictureSearchRow(Base):
     the most followed first. `pick` is the cover an AI model picked, at `chosen_at`,
     among the covers `offered`, why, the model and its host, and the note it was asked
     with; `None` when it picked none, and `chosen_at` `None` when none was asked.
+    `dismissed` are the covers the household said are not of the artist, kept when the
+    pictures are found again, as a cover is named by its bytes.
     """
 
     __tablename__ = "artist_picture_search"
@@ -846,6 +848,7 @@ class ArtistPictureSearchRow(Base):
     model: Mapped[str] = mapped_column(String(128), default="", server_default="")
     host: Mapped[str] = mapped_column(String(255), default="", server_default="")
     chosen_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    dismissed: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
 
 
 class ArtistHouseholdRow(Base):

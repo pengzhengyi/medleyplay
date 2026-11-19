@@ -26,7 +26,7 @@ import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
 import { Modal } from "./Modal";
-import { PictureEditor } from "./PictureEditor";
+import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { PictureFrame } from "./PictureFrame";
 
 /** The longest name an artist may be shown by, and the longest note about it. */
@@ -366,22 +366,11 @@ export function EditArtist({
           </div>
         </div>
         {replacingPhoto && (
-          <PictureEditor
-            sources={{
-              kind: "photo",
-              of: name,
-              shown: artist.photo,
-              artistId: artist.id,
-              pictured: { kind: "artist", artistId: artist.id },
-              upload: async (image) => {
-                await api.setArtistPhoto(artist.id, image);
-                onChanged();
-              },
-              use: async (cover) => {
-                await api.useArtistPhotoCover(artist.id, cover);
-                onChanged();
-              },
-            }}
+          <ArtistPhotoEditor
+            artistId={artist.id}
+            name={name}
+            shown={artist.photo}
+            onChanged={onChanged}
             onClose={() => {
               setReplacingPhoto(false);
             }}

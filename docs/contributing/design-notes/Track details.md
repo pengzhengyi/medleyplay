@@ -315,6 +315,10 @@ place a picture comes from, listed down its side and across the top on a phone:
   is sent. An album's upload becomes its first song's cover, and then every song's.
 - **A song on no album** can't look its cover up: *MusicBrainz* and *Ask AI* are
   unavailable, saying the album is needed.
+- **An album's page** shows its cover under the heading, your rating beside it, with
+  *Save* and *Replace* on hover, as the album's editor does, so the cover changes
+  without *Edit details*. It is set on every song of the album, or on its one file
+  when the album is a split file.
 - **Built on** Radix UI's tabs, which the dropdown menus' Radix packages already
   bring, and `react-dropzone` for the drop panel.
 

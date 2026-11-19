@@ -182,6 +182,42 @@ describe("about an artist", () => {
   });
 });
 
+describe("replacing a linked artist's photo", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("opens the photo editor from the photo itself", async () => {
+    serve({});
+    render(
+      <ArtistAbout
+        name="The Beatles"
+        songs={[songOn(1, "Help!", "help.jpg")]}
+        artist={BEATLES_ON_WIKIDATA}
+        toLink={false}
+        onPhotoUsed={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Replace the photo…" }));
+
+    expect(await screen.findByRole("dialog", { name: "Replace the photo" })).toBeVisible();
+  });
+
+  it("offers none while the artist can't be changed here", () => {
+    render(
+      <ArtistAbout
+        name="The Beatles"
+        songs={[songOn(1, "Help!", "help.jpg")]}
+        artist={BEATLES_ON_WIKIDATA}
+        toLink={false}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Replace the photo…" })).toBeNull();
+  });
+});
+
 describe("a photo suggested for an artist with none", () => {
   const PICTURES = `GET /api/artists/${BEATLES.id}/pictures`;
   const USE = `POST /api/artists/${BEATLES.id}/photo/cover`;
@@ -255,6 +291,38 @@ describe("a photo suggested for an artist with none", () => {
 
     expect(sent).toEqual([{ cover: "picture-beatles" }]);
     expect(onPhotoUsed).toHaveBeenCalled();
+  });
+
+  it("is dismissed in one click, and the covers stand in again", async () => {
+    let dismissed: unknown;
+    serve({
+      [PICTURES]: () => ({
+        body: beatlesPictures(dismissed === undefined ? { suggested: "picture-beatles" } : {}),
+      }),
+      [`POST /api/artists/${BEATLES.id}/pictures/dismiss`]: (body) => {
+        dismissed = body;
+        return { body: null };
+      },
+    });
+    about();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Dismiss the suggested photo of The Beatles" }),
+    );
+
+    expect(dismissed).toEqual({ cover: "picture-beatles" });
+    expect(await screen.findByRole("img", { name: "Album covers of The Beatles" })).toBeVisible();
+  });
+
+  it("opens the photo editor to choose another", async () => {
+    serve({ [PICTURES]: { body: beatlesPictures({ suggested: "picture-beatles" }) } });
+    about();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Choose another photo of The Beatles…" }),
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Add a photo" })).toBeVisible();
   });
 
   it("leaves the covers while nothing is suggested", async () => {

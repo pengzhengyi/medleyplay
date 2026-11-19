@@ -19,6 +19,10 @@
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --caution: #8a4b00;
   --caution-soft: rgb(196 120 20 / 14%);
+
+  /* Saying yes and no: using a suggestion, and dismissing it. */
+  --yes: #1d8a3e;
+  --no: #c4362b;
   --accent-ink: var(--chosen-accent-ink-light, #fff);
   --shadow-color: 160deg 30% 20%;
   --lift: 0 1px 2px hsl(var(--shadow-color) / 8%), 0 6px 16px -6px hsl(var(--shadow-color) / 16%);
@@ -39,6 +43,8 @@
     --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
     --caution: #f0b461;
     --caution-soft: rgb(240 180 97 / 14%);
+    --yes: #5bd47a;
+    --no: #f07167;
     --accent-ink: var(--chosen-accent-ink-dark, #062019);
     --lift: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 16px -6px rgb(0 0 0 / 50%);
     --float:
@@ -50,6 +56,8 @@
 [data-theme="dark"] {
   --caution: #f0b461;
   --caution-soft: rgb(240 180 97 / 14%);
+  --yes: #5bd47a;
+  --no: #f07167;
   --page: #0e1514;
   --surface: #151e1c;
   --raised: #1b2624;
@@ -1095,6 +1103,34 @@ button[aria-disabled="true"] {
   color: var(--muted);
 }
 
+/* An album's cover on its page, your rating beside it. */
+.album-about {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0 0 1.25rem;
+}
+
+.album-art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 7.5rem;
+  height: 7.5rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+  box-shadow: var(--lift);
+  color: var(--accent);
+  font-size: 2.5rem;
+}
+
+.album-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* About an artist, under its heading: a round mosaic of its covers, then what is known. */
 .artist-about {
   display: flex;
@@ -1142,7 +1178,9 @@ button[aria-disabled="true"] {
 
 /*
  * A photo suggested for an artist with none: ringed in the accent's dashes, its tag on
- * the ring's lower edge, and Use photo under it.
+ * the ring's lower edge. The photo is its own controls: its lower half uses it, its
+ * upper right quarter dismisses it, and its upper left chooses another; the ring turns
+ * green, red, or solid as each is pointed at or focused.
  */
 .photo-suggestion {
   display: grid;
@@ -1156,12 +1194,15 @@ button[aria-disabled="true"] {
 }
 
 .photo-suggestion-art {
+  border-radius: 50%;
   outline: 2px dashed var(--accent);
   outline-offset: 3px;
+  transition: outline-color 0.15s;
 }
 
 .photo-suggestion-tag {
   position: absolute;
+  z-index: 1;
   bottom: -0.55rem;
   left: 50%;
   display: inline-flex;
@@ -1174,16 +1215,86 @@ button[aria-disabled="true"] {
   font-size: 0.7rem;
   font-weight: 700;
   white-space: nowrap;
+  pointer-events: none;
   transform: translateX(-50%);
 }
 
-.photo-suggestion-use {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
+.photo-suggestion-controls {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template: 1fr 1fr / 1fr 1fr;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.photo-suggestion-control {
+  display: grid;
+  place-items: center;
   margin: 0;
-  padding: 0.2rem 0.75rem;
-  font-size: 0.8rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.photo-suggestion-control:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.photo-suggestion-control:disabled {
+  cursor: progress;
+}
+
+.photo-suggestion-use {
+  grid-column: 1 / -1;
+}
+
+.photo-suggestion-icon {
+  font-size: 1.35rem;
+  opacity: 0;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 70%));
+  transition: opacity 0.15s;
+}
+
+.photo-suggestion-controls:is(:hover, :focus-within) .photo-suggestion-icon {
+  opacity: 0.7;
+}
+
+.photo-suggestion-control:is(:hover, :focus-visible):not(:disabled) {
+  background: rgb(0 0 0 / 38%);
+}
+
+.photo-suggestion-control:is(:hover, :focus-visible) .photo-suggestion-icon {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .photo-suggestion-icon {
+    opacity: 0.85;
+  }
+}
+
+.photo-suggestion-frame:has(.photo-suggestion-use:is(:hover, :focus-visible))
+  .photo-suggestion-art {
+  outline-color: var(--yes);
+  outline-style: solid;
+}
+
+.photo-suggestion-frame:has(.photo-suggestion-dismiss:is(:hover, :focus-visible))
+  .photo-suggestion-art {
+  outline-color: var(--no);
+  outline-style: solid;
+}
+
+.photo-suggestion-frame:has(.photo-suggestion-change:is(:hover, :focus-visible))
+  .photo-suggestion-art {
+  outline-style: solid;
 }
 
 .photo-suggestion .error {
@@ -1217,8 +1328,6 @@ button[aria-disabled="true"] {
   height: 6rem;
   margin: 0;
   border-radius: 50%;
-  outline: 2px dashed var(--accent);
-  outline-offset: 3px;
   object-fit: cover;
 }
 
@@ -1231,12 +1340,6 @@ button[aria-disabled="true"] {
   color: var(--ink);
   font-weight: 600;
   text-decoration: none;
-}
-
-.photo-suggestion-item .dialog-button {
-  margin: 0.15rem 0 0;
-  padding: 0.15rem 0.9rem;
-  font-size: 0.8rem;
 }
 
 .artist-credit {
@@ -8751,6 +8854,30 @@ button.playing-kind[aria-expanded="true"] {
 .cover-frame.edit-artist-frame .cover-tools {
   border-radius: 0;
   padding-bottom: 0.9rem;
+}
+
+/* An album's cover on its page, its tools along its foot. */
+.cover-frame.album-frame {
+  flex: none;
+  width: 7.5rem;
+}
+
+.cover-frame.album-frame .cover-tools {
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+
+/* An artist's photo on its page, round, its tools inside the circle. */
+.cover-frame.artist-frame {
+  flex: none;
+  width: 7.5rem;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: var(--lift);
+}
+
+.cover-frame.artist-frame .cover-tools {
+  border-radius: 0;
+  padding-bottom: 0.6rem;
 }
 
 .edit-artist-picture {

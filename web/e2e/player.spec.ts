@@ -116,6 +116,31 @@ test("Now Playing, opened from the player's cover, pauses the song from its own 
   await expect.poll(async () => (await audioState(page)).playing).toBe(false);
 });
 
+test("with no lyrics, Now Playing says so level with the player, mirroring the cover", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route("**/api/tracks/*/lyrics", (route) => route.fulfill({ json: null }));
+  await play(page, "Alpha");
+
+  await player(page).getByRole("button", { name: "Open Now Playing" }).click();
+
+  const nowPlaying = page.getByRole("dialog", { name: "Now Playing" });
+  const none = nowPlaying.getByText("No lyrics for this song.");
+
+  await expect(none).toBeVisible();
+  const middle = (box: { x: number; y: number; width: number; height: number } | null) => ({
+    x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+  });
+  const stage = middle(await nowPlaying.locator(".np-stage").boundingBox());
+  const cover = middle(await nowPlaying.locator(".np-art").boundingBox());
+  const main = middle(await nowPlaying.locator(".np-main").boundingBox());
+  const said = middle(await none.boundingBox());
+  expect(Math.abs(said.x - (2 * stage.x - cover.x))).toBeLessThan(16);
+  expect(Math.abs(said.y - main.y)).toBeLessThan(16);
+});
+
 test("a Track that ends moves on to the next", async ({ page }) => {
   await play(page, "Charlie");
 

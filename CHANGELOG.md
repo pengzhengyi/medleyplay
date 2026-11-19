@@ -729,6 +729,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dismiss it, the upper left in the accent to choose another. They had stopped short
   of the photo's bottom, so the halves weren't halves.
 
+- **Now Playing's lyrics mirror the cover** — they take the half of the page beside
+  the cover's half, so "No lyrics for this song." sits level with the player and as
+  far right of the middle as the cover is left of it.
+
 - **Asking the AI for a file's songs can be stopped:** pressing *AI* again while it
   asks, or closing the editor, cancels the lookup, so no AI round runs for nothing.
 

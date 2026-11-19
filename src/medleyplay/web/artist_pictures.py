@@ -2,7 +2,8 @@
 
 Nothing here changes the artist's photo: the household uses a picture found as it
 uses any cover already kept, through the artist's photo. An AI model may be asked which
-picture is of the artist; its pick is only a suggestion.
+picture is of the artist; its pick is only a suggestion, and a suggestion the household
+dismisses is not made again.
 """
 
 from datetime import datetime
@@ -134,6 +135,20 @@ def choose(
 ) -> None:
     """Ask an AI model which picture found is of the artist; nothing is changed."""
     service.choose(me, artist_id, body.hint)
+
+
+class DismissIn(BaseModel):
+    """The picture found that is not of the artist."""
+
+    cover: str = Field(max_length=128)
+
+
+@router.post("/{artist_id}/pictures/dismiss", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss(
+    artist_id: _ArtistId, body: DismissIn, me: SignedInAccount, service: ArtistPicturesDep
+) -> None:
+    """Suggest the picture no more as the artist's photo; nothing else is changed."""
+    service.dismiss(me, artist_id, body.cover)
 
 
 class MissingPhotoOut(BaseModel):

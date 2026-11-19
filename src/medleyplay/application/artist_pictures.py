@@ -271,6 +271,18 @@ class ArtistPictureService:
             )
         self._jobs.submit(self._kinds.choose, choose_picture_target(artist_id), request, caller.id)
 
+    def dismiss(self, caller: Account, artist_id: str, cover: str) -> None:
+        """Suggest the picture `cover` no more as the artist's photo; it stays among those found."""
+        del caller
+        with self._units.begin() as db:
+            _name_of(db, artist_id)
+            row = db.get(ArtistPictureSearchRow, (artist_id, SITE.value))
+            if row is None or all(each.cover != cover for each in _pictures_of(row)):
+                message = "Only a picture found of the artist may be dismissed."
+                raise InvalidInputError(message)
+            if cover not in row.dismissed:
+                row.dismissed = [*row.dismissed, cover]
+
     def pictures(self, viewer: Account, artist_id: str) -> ArtistPictures:
         """Return what is known of the pictures of the artist, and what is being asked."""
         with self._units() as db:
@@ -299,7 +311,7 @@ class ArtistPictureService:
             may_choose=ai
             and bool(found)
             and CHOOSER in self._plugins.available_keys().get(PICTURE_CHOOSER.name, []),
-            suggested=_suggested(names, found, pick),
+            suggested=_suggested(names, row, pick),
             auto_pick=settings.pick_pictures_by_ai,
         )
 
@@ -331,7 +343,7 @@ class ArtistPictureService:
                     artist_id=artist_id,
                     name=named[artist_id],
                     songs=count,
-                    suggested=_suggested(names[artist_id], pictures, pick),
+                    suggested=_suggested(names[artist_id], row, pick),
                     picked=pick is not None,
                     found=row is not None,
                     finding=self._finding(artist_id),
@@ -413,13 +425,20 @@ def _pictures_of(row: ArtistPictureSearchRow) -> tuple[FoundPicture, ...]:
 
 
 def _suggested(
-    names: list[str], found: tuple[FoundPicture, ...], pick: PicturePick | None
+    names: list[str], row: ArtistPictureSearchRow | None, pick: PicturePick | None
 ) -> str | None:
-    """Return the cover suggested as the artist's photo: the pick, else the likeliest."""
-    if pick is not None:
+    """Return the cover suggested as the artist's photo: the pick, else the likeliest.
+
+    A picture the household dismissed is never suggested.
+    """
+    if row is None:
+        return None
+    dismissed = set(row.dismissed)
+    if pick is not None and pick.cover not in dismissed:
         return pick.cover
-    likeliest = likeliest_picture(names, [(each.name, each.fans) for each in found])
-    return None if likeliest is None else found[likeliest].cover
+    left = [each for each in _pictures_of(row) if each.cover not in dismissed]
+    likeliest = likeliest_picture(names, [(each.name, each.fans) for each in left])
+    return None if likeliest is None else left[likeliest].cover
 
 
 def _without_photo(db: Session, track_ids: list[int] | None) -> dict[str, int]:

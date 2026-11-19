@@ -1357,6 +1357,11 @@ export const api = {
   /** Ask an AI model which picture found is of an artist, with what the listener says. */
   chooseArtistPicture: (artistId: string, hint: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/choose`, { hint }),
+  /** Suggest the picture `cover` no more as the artist's photo; nothing else changes. */
+  dismissArtistPicture: (artistId: string, cover: string) =>
+    call<undefined>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/dismiss`, {
+      cover,
+    }),
   /** What is known of the covers of the album `album` by `artist`, its album artist or artist. */
   albumCovers: (album: string, artist: string) =>
     call<AlbumCovers>(

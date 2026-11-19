@@ -413,7 +413,16 @@ used, and one used becomes the household's photo.
   picture whose artist goes by one of the artist's names, exactly before holding
   one, as *Jay Chou* holds *周杰伦* in *周杰伦 Jay Chou*; a picture matching no name
   is never suggested. It is ringed in dashes and tagged *Suggested* or *AI pick*,
-  says why on hover, and *Use photo* under it makes it the household's photo.
+  says why on hover, and is its own controls: its lower half (✓) makes it the
+  household's photo, its upper right quarter (✕) dismisses it, and its upper left
+  (✎) opens the photo editor to choose another; the ring turns green, red, or solid
+  as each is pointed at or focused.
+- **Dismissed for good:** a picture dismissed is kept in `artist_picture_search`
+  (`dismissed`) and never suggested again, even when the pictures are found again, as
+  a cover is named by its bytes; the next likeliest is suggested instead, if one is.
+- **Replaced from the page:** a linked artist's photo, or its album covers while it
+  has none, shows *Save* and *Replace* on hover, as in the artist's editor, opening
+  the photo editor without *Edit details*.
 - **Looked up without anyone asking:** Settings → Deezer → *Look up photos of artists
   with none* (`find_artist_photos`) chooses which artists linked to MusicBrainz with
   no photo, and never looked up, Deezer is asked about on its own: those of the song
@@ -422,7 +431,7 @@ used, and one used becomes the household's photo.
   once in the page; each artist is a Job of Deezer's lane, as when someone looks.
 - **A section of Clean up,** *Find artist photos*, counted in the rail's *Clean up*:
   each artist with no photo for which a picture is suggested, ringed and tagged as on
-  its page, with its songs and *Use*; *Use all* uses every one. The rest are counted:
+  its page and with the same controls, with its songs; *Use all* uses every one. The rest are counted:
   those Deezer has nothing that fits for, and those not looked up yet, pointing to
   the setting.
 
@@ -590,6 +599,7 @@ not.
 | `POST /api/artists/{id}/photo/cover` | Signed in | Make a cover already kept the household's photo of the artist; 404 for no such cover |
 | `GET /api/artists/{id}/pictures` | Signed in | The pictures Deezer last had of the artist, the most followed first, when they were found, whether Deezer is asked now and whether that waits for medleyplay to be Online, why the last asking failed, to the Account that asked and to admins, and whether Deezer is turned on; 404 for an artist no site named |
 | `POST /api/artists/{id}/pictures/choose` | Signed in | Ask an AI model which picture found is of the artist, with the listener's `hint`, up to 500 characters; 202, or 404 for an artist no site named, 409 before any picture is found, while no AI provider is set up, or while the `ai-details` plugin is off, 422 for a longer note. `GET …/pictures` then shows the `pick`: its cover, why, the model, its host, when, and the note; and `choosing`, `choice_failure`, and `may_choose`; and `suggested`, the cover suggested as its photo, and `auto_pick` |
+| `POST /api/artists/{id}/pictures/dismiss` | Signed in | Suggest the picture `cover` no more as the artist's photo; 204, or 404 for an artist no site named, 422 for a cover not among those found |
 | `POST /api/artists/{id}/pictures/find` | Signed in | Ask Deezer for pictures of the artists going by the artist's name; 202, or 404 for an artist no site named, or 409 until Deezer is turned on in Settings or while the `deezer` plugin is off |
 | `PUT /api/settings` | Admin | `picture_sites`, the sites asked for pictures of an artist: `[]` or `["deezer"]`; `pick_pictures_by_ai`, whether a model is asked as soon as pictures are found; and `find_artist_photos`, which artists with no photo are looked up on their own: `up_next`, `missing`, or `off`; left out, each stays as saved |
 | `GET /api/artist-photos/missing` | Signed in | Every artist linked to MusicBrainz with no photo, those with a photo suggested first, then most songs: its name, songs, the cover suggested, whether an AI model picked it, whether Deezer was asked about it, and whether it is now |

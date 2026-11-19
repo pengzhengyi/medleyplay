@@ -83,11 +83,41 @@ describe("finding artist photos in Clean up", () => {
     const { reload } = cleanUp(SUGGESTED);
 
     await userEvent.click(
-      section().getByRole("button", { name: "Use the photo suggested for The Beatles" }),
+      section().getByRole("button", { name: "Use the suggested photo of The Beatles" }),
     );
 
     expect(sent).toEqual([{ cover: "picture-beatles" }]);
     expect(reload).toHaveBeenCalled();
+  });
+
+  it("dismisses a photo suggested in one click", async () => {
+    const sent: unknown[] = [];
+    serve({
+      [FIND]: { body: { asked: 0 } },
+      "POST /api/artists/beatles/pictures/dismiss": (body) => {
+        sent.push(body);
+        return { status: 204 };
+      },
+    });
+    const { reload } = cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Dismiss the suggested photo of The Beatles" }),
+    );
+
+    expect(sent).toEqual([{ cover: "picture-beatles" }]);
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it("opens the photo editor to choose another", async () => {
+    serve({ [FIND]: { body: { asked: 0 } } });
+    cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Choose another photo of 周杰伦…" }),
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Add a photo" })).toBeVisible();
   });
 
   it("uses every photo suggested at once", async () => {

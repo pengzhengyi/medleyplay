@@ -287,6 +287,51 @@ def test_no_picture_is_suggested_when_none_goes_by_the_artists_names(
     assert (len(found.pictures), found.suggested) == (2, None)
 
 
+def test_a_picture_dismissed_is_suggested_no_more_and_the_next_likeliest_is(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+
+    enriching.artist_pictures.dismiss(alice, BEATLES, found.pictures[0].cover)
+
+    again = enriching.artist_pictures.pictures(alice, BEATLES)
+    assert (again.pictures, again.suggested) == (found.pictures, found.pictures[1].cover)
+
+
+def test_an_ai_pick_dismissed_is_suggested_no_more(enriching: Enriching, alice: Account) -> None:
+    found = _found(enriching, alice)
+    _chosen(enriching, alice, "the tribute act")
+
+    enriching.artist_pictures.dismiss(alice, BEATLES, found.pictures[1].cover)
+
+    assert enriching.artist_pictures.pictures(alice, BEATLES).suggested == found.pictures[0].cover
+
+
+def test_with_every_picture_dismissed_none_is_suggested_even_when_found_again(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+    _photo_dropped(enriching)
+
+    for picture in found.pictures:
+        enriching.artist_pictures.dismiss(alice, BEATLES, picture.cover)
+    enriching.artist_pictures.find(alice, BEATLES)
+    enriching.finish_every_job()
+
+    [missing] = enriching.artist_pictures.missing()
+    assert enriching.artist_pictures.pictures(alice, BEATLES).suggested is None
+    assert missing.suggested is None
+
+
+def test_only_a_picture_found_of_the_artist_may_be_dismissed(
+    enriching: Enriching, alice: Account
+) -> None:
+    _found(enriching, alice)
+
+    with pytest.raises(InvalidInputError, match="found"):
+        enriching.artist_pictures.dismiss(alice, BEATLES, "0" * 64 + ".jpg")
+
+
 def _photo_search(enriching: Enriching, alice: Account, search: PhotoSearch) -> None:
     """Turn Deezer on, with the artists with no photo looked up as `search` says."""
     settings = SettingsService(enriching.units, enriching.clock)

@@ -641,6 +641,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An old artist link names one artist or asks which** — a link by the name alone,
+  such as `#/artist?name=Jay` saved before artist pages opened by id, asks *Which
+  Jay?* when the name goes by several artists, each a tile told apart by its album.
+
 - **A faster first load** — the songs are read first and alone, then what shows
   around them once they are drawn, and what only some views need when the browser is
   idle; the Library shows rows shaped like songs meanwhile. Now Playing, the

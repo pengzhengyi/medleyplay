@@ -41,6 +41,7 @@ import {
   type Artist,
   albumsOf,
   albumFileOf,
+  artistsCalled,
   artistsOf,
   downloadedOf,
   favoritesOf,
@@ -192,6 +193,36 @@ function viewOf(given: ViewProps) {
     case "artists":
       return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
     case "artist": {
+      // A link by a name alone that names several artists, as links once were, asks which.
+      const called =
+        route.id === undefined
+          ? props.artistNames?.names.names.find(
+              (each) => fold(each.name.trim()) === fold(route.name.trim()),
+            )?.artist_ids
+          : undefined;
+      const choices =
+        called !== undefined && called.length > 1 && props.links !== undefined
+          ? artistsCalled(props.tracks, props.links, called)
+          : [];
+      if (choices.length > 1) {
+        return (
+          <>
+            <ViewHeading
+              title={`Which ${route.name}?`}
+              back={{ view: "artists" }}
+              backLabel="Artists"
+            >
+              {`${String(choices.length)} artists go by this name`}
+            </ViewHeading>
+            <ArtistList
+              artists={choices}
+              favorites={props.favorites}
+              links={props.links}
+              label={`Artists called ${route.name}`}
+            />
+          </>
+        );
+      }
       // A page opened by an artist's id shows its songs by the name most of them write.
       const name =
         (route.id === undefined ? undefined : artistWrittenOf(props.tracks, route.id)) ??
@@ -560,13 +591,15 @@ function ArtistList({
   artists,
   favorites,
   links = NO_LINKS,
+  label = "Artists",
 }: {
   readonly artists: readonly Artist[];
   readonly favorites: FavoriteGroups;
   readonly links: ArtistLinks | undefined;
+  readonly label?: string;
 }) {
   return (
-    <ul className="groups" aria-label="Artists">
+    <ul className="groups" aria-label={label}>
       {artists.map((artist) => (
         <li
           key={artist.id ?? artist.link}

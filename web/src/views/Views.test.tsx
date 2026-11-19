@@ -756,6 +756,28 @@ describe("two artists of one name", () => {
       expect(songs()).toEqual(["Blue Night"]);
     });
   });
+
+  it("are asked between when a link names only the name, the one it named first first", async () => {
+    open("#/artist?name=Jay", twoJays());
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Which Jay?" })).toBeVisible();
+    const choices = within(screen.getByRole("list", { name: "Artists called Jay" }));
+    expect(choices.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      `#/artist?id=${artistIdOf("Jay")}&name=Jay`,
+      `#/artist?id=${OTHER_JAY}&name=Jay`,
+    ]);
+  });
+
+  it("open the page of the one chosen", async () => {
+    open("#/artist?name=Jay", twoJays());
+
+    await userEvent.click(await screen.findByRole("link", { name: /Jay.*on Blue Night/u }));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Jay" })).toBeVisible();
+    await waitFor(() => {
+      expect(songs()).toEqual(["Blue Night"]);
+    });
+  });
 });
 
 describe("favorite artists and albums", () => {

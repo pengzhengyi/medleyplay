@@ -174,11 +174,10 @@ describe("editing a song's details", () => {
     );
   });
 
-  it("closes only when asked, with Close once nothing is left to save", async () => {
+  it("closes only when asked, from its ✕", async () => {
     const { dialog, onClose } = await renderDialog();
 
     await userEvent.type(box(dialog, "Album"), "Re:Start");
-    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     await save(dialog);
     await userEvent.click(await within(dialog).findByRole("button", { name: "Close" }));
 
@@ -314,15 +313,15 @@ describe("editing a song's details", () => {
     await save(dialog);
     await userEvent.keyboard("{Escape}");
 
-    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
     expect(dialog).toHaveAttribute("open");
   });
 
-  it("is dismissed with Cancel, saving nothing", async () => {
+  it("is dismissed from its ✕, saving nothing", async () => {
     const { dialog, onSave, onClose } = await renderDialog();
 
     await userEvent.type(box(dialog, "Artist"), " feat. Hatsune");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
 
     expect(onSave).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
@@ -681,7 +680,7 @@ describe("editing a song's details", () => {
       await uploaded(editor, PNG);
 
       expect(editor.getByRole("button", { name: "Use this cover" })).toBeDisabled();
-      expect(editor.getByRole("button", { name: "Cancel" })).toBeDisabled();
+      expect(editor.getByRole("button", { name: "Close" })).toBeDisabled();
       expect(editor.getByRole("status")).toHaveTextContent("Saving the cover…");
     });
 

@@ -187,20 +187,13 @@ export function EditAlbum({
         )}
         <footer className="dialog-buttons">
           <button
-            type="button"
-            className="secondary outline dialog-button"
-            disabled={saving}
-            onClick={() => dialog.current?.close()}
-          >
-            Cancel
-          </button>
-          <button
             type="submit"
+            title={`Saves to each of the ${String(songs.length)} songs`}
             className="dialog-button"
             disabled={!changed || saving}
             aria-busy={saving}
           >
-            {`Save to ${String(songs.length)} songs`}
+            Save
           </button>
         </footer>
       </form>

@@ -33,7 +33,7 @@ describe("asking the AI again", () => {
     const onClose = vi.fn();
     render(<AskAiAgain title="Night Drive" onAsk={onAsk} onClose={onClose} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(onAsk).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();

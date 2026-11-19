@@ -870,7 +870,7 @@ describe("editing an album from its page", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
     const editor = await screen.findByRole("dialog", { name: "Edit album" });
     await userEvent.type(within(editor).getByRole("textbox", { name: "Genre" }), "J-Pop");
-    await userEvent.click(within(editor).getByRole("button", { name: "Save to 2 songs" }));
+    await userEvent.click(within(editor).getByRole("button", { name: "Save" }));
 
     expect(sent).toEqual([{ track_ids: [1, 2], values: { genre: "J-Pop" } }]);
   });

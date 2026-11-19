@@ -135,13 +135,13 @@ test("at phone, small phone, and laptop widths the add dialogs never scroll side
     await expect(unreadable.getByRole("textbox", { name: "Title of part 2" })).toBeVisible();
     expect(await sideways(), `a video that can't be read, ${String(width)} wide`).toBe(false);
     expect(await dialogSideways("Add from Bilibili")).toBe(false);
-    await unreadable.getByRole("button", { name: "Cancel" }).click();
+    await unreadable.getByRole("button", { name: "Close" }).click();
 
     const read = await lookUp(page, "https://www.bilibili.com/video/BV17x411w7KC");
     await expect(read.getByRole("textbox", { name: "Title of part 3" })).toBeVisible();
     expect(await sideways(), `a video that was read, ${String(width)} wide`).toBe(false);
     expect(await dialogSideways("Add from Bilibili")).toBe(false);
-    await read.getByRole("button", { name: "Cancel" }).click();
+    await read.getByRole("button", { name: "Close" }).click();
   }
 
   const read = await lookUp(page, "https://www.bilibili.com/video/BV17x411w7KC");
@@ -156,6 +156,6 @@ test("at phone, small phone, and laptop widths the add dialogs never scroll side
     await expect(adding.getByText("yt-dlp --proxy").first()).toBeVisible();
     expect(await sideways(), `adding a file, ${String(width)} wide`).toBe(false);
     expect(await dialogSideways("Add the file for “Mixtape 1”")).toBe(false);
-    await adding.getByRole("button", { name: "Cancel" }).click();
+    await adding.getByRole("button", { name: "Close" }).click();
   }
 });

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Find a song's lyrics by hand** — the lyrics editor's *Find* lists the songs
+  LRCLIB, and NetEase once turned on, have of a title and artist you can change, each
+  with its site, album, length, kind, and first lines; *Use* fills the editor with
+  them to save. New: `POST /api/tracks/{id}/lyrics/find`,
+  `GET /api/tracks/{id}/lyrics/found` (migration 0057).
+
 - **The search box completes tags and sites** — a word being typed offers the tag
   or site it begins, as `bi` offers `bilibili:` and `ar` offers `artist:`; *Tab*
   takes the first.

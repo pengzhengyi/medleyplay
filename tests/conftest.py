@@ -40,6 +40,7 @@ from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_search import LyricsSearchService, find_lyrics_kind
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
@@ -354,6 +355,13 @@ def lyrics(units: sessionmaker[Session], clock: FakeClock) -> LyricsService:
 
 
 @pytest.fixture
+def lyrics_search(
+    units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, jobs: JobService
+) -> LyricsSearchService:
+    return LyricsSearchService(units, plugins, jobs, find_lyrics_kind(clock))
+
+
+@pytest.fixture
 def artists(
     units: sessionmaker[Session],
     clock: FakeClock,
@@ -518,6 +526,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     artist_pictures: ArtistPictureService,
     image_links: ImageLinkService,
     lyrics: LyricsService,
+    lyrics_search: LyricsSearchService,
     clock: FakeClock,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
@@ -558,6 +567,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         artist_pictures=artist_pictures,
         image_links=image_links,
         lyrics=lyrics,
+        lyrics_search=lyrics_search,
     )
 
 

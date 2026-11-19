@@ -131,6 +131,31 @@ export interface Details {
 /** Where a song's lyrics came from: the first held of each shows. */
 export type LyricsOrigin = "household" | "sidecar" | "tag" | "lrclib" | "netease";
 
+/** A song a lyrics site found of a title and artist, what tells it apart, and its lyrics. */
+export interface LyricsOption {
+  readonly provider: "lrclib" | "netease";
+  readonly title: string;
+  readonly artist: string;
+  readonly album: string;
+  readonly duration_ms: number | null;
+  /** LRC or plain text; empty for a song that is instrumental. */
+  readonly text: string;
+  readonly instrumental: boolean;
+}
+
+/** What was found when a song's lyrics were last looked for, and what is being asked. */
+export interface LyricsFound {
+  /** The title asked by; empty until asked. */
+  readonly title: string;
+  readonly artist: string;
+  /** The songs found, the closest in length first. */
+  readonly options: readonly LyricsOption[];
+  readonly found_at: string | null;
+  readonly finding: boolean;
+  readonly waiting: boolean;
+  readonly failure: string | null;
+}
+
 /** A site the household may turn on to be asked for the lyrics LRCLIB lacks. */
 export type LyricsSite = "netease";
 
@@ -1313,6 +1338,12 @@ export const api = {
   /** Drop the household's lyrics for the song; answers what it shows now. */
   forgetLyrics: (trackId: number) =>
     call<Lyrics | null>("DELETE", `/api/tracks/${String(trackId)}/lyrics`),
+  /** What was found when the song's lyrics were last looked for by hand. */
+  lyricsFound: (trackId: number) =>
+    call<LyricsFound>("GET", `/api/tracks/${String(trackId)}/lyrics/found`),
+  /** Look for the songs titled `title` by `artist` on the lyrics sites, for the song. */
+  findLyrics: (trackId: number, title: string, artist: string) =>
+    call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/find`, { title, artist }),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
   artistNames: () => call<ArtistNames>("GET", "/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */

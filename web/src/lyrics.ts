@@ -3,7 +3,7 @@
  * it is, and whether this browser shows them.
  */
 
-import type { LyricLine, Track } from "./api";
+import type { LyricLine, LyricsOption, Track } from "./api";
 import { type Playing, songPlaying } from "./player/albumNow";
 import { choice } from "./storedChoice";
 
@@ -49,3 +49,29 @@ export const setLyricsHidden: (hidden: boolean) => void = hide;
 
 /** Whether this browser hides the lyrics; they show until it does. */
 export const useLyricsHidden: () => boolean = useHidden;
+
+/** How many lines of a song's lyrics show, to tell it apart. */
+const LINES_SHOWN = 2;
+
+/** Each lyrics site's name, as the household reads it. */
+export const LYRICS_SITE_NAMES: Record<LyricsOption["provider"], string> = {
+  lrclib: "LRCLIB",
+  netease: "NetEase Cloud Music",
+};
+
+/**
+ * Return the first lines of lyrics, LRC or plain, as sung: without their times, and
+ * without LRC's lines naming the artist or album.
+ */
+export function firstLinesOf(text: string, count = LINES_SHOWN): readonly string[] {
+  return text
+    .split("\n")
+    .map((line) =>
+      line
+        .replaceAll(/\[[^\]]*\]/gu, "")
+        .replaceAll(/<[^>]*>/gu, "")
+        .trim(),
+    )
+    .filter((line) => line !== "")
+    .slice(0, count);
+}

@@ -1,9 +1,13 @@
 """The lyrics API: what a song shows, line by line, and the household's own."""
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.catalog import TrackId
+from medleyplay.persistence.schema import LyricsSearchRow
 from tests.support.api import set_up_as_alice
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
 
@@ -96,3 +100,77 @@ def test_lyrics_need_a_signed_in_account(client: TestClient, catalog: CatalogSer
     song = _song(catalog)
 
     assert client.get(f"/api/tracks/{song}/lyrics").status_code == 401
+
+
+def test_nothing_is_found_for_a_songs_lyrics_until_looked_for(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    song = _song(catalog)
+
+    response = client.get(f"/api/tracks/{song}/lyrics/found")
+
+    assert response.json() == {
+        "title": "",
+        "artist": "",
+        "options": [],
+        "found_at": None,
+        "finding": False,
+        "waiting": False,
+        "failure": None,
+    }
+
+
+def test_the_songs_found_are_listed_with_their_lyrics_and_what_was_asked(
+    client: TestClient, catalog: CatalogService, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    song = _song(catalog)
+    melt = {"provider": "lrclib", "title": "Melt", "artist": "ryo", "duration_ms": 260_000}
+    with units.begin() as db:
+        db.add(
+            LyricsSearchRow(
+                track_id=song,
+                title="Melt",
+                artist="ryo",
+                options=[melt | {"text": MELT}],
+                found_at=datetime(2026, 11, 19, tzinfo=UTC),
+            )
+        )
+
+    found = client.get(f"/api/tracks/{song}/lyrics/found").json()
+
+    assert (found["title"], found["artist"]) == ("Melt", "ryo")
+    assert found["options"] == [
+        melt | {"album": "", "text": MELT, "instrumental": False},
+    ]
+
+
+def test_no_lyrics_are_found_while_the_lyrics_plugin_is_off(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    song = _song(catalog)
+
+    response = client.post(f"/api/tracks/{song}/lyrics/find", json={"title": "Melt"})
+
+    assert response.status_code == 409
+    assert "lyrics plugin" in response.json()["detail"]
+
+
+def test_lyrics_are_found_by_a_title(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    song = _song(catalog)
+
+    response = client.post(f"/api/tracks/{song}/lyrics/find", json={"title": "", "artist": "ryo"})
+
+    assert response.status_code == 422
+
+
+def test_finding_lyrics_needs_a_signed_in_account(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    song = _song(catalog)
+
+    assert client.get(f"/api/tracks/{song}/lyrics/found").status_code == 401
+    assert client.post(f"/api/tracks/{song}/lyrics/find", json={"title": "Melt"}).status_code == 401

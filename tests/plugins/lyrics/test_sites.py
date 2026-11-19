@@ -3,7 +3,13 @@
 Every request goes to a fake transport: no test contacts lrclib.net or music.163.com.
 """
 
-from medleyplay.plugin_api import EnrichStatus, EnrichTrack, LyricsProvider, ShownDetail
+from medleyplay.plugin_api import (
+    EnrichStatus,
+    EnrichTrack,
+    FindLyrics,
+    LyricsProvider,
+    ShownDetail,
+)
 from medleyplay.plugins.lyrics import LyricsSites, lrclib, netease
 from medleyplay.plugins.lyrics.lrclib import Lrclib
 from medleyplay.plugins.lyrics.netease import Netease
@@ -86,3 +92,31 @@ def test_a_refusal_from_lrclib_is_answered_without_asking_netease() -> None:
 
     assert found.status is EnrichStatus.REFUSED
     assert at_netease.urls() == []
+
+
+def lrclib_finding_melt() -> FakeTransport:
+    """LRCLIB, whose search finds *Melt*."""
+    record = {"trackName": "Melt", "artistName": "ryo", "duration": 260.0, "syncedLyrics": MELT}
+    return FakeTransport().answer(lrclib.SEARCH, Reply.json([record]))
+
+
+def test_lyrics_are_found_on_lrclib_then_on_the_sites_turned_on() -> None:
+    lrclib_fake, netease_fake = lrclib_finding_melt(), netease_with_melt()
+    sites = sites_of(lrclib_fake, netease_fake)
+
+    found = sites.find(FindLyrics(title="Melt", artist="ryo", sites=(LyricsProvider.NETEASE,)))
+
+    assert [each.provider for each in found.options] == [
+        LyricsProvider.LRCLIB,
+        LyricsProvider.NETEASE,
+    ]
+
+
+def test_netease_is_not_searched_unless_turned_on() -> None:
+    lrclib_fake, netease_fake = lrclib_finding_melt(), netease_with_melt()
+    sites = sites_of(lrclib_fake, netease_fake)
+
+    found = sites.find(FindLyrics(title="Melt", artist="ryo"))
+
+    assert [each.provider for each in found.options] == [LyricsProvider.LRCLIB]
+    assert netease_fake.sent == []

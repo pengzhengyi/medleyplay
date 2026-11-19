@@ -23,6 +23,7 @@ from medleyplay.application.libraries import LibraryService
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_search import LyricsSearchService
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService
@@ -83,6 +84,7 @@ class Services:
     artist_pictures: ArtistPictureService
     image_links: ImageLinkService
     lyrics: LyricsService
+    lyrics_search: LyricsSearchService
 
 
 def services_of(request: Request) -> Services:
@@ -178,6 +180,10 @@ def _album_covers(services: Annotated[Services, Depends(_services)]) -> AlbumCov
     return services.album_covers
 
 
+def _lyrics_search(services: Annotated[Services, Depends(_services)]) -> LyricsSearchService:
+    return services.lyrics_search
+
+
 def _artist_pictures(services: Annotated[Services, Depends(_services)]) -> ArtistPictureService:
     return services.artist_pictures
 
@@ -254,6 +260,7 @@ AlbumCoversDep = Annotated[AlbumCoverService, Depends(_album_covers)]
 ArtistPicturesDep = Annotated[ArtistPictureService, Depends(_artist_pictures)]
 ImageLinksDep = Annotated[ImageLinkService, Depends(_image_links)]
 LyricsDep = Annotated[LyricsService, Depends(_lyrics)]
+LyricsSearchDep = Annotated[LyricsSearchService, Depends(_lyrics_search)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]

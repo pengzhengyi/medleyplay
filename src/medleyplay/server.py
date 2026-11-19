@@ -45,6 +45,7 @@ from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_search import LyricsSearchService, find_lyrics_kind
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.network import probe_network
@@ -191,6 +192,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     link_jobs = image_link_kinds(clock, data_dir / COVERS_FOLDER)
     picture_jobs = artist_picture_kinds(clock, data_dir / COVERS_FOLDER)
     find_silences = find_silences_kind(clock)
+    find_lyrics = find_lyrics_kind(clock)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,
@@ -207,6 +209,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         link_jobs.suggest.name: link_jobs.suggest,
         link_jobs.fetch.name: link_jobs.fetch,
         find_silences.name: find_silences,
+        find_lyrics.name: find_lyrics,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -306,6 +309,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         lyrics=LyricsService(units, clock, changes.tell),
+        lyrics_search=LyricsSearchService(units, plugins, jobs, find_lyrics),
     )
 
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LyricLine } from "./api";
-import { lineAt, songTimeOf } from "./lyrics";
+import { firstLinesOf, lineAt, songTimeOf } from "./lyrics";
 import type { Playing } from "./player/albumNow";
 import { trackOf } from "./testing/server";
 
@@ -50,5 +50,25 @@ describe("how far into the song playing", () => {
     };
 
     expect(songTimeOf(file, playing, 260)).toEqual({ song: second, from: 252, seconds: 8 });
+  });
+});
+
+describe("the first lines of lyrics", () => {
+  it("are the lines as sung, without their times or the lines naming the song", () => {
+    const text = `[ar:ryo]
+[ti:Melt]
+[00:12.34]<00:12.34>朝目が<00:13.00>覚めて
+
+[00:15.50]真っ先に思い浮かぶ
+[00:18.00]君の顔
+`;
+
+    expect(firstLinesOf(text)).toEqual(["朝目が覚めて", "真っ先に思い浮かぶ"]);
+  });
+
+  it("are plain lyrics' first lines as written", () => {
+    expect(firstLinesOf("故事的小黄花\n从出生那年就飘着\n童年的荡秋千", 1)).toEqual([
+      "故事的小黄花",
+    ]);
   });
 });

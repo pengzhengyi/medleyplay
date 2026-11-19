@@ -28,6 +28,7 @@ from medleyplay.application.image_links import ImageLinkService, image_link_kind
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_search import LyricsSearchService, find_lyrics_kind
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
@@ -56,6 +57,7 @@ class Enriching:
     kind: EnrichKind
     artists: ArtistService
     album_covers: AlbumCoverService
+    lyrics_search: LyricsSearchService
     artist_pictures: ArtistPictureService
     image_links: ImageLinkService
     jobs: JobService
@@ -173,7 +175,9 @@ def running_enrichment(
     album_covers = album_cover_kinds(clock, data_dir / COVERS_FOLDER)
     image_links = image_link_kinds(clock, data_dir / COVERS_FOLDER)
     pictures = artist_picture_kinds(clock, data_dir / COVERS_FOLDER)
+    lyrics_search = find_lyrics_kind(clock)
     kinds: dict[str, AnyJobKind] = {
+        lyrics_search.name: lyrics_search,
         pictures.find.name: pictures.find,
         pictures.choose.name: pictures.choose,
         kind.name: kind,
@@ -217,6 +221,7 @@ def running_enrichment(
                     covers_folder=data_dir / COVERS_FOLDER,
                 ),
                 album_covers=AlbumCoverService(units, plugins, jobs, album_covers),
+                lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_search),
                 artist_pictures=ArtistPictureService(units, plugins, jobs, pictures),
                 image_links=ImageLinkService(
                     units, plugins, jobs, image_links, data_dir / COVERS_FOLDER

@@ -158,8 +158,8 @@ values.
   still follows the file.
 - **Saving keeps the dialog open,** on the details read again as saved, with
   *Saved* beside the heading for a moment; closing is the household's choice, so an album's songs can be split
-  next without opening it again. *Save* waits for a change, and *Cancel* reads
-  *Close* once nothing is left to save.
+  next without opening it again. *Save* waits for a change; the ✕ at the top
+  right closes the dialog, saved or not.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works for any video, and asks the

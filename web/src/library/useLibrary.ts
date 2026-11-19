@@ -95,6 +95,8 @@ export interface Library {
    */
   /** Ask `enricher` about the Track `id`; the AI may be asked `again`, with a hint. */
   readonly find: (enricher: string, id: number, again?: { readonly hint: string }) => Promise<void>;
+  /** Stop the lookup asked about the Track while it waits or runs; nothing it found is kept. */
+  readonly stopFinding: (id: number) => Promise<void>;
   /**
    * The lookup last asked about each Track, by the Track's id, while its Job runs, a
    * moment after it succeeds, and until it is asked again after it fails.
@@ -243,6 +245,9 @@ export function useLibrary(onSignedOut: () => void): Library {
   // Each lookup's Job, and each Track's latest, so an older Job's end can't land after it.
   const trackOfJob = useRef(new Map<number, number>());
   const jobOfTrack = useRef(new Map<number, number>());
+  // The Tracks whose lookup is being asked for, and those of them stopped before it was.
+  const asking = useRef(new Set<number>());
+  const stoppedEarly = useRef(new Set<number>());
   const writes = useRef(0);
   // The latest change of each Track's details, so an older read-back can't land after it.
   const latestSave = useRef(new Map<number, number>());
@@ -576,15 +581,26 @@ export function useLibrary(onSignedOut: () => void): Library {
       jobOfTrack.current.delete(id);
       setLookup(id, { enricher, state: "queued", message: "" });
       let job: Job;
+      asking.current.add(id);
       try {
         job = await api.findDetails(enricher, id, again);
       } catch (failure) {
+        asking.current.delete(id);
+        stoppedEarly.current.delete(id);
         if (failure instanceof ApiError && failure.status === 401) {
           onSignedOut();
         }
         const message = failure instanceof Error ? failure.message : String(failure);
         setLookup(id, { enricher, state: "failed", message });
         throw failure;
+      }
+      asking.current.delete(id);
+      if (stoppedEarly.current.delete(id)) {
+        // Stopped while it was being asked for: the Job it became is cancelled at once.
+        setLookup(id, undefined);
+        await api.cancelJob(job.id).catch(() => undefined);
+        loadFindable();
+        return;
       }
       trackOfJob.current.set(job.id, id);
       jobOfTrack.current.set(id, job.id);
@@ -596,6 +612,20 @@ export function useLibrary(onSignedOut: () => void): Library {
       };
       setFindable(without);
       setAskedRecently(without);
+    },
+    stopFinding: async (id) => {
+      const job = jobOfTrack.current.get(id);
+      if (job === undefined) {
+        if (asking.current.has(id)) {
+          stoppedEarly.current.add(id);
+        }
+        return;
+      }
+      jobOfTrack.current.delete(id);
+      setLookup(id, undefined);
+      await api.cancelJob(job);
+      // Stopped, the Track offers the lookup again.
+      loadFindable();
     },
     setFavorite: (id, favorite) => {
       setError("");

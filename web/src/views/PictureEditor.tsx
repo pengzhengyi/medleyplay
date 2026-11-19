@@ -203,16 +203,6 @@ export function PictureEditor({
             {error}
           </p>
         )}
-        <footer className="dialog-buttons">
-          <button
-            type="button"
-            className="secondary outline dialog-button"
-            disabled={using}
-            onClick={() => dialog.current?.close()}
-          >
-            Cancel
-          </button>
-        </footer>
       </div>
     </Modal>
   );

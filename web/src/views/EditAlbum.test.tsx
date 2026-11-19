@@ -69,7 +69,7 @@ describe("editing an album of songs of their own", () => {
     await userEvent.clear(screen.getByRole("textbox", { name: "Album" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Album" }), "supercell");
     await userEvent.type(screen.getByRole("spinbutton", { name: "Year" }), "2009");
-    await userEvent.click(screen.getByRole("button", { name: "Save to 2 songs" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(onSave).toHaveBeenCalledWith({ album: "supercell", year: 2009 });
   });
@@ -78,7 +78,7 @@ describe("editing an album of songs of their own", () => {
     const { onSave } = renderEditor();
 
     await userEvent.clear(screen.getByRole("textbox", { name: "Genre" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save to 2 songs" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(onSave).toHaveBeenCalledWith({ genre: null });
   });
@@ -96,7 +96,7 @@ describe("editing an album of songs of their own", () => {
     );
 
     await userEvent.type(screen.getByRole("spinbutton", { name: "Year" }), "2009");
-    await userEvent.click(screen.getByRole("button", { name: "Save to 2 songs" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The year is 1-9999.");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe("editing an album of songs of their own", () => {
   it("has nothing to save until something changes", () => {
     renderEditor();
 
-    expect(screen.getByRole("button", { name: "Save to 2 songs" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   it("finds covers of the album on MusicBrainz, and sets the one chosen on every song", async () => {

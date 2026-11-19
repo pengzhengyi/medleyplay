@@ -531,6 +531,64 @@ describe("finding a song's details online", () => {
     expect(result.current.lookups.get(1)?.state).toBe("succeeded");
   });
 
+  it("stops a lookup asked for, cancelling its Job and offering it again", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+      "POST /api/jobs/7/cancel": { body: { id: 7, state: "cancelled", failure_message: "" } },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+    await act(async () => {
+      await result.current.find("musicbrainz", 1);
+    });
+
+    await act(async () => {
+      await result.current.stopFinding(1);
+    });
+
+    expect(calls).toContain("POST /api/jobs/7/cancel");
+    expect(result.current.lookups.get(1)).toBeUndefined();
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+  });
+
+  it("cancels a lookup stopped before the server answered asking for it", async () => {
+    let answer: (value?: unknown) => void = () => undefined;
+    const answered = new Promise((resolve) => {
+      answer = resolve;
+    });
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 8, state: "queued", failure_message: "" },
+        after: answered,
+      },
+      "POST /api/jobs/8/cancel": { body: { id: 8, state: "cancelled", failure_message: "" } },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+
+    await act(async () => {
+      const asking = result.current.find("musicbrainz", 1);
+      await result.current.stopFinding(1);
+      answer();
+      await asking;
+    });
+
+    expect(calls).toContain("POST /api/jobs/8/cancel");
+    expect(result.current.lookups.get(1)).toBeUndefined();
+  });
+
   it("lets a finished lookup go after a moment", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     serve({

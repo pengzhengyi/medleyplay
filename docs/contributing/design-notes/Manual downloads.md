@@ -160,8 +160,8 @@
   refuses, such as to an Account that didn't ask for the Download. The Track's
   menu has *Add the file yourself…* for any site Track, failed or not.
 - **The add-the-file dialog:** the failure's message, the other ways, a file
-  picker, and *Add*, with the upload's progress; *Cancel* stops an upload under
-  way. When it finishes, the dialog closes and the Track shows as downloaded and
+  picker, and *Add*, with the upload's progress; *Stop* beside it stops an upload
+  under way. When it finishes, the dialog closes and the Track shows as downloaded and
   plays like any other.
 
 ## What the API shows

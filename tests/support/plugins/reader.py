@@ -628,8 +628,8 @@ BEATLES_FETCHED: Final = jpeg_image("The Beatles from the web")
 class ImageLinks:
     """Names links as an AI model might: two to *Help!*'s cover, one to The Beatles.
 
-    A song *Refused* has the provider refuse the key, and any other album or artist
-    has it name no link.
+    A song *Refused* has the provider refuse the key, a note saying *first only* has it
+    name only the first, and any other album or artist has it name no link.
     """
 
     def suggest(self, request: SuggestImages) -> SuggestedImages:
@@ -643,6 +643,8 @@ class ImageLinks:
             )
         if request.subject is ImageSubject.ARTIST and request.name == "The Beatles":
             links = (ImageLink(url=BEATLES_LINK, why="A photo of the band"),)
+        if "first only" in request.hint:
+            links = links[:1]
         return SuggestedImages(links=links, ai_answered=request.ai[0].id)
 
 

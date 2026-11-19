@@ -17,7 +17,7 @@ from medleyplay.application.image_links import (
     PictureLinks,
     SuggestedLink,
 )
-from medleyplay.plugin_api import MAX_LINK, MAX_NAME
+from medleyplay.plugin_api import MAX_HINT, MAX_LINK, MAX_NAME
 from medleyplay.web.deps import ImageLinksDep, SignedInAccount
 
 router = APIRouter(prefix="/api/image-links", tags=["covers"])
@@ -32,6 +32,16 @@ class AlbumIn(BaseModel):
 
     album: str = Field(min_length=1, max_length=MAX_NAME)
     artist: str = Field(default="", max_length=MAX_NAME)
+
+
+class SuggestIn(BaseModel):
+    """What the listener says to the AI of the picture they want; empty for nothing."""
+
+    hint: str = Field(default="", max_length=MAX_HINT, examples=["the 1997 first pressing"])
+
+
+class SuggestAlbumIn(AlbumIn, SuggestIn):
+    """An album, and what the listener says to the AI of its cover."""
 
 
 class ApproveIn(BaseModel):
@@ -113,9 +123,9 @@ def album_links(
 
 
 @router.post("/album/suggest", status_code=status.HTTP_202_ACCEPTED)
-def suggest_for_album(body: AlbumIn, me: SignedInAccount, service: ImageLinksDep) -> None:
+def suggest_for_album(body: SuggestAlbumIn, me: SignedInAccount, service: ImageLinksDep) -> None:
     """Ask an AI model for links to the album's cover; nothing is fetched."""
-    service.suggest(me, AlbumPictured(body.album, body.artist))
+    service.suggest(me, AlbumPictured(body.album, body.artist), body.hint)
 
 
 @router.post("/album/approve", status_code=status.HTTP_202_ACCEPTED)
@@ -135,9 +145,11 @@ def artist_links(
 
 
 @router.post("/artist/{artist_id}/suggest", status_code=status.HTTP_202_ACCEPTED)
-def suggest_for_artist(artist_id: _ArtistId, me: SignedInAccount, service: ImageLinksDep) -> None:
+def suggest_for_artist(
+    artist_id: _ArtistId, me: SignedInAccount, service: ImageLinksDep, body: SuggestIn | None = None
+) -> None:
     """Ask an AI model for links to a photo of the artist; nothing is fetched."""
-    service.suggest(me, ArtistPictured(artist_id))
+    service.suggest(me, ArtistPictured(artist_id), "" if body is None else body.hint)
 
 
 @router.post("/artist/{artist_id}/approve", status_code=status.HTTP_202_ACCEPTED)

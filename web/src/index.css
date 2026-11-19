@@ -8505,6 +8505,11 @@ button.playing-kind[aria-expanded="true"] {
   font-size: 0.8rem;
 }
 
+/* The AI's pictures have no heading of their own: the tab names them. */
+.image-links .cover-finder-head {
+  justify-content: flex-end;
+}
+
 .cover-finder-note {
   display: flex;
   align-items: center;

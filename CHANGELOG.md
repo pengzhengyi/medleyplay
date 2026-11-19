@@ -631,6 +631,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Ask AI in the picture editor asks on opening** — the tab asks the AI the first
+  time it opens for an album or artist, without a button to press first. *Ask
+  again* takes a note of the picture wanted, as the songs editor does. New: a
+  `hint` in the body of `POST /api/image-links/album/suggest` and
+  `POST /api/image-links/artist/{id}/suggest`.
+
 - **A faster first load** — the songs are read first and alone, then what shows
   around them once they are drawn, and what only some views need when the browser is
   idle; the Library shows rows shaped like songs meanwhile. Now Playing, the

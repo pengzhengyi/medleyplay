@@ -1185,8 +1185,8 @@ button[aria-disabled="true"] {
 /*
  * A photo suggested for an artist with none: ringed in the accent's dashes, its tag on
  * the ring's lower edge. The photo is its own controls: its lower half uses it, its
- * upper right quarter dismisses it, and its upper left chooses another; the ring turns
- * green, red, or solid as each is pointed at or focused.
+ * upper right quarter dismisses it, and its upper left chooses another. Pointed at or
+ * focused, each tints its part green, red, or the accent, and the ring follows.
  */
 .photo-suggestion {
   display: grid;
@@ -1230,8 +1230,14 @@ button[aria-disabled="true"] {
   inset: 0;
   display: grid;
   grid-template: 1fr 1fr / 1fr 1fr;
+  margin: 0;
   overflow: hidden;
   border-radius: 50%;
+}
+
+/* Pico spaces a group's buttons apart; these are the photo's own halves and quarters. */
+.photo-suggestion-frame .photo-suggestion-controls > button.photo-suggestion-control {
+  margin: 0;
 }
 
 .photo-suggestion-control {
@@ -1272,8 +1278,17 @@ button[aria-disabled="true"] {
   opacity: 0.7;
 }
 
-.photo-suggestion-control:is(:hover, :focus-visible):not(:disabled) {
-  background: rgb(0 0 0 / 38%);
+/* Pointed at, a control tints just the part of the photo it is: green, red, or the accent. */
+.photo-suggestion-use:is(:hover, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--yes) 32%, transparent);
+}
+
+.photo-suggestion-dismiss:is(:hover, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--no) 32%, transparent);
+}
+
+.photo-suggestion-change:is(:hover, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .photo-suggestion-control:is(:hover, :focus-visible) .photo-suggestion-icon {

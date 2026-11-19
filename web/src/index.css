@@ -1532,6 +1532,19 @@ button[aria-disabled="true"] {
   font-weight: 500;
 }
 
+/*
+ * Who sings the song and its album, under its title in the player, and who an album
+ * is by, under its heading: links that keep the text's color, faintly underlined, as
+ * Now Playing's names are.
+ */
+.song-credits a,
+.subtitle > a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentcolor 30%, transparent);
+  text-underline-offset: 0.2em;
+}
+
 .found {
   margin: 1.25rem 0 0.5rem 0.75rem;
   color: var(--muted);
@@ -2408,6 +2421,15 @@ button[aria-disabled="true"] {
 .groups a:hover {
   background: var(--surface);
   box-shadow: var(--lift);
+}
+
+/* Pointed at, a credit link takes the ink and a full underline. */
+.song-credits a:hover,
+.song-credits a:focus-visible,
+.subtitle > a:hover,
+.subtitle > a:focus-visible {
+  color: var(--ink);
+  text-decoration-color: currentcolor;
 }
 
 .avatar,

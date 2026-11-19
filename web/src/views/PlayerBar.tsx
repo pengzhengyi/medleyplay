@@ -23,6 +23,7 @@ import { LyricNow } from "./LyricsPanel";
 import { AlbumCard, PlayingKind } from "./PlayingKind";
 import { PlayTime } from "./PlayTime";
 import { SeekBar } from "./SeekBar";
+import { SongCredits } from "./SongCredits";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { FavoriteButton, Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
@@ -122,7 +123,11 @@ export function PlayerBar({
         )}
         <div className="names">
           <strong>{track?.title ?? "Nothing playing"}</strong>
-          <span>{track?.artist ?? "Choose a Track to play it"}</span>
+          {track === undefined ? (
+            <span>Choose a Track to play it</span>
+          ) : (
+            <SongCredits track={track} />
+          )}
           {track !== undefined && !lyricsHidden && (
             <LyricNow lyrics={lyrics} seconds={songTimeOf(track, nowPlaying, position).seconds} />
           )}

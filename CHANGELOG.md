@@ -724,6 +724,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A suggested photo's controls are exactly its halves and quarters** — pointed at,
+  each tints just its part: the lower half green to use it, the upper right red to
+  dismiss it, the upper left in the accent to choose another. They had stopped short
+  of the photo's bottom, so the halves weren't halves.
+
 - **Asking the AI for a file's songs can be stopped:** pressing *AI* again while it
   asks, or closing the editor, cancels the lookup, so no AI round runs for nothing.
 

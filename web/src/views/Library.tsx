@@ -357,6 +357,27 @@ export function Library({
       },
     );
   };
+  /** Use `cover` on every song of `songs`. */
+  const setAlbumCover = async (songs: readonly Track[], cover: string) => {
+    await library.setDetailsOn(
+      songs.map(({ id }) => id),
+      { cover },
+    );
+    setNotice(`Used the cover on ${String(songs.length)} songs.`);
+  };
+  // The image becomes the first song's cover, then every song's.
+  const uploadAlbumCover = async (songs: readonly Track[], image: File) => {
+    const [first] = songs;
+    const cover =
+      first === undefined
+        ? undefined
+        : (await library.setCover(first.id, image)).origins.household?.cover;
+    if (typeof cover !== "string") {
+      throw new Error("The cover could not be kept.");
+    }
+    await setAlbumCover(songs, cover);
+    return cover;
+  };
   const actions: TrackActions = {
     onPlay: player.playList,
     onPlayAll: player.playAll,
@@ -373,6 +394,8 @@ export function Library({
       setEditing({ track, songs: false });
     },
     onEditAlbum: setEditingAlbum,
+    onUseAlbumCover: setAlbumCover,
+    onUploadAlbumCover: uploadAlbumCover,
     // The AI asked about a Track lately is offered too, asked again once someone agrees.
     canFind: (lookup: Lookup, track: Track) =>
       (library.findable.get(lookup.enricher)?.has(track.id) ?? false) ||
@@ -776,30 +799,8 @@ export function Library({
         {editingAlbum !== undefined && (
           <EditAlbum
             songs={editingAlbum}
-            onUseCover={async (cover) => {
-              await library.setDetailsOn(
-                editingAlbum.map(({ id }) => id),
-                { cover },
-              );
-              setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
-            }}
-            // The image becomes the first song's cover, then every song's.
-            onUploadCover={async (image) => {
-              const [first] = editingAlbum;
-              const cover =
-                first === undefined
-                  ? undefined
-                  : (await library.setCover(first.id, image)).origins.household?.cover;
-              if (typeof cover !== "string") {
-                throw new Error("The cover could not be kept.");
-              }
-              await library.setDetailsOn(
-                editingAlbum.map(({ id }) => id),
-                { cover },
-              );
-              setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
-              return cover;
-            }}
+            onUseCover={(cover) => setAlbumCover(editingAlbum, cover)}
+            onUploadCover={(image) => uploadAlbumCover(editingAlbum, image)}
             onSave={async (changes) => {
               const [first] = editingAlbum;
               await library.setDetailsOn(

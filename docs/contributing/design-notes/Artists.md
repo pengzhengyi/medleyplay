@@ -551,7 +551,7 @@ not.
   ([Track details](Track%20details.md#replacing-a-cover-or-a-photo)), uploading one
   or asking an AI model, or, when it is the household's, remove at once; *Shown as*, offering every name it goes by, with
   the songs' own name as its placeholder; and *About*. *Save* keeps the name and
-  the note together; until then *Cancel* forgets them. *Ask AI* above the fields
+  the note together; until then closing forgets them. *Ask AI* above the fields
   asks a model for a name and a note, reads *Asking the AI…* with one spinner
   while it is, or *Asking the AI once medleyplay is Online* while it waits, and
   reads its answer every 2 seconds until it comes; each

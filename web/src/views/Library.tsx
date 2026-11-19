@@ -431,7 +431,9 @@ export function Library({
   };
   /** The way to the songs of `track`'s file from its details, and the editor to show. */
   const songsOf = (track: Track) => {
-    const file = track.segment_of === null ? track : byId.get(track.segment_of);
+    // Read from the Library, so a file split while its details are open says so.
+    const file =
+      byId.get(track.segment_of ?? track.id) ?? (track.segment_of === null ? track : undefined);
     if (file === undefined) {
       return undefined;
     }
@@ -450,6 +452,11 @@ export function Library({
       askAgain: (hint) => {
         library.find(AI_ENRICHER, file.id, { hint }).catch(() => {
           // The lookup's state says why, beside the AI button.
+        });
+      },
+      stop: () => {
+        library.stopFinding(file.id).catch(() => {
+          // A Job that can't be cancelled has ended; its answer lands as any does.
         });
       },
     };

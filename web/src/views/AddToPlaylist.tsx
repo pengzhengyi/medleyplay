@@ -1,7 +1,7 @@
 /**
  * @file Adding a song to Playlists: choose one or several, or name a new one.
  *
- * Escape, Cancel, or a click outside it close it without adding anything; a new
+ * Escape, its ✕, or a click outside it close it without adding anything; a new
  * Playlist is made only when the song is added.
  */
 
@@ -154,9 +154,6 @@ export function AddToPlaylist({
           </p>
         )}
         <footer className="dialog-buttons">
-          <button type="button" className="secondary outline dialog-button" onClick={close}>
-            Cancel
-          </button>
           <button
             type="submit"
             className="dialog-button"

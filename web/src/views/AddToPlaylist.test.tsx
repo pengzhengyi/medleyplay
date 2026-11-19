@@ -89,9 +89,9 @@ describe("adding a song to playlists", () => {
 
   it.each([
     [
-      "Cancel",
+      "its ✕",
       async (dialog: HTMLElement) => {
-        await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+        await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
       },
     ],
     [

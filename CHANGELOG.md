@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The search box completes tags and sites** — a word being typed offers the tag
+  or site it begins, as `bi` offers `bilibili:` and `ar` offers `artist:`; *Tab*
+  takes the first.
+
 - **An album's cover on its page** — under the heading, with *Save* and *Replace* on
   hover; *Replace* opens the picture editor (upload, MusicBrainz, or Ask AI) without
   going through *Edit details*.

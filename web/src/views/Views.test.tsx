@@ -297,6 +297,59 @@ describe("search suggestions", () => {
     expect(box).toHaveFocus();
   });
 
+  it("completes a site's name being typed, and searches it when chosen", async () => {
+    open("", withBilibili());
+    const box = await screen.findByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "bi");
+    await userEvent.click(screen.getByRole("option", { name: /^bilibili:/u }));
+
+    expect(screen.getByRole("radio", { name: "Bilibili" })).toBeChecked();
+    expect(box).toHaveValue("");
+    expect(box).toHaveFocus();
+  });
+
+  it("completes a tag's name being typed, keeping the words before it", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "melt ar");
+    await userEvent.click(screen.getByRole("option", { name: /^artist:/u }));
+
+    expect(box).toHaveAccessibleDescription("melt Artist:");
+    expect(box).toHaveValue("");
+  });
+
+  it("takes the first completion on Tab", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "ar{Tab}");
+
+    expect(box).toHaveAccessibleDescription("Artist:");
+    expect(box).toHaveFocus();
+  });
+
+  it("offers no completion for a single letter", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "a");
+
+    expect(screen.queryByRole("option", { name: /^artist:/u })).toBeNull();
+  });
+
+  it("offers no site to complete where only the Library can be searched", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "bi");
+
+    expect(screen.queryByRole("option", { name: /^bilibili:/u })).toBeNull();
+  });
+
   it("lists the tags when the pointer rests on an empty box", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });

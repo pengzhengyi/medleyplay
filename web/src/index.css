@@ -8639,6 +8639,11 @@ button.playing-kind[aria-expanded="true"] {
   font-size: 0.8rem;
 }
 
+/* The AI's pictures have no heading of their own: the tab names them. */
+.image-links .cover-finder-head {
+  justify-content: flex-end;
+}
+
 .cover-finder-note {
   display: flex;
   align-items: center;
@@ -8775,15 +8780,18 @@ button.playing-kind[aria-expanded="true"] {
 .picture-note .picture-note-text {
   flex: 1 1 auto;
   width: auto;
+  height: auto;
   min-width: 0;
   margin: 0;
   padding-block: 0.3rem;
   font-size: 0.85rem;
 }
 
+/* Ask stands as tall as the note beside it. */
 .picture-note .dialog-button {
   flex: none;
   width: auto;
+  height: auto;
   margin: 0;
 }
 

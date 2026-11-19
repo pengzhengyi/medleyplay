@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
 from medleyplay.plugin_api.artists import MAX_NAME, MAX_SONGS_SHOWN, FindStatus, Name
-from medleyplay.plugin_api.enrichers import AiEndpoint
+from medleyplay.plugin_api.enrichers import MAX_HINT, AiEndpoint
 from medleyplay.plugin_api.extension import ExtensionPoint
 
 MAX_IMAGE_LINKS: Final = 6
@@ -94,12 +94,14 @@ class SuggestImages(_Model):
     """Ask for links to images of `name`, an album or an artist, of the AI providers `ai`.
 
     For an album, `artist` is its artist, or empty, and `songs` a few of its songs.
+    `hint` is what the listener wrote for the AI, or empty.
     """
 
     subject: ImageSubject
     name: Name
     artist: Annotated[str, StringConstraints(max_length=MAX_NAME)] = ""
     songs: Annotated[tuple[Name, ...], Field(max_length=MAX_SONGS_SHOWN)] = ()
+    hint: Annotated[str, StringConstraints(max_length=MAX_HINT)] = Field(default="", repr=False)
     ai: tuple[AiEndpoint, ...] = Field(default=(), repr=False)
 
 

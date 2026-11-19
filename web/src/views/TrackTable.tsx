@@ -227,6 +227,10 @@ export interface TrackActions extends TrackMenuActions {
   readonly statusOf: (track: Track) => CoverStatus | undefined;
   /** Edit the album `songs`, songs of their own, make up; an album that is one file is edited as it. */
   readonly onEditAlbum?: (songs: readonly Track[]) => void;
+  /** Make `cover`, a cover kept already, the cover of `songs`: an album's songs, or its one file. */
+  readonly onUseAlbumCover?: (songs: readonly Track[], cover: string) => Promise<void>;
+  /** Make the image `image` the cover of `songs`, answering the cover it became. */
+  readonly onUploadAlbumCover?: (songs: readonly Track[], image: File) => Promise<string>;
 }
 
 /** The columns a browser shows and their widths, as it last left them. */

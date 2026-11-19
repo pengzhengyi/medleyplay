@@ -1103,6 +1103,34 @@ button[aria-disabled="true"] {
   color: var(--muted);
 }
 
+/* An album's cover on its page, your rating beside it. */
+.album-about {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0 0 1.25rem;
+}
+
+.album-art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 7.5rem;
+  height: 7.5rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+  box-shadow: var(--lift);
+  color: var(--accent);
+  font-size: 2.5rem;
+}
+
+.album-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* About an artist, under its heading: a round mosaic of its covers, then what is known. */
 .artist-about {
   display: flex;
@@ -8821,6 +8849,16 @@ button.playing-kind[aria-expanded="true"] {
 .cover-frame.edit-artist-frame .cover-tools {
   border-radius: 0;
   padding-bottom: 0.9rem;
+}
+
+/* An album's cover on its page, its tools along its foot. */
+.cover-frame.album-frame {
+  flex: none;
+  width: 7.5rem;
+}
+
+.cover-frame.album-frame .cover-tools {
+  border-radius: 0 0 0.75rem 0.75rem;
 }
 
 /* An artist's photo on its page, round, its tools inside the circle. */

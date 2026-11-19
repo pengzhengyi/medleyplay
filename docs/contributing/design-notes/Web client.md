@@ -361,6 +361,11 @@ Track's kind is decided.
   in the box; what follows it stays typed, so `bilibili:BV1…` pasted is ready for
   *Enter*. The tags listed in an empty box end with it, and Backspace in an empty
   box with Bilibili chosen goes back to the Library, as it removes a tag.
+- **A word being typed completes to a tag or a site** it begins, from its second
+  letter: `bi` offers `bilibili:` (where Bilibili can be searched) and `ar`
+  offers `artist:`, first in the panel, above the artists. Choosing one is typing
+  it in full, keeping the words before it; *Tab* takes the first, or the one the
+  arrow keys point at. One letter offers nothing, as it begins too many names.
 - **Library search** matches the words typed, each anywhere in a Track's title,
   artist, or album, ignoring case, width, and hiragana or katakana: NFKC, lower
   case, and katakana shifted to hiragana, so `ｍｅｌｔ` finds *Melt* and

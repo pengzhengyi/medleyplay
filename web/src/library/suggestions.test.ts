@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { trackOf } from "../testing/server";
-import { artistAskedOf, suggestedArtists } from "./suggestions";
+import { artistAskedOf, completionsOf, suggestedArtists } from "./suggestions";
 
 /** Songs by 周杰伦, 周深, and ryo, four, two, and one of them. */
 const TRACKS = [
@@ -29,5 +29,38 @@ describe("the artists suggested", () => {
 
   it("are none for a search that asks about no artist", () => {
     expect(suggestedArtists(TRACKS, "album:Supercell")).toEqual([]);
+  });
+});
+
+describe("the tags and sites a word being typed completes", () => {
+  it.each([
+    ["bi", [{ site: "bilibili" }]],
+    ["BI", [{ site: "bilibili" }]],
+    ["ar", [{ tag: "artist" }]],
+    ["artist", [{ tag: "artist" }]],
+    ["so", [{ tag: "song" }]],
+    ["fa", [{ tag: "favorite" }]],
+  ])("are, for %j, %j", (typed, completions) => {
+    expect(completionsOf(typed, ["bilibili"]).completions).toEqual(completions);
+  });
+
+  it.each([
+    ["a", "a single letter, which begins too many"],
+    ["melt ", "a word already finished"],
+    ["bilibili:", "a name already completed"],
+    ["xyz", "a word no name begins"],
+  ])("are none for %j, %s", (typed) => {
+    expect(completionsOf(typed, ["bilibili"]).completions).toEqual([]);
+  });
+
+  it("include no site that cannot be searched", () => {
+    expect(completionsOf("bi", []).completions).toEqual([]);
+  });
+
+  it("complete the last word, keeping the words before it", () => {
+    expect(completionsOf("melt ar", ["bilibili"])).toEqual({
+      before: "melt",
+      completions: [{ tag: "artist" }],
+    });
   });
 });

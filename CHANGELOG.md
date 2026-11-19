@@ -728,6 +728,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A suggested photo's controls are exactly its halves and quarters** — pointed at,
+  each tints just its part: the lower half green to use it, the upper right red to
+  dismiss it, the upper left in the accent to choose another. They had stopped short
+  of the photo's bottom, so the halves weren't halves.
+
 - **Now Playing's lyrics mirror the cover** — they take the half of the page beside
   the cover's half, so "No lyrics for this song." sits level with the player and as
   far right of the middle as the cover is left of it.

@@ -1,9 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Lyrics } from "../api";
-import { lyricsOf } from "../testing/server";
+import { lyricsFoundOf, lyricsOf, lyricsOptionOf, serve } from "../testing/server";
 import { LyricsEditor, type SyncPlayer } from "./LyricsEditor";
 import { SongsControlsContext } from "./songsControls";
 
@@ -28,7 +28,11 @@ function playingAt(seconds: number, change: Partial<SyncPlayer> = {}): SyncPlaye
   };
 }
 
-function editing(lyrics: Lyrics | null, player: SyncPlayer = playingAt(0)) {
+function editing(
+  lyrics: Lyrics | null,
+  player: SyncPlayer = playingAt(0),
+  song?: { readonly id: number; readonly title: string; readonly artist: string },
+) {
   const save = vi.fn<(text: string, instrumental: boolean) => Promise<unknown>>(() =>
     Promise.resolve(undefined),
   );
@@ -41,6 +45,7 @@ function editing(lyrics: Lyrics | null, player: SyncPlayer = playingAt(0)) {
         save={save}
         forget={forget}
         player={shown}
+        song={song}
       />
     </SongsControlsContext>
   );
@@ -179,5 +184,35 @@ describe("syncing lyrics to the song", () => {
     expect(within(region()).getByRole("button", { name: "Stamp" })).toBeDisabled();
     expect(region()).toHaveTextContent("Play the song from the start, then press Space");
     expect(within(region()).getByRole("status")).toHaveTextContent("3 lines aren't stamped yet.");
+  });
+});
+
+describe("finding lyrics", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("takes the lyrics of a song found into the text, saying where from, to save", async () => {
+    serve({ "GET /api/tracks/7/lyrics/found": { body: lyricsFoundOf() } });
+    const { save, region } = editing(null, playingAt(0), { id: 7, title: "Melt", artist: "ryo" });
+
+    await userEvent.click(await within(region()).findByRole("button", { name: "Find" }));
+    const found = await screen.findByRole("listitem", { name: /^Melt/ });
+    await userEvent.click(within(found).getByRole("button", { name: "Use" }));
+
+    expect(within(region()).getByRole("textbox", { name: /Lyrics/ })).toHaveValue(
+      lyricsOptionOf().text,
+    );
+    expect(region()).toHaveTextContent("From “Melt” on LRCLIB. Save to keep them.");
+    await userEvent.click(within(region()).getByRole("button", { name: "Save lyrics" }));
+    expect(save).toHaveBeenCalledWith(lyricsOptionOf().text, false);
+  });
+
+  it("offers no finding for lyrics with no song to find them for", async () => {
+    const { region } = editing(null);
+
+    await within(region()).findByRole("button", { name: "Text" });
+
+    expect(within(region()).queryByRole("button", { name: "Find" })).toBeNull();
   });
 });

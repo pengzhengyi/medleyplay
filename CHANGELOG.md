@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Find a song's lyrics by hand** — the lyrics editor's *Find* lists the songs
+  LRCLIB, and NetEase once turned on, have of a title and artist you can change, each
+  with its site, album, length, kind, and first lines; *Use* fills the editor with
+  them to save. New: `POST /api/tracks/{id}/lyrics/find`,
+  `GET /api/tracks/{id}/lyrics/found` (migration 0057).
+
 - **Names lead to their pages** — the player names the song's artists and its album
   under its title, each a link to its page, as Now Playing does; an album's page
   links the artist it is by.

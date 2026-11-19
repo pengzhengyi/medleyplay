@@ -10,13 +10,16 @@ from medleyplay.plugin_api import (
     MAX_LYRICS,
     EnrichStatus,
     EnrichTrack,
+    FindLyrics,
+    FindStatus,
     FoundLyrics,
+    LyricsOption,
     LyricsProvider,
     NetworkError,
     ShownDetail,
 )
 from medleyplay.plugins.lyrics.lrclib import USER_AGENT
-from medleyplay.plugins.lyrics.netease import LYRIC, SEARCH, SPACING, Netease
+from medleyplay.plugins.lyrics.netease import LYRIC, MAX_OFFERED, SEARCH, SPACING, Netease
 from tests.support.transport import FakeTransport, FakeWaits, Reply
 
 MELT = """\
@@ -279,3 +282,56 @@ def test_an_unreachable_site_is_a_network_failure() -> None:
 
     with pytest.raises(NetworkError, match="NetEase couldn't be reached"):
         netease_of(fake).enrich(asking_for_melt())
+
+
+def test_the_songs_found_are_offered_with_their_lyrics_closest_in_length_first() -> None:
+    live = melt(id=2, name="Melt (Live)", duration=301_000, album={"name": "Live"})
+    fake = (
+        FakeTransport()
+        .answer(SEARCH, searched(live, melt()))
+        .answer(LYRIC, lyric("[00:01.00]Live\n"), lyric())
+    )
+
+    found = netease_of(fake).find(FindLyrics(title="Melt", artist="ryo", duration_ms=260_400))
+
+    assert found.options == (
+        LyricsOption(
+            provider=LyricsProvider.NETEASE,
+            title="Melt",
+            artist="ryo",
+            album="Re:Start",
+            duration_ms=260_000,
+            text=MELT,
+        ),
+        LyricsOption(
+            provider=LyricsProvider.NETEASE,
+            title="Melt (Live)",
+            artist="ryo",
+            album="Live",
+            duration_ms=301_000,
+            text="[00:01.00]Live\n",
+        ),
+    )
+    assert fake.parameter("s") == "Melt ryo"
+
+
+def test_only_the_first_few_songs_found_are_asked_for_their_lyrics() -> None:
+    songs = [melt(id=at, name=f"Melt {at}") for at in range(MAX_OFFERED + 2)]
+    fake = (
+        FakeTransport()
+        .answer(SEARCH, searched(*songs))
+        .answer(LYRIC, *[lyric() for _ in range(MAX_OFFERED)])
+    )
+
+    found = netease_of(fake).find(FindLyrics(title="Melt", artist="ryo"))
+
+    assert len(found.options) == MAX_OFFERED
+    assert sum(str(request.url).startswith(LYRIC) for request in fake.sent) == MAX_OFFERED
+
+
+def test_netease_refusing_a_search_is_a_refusal() -> None:
+    fake = FakeTransport().answer(SEARCH, Reply.json({"code": -460, "msg": "Cheating"}))
+
+    found = netease_of(fake).find(FindLyrics(title="Melt", artist="ryo"))
+
+    assert found.status is FindStatus.REFUSED

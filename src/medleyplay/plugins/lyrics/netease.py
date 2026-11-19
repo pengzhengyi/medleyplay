@@ -23,14 +23,19 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from medleyplay.plugin_api import (
     MAX_LYRICS,
+    MAX_NAME,
     Enriched,
     EnrichStatus,
     EnrichTrack,
+    FindLyrics,
+    FindStatus,
     FoundLyrics,
+    FoundLyricsOptions,
+    LyricsOption,
     LyricsProvider,
     NetworkError,
 )
-from medleyplay.plugins.lyrics.lrclib import USER_AGENT
+from medleyplay.plugins.lyrics.lrclib import USER_AGENT, closest_first
 
 API: Final = "https://music.163.com/api"
 SEARCH: Final = f"{API}/search/get"
@@ -40,6 +45,8 @@ SPACING: Final = 1.0
 TIMEOUT: Final = 10.0
 RESULTS: Final = 10
 """How many search results are read for the song."""
+MAX_OFFERED: Final = 3
+"""The most songs offered from NetEase's search, each asked for its lyrics in turn."""
 MATCH_WITHIN_MS: Final = 2_000
 """How many milliseconds a result's length may differ from the song's."""
 REFUSED_CODES: Final = frozenset({-460, -462})
@@ -67,6 +74,7 @@ class _Song(_Model):
     id: int
     name: str = ""
     artists: list[_Named] = []
+    album: _Named = _Named()
     duration: int | None = None
 
 
@@ -129,14 +137,31 @@ class Netease:
             return Enriched(status=EnrichStatus.INVALID, message=str(error))
         return Enriched(lyrics=lyrics)
 
-    def _find(self, title: str, artist: str, duration_ms: int | None) -> _Song | None:
-        found = self._json(SEARCH, {"s": f"{title} {artist}", "type": "1", "limit": str(RESULTS)})
+    def find(self, request: FindLyrics) -> FoundLyricsOptions:
+        """Answer the first few songs NetEase's search finds, with their lyrics.
+
+        The closest in length to the song come first; a song with no lyrics isn't offered.
+        """
         try:
-            songs = _Search.model_validate(found).result.songs
+            songs = self._search(request.title, request.artist)[:MAX_OFFERED]
+            found = [(song, self._lyrics(song)) for song in songs if song.name.strip()]
+        except _RefusedError as error:
+            return FoundLyricsOptions(status=FindStatus.REFUSED, message=str(error))
+        options = [_option_of(song, lyrics) for song, lyrics in found if lyrics is not None]
+        return FoundLyricsOptions(options=tuple(closest_first(options, request.duration_ms)))
+
+    def _find(self, title: str, artist: str, duration_ms: int | None) -> _Song | None:
+        songs = self._search(title, artist)
+        return next((each for each in songs if _matches(each, title, artist, duration_ms)), None)
+
+    def _search(self, title: str, artist: str) -> list[_Song]:
+        words = f"{title} {artist}".strip()
+        found = self._json(SEARCH, {"s": words, "type": "1", "limit": str(RESULTS)})
+        try:
+            return _Search.model_validate(found).result.songs
         except ValidationError as error:
             message = "NetEase's search answered a list of another shape."
             raise _InvalidError(message) from error
-        return next((each for each in songs if _matches(each, title, artist, duration_ms)), None)
 
     def _lyrics(self, song: _Song) -> FoundLyrics | None:
         found = self._json(LYRIC, {"id": str(song.id), "lv": "-1", "tv": "-1"})
@@ -223,6 +248,21 @@ def _lyrics_of(answer: _Lyric) -> FoundLyrics | None:
     if len(with_translation) <= MAX_LYRICS:
         text = with_translation
     return FoundLyrics(provider=LyricsProvider.NETEASE, text=text)
+
+
+def _option_of(song: _Song, lyrics: FoundLyrics) -> LyricsOption:
+    """Return the song found, with its lyrics, as a song offered."""
+    return LyricsOption(
+        provider=LyricsProvider.NETEASE,
+        title=song.name.strip()[:MAX_NAME],
+        artist=", ".join(each.name.strip() for each in song.artists if each.name.strip())[
+            :MAX_NAME
+        ],
+        album=song.album.name.strip()[:MAX_NAME],
+        duration_ms=song.duration,
+        text=lyrics.text,
+        instrumental=lyrics.instrumental,
+    )
 
 
 def _is_pure_music(text: str) -> bool:

@@ -14,6 +14,7 @@
 - [Lyrics from the files](#lyrics-from-the-files)
 - [Looking lyrics up on LRCLIB](#looking-lyrics-up-on-lrclib)
 - [Looking lyrics up on NetEase](#looking-lyrics-up-on-netease)
+- [Finding lyrics by hand](#finding-lyrics-by-hand)
 - [What the API shows](#what-the-api-shows)
 - [Showing them](#showing-them)
 - [Editing them](#editing-them)
@@ -133,6 +134,23 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
   enricher until an admin resets it; a busy answer fails the lookup without asking
   again.
 
+## Finding lyrics by hand
+
+A lookup takes the one song a site matches to the file's title, artist, and length.
+When it finds none, or the wrong one, as for a video whose title is not the song's,
+the household looks for the lyrics itself, by a title and artist of its own.
+
+- **The plugin's lyrics finder** (`lyrics_finder`) answers the songs each site finds
+  of a title and artist, each with its lyrics: LRCLIB's search, at most five, then
+  NetEase's first three, each asked for its lyrics, once the household turned NetEase
+  on. Each site's songs come closest in length to the file first; a song with no
+  lyrics, and not instrumental, isn't offered. A site refusing is said so, and what
+  was found before it is kept.
+- **Finding is a Job** in the lyrics enricher's lane, so it keeps the same pace with
+  the lookups. What it finds is kept for the song, with what was asked, and finding
+  again replaces it. Nothing changes the song's lyrics until the household uses one
+  and saves.
+
 ## What the API shows
 
 | Route | Who | Does |
@@ -141,6 +159,8 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
 | `PUT /api/tracks/{id}/lyrics` | Signed in | The household's lyrics, `{text}` (LRC or plain) or `{instrumental: true}`; 422 for empty text |
 | `DELETE /api/tracks/{id}/lyrics` | Signed in | Drops the household's, answering what shows now |
 | `POST /api/enrichers/lyrics/tracks/{id}` | Signed in | Looks the song up now; `?again` for one found before |
+| `POST /api/tracks/{id}/lyrics/find` | Signed in | Finds the songs titled `{title, artist}` on the lyrics sites, for the song; 202, 409 while the lyrics plugin is off |
+| `GET /api/tracks/{id}/lyrics/found` | Signed in | What was last found: the title and artist asked, each song found with its site, album, length, and lyrics, and whether it is being found or why it failed |
 | `PUT /api/settings` | Admin | `lyrics_sites`, the sites asked after LRCLIB: `[]` or `["netease"]`; left out, they stay as saved |
 
 ## Showing them
@@ -177,6 +197,11 @@ the song shows, as their source gave them, and says where they came from.
   and each line, or every line at once, moves a tenth of a second earlier or later.
   Lines not stamped yet are counted, and saved as plain lines. Syncing writes the
   text back as LRC, so the two modes edit the same lyrics.
+- **Found:** the songs the sites have of a title and artist, which start as the
+  song's own and may be changed. Opened for a song never looked for, it looks at
+  once. Each song found shows its site, album, length, whether it is timed, plain,
+  or instrumental, and its first two lines; *Use* fills the text with its lyrics,
+  saying where they are from until saved.
 - **Saving** makes them the household's, which show over every other source's and
   stop the song being looked up; *Remove yours* drops them, showing the next source's
   again. Either goes back to the details, and the lyrics shown are read again. A
@@ -195,6 +220,11 @@ the song shows, as their source gave them, and says where they came from.
   held, found, or not found, and asking again.
 - **Looking up:** real Jobs against the test plugin, which answers by title: lyrics
   timed and plain, an instrumental, nothing, a refusal, and a failure.
+- **Finding by hand:** each site's finder over a fake transport (songs closest in
+  length first, none without lyrics, at most a few, a refusal), the sites in turn,
+  real Jobs that keep and replace what was found, and the editor's *Find*: looking on
+  opening only once, looking again by other words, nothing found, a failure, and a
+  song used then saved.
 - **Showing them:** the line at a time (before the first, at each start, past the
   last), how far into a song of a file playing whole; reading them for the song
   playing and again on a finished lookup; the panel's lines, translation, pause,

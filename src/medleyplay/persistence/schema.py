@@ -1030,6 +1030,24 @@ class TrackLyricsRow(Base):
     found_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class LyricsSearchRow(Base):
+    """The songs a site last found of the title and artist the household asked a song's lyrics by.
+
+    Each of `options` is a song found, what tells it apart, and its lyrics, the closest
+    in length first; none when the sites found none.
+    """
+
+    __tablename__ = "lyrics_search"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    title: Mapped[str] = mapped_column(String(512))
+    artist: Mapped[str] = mapped_column(String(512))
+    options: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class NameSplitRow(Base):
     """What the household chose for an artist name written as several: split it, or keep it.
 

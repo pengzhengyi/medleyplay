@@ -115,6 +115,7 @@ from medleyplay.plugin_api import (
     COVER_FINDER,
     IMAGE_FETCHER,
     IMAGE_SUGGESTER,
+    LYRICS_FINDER,
     PICTURE_CHOOSER,
     PICTURE_FINDER,
     TRACK_ENRICHER,
@@ -141,6 +142,7 @@ from medleyplay.plugin_api import (
     FindArtist,
     FindArtistNames,
     FindCovers,
+    FindLyrics,
     FindPictures,
     FindStatus,
     FoundArtist,
@@ -149,10 +151,12 @@ from medleyplay.plugin_api import (
     FoundCover,
     FoundCovers,
     FoundLyrics,
+    FoundLyricsOptions,
     FoundPicture,
     FoundPictures,
     ImageLink,
     ImageSubject,
+    LyricsOption,
     LyricsProvider,
     NetworkError,
     Plugin,
@@ -694,6 +698,30 @@ class Lyricist:
         site = LyricsProvider.NETEASE if title == "Elsewhere" else LyricsProvider.LRCLIB
         return Enriched(lyrics=FoundLyrics(provider=site, text=lyrics_of(title)))
 
+    def find(self, request: FindLyrics) -> FoundLyricsOptions:
+        """Answer the songs titled as asked: the song, then a live take; none for *Nowhere*.
+
+        NetEase, once turned on, adds its own; *Refused* is refused.
+        """
+        match request.title:
+            case "Nowhere":
+                return FoundLyricsOptions()
+            case "Refused":
+                return FoundLyricsOptions(status=FindStatus.REFUSED, message="HTTP Error 403.")
+        song = LyricsOption(
+            provider=LyricsProvider.LRCLIB,
+            title=request.title,
+            artist=request.artist,
+            duration_ms=request.duration_ms,
+            text=lyrics_of(request.title),
+        )
+        live = song.model_copy(
+            update={"title": f"{request.title} (Live)", "duration_ms": None, "text": PLAIN_LYRICS}
+        )
+        elsewhere = song.model_copy(update={"provider": LyricsProvider.NETEASE})
+        on_netease = (elsewhere,) if LyricsProvider.NETEASE in request.sites else ()
+        return FoundLyricsOptions(options=(song, live, *on_netease))
+
 
 def register(registry: Registry) -> None:
     """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
@@ -704,7 +732,9 @@ def register(registry: Registry) -> None:
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
     registry.add(TRACK_ENRICHER, "ai-details", Suggester())
-    registry.add(TRACK_ENRICHER, "lyrics", Lyricist())
+    lyricist = Lyricist()
+    registry.add(TRACK_ENRICHER, "lyrics", lyricist)
+    registry.add(LYRICS_FINDER, "lyrics", lyricist)
     registry.add(ARTIST_FINDER, "musicbrainz", Artists())
     registry.add(ARTIST_NAME_FINDER, "wikipedia", ArtistNames())
     registry.add(ARTIST_CHOOSER, "ai-details", ArtistChoices())

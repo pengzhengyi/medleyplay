@@ -6251,6 +6251,114 @@ button.song-handle {
   resize: vertical;
 }
 
+/* Where the lyrics in the text came from, until saved. */
+.lyrics-editor-taken {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+/*
+ * Finding a song's lyrics: what to look for on one line, then the songs found, each
+ * with what tells it apart and its first lines, and a way to use it.
+ */
+.lyrics-finder {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.lyrics-finder-ask {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.lyrics-finder-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Pico spaces fields apart below; these sit on one line with the button. */
+.lyrics-finder-ask .lyrics-finder-input {
+  height: auto;
+  margin: 0;
+}
+
+/* Find stands as tall as the fields beside it. */
+.lyrics-finder-ask .dialog-button {
+  align-self: stretch;
+  height: auto;
+}
+
+.lyrics-finder-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.lyrics-found {
+  display: grid;
+  gap: 0.5rem;
+  max-height: min(24rem, 50dvh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.lyrics-found-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.65rem;
+  box-shadow: inset 0 0 0 1px var(--line);
+  list-style: none;
+}
+
+.lyrics-found-about {
+  display: grid;
+  flex: 1;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.lyrics-found-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-found-title {
+  font-weight: 600;
+}
+
+.lyrics-found-artist,
+.lyrics-found-meta {
+  color: var(--muted);
+}
+
+.lyrics-found-lines {
+  font-size: 0.85rem;
+}
+
+@media (width <= 36rem) {
+  .lyrics-finder-ask {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .lyrics-finder-ask .dialog-button {
+    grid-column: 1 / -1;
+  }
+}
+
 .lyrics-editor-instrumental {
   display: flex;
   align-items: center;

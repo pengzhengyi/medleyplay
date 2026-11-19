@@ -5,6 +5,8 @@
 import { vi } from "vitest";
 
 import type {
+  LyricsFound,
+  LyricsOption,
   Lyrics,
   CoverRelease,
   AlbumCovers,
@@ -753,6 +755,37 @@ export function lyricsOf(change: Partial<Lyrics> = {}): Lyrics {
     plain: "",
     text: "[00:12.34]朝目が覚めて\n",
     found_at: "2026-11-17T12:00:00Z",
+    ...change,
+  };
+}
+
+/** *Melt* by ryo as LRCLIB has it, 4:20 long, timed, with `change` on top. */
+export function lyricsOptionOf(change: Partial<LyricsOption> = {}): LyricsOption {
+  return {
+    provider: "lrclib",
+    title: "Melt",
+    artist: "ryo",
+    album: "Re:Start",
+    duration_ms: 260_000,
+    text: "[ar:ryo]\n[00:12.34]朝目が覚めて\n[00:15.50]真っ先に思い浮かぶ\n[00:18.00]君の顔\n",
+    instrumental: false,
+    ...change,
+  };
+}
+
+/** What was found looking for *Melt* by ryo: `options`, with `change` on top. */
+export function lyricsFoundOf(
+  options: readonly LyricsOption[] = [lyricsOptionOf()],
+  change: Partial<LyricsFound> = {},
+): LyricsFound {
+  return {
+    title: "Melt",
+    artist: "ryo",
+    options,
+    found_at: "2026-11-19T12:00:00Z",
+    finding: false,
+    waiting: false,
+    failure: null,
     ...change,
   };
 }

@@ -66,6 +66,10 @@ describe("the first lines of lyrics", () => {
     expect(firstLinesOf(text)).toEqual(["朝目が覚めて", "真っ先に思い浮かぶ"]);
   });
 
+  it("keep words in angle brackets that are no word's time", () => {
+    expect(firstLinesOf("[00:01.00]<3 you, <00:02.00>always")).toEqual(["<3 you, always"]);
+  });
+
   it("are plain lyrics' first lines as written", () => {
     expect(firstLinesOf("故事的小黄花\n从出生那年就飘着\n童年的荡秋千", 1)).toEqual([
       "故事的小黄花",

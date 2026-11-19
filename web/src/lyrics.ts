@@ -69,7 +69,8 @@ export function firstLinesOf(text: string, count = LINES_SHOWN): readonly string
     .map((line) =>
       line
         .replaceAll(/\[[^\]]*\]/gu, "")
-        .replaceAll(/<[^>]*>/gu, "")
+        // A word's time, as enhanced LRC writes it: <00:12.34>.
+        .replaceAll(/<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/gu, "")
         .trim(),
     )
     .filter((line) => line !== "")

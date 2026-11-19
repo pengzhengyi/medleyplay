@@ -367,11 +367,15 @@ The *Ask AI* tab of the picture editor shows the pictures an AI model names for 
 photo of the artist, each from its own site. Nothing is downloaded until one is
 approved.
 
-- **Asked only when someone chooses *Ask AI*,** with an AI set up and the
-  `ai-details` plugin on: a Job in the AI's lane shows a model the album, its
-  artist, and a few of its songs, or the artist's name, and it answers with at
-  most 6 places to find a picture, each with why. Asking again replaces what it
-  named.
+- **Asked on opening the *Ask AI* tab,** the first time for that album or artist,
+  with an AI set up and the `ai-details` plugin on: a Job in the AI's lane shows a
+  model the album, its artist, and a few of its songs, or the artist's name, and it
+  answers with at most 6 places to find a picture, each with why. With no AI set
+  up, the tab says so and links to Settings.
+- **Asked again with a note:** *Ask again* opens a field for what the listener
+  wants, such as "the 1997 first pressing", at most 500 characters. The note goes
+  to the model as a message of its own, after the question, so it can't change the
+  question's lines. Asking again replaces what the model named.
 - **Places a model can name rightly:** a model rarely knows an image's exact
   address, so it is asked for Wikipedia articles first (the album's, or the
   artist's, in the language they are best known in, and in English too), then

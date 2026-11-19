@@ -116,10 +116,13 @@ def asking(request: SuggestImages) -> list[Message]:
         lines = [f"the front cover of the album: {name}{by}"]
         if request.songs:
             lines.append(f"songs: {'; '.join(one_line(song) for song in request.songs)}")
-    return [
+    messages: list[Message] = [
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": "\n".join(lines)},
     ]
+    if note := one_line(request.hint):
+        messages.append({"role": "user", "content": f"Note from the listener: {note}"})
+    return messages
 
 
 @dataclass(frozen=True)

@@ -1383,8 +1383,8 @@ export const api = {
         : picturePath(pictured),
     ),
   /** Ask an AI model for links to a picture; nothing is fetched. */
-  suggestImageLinks: (pictured: Pictured) =>
-    call<null>("POST", `${picturePath(pictured)}/suggest`, pictureBody(pictured)),
+  suggestImageLinks: (pictured: Pictured, hint = "") =>
+    call<null>("POST", `${picturePath(pictured)}/suggest`, { ...pictureBody(pictured), hint }),
   /** Fetch the picture at a link suggested; answers its cover when it was fetched before. */
   approveImageLink: (pictured: Pictured, url: string) =>
     call<{ readonly cover: string | null }>("POST", `${picturePath(pictured)}/approve`, {

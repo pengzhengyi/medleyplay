@@ -29,10 +29,10 @@ from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.covers import cover_type, is_cover_id
 from medleyplay.domain.enrichers import AI_DETAILS
-from medleyplay.domain.errors import ConflictError, NotFoundError
+from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
 from medleyplay.persistence.schema import ArtistRow, ImageLinksRow
-from medleyplay.plugin_api import IMAGE_FETCHER, IMAGE_SUGGESTER, ImageSubject
+from medleyplay.plugin_api import IMAGE_FETCHER, IMAGE_SUGGESTER, MAX_HINT, ImageSubject
 from medleyplay.programs.image_links import (
     FetchedImageResult,
     FetchImageJob,
@@ -177,8 +177,15 @@ class ImageLinkService:
         self._kinds = kinds
         self._covers_folder = covers_folder
 
-    def suggest(self, caller: Account, pictured: Pictured) -> None:
-        """Ask an AI model for links to the picture; asking again while asked waits."""
+    def suggest(self, caller: Account, pictured: Pictured, hint: str = "") -> None:
+        """Ask an AI model for links to the picture, with `hint`, the listener's note to it.
+
+        Asking again while asked waits.
+        """
+        hint = " ".join(hint.split())
+        if len(hint) > MAX_HINT:
+            message = f"A note to the AI is at most {MAX_HINT} characters."
+            raise InvalidInputError(message)
         if not self._may_suggest():
             message = "Turn on the ai-details plugin to ask an AI model."
             raise ConflictError(message)
@@ -197,6 +204,7 @@ class ImageLinkService:
             name=subject.name,
             artist=subject.artist,
             songs=songs,
+            hint=hint,
             suggester=PLUGIN,
         )
         self._jobs.submit(self._kinds.suggest, _suggest_target(subject), request, caller.id)

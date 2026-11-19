@@ -645,6 +645,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   such as `#/artist?name=Jay` saved before artist pages opened by id, asks *Which
   Jay?* when the name goes by several artists, each a tile told apart by its album.
 
+- **Ask AI in the picture editor asks on opening** — the tab asks the AI the first
+  time it opens for an album or artist, without a button to press first. *Ask
+  again* takes a note of the picture wanted, as the songs editor does. New: a
+  `hint` in the body of `POST /api/image-links/album/suggest` and
+  `POST /api/image-links/artist/{id}/suggest`.
+
 - **Dialogs close from a ✕ at their top right,** with Escape and a click outside as
   before; their footers hold only what they do, so *Save* stands alone. The main
   action reads *Save* (not *Save songs*, *Save to 2 songs*, or *Use these songs*),

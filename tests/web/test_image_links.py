@@ -148,3 +148,22 @@ def test_an_album_unnamed_is_refused(client: TestClient) -> None:
     response = client.get("/api/image-links/album", params={"album": ""})
 
     assert response.status_code == 422
+
+
+def test_a_note_longer_than_the_ai_takes_is_refused(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.post("/api/image-links/album/suggest", json={**HELP, "hint": "x" * 501})
+
+    assert response.status_code == 422
+
+
+def test_asking_for_an_artist_s_photo_needs_no_note(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    without = client.post("/api/image-links/artist/not-an-artist/suggest")
+    with_note = client.post(
+        "/api/image-links/artist/not-an-artist/suggest", json={"hint": "the band"}
+    )
+
+    assert (without.status_code, with_note.status_code) == (409, 409)

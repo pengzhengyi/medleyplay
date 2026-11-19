@@ -931,6 +931,19 @@ describe("a file split into songs", () => {
   });
 });
 
+describe("an album's page", () => {
+  it("links its artist to the artist's page", async () => {
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }));
+    const heading = await screen.findByRole("heading", { level: 2, name: "Supercell" });
+
+    await userEvent.click(
+      within(heading.closest("header") ?? document.body).getByRole("link", { name: "ryo" }),
+    );
+
+    expect(await screen.findByRole("heading", { level: 2, name: "ryo" })).toBeVisible();
+  });
+});
+
 describe("editing an album from its page", () => {
   it("sets what is typed on every song of an album of songs of their own", async () => {
     const sent: unknown[] = [];

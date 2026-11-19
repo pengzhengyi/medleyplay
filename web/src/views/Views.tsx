@@ -308,6 +308,7 @@ function viewOf(given: ViewProps) {
         <Songs
           title={route.name || UNKNOWN_ALBUM}
           subtitle={route.artist || UNKNOWN_ARTIST}
+          subtitleTo={route.artist === "" ? undefined : { view: "artist", name: route.artist }}
           back={{ view: "albums" }}
           backLabel="Albums"
           heart={
@@ -475,6 +476,7 @@ const showFocused = () => {
 function Songs({
   title,
   subtitle,
+  subtitleTo,
   back,
   backLabel,
   heart,
@@ -486,7 +488,9 @@ function Songs({
   actions,
 }: Omit<ViewProps, "tracks" | "route" | "playlists" | "admin" | "onEnrichersChanged"> & {
   readonly title: string;
+  /** Who the view is by, under its title; a route to their page makes it a link. */
   readonly subtitle?: string | undefined;
+  readonly subtitleTo?: Route | undefined;
   readonly back?: Route;
   readonly backLabel?: string;
   /** A heart beside the title, for an artist or album that can be a favorite. */
@@ -503,6 +507,7 @@ function Songs({
       <ViewHeading
         title={title}
         subtitle={subtitle}
+        subtitleTo={subtitleTo}
         back={back}
         backLabel={backLabel}
         heart={heart}
@@ -519,6 +524,7 @@ function Songs({
 function ViewHeading({
   title,
   subtitle,
+  subtitleTo,
   back,
   backLabel,
   heart,
@@ -527,6 +533,8 @@ function ViewHeading({
 }: {
   readonly title: string;
   readonly subtitle?: string | undefined;
+  /** The page of who `subtitle` names, making it a link. */
+  readonly subtitleTo?: Route | undefined;
   readonly back?: Route | undefined;
   readonly backLabel?: string | undefined;
   readonly heart?: ReactNode;
@@ -557,7 +565,11 @@ function ViewHeading({
           {title}
         </h2>
       )}
-      {subtitle !== undefined && <p className="subtitle">{subtitle}</p>}
+      {subtitle !== undefined && (
+        <p className="subtitle">
+          {subtitleTo === undefined ? subtitle : <a href={hrefOf(subtitleTo)}>{subtitle}</a>}
+        </p>
+      )}
       {children !== undefined && children !== false && <p className="meta">{children}</p>}
     </header>
   );

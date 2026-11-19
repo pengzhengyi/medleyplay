@@ -40,7 +40,7 @@ from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
-from medleyplay.application.lyrics_search import LyricsSearchService, find_lyrics_kind
+from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
@@ -358,7 +358,7 @@ def lyrics(units: sessionmaker[Session], clock: FakeClock) -> LyricsService:
 def lyrics_search(
     units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, jobs: JobService
 ) -> LyricsSearchService:
-    return LyricsSearchService(units, plugins, jobs, find_lyrics_kind(clock))
+    return LyricsSearchService(units, plugins, jobs, lyrics_search_kinds(clock))
 
 
 @pytest.fixture

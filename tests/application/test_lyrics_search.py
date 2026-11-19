@@ -15,10 +15,11 @@ from medleyplay.application.lyrics_search import LyricsFound
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.errors import InvalidInputError, NotFoundError
+from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import Settings
 from medleyplay.plugin_api import LyricsProvider
+from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -36,6 +37,13 @@ def enriching(
 ) -> Iterator[Enriching]:
     with running_enrichment(units, clock, tmp_path / "data") as running:
         yield running
+
+
+def _chosen(enriching: Enriching, caller: Account, song: TrackId) -> LyricsFound:
+    """Have `caller` ask a model which song found is the song, and return what it picked."""
+    enriching.lyrics_search.choose(caller, song)
+    enriching.finish_every_job()
+    return enriching.lyrics_search.found(caller, song)
 
 
 def _found(
@@ -127,3 +135,83 @@ def test_finding_needs_a_title(enriching: Enriching, alice: Account) -> None:
 def test_finding_the_lyrics_of_no_song_is_refused(enriching: Enriching, alice: Account) -> None:
     with pytest.raises(NotFoundError):
         enriching.lyrics_search.find(alice, TrackId(404), "Melt", "ryo")
+
+
+def _with_ai(enriching: Enriching, caller: Account) -> None:
+    enriching.ai.add(caller, DEEPSEEK, "deepseek-flash", None)
+
+
+def test_an_ai_model_picks_the_song_found_that_is_the_song_with_why_and_who(
+    enriching: Enriching, alice: Account
+) -> None:
+    _with_ai(enriching, alice)
+    song = enriching.add_song("Melt", artist="ryo")
+    assert _found(enriching, alice, song).may_choose
+
+    chosen = _chosen(enriching, alice, song)
+
+    assert chosen.pick is not None
+    assert (chosen.pick.option, chosen.pick.why, chosen.pick.model, chosen.pick.host) == (
+        0,
+        "The studio recording, as long as the file",
+        "deepseek-flash",
+        "api.deepseek.com",
+    )
+    assert (chosen.choosing, chosen.may_choose) == (False, False)
+
+
+def test_no_model_may_be_asked_until_one_is_set_up(enriching: Enriching, alice: Account) -> None:
+    song = enriching.add_song("Melt", artist="ryo")
+
+    found = _found(enriching, alice, song)
+
+    assert found.may_choose is False
+    with pytest.raises(ConflictError, match="AI provider"):
+        enriching.lyrics_search.choose(alice, song)
+
+
+def test_a_model_is_asked_only_once_songs_were_found(enriching: Enriching, alice: Account) -> None:
+    _with_ai(enriching, alice)
+    song = enriching.add_song("Melt", artist="ryo")
+
+    with pytest.raises(ConflictError, match="Find"):
+        enriching.lyrics_search.choose(alice, song)
+
+
+def test_a_model_choosing_none_picks_nothing_and_is_not_asked_again(
+    enriching: Enriching, alice: Account
+) -> None:
+    _with_ai(enriching, alice)
+    song = enriching.add_song("Silence", artist="ryo")
+    _found(enriching, alice, song, title="Silence")
+
+    chosen = _chosen(enriching, alice, song)
+
+    assert (chosen.pick, chosen.may_choose) == (None, False)
+
+
+def test_finding_again_drops_the_pick_among_the_songs_found_before(
+    enriching: Enriching, alice: Account
+) -> None:
+    _with_ai(enriching, alice)
+    song = enriching.add_song("Melt", artist="ryo")
+    _found(enriching, alice, song)
+    _chosen(enriching, alice, song)
+
+    found = _found(enriching, alice, song, title="Melt", artist="ryo feat. 初音ミク")
+
+    assert (found.pick, found.may_choose) == (None, True)
+
+
+def test_a_provider_refusing_fails_the_choosing_saying_so(
+    enriching: Enriching, alice: Account
+) -> None:
+    _with_ai(enriching, alice)
+    song = enriching.add_song("Refused", artist="ryo")
+    _found(enriching, alice, song, title="Melt")
+
+    chosen = _chosen(enriching, alice, song)
+
+    assert chosen.pick is None
+    assert chosen.choice_failure is not None
+    assert "refused" in chosen.choice_failure

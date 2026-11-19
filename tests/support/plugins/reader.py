@@ -115,6 +115,7 @@ from medleyplay.plugin_api import (
     COVER_FINDER,
     IMAGE_FETCHER,
     IMAGE_SUGGESTER,
+    LYRICS_CHOOSER,
     LYRICS_FINDER,
     PICTURE_CHOOSER,
     PICTURE_FINDER,
@@ -126,10 +127,12 @@ from medleyplay.plugin_api import (
     Chapter,
     ChooseArtists,
     ChooseCover,
+    ChooseLyrics,
     ChoosePicture,
     ChosenArtist,
     ChosenArtists,
     ChosenCover,
+    ChosenLyrics,
     ChosenPicture,
     CommunityRating,
     DescribeArtist,
@@ -616,6 +619,27 @@ class CoverChoices:
         )
 
 
+class LyricsChoices:
+    """Picks the timed song found titled as the song; *Refused* is refused, *Silence* none."""
+
+    def choose(self, request: ChooseLyrics) -> ChosenLyrics:
+        if request.title.startswith("Refused"):
+            return ChosenLyrics(status=FindStatus.REFUSED, message="The key was refused.")
+        timed = (
+            at
+            for at, option in enumerate(request.options)
+            if option.timed
+            and option.title == request.title
+            and not request.title.startswith("Silence")
+        )
+        option = next(timed, None)
+        return ChosenLyrics(
+            option=option,
+            why="" if option is None else "The studio recording, as long as the file",
+            ai_answered=request.ai[0].id,
+        )
+
+
 HELP_LINK: Final = "https://upload.wikimedia.org/wikipedia/en/e/e7/Help!_(The_Beatles_album).jpg"
 """The link to *Help!*'s cover the image suggester names first; the fetcher has it."""
 HELP_GONE: Final = "https://upload.wikimedia.org/wikipedia/en/0/00/Help_gone.jpg"
@@ -743,6 +767,7 @@ def register(registry: Registry) -> None:
     registry.add(PICTURE_FINDER, "deezer", Pictures())
     registry.add(PICTURE_CHOOSER, "ai-details", PictureChoices())
     registry.add(COVER_CHOOSER, "ai-details", CoverChoices())
+    registry.add(LYRICS_CHOOSER, "ai-details", LyricsChoices())
     registry.add(IMAGE_SUGGESTER, "ai-details", ImageLinks())
     registry.add(IMAGE_FETCHER, "ai-details", Images())
 

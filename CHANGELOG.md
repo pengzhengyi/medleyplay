@@ -641,6 +641,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An old artist link names one artist or asks which** — a link by the name alone,
+  such as `#/artist?name=Jay` saved before artist pages opened by id, asks *Which
+  Jay?* when the name goes by several artists, each a tile told apart by its album.
+
 - **Ask AI in the picture editor asks on opening** — the tab asks the AI the first
   time it opens for an album or artist, without a button to press first. *Ask
   again* takes a note of the picture wanted, as the songs editor does. New: a

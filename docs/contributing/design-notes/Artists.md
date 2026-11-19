@@ -561,8 +561,10 @@ not.
 - **Two artists of one name are two:** in the Artists view, each a tile of its own,
   the two told apart by the album most of their songs are on (*on Blue Night*);
   each with its own page, opened by its id, listing only its own songs; and each its
-  own favorite, in Now Playing's hearts and Radio too. A link by the name alone
-  opens the name's first. *Which Jay?* beside a song's Artist in *Edit details*
+  own favorite, in Now Playing's hearts and Radio too. A link by the name alone,
+  as `#/artist?name=Jay` from before pages opened by id, asks *Which Jay?* with a
+  tile for each artist with songs going by it, the name's first first; a name
+  naming one artist opens its page. *Which Jay?* beside a song's Artist in *Edit details*
   lists, under each of its artists, *The one it is by now*, checked, each other
   artist going by the name as *On Blue Night · 3 songs*, and *Another artist called
   Jay*; choosing one moves the song at once.

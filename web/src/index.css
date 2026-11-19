@@ -6864,8 +6864,9 @@ kbd {
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
 }
 
+/* The lyrics take a half as wide as the cover's, so they mirror it across the middle. */
 .np-stage.lyrics-open {
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 34rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .np-main {
@@ -7107,8 +7108,10 @@ kbd {
 /* The lyrics beside the cover: the line sung now large and bright, the others dim. */
 .lyrics-panel {
   display: grid;
-  align-self: stretch;
+  align-self: center;
   width: 100%;
+  max-width: 34rem;
+  height: 100%;
   min-height: 0;
   max-height: min(78dvh, 48rem);
 }

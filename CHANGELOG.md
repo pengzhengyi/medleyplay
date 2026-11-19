@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Names lead to their pages** — the player names the song's artists and its album
+  under its title, each a link to its page, as Now Playing does; an album's page
+  links the artist it is by.
+
 - **The search box completes tags and sites** — a word being typed offers the tag
   or site it begins, as `bi` offers `bilibili:` and `ar` offers `artist:`; *Tab*
   takes the first.

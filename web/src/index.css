@@ -457,6 +457,12 @@ button[aria-disabled="true"] {
   color: var(--ink);
 }
 
+/* The key that takes the first completion, at the row's end. */
+.suggest-key {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
 .suggest-tag code {
   padding: 0;
   background: none;

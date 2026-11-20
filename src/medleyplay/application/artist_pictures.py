@@ -333,6 +333,7 @@ class ArtistPictureService:
             }
             named = {artist_id: _name_of(db, artist_id) for artist_id in songs}
             names = {artist_id: _every_name_of(db, artist_id) for artist_id in songs}
+        finding = self._jobs.active_targets(FIND_PICTURES_KIND)
         found: list[MissingPhoto] = []
         for artist_id, count in songs.items():
             row = rows.get(artist_id)
@@ -346,7 +347,7 @@ class ArtistPictureService:
                     suggested=_suggested(names[artist_id], row, pick),
                     picked=pick is not None,
                     found=row is not None,
-                    finding=self._finding(artist_id),
+                    finding=find_pictures_target(artist_id) in finding,
                 )
             )
         found.sort(key=lambda each: (each.suggested is None, -each.songs, each.name))

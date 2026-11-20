@@ -1,7 +1,8 @@
 """The database revision: a number that changes whenever a write changes rows."""
 
-import secrets
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from sqlite3 import Connection as SQLiteConnection
 
 from sqlalchemy import Engine, event
@@ -9,6 +10,8 @@ from sqlalchemy.pool import ConnectionPoolEntry, PoolProxiedConnection
 
 # cspell:ignore checkin
 _CHANGES_AT_CHECKOUT = "changes_at_checkout"
+
+_ignoring = threading.local()
 
 
 class DatabaseRevision:
@@ -18,14 +21,10 @@ class DatabaseRevision:
     notes that count when it lends a connection and compares when it is given back,
     after its transaction ended; the revision goes up only if rows changed. A write
     that matches no rows leaves it alone, and every way of writing counts.
-
-    The revision starts at zero with each server, so `mark`, chosen at random when it
-    is created, tells one server's revisions from another's.
     """
 
     def __init__(self) -> None:
-        """Start at revision zero with a new mark."""
-        self.mark = secrets.token_hex(8)
+        """Start at revision zero."""
         self._value = 0
         self._lock = threading.Lock()
 
@@ -38,6 +37,21 @@ class DatabaseRevision:
         """Move to the next revision."""
         with self._lock:
             self._value += 1
+
+    @staticmethod
+    @contextmanager
+    def ignoring() -> Iterator[None]:
+        """Leave the revision alone for connections this thread gives back inside the block.
+
+        Only for bookkeeping, such as when a session was last seen: a write here must
+        change nothing a cached answer is built from, or that answer goes stale.
+        """
+        outer = getattr(_ignoring, "on", False)
+        _ignoring.on = True
+        try:
+            yield
+        finally:
+            _ignoring.on = outer
 
     def watch(self, engine: Engine) -> None:
         """Bump the revision whenever a connection of `engine` returns having changed rows.
@@ -59,5 +73,7 @@ class DatabaseRevision:
         self, dbapi_connection: SQLiteConnection | None, record: ConnectionPoolEntry
     ) -> None:
         lent_at = record.info.pop(_CHANGES_AT_CHECKOUT, None)
+        if getattr(_ignoring, "on", False) and dbapi_connection is not None:
+            return
         if dbapi_connection is None or lent_at != dbapi_connection.total_changes:
             self.bump()

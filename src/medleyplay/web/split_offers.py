@@ -4,14 +4,17 @@ Splitting names each file with the offer the household saw, by its signature, so
 whose list changed since is left as it is.
 """
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from typing import Final
+
+from fastapi import APIRouter, Request, Response
+from pydantic import BaseModel, Field, TypeAdapter
 
 from medleyplay.application.split_offers import Chosen, OfferedFile
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.settings import SplitAlbums
 from medleyplay.domain.split_offers import Doubt, OfferSource
-from medleyplay.web.deps import SignedInAccount, SplitOffersDep
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AnswersDep, SignedInAccount, SplitOffersDep
 
 router = APIRouter(prefix="/api/split-offers", tags=["songs"])
 
@@ -111,13 +114,25 @@ class KeptOut(BaseModel):
     kept: int
 
 
-@router.get("")
-def offers(_: SignedInAccount, service: SplitOffersDep) -> SplitOffersOut:
-    """Return the setting *Split albums*, and every long file to split or to keep."""
-    found = service.offers()
-    return SplitOffersOut(
-        setting=found.setting, files=[OfferedFileOut.of(each) for each in found.files]
-    )
+SPLIT_OFFERS: Final = TypeAdapter(SplitOffersOut)
+
+
+@router.get("", response_model=SplitOffersOut, responses=NOT_MODIFIED)
+def offers(
+    request: Request, _: SignedInAccount, service: SplitOffersDep, answers: AnswersDep
+) -> Response:
+    """Return the setting *Split albums*, and every long file to split or to keep.
+
+    304 when the request holds the answer already.
+    """
+
+    def build() -> SplitOffersOut:
+        found = service.offers()
+        return SplitOffersOut(
+            setting=found.setting, files=[OfferedFileOut.of(each) for each in found.files]
+        )
+
+    return answers.answer(request, ("split-offers",), build, SPLIT_OFFERS, heavy=False)
 
 
 @router.post("/split")

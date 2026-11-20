@@ -156,6 +156,79 @@ describe("the Library", () => {
   });
 });
 
+describe("when the Library may have changed", () => {
+  it("counts a refresh with each load, and none for a heart given", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "PUT /api/tracks/1/favorite": { body: trackOf(1, "Intro", { favorite: true }) },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const first = result.current.refreshes;
+
+    act(() => {
+      result.current.setFavorite(1, true);
+    });
+    await waitFor(() => {
+      expect(result.current.tracks.get(1)?.favorite).toBe(true);
+    });
+    const afterHeart = result.current.refreshes;
+    act(() => {
+      stream().send("tracks");
+    });
+
+    expect(afterHeart).toBe(first);
+    await waitFor(() => {
+      expect(result.current.refreshes).toBe(first + 1);
+    });
+  });
+
+  it("counts a refresh a moment after any Job ends, without asking for the Tracks again", async () => {
+    const { calls } = serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const before = result.current.refreshes;
+    vi.useFakeTimers();
+
+    act(() => {
+      stream().send("job", { id: 4, kind: "find_artist_pictures", state: "succeeded" });
+      stream().send("job", { id: 5, kind: "find_artist", state: "failed" });
+    });
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    const meanwhile = result.current.refreshes;
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+
+    expect(meanwhile).toBe(before);
+    expect(result.current.refreshes).toBe(before + 1);
+    expect(asked(calls)).toBe(1);
+  });
+
+  it("counts a refresh once the Tracks are read again after a change made here", async () => {
+    serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const before = result.current.refreshes;
+
+    act(() => {
+      result.current.reloadTracks();
+    });
+
+    await waitFor(() => {
+      expect(result.current.refreshes).toBe(before + 1);
+    });
+  });
+});
+
 describe("remote play", () => {
   it("names this page on the event stream", () => {
     serve(signedIn([]));

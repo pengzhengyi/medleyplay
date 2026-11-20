@@ -2,9 +2,10 @@
  * @file The Library's artist names, what MusicBrainz knows of them, and their links.
  *
  * Nothing is read while `version` is `undefined`, as before the Tracks are in. They
- * are read again whenever `version` changes, as it does with the Tracks, after
- * a change made here, and every 2 seconds while MusicBrainz is being asked about any,
- * Wikidata about a linked artist's other names, or an AI model which artists they name.
+ * are read again whenever `version` changes, as it does whenever the Library may have
+ * changed, after a change made here, and every 2 seconds while MusicBrainz is being
+ * asked about any, Wikidata about a linked artist's other names, or an AI model which
+ * artists they name, even while the server says nothing changed.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -16,6 +17,11 @@ import { whenIdle } from "./stages";
 const FINDING_EVERY_MS = 2000;
 const NONE: ArtistNames = { names: [], artists: [] };
 
+/** Whether a name, or which artists the names name, is being looked up. */
+function findingIn(names: ArtistNames): boolean {
+  return names.recommending === true || names.names.some((each) => each.finding);
+}
+
 /** The artist names, and a way to read them again after changing one. */
 export function useArtistNames(version: unknown): {
   readonly names: ArtistNames;
@@ -24,7 +30,9 @@ export function useArtistNames(version: unknown): {
   const [names, setNames] = useState<ArtistNames>(NONE);
   // Counts the reads asked for, so each asks the server again.
   const [reads, setReads] = useState(0);
-  const finding = names.recommending === true || names.names.some((each) => each.finding);
+  // Counts the answers that came while a name was found, the same one too, to read again.
+  const [answered, setAnswered] = useState(0);
+  const finding = findingIn(names);
   const readBefore = useRef(false);
   useEffect(() => {
     if (version === undefined) {
@@ -36,6 +44,9 @@ export function useArtistNames(version: unknown): {
         (found) => {
           if (current) {
             setNames(found);
+            if (findingIn(found)) {
+              setAnswered((count) => count + 1);
+            }
           }
         },
         () => {
@@ -66,7 +77,7 @@ export function useArtistNames(version: unknown): {
     return () => {
       clearTimeout(timer);
     };
-  }, [finding, names]);
+  }, [finding, answered]);
   return {
     names,
     reload: () => {

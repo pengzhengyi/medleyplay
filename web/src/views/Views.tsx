@@ -135,6 +135,7 @@ export interface ViewProps {
   readonly missingPhotos?: {
     readonly artists: readonly MissingPhoto[];
     readonly reload: () => void;
+    readonly answered: number;
   };
   /** How many names wait to be cleaned up. */
   readonly toDo?: number;

@@ -664,6 +664,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads at once answer in 0.7 s rather than 1.9 s on a library of 1738 songs.
   Signing out asks the browser to forget what it kept.
 
+- **Coming back to the page costs little when nothing changed** — the page asks
+  for the songs and the six lists beside them (artist names, names to tidy, split
+  offers, artist splits, shared names, artists missing a photo) with what it holds,
+  and an unchanged one comes back as *304 Not Modified* and renders nothing. A heart
+  or a rating no longer asks for those lists again, and when a session or device
+  was last seen no longer counts as a change. On a library of 1738 songs, coming
+  back sends 5.7 kB rather than 148 kB, and a heart sends one request rather than 13.
+
 - **An old artist link names one artist or asks which** — a link by the name alone,
   such as `#/artist?name=Jay` saved before artist pages opened by id, asks *Which
   Jay?* when the name goes by several artists, each a tile told apart by its album.

@@ -1,5 +1,6 @@
 /**
- * @file The artist names written as several artists, read again whenever the Tracks change.
+ * @file The artist names written as several artists, read again whenever the Library
+ * may have changed.
  */
 
 import { type ArtistSplits, api } from "../api";

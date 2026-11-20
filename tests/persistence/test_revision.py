@@ -1,5 +1,6 @@
 """The database revision: it changes once rows change and their connection returns."""
 
+import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -182,8 +183,42 @@ def test_an_invalidated_connection_changes_the_revision(
     assert revision.value > before
 
 
-def test_each_revision_starts_with_a_mark_of_its_own() -> None:
-    first, second = DatabaseRevision(), DatabaseRevision()
+def test_a_write_inside_ignoring_leaves_the_revision_alone(
+    units: sessionmaker[Session], revision: DatabaseRevision
+) -> None:
+    before = revision.value
 
-    assert first.mark
-    assert first.mark != second.mark
+    with DatabaseRevision.ignoring(), units.begin() as db:
+        _orm_update(db)
+
+    assert revision.value == before
+
+
+def test_a_write_after_ignoring_ends_changes_the_revision(
+    units: sessionmaker[Session], revision: DatabaseRevision
+) -> None:
+    with DatabaseRevision.ignoring(), units.begin() as db:
+        _orm_update(db)
+    before = revision.value
+
+    with units.begin() as db:
+        _orm_insert(db)
+
+    assert revision.value > before
+
+
+def test_a_write_on_another_thread_while_one_ignores_changes_the_revision(
+    units: sessionmaker[Session], revision: DatabaseRevision
+) -> None:
+    before = revision.value
+
+    def write() -> None:
+        with units.begin() as db:
+            _orm_insert(db)
+
+    with DatabaseRevision.ignoring():
+        other = threading.Thread(target=write)
+        other.start()
+        other.join(10)
+
+    assert revision.value > before

@@ -8,8 +8,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Annotated, Final, Literal
 
-from fastapi import APIRouter, status
-from pydantic import BaseModel, Field, StrictInt, StrictStr
+from fastapi import APIRouter, Request, Response, status
+from pydantic import BaseModel, Field, StrictInt, StrictStr, TypeAdapter
 
 from medleyplay.application.details import DetailsView, NameToTidy, VideoRead
 from medleyplay.domain.ai import AnsweredBy
@@ -20,7 +20,8 @@ from medleyplay.domain.details import MAX_TEXT, Kind, KindReason, Origin, Shown
 from medleyplay.domain.details import Field as Detail
 from medleyplay.domain.tidy import NameKind
 from medleyplay.domain.video_text import VideoText
-from medleyplay.web.deps import DetailsDep, SignedInAccount
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AnswersDep, DetailsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api/tracks", tags=["details"])
@@ -354,10 +355,24 @@ class NamesIn(BaseModel):
     names: list[NameIn] = Field(min_length=1, max_length=MAX_TIDY_ALL)
 
 
-@names_router.get("")
-def names_to_tidy(_: SignedInAccount, service: DetailsDep) -> NamesToTidyOut:
-    """Return the artist names with more than the name in them, with their tidy form."""
-    return NamesToTidyOut(names=[NameToTidyOut.of(found) for found in service.names_to_tidy()])
+NAMES_TO_TIDY: Final = TypeAdapter(NamesToTidyOut)
+
+
+@names_router.get("", response_model=NamesToTidyOut, responses=NOT_MODIFIED)
+def names_to_tidy(
+    request: Request, _: SignedInAccount, service: DetailsDep, answers: AnswersDep
+) -> Response:
+    """Return the artist names with more than the name in them, with their tidy form.
+
+    304 when the request holds the answer already.
+    """
+    return answers.answer(
+        request,
+        ("names-to-tidy",),
+        lambda: NamesToTidyOut(names=[NameToTidyOut.of(each) for each in service.names_to_tidy()]),
+        NAMES_TO_TIDY,
+        heavy=False,
+    )
 
 
 @names_router.post("/tidy")

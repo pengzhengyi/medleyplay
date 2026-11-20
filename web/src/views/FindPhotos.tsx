@@ -23,9 +23,12 @@ const READ_EVERY_MS = 3000;
 /** The artists with no photo, each with the one suggested, to use. */
 export function FindPhotos({
   artists,
+  answered,
   onChanged,
 }: {
   readonly artists: readonly MissingPhoto[];
+  /** How many answers came while Deezer was asked, the same one too; each reads again. */
+  readonly answered: number;
   /** Called after a change, or to read the artists again. */
   readonly onChanged: () => void;
 }) {
@@ -56,7 +59,7 @@ export function FindPhotos({
     return () => {
       clearTimeout(timer);
     };
-  }, [artists, finding]);
+  }, [answered, finding]);
 
   const suggested = artists.filter(
     (each): each is MissingPhoto & { readonly suggested: string } => each.suggested !== null,

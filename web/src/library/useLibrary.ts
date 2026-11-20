@@ -62,6 +62,12 @@ export interface Library {
   readonly refreshFeatures: () => Promise<boolean | null>;
   /** Whether the server has listed the Tracks yet. */
   readonly loaded: boolean;
+  /**
+   * Counts the times the Library may have changed, as what is read beside the songs
+   * sees it: each load, a moment after any Job ends, and each read of the songs after
+   * a change made here; a heart or a rating leaves it alone.
+   */
+  readonly refreshes: number;
   /** Why the last request failed, or `""`. */
   readonly error: string;
   /** Whether medleyplay may contact music sites now, once the server has said. */
@@ -181,7 +187,7 @@ export interface Library {
 /** The Jobs whose end can change the Tracks. */
 const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
-/** How long after the last such Job the Tracks are asked for, so a busy scan asks once. */
+/** How long after the last Job to end the Library is refreshed, so a busy scan does it once. */
 const SETTLE_MS = 1000;
 /** How long a lookup that succeeded still says so. */
 const DONE_MS = 4000;
@@ -198,6 +204,10 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "bas
  */
 export function useLibrary(onSignedOut: () => void): Library {
   const [store, dispatch] = useReducer(reduce, EMPTY);
+  const [refreshes, setRefreshes] = useState(0);
+  const refresh = useCallback(() => {
+    setRefreshes((count) => count + 1);
+  }, []);
   const [playlists, setPlaylists] = useState<readonly Playlist[]>([]);
   const [providers, setProviders] = useState<readonly string[]>([]);
   const [aiSetUp, setAiSetUp] = useState<boolean | null>(null);
@@ -374,10 +384,12 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.tracks().then(
         (tracks) => {
           dispatch({ type: "loaded", tracks });
+          refresh();
           readRest();
         },
         (failure: unknown) => {
           onFailure(failure);
+          refresh();
           readRest();
         },
       );
@@ -410,23 +422,31 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
     load();
     document.addEventListener("visibilitychange", onShown);
-    const stopListening = listen(load, setMode, onJob, setWaitingDevices, setSpeaker, (command) => {
-      for (const listener of commandListeners.current) {
-        listener(command);
-      }
-    });
+    const stopListening = listen(
+      { load, refresh },
+      setMode,
+      onJob,
+      setWaitingDevices,
+      setSpeaker,
+      (command) => {
+        for (const listener of commandListeners.current) {
+          listener(command);
+        }
+      },
+    );
     return () => {
       cancelRest?.();
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
     };
-  }, [loadFindable, loadFeatures, loadDownloading]);
+  }, [loadFindable, loadFeatures, loadDownloading, refresh]);
 
   /** Ask for the Tracks again; one that can't be read now shows on the next load. */
   const reloadTracks = () => {
     api.tracks().then(
       (tracks) => {
         dispatch({ type: "loaded", tracks });
+        refresh();
       },
       () => undefined,
     );
@@ -472,6 +492,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       (track) => {
         if (latestSave.current.get(id) === seq) {
           dispatch({ type: "details", track });
+          refresh();
         }
       },
       () => undefined,
@@ -564,6 +585,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     aiSetUp,
     refreshFeatures: loadFeatures,
     loaded: store.loaded,
+    refreshes,
     error,
     mode,
     modeChecked: setMode,
@@ -718,14 +740,15 @@ function listed(playlists: readonly Playlist[]): Playlist[] {
 /**
  * Call `load` when the event stream (re)connects, which may have missed changes,
  * a moment after a scan or a Download finishes, and when the Mode goes Online or
- * Offline, which changes what can play; tell `onMode` each Mode the stream sends,
- * `onJob` each Job, `onWaitingDevices` the devices waiting for an answer, which
- * only an admin's stream sends, `onSpeaker` the computer playing for the Account,
- * and `onCommand` each command for this page while it is that computer. Return what
- * stops listening.
+ * Offline, which changes what can play; a moment after any other Job ends, call
+ * `refresh`, as it may change what is read beside the songs. Tell `onMode` each
+ * Mode the stream sends, `onJob` each Job, `onWaitingDevices` the devices waiting
+ * for an answer, which only an admin's stream sends, `onSpeaker` the computer
+ * playing for the Account, and `onCommand` each command for this page while it is
+ * that computer. Return what stops listening.
  */
 function listen(
-  load: () => void,
+  { load, refresh }: { readonly load: () => void; readonly refresh: () => void },
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
   onWaitingDevices: (waiting: readonly WaitingDevice[]) => void,
@@ -737,6 +760,8 @@ function listen(
   }
   const events = new EventSource(`/api/events?page=${PAGE_ID}`);
   let settling: ReturnType<typeof setTimeout> | undefined;
+  // Whether a Job that ended while settling may have changed the Tracks.
+  let tracksChanged = false;
   let connected = false;
   let online: boolean | undefined;
   events.addEventListener("ready", () => {
@@ -776,9 +801,18 @@ function listen(
   events.addEventListener("job", (event: MessageEvent<string>) => {
     const job = JSON.parse(event.data) as JobEvent;
     onJob(job);
-    if (CHANGES_TRACKS.has(job.kind) && FINISHED.has(job.state)) {
+    if (FINISHED.has(job.state)) {
+      tracksChanged ||= CHANGES_TRACKS.has(job.kind);
       clearTimeout(settling);
-      settling = setTimeout(load, SETTLE_MS);
+      settling = setTimeout(() => {
+        const reload = tracksChanged;
+        tracksChanged = false;
+        if (reload) {
+          load();
+        } else {
+          refresh();
+        }
+      }, SETTLE_MS);
     }
   });
   return () => {

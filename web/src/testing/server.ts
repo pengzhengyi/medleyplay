@@ -52,6 +52,8 @@ export interface Answer {
   readonly body?: unknown;
   /** Answer only once this settles, as a slow server would. */
   readonly after?: Promise<unknown>;
+  /** The answer's ETag: a request holding it is answered 304, as the server does. */
+  readonly etag?: string;
 }
 
 /** Routes keyed by method and path, such as `"GET /api/me"`. */
@@ -66,16 +68,17 @@ export function serve(routes: Routes): { readonly calls: string[] } {
     const found = routes[route];
     const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     const answer = typeof found === "function" ? found(body) : (found ?? { status: 404 });
-    const status = answer.status ?? 200;
+    const held = new Headers(init?.headers).get("If-None-Match");
+    const unchanged = answer.etag !== undefined && held === answer.etag;
+    const status = unchanged ? 304 : (answer.status ?? 200);
+    const headers: Record<string, string> = answer.etag === undefined ? {} : { ETag: answer.etag };
     return (answer.after ?? Promise.resolve()).then(
       () =>
         new Response(
-          status === 204
+          status === 204 || status === 304
             ? null
             : JSON.stringify(answer.body === undefined ? { detail: "Not Found" } : answer.body),
-          {
-            status,
-          },
+          { status, headers },
         ),
     );
   });

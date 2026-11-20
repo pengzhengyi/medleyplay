@@ -10,9 +10,17 @@ answer   LRCLIB  Melt, ryo, Re:Start, 4:20, timed;
          LRCLIB  Melt (Acoustic), ryo, 4:31, plain
 ```
 
-LRCLIB is searched first, then the sites the household turned on. Nothing changes a
-song's lyrics until the household chooses some. The site refusing the request is a
-reply, not a failure, so it doesn't count against the plugin.
+LRCLIB is searched first, then the sites the household turned on. A lyrics chooser
+is asked which of the songs found is the song, shown what tells each apart and never
+its words, and answers with one, or none, and why:
+
+```text
+ask      Melt, ryo, Re:Start, 4:20; the two above
+answer   0, "the studio recording, as long as the file"
+```
+
+Nothing changes a song's lyrics until the household chooses some. The site refusing
+the request is a reply, not a failure, so it doesn't count against the plugin.
 """
 
 from datetime import timedelta
@@ -21,7 +29,7 @@ from typing import Annotated, Final, Protocol
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from medleyplay.plugin_api.artists import MAX_NAME, FindStatus, Name
-from medleyplay.plugin_api.enrichers import MAX_LYRICS, LyricsProvider
+from medleyplay.plugin_api.enrichers import MAX_LYRICS, AiEndpoint, LyricsProvider
 from medleyplay.plugin_api.extension import ExtensionPoint
 
 MAX_LYRICS_FOUND: Final = 8
@@ -92,4 +100,62 @@ FIND_LYRICS = LYRICS_FINDER.operation(
     FoundLyricsOptions,
     lambda finder: finder.find,
     deadline=timedelta(minutes=2),
+)
+
+
+class LyricsChoice(_Model):
+    """A song found, offered to choose from by what tells it apart, without its words.
+
+    `timed` says its lyrics are LRC, timed line by line.
+    """
+
+    provider: LyricsProvider
+    title: Name
+    artist: Named = ""
+    album: Named = ""
+    duration_ms: Annotated[int, Field(ge=0)] | None = None
+    timed: bool = False
+    instrumental: bool = False
+
+
+class ChooseLyrics(_Model):
+    """Ask which of `options` is the song `title` by `artist`, of the AI providers `ai`, in turn.
+
+    `album` is the song's album, empty for none, and `duration_ms` its length, when known.
+    """
+
+    title: Name
+    artist: Named = ""
+    album: Named = ""
+    duration_ms: Annotated[int, Field(ge=0)] | None = None
+    options: Annotated[tuple[LyricsChoice, ...], Field(min_length=1, max_length=MAX_LYRICS_FOUND)]
+    ai: tuple[AiEndpoint, ...] = Field(default=(), repr=False)
+
+
+class ChosenLyrics(_Model):
+    """The option, by its place among those offered, that is the song, or `None`, and why."""
+
+    status: FindStatus = FindStatus.OK
+    message: Annotated[str, StringConstraints(max_length=500)] = ""
+    option: Annotated[int, Field(ge=0, lt=MAX_LYRICS_FOUND)] | None = None
+    why: Annotated[str, StringConstraints(max_length=300)] = ""
+    ai_answered: Annotated[str, StringConstraints(max_length=64)] = ""
+    """The `id` of the provider that answered."""
+
+
+class LyricsChooser(Protocol):
+    """Chooses which of the songs found is the song."""
+
+    def choose(self, request: ChooseLyrics) -> ChosenLyrics:
+        """Answer which option is the song, or none."""
+        ...
+
+
+LYRICS_CHOOSER = ExtensionPoint[LyricsChooser]("lyrics_chooser")
+CHOOSE_LYRICS = LYRICS_CHOOSER.operation(
+    "choose",
+    ChooseLyrics,
+    ChosenLyrics,
+    lambda chooser: chooser.choose,
+    deadline=timedelta(minutes=5),
 )

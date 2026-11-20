@@ -115,13 +115,17 @@ def test_nothing_is_found_for_a_songs_lyrics_until_looked_for(
         "artist": "",
         "options": [],
         "found_at": None,
+        "pick": None,
         "finding": False,
+        "choosing": False,
         "waiting": False,
         "failure": None,
+        "choice_failure": None,
+        "may_choose": False,
     }
 
 
-def test_the_songs_found_are_listed_with_their_lyrics_and_what_was_asked(
+def test_the_songs_found_are_listed_with_their_lyrics_what_was_asked_and_the_pick(
     client: TestClient, catalog: CatalogService, units: sessionmaker[Session]
 ) -> None:
     set_up_as_alice(client)
@@ -135,6 +139,12 @@ def test_the_songs_found_are_listed_with_their_lyrics_and_what_was_asked(
                 artist="ryo",
                 options=[melt | {"text": MELT}],
                 found_at=datetime(2026, 11, 19, tzinfo=UTC),
+                offered=["\n".join(str(value) for value in melt.values())],
+                pick=0,
+                why="The studio recording",
+                model="deepseek-flash",
+                host="api.deepseek.com",
+                chosen_at=datetime(2026, 11, 19, 1, tzinfo=UTC),
             )
         )
 
@@ -144,6 +154,13 @@ def test_the_songs_found_are_listed_with_their_lyrics_and_what_was_asked(
     assert found["options"] == [
         melt | {"album": "", "text": MELT, "instrumental": False},
     ]
+    assert found["pick"] == {
+        "option": 0,
+        "why": "The studio recording",
+        "model": "deepseek-flash",
+        "host": "api.deepseek.com",
+        "at": "2026-11-19T01:00:00Z",
+    }
 
 
 def test_no_lyrics_are_found_while_the_lyrics_plugin_is_off(
@@ -174,3 +191,16 @@ def test_finding_lyrics_needs_a_signed_in_account(
 
     assert client.get(f"/api/tracks/{song}/lyrics/found").status_code == 401
     assert client.post(f"/api/tracks/{song}/lyrics/find", json={"title": "Melt"}).status_code == 401
+    assert client.post(f"/api/tracks/{song}/lyrics/choose").status_code == 401
+
+
+def test_no_model_is_asked_while_the_ai_plugin_is_off(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    song = _song(catalog)
+
+    response = client.post(f"/api/tracks/{song}/lyrics/choose")
+
+    assert response.status_code == 409
+    assert "ai-details" in response.json()["detail"]

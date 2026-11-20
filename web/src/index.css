@@ -6376,13 +6376,29 @@ button.song-handle {
   font-size: 0.85rem;
 }
 
+.lyrics-found-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.66rem;
+  font-weight: 700;
+  vertical-align: 0.1em;
+}
+
 @media (width <= 36rem) {
   .lyrics-finder-ask {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
+  /* On its own row, Find keeps the compact height of every dialog's own action. */
   .lyrics-finder-ask .dialog-button {
     grid-column: 1 / -1;
+    height: 2.25rem;
   }
 }
 

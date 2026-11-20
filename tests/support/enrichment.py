@@ -28,7 +28,7 @@ from medleyplay.application.image_links import ImageLinkService, image_link_kind
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.lyrics import LyricsService
-from medleyplay.application.lyrics_search import LyricsSearchService, find_lyrics_kind
+from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
@@ -175,9 +175,10 @@ def running_enrichment(
     album_covers = album_cover_kinds(clock, data_dir / COVERS_FOLDER)
     image_links = image_link_kinds(clock, data_dir / COVERS_FOLDER)
     pictures = artist_picture_kinds(clock, data_dir / COVERS_FOLDER)
-    lyrics_search = find_lyrics_kind(clock)
+    lyrics_search = lyrics_search_kinds(clock)
     kinds: dict[str, AnyJobKind] = {
-        lyrics_search.name: lyrics_search,
+        lyrics_search.find.name: lyrics_search.find,
+        lyrics_search.choose.name: lyrics_search.choose,
         pictures.find.name: pictures.find,
         pictures.choose.name: pictures.choose,
         kind.name: kind,

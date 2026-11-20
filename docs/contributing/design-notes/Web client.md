@@ -214,6 +214,12 @@ Track's kind is decided.
   a warning mark in its row, named *Download failed*, which opens why, *Retry
   download*, and *Add the file…*. See
   [Manual downloads](Manual%20downloads.md#the-web-client).
+- **A Track downloading says so in its row,** from the moment it is added: where a
+  Track that can't play says why, a download mark and how far it has got (*42%*,
+  *Waiting*, *When online*), said in full in its tooltip and to a screen reader;
+  its cover spins, or shows a clock while it waits for Online.
+- **A narrow table keeps the title readable:** below 64rem it keeps only a row's
+  "…", which holds *Play next* and *Add to queue* too; below 52rem the album goes.
 - **Go to** opens the artist's view, or the album's under its album artist, as
   the Albums view groups it.
 - **Show in Library** opens `#/library?focus=<id>`: the Library clears its

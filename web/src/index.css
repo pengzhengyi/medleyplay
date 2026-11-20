@@ -3579,12 +3579,25 @@ details.dropdown[open] > summary.filter-summary {
   font-weight: 650;
 }
 
+/* Why a song can't play, or how far its Download has got: whole, the title giving way. */
 .tracks .why {
+  flex: none;
   padding: 0.05rem 0.5rem;
+  white-space: nowrap;
   border-radius: 999px;
   background: var(--raised);
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+/* A Download under way: a download mark and how far it has got, in a word or two. */
+.tracks .why.downloading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 /* A failed download: a warning mark opening why, and what to do, so the title keeps its room. */
@@ -3657,6 +3670,20 @@ details.dropdown[open] > summary.filter-summary {
 /* A row's "…" stays while its menu is open, though the pointer has left the row. */
 .tracks .actions button[data-state="open"] {
   opacity: 1;
+}
+
+/*
+ * A narrow table keeps only a row's "…", which holds its queue actions too, so the
+ * title keeps room to be read.
+ */
+@container (width < 64rem) {
+  .tracks .actions button:not(.more) {
+    display: none;
+  }
+
+  .tracks th.actions {
+    width: 2.75rem;
+  }
 }
 
 /* A heart and five stars, quiet until a row is pointed at, unless already given. */

@@ -98,7 +98,8 @@
 
 ### Add from Bilibili
 
-- Paste a link. medleyplay accepts only `bilibili.com` and `b23.tv` addresses. The
+- Paste a link. The dialog opens the moment Enter is pressed, saying it looks the
+  video up, so the press is never repeated. medleyplay accepts only `bilibili.com` and `b23.tv` addresses. The
   plugin resolves short links, canonicalizes `av` and `BV` ids and part numbers,
   and reads the title, uploader, parts, and available qualities. The host is
   checked again after resolving, and yt-dlp only ever sees the canonical URL.

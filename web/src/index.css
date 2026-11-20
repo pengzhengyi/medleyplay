@@ -1184,9 +1184,10 @@ button[aria-disabled="true"] {
 
 /*
  * A photo suggested for an artist with none: ringed in the accent's dashes, its tag on
- * the ring's lower edge. The photo is its own controls: its lower half uses it, its
- * upper right quarter dismisses it, and its upper left chooses another. Pointed at or
- * focused, each tints its part green, red, or the accent, and the ring follows.
+ * the ring's lower edge. The photo is its own controls: its lower two thirds use it,
+ * and the top third's right half dismisses it and its left half chooses another, so
+ * the photo stays mostly clear. Pointed at or focused, each tints its part green, red,
+ * or the accent, and the ring follows.
  */
 .photo-suggestion {
   display: grid;
@@ -1229,13 +1230,13 @@ button[aria-disabled="true"] {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template: 1fr 1fr / 1fr 1fr;
+  grid-template: 1fr 2fr / 1fr 1fr;
   margin: 0;
   overflow: hidden;
   border-radius: 50%;
 }
 
-/* Pico spaces a group's buttons apart; these are the photo's own halves and quarters. */
+/* Pico spaces a group's buttons apart; these are the photo's own parts. */
 .photo-suggestion-frame .photo-suggestion-controls > button.photo-suggestion-control {
   margin: 0;
 }

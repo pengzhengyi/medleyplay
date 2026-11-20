@@ -20,6 +20,7 @@
 - [Boundary cases](#boundary-cases)
 - [Testing](#testing)
 - [Measuring](#measuring)
+- [Deferred: changed songs announced](#deferred-changed-songs-announced)
 - [Open questions](#open-questions)
 
 ## Why
@@ -321,6 +322,32 @@ Main-thread time is Chromium's task time until the page is quiet.
 The ten reads still answered 200 on a return are the small uncached ones: favorites,
 preferences, Playlists, the Mode, five enrichers, the Downloads, and the features.
 The enricher reads are the next step named in [Open questions](#open-questions).
+
+## Deferred: changed songs announced
+
+When one song changes, the songs read answers in full: 1.24 MB, or 82 KB with
+gzip, for 1,738 songs. The client keeps every unchanged Track, so it renders
+little, but it still downloads and parses the whole list. On a home network that
+costs a few milliseconds, so this step waits.
+
+The planned design sends only what changed, without a change log on the server:
+
+- **The event stream announces changed songs.** After a write, `GET /api/events`
+  names the Track ids it changed, such as *songs 42 and 97 changed*.
+- **The client reads just those songs** with `GET /api/tracks/{track_id}`, puts
+  each into the store, and drops ids that answer 404.
+- **The full read stays the resync.** After a reconnect, a Mode change, a missed
+  event, or anything the client can't account for, it reads the songs with the
+  held ETag as it does today, and gets a 304 when nothing changed.
+
+Rejected for now: a `?since=revision` patch. It needs the revision that last
+changed each row, a record of removed songs and when to prune it, and a "too old,
+read it all" answer. It also has to cover each Account's hearts, ratings, and
+plays, and the Mode changing which songs are listed.
+
+**Trigger:** a songs answer measured above about 500 KB gzipped, or a reload
+measured as slow because of it. Pick it up together with paging, whose trigger is
+a library past about 20,000 songs.
 
 ## Open questions
 

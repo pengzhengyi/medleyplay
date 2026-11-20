@@ -41,6 +41,7 @@ from medleyplay.domain.devices import (
     label_of,
 )
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
+from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.persistence.schema import DeviceRow, DeviceSettingRow, SessionRow
 
 MAX_WAITING: Final = 10
@@ -477,8 +478,9 @@ class DeviceService:
         return seen
 
     def _write_seen(self, device: Device) -> None:
+        """Note when and from where `device` was last seen, leaving the revision alone."""
         try:
-            with self._units.begin() as db:
+            with DatabaseRevision.ignoring(), self._units.begin() as db:
                 db.execute(
                     update(DeviceRow)
                     .where(DeviceRow.id == device.id)

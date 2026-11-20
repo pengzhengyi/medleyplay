@@ -1,7 +1,7 @@
 # Cheap reloads
 
-> [!IMPORTANT]
-> **Status: approved, in progress.** This note describes how the web client asks the server again
+> [!NOTE]
+> **Status: implemented.** This note describes how the web client asks the server again
 > only for what may have changed, and how an unchanged answer costs a small request
 > and no rendering. It builds on [Cached reads](Cached%20reads.md), which gives the
 > server's largest answers an ETag and a 304.
@@ -47,23 +47,23 @@ The client reloads more than it needs to, and each reload renders everything aga
 
 ## What it delivers
 
-- [ ] **ETags that name the content:** a rebuilt answer with the same bytes keeps
+- [x] **ETags that name the content:** a rebuilt answer with the same bytes keeps
       its ETag, so it still answers 304.
-- [ ] **Bookkeeping writes leave the revision alone:** the last-seen times of
+- [x] **Bookkeeping writes leave the revision alone:** the last-seen times of
       sessions and devices don't trigger rebuilds.
-- [ ] **Five more cached answers:** names to tidy, artist splits, split offers,
+- [x] **Five more cached answers:** names to tidy, artist splits, split offers,
       shared names, and artists missing a photo.
-- [ ] **Conditional reads in the client:** for each cached answer, the client keeps
+- [x] **Conditional reads in the client:** for each cached answer, the client keeps
       the last answer and its ETag, sends `If-None-Match`, and gets back the *same
       object* on a 304. One read per path runs at a time, and the newest answer
       wins.
-- [ ] **Unchanged songs keep their identity:** a list the server sends again keeps
+- [x] **Unchanged songs keep their identity:** a list the server sends again keeps
       every Track that is equal, and keeps the `Map` when all are equal and in the
       same order.
-- [ ] **Side reads follow the Library, not the Account's own writes:** they run
+- [x] **Side reads follow the Library, not the Account's own writes:** they run
       with each reload and after any Job ends, never because of a heart or a
       rating. Their 2 s polls keep running through 304s.
-- [ ] Before-and-after counts and timings in the pull request.
+- [x] Before-and-after counts and timings: see [Measuring](#measuring).
 
 Left out: per-view reads, caching favorites, and the enricher reads. See
 [Open questions](#open-questions).
@@ -102,12 +102,12 @@ last-seen time and address. Both are written at most once a minute, so after the
 tab has been hidden a minute, the first request moves the revision and every cached
 answer rebuilds.
 
-`DatabaseRevision.ignoring()` is a context manager that marks the current thread.
-A connection checked in while the mark is set doesn't bump. Each bookkeeping write
-runs inside it:
+`DatabaseRevision.ignoring()` is a static context manager that marks the current
+thread, so a service needs no revision of its own to use it. A connection checked in
+while the mark is set doesn't bump. Each bookkeeping write runs inside it:
 
 ```python
-with self._revision.ignoring(), self._units.begin() as db:
+with DatabaseRevision.ignoring(), self._units.begin() as db:
     ...  # write last_seen_at
 ```
 
@@ -215,10 +215,13 @@ Track. So the side reads don't follow the songs; they follow a counter,
 
 | Event | `refreshes` |
 | --- | --- |
-| A load: the page shown again, the event stream reconnecting, the Mode changing, a setting changing how songs show | +1 |
-| Any Job ending, a second after the last one ends | +1 |
+| A load (the page shown again, the event stream reconnecting, the Mode changing, a setting changing how songs show), once the songs answer | +1 |
+| Any Job ending, a second after the last one ends; a load instead if one of them changes songs | +1 |
 | An edited Track read back, or the songs read again after a change made here | +1 |
 | A favorite or rating written | unchanged |
+
+A load moves the counter once the songs answer, not as it starts, so the songs are
+still read first and alone.
 
 `Library` passes `library.loaded ? library.refreshes : undefined` to the six hooks.
 Each side read is conditional, so a read that nothing changed answers 304 and keeps
@@ -228,9 +231,12 @@ its object: no render.
   artist, and suggesting images change side answers but no Track. Six 304s cost
   little.
 - **The polls follow a count of answers, not the answer.** `useArtistNames` and
-  `FindPhotos` read again every 2 s while something is being found. Their timers
-  depend on the answer object, which a 304 keeps, so a 304 would stop the polling.
-  Instead, each timer depends on a counter that moves with every answer.
+  `FindPhotos` read again every few seconds while something is being found. A timer
+  that depended on the answer object would stop at the first 304, which keeps it.
+  Instead, each timer depends on `answered`, a count of the answers that came while
+  something was still being found. An answer with nothing being found leaves the
+  count alone, so an unchanged answer still renders nothing. `useReadAgain` keeps
+  the count for `useMissingPhotos`, which passes it to `FindPhotos`.
 
 ```mermaid
 flowchart TD
@@ -250,13 +256,15 @@ flowchart TD
 | --- | --- | --- |
 | `CachedAnswers.etag` | `web/cached.py` | Hashes the key and the bytes; no boot mark |
 | `CachedAnswers.answer(..., heavy=)` | `web/cached.py` | Takes the heavy-read lock only when asked |
-| `DatabaseRevision.ignoring()` | `persistence/revision.py` | New: writes on this thread inside it don't bump |
+| `DatabaseRevision.ignoring()` | `persistence/revision.py` | New, static: writes on this thread inside it don't bump |
 | Five side-read routes | `web/*.py` | Answer through `CachedAnswers`, with `responses=NOT_MODIFIED` |
-| `HeldReads` | `web/src/api.ts` | New: conditional, one-at-a-time reads by path |
+| `HeldReads`, `forgetHeldReads` | `web/src/api.ts` | New: conditional, one-at-a-time reads by path; `App` forgets them when the Account changes |
 | `api.tracks`, `api.artistNames`, the five side reads | `web/src/api.ts` | Read through `HeldReads` |
 | `Store.listed` | `web/src/library/store.ts` | New: the array last loaded, so a 304 is no change |
 | `equalJson` | `web/src/library/store.ts` | New: deep equality of two JSON values |
 | `Library.refreshes` | `web/src/library/useLibrary.ts` | New: the count the side reads follow |
+| `useReadAgain(..., changing)` | `web/src/library/useReadAgain.ts` | New argument; returns `answered`, the count the polls follow |
+| `serve()` routes' `etag` | `web/src/testing/server.ts` | New: a test server answers 304 to a request holding the ETag |
 
 ## Boundary cases
 
@@ -298,11 +306,21 @@ flowchart TD
 
 ## Measuring
 
-On an Offline copy of the preview library, in a headless browser, before and after:
+On an Offline copy of the preview library of 1,738 songs, in headless Chromium, one
+run each. *Return* is the page shown again after two minutes with nothing changed,
+so the session's last-seen time is written first. *Heart* is one favorite given.
+Main-thread time is Chromium's task time until the page is quiet.
 
-- Requests, bytes, and main-thread time for a return to the tab after two minutes
-  hidden with nothing changed, and for one heart click.
-- Time until the last answer of that return.
+| | Return, before | Return, after | Heart, before | Heart, after |
+| --- | --- | --- | --- | --- |
+| Requests | 17, all 200 | 17: 7 answered 304 | 13 | 1, the write |
+| Bytes | 148 kB | 5.7 kB | 127 kB | 0.8 kB |
+| Main-thread time | 187 ms | 104 ms | 136–206 ms | 63–148 ms |
+| Last answer | 0.96 s | 0.40 s | 0.75–1.85 s | 0.08–0.13 s |
+
+The ten reads still answered 200 on a return are the small uncached ones: favorites,
+preferences, Playlists, the Mode, five enrichers, the Downloads, and the features.
+The enricher reads are the next step named in [Open questions](#open-questions).
 
 ## Open questions
 

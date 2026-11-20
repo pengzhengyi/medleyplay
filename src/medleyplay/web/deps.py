@@ -42,6 +42,8 @@ from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import DeviceId
 from medleyplay.domain.errors import NotSignedInError
+from medleyplay.persistence.revision import DatabaseRevision
+from medleyplay.web.cached import CachedAnswers
 
 SESSION_COOKIE: Final = "medleyplay_session"
 DEVICE_COOKIE: Final = "medleyplay_device"
@@ -85,6 +87,8 @@ class Services:
     image_links: ImageLinkService
     lyrics: LyricsService
     lyrics_search: LyricsSearchService
+    revision: DatabaseRevision
+    answers: CachedAnswers
 
 
 def services_of(request: Request) -> Services:
@@ -98,6 +102,10 @@ def _services(request: Request) -> Services:
         message = "The app was built without services; use medleyplay.web.app.create_app."
         raise TypeError(message)
     return services
+
+
+def _answers(services: Annotated[Services, Depends(_services)]) -> CachedAnswers:
+    return services.answers
 
 
 def _accounts(services: Annotated[Services, Depends(_services)]) -> AccountService:
@@ -237,6 +245,7 @@ def _this_device(request: Request) -> DeviceId | None:
     return None if device_id is None else DeviceId(device_id)
 
 
+AnswersDep = Annotated[CachedAnswers, Depends(_answers)]
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]

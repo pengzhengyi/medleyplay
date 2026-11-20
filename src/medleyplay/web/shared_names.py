@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 from medleyplay.application.shared_names import SharedName
 from medleyplay.application.track_artists import SongsBy
 from medleyplay.domain.catalog import TrackId
+from medleyplay.web.cached import heavy_read
 from medleyplay.web.deps import SharedNamesDep, SignedInAccount
 
 router = APIRouter(prefix="/api/shared-names", tags=["artists"])
@@ -118,7 +119,9 @@ class NamesIn(BaseModel):
 @router.get("")
 def shared_names(_: SignedInAccount, service: SharedNamesDep) -> SharedNamesOut:
     """Return every name that may name several artists, most songs first."""
-    return SharedNamesOut(names=[SharedNameOut.of(each) for each in service.names()])
+    with heavy_read():
+        names = service.names()
+    return SharedNamesOut(names=[SharedNameOut.of(each) for each in names])
 
 
 @router.put("/albums", status_code=status.HTTP_204_NO_CONTENT)

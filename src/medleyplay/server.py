@@ -66,9 +66,11 @@ from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
+from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.plugin_host.client import HostCommand, PluginHost
 from medleyplay.plugin_host.loader import BUILT_IN_PLUGINS, plugin_names
 from medleyplay.web.app import create_app
+from medleyplay.web.cached import CachedAnswers
 from medleyplay.web.deps import Services
 
 DEFAULT_PORT: Final = 8000
@@ -268,6 +270,9 @@ def build_services(  # noqa: PLR0913, PLR0915
         on_change=changes.tell,
     )
     playback = PlaybackService(units, plugins, jobs, cache, data_dir, downloads, mode.online)
+    # Every write after the migration changes the revision the cached answers stand on.
+    revision = DatabaseRevision()
+    revision.watch(engine)
     return Services(
         accounts=accounts,
         catalog=catalog,
@@ -311,6 +316,8 @@ def build_services(  # noqa: PLR0913, PLR0915
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         lyrics=LyricsService(units, clock, changes.tell),
         lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs),
+        revision=revision,
+        answers=CachedAnswers(revision),
     )
 
 

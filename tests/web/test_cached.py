@@ -1,14 +1,19 @@
-"""Cached answers: built once per revision and key, shared by concurrent requests."""
+"""Cached answers, built once per revision and key; heavy reads, one at a time."""
 
 import gzip
 import threading
 from collections.abc import Callable
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
+from medleyplay.application.catalog import CatalogService
 from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.web.cached import CachedAnswers, HeavyReadReenteredError, heavy_read
+from medleyplay.web.deps import Services
+from tests.support.api import set_up_as_alice
+from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
 
 NUMBERS = TypeAdapter(list[int])
 WAIT = 10.0
@@ -204,3 +209,25 @@ def _taken_within_a_moment() -> bool:
     thread, _ = _run(take)
     thread.join(WAIT)
     return taken.is_set()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/tracks",
+        "/api/artist-names",
+        "/api/artist-photos/missing",
+        "/api/shared-names",
+    ],
+)
+def test_a_heavy_read_writes_nothing_so_it_never_waits_on_a_write_while_holding_the_lock(
+    client: TestClient, services: Services, catalog: CatalogService, path: str
+) -> None:
+    set_up_as_alice(client)
+    catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song("Intro"))
+    before = services.revision.value
+
+    response = client.get(path, headers={"If-None-Match": ""})
+
+    assert response.status_code == 200, response.text
+    assert services.revision.value == before

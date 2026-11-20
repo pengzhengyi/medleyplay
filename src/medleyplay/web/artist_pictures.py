@@ -19,6 +19,7 @@ from medleyplay.application.artist_pictures import (
     PicturePick,
 )
 from medleyplay.plugin_api import MAX_HINT
+from medleyplay.web.cached import heavy_read
 from medleyplay.web.deps import ArtistPicturesDep, SignedInAccount
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
@@ -197,7 +198,9 @@ class FoundPhotosOut(BaseModel):
 @photos_router.get("/missing")
 def missing_photos(_: SignedInAccount, service: ArtistPicturesDep) -> MissingPhotosOut:
     """Return every artist linked to MusicBrainz with no photo, and the photo suggested."""
-    return MissingPhotosOut(artists=[MissingPhotoOut.of(each) for each in service.missing()])
+    with heavy_read():
+        missing = service.missing()
+    return MissingPhotosOut(artists=[MissingPhotoOut.of(each) for each in missing])
 
 
 @photos_router.post("/find")

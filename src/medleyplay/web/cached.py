@@ -21,6 +21,9 @@ from pydantic import TypeAdapter
 from medleyplay.persistence.revision import DatabaseRevision
 
 GZIP_LEVEL: Final = 6
+NOT_MODIFIED: Final[dict[int | str, dict[str, object]]] = {
+    304: {"description": "The request holds the current answer already; nothing is sent."}
+}
 CACHE_CONTROL: Final = "private, no-cache"
 
 _heavy = threading.Lock()
@@ -135,7 +138,8 @@ class CachedAnswers:
         self, key: AnswerKey, revision: int, build: Callable[[], T], adapter: TypeAdapter[T]
     ) -> CachedAnswer:
         with heavy_read():
-            plain = adapter.dump_json(build())
+            # As FastAPI serializes a response model, so the bytes are the same.
+            plain = adapter.dump_json(build(), by_alias=True)
         return CachedAnswer(
             revision, self.etag(key, revision), plain, gzip.compress(plain, GZIP_LEVEL)
         )

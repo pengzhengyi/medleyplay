@@ -5,13 +5,17 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
+from pydantic import TypeAdapter
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
+from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import TrackId
 from medleyplay.persistence.schema import CommunityRatingRow
+from medleyplay.web.catalog import TrackOut
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
+from tests.support.fakes import OnlineSwitch
 
 MORNING = uuid.UUID("00000000-0000-4000-8000-000000000001")
 
@@ -507,3 +511,128 @@ def test_favorite_artists_and_albums_need_a_signed_in_account(client: TestClient
     assert (
         client.put(f"/api/favorites/artists/{'0' * 32}", json={"favorite": True}).status_code == 401
     )
+
+
+def test_the_tracks_carry_an_etag_and_ask_the_browser_to_check_each_time(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _one_track(catalog)
+
+    response = client.get("/api/tracks")
+
+    assert response.status_code == 200
+    assert response.headers["etag"].startswith('W/"')
+    assert response.headers["cache-control"] == "private, no-cache"
+    assert response.headers["vary"] == "Accept-Encoding"
+
+
+def test_asking_again_with_the_etag_answers_304_with_no_body(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _one_track(catalog)
+    etag = client.get("/api/tracks").headers["etag"]
+
+    again = client.get("/api/tracks", headers={"If-None-Match": etag})
+
+    assert again.status_code == 304
+    assert again.content == b""
+    assert (again.headers["etag"], again.headers["cache-control"]) == (etag, "private, no-cache")
+
+
+def test_asking_with_any_etag_at_all_answers_304(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.get("/api/tracks", headers={"If-None-Match": "*"})
+
+    assert response.status_code == 304
+
+
+def test_a_favorite_changed_since_the_etag_answers_the_tracks_anew(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    etag = client.get("/api/tracks").headers["etag"]
+    client.put(f"/api/tracks/{track_id}/favorite", json={"favorite": True})
+
+    again = client.get("/api/tracks", headers={"If-None-Match": etag})
+
+    assert again.status_code == 200
+    assert again.headers["etag"] != etag
+    assert [track["favorite"] for track in again.json()] == [True]
+
+
+def test_the_tracks_are_gzipped_only_for_a_request_that_accepts_gzip(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _one_track(catalog)
+
+    gzipped = client.get("/api/tracks", headers={"Accept-Encoding": "gzip"})
+    plain = client.get("/api/tracks", headers={"Accept-Encoding": "identity"})
+
+    assert gzipped.headers["content-encoding"] == "gzip"
+    assert "content-encoding" not in plain.headers
+    assert gzipped.json() == plain.json()
+    assert gzipped.headers["etag"] == plain.headers["etag"]
+
+
+def test_two_accounts_never_share_the_etag_of_their_tracks(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    add_bob(client)
+    _one_track(catalog)
+    alices = client.get("/api/tracks").headers["etag"]
+    sign_in(client, "bob")
+
+    bobs = client.get("/api/tracks", headers={"If-None-Match": alices})
+
+    assert bobs.status_code == 200
+    assert bobs.headers["etag"] != alices
+
+
+def test_going_offline_answers_the_tracks_anew_though_no_row_changed(
+    client: TestClient, catalog: CatalogService, online_switch: OnlineSwitch
+) -> None:
+    set_up_as_alice(client)
+    _one_track(catalog)
+    etag = client.get("/api/tracks").headers["etag"]
+    online_switch.online = False
+
+    again = client.get("/api/tracks", headers={"If-None-Match": etag})
+
+    assert again.status_code == 200
+    assert [track["availability"] for track in again.json()] == ["waiting_online"]
+
+
+def test_the_tracks_sent_are_what_the_tracks_model_serializes(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _one_track(catalog)
+    me = client.get("/api/me").json()["id"]
+
+    sent = client.get("/api/tracks").json()
+
+    expected = TypeAdapter(list[TrackOut]).dump_python(
+        [TrackOut.of(track) for track in catalog.list_tracks(AccountId(me))], mode="json"
+    )
+    assert sent == expected
+
+
+def test_the_api_description_says_the_tracks_answer_is_a_list_of_tracks_or_304(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+
+    answers = schema["paths"]["/api/tracks"]["get"]["responses"]
+
+    assert answers["200"]["content"]["application/json"]["schema"] == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/TrackOut"},
+        "title": "Response List Tracks Api Tracks Get",
+    }
+    assert "304" in answers

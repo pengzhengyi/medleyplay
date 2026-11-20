@@ -70,6 +70,32 @@ def test_a_name_is_linked_to_no_artist_and_then_unlinked(
     assert client.get("/api/artist-names").json()["names"][0]["linked"] is False
 
 
+def test_asking_for_the_artist_names_again_with_their_etag_answers_304(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _song_by(catalog, "Blue Room")
+    etag = client.get("/api/artist-names").headers["etag"]
+
+    again = client.get("/api/artist-names", headers={"If-None-Match": etag})
+
+    assert again.status_code == 304
+
+
+def test_a_name_linked_since_the_etag_answers_the_artist_names_anew(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    _song_by(catalog, "Blue Room")
+    etag = client.get("/api/artist-names").headers["etag"]
+    client.put("/api/artist-names/link", json={"name": "Blue Room", "artist_id": None})
+
+    again = client.get("/api/artist-names", headers={"If-None-Match": etag})
+
+    assert again.status_code == 200
+    assert again.json()["names"][0]["linked"] is True
+
+
 def test_a_name_is_not_linked_to_an_artist_never_named(
     client: TestClient, catalog: CatalogService
 ) -> None:

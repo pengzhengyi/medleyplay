@@ -657,6 +657,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Library loads faster** — the songs and the artist names are kept once
+  built, until something changes, and sent gzipped; a browser holding them gets
+  *304 Not Modified*. The reads that take longest to build take turns, rather than
+  slowing each other down, and the artist names ask about active Jobs once. Fifteen
+  reads at once answer in 0.7 s rather than 1.9 s on a library of 1738 songs.
+  Signing out asks the browser to forget what it kept.
+
 - **An old artist link names one artist or asks which** — a link by the name alone,
   such as `#/artist?name=Jay` saved before artist pages opened by id, asks *Which
   Jay?* when the name goes by several artists, each a tile told apart by its album.

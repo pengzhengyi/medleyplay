@@ -283,6 +283,17 @@ class JobService:
             )
             return None if row is None else to_job(row)
 
+    def active_targets(self, kind: str) -> set[str]:
+        """Return the target of every waiting, queued, or running Job of `kind`, in one read."""
+        with self._units() as db:
+            return set(
+                db.scalars(
+                    select(JobRow.target).where(
+                        JobRow.kind == kind, JobRow.state.in_(ACTIVE_STATES)
+                    )
+                )
+            )
+
     def active_of(self, kind: str) -> list[JobView]:
         """Return the waiting, queued, and running Jobs of `kind`, oldest first."""
         with self._units() as db:

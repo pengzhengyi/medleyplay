@@ -1,5 +1,6 @@
 """The Accounts API, over HTTP with the session cookie."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.support.api import ALICE_SETUP, BOB, add_bob, set_up_as_alice, sign_in
@@ -94,6 +95,18 @@ def test_signing_out_everywhere_ends_other_browsers_too(client: TestClient) -> N
     assert response.status_code == 204
     client.cookies.set("medleyplay_session", str(phone))
     assert client.get("/api/me").status_code == 401
+
+
+@pytest.mark.parametrize("path", ["/api/session", "/api/sessions"])
+def test_signing_out_asks_the_browser_to_forget_the_answers_it_cached(
+    client: TestClient, path: str
+) -> None:
+    set_up_as_alice(client)
+
+    response = client.delete(path)
+
+    assert response.status_code == 204
+    assert response.headers["clear-site-data"] == '"cache"'
 
 
 def test_an_admin_manages_accounts_end_to_end(client: TestClient) -> None:

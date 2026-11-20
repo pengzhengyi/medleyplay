@@ -5,16 +5,17 @@ choose the name it is shown by, a note, and a photo.
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Final
 
-from fastapi import APIRouter, HTTPException, Path, Request, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Path, Request, Response, status
+from pydantic import BaseModel, Field, TypeAdapter
 from starlette.concurrency import run_in_threadpool
 
 from medleyplay.application.artists import MAX_LOOK_UP, ArtistName, KnownArtist
 from medleyplay.domain.artists import MAX_ABOUT, MAX_SHOWN_AS, LookUp
 from medleyplay.domain.covers import MAX_COVER_BYTES
-from medleyplay.web.deps import ArtistsDep, SignedInAccount
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AnswersDep, ArtistsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/artist-names", tags=["artists"])
 artists_router = APIRouter(prefix="/api/artists", tags=["artists"])
@@ -204,15 +205,27 @@ class UnlinkIn(BaseModel):
     name: _Name
 
 
-@router.get("")
-def artist_names(_: SignedInAccount, service: ArtistsDep) -> ArtistNamesOut:
-    """Return every artist name the Library shows, and what is known of each."""
-    found = service.names()
-    return ArtistNamesOut(
-        names=[ArtistNameOut.of(each) for each in found.names],
-        artists=[ArtistOut.of(each) for each in found.artists.values()],
-        recommending=service.recommending(),
-    )
+ARTIST_NAMES: Final = TypeAdapter(ArtistNamesOut)
+
+
+@router.get("", response_model=ArtistNamesOut, responses=NOT_MODIFIED)
+def artist_names(
+    request: Request, _: SignedInAccount, service: ArtistsDep, answers: AnswersDep
+) -> Response:
+    """Return every artist name the Library shows, and what is known of each.
+
+    The answer is the same for every Account; 304 when the request holds it already.
+    """
+
+    def build() -> ArtistNamesOut:
+        found = service.names()
+        return ArtistNamesOut(
+            names=[ArtistNameOut.of(each) for each in found.names],
+            artists=[ArtistOut.of(each) for each in found.artists.values()],
+            recommending=service.recommending(),
+        )
+
+    return answers.answer(request, ("artist-names",), build, ARTIST_NAMES)
 
 
 @router.post("/look-up")

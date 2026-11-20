@@ -9,6 +9,7 @@ from medleyplay.application.enrichment import EnricherState
 from medleyplay.domain.ai import MAX_HINT
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.enrichers import EnricherMode
+from medleyplay.web.cached import heavy_read
 from medleyplay.web.deps import EnrichmentDep, JobsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 from medleyplay.web.jobs import JobOut
@@ -83,9 +84,10 @@ class QueuedOut(BaseModel):
 @router.get("/{name}")
 def get_enricher(name: str, _: SignedInAccount, enrichment: EnrichmentDep) -> EnricherOut:
     """Return the enricher's state and the Tracks it may be asked about."""
-    return EnricherOut.of(
-        enrichment.state(name), enrichment.eligible(name), enrichment.asked_recently(name)
-    )
+    with heavy_read():
+        state = enrichment.state(name)
+        eligible, asked = enrichment.eligible(name), enrichment.asked_recently(name)
+    return EnricherOut.of(state, eligible, asked)
 
 
 @router.post("/{name}/tracks/{track_id}")

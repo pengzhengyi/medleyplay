@@ -2,10 +2,10 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Query, Response, status
-from pydantic import AwareDatetime, BaseModel, Field
+from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import AwareDatetime, BaseModel, Field, TypeAdapter
 
 from medleyplay.application.rule_schema import RulesIn, rules_document, to_rules
 from medleyplay.domain.catalog import (
@@ -25,7 +25,8 @@ from medleyplay.domain.community import CommunityRating, RatedAs
 from medleyplay.domain.details import Kind, KindReason
 from medleyplay.domain.history import DEFAULT_HISTORY_LENGTH, KEPT_PLAYS, Played
 from medleyplay.domain.playback import PlayId
-from medleyplay.web.deps import CatalogDep, SignedInAccount
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AnswersDep, CatalogDep, SignedInAccount
 from medleyplay.web.ids import ArtistIdPath, RowId
 
 router = APIRouter(prefix="/api", tags=["catalog"])
@@ -262,10 +263,22 @@ class PlaylistOut(BaseModel):
         )
 
 
-@router.get("/tracks")
-def list_tracks(me: SignedInAccount, catalog: CatalogDep) -> list[TrackOut]:
-    """Return every Track in the catalog."""
-    return [TrackOut.of(track) for track in catalog.list_tracks(me.id)]
+TRACKS: Final = TypeAdapter(list[TrackOut])
+
+
+@router.get("/tracks", response_model=list[TrackOut], responses=NOT_MODIFIED)
+def list_tracks(
+    request: Request, me: SignedInAccount, catalog: CatalogDep, answers: AnswersDep
+) -> Response:
+    """Return every Track in the catalog, or 304 when the request holds them already."""
+    # Read once, so the answer kept and what it is kept under agree.
+    online = catalog.online()
+    return answers.answer(
+        request,
+        ("tracks", me.id, online),
+        lambda: [TrackOut.of(track) for track in catalog.list_tracks(me.id, online=online)],
+        TRACKS,
+    )
 
 
 @router.get("/tracks/{track_id}")

@@ -62,7 +62,9 @@ from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
+from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.web.app import create_app
+from medleyplay.web.cached import CachedAnswers
 from medleyplay.web.deps import Services
 from tests.support.fakes import (
     FakeClock,
@@ -528,11 +530,14 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     lyrics: LyricsService,
     lyrics_search: LyricsSearchService,
     clock: FakeClock,
+    units: sessionmaker[Session],
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     events = Events()
     remote = RemoteService(clock)
     remote.listen(events.publish_remote)
+    revision = DatabaseRevision()
+    revision.watch(units.kw["bind"])
     return Services(
         accounts=accounts,
         catalog=catalog,
@@ -568,6 +573,8 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         image_links=image_links,
         lyrics=lyrics,
         lyrics_search=lyrics_search,
+        revision=revision,
+        answers=CachedAnswers(revision),
     )
 
 

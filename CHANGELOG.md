@@ -736,6 +736,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Adding from Bilibili answers at once** — its dialog opens the moment Enter is
+  pressed, saying it looks the video up, rather than after its code loads; and a
+  song just added shows a download mark and how far it has got in its row, its
+  cover spinning, rather than *Unavailable*.
+
+- **Song titles readable beside Up next** — a table narrower than 64rem keeps only a
+  row's "…" (which holds the queue actions), so a title no longer shrinks to a
+  letter or two.
+
 - **A suggested photo's controls are exactly its halves and quarters** — pointed at,
   each tints just its part: the lower half green to use it, the upper right red to
   dismiss it, the upper left in the accent to choose another. They had stopped short

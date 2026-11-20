@@ -666,6 +666,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     addLink: async (link, quality, parts) => {
       const added = await signedOutOn401(api.addLink(link, quality, parts));
       reloadTracks();
+      loadDownloading();
       return added;
     },
     download: (id) => signedOutOn401(api.download(id)),

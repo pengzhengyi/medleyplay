@@ -550,11 +550,27 @@ describe("search", () => {
 
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
 
-    const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
-    expect(await within(dialog).findByText("【MV】Night Drive")).toBeVisible();
+    expect(await screen.findByText("【MV】Night Drive")).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Add from Bilibili" })).toContainElement(
+      screen.getByText("【MV】Night Drive"),
+    );
     expect(calls).toContain("POST /api/links/lookup");
     expect(location.hash).toBe("");
     expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("");
+  });
+
+  it("opens the add dialog the moment Enter is pressed, saying it looks the video up", async () => {
+    // The site never answers, so all the dialog can show is that it asked.
+    open("", {
+      ...withBilibili(),
+      "POST /api/links/lookup": { body: lookupOf(1), after: new Promise(() => undefined) },
+    });
+    await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
+
+    const dialog = screen.getByRole("dialog", { name: "Add from Bilibili" });
+    expect(within(dialog).getByText("Looking the video up…")).toBeVisible();
   });
 
   it("adds what is chosen, says so, and asks for the Tracks again", async () => {
@@ -565,13 +581,15 @@ describe("search", () => {
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
-    const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
-    await within(dialog).findByText("【MV】Night Drive");
+    await screen.findByText("【MV】Night Drive");
+    const dialog = screen.getByRole("dialog", { name: "Add from Bilibili" });
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
     expect(await screen.findByText("Added 1 song. They are downloading.")).toBeVisible();
     expect(calls.filter((call) => call === "GET /api/tracks")).toHaveLength(2);
+    // The Downloads are read again, so the songs added show downloading at once.
+    expect(calls.filter((call) => call === "GET /api/downloads")).toHaveLength(2);
   });
 
   it("does not search the Library as you type with Bilibili chosen", async () => {

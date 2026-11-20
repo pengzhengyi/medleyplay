@@ -2,11 +2,11 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CommunityRating, Track } from "../api";
+import type { CommunityRating, DownloadUnderWay, Track } from "../api";
 import type { CoverStatus } from "../library/lookups";
 import { albumUnit, songsByFile } from "../library/playOrder";
 import type { UnitOf } from "../player/usePlayer";
-import { downloadOf, serve, trackOf } from "../testing/server";
+import { downloadOf, downloadUnderWayOf, serve, trackOf } from "../testing/server";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** Intro, a Long Road that can't play, and Outro, listed in that order, as the server adds them. */
@@ -22,9 +22,11 @@ function renderTable(
   statuses: ReadonlyMap<number, CoverStatus> = new Map(),
   songsIn?: ReadonlyMap<number, readonly Track[]>,
   focus?: { readonly id: number; readonly onFocused: () => void },
+  downloads: readonly DownloadUnderWay[] = [],
 ) {
   const actions: TrackActions = {
     statusOf: (track) => statuses.get(track.id),
+    downloadOf: (track) => downloads.find((each) => each.track_id === track.id),
     onPlay: vi.fn(),
     onPlayAll: vi.fn(),
     onPlayNext: vi.fn(),
@@ -423,6 +425,60 @@ describe("columns", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Plays" }));
 
     expect(screen.getByRole("columnheader", { name: "Plays" })).toBeInTheDocument();
+  });
+});
+
+describe("a Track downloading", () => {
+  /** Night Drive, just added from Bilibili, its file not downloaded yet. */
+  const ADDED = trackOf(4, "Night Drive", { availability: "unavailable", site: "bilibili" });
+  const downloading = (job: Partial<DownloadUnderWay["job"]>) =>
+    renderTable([ADDED], undefined, new Map(), undefined, undefined, [downloadUnderWayOf(4, job)]);
+
+  /** What the row says of the Download in place of why it can't play, as heard and as seen. */
+  const said = (row: HTMLElement) => {
+    const words = row.querySelector(".why");
+    return { heard: words?.textContent, hover: words?.getAttribute("title") };
+  };
+
+  it("says how far it has got where a Track that can't play says why, its cover spinning", () => {
+    downloading({ state: "running", progress: { fraction: 0.42, message: "" } });
+
+    const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
+    expect(said(row)).toEqual({ heard: "Downloading 42%", hover: "Downloading 42%" });
+    expect(row).toHaveTextContent("42%");
+    expect(row).not.toHaveTextContent("Unavailable");
+    expect(within(row).getByRole("img", { name: "Downloading 42%" })).toHaveClass("looking");
+  });
+
+  it("says it is downloading before it knows how far", () => {
+    downloading({ state: "running" });
+
+    const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
+    expect(said(row)).toEqual({ heard: "Downloading", hover: "Downloading" });
+  });
+
+  it("says it waits its turn to download, its cover spinning", () => {
+    downloading({ state: "queued" });
+
+    const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
+    expect(said(row)).toEqual({
+      heard: "Downloading: Waiting",
+      hover: "Waiting to download",
+    });
+    expect(within(row).getByRole("img", { name: "Waiting to download" })).toHaveClass("looking");
+  });
+
+  it("says it waits for Online while medleyplay is Offline", () => {
+    downloading({ state: "waiting", waits_for_online: true });
+
+    const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
+    expect(said(row)).toEqual({
+      heard: "Downloading: When online",
+      hover: "Downloading once medleyplay is Online",
+    });
+    expect(
+      within(row).getByRole("img", { name: "Downloading once medleyplay is Online" }),
+    ).toHaveClass("waiting");
   });
 });
 

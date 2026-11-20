@@ -12,6 +12,21 @@ afterEach(() => {
 
 const NEVER_LOOKED: LyricsFound = lyricsFoundOf([], { title: "", artist: "", found_at: null });
 
+/** The answers of reads one after another, the last answered from then on. */
+function reading(...answers: [LyricsFound, ...LyricsFound[]]): () => LyricsFound {
+  let read = 0;
+  return () => answers[Math.min(read++, answers.length - 1)] ?? answers[0];
+}
+
+/** An AI model's pick of the second song found, the one by its length. */
+const PICKED_LIVE = {
+  option: 1,
+  why: "The live take, by its length",
+  model: "deepseek-flash",
+  host: "api.deepseek.com",
+  at: "2026-11-19T12:00:01Z",
+};
+
 /** The finder of song 7's lyrics, *Melt* by ryo, the server answering `found` and `asked`. */
 function finding(found: LyricsFound | (() => LyricsFound), asked: unknown[] = []) {
   const served = serve({
@@ -22,6 +37,7 @@ function finding(found: LyricsFound | (() => LyricsFound), asked: unknown[] = []
       asked.push(body);
       return { status: 202, body: null };
     },
+    "POST /api/tracks/7/lyrics/choose": { status: 202, body: null },
   });
   const onUse = vi.fn();
   render(<LyricsFinder trackId={7} title="【MV】Melt" artist="初音ミク" onUse={onUse} />);
@@ -106,5 +122,52 @@ describe("finding a song's lyrics", () => {
     finding(lyricsFoundOf([], { failure: "LRCLIB refused the request (HTTP 403)." }));
 
     expect(await screen.findByText("LRCLIB refused the request (HTTP 403).")).toBeVisible();
+  });
+});
+
+describe("asking an AI model which song found is the song", () => {
+  const found = [lyricsOptionOf(), lyricsOptionOf({ title: "Melt (Live)" })];
+
+  it("asks once the songs are found, and marks its pick with why", async () => {
+    const { calls } = finding(
+      reading(
+        lyricsFoundOf(found, { may_choose: true }),
+        lyricsFoundOf(found, { choosing: true }),
+        lyricsFoundOf(found, { pick: PICKED_LIVE }),
+      ),
+    );
+
+    const live = await screen.findByRole("listitem", { name: /^Melt \(Live\)/u });
+    await waitFor(() => {
+      expect(live).toHaveTextContent("AI pick");
+    });
+
+    expect(within(live).getByText("AI pick")).toHaveAttribute(
+      "title",
+      "deepseek-flash picked this: The live take, by its length",
+    );
+    expect(screen.getByRole("listitem", { name: /^Melt by/u })).not.toHaveTextContent("AI pick");
+    expect(calls.filter((call) => call === "POST /api/tracks/7/lyrics/choose")).toHaveLength(1);
+  });
+
+  it("says the AI is being asked while it is", async () => {
+    finding(lyricsFoundOf(found, { choosing: true }));
+
+    expect(await screen.findByText("Asking the AI which is this song…")).toBeVisible();
+  });
+
+  it("does not ask when no AI model may be asked", async () => {
+    const { calls } = finding(lyricsFoundOf(found));
+
+    await screen.findByRole("listitem", { name: /^Melt \(Live\)/u });
+
+    expect(calls).not.toContain("POST /api/tracks/7/lyrics/choose");
+  });
+
+  it("says why asking the AI failed, offering the songs all the same", async () => {
+    finding(lyricsFoundOf(found, { choice_failure: "DeepSeek refused the request." }));
+
+    expect(await screen.findByText("DeepSeek refused the request.")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Use" })).toHaveLength(2);
   });
 });

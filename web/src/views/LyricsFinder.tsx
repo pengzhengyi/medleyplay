@@ -4,11 +4,12 @@
  * Opened, it shows what was found before, or, never asked, looks at once by the song's
  * own title and artist; the household may look again by words of its own, as a video's
  * title rarely is the song's. While the sites are asked, it reads again every few
- * seconds. Each song found shows its site, album, length, kind, and first lines.
- * Nothing changes until the household uses one and saves.
+ * seconds. Each song found shows its site, album, length, kind, and first lines. Once
+ * songs are found and an AI model is set up, one is asked which is the song, and its
+ * pick is marked. Nothing changes until the household uses one and saves.
  */
 
-import { CircleNotchIcon } from "@phosphor-icons/react";
+import { CircleNotchIcon, SparkleIcon } from "@phosphor-icons/react";
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
 import { type LyricsFound, type LyricsOption, api } from "../api";
@@ -61,11 +62,14 @@ export function LyricsFinder({
   const [asking, setAsking] = useState({ title, artist });
   // The sites are asked once on opening, never looked for before.
   const asked = useRef(false);
+  // An AI model is asked once of the songs each finding finds.
+  const chosen = useRef(false);
   const readAgain = () => {
     setReads((count) => count + 1);
   };
   const find = (words: { readonly title: string; readonly artist: string }) => {
     asked.current = true;
+    chosen.current = false;
     setError("");
     setState((was) => (was === undefined ? was : { ...was, finding: true, failure: null }));
     api
@@ -83,6 +87,11 @@ export function LyricsFinder({
     // Never looked for, the song is looked for at once by its own words.
     if (!asked.current && known.found_at === null && !known.finding && known.failure === null) {
       find(asking);
+    } else if (known.may_choose && !known.choosing && !chosen.current) {
+      chosen.current = true;
+      api.chooseLyrics(trackId).then(readAgain, () => {
+        // Without a pick, the songs are offered all the same.
+      });
     }
   });
   useEffect(() => {
@@ -104,7 +113,7 @@ export function LyricsFinder({
     };
   }, [trackId, reads]);
   useEffect(() => {
-    if (state?.finding !== true) {
+    if (state?.finding !== true && state?.choosing !== true) {
       return;
     }
     const timer = setTimeout(readAgain, READ_EVERY_MS);
@@ -116,6 +125,7 @@ export function LyricsFinder({
   const options = state?.options ?? [];
   const finding = state === undefined || state.finding;
   const failure = error || state?.failure;
+  const pick = state?.pick ?? null;
   return (
     <section className="lyrics-finder" aria-label="Find lyrics">
       <form
@@ -186,15 +196,29 @@ export function LyricsFinder({
           {options.map((option, at) => {
             const named =
               option.artist === "" ? option.title : `${option.title} by ${option.artist}`;
+            const picked = pick?.option === at ? pick : null;
             return (
               <li
                 className="lyrics-found-item"
                 // A site may find one song twice, as a remaster; each place is its own.
                 key={`${option.provider}-${String(at)}`}
-                aria-label={`${named}, ${aboutOf(option)}`}
+                aria-label={
+                  picked === null
+                    ? `${named}, ${aboutOf(option)}`
+                    : `${named}, ${aboutOf(option)}, the AI's pick: ${picked.why}`
+                }
               >
                 <div className="lyrics-found-about">
                   <span className="lyrics-found-name lyrics-found-line">
+                    {picked !== null && (
+                      <span
+                        className="lyrics-found-pick"
+                        title={`${picked.model} picked this: ${picked.why}`}
+                      >
+                        <SparkleIcon weight="fill" aria-hidden />
+                        AI pick
+                      </span>
+                    )}
                     <strong className="lyrics-found-title">{option.title}</strong>
                     {option.artist !== "" && (
                       <span className="lyrics-found-artist"> {option.artist}</span>
@@ -222,6 +246,17 @@ export function LyricsFinder({
             );
           })}
         </ul>
+      )}
+      {state?.choosing === true && (
+        <p className="lyrics-finder-note" role="status">
+          <CircleNotchIcon weight="bold" className="spin" aria-hidden />
+          Asking the AI which is this song…
+        </p>
+      )}
+      {state?.choice_failure && (
+        <p className="lyrics-finder-note error" role="alert">
+          {state.choice_failure}
+        </p>
       )}
     </section>
   );

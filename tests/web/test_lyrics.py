@@ -139,7 +139,7 @@ def test_the_songs_found_are_listed_with_their_lyrics_what_was_asked_and_the_pic
                 artist="ryo",
                 options=[melt | {"text": MELT}],
                 found_at=datetime(2026, 11, 19, tzinfo=UTC),
-                offered=["lrclib\nMelt\nryo\n260000"],
+                offered=["\n".join(str(value) for value in melt.values())],
                 pick=0,
                 why="The studio recording",
                 model="deepseek-flash",

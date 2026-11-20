@@ -151,9 +151,22 @@ export interface LyricsFound {
   /** The songs found, the closest in length first. */
   readonly options: readonly LyricsOption[];
   readonly found_at: string | null;
+  /** The song an AI model picked of those found, by its place, why, and who answered. */
+  readonly pick: {
+    readonly option: number;
+    readonly why: string;
+    readonly model: string;
+    readonly host: string;
+    readonly at: string;
+  } | null;
   readonly finding: boolean;
+  readonly choosing: boolean;
   readonly waiting: boolean;
   readonly failure: string | null;
+  /** Why the last asking of an AI model failed. */
+  readonly choice_failure: string | null;
+  /** Whether an AI model may be asked to pick: one is set up, and none picked among these. */
+  readonly may_choose: boolean;
 }
 
 /** A site the household may turn on to be asked for the lyrics LRCLIB lacks. */
@@ -1344,6 +1357,9 @@ export const api = {
   /** Look for the songs titled `title` by `artist` on the lyrics sites, for the song. */
   findLyrics: (trackId: number, title: string, artist: string) =>
     call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/find`, { title, artist }),
+  /** Ask an AI model which of the songs found is the song. */
+  chooseLyrics: (trackId: number) =>
+    call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/choose`),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
   artistNames: () => call<ArtistNames>("GET", "/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */

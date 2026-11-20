@@ -150,6 +150,12 @@ the household looks for the lyrics itself, by a title and artist of its own.
   the lookups. What it finds is kept for the song, with what was asked, and finding
   again replaces it. Nothing changes the song's lyrics until the household uses one
   and saves.
+- **An AI model's pick.** With an AI set up and the `ai-details` plugin on, the
+  editor asks once the songs are found: a Job in the AI's lane shows a model the
+  song's title, artist, album, and length, and each song found as a letter with its
+  site, title, artist, album, length, and kind, never its lyrics. The model answers
+  with one letter, or none, and why. The pick is marked *AI pick*, why in its tooltip,
+  while those are the songs found; finding again drops it.
 
 ## What the API shows
 
@@ -160,7 +166,8 @@ the household looks for the lyrics itself, by a title and artist of its own.
 | `DELETE /api/tracks/{id}/lyrics` | Signed in | Drops the household's, answering what shows now |
 | `POST /api/enrichers/lyrics/tracks/{id}` | Signed in | Looks the song up now; `?again` for one found before |
 | `POST /api/tracks/{id}/lyrics/find` | Signed in | Finds the songs titled `{title, artist}` on the lyrics sites, for the song; 202, 409 while the lyrics plugin is off |
-| `GET /api/tracks/{id}/lyrics/found` | Signed in | What was last found: the title and artist asked, each song found with its site, album, length, and lyrics, and whether it is being found or why it failed |
+| `GET /api/tracks/{id}/lyrics/found` | Signed in | What was last found: the title and artist asked, each song found with its site, album, length, and lyrics, an AI model's pick and why, whether either is being asked, why either failed, and whether a model may be asked |
+| `POST /api/tracks/{id}/lyrics/choose` | Signed in | Asks an AI model which song found is the song; 202, 409 with no songs found, no model set up, or the `ai-details` plugin off |
 | `PUT /api/settings` | Admin | `lyrics_sites`, the sites asked after LRCLIB: `[]` or `["netease"]`; left out, they stay as saved |
 
 ## Showing them
@@ -201,7 +208,7 @@ the song shows, as their source gave them, and says where they came from.
   song's own and may be changed. Opened for a song never looked for, it looks at
   once. Each song found shows its site, album, length, whether it is timed, plain,
   or instrumental, and its first two lines; *Use* fills the text with its lyrics,
-  saying where they are from until saved.
+  saying where they are from until saved. An AI model's pick is tagged *AI pick*.
 - **Saving** makes them the household's, which show over every other source's and
   stop the song being looked up; *Remove yours* drops them, showing the next source's
   again. Either goes back to the details, and the lyrics shown are read again. A
@@ -225,6 +232,9 @@ the song shows, as their source gave them, and says where they came from.
   real Jobs that keep and replace what was found, and the editor's *Find*: looking on
   opening only once, looking again by other words, nothing found, a failure, and a
   song used then saved.
+- **The AI's pick:** the chooser over a fake model (a letter, none, an unknown
+  letter, a refusal), real Jobs that keep the pick and drop it on finding again, and
+  the editor asking once, marking the pick, and saying why asking failed.
 - **Showing them:** the line at a time (before the first, at each start, past the
   last), how far into a song of a file playing whole; reading them for the song
   playing and again on a finished lookup; the panel's lines, translation, pause,

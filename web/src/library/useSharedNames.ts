@@ -1,5 +1,6 @@
 /**
- * @file The names that may name several artists, read again whenever the Tracks change.
+ * @file The names that may name several artists, read again whenever the Library may
+ * have changed.
  */
 
 import { type SharedName, api } from "../api";

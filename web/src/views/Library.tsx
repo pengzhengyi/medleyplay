@@ -184,14 +184,15 @@ export function Library({
       setPlaysOn("computer");
     }, playOnFailedFor);
   };
-  // What only some views need is read once the songs are in, and again as they change.
-  const loadedTracks = library.loaded ? library.tracks : undefined;
-  const artistNames = useArtistNames(loadedTracks);
-  const namesToTidy = useNamesToTidy(loadedTracks);
-  const splitOffers = useSplitOffers(loadedTracks);
-  const artistSplits = useArtistSplits(loadedTracks);
-  const sharedNames = useSharedNames(loadedTracks);
-  const missingPhotos = useMissingPhotos(loadedTracks);
+  // What is read beside the songs is read once they are in, and again whenever the
+  // Library may have changed; never for a heart or a rating.
+  const refreshes = library.loaded ? library.refreshes : undefined;
+  const artistNames = useArtistNames(refreshes);
+  const namesToTidy = useNamesToTidy(refreshes);
+  const splitOffers = useSplitOffers(refreshes);
+  const artistSplits = useArtistSplits(refreshes);
+  const sharedNames = useSharedNames(refreshes);
+  const missingPhotos = useMissingPhotos(refreshes);
   const toDo = toDoOf(
     namesToTidy.names,
     artistNames.names,

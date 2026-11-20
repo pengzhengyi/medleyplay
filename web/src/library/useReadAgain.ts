@@ -1,8 +1,8 @@
 /**
- * @file Something read from the server, read again whenever the Tracks change.
+ * @file Something read from the server, read again whenever the Library may have changed.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { whenIdle } from "./stages";
 
@@ -11,15 +11,22 @@ import { whenIdle } from "./stages";
  * and a way to read it again. Nothing is read while `version` is `undefined`, as before
  * the Tracks are in; the first read waits until the browser is idle, so the page is
  * drawn first.
+ *
+ * `answered` counts the answers that came while `changing` says the value is still
+ * changing, the very same answer too, so a caller reading it again every few seconds
+ * keeps going when the server says nothing changed.
  */
 export function useReadAgain<T>(
   read: () => Promise<T>,
   none: T,
   version: unknown,
-): { readonly value: T; readonly reload: () => void } {
+  changing: (value: T) => boolean = () => false,
+): { readonly value: T; readonly reload: () => void; readonly answered: number } {
   const [value, setValue] = useState<T>(none);
   // Counts the reads asked for, so each asks the server again.
   const [reads, setReads] = useState(0);
+  const [answered, setAnswered] = useState(0);
+  const stillChanging = useEffectEvent(changing);
   const readBefore = useRef(false);
   useEffect(() => {
     if (version === undefined) {
@@ -31,6 +38,9 @@ export function useReadAgain<T>(
         (answer) => {
           if (current) {
             setValue(answer);
+            if (stillChanging(answer)) {
+              setAnswered((count) => count + 1);
+            }
           }
         },
         () => {
@@ -52,6 +62,7 @@ export function useReadAgain<T>(
   }, [read, version, reads]);
   return {
     value,
+    answered,
     reload: () => {
       setReads((count) => count + 1);
     },

@@ -50,6 +50,16 @@ function withBilibili(): Routes {
   });
 }
 
+/** What is read beside the songs: once they are in, and whenever the Library may change. */
+const SIDE_READS: ReadonlySet<string> = new Set([
+  "GET /api/artist-names",
+  "GET /api/names-to-tidy",
+  "GET /api/split-offers",
+  "GET /api/artist-splits",
+  "GET /api/shared-names",
+  "GET /api/artist-photos/missing",
+]);
+
 function open(
   hash: string,
   routes: Routes = signedIn(LIBRARY, [
@@ -391,6 +401,27 @@ describe("playlists", () => {
     );
 
     expect(await screen.findByText(/No favorites yet/)).toBeInTheDocument();
+  });
+
+  it("reads nothing beside the songs again for a heart given", async () => {
+    const { calls } = open("#/library", {
+      ...signedIn(LIBRARY),
+      "PUT /api/tracks/2/favorite": { body: trackOf(2, "Shiver", { favorite: true }) },
+    });
+    const sideReads = () => calls.filter((call) => SIDE_READS.has(call)).length;
+    await waitFor(() => {
+      expect(sideReads()).toBe(SIDE_READS.size);
+    });
+
+    await userEvent.click(
+      within(screen.getByRole("main")).getByRole("button", { name: "Favorite Shiver" }),
+    );
+    await waitFor(() => {
+      expect(calls).toContain("PUT /api/tracks/2/favorite");
+    });
+    await act(() => new Promise((settled) => setTimeout(settled, 500)));
+
+    expect(sideReads()).toBe(SIDE_READS.size);
   });
 
   it("plays a Playlist's songs in its order, a song as often as it holds it", async () => {

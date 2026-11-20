@@ -64,6 +64,7 @@ export function CleanUpView({
   readonly missingPhotos?: {
     readonly artists: readonly MissingPhoto[];
     readonly reload: () => void;
+    readonly answered: number;
   };
   readonly onEditSongs?: (trackId: number) => void;
 }) {
@@ -140,7 +141,13 @@ export function CleanUpView({
             id: "clean-up-photos",
             title: "Find artist photos",
             waiting: toUse,
-            body: <FindPhotos artists={missingPhotos.artists} onChanged={missingPhotos.reload} />,
+            body: (
+              <FindPhotos
+                artists={missingPhotos.artists}
+                answered={missingPhotos.answered}
+                onChanged={missingPhotos.reload}
+              />
+            ),
           },
         ]
       : []),

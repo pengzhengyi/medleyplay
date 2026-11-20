@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { trackOf } from "../testing/server";
-import { EMPTY, type Store, reduce, tracksOf } from "./store";
+import { EMPTY, type Store, equalJson, reduce, tracksOf } from "./store";
 
 /** A store holding Intro and Outro, as the server listed them, neither a favorite. */
 const LOADED: Store = reduce(EMPTY, {
@@ -180,5 +180,81 @@ describe("the Track store", () => {
 
   it("gives back the same Tracks while nothing changes, so views needn't work again", () => {
     expect(tracksOf(LOADED)).toBe(tracksOf(LOADED));
+  });
+
+  it("stays the same store when the server's list is the one it holds", () => {
+    const listed = [trackOf(1, "Intro"), trackOf(2, "Outro")];
+    const held = reduce(LOADED, { type: "loaded", tracks: listed });
+
+    expect(reduce(held, { type: "loaded", tracks: listed })).toBe(held);
+  });
+
+  it("stays the same store when a new list equals the one it holds", () => {
+    const again = reduce(LOADED, {
+      type: "loaded",
+      tracks: [trackOf(1, "Intro"), trackOf(2, "Outro")],
+    });
+
+    expect(again).toBe(LOADED);
+  });
+
+  it("stays the same store, its write still shown, when an equal list comes during a write", () => {
+    const writing = reduce(LOADED, {
+      type: "write",
+      id: 2,
+      field: "favorite",
+      value: true,
+      seq: 1,
+    });
+
+    const again = reduce(writing, {
+      type: "loaded",
+      tracks: [trackOf(1, "Intro"), trackOf(2, "Outro")],
+    });
+
+    expect(again).toBe(writing);
+    expect(favoriteOf(again, 2)).toBe(true);
+  });
+
+  it("keeps every Track that is unchanged when one changed", () => {
+    const played = reduce(LOADED, {
+      type: "loaded",
+      tracks: [trackOf(1, "Intro", { play_count: 4 }), trackOf(2, "Outro")],
+    });
+
+    expect(tracksOf(played)).not.toBe(tracksOf(LOADED));
+    expect(tracksOf(played).get(1)?.play_count).toBe(4);
+    expect(tracksOf(played).get(2)).toBe(tracksOf(LOADED).get(2));
+  });
+
+  it("takes the same Tracks in a new order as a change, in that order", () => {
+    const reordered = reduce(LOADED, {
+      type: "loaded",
+      tracks: [trackOf(2, "Outro"), trackOf(1, "Intro")],
+    });
+
+    expect(reordered).not.toBe(LOADED);
+    expect([...tracksOf(reordered).keys()]).toEqual([2, 1]);
+    expect(tracksOf(reordered).get(1)).toBe(tracksOf(LOADED).get(1));
+  });
+});
+
+describe("JSON equality", () => {
+  it("compares objects and arrays by what they hold, all the way down", () => {
+    expect(equalJson({ a: [1, { b: null }], c: "x" }, { c: "x", a: [1, { b: null }] })).toBe(true);
+    expect(equalJson({ a: [1, { b: null }] }, { a: [1, { b: 0 }] })).toBe(false);
+  });
+
+  it("tells apart a missing key, an extra one, and arrays of other lengths", () => {
+    expect(equalJson({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+    expect(equalJson({ a: 1, b: 2 }, { a: 1, c: 2 })).toBe(false);
+    expect(equalJson([1, 2], [1, 2, 3])).toBe(false);
+  });
+
+  it("tells apart values of other kinds", () => {
+    expect(equalJson(null, {})).toBe(false);
+    expect(equalJson([], {})).toBe(false);
+    expect(equalJson("1", 1)).toBe(false);
+    expect(equalJson(null, null)).toBe(true);
   });
 });

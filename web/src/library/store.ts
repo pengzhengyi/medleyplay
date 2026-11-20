@@ -4,7 +4,8 @@
  * A pure reducer, so the races between quick writes, their answers, and a fresh
  * list are unit tested. Each write has a number; only the answer to a field's
  * latest write ends it, and a refused write falls back to what the server
- * confirmed.
+ * confirmed. A list equal to the one held changes nothing, and a Track equal to
+ * the one held is kept, so views don't work again for what didn't change.
  */
 
 import type { Track } from "../api";
@@ -26,6 +27,8 @@ export interface Store {
   /** Keyed by Track id and field, such as `7:favorite`. */
   readonly pending: ReadonlyMap<string, Pending>;
   readonly loaded: boolean;
+  /** The list last loaded, so the same list read again is known at once. */
+  readonly listed: readonly Track[];
 }
 
 /** A change to the store. */
@@ -65,20 +68,15 @@ const DETAILS = [
 ] as const satisfies readonly (keyof Track)[];
 
 /** A store before the server has listed any Tracks. */
-export const EMPTY: Store = { confirmed: new Map(), pending: new Map(), loaded: false };
+export const EMPTY: Store = { confirmed: new Map(), pending: new Map(), loaded: false, listed: [] };
 
 const keyOf = (id: number, field: Field) => `${String(id)}:${field}`;
 
 /** Apply `action` to `store`. */
 export function reduce(store: Store, action: StoreAction): Store {
   switch (action.type) {
-    case "loaded": {
-      const confirmed = new Map(action.tracks.map((track) => [track.id, track]));
-      const pending = new Map(
-        [...store.pending].filter(([key]) => confirmed.has(Number(key.split(":")[0]))),
-      );
-      return { confirmed, pending, loaded: true };
-    }
+    case "loaded":
+      return loaded(store, action.tracks);
     case "details": {
       // A Track read after its details were edited: only its details are taken, as
       // the Account's own state may have changed since it was read.
@@ -112,6 +110,58 @@ export function reduce(store: Store, action: StoreAction): Store {
     case "refused":
       return { ...store, pending: ended(store, action.id, action.field, action.seq) };
   }
+}
+
+/** Take the server's list, keeping each Track equal to the one held, and the store if all are. */
+function loaded(store: Store, tracks: readonly Track[]): Store {
+  if (tracks === store.listed) {
+    // The very list held, as a read the server said is unchanged gives back.
+    return store;
+  }
+  const before = [...store.confirmed.values()];
+  let same = store.loaded && tracks.length === before.length;
+  const confirmed = new Map<number, Track>();
+  tracks.forEach((track, index) => {
+    const known = store.confirmed.get(track.id);
+    const kept = known !== undefined && equalJson(known, track) ? known : track;
+    // The same Track in the same place: views show the order, so it counts.
+    same &&= before[index] === kept;
+    confirmed.set(track.id, kept);
+  });
+  if (same) {
+    return store;
+  }
+  const pending = new Map(
+    [...store.pending].filter(([key]) => confirmed.has(Number(key.split(":")[0]))),
+  );
+  return {
+    confirmed,
+    pending: pending.size === store.pending.size ? store.pending : pending,
+    loaded: true,
+    listed: tracks,
+  };
+}
+
+/** Whether two values read from JSON hold the same, all the way down. */
+export function equalJson(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
+    return false;
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) {
+    return false;
+  }
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) {
+    return false;
+  }
+  return keys.every(
+    (key) =>
+      Object.hasOwn(b, key) &&
+      equalJson((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+  );
 }
 
 function ended(store: Store, id: number, field: Field, seq: number): ReadonlyMap<string, Pending> {

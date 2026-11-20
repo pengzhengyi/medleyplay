@@ -783,9 +783,13 @@ export function lyricsFoundOf(
     artist: "ryo",
     options,
     found_at: "2026-11-19T12:00:00Z",
+    pick: null,
     finding: false,
+    choosing: false,
     waiting: false,
     failure: null,
+    choice_failure: null,
+    may_choose: false,
     ...change,
   };
 }

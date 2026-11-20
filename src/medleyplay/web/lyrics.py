@@ -12,7 +12,7 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from medleyplay.application.lyrics import ShownLyrics
-from medleyplay.application.lyrics_search import LyricsFound
+from medleyplay.application.lyrics_search import LyricsFound, LyricsPick
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.lyrics import MAX_LYRICS, LyricsOrigin
 from medleyplay.plugin_api import MAX_NAME, LyricsOption
@@ -110,6 +110,25 @@ class FindLyricsIn(BaseModel):
     artist: str = Field(default="", max_length=MAX_NAME)
 
 
+class LyricsPickOut(BaseModel):
+    """The song an AI model picked of those found, by its place, why, and who answered."""
+
+    option: int
+    why: str
+    model: str
+    host: str
+    at: datetime
+
+    @staticmethod
+    def of(pick: LyricsPick | None) -> "LyricsPickOut | None":
+        """Return the pick as the API shows it, or `None` for none."""
+        if pick is None:
+            return None
+        return LyricsPickOut(
+            option=pick.option, why=pick.why, model=pick.model, host=pick.host, at=pick.at
+        )
+
+
 class LyricsFoundOut(BaseModel):
     """What was found when a song's lyrics were last looked for, and what is being asked."""
 
@@ -117,10 +136,16 @@ class LyricsFoundOut(BaseModel):
     artist: str
     options: list[LyricsOption] = Field(description="The songs found, the closest first.")
     found_at: datetime | None
+    pick: LyricsPickOut | None = Field(description="An AI model's pick among the songs found.")
     finding: bool
+    choosing: bool
     waiting: bool = Field(description="Whether the asking waits for medleyplay to be Online.")
     failure: str | None = Field(
         description="Why the last finding failed; only to the Account that asked, and to admins."
+    )
+    choice_failure: str | None = Field(description="Why the last asking of an AI model failed.")
+    may_choose: bool = Field(
+        description="Whether an AI model may be asked to pick: one is set up, and none picked."
     )
 
     @staticmethod
@@ -131,9 +156,13 @@ class LyricsFoundOut(BaseModel):
             artist=found.artist,
             options=list(found.options),
             found_at=found.found_at,
+            pick=LyricsPickOut.of(found.pick),
             finding=found.finding,
+            choosing=found.choosing,
             waiting=found.waiting,
             failure=found.failure,
+            choice_failure=found.choice_failure,
+            may_choose=found.may_choose,
         )
 
 
@@ -149,3 +178,9 @@ def find_lyrics(
 ) -> None:
     """Look for the songs titled as asked on the lyrics sites, for the song."""
     service.find(me, TrackId(track_id), body.title, body.artist)
+
+
+@router.post("/{track_id}/lyrics/choose", status_code=status.HTTP_202_ACCEPTED)
+def choose_lyrics(track_id: RowId, me: SignedInAccount, service: LyricsSearchDep) -> None:
+    """Ask an AI model which of the songs found is the song."""
+    service.choose(me, TrackId(track_id))

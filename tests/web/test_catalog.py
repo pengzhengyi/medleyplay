@@ -13,6 +13,7 @@ from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import TrackId
 from medleyplay.persistence.schema import CommunityRatingRow
 from medleyplay.web.catalog import TrackOut
+from medleyplay.web.deps import Services
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import OnlineSwitch
@@ -539,6 +540,20 @@ def test_asking_again_with_the_etag_answers_304_with_no_body(
     assert again.status_code == 304
     assert again.content == b""
     assert (again.headers["etag"], again.headers["cache-control"]) == (etag, "private, no-cache")
+
+
+def test_a_write_that_changes_no_track_still_answers_304(
+    client: TestClient, catalog: CatalogService, services: Services
+) -> None:
+    set_up_as_alice(client)
+    _one_track(catalog)
+    etag = client.get("/api/tracks").headers["etag"]
+    services.revision.bump()
+
+    again = client.get("/api/tracks", headers={"If-None-Match": etag})
+
+    assert again.status_code == 304
+    assert again.headers["etag"] == etag
 
 
 def test_asking_with_any_etag_at_all_answers_304(client: TestClient) -> None:

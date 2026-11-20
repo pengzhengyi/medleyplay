@@ -2,8 +2,9 @@
 
 A heavy read builds its answer while holding one process-wide lock: SQLite hands
 Python's interpreter lock back on every row, so builds side by side slow each other
-down far more than taking turns does. The largest answers are also kept, as JSON and
-gzip bytes, for as long as the database revision they were built under stands.
+down far more than taking turns does. Cached answers are kept as JSON and gzip bytes
+for as long as the database revision they were built under stands; their ETag names
+the bytes, so a rebuild that gives the same bytes still answers 304.
 """
 
 import gzip
@@ -11,7 +12,7 @@ import hashlib
 import threading
 from collections.abc import Callable, Hashable, Iterator
 from concurrent.futures import Future
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Final
 
@@ -55,7 +56,7 @@ def heavy_read() -> Iterator[None]:
 
 @dataclass(frozen=True)
 class CachedAnswer:
-    """An answer's bytes, plain and gzipped, and the revision and ETag they were built under."""
+    """An answer's bytes, plain and gzipped, the revision they were built under, and their ETag."""
 
     revision: int
     etag: str
@@ -68,7 +69,8 @@ class CachedAnswers:
 
     A key names what the answer depends on beyond the database, such as the Account
     asking. An answer is labeled with the revision read before its build, so it is
-    never labeled newer than the rows it holds.
+    never labeled newer than the rows it holds. Its ETag hashes the key and the bytes,
+    so it changes only when the answer does, on this server or the next.
     """
 
     def __init__(self, revision: DatabaseRevision) -> None:
@@ -78,18 +80,13 @@ class CachedAnswers:
         self._answers: dict[AnswerKey, CachedAnswer] = {}
         self._building: dict[tuple[AnswerKey, int], Future[CachedAnswer]] = {}
 
-    def etag(self, key: AnswerKey, revision: int) -> str:
-        """Return the weak ETag of the answer for `key` under `revision`, on this server."""
-        named = f"{self._revision.mark}:{revision}:{key!r}"
-        return f'W/"{hashlib.sha256(named.encode()).hexdigest()[:24]}"'
-
     def get[T](
-        self, key: AnswerKey, build: Callable[[], T], adapter: TypeAdapter[T]
+        self, key: AnswerKey, build: Callable[[], T], adapter: TypeAdapter[T], *, heavy: bool
     ) -> CachedAnswer:
         """Return the answer for `key` under the current revision, building it if none is kept.
 
-        A request that finds the answer being built waits for that build, outside the
-        heavy-read lock, and gets the same answer or the same error.
+        A `heavy` build holds the heavy-read lock. A request that finds the answer being
+        built waits for that build, outside the lock, and gets the same answer or error.
         """
         revision = self._revision.value
         with self._lock:
@@ -103,7 +100,7 @@ class CachedAnswers:
         if not builds:
             return pending.result()
         try:
-            answer = self._build(key, revision, build, adapter)
+            answer = self._build(key, revision, build, adapter, heavy=heavy)
         except BaseException as error:
             with self._lock:
                 del self._building[key, revision]
@@ -118,31 +115,49 @@ class CachedAnswers:
         return answer
 
     def answer[T](
-        self, request: Request, key: AnswerKey, build: Callable[[], T], adapter: TypeAdapter[T]
+        self,
+        request: Request,
+        key: AnswerKey,
+        build: Callable[[], T],
+        adapter: TypeAdapter[T],
+        *,
+        heavy: bool,
     ) -> Response:
         """Answer `request` with 304 when it holds the current answer, else with its bytes.
 
-        A 304 builds nothing. The bytes are gzipped when the request accepts gzip.
+        A 304 for an answer kept under the current revision builds nothing. The bytes
+        are gzipped when the request accepts gzip.
         """
-        current = self.etag(key, self._revision.value)
-        if _matches(request.headers.get("if-none-match"), current):
-            return Response(status_code=304, headers=_headers(current))
-        answer = self.get(key, build, adapter)
+        answer = self.get(key, build, adapter, heavy=heavy)
         headers = _headers(answer.etag)
+        if _matches(request.headers.get("if-none-match"), answer.etag):
+            return Response(status_code=304, headers=headers)
         if _accepts_gzip(request.headers.get("accept-encoding")):
             headers["Content-Encoding"] = "gzip"
             return Response(answer.gzipped, media_type="application/json", headers=headers)
         return Response(answer.plain, media_type="application/json", headers=headers)
 
+    @staticmethod
     def _build[T](
-        self, key: AnswerKey, revision: int, build: Callable[[], T], adapter: TypeAdapter[T]
+        key: AnswerKey,
+        revision: int,
+        build: Callable[[], T],
+        adapter: TypeAdapter[T],
+        *,
+        heavy: bool,
     ) -> CachedAnswer:
-        with heavy_read():
+        with heavy_read() if heavy else nullcontext():
             # As FastAPI serializes a response model, so the bytes are the same.
             plain = adapter.dump_json(build(), by_alias=True)
-        return CachedAnswer(
-            revision, self.etag(key, revision), plain, gzip.compress(plain, GZIP_LEVEL)
-        )
+        return CachedAnswer(revision, _etag(key, plain), plain, gzip.compress(plain, GZIP_LEVEL))
+
+
+def _etag(key: AnswerKey, plain: bytes) -> str:
+    """Return the weak ETag naming the answer `plain` for `key`."""
+    named = hashlib.sha256(repr(key).encode())
+    named.update(b"\0")
+    named.update(plain)
+    return f'W/"{named.hexdigest()[:24]}"'
 
 
 def _headers(etag: str) -> dict[str, str]:

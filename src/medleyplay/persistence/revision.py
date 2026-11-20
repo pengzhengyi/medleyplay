@@ -1,6 +1,5 @@
 """The database revision: a number that changes whenever a write changes rows."""
 
-import secrets
 import threading
 from sqlite3 import Connection as SQLiteConnection
 
@@ -18,14 +17,10 @@ class DatabaseRevision:
     notes that count when it lends a connection and compares when it is given back,
     after its transaction ended; the revision goes up only if rows changed. A write
     that matches no rows leaves it alone, and every way of writing counts.
-
-    The revision starts at zero with each server, so `mark`, chosen at random when it
-    is created, tells one server's revisions from another's.
     """
 
     def __init__(self) -> None:
-        """Start at revision zero with a new mark."""
-        self.mark = secrets.token_hex(8)
+        """Start at revision zero."""
         self._value = 0
         self._lock = threading.Lock()
 

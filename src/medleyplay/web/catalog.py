@@ -278,6 +278,7 @@ def list_tracks(
         ("tracks", me.id, online),
         lambda: [TrackOut.of(track) for track in catalog.list_tracks(me.id, online=online)],
         TRACKS,
+        heavy=True,
     )
 
 

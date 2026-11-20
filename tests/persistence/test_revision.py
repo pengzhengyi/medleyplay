@@ -180,10 +180,3 @@ def test_an_invalidated_connection_changes_the_revision(
         connection.invalidate()
 
     assert revision.value > before
-
-
-def test_each_revision_starts_with_a_mark_of_its_own() -> None:
-    first, second = DatabaseRevision(), DatabaseRevision()
-
-    assert first.mark
-    assert first.mark != second.mark

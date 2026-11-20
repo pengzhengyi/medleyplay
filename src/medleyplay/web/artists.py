@@ -225,7 +225,7 @@ def artist_names(
             recommending=service.recommending(),
         )
 
-    return answers.answer(request, ("artist-names",), build, ARTIST_NAMES)
+    return answers.answer(request, ("artist-names",), build, ARTIST_NAMES, heavy=True)
 
 
 @router.post("/look-up")

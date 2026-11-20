@@ -48,8 +48,8 @@ def _run(task: Callable[[], object]) -> tuple[threading.Thread, list[object]]:
 def test_a_miss_builds_the_answer_and_a_hit_sends_it_without_building() -> None:
     answers, builds = CachedAnswers(DatabaseRevision()), _Builds()
 
-    first = answers.get(("songs",), builds, NUMBERS)
-    again = answers.get(("songs",), builds, NUMBERS)
+    first = answers.get(("songs",), builds, NUMBERS, heavy=True)
+    again = answers.get(("songs",), builds, NUMBERS, heavy=True)
 
     assert builds.count == 1
     assert again == first
@@ -60,11 +60,11 @@ def test_a_miss_builds_the_answer_and_a_hit_sends_it_without_building() -> None:
 def test_a_new_revision_builds_the_answer_anew_and_replaces_the_older_one() -> None:
     revision = DatabaseRevision()
     answers, builds = CachedAnswers(revision), _Builds()
-    older = answers.get(("songs",), builds, NUMBERS)
+    older = answers.get(("songs",), builds, NUMBERS, heavy=True)
 
     revision.bump()
-    newer = answers.get(("songs",), builds, NUMBERS)
-    again = answers.get(("songs",), builds, NUMBERS)
+    newer = answers.get(("songs",), builds, NUMBERS, heavy=True)
+    again = answers.get(("songs",), builds, NUMBERS, heavy=True)
 
     assert builds.count == 2
     assert NUMBERS.validate_json(newer.plain) == [1, 2, 3, 2]
@@ -72,22 +72,42 @@ def test_a_new_revision_builds_the_answer_anew_and_replaces_the_older_one() -> N
     assert again == newer
 
 
-def test_each_key_has_an_answer_of_its_own() -> None:
-    answers, builds = CachedAnswers(DatabaseRevision()), _Builds()
+def test_a_rebuild_that_gives_the_same_bytes_keeps_the_etag() -> None:
+    revision = DatabaseRevision()
+    answers, builds = CachedAnswers(revision), _Builds()
+    older = answers.get(("songs",), _same, NUMBERS, heavy=True)
 
-    alice_online = answers.get(("songs", 1, True), builds, NUMBERS)
-    bob_online = answers.get(("songs", 2, True), builds, NUMBERS)
-    alice_offline = answers.get(("songs", 1, False), builds, NUMBERS)
+    revision.bump()
+    newer = answers.get(("songs",), lambda: (builds(), [1, 2, 3])[1], NUMBERS, heavy=True)
 
-    assert builds.count == 3
+    assert builds.count == 1
+    assert newer.revision > older.revision
+    assert newer.etag == older.etag
+
+
+def test_each_key_has_an_answer_and_an_etag_of_its_own_even_with_the_same_bytes() -> None:
+    answers = CachedAnswers(DatabaseRevision())
+
+    alice_online = answers.get(("songs", 1, True), _same, NUMBERS, heavy=True)
+    bob_online = answers.get(("songs", 2, True), _same, NUMBERS, heavy=True)
+    alice_offline = answers.get(("songs", 1, False), _same, NUMBERS, heavy=True)
+
+    assert alice_online.plain == bob_online.plain == alice_offline.plain
     assert len({alice_online.etag, bob_online.etag, alice_offline.etag}) == 3
 
 
-def test_the_same_key_and_revision_on_another_server_has_another_etag() -> None:
+def test_another_server_gives_the_same_key_and_bytes_the_same_etag() -> None:
     one, another = CachedAnswers(DatabaseRevision()), CachedAnswers(DatabaseRevision())
 
-    assert one.etag(("songs",), 0) != another.etag(("songs",), 0)
-    assert one.etag(("songs",), 0) == one.etag(("songs",), 0)
+    first = one.get(("songs",), _same, NUMBERS, heavy=True)
+    after_a_restart = another.get(("songs",), _same, NUMBERS, heavy=True)
+
+    assert after_a_restart.etag == first.etag
+
+
+def _same() -> list[int]:
+    """A build that answers `[1, 2, 3]` every time."""
+    return [1, 2, 3]
 
 
 def test_a_request_arriving_while_its_answer_is_built_waits_for_that_build() -> None:
@@ -103,9 +123,9 @@ def test_a_request_arriving_while_its_answer_is_built_waits_for_that_build() -> 
         assert release.wait(WAIT)
         return builds()
 
-    builder, built = _run(lambda: answers.get(("songs",), slow, NUMBERS))
+    builder, built = _run(lambda: answers.get(("songs",), slow, NUMBERS, heavy=True))
     assert building.wait(WAIT)
-    waiter, waited = _run(lambda: answers.get(("songs",), slow, NUMBERS))
+    waiter, waited = _run(lambda: answers.get(("songs",), slow, NUMBERS, heavy=True))
     release.set()
     builder.join(WAIT)
     waiter.join(WAIT)
@@ -122,8 +142,8 @@ def test_a_build_that_raises_keeps_nothing_and_its_error_reaches_the_request() -
         raise RuntimeError(message)
 
     with pytest.raises(RuntimeError, match="the database said no"):
-        answers.get(("songs",), broken, NUMBERS)
-    answer = answers.get(("songs",), builds, NUMBERS)
+        answers.get(("songs",), broken, NUMBERS, heavy=True)
+    answer = answers.get(("songs",), builds, NUMBERS, heavy=True)
 
     assert builds.count == 1
     assert NUMBERS.validate_json(answer.plain) == [1, 2, 3, 1]
@@ -142,9 +162,9 @@ def test_a_request_waiting_on_a_build_that_raises_gets_the_same_error() -> None:
         assert release.wait(WAIT)
         raise failure
 
-    builder, built = _run(lambda: answers.get(("songs",), broken, NUMBERS))
+    builder, built = _run(lambda: answers.get(("songs",), broken, NUMBERS, heavy=True))
     assert building.wait(WAIT)
-    waiter, waited = _run(lambda: answers.get(("songs",), broken, NUMBERS))
+    waiter, waited = _run(lambda: answers.get(("songs",), broken, NUMBERS, heavy=True))
     release.set()
     builder.join(WAIT)
     waiter.join(WAIT)
@@ -161,9 +181,51 @@ def test_a_build_that_raises_lets_go_of_the_heavy_read_lock() -> None:
         raise RuntimeError
 
     with pytest.raises(RuntimeError):
-        answers.get(("songs",), broken, NUMBERS)
+        answers.get(("songs",), broken, NUMBERS, heavy=True)
 
     assert _taken_within_a_moment()
+
+
+def test_a_light_build_never_waits_for_a_heavy_read() -> None:
+    answers = CachedAnswers(DatabaseRevision())
+    inside, release = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with heavy_read():
+            inside.set()
+            assert release.wait(WAIT)
+
+    holder, _ = _run(hold)
+    assert inside.wait(WAIT)
+    reader, read = _run(lambda: answers.get(("offers",), _same, NUMBERS, heavy=False))
+    reader.join(WAIT)
+    release.set()
+    holder.join(WAIT)
+
+    assert len(read) == 1
+    assert not isinstance(read[0], Exception)
+
+
+def test_a_heavy_build_waits_for_the_heavy_read_under_way() -> None:
+    answers = CachedAnswers(DatabaseRevision())
+    inside, release = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with heavy_read():
+            inside.set()
+            assert release.wait(WAIT)
+
+    holder, _ = _run(hold)
+    assert inside.wait(WAIT)
+    reader, read = _run(lambda: answers.get(("songs",), _same, NUMBERS, heavy=True))
+    reader.join(0.2)
+    built_early = bool(read)
+    release.set()
+    holder.join(WAIT)
+    reader.join(WAIT)
+
+    assert not built_early
+    assert len(read) == 1
 
 
 def test_a_heavy_read_waits_for_the_one_under_way() -> None:

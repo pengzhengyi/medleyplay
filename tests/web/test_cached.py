@@ -287,10 +287,14 @@ def _taken_within_a_moment() -> bool:
     return taken.is_set()
 
 
-CACHED_PATHS: Final = [
+HEAVY_PATHS: Final = [
     "/api/tracks",
     "/api/artist-names",
+    "/api/shared-names",
+    "/api/artist-photos/missing",
 ]
+LIGHT_PATHS: Final = ["/api/names-to-tidy", "/api/artist-splits", "/api/split-offers"]
+CACHED_PATHS: Final = HEAVY_PATHS + LIGHT_PATHS
 BOOKKEEPING_TABLES: Final = {SessionRow.__tablename__, DeviceRow.__tablename__}
 _TABLE = re.compile(r'\b(?:FROM|JOIN|INTO|UPDATE)\s+"?(\w+)', re.IGNORECASE)
 _WRITE = re.compile(r"^\s*(?:INSERT|UPDATE|DELETE)\b", re.IGNORECASE)
@@ -379,15 +383,44 @@ def test_no_cached_answer_is_built_from_a_table_bookkeeping_writes(
     assert not _tables(built) & BOOKKEEPING_TABLES
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/tracks",
-        "/api/artist-names",
-        "/api/artist-photos/missing",
-        "/api/shared-names",
-    ],
-)
+@pytest.mark.parametrize("path", CACHED_PATHS)
+def test_a_cached_read_answers_304_when_asked_with_the_etag_it_sent(
+    client: TestClient, catalog: CatalogService, path: str
+) -> None:
+    set_up_as_alice(client)
+    catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song("Intro"))
+    first = client.get(path)
+
+    again = client.get(path, headers={"If-None-Match": first.headers["etag"]})
+
+    assert first.status_code == 200, first.text
+    assert first.headers["cache-control"] == "private, no-cache"
+    assert again.status_code == 304
+    assert again.content == b""
+
+
+@pytest.mark.parametrize("path", LIGHT_PATHS)
+def test_a_light_cached_read_never_waits_for_a_heavy_read(client: TestClient, path: str) -> None:
+    set_up_as_alice(client)
+    inside, release = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with heavy_read():
+            inside.set()
+            assert release.wait(WAIT)
+
+    holder, _ = _run(hold)
+    assert inside.wait(WAIT)
+    reader, read = _run(lambda: client.get(path, headers={"If-None-Match": ""}))
+    reader.join(WAIT)
+    release.set()
+    holder.join(WAIT)
+
+    assert len(read) == 1
+    assert getattr(read[0], "status_code", None) == 200
+
+
+@pytest.mark.parametrize("path", CACHED_PATHS)
 def test_a_heavy_read_writes_nothing_so_it_never_waits_on_a_write_while_holding_the_lock(
     client: TestClient, services: Services, catalog: CatalogService, path: str
 ) -> None:

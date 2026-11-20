@@ -1,11 +1,11 @@
 # Cached reads
 
-> [!IMPORTANT]
-> **Status: approved, being built.** This note describes how the server answers
-> its largest reads, the songs and the artist names, from a cache that a database
-> revision keeps true, says "not changed" when a browser already holds the answer,
-> and runs the reads that build an answer one at a time. Making the web client ask
-> less often is a separate step that builds on this one.
+> [!NOTE]
+> **Status: implemented.** This note describes how the server answers its largest
+> reads, the songs and the artist names, from a cache that a database revision
+> keeps true, says "not changed" when a browser already holds the answer, and runs
+> the reads that build an answer one at a time. Making the web client ask less
+> often is a separate step that builds on this one.
 
 ## Contents
 
@@ -37,20 +37,20 @@ answer cheaply, once per change, and never let two heavy builds fight.
 
 ## What it delivers
 
-- [ ] **Cheaper builds:** the artist names ask for the active Jobs once, not once
+- [x] **Cheaper builds:** the artist names ask for the active Jobs once, not once
       per name, and the songs are serialized once, not twice.
-- [ ] A **database revision** that changes whenever a write changes rows, whichever
+- [x] A **database revision** that changes whenever a write changes rows, whichever
       service makes it, and never for a write that changes none.
-- [ ] **Cached answers** for `GET /api/tracks` and `GET /api/artist-names`: built
+- [x] **Cached answers** for `GET /api/tracks` and `GET /api/artist-names`: built
       once per revision, kept as JSON bytes and as gzip bytes, and sent as they are.
-- [ ] An **ETag** on each cached answer, and **304 Not Modified** when a request's
+- [x] An **ETag** on each cached answer, and **304 Not Modified** when a request's
       `If-None-Match` holds it, without building anything.
-- [ ] **gzip** for a cached answer when the request accepts it.
-- [ ] **Heavy reads, one at a time:** every read listed in
+- [x] **gzip** for a cached answer when the request accepts it.
+- [x] **Heavy reads, one at a time:** every read listed in
       [Heavy reads](#heavy-reads-one-at-a-time) builds its answer only while it
       holds one lock.
-- [ ] **Signing out clears the browser's cache** of these private answers.
-- [ ] Before-and-after measurements in the pull request.
+- [x] **Signing out clears the browser's cache** of these private answers.
+- [x] Before-and-after measurements in the pull request.
 
 Browsers already send `If-None-Match` for an answer they hold, so 304s start with
 no change to the web client. The client cannot see a 304 through `fetch`, though:
@@ -62,13 +62,15 @@ loads.
 
 Two builds do needless work, which caching alone would only hide:
 
-- **The artist names ask for Jobs once per name.** `ArtistsService.names` asks, for
-  each name, whether a MusicBrainz or Wikidata Job is active, and `recommending`
-  asks once per batch; each asking opens its own session and query. One query for
-  the targets of active Jobs of those kinds answers them all.
-- **The songs are validated twice.** The route builds `TrackOut` models, then
-  FastAPI validates and serializes them again for the `response_model`. Serializing
-  the list once, with a `TypeAdapter`, is the same bytes for less work.
+- **The artist names ask for Jobs once per name.** `ArtistService.names` asked,
+  for each name, whether a MusicBrainz or Wikidata Job is active, and
+  `recommending` once per batch; each asking opened its own session and query.
+  `JobService.active_targets(kind)` reads the targets of a kind's active Jobs in
+  one query, and answers them all. The artists missing a photo ask it the same way.
+- **The songs are validated twice.** The route built `TrackOut` models, then
+  FastAPI validated and serialized them again for the `response_model`. A cached
+  answer serializes the list once, with a `TypeAdapter` and `by_alias` as FastAPI
+  does, so the bytes are the same for less work.
 
 Each change is measured on its own, so the pull request shows what it bought.
 
@@ -134,11 +136,11 @@ flowchart TD
 
 - **Built under the revision read before the build,** so an answer is never
   labeled newer than the rows it holds. Online is read once, before the build too,
-  and handed to the build, so the key and the answer agree even if the Mode
-  changes meanwhile.
-- **Bytes, not models.** The answer is serialized once, then sent as a `Response`
-  with its bytes, so a cache hit does no Python work beyond the lookup. It is also
-  gzipped at level 6, outside the lock, and sent with `Content-Encoding: gzip`
+  with `CatalogService.online()`, and handed to `list_tracks(…, online=…)`, so the
+  key and the answer agree even if the Mode changes meanwhile.
+- **Bytes, not models.** The answer is serialized once, under the lock, then sent
+  as a `Response` with its bytes, so a cache hit does no Python work beyond the
+  lookup. It is also gzipped at level 6, outside the lock, and sent with `Content-Encoding: gzip`
   when the request's `Accept-Encoding` allows it.
 - **Headers,** on a 200 and a 304 alike: `ETag`, `Cache-Control: private,
   no-cache` (a browser may keep it, but asks each time), and `Vary:
@@ -193,25 +195,28 @@ Rejected alternatives:
 | --- | --- | --- |
 | `DatabaseRevision` | `persistence/revision.py` | The revision and the boot mark; `watch(engine)` registers the pool events that bump it |
 | `CachedAnswers` | `web/cached.py` | One answer per key, built once, kept as JSON and gzip bytes; answers a request with 304, cached bytes, or a fresh build |
-| `heavy_read` | `web/cached.py` | A context manager over the process-wide lock that heavy builds hold; raises if taken twice by one thread |
+| `heavy_read` | `web/cached.py` | A context manager over the process-wide lock that heavy builds hold; raises `HeavyReadReenteredError` if taken twice by one thread |
+| `JobService.active_targets` | `application/jobs.py` | The targets of a kind's waiting, queued, and running Jobs, in one query |
 | `Services.revision`, `Services.answers` | `web/deps.py` | Reach both from routes as dependencies |
 
 ```python
-# The songs' route, in outline.
-@router.get("/tracks", response_model=list[TrackOut], responses={304: {"description": "..."}})
-def list_tracks(request: Request, me: SignedInAccount, catalog: CatalogDep,
-                answers: AnswersDep, mode: ModeDep) -> Response:
-    online = mode.online()
+# The songs' route.
+@router.get("/tracks", response_model=list[TrackOut], responses=NOT_MODIFIED)
+def list_tracks(
+    request: Request, me: SignedInAccount, catalog: CatalogDep, answers: AnswersDep
+) -> Response:
+    online = catalog.online()
     return answers.answer(
         request,
-        key=("tracks", me.id, online),
-        build=lambda: [TrackOut.of(t) for t in catalog.list_tracks(me.id, online=online)],
-        adapter=TRACKS,
+        ("tracks", me.id, online),
+        lambda: [TrackOut.of(track) for track in catalog.list_tracks(me.id, online=online)],
+        TRACKS,
     )
 ```
 
 The route keeps its `response_model` and lists the 304, so the API description
-stays true; a test checks that the cached bytes equal what the model serializes.
+stays true; tests check the description, and that the cached bytes equal what the
+model serializes.
 
 ## Boundary cases
 
@@ -253,16 +258,25 @@ stays true; a test checks that the cached bytes equal what the model serializes.
 
 ## Measured
 
-Before, on the preview library (1738 songs), with no throttling:
+On a copy of the preview library (1738 songs), served by `medleyplay serve` with
+the Mode Offline, from a script firing the fifteen reads a page load makes at once;
+no throttling.
 
-| What | Before |
-| --- | --- |
-| `GET /api/tracks`, alone | 0.15–0.23 s, 1.2 MB |
-| `GET /api/artist-names`, alone | 0.19–0.34 s, 233 KB |
-| Five song lists built at once (in-process) | 3.2 s wall |
-| Fifteen page-load reads at once | last at 6.3 s |
+| What | Before | After |
+| --- | --- | --- |
+| `ArtistService.names` and `recommending`, in-process | 0.58 s | 0.16 s |
+| Fifteen page-load reads at once, the first time | last at 1.92 s | last at 1.48 s |
+| The same, again | last at 1.94 s | last at 0.73 s |
+| The same, sending each ETag held | last at 2.16 s | last at 0.80 s; the songs 304 in 59 ms |
+| Five song lists at once, over HTTP | 3.65 s | 0.02 s |
+| `GET /api/tracks`, gzip accepted | 1.24 MB | 82 KB |
+| `GET /api/artist-names`, gzip accepted | 239 KB | 51 KB |
 
-The pull request adds the after column.
+The ETag held steady while the Job runner's update ran each second, and changed
+with each favorite. What remains slowest when the reads arrive together is reads
+this note leaves alone: the shared names (under the heavy-read lock), the
+Playlists, the names to tidy, and the artist splits, each 0.35 to 0.66 s. The
+client step, asking for fewer of them at once, is where they go next.
 
 ## Open questions
 

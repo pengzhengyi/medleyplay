@@ -7,6 +7,7 @@ from sqlite3 import Connection as SQLiteConnection
 from sqlalchemy import Engine, event
 from sqlalchemy.pool import ConnectionPoolEntry, PoolProxiedConnection
 
+# cspell:ignore checkin
 _CHANGES_AT_CHECKOUT = "changes_at_checkout"
 
 

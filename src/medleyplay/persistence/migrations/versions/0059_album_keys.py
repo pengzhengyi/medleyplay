@@ -38,33 +38,49 @@ def _key(fold: Callable[[str], str], album: str, artist: str) -> str:
     return hashlib.sha256(f"{fold(artist)}\n{fold(album)}".encode()).hexdigest()
 
 
-def _rekey(table: str, name: str, at: str, where: str, fold: Callable[[str], str]) -> None:
+_SEARCHES = sa.table(
+    "album_cover_search",
+    sa.column("key", sa.String),
+    sa.column("album", sa.String),
+    sa.column("artist", sa.String),
+    sa.column("found_at", sa.DateTime),
+)
+_LINKS = sa.table(
+    "image_links",
+    sa.column("subject", sa.String),
+    sa.column("key", sa.String),
+    sa.column("name", sa.String),
+    sa.column("artist", sa.String),
+    sa.column("asked_at", sa.DateTime),
+)
+
+
+def _rekey(
+    table: sa.TableClause,
+    name: sa.ColumnClause[str],
+    at: sa.ColumnClause[object],
+    where: sa.ColumnElement[bool],
+    fold: Callable[[str], str],
+) -> None:
     """Key each row of `table` by its `name` and `artist` under `fold`; the latest by `at` stays."""
     connection = op.get_bind()
-    rows = connection.execute(
-        sa.text(f"SELECT key, {name}, artist, {at} FROM {table} WHERE {where} ORDER BY {at}")  # noqa: S608
-    ).all()
+    key = table.c.key
+    rows = connection.execute(sa.select(key, name, table.c.artist).where(where).order_by(at)).all()
     kept: dict[str, str] = {}
-    for key, album, artist, _ in rows:
-        kept[_key(fold, album, artist)] = key
+    for old, album, artist in rows:
+        kept[_key(fold, album, artist)] = old
     keeping = set(kept.values())
-    for key, _, _, _ in rows:
-        if key not in keeping:
-            connection.execute(
-                sa.text(f"DELETE FROM {table} WHERE {where} AND key = :key"),  # noqa: S608
-                {"key": key},
-            )
+    for old, _, _ in rows:
+        if old not in keeping:
+            connection.execute(sa.delete(table).where(where, key == old))
     for new, old in kept.items():
-        connection.execute(
-            sa.text(f"UPDATE {table} SET key = :new WHERE {where} AND key = :old"),  # noqa: S608
-            {"new": new, "old": old},
-        )
+        connection.execute(sa.update(table).where(where, key == old).values(key=new))
 
 
 def upgrade() -> None:
     """Apply this revision."""
-    _rekey("album_cover_search", "album", "found_at", "1 = 1", _as_grouped)
-    _rekey("image_links", "name", "asked_at", "subject = 'album'", _as_grouped)
+    _rekey(_SEARCHES, _SEARCHES.c.album, _SEARCHES.c.found_at, sa.true(), _as_grouped)
+    _rekey(_LINKS, _LINKS.c.name, _LINKS.c.asked_at, _LINKS.c.subject == "album", _as_grouped)
     with op.batch_alter_table("album_cover_search", recreate="always") as batch:
         batch.add_column(
             sa.Column("finder", sa.String(length=32), server_default="musicbrainz", nullable=False)
@@ -87,5 +103,5 @@ def downgrade() -> None:
         batch.drop_constraint("pk_album_cover_search", type_="primary")
         batch.drop_column("finder")
         batch.create_primary_key("pk_album_cover_search", ["key"])
-    _rekey("album_cover_search", "album", "found_at", "1 = 1", _case_folded)
-    _rekey("image_links", "name", "asked_at", "subject = 'album'", _case_folded)
+    _rekey(_SEARCHES, _SEARCHES.c.album, _SEARCHES.c.found_at, sa.true(), _case_folded)
+    _rekey(_LINKS, _LINKS.c.name, _LINKS.c.asked_at, _LINKS.c.subject == "album", _case_folded)

@@ -76,6 +76,7 @@ class Services:
     covers: CoverService
     thumbnails: ThumbnailService
     thumbnail_sweeper: EnrichmentSweeper
+    cover_sweeper: EnrichmentSweeper
     enrichment: EnrichmentService
     sweeper: EnrichmentSweeper
     ai: AiService

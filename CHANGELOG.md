@@ -657,6 +657,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Coming back to the page waits less** — which songs each lookup may be asked
+  about is kept on the server until something changes, and answered 304 to a page
+  holding it; the answer says when each song asked before may be asked again, and
+  the page applies the wait itself. A return to the tab with nothing changed took
+  309 ms, now 32 ms. `GET /api/enrichers/{name}` sends `waiting` and `asks_again` in
+  place of `asked_recently`.
+
 - **Covers load small in rows and tiles** — the server keeps a 128-pixel and a
   512-pixel copy of each cover and photo, made ahead by a Job through the new
   `ffmpeg-thumbnails` plugin; song rows, Up next, and the player show the small one,

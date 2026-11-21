@@ -1,7 +1,7 @@
 # No blank frames
 
 > [!NOTE]
-> **Status: proposed.** This note describes how the web client shows something at
+> **Status: implemented.** This note describes how the web client shows something at
 > once wherever it now shows nothing: before its script runs, while the Account is
 > read, and while a dialog, panel, or view waits for its code. It is the last of four
 > steps after [Cached reads](Cached%20reads.md), [Cheap reloads](Cheap%20reloads.md),
@@ -63,20 +63,20 @@ it hasn't loaded, and today that takes the whole page down.
 
 ## What it delivers
 
-- [ ] **A page before the script:** the page's colors, in the theme the browser
+- [x] **A page before the script:** the page's colors, in the theme the browser
       chose, and a quiet *medleyplay* mark, from the first paint until the Library's
       skeleton.
-- [ ] **The small parts load with the page:** Now Playing, *Edit details*, *Edit
+- [x] **The small parts load with the page:** Now Playing, *Edit details*, *Edit
       album*, *Add from Bilibili*, and *Add file*, about 15 KB gzipped.
-- [ ] **A frame for each lazy part,** each with its own boundary: a dialog's frame
+- [x] **A frame for each lazy part,** each with its own boundary: a dialog's frame
       with its title and ✕, a panel's busy line, a view's *Loading…*.
-- [ ] **A part that fails to load says so in its place,** offers *Try again*, and
+- [x] **A part that fails to load says so in its place,** offers *Try again*, and
       never takes the page down. Any other error in it says something went wrong.
-- [ ] **The rest load while the browser is idle,** one at a time, once the Library
+- [x] **The rest load while the browser is idle,** one at a time, once the Library
       has drawn, so a part opens at once and an upgrade can't break it.
-- [ ] **Assets are sent gzipped** to browsers that accept it, and keep their
+- [x] **Assets are sent gzipped** to browsers that accept it, and keep their
       year-long caching through a 304.
-- [ ] Before-and-after measurements in the pull request.
+- [x] Before-and-after measurements in the pull request.
 
 ## A page before the script
 
@@ -147,13 +147,16 @@ asks for. Three things make that recoverable:
   good, and a browser may keep a failed module, so a part that failed would fail
   again on every open. `lazyPart` retries once after a second, and if that fails,
   the next open, or *Try again*, makes a fresh attempt.
-- **The frame says what happened and offers what helps:**
+- **The frame says what happened and offers what helps.** To tell the causes apart,
+  it reads the page again, uncached, and compares the entry script it names with the
+  one this page runs:
 
   | Cause | Says | Offers |
   | --- | --- | --- |
-  | The server can't be reached | *Can't reach medleyplay.* | *Try again* |
-  | The file is gone, as after an upgrade | *medleyplay was updated. Reload to open this; the music stops while the page reloads.* | *Reload* |
-  | The part loaded but failed to show | *Something went wrong here.* | *Close* |
+  | The page can't be read: the server can't be reached | *Can't reach medleyplay. Check the connection, then try again.* | *Try again* |
+  | The page names another entry script: medleyplay was updated | *medleyplay was updated. Reload to open this; the music stops while the page reloads.* | *Reload* |
+  | The page is the same: the load failed on the way | *This part of the page didn't load.* | *Try again* |
+  | The part loaded but failed to show | *Something went wrong here.* | *Try again*; a dialog's ✕ still closes it |
 
 - **Nothing reloads by itself.** A reload stops the music, so it waits for someone to
   choose it.
@@ -205,11 +208,13 @@ On a first visit this sends about 290 KB instead of 1,085 KB.
 | --- | --- | --- |
 | `index.html` | `web/index.html` | Inline theme script, `color-scheme`, the starting mark |
 | `Starting` | `web/src/views/Starting.tsx` | New: the mark while the Account is read |
-| `lazyPart(load)` | `web/src/lazyPart.ts` | New: a lazy component with `preload()`, that forgets a failed load and retries once |
-| `preloadWhenIdle(parts, signal)` | `web/src/lazyPart.ts` | New: loads each part in turn with `whenIdle` |
-| `LazyPart` | `web/src/views/LazyPart.tsx` | New: an error boundary and a `Suspense` around one part, with its frame |
-| `DialogOpening` | `web/src/views/DialogOpening.tsx` | Gains the failed states |
-| `AppBoundary` | `web/src/App.tsx` | New: the root's error boundary |
+| `lazyPart(load)` | `web/src/lazyPart.tsx` | New: a lazy component with `preload()`, that retries a failed load once, then lets the next try load afresh |
+| `forgetFailedLoads()` | `web/src/lazyPart.tsx` | New: what *Try again* calls, so each part that failed loads afresh |
+| `preloadWhenIdle(parts, signal)` | `web/src/lazyPart.tsx` | New: loads each part in turn with `whenIdle` |
+| The lazy parts and `PRELOADED` | `web/src/views/parts.ts` | New: each part declared once, and the preload order |
+| `LazyPart` | `web/src/views/LazyPart.tsx` | New: an error boundary and a `Suspense` around one part, with its frame and what to say when it fails |
+| `DialogOpening` | `web/src/views/DialogOpening.tsx` | Shows its children: the busy line, or the failure |
+| The root's boundary | `web/src/main.tsx` | A `LazyPart` around `App` |
 | Five parts | `web/src/views/Library.tsx` | Imported with the page |
 | `client_app` | `src/medleyplay/web/pages.py` | Wraps `ClientFiles` in `GZipMiddleware` |
 | `ClientFiles.get_response` | `src/medleyplay/web/pages.py` | `immutable` on a 304 for an asset too |
@@ -220,8 +225,9 @@ On a first visit this sends about 290 KB instead of 1,085 KB.
 | --- | --- |
 | A part fails to load while offline | Its frame says the server can't be reached, with *Try again*; the rest of the page keeps working |
 | A part's file is gone after an upgrade | Its frame offers *Reload*, saying the music stops |
+| A load fails on the way, the server still serving this build | *This part of the page didn't load*, with *Try again* |
 | A preload fails | Forgotten; opening the part tries again, behind its frame |
-| A part loads, then throws while showing | *Something went wrong here*, with *Close*; not the upgrade message |
+| A part loads, then throws while showing | *Something went wrong here*, with *Try again*; not the upgrade message |
 | The dialog is closed while its code loads | The frame's ✕ closes it; the code still lands, for next time |
 | Two lazy parts open, one loading | Each has its own boundary, so the other stays |
 | A request without `Accept-Encoding: gzip`, or a range | The original bytes |
@@ -236,13 +242,15 @@ On a first visit this sends about 290 KB instead of 1,085 KB.
 - **`preloadWhenIdle`:** the parts load in order, one at a time, each on an idle
   callback; stopping the signal stops the rest; a failed preload is swallowed.
 - **`LazyPart`:** shows its frame while loading and the part once loaded; a failed
-  load shows the right message for an unreachable server and for a missing file,
-  and *Try again* loads afresh; an error while rendering shows *Something went
+  load shows the right message for an unreachable server, a newer build, and the
+  same build, and *Try again* loads afresh; an error while rendering shows *Something went
   wrong*; two parts load independently.
 - **`App`:** shows the starting mark while the Account is read.
 - **`index.html`:** the inline script's key is the one `theme.ts` keeps.
-- **The Library:** the Lyrics panel loading leaves *Edit details* open; a list editor
-  that fails keeps the Songs panel and its edits.
+- **The Library:** preloading starts once the Library has drawn, not before. That
+  the Lyrics and Songs panels and the list editor keep *Edit details* open while they
+  load or fail follows from each having its own `LazyPart`, which `LazyPart`'s own
+  tests cover.
 - **`ClientFiles`:** an asset is sent gzipped, with `Vary`, to a request that accepts
   gzip, and as it is otherwise; a 304 for an asset keeps `immutable`.
 - **End to end:** the built client loads with gzipped assets, and opening *Edit
@@ -250,14 +258,27 @@ On a first visit this sends about 290 KB instead of 1,085 KB.
 
 ## Measuring
 
-The same script as in [Why](#why), before and after, three runs each, on a quiet
-machine:
+On two fresh Offline copies of the preview library, one served by main and one by
+this change, with the network and CPU slowed as in [Why](#why). Medians of three
+runs:
 
-- the browser's first paint, first content, the rail, and the first song row;
-- the bytes of scripts and styles on a first visit;
-- how long *Edit details* and *Listen on a device* show nothing after being chosen;
-- long tasks while preloading, with the CPU slowed;
-- a screenshot of the page before its script and of a part's frame.
+| Moment | Before | After |
+| --- | --- | --- |
+| Browser's first paint | 0.53 s, an empty page | 0.25 s, the starting mark |
+| First content | 1.81 s | 0.25 s |
+| The rail of views | 1.84 s | 1.66 s |
+| The first song row | 2.79 s | 2.07 s |
+| Scripts and styles, the first visit and four seconds after | 1,107 KB, no part preloaded | 484 KB, every part preloaded |
+| *Edit details* shows nothing for | 344 ms | 21 ms |
+| Settings, opened four seconds after the page | 544 ms | 546 ms |
+| Long tasks in the four seconds after the first row | 6 | 6 |
+
+- **The baseline is lower than in [Why](#why)** because main now keeps the enricher
+  reads, so fewer slow reads hold the browser's connections.
+- **Settings opens no faster:** its code is preloaded and no file is fetched on the
+  click, but drawing it takes about 440 ms on the slowed CPU before it reads its
+  settings. That is the view's own cost, outside this note.
+- **Preloading adds no long tasks** in the window it runs.
 
 ## Left out
 

@@ -102,6 +102,19 @@ body {
   background: var(--page);
 }
 
+/* A part of the page that didn't load or show: what happened, and what helps. */
+.part-failed {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  padding: 1rem 0;
+  color: var(--muted);
+}
+
+.part-failed p {
+  margin: 0;
+}
+
 /* The mark while the page starts, before the script runs and until the Account is known. */
 .starting {
   display: grid;

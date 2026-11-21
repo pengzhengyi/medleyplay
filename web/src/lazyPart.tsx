@@ -4,7 +4,7 @@
  *
  * `React.lazy` keeps a failed load for good, so a part that failed once, as when the
  * network dropped, would fail on every open until the page reloads. A part here tries
- * once more a moment later, then forgets the failure: the next render or preload loads
+ * once more a moment later; if that fails too, the next preload, or *Try again*, loads
  * afresh.
  */
 
@@ -31,14 +31,25 @@ export interface Part<P extends object> {
   readonly preload: () => Promise<void>;
 }
 
+/** How each part whose load failed starts afresh, once someone tries again. */
+const renewals = new Set<() => void>();
+
+/** Let every part whose load failed load afresh, as when someone chooses *Try again*. */
+export function forgetFailedLoads(): void {
+  for (const renew of renewals) {
+    renew();
+  }
+}
+
 /** Return a part whose code `load` gives, loaded when first rendered or preloaded. */
 export function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>): Part<P> {
   let loading: Promise<ComponentType<P>> | undefined;
+  let failed = false;
   const attempt = () => {
     loading ??= retriedOnce(load).catch((failure: unknown) => {
-      // Forget the failure, and the lazy component that holds it, so the next try loads.
+      // Forgotten, so the next try loads; the shown part keeps its failure until then.
       loading = undefined;
-      current = fresh();
+      failed = true;
       throw new PartLoadError(failure);
     });
     return loading;
@@ -46,6 +57,13 @@ export function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>
   const fresh = (): LazyExoticComponent<ComponentType<P>> =>
     lazy(() => attempt().then((loaded) => ({ default: loaded })));
   let current = fresh();
+  const renew = () => {
+    if (failed) {
+      failed = false;
+      current = fresh();
+    }
+  };
+  renewals.add(renew);
 
   function Component(props: P) {
     const Loaded = current;
@@ -53,7 +71,10 @@ export function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>
   }
   return {
     Component,
-    preload: () => attempt().then(() => undefined),
+    preload: () => {
+      renew();
+      return attempt().then(() => undefined);
+    },
   };
 }
 

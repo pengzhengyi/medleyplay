@@ -11,7 +11,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.enrichment import ENRICH_KIND, EnrichmentService, enrich_target
+from medleyplay.application.enrichment import (
+    ENRICH_KIND,
+    Askable,
+    EnrichmentService,
+    enrich_target,
+)
 from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.ai import AnsweredBy, ProviderFailure, UnusableReason
@@ -438,6 +443,22 @@ def test_a_track_asked_of_the_ai_today_waits_for_someone_to_choose_to_ask_again(
         enriching.enrichment.find_details(alice, track_id, NAME)
     clock.advance(ASK_AGAIN_AFTER)
     assert enriching.enrichment.asked_recently(NAME) == []
+
+
+def test_the_tracks_the_ai_may_be_asked_about_say_when_one_asked_today_may_be_asked_again(
+    enriching: Enriching, alice: Account, clock: FakeClock
+) -> None:
+    track_id = enriching.add_track_with_text("Night Drive")
+    other = enriching.add_track_with_text("Album")
+    tomorrow = clock.now + ASK_AGAIN_AFTER
+    _suggested(enriching, alice, track_id)
+
+    today = enriching.enrichment.askable(NAME)
+    clock.advance(ASK_AGAIN_AFTER)
+    a_day_later = enriching.enrichment.askable(NAME)
+
+    assert today == Askable(eligible=(track_id, other), waiting={track_id: tomorrow})
+    assert a_day_later == today
 
 
 def test_asking_the_ai_again_needs_no_wait_of_a_day(enriching: Enriching, alice: Account) -> None:

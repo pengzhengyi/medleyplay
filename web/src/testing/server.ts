@@ -286,7 +286,8 @@ export function enricherOf(
     available: true,
     stopped: null,
     eligible,
-    asked_recently: [],
+    waiting: {},
+    asks_again: false,
     mode: "manual",
     ...change,
   };

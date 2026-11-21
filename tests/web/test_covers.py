@@ -132,7 +132,7 @@ def test_a_thumbnail_made_is_served_and_kept_by_the_browser_for_good(
 @pytest.mark.parametrize(
     "query",
     ["size=medium&recipe=1", "size=small&recipe=0", "size=small&recipe=2"],
-    ids=["a size not made", "an older recipe", "a newer recipe"],
+    ids=["a size not made yet", "an older recipe", "a newer recipe"],
 )
 def test_a_thumbnail_not_there_sends_the_browser_to_the_original_unkept(
     client: TestClient, catalog: CatalogService, tmp_path: Path, query: str
@@ -169,3 +169,18 @@ def test_a_thumbnail_of_no_kept_image_is_not_found(client: TestClient) -> None:
     response = client.get(f"/api/covers/{'0' * 64}?size=small&recipe=1", follow_redirects=False)
 
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize("mark", ["made", "unreadable"])
+def test_an_image_done_without_a_size_sends_the_browser_to_the_original_for_good(
+    client: TestClient, catalog: CatalogService, tmp_path: Path, mark: str
+) -> None:
+    set_up_as_alice(client)
+    name = _kept_with_thumbnail(client, catalog, tmp_path)
+    (tmp_path / "data" / "thumbnails" / str(THUMBNAIL_RECIPE) / f"{name}.{mark}").touch()
+
+    response = client.get(f"/api/covers/{name}?size=medium&recipe=1", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == f"/api/covers/{name}"
+    assert response.headers["cache-control"] == "private, max-age=31536000, immutable"

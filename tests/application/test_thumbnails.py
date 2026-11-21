@@ -234,6 +234,16 @@ def test_a_size_not_made_is_not_found(thumbnails: Thumbnails) -> None:
     assert thumbnails.service.found(name, ThumbnailSize.MEDIUM) is None
 
 
+def test_an_image_is_done_once_its_job_has_answered_for_it(thumbnails: Thumbnails) -> None:
+    name = thumbnails.keep(png_image("small"))
+    thumbnails.service.sweep()
+    before = thumbnails.service.done(name)
+
+    thumbnails.run_until_done()
+
+    assert (before, thumbnails.service.done(name)) == (False, True)
+
+
 @pytest.mark.parametrize("name", ["", "../covers/x", "A" * 64])
 def test_a_name_other_than_a_cover_id_finds_nothing(thumbnails: Thumbnails, name: str) -> None:
     assert thumbnails.service.found(name, ThumbnailSize.SMALL) is None

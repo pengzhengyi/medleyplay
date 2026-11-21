@@ -118,6 +118,16 @@ class ThumbnailService:
             return None
         return None if kind is None or path.is_symlink() else (path, kind)
 
+    def done(self, name: str) -> bool:
+        """Return whether the image `name` is done: thumbnailed, or found unreadable.
+
+        A done image's thumbnails won't change under this recipe, so a size it lacks
+        never will be made.
+        """
+        return _is_cover_id(name) and any(
+            (self._folder / f"{name}{mark}").exists() for mark in (_MADE, _UNREADABLE)
+        )
+
     def sweep(self) -> int:
         """Ask one Job for the images with no thumbnails yet; return how many it asks for.
 

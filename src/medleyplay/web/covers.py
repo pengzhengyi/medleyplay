@@ -35,7 +35,8 @@ def cover(
     """Serve a cover as its bytes say, or its thumbnail of `size` made by `recipe`.
 
     Its name is its content, so a browser keeps it. A thumbnail not made yet, or made
-    by another recipe, sends the browser to the original, without keeping that answer.
+    by another recipe, sends the browser to the original, without keeping that answer;
+    a size a done image has no thumbnail of sends it there for good.
     """
     if (size is None) != (recipe is None):
         message = "Ask for a thumbnail with both a size and a recipe."
@@ -44,12 +45,15 @@ def cover(
     if found is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"There is no cover {name!r}.")
     if size is not None:
-        thumbnail = thumbnails.found(name, size) if recipe == THUMBNAIL_RECIPE else None
+        current = recipe == THUMBNAIL_RECIPE
+        thumbnail = thumbnails.found(name, size) if current else None
         if thumbnail is None:
+            # A done image's missing size is never made, so that answer is kept too.
+            final = current and thumbnails.done(name)
             return RedirectResponse(
                 f"/api/covers/{name}",
                 status.HTTP_307_TEMPORARY_REDIRECT,
-                headers={"Cache-Control": "no-store"},
+                headers={"Cache-Control": _CACHED if final else "no-store"},
             )
         found = thumbnail
     path, kind = found

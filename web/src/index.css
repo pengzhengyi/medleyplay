@@ -1254,7 +1254,7 @@ button[aria-disabled="true"] {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template: 1fr 2fr / 1fr 1fr;
+  grid-template: 1fr 1fr / 1fr 1fr;
   margin: 0;
   overflow: hidden;
   border-radius: 50%;
@@ -9458,4 +9458,59 @@ small.ai-set-up-hint {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The rail's views in Settings › Appearance, each dragged by its handle or moved a place. */
+.rail-order {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+  max-width: 22rem;
+}
+
+.rail-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rail-order-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.15rem 0.25rem;
+  border-radius: 0.6rem;
+}
+
+.rail-order-row.dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+.rail-order-name {
+  flex: 1;
+}
+
+button.rail-order-handle {
+  width: 1.75rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.rail-order-row.dragging .rail-order-handle {
+  cursor: grabbing;
+}
+
+/* A view being dragged to another place in the rail. */
+.views-list li.dragging {
+  position: relative;
+  z-index: 1;
+  opacity: 0.85;
 }

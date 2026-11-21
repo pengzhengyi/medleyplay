@@ -413,9 +413,9 @@ used, and one used becomes the household's photo.
   picture whose artist goes by one of the artist's names, exactly before holding
   one, as *Jay Chou* holds *周杰伦* in *周杰伦 Jay Chou*; a picture matching no name
   is never suggested. It is ringed in dashes and tagged *Suggested* or *AI pick*,
-  says why on hover, and is its own controls: its lower two thirds (✓) make it
-  the household's photo, the right half of its top third (✕) dismisses it, and the
-  left half (✎) opens the photo editor to choose another; the ring turns green, red, or solid
+  says why on hover, and is its own controls: its lower half (✓) makes it
+  the household's photo, the right half of its top half (✕) dismisses it, and the
+  left (✎) opens the photo editor to choose another; the ring turns green, red, or solid
   as each is pointed at or focused.
 - **Dismissed for good:** a picture dismissed is kept in `artist_picture_search`
   (`dismissed`) and never suggested again, even when the pictures are found again, as

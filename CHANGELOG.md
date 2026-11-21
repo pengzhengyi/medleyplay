@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Choose the order of the views in the rail** — drag a view to another place in
+  the rail, or move it in Settings › Appearance, where *Reset order* goes back to
+  the default; each browser keeps its own order. Radio now sits below Albums and
+  above Playlists by default.
+
 - **Find a song's lyrics by hand** — the lyrics editor's *Find* lists the songs
   LRCLIB, and NetEase once turned on, have of a title and artist you can change, each
   with its site, album, length, kind, and first lines; *Use* fills the editor with
@@ -30,8 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   going through *Edit details*.
 
 - **A suggested photo is its own controls** — on an artist's page and in Clean up,
-  its lower two thirds use it, its top third's right half dismisses it (never suggested
-  again), and its left half opens the photo editor; the ring turns green or red to say which.
+  its lower half uses it, its top half's right quarter dismisses it (never suggested
+  again), and its left quarter opens the photo editor; the ring turns green or red to say which.
   An artist's photo opens the photo editor from the page itself. New:
   `POST /api/artists/{id}/pictures/dismiss` (migration 0056).
 
@@ -776,6 +781,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- **The player names the song of a split file** — a file playing whole after it was
+  split into songs showed its own title (such as the video's BV code) in the player;
+  it now names the song it has reached, as Now Playing does.
+
+- **The songs editor's way back** — *Details* at the top of the songs editor opened
+  from *Split into songs* now shows the song's details; it closed the dialog. Saving
+  the songs still closes it.
 
 - **Adding from Bilibili answers at once** — its dialog opens the moment Enter is
   pressed, saying it looks the video up, rather than after its code loads; and a

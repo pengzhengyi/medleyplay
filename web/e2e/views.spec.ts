@@ -101,3 +101,35 @@ test("an album's tile asks for a thumbnail of its cover, and shows the original 
     await page.request.delete(`/api/tracks/${String(bravo)}/cover`);
   }
 });
+
+test("dragging a view to another place in the rail keeps it there after a reload, and a click still opens it", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const links = nav(page).getByRole("link");
+  await expect(links.first()).toHaveAccessibleName("Library");
+  const radio = nav(page).getByRole("link", { name: "Radio" });
+  const library = nav(page).getByRole("link", { name: "Library" });
+
+  const from = await radio.boundingBox();
+  const to = await library.boundingBox();
+  if (from === null || to === null) {
+    throw new Error("The rail isn't shown.");
+  }
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 12, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + 2, { steps: 12 });
+  await page.mouse.up();
+  await expect(links.first()).toHaveAccessibleName("Radio");
+  await expect(page).not.toHaveURL(/#\/radio/);
+  await page.reload();
+  await expect(links.first()).toHaveAccessibleName("Radio");
+
+  await radio.click();
+
+  await expect(page).toHaveURL(/#\/radio/);
+  await page.evaluate(() => {
+    localStorage.removeItem("medleyplay.rail-order");
+  });
+});

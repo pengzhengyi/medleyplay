@@ -12,56 +12,31 @@
  */
 
 import {
-  BroomIcon,
+  DndContext,
+  type DragEndEvent,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   CaretDoubleLeftIcon,
   CaretDoubleRightIcon,
   CaretDownIcon,
   CornersInIcon,
   CornersOutIcon,
-  ChartBarIcon,
-  DownloadSimpleIcon,
-  GearSixIcon,
-  type Icon,
-  MicrophoneStageIcon,
   MusicNotesSimpleIcon,
-  PlaylistIcon,
-  RadioIcon,
   SignOutIcon,
-  VinylRecordIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
+import type { ReactNode } from "react";
 
-import { VIEW_LABELS } from "../rail";
+import { type RailView, setRailOrder, useRailOrder } from "../railOrder";
+import { type RailEntry, type Top, railEntriesIn } from "./railViews";
 import { type Route, hrefOf } from "../routes";
-
-type Top =
-  | "library"
-  | "radio"
-  | "artists"
-  | "albums"
-  | "downloaded"
-  | "playlists"
-  | "insights"
-  | "settings"
-  | "clean-up";
-
-const TOPS: readonly {
-  readonly view: Top;
-  readonly label: string;
-  readonly icon: Icon;
-  /** Shown under the view before it, and left out of a phone's tab bar. */
-  readonly under?: boolean;
-}[] = [
-  { view: "library", label: VIEW_LABELS.library, icon: MusicNotesSimpleIcon },
-  { view: "radio", label: VIEW_LABELS.radio, icon: RadioIcon },
-  { view: "artists", label: VIEW_LABELS.artists, icon: MicrophoneStageIcon },
-  { view: "albums", label: VIEW_LABELS.albums, icon: VinylRecordIcon },
-  { view: "playlists", label: VIEW_LABELS.playlists, icon: PlaylistIcon },
-  { view: "downloaded", label: VIEW_LABELS.downloaded, icon: DownloadSimpleIcon },
-  { view: "insights", label: VIEW_LABELS.insights, icon: ChartBarIcon },
-  { view: "clean-up", label: VIEW_LABELS["clean-up"], icon: BroomIcon, under: true },
-  { view: "settings", label: VIEW_LABELS.settings, icon: GearSixIcon },
-];
 
 /** The top view a route belongs to: an artist's Tracks belong to Artists, and so on. */
 function topOf(route: Route): Top | undefined {
@@ -118,6 +93,45 @@ export function Nav({
     view === "downloaded"
       ? `${String(downloading)} ${downloading === 1 ? "song" : "songs"} downloading`
       : waiting;
+  const order = useRailOrder();
+  const entries = railEntriesIn(order);
+  const sensors = useSensors(
+    // A mouse moves a little first, so a click still opens the view; a finger holds a
+    // moment first, so a tap opens it and a swipe scrolls the tab bar.
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
+  );
+  const drop = ({ active, over }: DragEndEvent) => {
+    swallowNextClick();
+    const from = order.indexOf(active.id as RailView);
+    const to = over === null ? -1 : order.indexOf(over.id as RailView);
+    if (from >= 0 && to >= 0 && from !== to) {
+      setRailOrder(arrayMove([...order], from, to));
+    }
+  };
+  const linkOf = ({ view, label, icon: ViewIcon }: RailEntry) => {
+    const current = view === top;
+    const count = countOf(view);
+    const counted = count > 0;
+    const named = counted ? `${label}, ${saying(view)}` : label;
+    return (
+      <a
+        className="view-link"
+        href={hrefOf({ view })}
+        aria-current={current ? "page" : undefined}
+        aria-label={counted ? named : undefined}
+        title={collapsed ? named : undefined}
+      >
+        <ViewIcon weight={current ? "fill" : "regular"} aria-hidden />
+        <span>{label}</span>
+        {counted && (
+          <span className={view === "insights" ? "view-count on-phone" : "view-count"} aria-hidden>
+            {count}
+          </span>
+        )}
+      </a>
+    );
+  };
   const className = ["views", collapsed && "collapsed", minimized && "minimized"]
     .filter(Boolean)
     .join(" ");
@@ -158,36 +172,28 @@ export function Nav({
           )}
         </div>
       )}
-      <ul className="views-list">
-        {TOPS.map(({ view, label, icon: ViewIcon, under = false }) => {
-          const current = view === top;
-          const count = countOf(view);
-          const counted = count > 0;
-          const named = counted ? `${label}, ${saying(view)}` : label;
-          return (
-            <li key={view} className={under ? "under" : undefined}>
-              <a
-                className="view-link"
-                href={hrefOf({ view })}
-                aria-current={current ? "page" : undefined}
-                aria-label={counted ? named : undefined}
-                title={collapsed ? named : undefined}
-              >
-                <ViewIcon weight={current ? "fill" : "regular"} aria-hidden />
-                <span>{label}</span>
-                {counted && (
-                  <span
-                    className={view === "insights" ? "view-count on-phone" : "view-count"}
-                    aria-hidden
-                  >
-                    {count}
-                  </span>
-                )}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={drop}
+        onDragCancel={swallowNextClick}
+      >
+        <SortableContext items={[...order]} strategy={rectSortingStrategy}>
+          <ul className="views-list">
+            {entries.map((entry) =>
+              isMovable(entry.view) ? (
+                <MovableView key={entry.view} view={entry.view}>
+                  {linkOf(entry)}
+                </MovableView>
+              ) : (
+                <li key={entry.view} className={entry.under === true ? "under" : undefined}>
+                  {linkOf(entry)}
+                </li>
+              ),
+            )}
+          </ul>
+        </SortableContext>
+      </DndContext>
       {account !== undefined && (
         <div className="views-foot">
           <AccountMenu account={account} collapsed={collapsed} />
@@ -209,7 +215,8 @@ function ViewMenu({
   readonly downloading: number;
   readonly account: NavAccount | undefined;
 }) {
-  const shown = TOPS.find(({ view }) => view === top);
+  const entries = railEntriesIn(useRailOrder());
+  const shown = entries.find(({ view }) => view === top);
   const ShownIcon = shown?.icon ?? MusicNotesSimpleIcon;
   const label = shown?.label ?? "Search";
   return (
@@ -228,7 +235,7 @@ function ViewMenu({
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Content className="track-menu" align="start" sideOffset={4} collisionPadding={8}>
-          {TOPS.map(({ view, label: name, icon: ViewIcon }) => (
+          {entries.map(({ view, label: name, icon: ViewIcon }) => (
             <Menu.Item key={view} className="track-menu-item" asChild>
               <a href={hrefOf({ view })} aria-current={view === top ? "page" : undefined}>
                 <ViewIcon className="track-menu-icon" aria-hidden />
@@ -304,4 +311,47 @@ export function AccountMenu({
       </Menu.Portal>
     </Menu.Root>
   );
+}
+
+/** Whether a browser may move `view` in the rail: not Clean up, under Insights, nor Settings. */
+function isMovable(view: Top): view is RailView {
+  return view !== "clean-up" && view !== "settings";
+}
+
+/** A view the rail lets a mouse or a finger drag to another place. */
+function MovableView({
+  view,
+  children,
+}: {
+  readonly view: RailView;
+  readonly children: ReactNode;
+}) {
+  // Only the pointer's listeners: the link keeps its own role, and Enter still opens it.
+  // Settings › Appearance moves views by keyboard.
+  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id: view });
+  return (
+    <li
+      ref={setNodeRef}
+      className={isDragging ? "dragging" : undefined}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      {...listeners}
+    >
+      {children}
+    </li>
+  );
+}
+
+/** How long after a drop its click may come, in milliseconds. */
+const CLICK_AFTER_DROP_MS = 300;
+
+/** Keep the click that follows letting go of a dragged link from opening its view. */
+function swallowNextClick(): void {
+  const swallow = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  setTimeout(() => {
+    window.removeEventListener("click", swallow, { capture: true });
+  }, CLICK_AFTER_DROP_MS);
 }

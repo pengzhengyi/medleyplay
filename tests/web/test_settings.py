@@ -21,6 +21,8 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "picture_sites": [],
         "pick_pictures_by_ai": False,
         "find_artist_photos": "up_next",
+        "find_album_covers": "up_next",
+        "pick_album_covers_by_ai": False,
         "revision": 0,
     }
 
@@ -175,6 +177,43 @@ def test_an_unknown_picture_site_is_refused(client: TestClient) -> None:
 
     refused = client.put(
         "/api/settings", json={"storage_limit": None, "picture_sites": ["spotify"], "revision": 0}
+    )
+
+    assert refused.status_code == 422
+
+
+def test_an_admin_has_every_missing_album_cover_found_and_saving_without_it_keeps_it(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    chosen = client.put(
+        "/api/settings",
+        json={
+            "storage_limit": None,
+            "find_album_covers": "missing",
+            "pick_album_covers_by_ai": True,
+            "revision": 0,
+        },
+    )
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert (chosen.json()["find_album_covers"], chosen.json()["pick_album_covers_by_ai"]) == (
+        "missing",
+        True,
+    )
+    assert (saved.json()["find_album_covers"], saved.json()["pick_album_covers_by_ai"]) == (
+        "missing",
+        True,
+    )
+
+
+def test_finding_album_covers_is_one_of_three_choices(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    refused = client.put(
+        "/api/settings",
+        json={"storage_limit": None, "find_album_covers": "always", "revision": 0},
     )
 
     assert refused.status_code == 422

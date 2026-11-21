@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from medleyplay.plugin_api import (
     FETCH_IMAGE,
+    MAX_HINT,
     MAX_IMAGE_LINKS,
     MAX_NAME,
     MAX_SONGS_SHOWN,
@@ -37,12 +38,16 @@ class _Model(BaseModel):
 
 
 class SuggestImagesJob(_Model):
-    """Ask `suggester` for links to a picture of `name`, an album by `artist`, or an artist."""
+    """Ask `suggester` for links to a picture of `name`, an album by `artist`, or an artist.
+
+    `hint` is what the listener wrote for the AI, or empty.
+    """
 
     subject: ImageSubject
     name: _Name
     artist: _Artist = ""
     songs: Annotated[tuple[_Name, ...], Field(max_length=MAX_SONGS_SHOWN)] = ()
+    hint: Annotated[str, StringConstraints(max_length=MAX_HINT)] = Field(default="", repr=False)
     suggester: _Key = "ai-details"
 
 
@@ -62,6 +67,7 @@ def run_suggest(request: SuggestImagesJob, context: JobContext) -> SuggestedImag
         name=request.name,
         artist=request.artist,
         songs=request.songs,
+        hint=request.hint,
         ai=context.ai,
     )
     answer = context.call(SUGGEST_IMAGES, request.suggester, asking)

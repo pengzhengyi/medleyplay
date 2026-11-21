@@ -153,11 +153,19 @@ class CatalogService:
         self._changed("catalog")
         return added
 
-    def list_tracks(self, account_id: AccountId) -> list[Track]:
-        """Return every Track, oldest first, with `account_id`'s own state."""
+    def online(self) -> bool:
+        """Return whether the Mode is Online, which decides what can play."""
+        return self._online()
+
+    def list_tracks(self, account_id: AccountId, *, online: bool | None = None) -> list[Track]:
+        """Return every Track, oldest first, with `account_id`'s own state.
+
+        What can play follows `online`, or the Mode now when it is `None`.
+        """
+        online = self._online() if online is None else online
         with self._units() as db:
             rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
-            available = _availability(db, select(SourceRow), online=self._online())
+            available = _availability(db, select(SourceRow), online=online)
             downloaded = _downloaded(db, select(SourceRow.track_id))
             sites = _site_sources(db)
             failed = _download_failed(db, sites, downloaded)

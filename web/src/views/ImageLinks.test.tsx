@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PictureLinks, Pictured, SuggestedLink } from "../api";
 import { serve } from "../testing/server";
 import { ImageLinks } from "./ImageLinks";
+import { AiSetUpContext } from "./aiSetUp";
 
 const HELP: Pictured = { kind: "album", album: "Help!", artist: "The Beatles" };
 const COVER_LINK = "https://upload.wikimedia.org/wikipedia/en/e/e7/Help.jpg";
@@ -87,19 +88,86 @@ describe("pictures an AI model suggests", () => {
     expect(calls.filter((call) => call.startsWith("POST"))).toEqual([]);
   });
 
-  it("asks the AI only when asked to", async () => {
+  it("asks the AI on opening when it was never asked", async () => {
+    let asked: unknown;
     const { calls } = serve({
       [LINKS]: reading(UNASKED, helpSuggested()),
-      "POST /api/image-links/album/suggest": { status: 202, body: null },
+      "POST /api/image-links/album/suggest": (body) => {
+        asked = body;
+        return { status: 202, body: null };
+      },
     });
-    suggestions();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+    suggestions();
 
     expect(await screen.findByRole("button", { name: /from covers\.example\.org/u })).toBeVisible();
     expect(calls.filter((call) => call.startsWith("POST"))).toEqual([
       "POST /api/image-links/album/suggest",
     ]);
+    expect(asked).toEqual({ album: "Help!", artist: "The Beatles", hint: "" });
+  });
+
+  it("asks nothing on opening while the AI is being asked", async () => {
+    const { calls } = serve({ [LINKS]: { body: { ...UNASKED, asking: true } } });
+
+    suggestions();
+
+    expect(await screen.findByText("Asking the AI for pictures…")).toBeVisible();
+    expect(calls.filter((call) => call.startsWith("POST"))).toEqual([]);
+  });
+
+  it("asks nothing on opening without an AI provider, and says how to set one up", async () => {
+    const { calls } = serve({ [LINKS]: { body: UNASKED } });
+
+    render(
+      <AiSetUpContext value={{ missing: true, admin: true }}>
+        <ImageLinks pictured={HELP} shown={null} onUse={vi.fn()} />
+      </AiSetUpContext>,
+    );
+
+    expect(await screen.findByText(/No AI provider is set up\./u)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Set up AI" })).toBeVisible();
+    expect(calls.filter((call) => call.startsWith("POST"))).toEqual([]);
+  });
+
+  it("asks again with a note of what the listener wants", async () => {
+    let asked: unknown;
+    serve({
+      [LINKS]: { body: helpSuggested() },
+      "POST /api/image-links/album/suggest": (body) => {
+        asked = body;
+        return { status: 202, body: null };
+      },
+    });
+    suggestions();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ask again" }));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Anything the AI should know?" }),
+      "the 1997 first pressing{Enter}",
+    );
+
+    await waitFor(() => {
+      expect(asked).toEqual({
+        album: "Help!",
+        artist: "The Beatles",
+        hint: "the 1997 first pressing",
+      });
+    });
+  });
+
+  it("puts the note away on Escape, asking nothing", async () => {
+    const { calls } = serve({ [LINKS]: { body: helpSuggested() } });
+    suggestions();
+    await userEvent.click(await screen.findByRole("button", { name: "Ask again" }));
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Anything the AI should know?" }),
+      "{Escape}",
+    );
+
+    expect(screen.queryByRole("textbox", { name: "Anything the AI should know?" })).toBeNull();
+    expect(calls.filter((call) => call.startsWith("POST"))).toEqual([]);
   });
 
   it("says when the AI knows no picture", async () => {

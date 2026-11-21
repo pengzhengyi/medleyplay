@@ -110,7 +110,9 @@ export function ArtistAbout({
       {covers.length === 0 ? (
         <span className="artist-initial">{initialOf(name)}</span>
       ) : (
-        covers.map((cover) => <Cover key={cover} cover={cover} className="artist-tile" />)
+        covers.map((cover) => (
+          <Cover size="medium" key={cover} cover={cover} className="artist-tile" />
+        ))
       )}
     </div>
   );
@@ -119,7 +121,7 @@ export function ArtistAbout({
       mosaic
     ) : (
       <div className="artist-art tiles-1" role="img" aria-label={`Photo of ${name}`}>
-        <Cover cover={photo} className="artist-tile">
+        <Cover size="medium" cover={photo} className="artist-tile">
           <span className="artist-initial">{initialOf(name)}</span>
         </Cover>
       </div>
@@ -132,7 +134,7 @@ export function ArtistAbout({
       <PictureFrame
         className="artist-frame"
         replaceLabel={photo === null ? "Add a photo" : "Replace the photo"}
-        save={photo === null ? undefined : { href: coverUrl(photo), name }}
+        save={photo === null ? undefined : { href: coverUrl(photo, "original"), name }}
         onReplace={() => {
           setReplacing(true);
         }}

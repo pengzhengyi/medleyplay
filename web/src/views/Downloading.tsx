@@ -39,7 +39,7 @@ export function Downloading({
             download.job.state === "running" ? (download.job.progress?.fraction ?? null) : 0;
           return (
             <li key={download.job.id} className="downloading-row">
-              <Cover cover={track.cover} className="downloading-cover" />
+              <Cover size="small" cover={track.cover} className="downloading-cover" />
               <span className="downloading-names">
                 <span className="downloading-title">{track.title}</span>
                 <span className="downloading-artist">{track.artist}</span>

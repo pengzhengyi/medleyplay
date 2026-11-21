@@ -46,6 +46,44 @@ test("a favorite and a rating are kept by the server", async ({ page }) => {
   );
 });
 
+/** The answers the server caches: the songs, and what is read beside them. */
+const CACHED = [
+  "/api/tracks",
+  "/api/artist-names",
+  "/api/names-to-tidy",
+  "/api/split-offers",
+  "/api/artist-splits",
+  "/api/shared-names",
+  "/api/artist-photos/missing",
+];
+
+/** Wait for each cached answer once; return each one's status, by path. */
+const cachedAnswers = (page: Page) =>
+  Promise.all(
+    CACHED.map(async (path) => {
+      const response = await page.waitForResponse(
+        (each) => new URL(each.url()).pathname === path && each.request().method() === "GET",
+      );
+      return [path, response.status()] as const;
+    }),
+  );
+
+test("returning to the page with nothing changed reads each cached answer as unchanged", async ({
+  page,
+}) => {
+  const first = cachedAnswers(page);
+  await page.goto("/");
+  await first;
+
+  // Other tests write as this one runs: a return with no write between it and the last is
+  // all unchanged.
+  await expect(async () => {
+    const again = cachedAnswers(page);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(await again).toEqual(CACHED.map((path) => [path, 304]));
+  }).toPass({ timeout: 30_000 });
+});
+
 test("sorting by time plays from the sorted order", async ({ page }) => {
   await page.goto("/");
 

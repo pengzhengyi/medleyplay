@@ -156,6 +156,98 @@ describe("the Library", () => {
   });
 });
 
+describe("when the Library may have changed", () => {
+  it("counts a refresh with each load, and none for a heart given", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "PUT /api/tracks/1/favorite": { body: trackOf(1, "Intro", { favorite: true }) },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const first = result.current.refreshes;
+
+    act(() => {
+      result.current.setFavorite(1, true);
+    });
+    await waitFor(() => {
+      expect(result.current.tracks.get(1)?.favorite).toBe(true);
+    });
+    const afterHeart = result.current.refreshes;
+    act(() => {
+      stream().send("tracks");
+    });
+
+    expect(afterHeart).toBe(first);
+    await waitFor(() => {
+      expect(result.current.refreshes).toBe(first + 1);
+    });
+  });
+
+  it("counts a refresh a moment after any Job ends, without asking for the Tracks again", async () => {
+    const { calls } = serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const before = result.current.refreshes;
+    vi.useFakeTimers();
+
+    act(() => {
+      stream().send("job", { id: 4, kind: "find_artist_pictures", state: "succeeded" });
+      stream().send("job", { id: 5, kind: "find_artist", state: "failed" });
+    });
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    const meanwhile = result.current.refreshes;
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+
+    expect(meanwhile).toBe(before);
+    expect(result.current.refreshes).toBe(before + 1);
+    expect(asked(calls)).toBe(1);
+  });
+
+  it("counts no refresh when only a Job making thumbnails ends", async () => {
+    serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const before = result.current.refreshes;
+    vi.useFakeTimers();
+
+    act(() => {
+      stream().send("job", { id: 6, kind: "make_thumbnails", state: "succeeded" });
+    });
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(result.current.refreshes).toBe(before);
+  });
+
+  it("counts a refresh once the Tracks are read again after a change made here", async () => {
+    serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const before = result.current.refreshes;
+
+    act(() => {
+      result.current.reloadTracks();
+    });
+
+    await waitFor(() => {
+      expect(result.current.refreshes).toBe(before + 1);
+    });
+  });
+});
+
 describe("remote play", () => {
   it("names this page on the event stream", () => {
     serve(signedIn([]));
@@ -529,6 +621,64 @@ describe("finding a song's details online", () => {
     expect(asked).toEqual({ enricher: "musicbrainz", state: "queued", message: "" });
     expect(running?.state).toBe("running");
     expect(result.current.lookups.get(1)?.state).toBe("succeeded");
+  });
+
+  it("stops a lookup asked for, cancelling its Job and offering it again", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 7, state: "queued", failure_message: "" },
+      },
+      "POST /api/jobs/7/cancel": { body: { id: 7, state: "cancelled", failure_message: "" } },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+    await act(async () => {
+      await result.current.find("musicbrainz", 1);
+    });
+
+    await act(async () => {
+      await result.current.stopFinding(1);
+    });
+
+    expect(calls).toContain("POST /api/jobs/7/cancel");
+    expect(result.current.lookups.get(1)).toBeUndefined();
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+  });
+
+  it("cancels a lookup stopped before the server answered asking for it", async () => {
+    let answer: (value?: unknown) => void = () => undefined;
+    const answered = new Promise((resolve) => {
+      answer = resolve;
+    });
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "POST /api/enrichers/musicbrainz/tracks/1": {
+        body: { id: 8, state: "queued", failure_message: "" },
+        after: answered,
+      },
+      "POST /api/jobs/8/cancel": { body: { id: 8, state: "cancelled", failure_message: "" } },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(findableBy(result.current, "musicbrainz")).toEqual([1]);
+    });
+
+    await act(async () => {
+      const asking = result.current.find("musicbrainz", 1);
+      await result.current.stopFinding(1);
+      answer();
+      await asking;
+    });
+
+    expect(calls).toContain("POST /api/jobs/8/cancel");
+    expect(result.current.lookups.get(1)).toBeUndefined();
   });
 
   it("lets a finished lookup go after a moment", async () => {

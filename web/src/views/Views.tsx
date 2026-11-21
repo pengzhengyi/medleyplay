@@ -41,6 +41,7 @@ import {
   type Artist,
   albumsOf,
   albumFileOf,
+  artistsCalled,
   artistsOf,
   downloadedOf,
   favoritesOf,
@@ -56,6 +57,7 @@ import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../l
 import { querySaid } from "../library/query";
 import { isRailNamed } from "../rail";
 import { type Route, hrefOf, navigate } from "../routes";
+import { AlbumAbout } from "./AlbumAbout";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
@@ -133,6 +135,7 @@ export interface ViewProps {
   readonly missingPhotos?: {
     readonly artists: readonly MissingPhoto[];
     readonly reload: () => void;
+    readonly answered: number;
   };
   /** How many names wait to be cleaned up. */
   readonly toDo?: number;
@@ -191,6 +194,36 @@ function viewOf(given: ViewProps) {
     case "artists":
       return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
     case "artist": {
+      // A link by a name alone that names several artists, as links once were, asks which.
+      const called =
+        route.id === undefined
+          ? props.artistNames?.names.names.find(
+              (each) => fold(each.name.trim()) === fold(route.name.trim()),
+            )?.artist_ids
+          : undefined;
+      const choices =
+        called !== undefined && called.length > 1 && props.links !== undefined
+          ? artistsCalled(props.tracks, props.links, called)
+          : [];
+      if (choices.length > 1) {
+        return (
+          <>
+            <ViewHeading
+              title={`Which ${route.name}?`}
+              back={{ view: "artists" }}
+              backLabel="Artists"
+            >
+              {`${String(choices.length)} artists go by this name`}
+            </ViewHeading>
+            <ArtistList
+              artists={choices}
+              favorites={props.favorites}
+              links={props.links}
+              label={`Artists called ${route.name}`}
+            />
+          </>
+        );
+      }
       // A page opened by an artist's id shows its songs by the name most of them write.
       const name =
         (route.id === undefined ? undefined : artistWrittenOf(props.tracks, route.id)) ??
@@ -276,6 +309,7 @@ function viewOf(given: ViewProps) {
         <Songs
           title={route.name || UNKNOWN_ALBUM}
           subtitle={route.artist || UNKNOWN_ARTIST}
+          subtitleTo={route.artist === "" ? undefined : { view: "artist", name: route.artist }}
           back={{ view: "albums" }}
           backLabel="Albums"
           heart={
@@ -311,7 +345,23 @@ function viewOf(given: ViewProps) {
               </button>
             )
           }
-          about={<AlbumRatingNote artist={route.artist} album={route.name} />}
+          about={
+            <AlbumAbout
+              album={route.name}
+              artist={route.artist}
+              // A split file's songs share its cover, so the file is what changes.
+              songs={file === undefined ? songs : [file]}
+              cover={file?.cover ?? albumsOf(songs)[0]?.cover ?? null}
+              {...(route.name === ""
+                ? {}
+                : {
+                    onUse: props.actions.onUseAlbumCover,
+                    onUpload: props.actions.onUploadAlbumCover,
+                  })}
+            >
+              <AlbumRatingNote artist={route.artist} album={route.name} />
+            </AlbumAbout>
+          }
           {...props}
           empty={<p className="empty">No songs from this album are in your Library now.</p>}
         >
@@ -427,6 +477,7 @@ const showFocused = () => {
 function Songs({
   title,
   subtitle,
+  subtitleTo,
   back,
   backLabel,
   heart,
@@ -438,7 +489,9 @@ function Songs({
   actions,
 }: Omit<ViewProps, "tracks" | "route" | "playlists" | "admin" | "onEnrichersChanged"> & {
   readonly title: string;
+  /** Who the view is by, under its title; a route to their page makes it a link. */
   readonly subtitle?: string | undefined;
+  readonly subtitleTo?: Route | undefined;
   readonly back?: Route;
   readonly backLabel?: string;
   /** A heart beside the title, for an artist or album that can be a favorite. */
@@ -455,6 +508,7 @@ function Songs({
       <ViewHeading
         title={title}
         subtitle={subtitle}
+        subtitleTo={subtitleTo}
         back={back}
         backLabel={backLabel}
         heart={heart}
@@ -471,6 +525,7 @@ function Songs({
 function ViewHeading({
   title,
   subtitle,
+  subtitleTo,
   back,
   backLabel,
   heart,
@@ -479,6 +534,8 @@ function ViewHeading({
 }: {
   readonly title: string;
   readonly subtitle?: string | undefined;
+  /** The page of who `subtitle` names, making it a link. */
+  readonly subtitleTo?: Route | undefined;
   readonly back?: Route | undefined;
   readonly backLabel?: string | undefined;
   readonly heart?: ReactNode;
@@ -509,7 +566,11 @@ function ViewHeading({
           {title}
         </h2>
       )}
-      {subtitle !== undefined && <p className="subtitle">{subtitle}</p>}
+      {subtitle !== undefined && (
+        <p className="subtitle">
+          {subtitleTo === undefined ? subtitle : <a href={hrefOf(subtitleTo)}>{subtitle}</a>}
+        </p>
+      )}
       {children !== undefined && children !== false && <p className="meta">{children}</p>}
     </header>
   );
@@ -543,13 +604,15 @@ function ArtistList({
   artists,
   favorites,
   links = NO_LINKS,
+  label = "Artists",
 }: {
   readonly artists: readonly Artist[];
   readonly favorites: FavoriteGroups;
   readonly links: ArtistLinks | undefined;
+  readonly label?: string;
 }) {
   return (
-    <ul className="groups" aria-label="Artists">
+    <ul className="groups" aria-label={label}>
       {artists.map((artist) => (
         <li
           key={artist.id ?? artist.link}
@@ -564,6 +627,7 @@ function ArtistList({
           >
             <span className="tile-frame">
               <Cover
+                size="medium"
                 cover={links.photoOf(links.groupOfBound(artist.link, artist.id))}
                 className="avatar"
               >
@@ -691,7 +755,7 @@ function AlbumList({
           <li key={`${album.artist}\n${album.name}`} className={favorite ? "favorite" : ""}>
             <a href={hrefOf({ view: "album", artist: album.artist, name: album.name })}>
               <span className="tile-frame">
-                <Cover cover={album.cover} className="cover-tile">
+                <Cover size="medium" cover={album.cover} className="cover-tile">
                   {initialOf(album.name)}
                 </Cover>
                 {favorite && <FavoriteBadge />}

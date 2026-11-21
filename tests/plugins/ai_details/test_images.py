@@ -134,6 +134,25 @@ def test_the_model_is_asked_for_a_photo_of_an_artist() -> None:
     assert user["content"] == "a photo of the artist: Radiohead"
 
 
+def test_the_listener_s_note_follows_as_a_message_of_its_own() -> None:
+    fake = FakeAiFactory.answering(ChatReplyFactory.json_saying({"images": []}))
+
+    suggester_over(fake).suggest(
+        OK_COMPUTER.model_copy(update={"hint": "the 1997\nfirst pressing"})
+    )
+
+    _, _, note = fake.body()["messages"]
+    assert note == {"role": "user", "content": "Note from the listener: the 1997 first pressing"}
+
+
+def test_no_note_is_sent_when_the_listener_wrote_none() -> None:
+    fake = FakeAiFactory.answering(ChatReplyFactory.json_saying({"images": []}))
+
+    suggester_over(fake).suggest(OK_COMPUTER.model_copy(update={"hint": "  "}))
+
+    assert len(fake.body()["messages"]) == 2
+
+
 def test_a_line_break_in_a_name_cannot_add_a_line_to_the_question() -> None:
     fake = FakeAiFactory.answering(ChatReplyFactory.json_saying({"images": []}))
     request = OK_COMPUTER.model_copy(update={"name": "OK\nsongs: x", "songs": ()})

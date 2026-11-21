@@ -151,9 +151,6 @@ export function EditDetails({
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const close = () => {
-    dialog.current?.close();
-  };
   const [details, setDetails] = useState<Details | undefined>(undefined);
   const [own, setOwn] = useState<Own>({});
   // The song's artists as chips, or `undefined` while it has one artist in a box.
@@ -591,14 +588,6 @@ export function EditDetails({
         )}
         <footer className="dialog-buttons">
           <button
-            type="button"
-            className="secondary outline dialog-button"
-            disabled={saving || reading || covering}
-            onClick={close}
-          >
-            {changed ? "Cancel" : "Close"}
-          </button>
-          <button
             type="submit"
             className="dialog-button"
             disabled={!changed || saving || reading || covering}
@@ -741,7 +730,7 @@ function CoverBox({
     <div className="cover-box">
       <PictureFrame
         replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
-        save={cover === undefined ? undefined : { href: coverUrl(cover), name: title }}
+        save={cover === undefined ? undefined : { href: coverUrl(cover, "original"), name: title }}
         removeLabel="Remove your cover"
         busy={busy}
         saving={covering ? "Saving the cover…" : undefined}
@@ -752,7 +741,7 @@ function CoverBox({
           {cover === undefined ? (
             <MusicNotesIcon weight="duotone" aria-hidden />
           ) : (
-            <img src={coverUrl(cover)} alt="Cover" />
+            <img src={coverUrl(cover, "original")} alt="Cover" />
           )}
         </span>
       </PictureFrame>

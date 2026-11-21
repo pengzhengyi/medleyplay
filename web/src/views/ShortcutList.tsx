@@ -33,9 +33,6 @@ export function ShortcutList({ onClose }: { readonly onClose: () => void }) {
           <a className="change-keys" href={hrefOf({ view: "settings" })} onClick={close}>
             Change them in Settings
           </a>
-          <button type="button" className="dialog-button" onClick={close}>
-            Close
-          </button>
         </footer>
       </div>
     </Modal>

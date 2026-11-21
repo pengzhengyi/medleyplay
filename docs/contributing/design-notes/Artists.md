@@ -413,9 +413,9 @@ used, and one used becomes the household's photo.
   picture whose artist goes by one of the artist's names, exactly before holding
   one, as *Jay Chou* holds *周杰伦* in *周杰伦 Jay Chou*; a picture matching no name
   is never suggested. It is ringed in dashes and tagged *Suggested* or *AI pick*,
-  says why on hover, and is its own controls: its lower half (✓) makes it the
-  household's photo, its upper right quarter (✕) dismisses it, and its upper left
-  (✎) opens the photo editor to choose another; the ring turns green, red, or solid
+  says why on hover, and is its own controls: its lower two thirds (✓) make it
+  the household's photo, the right half of its top third (✕) dismisses it, and the
+  left half (✎) opens the photo editor to choose another; the ring turns green, red, or solid
   as each is pointed at or focused.
 - **Dismissed for good:** a picture dismissed is kept in `artist_picture_search`
   (`dismissed`) and never suggested again, even when the pictures are found again, as
@@ -551,7 +551,7 @@ not.
   ([Track details](Track%20details.md#replacing-a-cover-or-a-photo)), uploading one
   or asking an AI model, or, when it is the household's, remove at once; *Shown as*, offering every name it goes by, with
   the songs' own name as its placeholder; and *About*. *Save* keeps the name and
-  the note together; until then *Cancel* forgets them. *Ask AI* above the fields
+  the note together; until then closing forgets them. *Ask AI* above the fields
   asks a model for a name and a note, reads *Asking the AI…* with one spinner
   while it is, or *Asking the AI once medleyplay is Online* while it waits, and
   reads its answer every 2 seconds until it comes; each
@@ -561,8 +561,10 @@ not.
 - **Two artists of one name are two:** in the Artists view, each a tile of its own,
   the two told apart by the album most of their songs are on (*on Blue Night*);
   each with its own page, opened by its id, listing only its own songs; and each its
-  own favorite, in Now Playing's hearts and Radio too. A link by the name alone
-  opens the name's first. *Which Jay?* beside a song's Artist in *Edit details*
+  own favorite, in Now Playing's hearts and Radio too. A link by the name alone,
+  as `#/artist?name=Jay` from before pages opened by id, asks *Which Jay?* with a
+  tile for each artist with songs going by it, the name's first first; a name
+  naming one artist opens its page. *Which Jay?* beside a song's Artist in *Edit details*
   lists, under each of its artists, *The one it is by now*, checked, each other
   artist going by the name as *On Blue Night · 3 songs*, and *Another artist called
   Jay*; choosing one moves the song at once.

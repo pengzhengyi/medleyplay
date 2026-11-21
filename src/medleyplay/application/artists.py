@@ -348,6 +348,10 @@ class ArtistService:
             recommended = {row.key: row for row in db.scalars(select(ArtistRecommendationRow))}
             artists = _known(db)
             library = every_name_artists(db)
+        finding = _Finding(
+            names=self._jobs.active_targets(FIND_ARTIST_KIND),
+            artists=self._jobs.active_targets(FIND_ARTIST_NAMES_KIND),
+        )
         known_by = _known_by(artists, {row.artist_id for row in links.values()})
         written: dict[str, Counter[str]] = {}
         tracks: dict[str, set[int]] = {}
@@ -355,7 +359,7 @@ class ArtistService:
             key = artist_key(name)
             written.setdefault(key, Counter())[name] += 1
             tracks.setdefault(key, set()).add(track_id)
-        read = _Read(links, searches, artists, known_by, recommended)
+        read = _Read(links, searches, artists, known_by, recommended, finding)
         found = [
             replace(
                 self._name_of(key, forms.most_common(1)[0][0], len(tracks[key]), read),
@@ -471,10 +475,8 @@ class ArtistService:
 
     def recommending(self) -> bool:
         """Return whether an AI model is being asked which artists the names name."""
-        return any(
-            self._jobs.active(CHOOSE_ARTISTS_KIND, f"artist-choice:{batch}") is not None
-            for batch in range(MAX_LOOK_UP // MAX_CHOICES)
-        )
+        asked = self._jobs.active_targets(CHOOSE_ARTISTS_KIND)
+        return any(f"artist-choice:{batch}" in asked for batch in range(MAX_LOOK_UP // MAX_CHOICES))
 
     def suggest(self, caller: Account, artist_id: str) -> None:
         """Ask an AI model which of the names the artist goes by to show it by, and who it is.
@@ -653,7 +655,7 @@ class ArtistService:
             looked_at=None if search is None else search.looked_at,
             candidates=found,
             suggested=suggested(name, candidates),
-            finding=self._finding(key, None if link is None else link.artist_id),
+            finding=read.finding.of(key, None if link is None else link.artist_id),
             recommendation=None
             if link is not None or recommended is None
             else Recommendation(
@@ -663,15 +665,6 @@ class ArtistService:
                 host=recommended.host,
                 at=recommended.answered_at,
             ),
-        )
-
-    def _finding(self, key: str, artist_id: str | None) -> bool:
-        """Return whether MusicBrainz is asked about the name, or Wikidata about its artist."""
-        if self._jobs.active(FIND_ARTIST_KIND, f"artist:{key}") is not None:
-            return True
-        target = f"artist-names:{artist_id}"
-        return (
-            artist_id is not None and self._jobs.active(FIND_ARTIST_NAMES_KIND, target) is not None
         )
 
     def _changed(self) -> None:
@@ -725,6 +718,21 @@ class _Read:
     artists: dict[str, KnownArtist]
     known_by: dict[str, set[str]]
     recommended: dict[str, ArtistRecommendationRow]
+    finding: "_Finding"
+
+
+@dataclass(frozen=True)
+class _Finding:
+    """The names MusicBrainz is asked about, and the artists Wikidata is, by Job target."""
+
+    names: set[str]
+    artists: set[str]
+
+    def of(self, key: str, artist_id: str | None) -> bool:
+        """Return whether MusicBrainz is asked about the name, or Wikidata about its artist."""
+        return f"artist:{key}" in self.names or (
+            artist_id is not None and f"artist-names:{artist_id}" in self.artists
+        )
 
 
 def _complete_choices(db: Session, job: Job, result: ChosenArtistsResult, *, clock: Clock) -> None:

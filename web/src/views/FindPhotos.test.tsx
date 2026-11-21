@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -31,14 +31,21 @@ const SUGGESTED = [
 
 function cleanUp(artists: readonly MissingPhoto[]) {
   const reload = vi.fn();
-  render(
+  const view = (answered: number) => (
     <CleanUpView
       tidy={{ names: [], reload: vi.fn() }}
       artistNames={undefined}
-      missingPhotos={{ artists, reload }}
-    />,
+      missingPhotos={{ artists, reload, answered }}
+    />
   );
-  return { reload };
+  const { rerender } = render(view(0));
+  return {
+    reload,
+    /** Show the same artists again, as an answer saying nothing changed does. */
+    answeredAgain: (answered: number) => {
+      rerender(view(answered));
+    },
+  };
 }
 
 const section = () => within(screen.getByRole("region", { name: /^Find artist photos/u }));
@@ -168,5 +175,18 @@ describe("finding artist photos in Clean up", () => {
     });
 
     expect(sent).toEqual([{ track_ids: null }]);
+  });
+
+  it("reads again a few seconds after each answer while Deezer is asked, the same one too", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    serve({ [FIND]: { body: { asked: 0 } } });
+    const { reload, answeredAgain } = cleanUp([missing("chou", "周杰伦", { finding: true })]);
+
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    answeredAgain(1);
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+
+    expect(reload).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });

@@ -4,8 +4,10 @@
  *
  * Syncing plays the song and stamps each line as Space is pressed, then the next; a
  * line's time, pressed, plays from there, and each line, or every line at once, moves
- * by a tenth of a second. Saving makes them the household's lyrics, which show over
- * every other source's; removing the household's shows the next source's again.
+ * by a tenth of a second. Finding lists the songs the lyrics sites have of a title and
+ * artist, and one used fills the text, to read over before saving. Saving makes them
+ * the household's lyrics, which show over every other source's; removing the
+ * household's shows the next source's again.
  */
 
 import {
@@ -18,9 +20,11 @@ import {
 } from "@phosphor-icons/react";
 import { useContext, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
-import type { Lyrics, LyricsOrigin } from "../api";
+import type { Lyrics, LyricsOption, LyricsOrigin } from "../api";
 import { formatTime } from "../format";
+import { LYRICS_SITE_NAMES } from "../lyrics";
 import { type SyncLine, linesOf, lrcOf, lrcTime, nudged, shifted, stamped } from "../lrc";
+import { LyricsFinder } from "./LyricsFinder";
 import { SongsControlsContext } from "./songsControls";
 
 /** How far a line, or every line, moves at a press, in milliseconds. */
@@ -49,27 +53,37 @@ export interface SyncPlayer {
   readonly seek: (seconds: number) => void;
 }
 
+/** What the editor shows: the text, the lines to sync, or the songs found to take some from. */
+type Mode = "text" | "sync" | "find";
+
 /**
  * Edit the song's lyrics, read with `load`: `save` makes text, or an instrumental, the
  * household's, and `forget` drops the household's; `player` plays the song to sync them.
+ * `song`, the Track as the Library names it, lets the household find its lyrics.
  */
 export function LyricsEditor({
   load,
   save,
   forget,
   player,
+  song,
 }: {
   readonly load: () => Promise<Lyrics | null>;
   readonly save: (text: string, instrumental: boolean) => Promise<unknown>;
   readonly forget: () => Promise<unknown>;
   readonly player: SyncPlayer;
+  readonly song?:
+    { readonly id: number; readonly title: string; readonly artist: string } | undefined;
 }) {
   const controls = useContext(SongsControlsContext);
   const textId = useId();
   const [shown, setShown] = useState<Lyrics | null>();
   const [draft, setDraft] = useState("");
   const [instrumental, setInstrumental] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [mode, setMode] = useState<Mode>("text");
+  const syncing = mode === "sync";
+  // The song found whose lyrics fill the text, until saved or written over.
+  const [taken, setTaken] = useState<LyricsOption>();
   const [lines, setLines] = useState<readonly SyncLine[]>([]);
   // The line Space stamps next.
   const [cursor, setCursor] = useState(0);
@@ -159,9 +173,9 @@ export function LyricsEditor({
         <button
           type="button"
           className="lyrics-mode"
-          aria-pressed={!syncing}
+          aria-pressed={mode === "text"}
           onClick={() => {
-            setSyncing(false);
+            setMode("text");
           }}
         >
           Text
@@ -177,17 +191,48 @@ export function LyricsEditor({
             setLines(next);
             const first = next.findIndex((line) => line.at_ms === null);
             setCursor(first === -1 ? 0 : first);
-            setSyncing(true);
+            setMode("sync");
           }}
         >
           Sync to the song
         </button>
+        {song !== undefined && (
+          <button
+            type="button"
+            className="lyrics-mode"
+            aria-pressed={mode === "find"}
+            title="Find the song's lyrics on the lyrics sites"
+            onClick={() => {
+              setMode("find");
+            }}
+          >
+            Find
+          </button>
+        )}
       </div>
-      {!syncing ? (
+      {mode === "find" && song !== undefined ? (
+        <LyricsFinder
+          trackId={song.id}
+          title={song.title}
+          artist={song.artist}
+          busy={busy}
+          onUse={(option) => {
+            setDraft(option.text);
+            setInstrumental(option.instrumental);
+            setTaken(option);
+            setMode("text");
+          }}
+        />
+      ) : !syncing ? (
         <div className="lyrics-editor-text">
           <label className="lyrics-editor-label" htmlFor={textId}>
             Lyrics, as LRC or plain text
           </label>
+          {taken !== undefined && (
+            <p className="lyrics-editor-taken" role="status">
+              {`From “${taken.title}” on ${LYRICS_SITE_NAMES[taken.provider]}. Save to keep them.`}
+            </p>
+          )}
           <textarea
             id={textId}
             rows={14}

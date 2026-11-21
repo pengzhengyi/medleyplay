@@ -45,6 +45,7 @@ from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.network import probe_network
@@ -63,11 +64,19 @@ from medleyplay.application.silences import SilenceService, find_silences_kind
 from medleyplay.application.split_offers import LibrarySweep, SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
+from medleyplay.application.thumbnails import (
+    RECONCILE_DELAY,
+    THUMBNAILS_FOLDER,
+    ThumbnailService,
+    make_thumbnails_kind,
+)
 from medleyplay.config import CONFIG_FILE, Config, load_config
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
+from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.plugin_host.client import HostCommand, PluginHost
 from medleyplay.plugin_host.loader import BUILT_IN_PLUGINS, plugin_names
 from medleyplay.web.app import create_app
+from medleyplay.web.cached import CachedAnswers
 from medleyplay.web.deps import Services
 
 DEFAULT_PORT: Final = 8000
@@ -191,6 +200,8 @@ def build_services(  # noqa: PLR0913, PLR0915
     link_jobs = image_link_kinds(clock, data_dir / COVERS_FOLDER)
     picture_jobs = artist_picture_kinds(clock, data_dir / COVERS_FOLDER)
     find_silences = find_silences_kind(clock)
+    lyrics_jobs = lyrics_search_kinds(clock)
+    make_thumbnails = make_thumbnails_kind(data_dir / THUMBNAILS_FOLDER, data_dir / JOBS_FOLDER)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,
@@ -207,6 +218,9 @@ def build_services(  # noqa: PLR0913, PLR0915
         link_jobs.suggest.name: link_jobs.suggest,
         link_jobs.fetch.name: link_jobs.fetch,
         find_silences.name: find_silences,
+        make_thumbnails.name: make_thumbnails,
+        lyrics_jobs.find.name: lyrics_jobs.find,
+        lyrics_jobs.choose.name: lyrics_jobs.choose,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -253,6 +267,19 @@ def build_services(  # noqa: PLR0913, PLR0915
     sweeper = EnrichmentSweeper(LibrarySweep(enrichment, split_offers))
     changes.listen(sweeper.request)
     events.listen(sweeper.request)
+    thumbnails = ThumbnailService(
+        clock,
+        plugins,
+        jobs,
+        make_thumbnails,
+        data_dir / COVERS_FOLDER,
+        data_dir / THUMBNAILS_FOLDER,
+    )
+    # Images are kept by uploads and by Jobs, so a change or a Job ending, 30 s after the
+    # first, asks what lacks thumbnails; an upload arrives as a change of the catalog.
+    thumbnail_sweeper = EnrichmentSweeper(thumbnails, delay=RECONCILE_DELAY, what="thumbnails")
+    changes.listen(thumbnail_sweeper.request)
+    events.listen(thumbnail_sweeper.request)
     # A changed proxy makes a looked-up video's details stale, so they are looked up again.
     proxies.listen(links.forget_lookups)
     accounts = AccountService(
@@ -264,6 +291,9 @@ def build_services(  # noqa: PLR0913, PLR0915
         on_change=changes.tell,
     )
     playback = PlaybackService(units, plugins, jobs, cache, data_dir, downloads, mode.online)
+    # Every write after the migration changes the revision the cached answers stand on.
+    revision = DatabaseRevision()
+    revision.watch(engine)
     return Services(
         accounts=accounts,
         catalog=catalog,
@@ -285,6 +315,8 @@ def build_services(  # noqa: PLR0913, PLR0915
         split_offers=split_offers,
         silences=SilenceService(units, clock, plugins, jobs, find_silences, playback),
         covers=CoverService(units, clock, data_dir / COVERS_FOLDER, changes.tell),
+        thumbnails=thumbnails,
+        thumbnail_sweeper=thumbnail_sweeper,
         enrichment=enrichment,
         sweeper=sweeper,
         ai=ai,
@@ -306,6 +338,9 @@ def build_services(  # noqa: PLR0913, PLR0915
         artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         lyrics=LyricsService(units, clock, changes.tell),
+        lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs),
+        revision=revision,
+        answers=CachedAnswers(revision),
     )
 
 
@@ -350,12 +385,15 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
                     services.playback.sweep_cache()
                     services.playback.sweep_downloads()
                     services.covers.sweep()
+                    services.thumbnails.tidy()
                     services.jobs.start()
                     services.policy.start()
                     services.sweeper.start()
+                    services.thumbnail_sweeper.start()
                     try:
                         yield
                     finally:
+                        services.thumbnail_sweeper.stop()
                         services.sweeper.stop()
                         services.policy.stop()
                         services.jobs.stop()

@@ -124,7 +124,7 @@ export function RadioView({
                 <li key={album.key} className="shelf-album">
                   {album.album === "" ? (
                     <div className="shelf-link">
-                      <Cover cover={album.cover} className="cover-tile" />
+                      <Cover size="medium" cover={album.cover} className="cover-tile" />
                       <span className="group-name">{album.name}</span>
                       <span className="group-meta">{album.artist || "Unknown artist"}</span>
                     </div>
@@ -133,7 +133,7 @@ export function RadioView({
                       className="shelf-link"
                       href={hrefOf({ view: "album", artist: album.artist, name: album.album })}
                     >
-                      <Cover cover={album.cover} className="cover-tile" />
+                      <Cover size="medium" cover={album.cover} className="cover-tile" />
                       <span className="group-name">{album.name}</span>
                       <span className="group-meta">{album.artist || "Unknown artist"}</span>
                     </a>

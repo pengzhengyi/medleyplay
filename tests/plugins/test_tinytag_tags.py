@@ -10,7 +10,7 @@ import pytest
 
 from medleyplay.domain import covers
 from medleyplay.plugin_api import MAX_LYRICS, FileRequest, LibraryRoot, ReadTags, Tags
-from medleyplay.plugin_api.covers import MAX_COVER_BYTES, is_cover_image
+from medleyplay.plugin_api.covers import MAX_COVER_BYTES, image_kind, is_cover_image
 from medleyplay.plugin_api.testing import check_tag_reader
 from medleyplay.plugins.fsspec_library.backends import ZipBackend
 from medleyplay.plugins.tinytag_tags import TinytagReader, register
@@ -290,7 +290,10 @@ def test_the_tags_of_a_file_with_a_cover_keep_the_contract(tmp_path: Path) -> No
     ids=["JPEG", "PNG", "WebP", "GIF", "a WAV file", "SVG", "nothing"],
 )
 def test_the_plugin_and_the_core_agree_on_what_a_cover_is(data: bytes) -> None:
-    assert is_cover_image(data) == (covers.cover_type(data) is not None)
+    kind, core = image_kind(data), covers.cover_type(data)
+
+    assert is_cover_image(data) == (core is not None)
+    assert (kind and kind.value) == (core and core.value)
 
 
 def test_the_plugin_and_the_core_agree_on_the_limit_of_a_cover() -> None:

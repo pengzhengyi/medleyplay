@@ -7,12 +7,16 @@
  * as choosing a cover does. While a model is asked or a picture downloaded, it reads
  * again every few seconds. It shows once the links are read, so a server that can't
  * suggest any shows nothing.
+ *
+ * Shown for a picture never asked about, it asks the AI at once; *Ask again* opens a
+ * note to tell the AI what picture is wanted.
  */
 
 import { CircleNotchIcon, SparkleIcon } from "@phosphor-icons/react";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
 import { type PictureLinks, type Pictured, type SuggestedLink, api, coverUrl } from "../api";
+import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
 
 const READ_EVERY_MS = 2000;
@@ -34,6 +38,13 @@ function siteOf(url: string): string {
 /** What the picture is of, in the words of the notes: *album* or *artist*. */
 function subjectOf(pictured: Pictured): string {
   return pictured.kind === "album" ? "album" : "artist";
+}
+
+/** An example of a note to the AI, for the picture wanted. */
+function noteExample(pictured: Pictured): string {
+  return pictured.kind === "album"
+    ? "Which cover you mean, such as “the 1997 first pressing”"
+    : "Which photo you want, such as “live on stage, not a poster”";
 }
 
 /**
@@ -59,6 +70,12 @@ export function ImageLinks({
   // The links approved here and not yet used, and those whose picture won't show.
   const [approved, setApproved] = useState<ReadonlySet<string>>(new Set());
   const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
+  // The note to the AI while it is being written, kept to write on when asking again.
+  const [noting, setNoting] = useState(false);
+  const [note, setNote] = useState("");
+  // Whether the AI was asked on opening, so it is asked once.
+  const askedOnOpening = useRef(false);
+  const noteId = useId();
   const key = JSON.stringify(pictured);
   const readAgain = () => {
     setReads((count) => count + 1);
@@ -69,6 +86,16 @@ export function ImageLinks({
 
   const onRead = useEffectEvent((known: PictureLinks) => {
     setState(known);
+    if (
+      !askedOnOpening.current &&
+      known.asked_at === null &&
+      !known.asking &&
+      known.may_suggest &&
+      !noAi.missing
+    ) {
+      askedOnOpening.current = true;
+      ask("");
+    }
     for (const link of known.links) {
       if (!approved.has(link.url)) {
         continue;
@@ -107,15 +134,16 @@ export function ImageLinks({
     };
   }, [state]);
 
-  const ask = () => {
+  function ask(hint: string) {
     setError("");
     setBroken(new Set());
+    setNoting(false);
     setState((was) => (was === undefined ? was : { ...was, asking: true, failure: null }));
-    api.suggestImageLinks(pictured).then(readAgain, (failure: unknown) => {
+    api.suggestImageLinks(pictured, hint).then(readAgain, (failure: unknown) => {
       setError(messageOf(failure));
       readAgain();
     });
-  };
+  }
   const approve = (link: SuggestedLink) => {
     setError("");
     setApproved((was) => new Set([...was, link.url]));
@@ -144,22 +172,84 @@ export function ImageLinks({
   const subject = subjectOf(pictured);
   return (
     <section className="cover-finder image-links" aria-label="Pictures the AI suggests">
-      <div className="cover-finder-head">
-        <h4>Suggested by AI</h4>
-        {!asking && (
-          <button
-            type="button"
-            className="link-button"
-            aria-disabled={noAi.missing}
-            title={noAi.missing ? noAi.why : "Ask the AI for pictures; nothing is downloaded yet"}
-            onClick={() => {
-              noAi.whenSetUp(ask);
+      {!asking && (
+        <div className="cover-finder-head">
+          {state.asked_at === null ? (
+            <button
+              type="button"
+              className="link-button"
+              aria-disabled={noAi.missing}
+              title={noAi.missing ? noAi.why : "Ask the AI for pictures; nothing is downloaded yet"}
+              onClick={() => {
+                noAi.whenSetUp(() => {
+                  ask("");
+                });
+              }}
+            >
+              Ask AI
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="link-button"
+              aria-expanded={noting}
+              aria-controls={noteId}
+              aria-disabled={noAi.missing}
+              title={noAi.missing ? noAi.why : "Ask the AI again, saying what picture you want"}
+              onClick={() => {
+                setNoting((was) => !was);
+              }}
+            >
+              Ask again
+            </button>
+          )}
+        </div>
+      )}
+      {noting && !asking && (
+        <form
+          id={noteId}
+          className="picture-note"
+          onSubmit={(event) => {
+            event.preventDefault();
+            noAi.whenSetUp(() => {
+              ask(note);
+            });
+          }}
+        >
+          <label className="visually-hidden" htmlFor={`${noteId}-text`}>
+            Anything the AI should know?
+          </label>
+          <input
+            id={`${noteId}-text`}
+            className="picture-note-text"
+            type="text"
+            value={note}
+            maxLength={500}
+            placeholder={noteExample(pictured)}
+            // The field opens on pressing Ask again, to type the note at once.
+            autoFocus
+            onChange={(event) => {
+              setNote(event.target.value);
             }}
-          >
-            {state.asked_at === null ? "Ask AI" : "Ask again"}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                // Escape puts the note away, not the dialog it is in.
+                event.preventDefault();
+                event.stopPropagation();
+                setNoting(false);
+              }
+            }}
+          />
+          <button type="submit" className="dialog-button">
+            Ask
           </button>
-        )}
-      </div>
+        </form>
+      )}
+      {noAi.missing && state.asked_at === null && (
+        <p className="cover-finder-note">
+          No AI provider is set up. <AiSetUpHint newTab />
+        </p>
+      )}
       {asking && (
         <p className="cover-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
@@ -203,7 +293,12 @@ export function ImageLinks({
                         <span className="image-link-missing">Unavailable</span>
                       )
                     ) : (
-                      <img src={coverUrl(link.cover)} alt="" loading="lazy" decoding="async" />
+                      <img
+                        src={coverUrl(link.cover, "medium")}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
                     )}
                     {downloading && (
                       <span className="cover-saving" role="status" aria-label="Downloading…">

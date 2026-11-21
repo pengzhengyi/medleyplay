@@ -51,6 +51,7 @@ const AI_UNASKED: AiAsk = {
   message: "",
   ask: vi.fn(),
   askAgain: vi.fn(),
+  stop: vi.fn(),
 };
 
 /** A server that has never looked for the gaps, and can't find them: ffmpeg isn't installed. */
@@ -194,7 +195,7 @@ describe("editing a file's songs", () => {
 
     expect(dialog).toHaveAccessibleName("Split into songs");
     await press(dialog, "Fill from the video's 2 songs");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(onSave).toHaveBeenCalledExactlyOnceWith(
       [
@@ -204,6 +205,38 @@ describe("editing a file's songs", () => {
       [],
     );
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("stops asking the AI from its button, keeping the songs as they are", async () => {
+    const ai = { ...AI_UNASKED, stop: vi.fn() };
+    const { dialog } = await renderEditor(SPLIT, { ai });
+
+    await press(dialog, "Fill with AI");
+    await press(dialog, "Stop asking the AI");
+
+    expect(ai.stop).toHaveBeenCalledOnce();
+    expect(within(dialog).getByText("Stopped asking the AI.")).toHaveRole("status");
+    expect(within(dialog).getByRole("button", { name: "Fill with AI" })).toBeEnabled();
+  });
+
+  it("stops asking the AI when the editor closes while it asks", async () => {
+    const ai = { ...AI_UNASKED, stop: vi.fn() };
+    const { dialog, unmount } = await renderEditor(SPLIT, { ai });
+
+    await press(dialog, "Fill with AI");
+    // Closed, the page takes the editor away.
+    unmount();
+
+    expect(ai.stop).toHaveBeenCalledOnce();
+  });
+
+  it("stops nothing when the editor closes with the AI not asked", async () => {
+    const ai = { ...AI_UNASKED, stop: vi.fn() };
+    const { unmount } = await renderEditor(SPLIT, { ai });
+
+    unmount();
+
+    expect(ai.stop).not.toHaveBeenCalled();
   });
 
   it("says which model suggested the songs, once it is known", async () => {
@@ -224,7 +257,7 @@ describe("editing a file's songs", () => {
     const { dialog, onSave } = await renderEditor(splitSongsOf(104, [], [], LISTED));
 
     await press(dialog, "Fill with AI");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(within(dialog).getByText("2 songs from the AI, starts estimated")).toHaveRole("status");
     expect(onSave).toHaveBeenCalledExactlyOnceWith(
@@ -242,7 +275,7 @@ describe("editing a file's songs", () => {
     await press(dialog, "Fill with AI");
     const filled = [(box(dialog, "Artist of song 2") as HTMLInputElement).value];
     const third = within(dialog).queryByRole("textbox", { name: "Title of song 3" });
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
     await press(dialog, "Save and remove 1 song");
 
     expect(filled).toEqual(["ハチ"]);
@@ -418,8 +451,11 @@ describe("editing a file's songs", () => {
         },
       });
     });
-    await press(dialog, await within(dialog).findByRole("button", { name: "Use these 2 songs" }));
-    await press(dialog, "Save songs");
+    // Save waits for the list to check clean.
+    await waitFor(() => {
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeEnabled();
+    });
+    await press(dialog, "Save");
     await press(dialog, "Save and remove 1 song");
 
     expect(typed).toBe("0:00 アイネクライネ\n4:12 ゴーゴー幽霊船\n8:00 Last");
@@ -434,7 +470,7 @@ describe("editing a file's songs", () => {
     await userEvent.clear(box(dialog, "Start of song 2"));
     await userEvent.type(box(dialog, "Start of song 2"), "3:00");
     await userEvent.type(box(dialog, "Title of song 2"), " (Reprise)");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(onSave).toHaveBeenCalledExactlyOnceWith(
       [
@@ -450,7 +486,7 @@ describe("editing a file's songs", () => {
     const { dialog, onSave } = await renderEditor();
 
     await press(dialog, "Remove “Last”");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(onSave).not.toHaveBeenCalled();
     expect(
@@ -475,7 +511,7 @@ describe("editing a file's songs", () => {
 
     await press(dialog, "Add a song");
     await userEvent.type(box(dialog, "Start of song 4"), "8:75");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(within(dialog).getByRole("alert")).toHaveTextContent("Song 4 starts at no time");
     expect(onSave).not.toHaveBeenCalled();
@@ -490,7 +526,7 @@ describe("editing a file's songs", () => {
       ),
     });
 
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("song 2 breaks that");
     expect(onClose).not.toHaveBeenCalled();
@@ -507,10 +543,10 @@ describe("the songs editor's guards", () => {
   it("asks again after any edit made once it said what saving removes", async () => {
     const { dialog, onSave } = await renderEditor();
     await press(dialog, "Remove “Last”");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     await userEvent.type(box(dialog, "Title of song 1"), "!");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(onSave).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("button", { name: "Save and remove 1 song" })).toBeVisible();
@@ -524,7 +560,7 @@ describe("the songs editor's guards", () => {
       ]),
     );
 
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(onSave.mock.calls[0]?.[0][1]?.start_ms).toBe(192_500);
   });
@@ -534,7 +570,7 @@ describe("the songs editor's guards", () => {
 
     await userEvent.clear(box(dialog, "Start of song 3"));
     await userEvent.type(box(dialog, "Start of song 3"), "2:00:00");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(within(dialog).getByRole("alert")).toHaveTextContent(
       "Song 3 starts after the file ends",
@@ -615,7 +651,7 @@ describe("listening in the songs editor", () => {
     await press(dialog, "Start song 3 here");
 
     expect(box(dialog, "Start of song 3")).toHaveValue("5:00");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
     expect(onSave.mock.calls[0]?.[0][2]).toMatchObject({ start_ms: 300_500 });
   });
 
@@ -809,7 +845,7 @@ describe("snapping the starts to the gaps in the audio", () => {
     const { dialog, onSave } = await renderEditor(SPLIT, { silences: BREMEN_GAPS });
 
     await press(dialog, "Snap the starts to the gaps in the audio");
-    await press(dialog, "Save songs");
+    await press(dialog, "Save");
 
     expect(onSave.mock.calls[0]?.[0].map((row) => row.start_ms)).toEqual([0, 251_400, 483_250]);
   });

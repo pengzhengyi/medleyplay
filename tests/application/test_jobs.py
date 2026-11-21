@@ -77,6 +77,26 @@ def test_submitting_the_same_target_again_returns_the_active_job(
     assert other.id != first.id
 
 
+def test_the_active_targets_of_a_kind_are_those_of_its_waiting_queued_and_running_jobs(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    tmp_path: Path,
+    household: tuple[Account, Account],
+) -> None:
+    admin, _member = household
+    with running_jobs(units, clock, tmp_path / "jobs", start=False) as jobs:
+        jobs.submit(EchoJob(text="a"), target="echo:1")
+        jobs.submit(EchoJob(text="b"), target="echo:2")
+        cancelled = jobs.submit(EchoJob(text="c"), target="echo:3")
+        jobs.service.cancel(admin, cancelled.id)
+
+        active = jobs.service.active_targets(jobs.kind.name)
+        other = jobs.service.active_targets("another-kind")
+
+    assert active == {"echo:1", "echo:2"}
+    assert other == set()
+
+
 def test_submitting_a_kind_the_service_does_not_run_is_refused(
     units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
 ) -> None:

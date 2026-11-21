@@ -214,6 +214,12 @@ Track's kind is decided.
   a warning mark in its row, named *Download failed*, which opens why, *Retry
   download*, and *Add the file…*. See
   [Manual downloads](Manual%20downloads.md#the-web-client).
+- **A Track downloading says so in its row,** from the moment it is added: where a
+  Track that can't play says why, a download mark and how far it has got (*42%*,
+  *Waiting*, *When online*), said in full in its tooltip and to a screen reader;
+  its cover spins, or shows a clock while it waits for Online.
+- **A narrow table keeps the title readable:** below 64rem it keeps only a row's
+  "…", which holds *Play next* and *Add to queue* too; below 52rem the album goes.
 - **Go to** opens the artist's view, or the album's under its album artist, as
   the Albums view groups it.
 - **Show in Library** opens `#/library?focus=<id>`: the Library clears its
@@ -361,6 +367,11 @@ Track's kind is decided.
   in the box; what follows it stays typed, so `bilibili:BV1…` pasted is ready for
   *Enter*. The tags listed in an empty box end with it, and Backspace in an empty
   box with Bilibili chosen goes back to the Library, as it removes a tag.
+- **A word being typed completes to a tag or a site** it begins, from its second
+  letter: `bi` offers `bilibili:` (where Bilibili can be searched) and `ar`
+  offers `artist:`, first in the panel, above the artists. Choosing one is typing
+  it in full, keeping the words before it; *Tab* takes the first, or the one the
+  arrow keys point at. One letter offers nothing, as it begins too many names.
 - **Library search** matches the words typed, each anywhere in a Track's title,
   artist, or album, ignoring case, width, and hiragana or katakana: NFKC, lower
   case, and katakana shifted to hiragana, so `ｍｅｌｔ` finds *Melt* and

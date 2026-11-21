@@ -1,8 +1,9 @@
 /**
  * @file The artist and album names written with more than the name in them, to tidy.
  *
- * They are read again whenever `version` changes, as it does with the Tracks, and after
- * a change made here; nothing is read while `version` is `undefined`.
+ * They are read again whenever `version` changes, as it does whenever the Library may
+ * have changed, and after a change made here; nothing is read while `version` is
+ * `undefined`.
  */
 
 import { type NameToTidy, api } from "../api";

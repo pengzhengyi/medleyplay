@@ -7,26 +7,39 @@ const BREMEN = "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291
 
 describe("a cover", () => {
   it("shows the image the cover names", () => {
-    const { container } = render(<Cover cover={BREMEN} />);
+    const { container } = render(<Cover cover={BREMEN} size="original" />);
 
     expect(container.querySelector("img")).toHaveAttribute("src", `/api/covers/${BREMEN}`);
   });
 
+  it("shows the thumbnail of the size asked for", () => {
+    const { container } = render(<Cover cover={BREMEN} size="small" />);
+
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      `/api/covers/${BREMEN}?size=small&recipe=1`,
+    );
+  });
+
   it("shows a note in place of no cover", () => {
-    const { container } = render(<Cover cover={null} />);
+    const { container } = render(<Cover cover={null} size="original" />);
 
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("svg")).not.toBeNull();
   });
 
   it("shows what it is given in place of no cover", () => {
-    const { container } = render(<Cover cover={null}>M</Cover>);
+    const { container } = render(
+      <Cover cover={null} size="original">
+        M
+      </Cover>,
+    );
 
     expect(container).toHaveTextContent("M");
   });
 
   it("shows the note once the image fails to load", () => {
-    const { container } = render(<Cover cover={BREMEN} />);
+    const { container } = render(<Cover cover={BREMEN} size="original" />);
 
     fireEvent.error(container.querySelector("img") ?? document.body);
 
@@ -34,11 +47,11 @@ describe("a cover", () => {
   });
 
   it("tries a cover again once it shows another in between", () => {
-    const { container, rerender } = render(<Cover cover={BREMEN} />);
+    const { container, rerender } = render(<Cover cover={BREMEN} size="original" />);
     fireEvent.error(container.querySelector("img") ?? document.body);
 
-    rerender(<Cover cover={null} />);
-    rerender(<Cover cover={BREMEN} />);
+    rerender(<Cover cover={null} size="original" />);
+    rerender(<Cover cover={BREMEN} size="original" />);
 
     expect(container.querySelector("img")).toHaveAttribute("src", `/api/covers/${BREMEN}`);
   });

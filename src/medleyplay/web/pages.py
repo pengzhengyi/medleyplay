@@ -1,7 +1,9 @@
 """Serving the web client: its page at every path outside `/api`, and its hashed assets.
 
 `npm run build` in `web/` writes the client into the `client` folder beside this
-module, so the package carries it.
+module, so the package carries it. Its files are sent gzipped to a browser that
+accepts gzip; a browser keeps each asset for a year, so each is compressed about
+once per browser per build.
 """
 
 from pathlib import Path
@@ -10,9 +12,12 @@ from typing import Final, override
 from fastapi import status
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+from medleyplay.web.cached import GZIP_LEVEL
 
 CLIENT_DIR: Final = Path(__file__).parent / "client"
 NOT_BUILT: Final = """<!doctype html>
@@ -46,7 +51,9 @@ class ClientFiles(StaticFiles):
             if error.status_code != status.HTTP_404_NOT_FOUND or path.startswith(_ASSETS):
                 raise
             response = await super().get_response(_PAGE, scope)
-        if path.startswith(_ASSETS) and response.status_code == status.HTTP_200_OK:
+        # A 304 sets the headers the browser keeps, so it says "for good" too.
+        kept = (status.HTTP_200_OK, status.HTTP_206_PARTIAL_CONTENT, status.HTTP_304_NOT_MODIFIED)
+        if path.startswith(_ASSETS) and response.status_code in kept:
             response.headers["cache-control"] = "public, max-age=31536000, immutable"
         else:
             response.headers["cache-control"] = "no-cache"
@@ -56,7 +63,9 @@ class ClientFiles(StaticFiles):
 def client_app(directory: Path) -> ASGIApp:
     """Return what serves the client in `directory`, or a page saying how to build it."""
     if (directory / _PAGE).is_file():
-        return ClientFiles(directory)
+        # Only the client's files: the API's large answers are gzipped already, and
+        # audio, covers, and the event stream must not be.
+        return GZipMiddleware(ClientFiles(directory), compresslevel=GZIP_LEVEL)
     return _not_built
 
 

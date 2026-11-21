@@ -67,6 +67,8 @@ export function PlayerBar({
   const timeline = albumTimeline(nowPlaying, position, (song, seconds) => {
     player.playAt(song.entry.key, seconds);
   });
+  // A split file playing whole is named by the song it has reached.
+  const named = track === undefined ? undefined : (songPlaying(track, nowPlaying) ?? track);
   const shownPosition = timeline?.position ?? position;
   const shownDuration = timeline === undefined ? duration : timeline.length;
   return (
@@ -122,11 +124,11 @@ export function PlayerBar({
           />
         )}
         <div className="names">
-          <strong>{track?.title ?? "Nothing playing"}</strong>
-          {track === undefined ? (
+          <strong>{named?.title ?? "Nothing playing"}</strong>
+          {named === undefined ? (
             <span>Choose a Track to play it</span>
           ) : (
-            <SongCredits track={track} />
+            <SongCredits track={named} />
           )}
           {track !== undefined && !lyricsHidden && (
             <LyricNow lyrics={lyrics} seconds={songTimeOf(track, nowPlaying, position).seconds} />

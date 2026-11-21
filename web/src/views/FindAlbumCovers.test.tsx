@@ -43,12 +43,13 @@ const HELP_SONGS = [
 
 function cleanUp(albums: readonly MissingCover[], onUse = vi.fn(() => Promise.resolve())) {
   const reload = vi.fn();
+  const onUsed = vi.fn();
   const view = (answered: number, shown: readonly MissingCover[]) => (
     <CleanUpView
       tidy={{ names: [], reload: vi.fn() }}
       artistNames={undefined}
       tracks={HELP_SONGS}
-      missingCovers={{ albums: shown, reload, answered }}
+      missingCovers={{ albums: shown, reload, answered, onUsed }}
       albumCovers={{ onUse, onUpload: vi.fn(() => Promise.resolve("uploaded")) }}
     />
   );
@@ -56,6 +57,7 @@ function cleanUp(albums: readonly MissingCover[], onUse = vi.fn(() => Promise.re
   return {
     reload,
     onUse,
+    onUsed,
     /** Show `shown` as the albums read again, the same ones by default. */
     answeredAgain: (answered: number, shown: readonly MissingCover[] = albums) => {
       rerender(view(answered, shown));
@@ -110,6 +112,17 @@ describe("finding album covers in Clean up", () => {
       { albums: [{ album: "Help!", artist: "The Beatles", cover: "cover-help" }] },
     ]);
     expect(reload).toHaveBeenCalled();
+  });
+
+  it("reads the songs again once a cover is used, so the album shows it", async () => {
+    serve({ [USE]: { body: { used: 1 } } });
+    const { onUsed } = cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the suggested cover of Help!" }),
+    );
+
+    expect(onUsed).toHaveBeenCalledOnce();
   });
 
   it("uses every cover suggested in one request", async () => {

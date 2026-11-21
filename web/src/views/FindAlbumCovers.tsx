@@ -43,6 +43,7 @@ export function FindAlbumCovers({
   tracks,
   actions,
   onChanged,
+  onUsed,
 }: {
   readonly albums: readonly MissingCover[];
   /** How many answers came while MusicBrainz was searched, the same one too; each reads again. */
@@ -53,6 +54,8 @@ export function FindAlbumCovers({
   readonly actions?: AlbumCoverActions | undefined;
   /** Called after a change, or to read the albums again. */
   readonly onChanged: () => void;
+  /** Called once covers found were used, to read the songs again. */
+  readonly onUsed?: (() => void) | undefined;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -104,11 +107,12 @@ export function FindAlbumCovers({
     }
   };
   const use = (chosen: readonly Suggested[], place?: number) =>
-    act(place, () =>
-      api.useAlbumCovers(
+    act(place, async () => {
+      await api.useAlbumCovers(
         chosen.map(({ album, artist, suggested: cover }) => ({ album, artist, cover })),
-      ),
-    );
+      );
+      onUsed?.();
+    });
   const dismiss = (album: Suggested, place: number) =>
     act(place, () => api.dismissAlbumCover(album.album, album.artist, album.suggested));
   const changingTarget = changing === undefined ? [] : targetOf(tracks, changing);

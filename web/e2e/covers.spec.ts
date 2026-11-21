@@ -11,15 +11,20 @@ import { expect as baseExpect, test } from "@playwright/test";
 // A search is a Job, which a busy machine slows; waits allow for that.
 const expect = baseExpect.configure({ timeout: 15_000 });
 
-const ALBUM = "Tube Covers";
 const ARTIST = "Blue Room";
 
 test("an album with no cover is suggested one found, and using it in Clean up shows it", async ({
   page,
   request,
-}) => {
+}, { retry }) => {
+  // A retry has a song and album of its own: the first try may have used the cover.
+  const ALBUM = `Tube Covers ${String(retry + 1)}`;
   const added = await request.post("/api/links", {
-    data: { link: "BVCoverAlbum", parts: [{ part: 1, title: "Cover Song", artist: ARTIST }] },
+    data: {
+      // A Bilibili code is ten letters or digits after `BV`.
+      link: `BVCoverTry0${String(retry)}`,
+      parts: [{ part: 1, title: "Cover Song", artist: ARTIST }],
+    },
   });
   expect(added.ok()).toBe(true);
   const [first] = (await added.json()) as { readonly track_id: number }[];

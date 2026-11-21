@@ -126,6 +126,8 @@ export interface ViewProps {
     readonly albums: readonly MissingCover[];
     readonly reload: () => void;
     readonly answered: number;
+    /** Read the songs again once covers found were used, so their albums show them. */
+    readonly onUsed?: () => void;
   };
   /** How many names wait to be cleaned up. */
   readonly toDo?: number;

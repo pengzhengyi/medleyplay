@@ -76,6 +76,8 @@ export function CleanUpView({
     readonly albums: readonly MissingCover[];
     readonly reload: () => void;
     readonly answered: number;
+    /** Read the songs again once covers found were used, so their albums show them. */
+    readonly onUsed?: () => void;
   };
   /** How a cover chosen in the cover editor is set on an album. */
   readonly albumCovers?: AlbumCoverActions | undefined;
@@ -179,6 +181,7 @@ export function CleanUpView({
                 tracks={tracks}
                 actions={albumCovers}
                 onChanged={missingCovers.reload}
+                onUsed={missingCovers.onUsed}
               />
             ),
           },

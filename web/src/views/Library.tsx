@@ -709,7 +709,7 @@ export function Library({
             artistSplits={{ names: artistSplits.splits, reload: artistSplits.reload }}
             sharedNames={sharedNames}
             missingPhotos={missingPhotos}
-            missingCovers={missingCovers}
+            missingCovers={{ ...missingCovers, onUsed: library.reloadTracks }}
             toDo={toDo}
           />
         ) : (

@@ -1,8 +1,7 @@
 # Album cover suggestions
 
-> [!IMPORTANT]
-> **Status: in progress.** The first step, the server and the album page, is built;
-> Clean up and the background search are next. This note describes how medleyplay
+> [!NOTE]
+> **Status: implemented.** This note describes how medleyplay
 > suggests a cover for an album that has none, on the album's page and in Clean up,
 > and how the household uses or dismisses it in one click. It builds on the album cover search of
 > [Track details](Track%20details.md) and mirrors the suggested artist photo of
@@ -41,13 +40,14 @@ listed in Clean up. Albums should work the same.
 - [x] **A suggested cover for an album without one:** the AI's pick, else the
       best-ranked release whose title and artist match the album's; never one
       dismissed; none rather than a likely wrong one.
-- [ ] **Found without anyone searching:** when the album's page opens, and, by a
-      Clean up setting, for the albums up next or for every album without a cover,
-      paced so it never holds up other MusicBrainz lookups.
+- [x] **Found without anyone searching:** when the album's page opens, and, as
+      Settings → MusicBrainz says, for the albums up next or for every album without
+      a cover, paced so it never holds up other MusicBrainz lookups.
 - [x] **On the album page,** the suggestion fills the empty cover with *Use*,
       *Dismiss*, and *Change*.
-- [ ] **In Clean up,** *Find album covers* lists the albums without a cover,
-      suggested ones first, with *Use*, *Dismiss*, *Change*, and *Use all*.
+- [x] **In Clean up,** *Find album covers* shows each suggested cover with *Use*,
+      *Dismiss*, and *Change*, and *Use all*; the other albums without a cover are
+      counted.
 - [x] **A dismissed cover stays dismissed** when the album's covers are found again.
 - [x] **The search table is keyed by finder,** so NetEase can add its covers later
       without overwriting MusicBrainz's.
@@ -125,34 +125,43 @@ each release tried, a second apart.
 | --- | --- | --- |
 | The album's page opens | That album, if never searched, or searched empty over 30 days ago | 12, as the editor |
 | *Look again* in the editor | That album | 12 |
-| Clean up setting *Up next* (default) | The albums of the song playing and the next | 4 |
-| Clean up setting *Every missing* | Every album without a cover, never searched or empty for 30 days, those up next first | 4 |
-| *Find all* in Clean up | Every album listed, whatever the setting | 4 |
+| Setting *Up next* (default) | The albums of the song playing and the next | 4 |
+| Setting *Every missing* | Those, and every album without a cover, never searched or empty for 30 days, those up next first | 4 |
 | Setting *Off* | Nothing in the background; the page and the editor still search | — |
 
 - **Opening the page counts as asking,** as an artist's page does for photos. *Off*
   stops only the look-ahead and the background search.
-- **The background never holds up a lookup.** A background search is queued only while
-  MusicBrainz's lane is otherwise empty: a scan's lookups, a page opened, or the
-  editor go first. Each search queues the next when it ends. Four releases make a
-  background search about 6–10 s, so 400 albums take about an hour of idle time
-  instead of two to four hours of a blocked lane.
-- **The albums about to play go first.** Only the page knows the play queue, so under
-  *Every missing* the look-ahead sends the next 50 songs of the queue each time the
-  song changes. The server keeps the latest list in memory, and each background search
+- **The albums up next are searched at once.** At most two albums a song change, queued
+  behind whatever MusicBrainz's lane already holds, so they are found while the song
+  plays.
+- **The background never holds up a lookup.** Under *Every missing*, the rest are
+  searched one at a time, only while nothing else waits in MusicBrainz's lane: a
+  scan's lookups, a page opened, or the editor go first. A sweeper, the one the
+  enrichers use, runs a few seconds after any Job changes and every hour; each sweep
+  queues one search when the lane is empty, so each search's end queues the next.
+  Four releases make a background search about 6–10 s, so 400 albums take about an
+  hour of idle time instead of two to four hours of a blocked lane.
+- **The albums about to play go first.** Only the page knows the play queue, so the
+  look-ahead sends the song playing and the next 49 of the queue each time the song
+  changes. The server keeps the latest list in memory, and each background search
   takes the first album in it not yet searched, then the rest by song count, most
   first. A restart forgets the list until the next song starts.
 - **An AI pick is asked in the background only when it helps:** after a search, when
   no release matches, two or more covers were found, an AI model is set up, and the
-  household turned on *Pick album covers by AI* in Clean up. It is off by default,
+  household turned on *Pick album covers by AI* in Settings → MusicBrainz. It is off by default,
   since each pick is an AI call and a library may hold hundreds of albums. It is a Job of the AI's
-  lane, like any pick. The editor keeps asking when opened, as it does today.
+  lane, like any pick, asked by the same sweep one at a time; a pick that failed is
+  not asked again in the background. The editor keeps asking when opened, as it does
+  today.
 - **Found covers nobody needs are let go.** Once an album has a cover, or leaves the
-  Library, its found covers are removed and their files swept, keeping the one used.
+  Library, its found covers are removed by the sweep and their files swept, keeping the
+  one used. Only searches over a day old are let go, so the editor's grid for an album
+  that has a cover stays while someone chooses from it.
 
 The settings are two new household settings beside `find_artist_photos`:
 `find_album_covers` (*Off*, *Up next*, *Every missing*; default *Up next*) and
-`pick_album_covers_by_ai` (default off).
+`pick_album_covers_by_ai` (default off). They show in Settings → MusicBrainz, as the
+artist-photo settings show in Settings → Deezer, and Clean up links there.
 
 ## Ready for a second finder
 
@@ -170,11 +179,12 @@ past MusicBrainz release ids is left to the NetEase note.
 
 - **Use on the album page** sets the cover as choosing it in the cover editor does: on
   every song of the album, or on the file of an album that is one file.
-- **Use in Clean up** goes to the server, `POST /api/album-covers/use`, with the album
-  as written and the cover, since the list may be stale. In one transaction it checks
-  the album still has no cover, then sets the household cover on each song that shows
-  none, or on the file. A song that gained its own cover meanwhile keeps it. *Use all*
-  does the same for every suggested album listed.
+- **Use in Clean up** goes to the server, `POST /api/album-covers/use`, with each album
+  as written and its cover, since the list may be stale. In one transaction it checks
+  each album still has no cover and the cover is one found for it, then sets the
+  household cover on each song that shows none, or on the file; an album that gained a
+  cover meanwhile is skipped. *Use all* sends every suggested album in one request, so
+  the Library reads its songs again once; the answer says how many were used.
 - **Dismiss** adds the cover to the album's dismissed covers; the next suggestion, if
   any, takes its place.
 
@@ -201,11 +211,13 @@ focuses its first tab, and the MusicBrainz and *Ask AI* tabs ask as soon as they
 
 *Find album covers* joins *Find artist photos*, laid out the same way:
 
-- The settings, *Find all*, and *Use all*.
-- Each album without a cover: its name and artist, how many songs it has, and its
-  suggested cover with *Use*, *Dismiss*, and *Change*; suggested albums first, then by
-  song count. An album searched with no suggestion says so, with *Change*.
-- When *Use* or *Dismiss* removes a row, focus moves to the next row's first control.
+- *Use all*, when more than one cover is suggested.
+- Each album with a suggested cover, most songs first: the cover with *Use*,
+  *Dismiss*, and *Change*, its name linking to its page, and how many songs it has.
+- One line counts the rest: the albums searched with nothing that fits, and those not
+  searched yet, which are searched as Settings → MusicBrainz says. Their pages still
+  search and open the editor.
+- When *Use* or *Dismiss* removes a tile, focus moves to the next tile's first control.
 - The count of albums with a suggestion joins Clean up's count on the rail.
 
 The look-ahead that asks for artist photos of the songs up next asks for their album
@@ -219,20 +231,23 @@ covers in the same pass.
 | `album_cover_search` key `(key, finder)` | `persistence/schema.py`, migration 0059 | Rekeyed rows; `finder` named |
 | `album_cover_dismissal` | `persistence/schema.py`, migration 0059 | New: `(key, cover)` |
 | `CoverSearch`, `Settings.find_album_covers`, `Settings.pick_album_covers_by_ai` | `domain/settings.py` | New |
+| `JobService.lane_busy(shared)` | `application/jobs.py` | New: whether any Job of a shared lane is waiting, queued, or running |
 | `FindCovers.tried` | `plugin_api/album_covers.py` | New: how many releases to try, 12 by default |
 | `FindCovers.artist_ids`, `release_query(album, artist, artist_ids)` | `plugin_api/album_covers.py`, `plugins/musicbrainz/matching.py` | New: the album's linked MusicBrainz artists, searched by id when there are any |
 | `suggested_cover(album, names, found, pick, dismissed)`, `FoundRelease` | `domain/album_covers.py` | New: the rule above, pure |
 | `goes_by(name, names)` | `domain/artists.py` | The artist-photo name match, shared |
 | `AlbumCoverService.missing()` | `application/album_covers.py` | New: grouped in SQL on the written album and artist, folded and merged in Python; searches read with one `IN`, and finding from the active Job targets |
-| `AlbumCoverService.find_missing(caller, track_ids, every)` | `application/album_covers.py` | New: queues background searches, paced |
-| `AlbumCoverService.use(caller, album, artist, cover)`, `.dismiss(...)` | `application/album_covers.py` | New |
+| `AlbumCoverService.find_missing(caller, track_ids)` | `application/album_covers.py` | New: searches the albums up next, and keeps the queue's order |
+| `AlbumCoverService.sweep()` | `application/album_covers.py` | New: lets found covers go, asks one AI pick, queues one background search; run by an `EnrichmentSweeper` |
+| `AlbumCoverService.use(caller, albums)`, `.dismiss(...)` | `application/album_covers.py` | New |
 | `AlbumCovers.suggested`, `.due`, `.may_find` | `application/album_covers.py` | New fields: the cover suggested, whether a search is due, whether MusicBrainz is on |
 | `PictureEditor`'s `startOn` | `web/src/views/PictureEditor.tsx` | New: the tab it opens on |
 | `GET /api/album-covers/missing` | `web/album_covers.py` | New, cached per revision |
 | `POST /api/album-covers/missing/find`, `/use`, `/dismiss` | `web/album_covers.py` | New; `POST /api/album-covers/find` stays the editor's |
 | `SuggestedCover`, `SuggestedFrame`'s noun | `web/src/views/` | New, and a prop |
 | `FindAlbumCovers` | `web/src/views/FindAlbumCovers.tsx` | New Clean up section |
-| The look-ahead | `web/src/library/usePhotoLookAhead.ts` | Asks for album covers too; under *Every missing* sends the next 50 songs of the queue |
+| `MusicBrainzSettings` | `web/src/views/MusicBrainzSettings.tsx` | The two settings |
+| `useCoverLookAhead` | `web/src/library/useCoverLookAhead.ts` | New: sends the song playing and the next 49 of the queue each time the song changes |
 
 ## Boundary cases
 
@@ -243,7 +258,7 @@ covers in the same pass.
 | The album gains a cover another way | It leaves the list; its found covers are let go |
 | A song gains its own cover after the list was read | *Use* leaves that song's cover alone |
 | Every found cover dismissed | No suggestion; *Change* still opens the editor |
-| A search finds nothing | Searched again after 30 days, or by *Find all* or *Look again* |
+| A search finds nothing | Searched again after 30 days, or by *Look again* |
 | An album name under two or more artists, with no album artist, as a compilation | Each is its own album, as on the page; the background skips them, since the search per artist rarely finds the compilation; the page and the editor still search |
 | An empty album name | No album: never listed or searched |
 | Found covers replaced by a new search | The pick stands only if the releases are the same; dismissed covers stay |
@@ -260,15 +275,16 @@ covers in the same pass.
   migration rekeys rows so a search kept before is still found.
 - **`AlbumCoverService`:** `missing()` lists albums without a cover, suggested first,
   leaving out albums with a file's cover, empty names, and compilations from the
-  background; `find_missing` queues only while the lane is otherwise empty, the next
-  when one ends, none while MusicBrainz is off; `use` sets songs without a cover, or the
+  background; `find_missing` searches the albums up next at once; `sweep` queues one
+  search only while the lane is otherwise empty, none while MusicBrainz is off or the
+  setting isn't *Every missing*, asks one AI pick when it helps; `use` sets songs without a cover, or the
   file, and skips a song that has one; `dismiss` survives a new search; found covers
   are let go once the album has a cover.
 - **Routes:** each new route for any signed-in Account, as the artist-photo routes are;
   the missing list answers 304 when unchanged.
 - **Web:** the album page shows looking, then the suggestion with its three controls;
   *Use* calls the server and the tile shows the cover; Clean up lists, uses, dismisses,
-  uses all, finds all, and moves focus on; the look-ahead asks for both.
+  uses all, and moves focus on; the look-ahead sends the queue.
 - **End to end:** an album without a cover, its covers found by the fake finder, shows
   the suggested cover on its page and in Clean up, and *Use* puts it on its tile.
 - Tests never contact MusicBrainz, the Cover Art Archive, or an AI provider: the
@@ -279,9 +295,9 @@ covers in the same pass.
 1. **The server and the album page** (built): the one fold and migration 0059, the
    rule, the search by linked artists, the page-open search, `dismiss`, and the
    suggestion on the page.
-2. **Clean up and the background:** `missing()`, `use`, the settings, the paced
-   background search with its AI pick, the Clean up section, the look-ahead, and the
-   end-to-end test with a fake finder.
+2. **Clean up and the background** (built): `missing()`, `use`, the settings, the
+   paced background search with its AI pick, the Clean up section, the look-ahead, and
+   the end-to-end test with a stand-in cover finder.
 
 Each is its own pull request, with the measurements in the first.
 

@@ -18,6 +18,8 @@ const LIMIT_20: Settings = {
   picture_sites: [],
   pick_pictures_by_ai: false,
   find_artist_photos: "up_next",
+  find_album_covers: "up_next",
+  pick_album_covers_by_ai: false,
   revision: 2,
 };
 
@@ -222,6 +224,46 @@ describe("the MusicBrainz section", () => {
     expect(screen.queryByRole("region", { name: "MusicBrainz" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Go to MusicBrainz" })).toBeNull();
     expect(calls).not.toContain("GET /api/enrichers/musicbrainz");
+  });
+
+  it("finds covers of every album with none, once chosen", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": { body: LIMIT_20 },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, find_album_covers: "missing", revision: 3 } };
+      },
+    });
+    const musicbrainz = within(screen.getByRole("region", { name: "MusicBrainz" }));
+    const covers = within(
+      await musicbrainz.findByRole("group", { name: "Find covers of albums with none" }),
+    );
+
+    expect(covers.getByRole("radio", { name: /^Songs up next/u })).toBeChecked();
+    await userEvent.click(covers.getByRole("radio", { name: /^Every album/u }));
+
+    expect(await musicbrainz.findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...LIMIT_20, find_album_covers: "missing" }]);
+  });
+
+  it("has the AI pick a cover where none plainly fits, once turned on", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/settings": { body: LIMIT_20 },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, pick_album_covers_by_ai: true, revision: 3 } };
+      },
+    });
+    const musicbrainz = within(screen.getByRole("region", { name: "MusicBrainz" }));
+
+    await userEvent.click(
+      await musicbrainz.findByRole("switch", { name: "Pick covers by AI when none plainly fits" }),
+    );
+
+    expect(await musicbrainz.findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...LIMIT_20, pick_album_covers_by_ai: true }]);
   });
 });
 

@@ -9,11 +9,19 @@ releases found. Nothing changes the album's cover until the household chooses on
 
 An album is known here by its name and artist as written, folded, so every song that
 writes them alike shares what was found.
+
+Without anyone asking, the albums with no cover of the song playing and the next are
+searched as their songs come up, while the household has them searched; and, while it
+has every album with no cover searched, a sweep searches one more each time MusicBrainz
+is otherwise idle, those coming up first. The sweep also asks an AI model which cover
+fits an album none plainly fits, when the household wants it, and lets go of what was
+found for an album that has a cover now, or is gone.
 """
 
 import hashlib
 import unicodedata
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
@@ -25,14 +33,21 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.ai import is_set_up, provider_named
 from medleyplay.application.artist_pictures import every_name_of
+from medleyplay.application.changes import OnChange
+from medleyplay.application.details import set_household
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
-from medleyplay.domain.accounts import Account
+from medleyplay.application.segments import album_file_of
+from medleyplay.application.settings import read_settings
+from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.album_covers import FoundRelease, suggested_cover
+from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.details import Field
 from medleyplay.domain.enrichers import AI_DETAILS, MUSICBRAINZ
 from medleyplay.domain.errors import ConflictError, InvalidInputError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
+from medleyplay.domain.settings import CoverSearch, Settings
 from medleyplay.persistence.schema import (
     AlbumCoverDismissalRow,
     AlbumCoverSearchRow,
@@ -65,6 +80,17 @@ SEARCHED_IN_VAIN: Final = timedelta(days=30)
 """How long an album searched in vain waits before it is searched on its own again."""
 CHOICE_TARGET: Final = "album-cover-choice:"
 """What the target of a Job that asks which release fits begins with, before the album's key."""
+TRIED_UNASKED: Final = 4
+"""How many releases a search no one asked for tries, so it holds MusicBrainz's lane briefly."""
+UP_NEXT_SONGS: Final = 2
+"""How many songs at the head of the queue have their albums searched at once: playing, next."""
+MAX_COMING: Final = 50
+"""The most songs coming up the page sends, in the order they play."""
+LET_GO_AFTER: Final = timedelta(days=1)
+"""How old what was found for an album with a cover must be before it is let go, so the
+cover editor's grid stays while someone chooses from it."""
+MAX_USED: Final = 1000
+"""The most albums given a cover at once."""
 
 type FindCoversKind = JobKind[FindCoversJob, FoundCoversResult]
 type ChooseCoverKind = JobKind[ChooseCoverJob, ChosenCoverResult]
@@ -191,6 +217,54 @@ class AlbumCovers:
     may_find: bool = False
 
 
+@dataclass(frozen=True)
+class MissingCover:
+    """An album with no cover, as written, how many songs it has, and the cover suggested.
+
+    `picked` says an AI model picked the suggestion, `found` that the album was searched,
+    and `finding` that it is now.
+    """
+
+    album: str
+    artist: str
+    songs: int
+    suggested: str | None
+    picked: bool
+    found: bool
+    finding: bool
+
+
+@dataclass(frozen=True)
+class ChosenAlbumCover:
+    """A cover found for the album `album` by `artist`, as written, to make its cover."""
+
+    album: str
+    artist: str
+    cover: str
+
+
+@dataclass
+class _Album:
+    """An album of the Library, as its songs make it up: written as its first song writes it.
+
+    `files` holds the file each song was split from, or the song itself; `bare` says no song
+    names an album artist, and `covered` that a song shows a cover.
+    """
+
+    album: str
+    artist: str
+    tracks: list[int] = field(default_factory=list)
+    files: set[int] = field(default_factory=set)
+    bare: bool = True
+    covered: bool = False
+
+    @property
+    def file(self) -> int | None:
+        """Return the one file the album's songs were split from, if they were."""
+        [only] = self.files if len(self.files) == 1 else (None,)
+        return None if only is None or only in self.tracks else only
+
+
 class AlbumCoverService:
     """Finds the covers of an album's releases, and asks an AI model which fits it."""
 
@@ -201,13 +275,16 @@ class AlbumCoverService:
         jobs: JobService,
         kinds: AlbumCoverKinds,
         clock: Clock,
+        on_change: OnChange | None = None,
     ) -> None:
-        """Create the service, submitting Jobs of `kinds` to `jobs`."""
+        """Create the service, submitting Jobs of `kinds` to `jobs`, telling `on_change`."""
         self._units = units
         self._plugins = plugins
         self._jobs = jobs
         self._kinds = kinds
         self._clock = clock
+        self._on_change = on_change
+        self._coming: tuple[str, ...] = ()
 
     def find(self, caller: Account, album: str, artist: str) -> None:
         """Ask MusicBrainz for the covers of the album's releases; asking again while asked waits.
@@ -309,6 +386,212 @@ class AlbumCoverService:
             if db.get(AlbumCoverDismissalRow, (key, cover)) is None:
                 db.add(AlbumCoverDismissalRow(key=key, cover=cover))
 
+    def missing(self) -> tuple[MissingCover, ...]:
+        """Return every album with no cover, those with a suggested cover first, then most songs."""
+        with self._units() as db:
+            albums = {key: album for key, album in _albums(db).items() if not album.covered}
+            rows = _searches_of(db, list(albums))
+            dismissed = _dismissed_of(db, list(albums))
+            listed: list[MissingCover] = []
+            for key, album in albums.items():
+                row = rows.get(key)
+                found = () if row is None else _covers_of(row)
+                pick = None if row is None else _pick_of(row, found)
+                suggested = (
+                    _suggested(db, album, found, pick, dismissed.get(key, set())) if found else None
+                )
+                listed.append(
+                    MissingCover(
+                        album=album.album,
+                        artist=album.artist,
+                        songs=len(album.tracks),
+                        suggested=suggested,
+                        picked=pick is not None and suggested == _cover_picked(pick, found),
+                        found=row is not None,
+                        finding=False,
+                    )
+                )
+        finding = self._jobs.active_targets(FIND_COVERS_KIND)
+        listed = [
+            each
+            if find_covers_target(each.album, each.artist) not in finding
+            else replace(each, finding=True)
+            for each in listed
+        ]
+        listed.sort(key=lambda each: (each.suggested is None, -each.songs, each.album))
+        return tuple(listed)
+
+    def use(self, caller: Account, chosen: Sequence[ChosenAlbumCover]) -> int:
+        """Make each cover its album's, on its songs or its one file; return how many albums.
+
+        An album that has a cover by now is left as it is. A cover not found for its album
+        is refused, and then no album changes.
+        """
+        del caller
+        if len(chosen) > MAX_USED:
+            message = f"Use at most {MAX_USED} covers at once."
+            raise InvalidInputError(message)
+        with self._units.begin() as db:
+            albums = _albums(db)
+            planned: list[tuple[list[int], str]] = []
+            for each in chosen:
+                album, artist = checked_album(each.album, each.artist)
+                key = album_key(album, artist)
+                row = db.get(AlbumCoverSearchRow, (key, FINDER))
+                if row is None or all(found.cover != each.cover for found in _covers_of(row)):
+                    message = "Only a cover found for the album may be used."
+                    raise InvalidInputError(message)
+                shown = albums.get(key)
+                if shown is None or shown.covered:
+                    continue
+                file = shown.file
+                planned.append(([file] if file is not None else shown.tracks, each.cover))
+            now = self._clock()
+            for tracks, cover in planned:
+                for track_id in tracks:
+                    set_household(db, TrackId(track_id), {Field.COVER: cover}, now)
+        if planned and self._on_change is not None:
+            self._on_change("catalog")
+        return len(planned)
+
+    def find_missing(self, caller: Account, track_ids: Sequence[int]) -> int:
+        """Search the albums with no cover of the songs coming up, `track_ids` in play order.
+
+        The albums of the song playing and the next are searched now, while the household
+        has albums searched without asking; the order is kept for the sweep. Return how many
+        were searched.
+        """
+        coming = list(dict.fromkeys(track_ids))
+        if len(coming) > MAX_COMING:
+            message = f"Send at most {MAX_COMING} songs coming up."
+            raise InvalidInputError(message)
+        with self._units() as db:
+            if read_settings(db).find_album_covers is CoverSearch.OFF or not self._may_find():
+                return 0
+            albums = _albums(db)
+            of_track = {track: key for key, album in albums.items() for track in album.tracks}
+            self._coming = tuple(dict.fromkeys(of_track[t] for t in coming if t in of_track))
+            now = {of_track[t] for t in coming[:UP_NEXT_SONGS] if t in of_track}
+            due = _due_unasked(db, albums, self._clock())
+            asking = [
+                (albums[key], linked_of(db, albums[key].tracks))
+                for key in self._coming
+                if key in now and key in due and not self._finding(albums[key])
+            ]
+        for album, linked in asking:
+            self._submit(album, linked, caller.id)
+        return len(asking)
+
+    def sweep(self) -> int:
+        """Let go of what nobody needs, then ask one AI pick and one search; return how many.
+
+        A model is asked only while the household wants covers picked by AI, and an album is
+        searched only while it has every album searched and MusicBrainz's lane is idle.
+        """
+        self._let_go()
+        if not self._may_find():
+            return 0
+        with self._units() as db:
+            settings = read_settings(db)
+        asked = self._pick_one(settings)
+        if settings.find_album_covers is CoverSearch.MISSING and not self._jobs.lane_busy(
+            MUSICBRAINZ.name
+        ):
+            asked += self._search_one()
+        return asked
+
+    def _may_find(self) -> bool:
+        return FINDER in self._plugins.available_keys().get(COVER_FINDER.name, [])
+
+    def _finding(self, album: _Album) -> bool:
+        active = self._jobs.active(FIND_COVERS_KIND, find_covers_target(album.album, album.artist))
+        return active is not None
+
+    def _submit(self, album: _Album, linked: tuple[str, ...], by: AccountId | None) -> None:
+        request = FindCoversJob(
+            album=album.album,
+            artist=album.artist,
+            artist_ids=linked,
+            tried=TRIED_UNASKED,
+            finder=FINDER,
+        )
+        target = find_covers_target(album.album, album.artist)
+        self._jobs.submit(self._kinds.find, target, request, by)
+
+    def _search_one(self) -> int:
+        with self._units() as db:
+            albums = _albums(db)
+            due = _due_unasked(db, albums, self._clock())
+            coming = {key: place for place, key in enumerate(self._coming)}
+            ordered = sorted(
+                due,
+                key=lambda key: (coming.get(key, len(coming)), -len(albums[key].tracks), key),
+            )
+            searched = next(
+                (albums[key] for key in ordered if not self._finding(albums[key])), None
+            )
+            linked = () if searched is None else linked_of(db, searched.tracks)
+        if searched is None:
+            return 0
+        self._submit(searched, linked, None)
+        return 1
+
+    def _pick_one(self, settings: Settings) -> int:
+        if (
+            not settings.pick_album_covers_by_ai
+            or CHOOSER not in self._plugins.available_keys().get(COVER_CHOOSER.name, [])
+            or self._jobs.active_targets(CHOOSE_COVER_KIND)
+        ):
+            return 0
+        with self._units() as db:
+            if not is_set_up(db):
+                return 0
+            albums = {key: album for key, album in _albums(db).items() if not album.covered}
+            rows = _searches_of(db, list(albums))
+            dismissed = _dismissed_of(db, list(albums))
+            for key in sorted(rows, key=lambda key: (-len(albums[key].tracks), key)):
+                album, row = albums[key], rows[key]
+                found = _covers_of(row)
+                left = [each for each in found if each.cover not in dismissed.get(key, set())]
+                if (
+                    len(left) < 2  # noqa: PLR2004 -- a pick needs a choice
+                    or (row.chosen_at is not None and _picked_among(row, found))
+                    or self._choice_failed(album)
+                    or _suggested(db, album, found, None, dismissed.get(key, set())) is not None
+                ):
+                    continue
+                request = ChooseCoverJob(
+                    album=album.album,
+                    artist=album.artist,
+                    songs=songs_of(db, album.album, album.artist),
+                    options=tuple(each.option for each in found),
+                    chooser=CHOOSER,
+                )
+                break
+            else:
+                return 0
+        target = choose_cover_target(album.album, album.artist)
+        self._jobs.submit(self._kinds.choose, target, request, None)
+        return 1
+
+    def _choice_failed(self, album: _Album) -> bool:
+        latest = self._jobs.latest(
+            CHOOSE_COVER_KIND, choose_cover_target(album.album, album.artist)
+        )
+        return latest is not None and latest.state is JobState.FAILED
+
+    def _let_go(self) -> None:
+        """Forget what was found for an album with a cover now, or gone, once a day old."""
+        with self._units.begin() as db:
+            albums = _albums(db)
+            old = select(AlbumCoverSearchRow).where(
+                AlbumCoverSearchRow.found_at < self._clock() - LET_GO_AFTER
+            )
+            for row in db.scalars(old):
+                album = albums.get(row.key)
+                if album is None or album.covered:
+                    db.delete(row)
+
 
 def checked_album(album: str, artist: str) -> tuple[str, str]:
     """Return the album and its artist trimmed, refusing an album unnamed or a name too long."""
@@ -348,10 +631,96 @@ def _dismissed(db: Session, key: str) -> set[str]:
 
 def _names_of(db: Session, album: str, artist: str) -> list[str]:
     """Return every name the album's artist goes by: as written, and its linked artists' names."""
+    return _names_linked(db, artist, linked_artists_of(db, album, artist))
+
+
+def _names_linked(db: Session, artist: str, linked: tuple[str, ...]) -> list[str]:
     names = [artist]
-    for artist_id in linked_artists_of(db, album, artist):
+    for artist_id in linked:
         names.extend(every_name_of(db, artist_id))
     return names
+
+
+def _suggested(
+    db: Session,
+    album: _Album,
+    found: tuple[FoundAlbumCover, ...],
+    pick: CoverPick | None,
+    dismissed: set[str],
+) -> str | None:
+    return suggested_cover(
+        album.album,
+        _names_linked(db, album.artist, linked_of(db, album.tracks)),
+        [FoundRelease(each.option.title, each.option.artist, each.cover) for each in found],
+        _cover_picked(pick, found),
+        dismissed,
+    )
+
+
+def _albums(db: Session) -> dict[str, _Album]:
+    """Return every album of the Library by its key, as the page groups songs into albums.
+
+    A file split into songs gives way to its songs, which show its cover.
+    """
+    segment_of = album_file_of(db)
+    split = set(segment_of.values())
+    rows = db.execute(
+        select(TrackRow.id, TrackRow.album, TrackRow.album_artist, TrackRow.artist, TrackRow.cover)
+        .where(TrackRow.album != "")
+        .order_by(TrackRow.id)
+    )
+    albums: dict[str, _Album] = {}
+    for track_id, written, album_artist, track_artist, cover in rows:
+        if track_id in split or not written.strip():
+            continue
+        artist = album_artist or track_artist
+        key = album_key(written, artist)
+        album = albums.setdefault(key, _Album(written.strip(), artist.strip()))
+        album.tracks.append(track_id)
+        album.files.add(segment_of.get(TrackId(track_id), track_id))
+        album.bare = album.bare and not album_artist
+        album.covered = album.covered or bool(cover)
+    return albums
+
+
+def _due_unasked(db: Session, albums: dict[str, _Album], now: datetime) -> list[str]:
+    """Return the albums with no cover that may be searched without anyone asking.
+
+    Each was never searched, or searched in vain over 30 days ago. An album name shared by
+    several artists with no album artist, as a compilation's, is left to its page.
+    """
+    shared: dict[str, int] = {}
+    for album in albums.values():
+        if album.bare:
+            shared[_as_grouped(album.album)] = shared.get(_as_grouped(album.album), 0) + 1
+    rows = _searches_of(db, list(albums))
+    due: list[str] = []
+    for key, album in albums.items():
+        row = rows.get(key)
+        if album.covered or (album.bare and shared[_as_grouped(album.album)] > 1):
+            continue
+        if row is None or (not row.covers and now - row.found_at > SEARCHED_IN_VAIN):
+            due.append(key)
+    return due
+
+
+def _searches_of(db: Session, keys: list[str]) -> dict[str, AlbumCoverSearchRow]:
+    rows = select(AlbumCoverSearchRow).where(
+        AlbumCoverSearchRow.key.in_(keys), AlbumCoverSearchRow.finder == FINDER
+    )
+    return {row.key: row for row in db.scalars(rows)}
+
+
+def _dismissed_of(db: Session, keys: list[str]) -> dict[str, set[str]]:
+    dismissed: dict[str, set[str]] = {}
+    rows = db.execute(
+        select(AlbumCoverDismissalRow.key, AlbumCoverDismissalRow.cover).where(
+            AlbumCoverDismissalRow.key.in_(keys)
+        )
+    )
+    for key, cover in rows:
+        dismissed.setdefault(key, set()).add(cover)
+    return dismissed
 
 
 def _picked_among(row: AlbumCoverSearchRow, found: tuple[FoundAlbumCover, ...]) -> bool:
@@ -387,7 +756,14 @@ def linked_artists_of(db: Session, album: str, artist: str) -> tuple[str, ...]:
 
     Those its album artists name come first; without any, those its songs' main artists name.
     """
-    track_ids = track_ids_of(db, album, artist)
+    return linked_of(db, track_ids_of(db, album, artist))
+
+
+def linked_of(db: Session, track_ids: Sequence[int]) -> tuple[str, ...]:
+    """Return the MusicBrainz artists the songs `track_ids` are linked to, a few at most.
+
+    Those their album artists name come first; without any, those their main artists name.
+    """
     rows = db.execute(
         select(TrackArtistRow.album_artist, LibraryArtistRow.musicbrainz_id)
         .join(LibraryArtistRow, LibraryArtistRow.id == TrackArtistRow.artist_id)

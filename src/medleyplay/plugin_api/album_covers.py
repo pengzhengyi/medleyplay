@@ -49,6 +49,9 @@ type MusicBrainzArtistId = Annotated[
 MAX_ARTIST_IDS: Final = 8
 """The most MusicBrainz artists an album is searched by."""
 
+MAX_TRIED: Final = 12
+"""The most releases a finder asks for their cover, a second apart."""
+
 
 class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -59,13 +62,14 @@ class FindCovers(_Model):
 
     `artist` is the album artist, or empty when the album has none; `artist_ids` are the
     MusicBrainz artists its songs are linked to, a finder that knows them searching by
-    them rather than by `artist`. Each cover goes into `folder`, an empty folder the
-    caller owns.
+    them rather than by `artist`. At most `tried` releases, the likeliest first, are asked
+    for their cover. Each cover goes into `folder`, an empty folder the caller owns.
     """
 
     album: Name
     artist: Annotated[str, StringConstraints(max_length=MAX_NAME)] = ""
     artist_ids: Annotated[tuple[MusicBrainzArtistId, ...], Field(max_length=MAX_ARTIST_IDS)] = ()
+    tried: Annotated[int, Field(ge=1, le=MAX_TRIED)] = MAX_TRIED
     folder: Annotated[str, StringConstraints(max_length=4096)] = ""
 
 

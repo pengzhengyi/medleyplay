@@ -1,18 +1,26 @@
 """The album covers API: finding the covers of an album's releases, and an AI model's pick.
 
-Nothing here changes a cover: the household sets the one it chooses on the album's
-songs, as any detail is set.
+The albums with no cover are listed with the cover suggested for each, and *use* makes
+covers found their albums' at once; otherwise the household sets the one it chooses on
+the album's songs, as any detail is set.
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Query, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import BaseModel, Field, TypeAdapter
 
-from medleyplay.application.album_covers import AlbumCovers
+from medleyplay.application.album_covers import (
+    MAX_COMING,
+    MAX_USED,
+    AlbumCovers,
+    ChosenAlbumCover,
+    MissingCover,
+)
 from medleyplay.plugin_api import MAX_NAME, CoverOption
-from medleyplay.web.deps import AlbumCoversDep, SignedInAccount
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AlbumCoversDep, AnswersDep, SignedInAccount
 
 router = APIRouter(prefix="/api/album-covers", tags=["covers"])
 
@@ -129,3 +137,91 @@ class DismissIn(AlbumIn):
 def dismiss(body: DismissIn, me: SignedInAccount, service: AlbumCoversDep) -> None:
     """Suggest the cover found no more as the album's; nothing else is changed."""
     service.dismiss(me, body.album, body.artist, body.cover)
+
+
+class MissingCoverOut(BaseModel):
+    """An album with no cover, as written, how many songs it has, and the cover suggested."""
+
+    album: str
+    artist: str
+    songs: int
+    suggested: str | None = Field(description="The cover suggested, as on the album's page.")
+    picked: bool = Field(description="Whether an AI model picked the suggestion.")
+    found: bool = Field(description="Whether MusicBrainz was searched for the album.")
+    finding: bool = Field(description="Whether MusicBrainz is searched for it now.")
+
+    @staticmethod
+    def of(missing: MissingCover) -> "MissingCoverOut":
+        """Return an album with no cover as the API shows it."""
+        return MissingCoverOut(
+            album=missing.album,
+            artist=missing.artist,
+            songs=missing.songs,
+            suggested=missing.suggested,
+            picked=missing.picked,
+            found=missing.found,
+            finding=missing.finding,
+        )
+
+
+class MissingCoversOut(BaseModel):
+    """Every album with no cover, those with a cover suggested first, then most songs."""
+
+    albums: list[MissingCoverOut]
+
+
+MISSING_COVERS: Final = TypeAdapter(MissingCoversOut)
+
+
+@router.get("/missing", response_model=MissingCoversOut, responses=NOT_MODIFIED)
+def missing_covers(
+    request: Request, _: SignedInAccount, service: AlbumCoversDep, answers: AnswersDep
+) -> Response:
+    """Return every album with no cover, and the cover suggested; 304 when unchanged."""
+    return answers.answer(
+        request,
+        ("album-covers-missing",),
+        lambda: MissingCoversOut(albums=[MissingCoverOut.of(each) for each in service.missing()]),
+        MISSING_COVERS,
+        heavy=True,
+    )
+
+
+class ComingIn(BaseModel):
+    """The songs coming up, the one playing first, in the order they play."""
+
+    track_ids: list[int] = Field(max_length=MAX_COMING)
+
+
+class SearchedOut(BaseModel):
+    """How many albums MusicBrainz is searched for."""
+
+    asked: int
+
+
+@router.post("/missing/find")
+def find_missing(body: ComingIn, me: SignedInAccount, service: AlbumCoversDep) -> SearchedOut:
+    """Search the albums with no cover of the songs playing and next, as the household chose.
+
+    The rest of the songs coming up say which albums the background searches first.
+    """
+    return SearchedOut(asked=service.find_missing(me, body.track_ids))
+
+
+class UsedIn(BaseModel):
+    """The covers found to make their albums' covers."""
+
+    albums: list[DismissIn] = Field(min_length=1, max_length=MAX_USED)
+
+
+class UsedOut(BaseModel):
+    """How many albums now show the cover chosen; one that gained a cover meanwhile doesn't."""
+
+    used: int
+
+
+@router.post("/use")
+def use(body: UsedIn, me: SignedInAccount, service: AlbumCoversDep) -> UsedOut:
+    """Make each cover found its album's, on its songs with none or its one file."""
+    chosen = [ChosenAlbumCover(each.album, each.artist, each.cover) for each in body.albums]
+    return UsedOut(used=service.use(me, chosen))

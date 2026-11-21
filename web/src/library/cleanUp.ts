@@ -1,11 +1,12 @@
 /**
- * @file How much of the Library waits to be cleaned up: names to tidy or link, and long
- * files to split.
+ * @file How much of the Library waits to be cleaned up: names to tidy or link, long files
+ * to split, and photos and covers suggested.
  */
 
 import type {
   ArtistNames,
   ArtistSplits,
+  MissingCover,
   MissingPhoto,
   NameToTidy,
   SharedName,
@@ -34,10 +35,15 @@ export function photosToUseOf(artists: readonly MissingPhoto[] | undefined): num
   return artists?.filter((each) => each.suggested !== null).length ?? 0;
 }
 
+/** Return how many albums with no cover have one suggested, to use. */
+export function coversToUseOf(albums: readonly MissingCover[] | undefined): number {
+  return albums?.filter((each) => each.suggested !== null).length ?? 0;
+}
+
 /**
  * Return how many wait: names to tidy, names that may be linked and aren't, long files
- * with a song list to split them by, artist names to split, names to tell apart, and
- * photos suggested for artists with none.
+ * with a song list to split them by, artist names to split, names to tell apart, photos
+ * suggested for artists with none, and covers suggested for albums with none.
  */
 export function toDoOf(
   tidy: readonly NameToTidy[],
@@ -46,6 +52,7 @@ export function toDoOf(
   artistSplits?: ArtistSplits,
   sharedNames?: readonly SharedName[],
   missingPhotos?: readonly MissingPhoto[],
+  missingCovers?: readonly MissingCover[],
 ): number {
   return (
     tidy.length +
@@ -53,7 +60,8 @@ export function toDoOf(
     toSplitOf(offers) +
     (artistSplits?.offers.length ?? 0) +
     toTellApartOf(sharedNames) +
-    photosToUseOf(missingPhotos)
+    photosToUseOf(missingPhotos) +
+    coversToUseOf(missingCovers)
   );
 }
 

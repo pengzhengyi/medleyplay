@@ -10,7 +10,7 @@ from datetime import timedelta
 from typing import Any, Final, Generic, Protocol, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -293,6 +293,20 @@ class JobService:
                     )
                 )
             )
+
+    def lane_busy(self, shared: str) -> bool:
+        """Return whether a Job of any lane sharing the name `shared` waits, is queued, or runs."""
+        clauses = []
+        for name, kind in self._kinds.items():
+            lanes = sorted(lane for lane, rules in kind.lanes.items() if rules.shared == shared)
+            if kind.lane_field is not None and lanes:
+                lane = JobRow.__table__.c.request[kind.lane_field].as_string()
+                clauses.append(and_(JobRow.kind == name, lane.in_(lanes)))
+        if not clauses:
+            return False
+        with self._units() as db:
+            busy = select(JobRow.id).where(JobRow.state.in_(ACTIVE_STATES), or_(*clauses)).limit(1)
+            return db.scalar(busy) is not None
 
     def active_of(self, kind: str) -> list[JobView]:
         """Return the waiting, queued, and running Jobs of `kind`, oldest first."""

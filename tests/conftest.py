@@ -582,6 +582,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         artist_splits=artist_splits,
         shared_names=shared_names,
         album_covers=album_covers,
+        cover_sweeper=EnrichmentSweeper(album_covers, what="album covers"),
         artist_pictures=artist_pictures,
         image_links=image_links,
         lyrics=lyrics,

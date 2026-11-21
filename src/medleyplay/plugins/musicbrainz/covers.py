@@ -29,8 +29,6 @@ from medleyplay.plugins.musicbrainz.client import MusicBrainzClient, RefusedErro
 from medleyplay.plugins.musicbrainz.matching import Candidate, release_query
 from medleyplay.plugins.musicbrainz.models import ReleaseHit, credited
 
-MAX_TRIED: Final = 12
-"""The most releases asked for their cover, a second apart."""
 MAX_TEXT: Final = 512
 MAX_TRACKS: Final = 999
 
@@ -57,7 +55,7 @@ class MusicBrainzCovers:
             ]
             covers: list[FoundCover] = []
             offered: set[str] = set()
-            for candidate in matching.ranked(candidates, request.album)[:MAX_TRIED]:
+            for candidate in matching.ranked(candidates, request.album)[: request.tried]:
                 image = self.client.release_cover(candidate.release)
                 if image is None or hashlib.sha256(image).hexdigest() in offered:
                     continue

@@ -24,6 +24,19 @@ class PhotoSearch(StrEnum):
     MISSING = "missing"
 
 
+class CoverSearch(StrEnum):
+    """Which albums with no cover MusicBrainz is searched for without anyone asking.
+
+    `UP_NEXT` searches the albums of the song playing and the one after it; `MISSING`
+    those, then every album with no cover, one at a time while MusicBrainz is otherwise
+    idle; `OFF` none, so an album is searched only when its page opens or someone looks.
+    """
+
+    OFF = "off"
+    UP_NEXT = "up_next"
+    MISSING = "missing"
+
+
 class SplitAlbums(StrEnum):
     """What becomes of a long file a song list was found for, while it is one file.
 
@@ -55,7 +68,10 @@ class Settings:
     pictures of an artist, and `pick_pictures_by_ai` says whether an AI model is asked
     which is of the artist as soon as they are found; `find_artist_photos` says which
     artists with no photo they are asked about without anyone asking. `lyrics_sites` are the sites
-    asked for a song's lyrics, in turn, when LRCLIB has none.
+    asked for a song's lyrics, in turn, when LRCLIB has none. `find_album_covers` says which
+    albums with no cover MusicBrainz is searched for without anyone asking, and
+    `pick_album_covers_by_ai` whether an AI model is then asked which cover found fits,
+    when none plainly does.
     """
 
     storage_limit: int | None = None
@@ -66,6 +82,8 @@ class Settings:
     picture_sites: tuple[PictureSite, ...] = ()
     pick_pictures_by_ai: bool = False
     find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
+    find_album_covers: CoverSearch = CoverSearch.UP_NEXT
+    pick_album_covers_by_ai: bool = False
     revision: int = 0
 
     @property

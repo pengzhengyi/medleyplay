@@ -7,6 +7,7 @@ from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import (
     ALBUM_MINUTES,
+    CoverSearch,
     PhotoSearch,
     RemovalOrder,
     Settings,
@@ -65,6 +66,21 @@ class SettingsIn(BaseModel):
             " (off). Left out, it stays as saved."
         ),
     )
+    find_album_covers: CoverSearch = Field(
+        default=CoverSearch.UP_NEXT,
+        description=(
+            "Which albums with no cover MusicBrainz is searched for without anyone asking:"
+            " those of the songs up next (up_next), every one while MusicBrainz is idle"
+            " (missing), or none (off). Left out, it stays as saved."
+        ),
+    )
+    pick_album_covers_by_ai: bool = Field(
+        default=False,
+        description=(
+            "Whether an AI model is asked which cover found fits an album, in the background,"
+            " when none plainly does. Left out, it stays as saved."
+        ),
+    )
     revision: int = Field(ge=0)
 
 
@@ -79,6 +95,8 @@ class SettingsOut(BaseModel):
     picture_sites: tuple[PictureSite, ...]
     pick_pictures_by_ai: bool
     find_artist_photos: PhotoSearch
+    find_album_covers: CoverSearch
+    pick_album_covers_by_ai: bool
     revision: int
 
     @classmethod
@@ -93,6 +111,8 @@ class SettingsOut(BaseModel):
             picture_sites=settings.picture_sites,
             pick_pictures_by_ai=settings.pick_pictures_by_ai,
             find_artist_photos=settings.find_artist_photos,
+            find_album_covers=settings.find_album_covers,
+            pick_album_covers_by_ai=settings.pick_album_covers_by_ai,
             revision=settings.revision,
         )
 
@@ -141,6 +161,16 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
                 body.find_artist_photos
                 if "find_artist_photos" in body.model_fields_set
                 else saved_before.find_artist_photos
+            ),
+            find_album_covers=(
+                body.find_album_covers
+                if "find_album_covers" in body.model_fields_set
+                else saved_before.find_album_covers
+            ),
+            pick_album_covers_by_ai=(
+                body.pick_album_covers_by_ai
+                if "pick_album_covers_by_ai" in body.model_fields_set
+                else saved_before.pick_album_covers_by_ai
             ),
             revision=body.revision,
         ),

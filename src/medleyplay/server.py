@@ -280,6 +280,12 @@ def build_services(  # noqa: PLR0913, PLR0915
     thumbnail_sweeper = EnrichmentSweeper(thumbnails, delay=RECONCILE_DELAY, what="thumbnails")
     changes.listen(thumbnail_sweeper.request)
     events.listen(thumbnail_sweeper.request)
+    # Each Job ending may leave MusicBrainz idle for the next album with no cover, and a
+    # change may give an album a cover, so both ask the album covers' sweep.
+    album_covers = AlbumCoverService(units, plugins, jobs, cover_jobs, clock, changes.tell)
+    cover_sweeper = EnrichmentSweeper(album_covers, what="album covers")
+    changes.listen(cover_sweeper.request)
+    events.listen(cover_sweeper.request)
     # A changed proxy makes a looked-up video's details stale, so they are looked up again.
     proxies.listen(links.forget_lookups)
     accounts = AccountService(
@@ -334,7 +340,8 @@ def build_services(  # noqa: PLR0913, PLR0915
         ),
         artist_splits=ArtistSplitService(units, clock, changes.tell),
         shared_names=SharedNameService(units, clock, changes.tell),
-        album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs, clock),
+        album_covers=album_covers,
+        cover_sweeper=cover_sweeper,
         artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         lyrics=LyricsService(units, clock, changes.tell),
@@ -390,9 +397,11 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
                     services.policy.start()
                     services.sweeper.start()
                     services.thumbnail_sweeper.start()
+                    services.cover_sweeper.start()
                     try:
                         yield
                     finally:
+                        services.cover_sweeper.stop()
                         services.thumbnail_sweeper.stop()
                         services.sweeper.stop()
                         services.policy.stop()

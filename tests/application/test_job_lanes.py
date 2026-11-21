@@ -252,3 +252,22 @@ class _Proxies:
 
     def current(self, site: str) -> str | None:
         return self.urls.get(site)
+
+
+def test_a_shared_lane_is_busy_while_a_job_of_any_lane_sharing_it_is_queued_or_runs(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    kind = kind_with_lanes(
+        {"tracks": Lane(shared="site"), "artists": Lane(shared="site"), "other": Lane()}
+    )
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, start=False) as jobs:
+        idle = jobs.service.lane_busy("site")
+        queued = jobs.submit(EchoJob(text="a", lane="artists"), target="echo:1")
+        busy = jobs.service.lane_busy("site")
+        jobs.submit(EchoJob(text="b", lane="other"), target="echo:2")
+        with units.begin() as db:
+            jobs.service.cancel_active_in(db, kind.name, "echo:1")
+        after = jobs.service.lane_busy("site")
+
+    assert (idle, busy, after) == (False, True, False)
+    assert queued.state is JobState.QUEUED

@@ -32,6 +32,8 @@ import { linksOf, withLinkedFavorites } from "../library/artistLinks";
 import { useArtistNames } from "../library/useArtistNames";
 import { useNamesToTidy } from "../library/useNamesToTidy";
 import { useArtistSplits } from "../library/useArtistSplits";
+import { useCoverLookAhead } from "../library/useCoverLookAhead";
+import { useMissingCovers } from "../library/useMissingCovers";
 import { useMissingPhotos } from "../library/useMissingPhotos";
 import { usePhotoLookAhead } from "../library/usePhotoLookAhead";
 import { useSharedNames } from "../library/useSharedNames";
@@ -177,6 +179,7 @@ export function Library({
   const artistSplits = useArtistSplits(refreshes);
   const sharedNames = useSharedNames(refreshes);
   const missingPhotos = useMissingPhotos(refreshes);
+  const missingCovers = useMissingCovers(refreshes);
   const toDo = toDoOf(
     namesToTidy.names,
     artistNames.names,
@@ -184,6 +187,7 @@ export function Library({
     artistSplits.splits,
     sharedNames.names,
     missingPhotos.artists,
+    missingCovers.albums,
   );
   const links = useMemo(() => linksOf(artistNames.names, tracks), [artistNames.names, tracks]);
   // A favorite artist makes each of its names, and every name linked with one, a favorite.
@@ -266,6 +270,8 @@ export function Library({
   // An enricher set to the next to play is asked about the song playing and the one after.
   useLookAhead([playingId, upNext(player.queue)[0]?.trackId], byId, library);
   usePhotoLookAhead([playingId, upNext(player.queue)[0]?.trackId]);
+  // Their albums with no cover are searched as the household chose, those coming up first.
+  useCoverLookAhead([playingId, ...upNext(player.queue).map((entry) => entry.trackId)]);
   // With nothing left playing, Now Playing closes, and the next song doesn't reopen it.
   if (nowPlayingOver !== undefined && playing === undefined && library.loaded) {
     setNowPlayingOver(undefined);
@@ -703,6 +709,7 @@ export function Library({
             artistSplits={{ names: artistSplits.splits, reload: artistSplits.reload }}
             sharedNames={sharedNames}
             missingPhotos={missingPhotos}
+            missingCovers={{ ...missingCovers, onUsed: library.reloadTracks }}
             toDo={toDo}
           />
         ) : (

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Find album covers in Clean up** — each album without a cover that MusicBrainz
+  has one for shows it with *Use*, *Dismiss*, and *Change*, and *Use all* uses every
+  one at once. Settings → MusicBrainz chooses which albums are looked up on their
+  own: those of the songs up next (the default), every album without a cover, one at
+  a time while MusicBrainz is otherwise idle, or none; and whether an AI model picks
+  a cover where none plainly fits (off by default).
 - **A suggested cover for an album without one** — opening the album's page looks
   it up on MusicBrainz, and the cover found whose title and artist are the album's,
   or the one an AI model picked, stands in the empty cover with *Use*, *Dismiss*,

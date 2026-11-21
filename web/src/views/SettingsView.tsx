@@ -34,6 +34,7 @@ import { KindSettings } from "./KindSettings";
 import { LyricsSettings } from "./LyricsSettings";
 import { LyricsSites } from "./LyricsSites";
 import { PictureSites } from "./PictureSites";
+import { CoverSearchSettings } from "./CoverSearchSettings";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { RatingsSettings } from "./RatingsSettings";
@@ -238,7 +239,12 @@ export function SettingsView({
         <VideoDetailsSettings onChanged={onEnrichersChanged} />
       </>
     ),
-    musicbrainz: <MusicBrainzSettings onChanged={onEnrichersChanged} />,
+    musicbrainz: (
+      <>
+        <MusicBrainzSettings onChanged={onEnrichersChanged} />
+        <CoverSearchSettings settings={household} onSettings={keepNewest} />
+      </>
+    ),
     deezer: <PictureSites settings={household} onSettings={keepNewest} />,
     lyrics: (
       <>

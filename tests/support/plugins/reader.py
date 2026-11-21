@@ -564,7 +564,10 @@ class Pictures:
 
 
 class Covers:
-    """Answers as MusicBrainz would for *Help!*, writing each cover into the folder asked for."""
+    """Answers as MusicBrainz would for *Help!*, writing each cover into the folder asked for.
+
+    *Help Me* by The Beatles is answered with *Help!*'s releases too, so none of them fits it.
+    """
 
     def find(self, request: FindCovers) -> FoundCovers:
         folder = Path(request.folder)
@@ -576,7 +579,7 @@ class Covers:
                 covers=(FoundCover(release_id=HELP_VINYL, title="Forged", file=HELP_VINYL),)
             )
         by_the_beatles = request.artist in {"", "The Beatles"} or BEATLES.id in request.artist_ids
-        if request.album != "Help!" or not by_the_beatles:
+        if request.album not in {"Help!", "Help Me"} or not by_the_beatles:
             return FoundCovers()
         (folder / HELP_VINYL).write_bytes(jpeg_image("Help! 1965"))
         (folder / HELP_CD).write_bytes(jpeg_image("Help! 1987"))

@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from medleyplay.plugin_api import MAX_COVERS, FindCovers, FindStatus, NetworkError
+from medleyplay.plugin_api import MAX_COVERS, MAX_TRIED, FindCovers, FindStatus, NetworkError
 from medleyplay.plugins.musicbrainz.client import MusicBrainzClient
-from medleyplay.plugins.musicbrainz.covers import MAX_TRIED, MusicBrainzCovers
+from medleyplay.plugins.musicbrainz.covers import MusicBrainzCovers
 from tests.support.images import jpeg_image
 from tests.support.musicbrainz import API, COVERS, SHU_PU, FakeMusicBrainz, MusicBrainzFactory
 from tests.support.transport import FakeWaits, Reply
@@ -162,6 +162,16 @@ def test_no_more_releases_are_tried_than_the_most(tmp_path: Path) -> None:
 
     assert found.covers == ()
     assert sum(url.startswith(COVERS) for url in fake.urls()) == MAX_TRIED
+
+
+def test_a_search_asked_to_try_fewer_releases_tries_no_more(tmp_path: Path) -> None:
+    fake = FakeMusicBrainz().answer(f"{API}/release", Reply.json(many_releases(6)))
+    for index in range(6):
+        fake.answer(cover_url(f"00000000-0000-4000-8000-{index:012d}"), Reply(404))
+
+    finder_of(fake).find(FindCovers(album="Live", tried=4, folder=str(tmp_path)))
+
+    assert sum(url.startswith(COVERS) for url in fake.urls()) == 4
 
 
 def test_musicbrainz_refusing_the_search_is_a_refusal(tmp_path: Path) -> None:

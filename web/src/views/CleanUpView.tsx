@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import type {
   ArtistNames,
   ArtistSplits,
+  MissingCover,
   MissingPhoto,
   NameToTidy,
   SharedName,
@@ -21,11 +22,13 @@ import type {
 } from "../api";
 import {
   inOrderOfWaiting,
+  coversToUseOf,
   photosToUseOf,
   toSplitOf,
   toTellApartOf,
   unlinkedOf,
 } from "../library/cleanUp";
+import { type AlbumCoverActions, FindAlbumCovers } from "./FindAlbumCovers";
 import { FindPhotos } from "./FindPhotos";
 import { LinkArtists } from "./LinkArtists";
 import { SharedNames } from "./SharedNames";
@@ -48,6 +51,8 @@ export function CleanUpView({
   artistSplits,
   sharedNames,
   missingPhotos,
+  missingCovers,
+  albumCovers,
   onEditSongs,
 }: {
   readonly tidy: Read<readonly NameToTidy[]>;
@@ -66,6 +71,16 @@ export function CleanUpView({
     readonly reload: () => void;
     readonly answered: number;
   };
+  /** The albums with no cover, each with any cover suggested. */
+  readonly missingCovers?: {
+    readonly albums: readonly MissingCover[];
+    readonly reload: () => void;
+    readonly answered: number;
+    /** Read the songs again once covers found were used, so their albums show them. */
+    readonly onUsed?: () => void;
+  };
+  /** How a cover chosen in the cover editor is set on an album. */
+  readonly albumCovers?: AlbumCoverActions | undefined;
   readonly onEditSongs?: (trackId: number) => void;
 }) {
   const toSplitNames = artistSplits?.names.offers.length ?? 0;
@@ -81,6 +96,8 @@ export function CleanUpView({
   const sharing = (sharedNames?.names.length ?? 0) > 0;
   const toUse = photosToUseOf(missingPhotos?.artists);
   const missingAnyPhoto = (missingPhotos?.artists.length ?? 0) > 0;
+  const coversToUse = coversToUseOf(missingCovers?.albums);
+  const missingAnyCover = (missingCovers?.albums.length ?? 0) > 0;
   const sections = inOrderOfWaiting<Section>([
     ...(toTidy > 0
       ? [
@@ -151,6 +168,25 @@ export function CleanUpView({
           },
         ]
       : []),
+    ...(missingCovers !== undefined && missingAnyCover
+      ? [
+          {
+            id: "clean-up-covers",
+            title: "Find album covers",
+            waiting: coversToUse,
+            body: (
+              <FindAlbumCovers
+                albums={missingCovers.albums}
+                answered={missingCovers.answered}
+                tracks={tracks}
+                actions={albumCovers}
+                onChanged={missingCovers.reload}
+                onUsed={missingCovers.onUsed}
+              />
+            ),
+          },
+        ]
+      : []),
     ...(artistNames !== undefined && linkable
       ? [
           {
@@ -175,7 +211,7 @@ export function CleanUpView({
           Clean up
         </h2>
         <p className="meta">
-          {summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart, toUse)}
+          {summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart, toUse, coversToUse)}
         </p>
       </header>
       {toTidy === 0 &&
@@ -183,7 +219,8 @@ export function CleanUpView({
       !splitting &&
       !splittingNames &&
       !sharing &&
-      !missingAnyPhoto ? (
+      !missingAnyPhoto &&
+      !missingAnyCover ? (
         <p className="empty">
           Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
           split into songs, show here.
@@ -250,6 +287,7 @@ function summaryOf(
   toSplitNames: number,
   toTellApart: number,
   toUse: number,
+  coversToUse: number,
 ): string {
   const waiting = [
     toTidy > 0 && `${String(toTidy)} ${toTidy === 1 ? "name" : "names"} to tidy`,
@@ -259,6 +297,8 @@ function summaryOf(
     toTellApart > 0 &&
       `${String(toTellApart)} shared ${toTellApart === 1 ? "name" : "names"} to tell apart`,
     toUse > 0 && `${String(toUse)} artist ${toUse === 1 ? "photo" : "photos"} to use`,
+    coversToUse > 0 &&
+      `${String(coversToUse)} album ${coversToUse === 1 ? "cover" : "covers"} to use`,
     toSplit > 0 && `${String(toSplit)} ${toSplit === 1 ? "file" : "files"} to split`,
   ].filter(Boolean);
   return waiting.length === 0 ? "Every name is tidy and linked." : waiting.join(", ");

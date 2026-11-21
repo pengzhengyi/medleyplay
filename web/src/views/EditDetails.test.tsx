@@ -48,6 +48,8 @@ async function renderDialog(
     reloaded?: Details;
     /** The way to the songs of the song's file. */
     songs?: { readonly label: string; readonly editor: ReactNode };
+    /** Whether the dialog opens on the songs, as *Split into songs* opens it. */
+    startOnSongs?: boolean;
     /** The way to the song's lyrics. */
     lyrics?: { readonly label: string; readonly editor: ReactNode };
   } = {},
@@ -73,12 +75,15 @@ async function renderDialog(
       onFind={onFind}
       songs={more.songs}
       lyrics={more.lyrics}
+      startOnSongs={more.startOnSongs ?? false}
       onClose={onClose}
     />
   );
   const { rerender } = render(dialogOf(more.lookup));
-  const dialog = screen.getByRole("dialog", { name: "Edit details" });
-  await within(dialog).findByRole("textbox", { name: "Title" });
+  const dialog = screen.getByRole("dialog");
+  if (more.startOnSongs !== true) {
+    await within(dialog).findByRole("textbox", { name: "Title" });
+  }
   /** Show the dialog as the page would once the song's lookup is `lookup`. */
   const lookUp = (lookup: TrackLookup) => {
     if (more.reloaded !== undefined) {
@@ -896,9 +901,9 @@ describe("looking a song up from its details", () => {
   });
 });
 
-/** A stand-in for the songs or lyrics editor: its heading, `title`, and its way back. */
+/** A stand-in for the songs or lyrics editor: its heading, `title`, its way back, and Save. */
 function PanelStandIn({ title }: { readonly title: string }) {
-  const { headingId, onBack } = useContext(SongsControlsContext);
+  const { headingId, onBack, onDone } = useContext(SongsControlsContext);
   return (
     <form>
       <h2 id={headingId} tabIndex={-1}>
@@ -906,6 +911,9 @@ function PanelStandIn({ title }: { readonly title: string }) {
       </h2>
       <button type="button" onClick={onBack}>
         Details
+      </button>
+      <button type="button" onClick={onDone}>
+        Save
       </button>
     </form>
   );
@@ -928,6 +936,33 @@ describe("the songs of a song's file", () => {
     expect(focused).toBe(heading);
     expect(within(dialog).getByRole("textbox", { name: "Title" })).toHaveValue("ケビョウニンゲン!");
     expect(within(dialog).getByRole("button", { name: "11 songs" })).toHaveFocus();
+  });
+
+  it("opened first, the way back shows the details instead of closing", async () => {
+    const { dialog, onClose } = await renderDialog(detailsOf(7), undefined, undefined, {
+      songs: { label: "11 songs", editor: <PanelStandIn title="Songs" /> },
+      startOnSongs: true,
+    });
+    await within(dialog).findByRole("heading", { name: "Songs" });
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Details" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(await within(dialog).findByRole("textbox", { name: "Title" })).toHaveValue(
+      "ケビョウニンゲン",
+    );
+    expect(within(dialog).getByRole("button", { name: "11 songs" })).toHaveFocus();
+  });
+
+  it("opened first, close the dialog once saved", async () => {
+    const { dialog, onClose } = await renderDialog(detailsOf(7), undefined, undefined, {
+      songs: { label: "11 songs", editor: <PanelStandIn title="Songs" /> },
+      startOnSongs: true,
+    });
+
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Save" }));
+
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("are not offered when the dialog has no way to them", async () => {

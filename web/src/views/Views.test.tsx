@@ -462,6 +462,59 @@ describe("playlists", () => {
   });
 });
 
+describe("keeping a Playlist downloaded", () => {
+  it("keeps a Playlist's songs downloaded once switched on, as the server saved it", async () => {
+    const sent: unknown[] = [];
+    open("#/playlist?id=p1", {
+      ...signedIn(LIBRARY, [favoritesPlaylistOf([1]), playlistOf("p1", "Mornings", [2, 1, 2])]),
+      "PUT /api/playlists/p1/keep_downloaded": (body) => {
+        sent.push(body);
+        return { body: { ...playlistOf("p1", "Mornings", [2, 1, 2]), keep_downloaded: true } };
+      },
+    });
+    const keep = await screen.findByRole("switch", { name: "Keep downloaded" });
+    expect(keep).not.toBeChecked();
+
+    await userEvent.click(keep);
+
+    expect(sent).toEqual([{ keep_downloaded: true }]);
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "Keep downloaded" })).toBeChecked();
+    });
+  });
+
+  it("keeps Favorites downloaded too, through the Playlist the server keeps for them", async () => {
+    const favorites = favoritesPlaylistOf([1]);
+    const sent: string[] = [];
+    open("#/playlist?id=favorites", {
+      ...signedIn(LIBRARY, [favorites]),
+      [`PUT /api/playlists/${favorites.id}/keep_downloaded`]: () => {
+        sent.push(favorites.id);
+        return { body: { ...favorites, keep_downloaded: true } };
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Keep downloaded" }));
+
+    expect(sent).toEqual([favorites.id]);
+  });
+
+  it("says why when the server refuses, and leaves the switch as it was", async () => {
+    open("#/playlist?id=p1", {
+      ...signedIn(LIBRARY, [favoritesPlaylistOf([1]), playlistOf("p1", "Mornings", [2, 1, 2])]),
+      "PUT /api/playlists/p1/keep_downloaded": {
+        status: 404,
+        body: { detail: "No Playlist p1." },
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Keep downloaded" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No Playlist p1.");
+    expect(screen.getByRole("switch", { name: "Keep downloaded" })).not.toBeChecked();
+  });
+});
+
 describe("search", () => {
   it("finds songs, artists, and albums as you type, ignoring hiragana or katakana", async () => {
     open("");

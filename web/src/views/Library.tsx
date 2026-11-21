@@ -413,6 +413,7 @@ export function Library({
     onEditAlbum: setEditingAlbum,
     onUseAlbumCover: setAlbumCover,
     onUploadAlbumCover: uploadAlbumCover,
+    onKeepDownloaded: library.keepDownloaded,
     // The AI asked about a Track lately is offered too, asked again once someone agrees.
     canFind: (lookup: Lookup, track: Track) =>
       (library.findable.get(lookup.enricher)?.has(track.id) ?? false) ||

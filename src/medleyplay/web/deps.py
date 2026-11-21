@@ -38,6 +38,7 @@ from medleyplay.application.settings import SettingsService
 from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import SilenceService
 from medleyplay.application.split_offers import SplitOfferService
+from medleyplay.application.storage_folder import StorageFolder
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.thumbnails import ThumbnailService
 from medleyplay.domain.accounts import Account
@@ -91,6 +92,7 @@ class Services:
     image_links: ImageLinkService
     lyrics: LyricsService
     lyrics_search: LyricsSearchService
+    storage_folder: StorageFolder
     revision: DatabaseRevision
     answers: CachedAnswers
 
@@ -162,6 +164,10 @@ def _settings(services: Annotated[Services, Depends(_services)]) -> SettingsServ
 
 def _policy(services: Annotated[Services, Depends(_services)]) -> PolicyService:
     return services.policy
+
+
+def _storage_folder(services: Annotated[Services, Depends(_services)]) -> StorageFolder:
+    return services.storage_folder
 
 
 def _preferences(services: Annotated[Services, Depends(_services)]) -> PreferencesService:
@@ -267,6 +273,7 @@ ManualDownloadsDep = Annotated[ManualDownloadService, Depends(_manual_downloads)
 EventsDep = Annotated[Events, Depends(_events)]
 SettingsDep = Annotated[SettingsService, Depends(_settings)]
 PolicyDep = Annotated[PolicyService, Depends(_policy)]
+StorageFolderDep = Annotated[StorageFolder, Depends(_storage_folder)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
 RatingsDep = Annotated[RatingsService, Depends(_ratings)]
 ArtistsDep = Annotated[ArtistService, Depends(_artists)]

@@ -1,6 +1,7 @@
-"""Fakes for the core's boundaries: the clock, the Keychain, and the network."""
+"""Fakes for the core's boundaries: the clock, the Keychain, the network, and Finder."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from medleyplay.domain.errors import KeychainUnavailableError
@@ -102,3 +103,17 @@ class OnlineSwitch:
 
     def __call__(self) -> bool:
         return self.online
+
+
+class FakeFinder:
+    """Finder as the core sees it: remembers each folder it was asked to show, opening none."""
+
+    def __init__(self, *, fails: bool = False) -> None:
+        self.shown: list[Path] = []
+        self.fails = fails
+
+    def __call__(self, folder: Path) -> None:
+        if self.fails:
+            message = "Finder could not be reached."
+            raise OSError(message)
+        self.shown.append(folder)

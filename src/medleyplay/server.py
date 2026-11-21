@@ -62,6 +62,7 @@ from medleyplay.application.settings import SettingsService
 from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import SilenceService, find_silences_kind
 from medleyplay.application.split_offers import LibrarySweep, SplitOfferService
+from medleyplay.application.storage_folder import StorageFolder, show_in_finder
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.application.thumbnails import (
@@ -346,6 +347,11 @@ def build_services(  # noqa: PLR0913, PLR0915
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         lyrics=LyricsService(units, clock, changes.tell),
         lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs),
+        storage_folder=StorageFolder(
+            downloads.folder,
+            show_in_finder if sys.platform == "darwin" else None,
+            home=Path.home(),
+        ),
         revision=revision,
         answers=CachedAnswers(revision),
     )

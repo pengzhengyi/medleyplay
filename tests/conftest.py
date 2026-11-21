@@ -59,6 +59,7 @@ from medleyplay.application.silences import (
     find_silences_kind,
 )
 from medleyplay.application.split_offers import SplitOfferService
+from medleyplay.application.storage_folder import StorageFolder
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.application.thumbnails import ThumbnailService, make_thumbnails_kind
@@ -69,6 +70,7 @@ from medleyplay.web.cached import CachedAnswers
 from medleyplay.web.deps import Services
 from tests.support.fakes import (
     FakeClock,
+    FakeFinder,
     FakeInternet,
     FakeNetwork,
     MemorySecrets,
@@ -507,6 +509,18 @@ def ai(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets) -
 
 
 @pytest.fixture
+def finder() -> FakeFinder:
+    """Finder, remembering each folder it was asked to show."""
+    return FakeFinder()
+
+
+@pytest.fixture
+def storage_folder(downloads: DownloadService, finder: FakeFinder) -> StorageFolder:
+    """The Downloads folder, shown by `finder`, as on a Mac."""
+    return StorageFolder(downloads.folder, finder, home=downloads.folder.parent)
+
+
+@pytest.fixture
 def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     accounts: AccountService,
     catalog: CatalogService,
@@ -540,6 +554,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     image_links: ImageLinkService,
     lyrics: LyricsService,
     lyrics_search: LyricsSearchService,
+    storage_folder: StorageFolder,
     clock: FakeClock,
     units: sessionmaker[Session],
 ) -> Services:
@@ -587,6 +602,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         image_links=image_links,
         lyrics=lyrics,
         lyrics_search=lyrics_search,
+        storage_folder=storage_folder,
         revision=revision,
         answers=CachedAnswers(revision),
     )

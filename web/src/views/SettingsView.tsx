@@ -25,6 +25,7 @@ import { classOf } from "../useNote";
 import { formatBytes } from "../format";
 import { hrefOf } from "../routes";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import { DownloadsFolder } from "./DownloadsFolder";
 import { AccentPicker } from "./AccentPicker";
 import { DynamicsSwitch } from "./DynamicsSwitch";
 import { AiSettings } from "./AiSettings";
@@ -516,6 +517,7 @@ function StorageSettings({
       ) : (
         <>
           <Usage storage={storage} />
+          <DownloadsFolder />
           {admin ? (
             <form
               className="limit"
@@ -604,8 +606,8 @@ function StorageSettings({
             </p>
           )}
           <p className="hint">
-            When room is needed, the Downloads of the least favorite songs go first; a song a kept
-            Playlist holds is never removed to make room.
+            When room is needed, the Downloads of the least favorite songs go first; a song in a
+            Playlist set to Keep downloaded is never removed to make room.
           </p>
         </>
       )}
@@ -668,7 +670,9 @@ function Usage({ storage }: { readonly storage: Storage }) {
         )}
         {storage.wanted !== null && (
           <div>
-            <dt>Kept Playlists want</dt>
+            <dt title="The songs of the Playlists set to Keep downloaded: what their Downloads use, and an estimate for those not downloaded yet">
+              Playlists kept downloaded
+            </dt>
             <dd>{formatBytes(storage.wanted)}</dd>
           </div>
         )}

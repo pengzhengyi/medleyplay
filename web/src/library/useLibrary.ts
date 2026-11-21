@@ -192,6 +192,8 @@ export interface Library {
     ids: readonly string[],
     newNames: readonly string[],
   ) => Promise<void>;
+  /** Switch whether `playlist` keeps its songs downloaded; it shows as the server saved it. */
+  readonly keepDownloaded: (playlist: Playlist, keep: boolean) => Promise<void>;
 }
 
 /** The Jobs whose end can change the Tracks. */
@@ -775,6 +777,10 @@ export function useLibrary(onSignedOut: () => void): Library {
         }
         throw refused.reason;
       }
+    },
+    keepDownloaded: async (playlist, keep) => {
+      const saved = await signedOutOn401(api.setKeepDownloaded(playlist.id, keep));
+      setPlaylists((now) => now.map((each) => (each.id === saved.id ? saved : each)));
     },
   };
 }

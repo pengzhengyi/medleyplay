@@ -117,8 +117,9 @@ body {
 
 /* The mark while the page starts, before the script runs and until the Account is known. */
 .starting {
-  display: grid;
-  place-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 100dvh;
   margin: 0;
   color: var(--muted);

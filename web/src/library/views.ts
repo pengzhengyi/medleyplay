@@ -140,6 +140,22 @@ export function artistsOf(tracks: readonly Track[], links?: ArtistLinks): Artist
     );
 }
 
+/**
+ * Return the artists among the Library's whose ids are `ids`, the artists one name names,
+ * in the order the name names them; an artist with no song is left out.
+ */
+export function artistsCalled(
+  tracks: readonly Track[],
+  links: ArtistLinks,
+  ids: readonly string[],
+): Artist[] {
+  const place = new Map(ids.map((id, index) => [id, index]));
+  const placeOf = (artist: Artist) => (artist.id === undefined ? undefined : place.get(artist.id));
+  return artistsOf(tracks, links)
+    .filter((artist) => placeOf(artist) !== undefined)
+    .sort((a, b) => (placeOf(a) ?? 0) - (placeOf(b) ?? 0));
+}
+
 /** Return the key `counts` counts most, the first of those counted alike; none for no keys. */
 function mostOf(counts: ReadonlyMap<string, number>): string | undefined {
   return [...counts].reduce<[string, number] | undefined>(

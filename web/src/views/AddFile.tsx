@@ -2,8 +2,8 @@
  * @file Adding a site Track's audio file by hand, when medleyplay can't download it.
  *
  * It says why the Download failed, lists other ways to get the file, and uploads the
- * file chosen, showing how far it has got. Escape, Cancel, or a click outside close it;
- * while the file is going up, Cancel stops the upload.
+ * file chosen, showing how far it has got. Escape, its ✕, or a click outside close it;
+ * while the file is going up, *Stop* beside its progress stops the upload.
  */
 
 import { UploadSimpleIcon } from "@phosphor-icons/react";
@@ -73,10 +73,6 @@ export function AddFile({
     };
   }, [track.id]);
 
-  const close = () => {
-    stopping.current?.abort();
-    dialog.current?.close();
-  };
   const send = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (file === undefined) {
@@ -156,6 +152,15 @@ export function AddFile({
             <span>
               {percent}% of {formatBytes(progress.total)}
             </span>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                stopping.current?.abort();
+              }}
+            >
+              Stop
+            </button>
           </div>
         )}
         {state !== undefined && <OtherWays kind={state.kind} link={state.link} open />}
@@ -165,9 +170,6 @@ export function AddFile({
           </p>
         )}
         <footer className="dialog-buttons">
-          <button type="button" className="secondary outline dialog-button" onClick={close}>
-            Cancel
-          </button>
           <button
             type="submit"
             className="dialog-button"

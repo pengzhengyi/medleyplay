@@ -49,6 +49,7 @@ import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { AskAiAgain } from "./AskAiAgain";
 import { CheckNetwork } from "./CheckNetwork";
+import { DialogOpening } from "./DialogOpening";
 import type { AiAsk, SilenceFinder } from "./EditSongs";
 import { LibrarySkeleton } from "./LibrarySkeleton";
 import { AccountMenu, Nav } from "./Nav";
@@ -68,7 +69,10 @@ import { setRailCollapsed, setRailMinimized, useRailCollapsed, useRailMinimized 
 
 // What opens only when asked for loads then, so the first page has less to load.
 const AddFile = lazy(() => import("./AddFile").then((loaded) => ({ default: loaded.AddFile })));
-const AddLink = lazy(() => import("./AddLink").then((loaded) => ({ default: loaded.AddLink })));
+const loadAddLink = () => import("./AddLink");
+const AddLink = lazy(() => loadAddLink().then((loaded) => ({ default: loaded.AddLink })));
+// Adding from a site is loaded soon after the page, so its dialog opens without a wait.
+const LOAD_ADD_LINK_AFTER_MS = 3000;
 const EditAlbum = lazy(() =>
   import("./EditAlbum").then((loaded) => ({ default: loaded.EditAlbum })),
 );
@@ -180,14 +184,15 @@ export function Library({
       setPlaysOn("computer");
     }, playOnFailedFor);
   };
-  // What only some views need is read once the songs are in, and again as they change.
-  const loadedTracks = library.loaded ? library.tracks : undefined;
-  const artistNames = useArtistNames(loadedTracks);
-  const namesToTidy = useNamesToTidy(loadedTracks);
-  const splitOffers = useSplitOffers(loadedTracks);
-  const artistSplits = useArtistSplits(loadedTracks);
-  const sharedNames = useSharedNames(loadedTracks);
-  const missingPhotos = useMissingPhotos(loadedTracks);
+  // What is read beside the songs is read once they are in, and again whenever the
+  // Library may have changed; never for a heart or a rating.
+  const refreshes = library.loaded ? library.refreshes : undefined;
+  const artistNames = useArtistNames(refreshes);
+  const namesToTidy = useNamesToTidy(refreshes);
+  const splitOffers = useSplitOffers(refreshes);
+  const artistSplits = useArtistSplits(refreshes);
+  const sharedNames = useSharedNames(refreshes);
+  const missingPhotos = useMissingPhotos(refreshes);
   const toDo = toDoOf(
     namesToTidy.names,
     artistNames.names,
@@ -255,6 +260,7 @@ export function Library({
           load={() => api.lyrics(track.id)}
           save={(text, instrumental) => edited(api.setLyrics(track.id, text, instrumental))}
           forget={() => edited(api.forgetLyrics(track.id))}
+          song={{ id: track.id, title: track.title, artist: track.artist }}
           player={{
             current,
             playing: current && player.status.kind === "playing",
@@ -357,6 +363,42 @@ export function Library({
       },
     );
   };
+  /** Use `cover` on every song of `songs`. */
+  const setAlbumCover = async (songs: readonly Track[], cover: string) => {
+    await library.setDetailsOn(
+      songs.map(({ id }) => id),
+      { cover },
+    );
+    setNotice(`Used the cover on ${String(songs.length)} songs.`);
+  };
+  // The image becomes the first song's cover, then every song's.
+  const uploadAlbumCover = async (songs: readonly Track[], image: File) => {
+    const [first] = songs;
+    const cover =
+      first === undefined
+        ? undefined
+        : (await library.setCover(first.id, image)).origins.household?.cover;
+    if (typeof cover !== "string") {
+      throw new Error("The cover could not be kept.");
+    }
+    await setAlbumCover(songs, cover);
+    return cover;
+  };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadAddLink().catch(() => {
+        // Not loaded now, it loads when its dialog first opens.
+      });
+    }, LOAD_ADD_LINK_AFTER_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
+  // A song's Download under way shows on its row, from the moment it is added.
+  const downloadsByTrack = useMemo(
+    () => new Map(library.downloading.map((download) => [download.track_id, download])),
+    [library.downloading],
+  );
   const actions: TrackActions = {
     onPlay: player.playList,
     onPlayAll: player.playAll,
@@ -373,6 +415,8 @@ export function Library({
       setEditing({ track, songs: false });
     },
     onEditAlbum: setEditingAlbum,
+    onUseAlbumCover: setAlbumCover,
+    onUploadAlbumCover: uploadAlbumCover,
     // The AI asked about a Track lately is offered too, asked again once someone agrees.
     canFind: (lookup: Lookup, track: Track) =>
       (library.findable.get(lookup.enricher)?.has(track.id) ?? false) ||
@@ -380,6 +424,7 @@ export function Library({
     // The song's cover shows the lookup as it goes; screen readers hear it asked.
     statusOf: (track: Track) =>
       coverStatusOf(library.lookups.get(track.id), library.mode?.online !== false),
+    downloadOf: (track: Track) => downloadsByTrack.get(track.id),
     onFind: (lookup: Lookup, track: Track) => {
       if (library.askedRecently.get(lookup.enricher)?.has(track.id) ?? false) {
         setAskingAgain({ lookup, track });
@@ -408,7 +453,9 @@ export function Library({
   };
   /** The way to the songs of `track`'s file from its details, and the editor to show. */
   const songsOf = (track: Track) => {
-    const file = track.segment_of === null ? track : byId.get(track.segment_of);
+    // Read from the Library, so a file split while its details are open says so.
+    const file =
+      byId.get(track.segment_of ?? track.id) ?? (track.segment_of === null ? track : undefined);
     if (file === undefined) {
       return undefined;
     }
@@ -427,6 +474,11 @@ export function Library({
       askAgain: (hint) => {
         library.find(AI_ENRICHER, file.id, { hint }).catch(() => {
           // The lookup's state says why, beside the AI button.
+        });
+      },
+      stop: () => {
+        library.stopFinding(file.id).catch(() => {
+          // A Job that can't be cancelled has ended; its answer lands as any does.
         });
       },
     };
@@ -696,20 +748,33 @@ export function Library({
       {/* Each dialog loads when it first opens; until then, nothing shows in its place. */}
       <Suspense fallback={null}>
         {linking !== undefined && (
-          <AddLink
-            link={linking}
-            look={library.lookUpLink}
-            add={library.addLink}
-            onAdded={(count) => {
-              const songs = count === 1 ? "1 song" : `${String(count)} songs`;
-              const wait =
-                library.mode?.online === false ? " They wait until medleyplay is Online." : "";
-              setNotice(`Added ${songs}. They are downloading.${wait}`);
-            }}
-            onClose={() => {
-              setLinking(undefined);
-            }}
-          />
+          <Suspense
+            fallback={
+              <DialogOpening
+                className="add-link"
+                title="Add from Bilibili"
+                doing="Looking the video up…"
+                onClose={() => {
+                  setLinking(undefined);
+                }}
+              />
+            }
+          >
+            <AddLink
+              link={linking}
+              look={library.lookUpLink}
+              add={library.addLink}
+              onAdded={(count) => {
+                const songs = count === 1 ? "1 song" : `${String(count)} songs`;
+                const wait =
+                  library.mode?.online === false ? " They wait until medleyplay is Online." : "";
+                setNotice(`Added ${songs}. They are downloading.${wait}`);
+              }}
+              onClose={() => {
+                setLinking(undefined);
+              }}
+            />
+          </Suspense>
         )}
         {filing !== undefined && (
           <AddFile
@@ -769,30 +834,8 @@ export function Library({
         {editingAlbum !== undefined && (
           <EditAlbum
             songs={editingAlbum}
-            onUseCover={async (cover) => {
-              await library.setDetailsOn(
-                editingAlbum.map(({ id }) => id),
-                { cover },
-              );
-              setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
-            }}
-            // The image becomes the first song's cover, then every song's.
-            onUploadCover={async (image) => {
-              const [first] = editingAlbum;
-              const cover =
-                first === undefined
-                  ? undefined
-                  : (await library.setCover(first.id, image)).origins.household?.cover;
-              if (typeof cover !== "string") {
-                throw new Error("The cover could not be kept.");
-              }
-              await library.setDetailsOn(
-                editingAlbum.map(({ id }) => id),
-                { cover },
-              );
-              setNotice(`Used the cover on ${String(editingAlbum.length)} songs.`);
-              return cover;
-            }}
+            onUseCover={(cover) => setAlbumCover(editingAlbum, cover)}
+            onUploadCover={(image) => uploadAlbumCover(editingAlbum, image)}
             onSave={async (changes) => {
               const [first] = editingAlbum;
               await library.setDetailsOn(

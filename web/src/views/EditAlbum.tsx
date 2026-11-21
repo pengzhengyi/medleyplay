@@ -149,13 +149,17 @@ export function EditAlbum({
             <PictureFrame
               className="edit-album-frame"
               replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
-              save={cover === undefined ? undefined : { href: coverUrl(cover), name: shared.album }}
+              save={
+                cover === undefined
+                  ? undefined
+                  : { href: coverUrl(cover, "original"), name: shared.album }
+              }
               busy={saving}
               onReplace={() => {
                 setReplacingCover(true);
               }}
             >
-              <Cover cover={cover ?? null} className="edit-album-cover-image" />
+              <Cover size="original" cover={cover ?? null} className="edit-album-cover-image" />
             </PictureFrame>
           </div>
         )}
@@ -187,20 +191,13 @@ export function EditAlbum({
         )}
         <footer className="dialog-buttons">
           <button
-            type="button"
-            className="secondary outline dialog-button"
-            disabled={saving}
-            onClick={() => dialog.current?.close()}
-          >
-            Cancel
-          </button>
-          <button
             type="submit"
+            title={`Saves to each of the ${String(songs.length)} songs`}
             className="dialog-button"
             disabled={!changed || saving}
             aria-busy={saving}
           >
-            {`Save to ${String(songs.length)} songs`}
+            Save
           </button>
         </footer>
       </form>

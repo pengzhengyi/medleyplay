@@ -595,7 +595,7 @@ export function usePlayer(
               title: track.title,
               artist: track.artist,
               album: track.album,
-              artwork: track.cover ? [{ src: coverUrl(track.cover) }] : [],
+              artwork: track.cover ? [{ src: coverUrl(track.cover, "original") }] : [],
             });
     }
   }, [track]);

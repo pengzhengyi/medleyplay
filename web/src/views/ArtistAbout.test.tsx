@@ -97,7 +97,10 @@ describe("about an artist", () => {
     );
 
     const photo = screen.getByRole("img", { name: "Photo of The Beatles" });
-    expect(photo.querySelector("img")).toHaveAttribute("src", "/api/covers/beatles-photo");
+    expect(photo.querySelector("img")).toHaveAttribute(
+      "src",
+      "/api/covers/beatles-photo?size=medium&recipe=1",
+    );
     expect(screen.queryByRole("img", { name: "Album covers of The Beatles" })).toBeNull();
     const credit = screen.getByRole("link", { name: "Photo: Wikimedia Commons" });
     expect(credit).toHaveAttribute(

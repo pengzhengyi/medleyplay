@@ -1,9 +1,10 @@
-"""Asking the enrichers set to find all, soon after something may have given them more to ask.
+"""Sweeping soon after something may have given a service more to do, and every hour.
 
-A scan, a Download, or a Track added makes Tracks an enricher may be asked about, and
-a day passing makes a video asked about yesterday one again. Each notice asks for a
-sweep a few seconds on, so a busy scan sweeps once; a tick sweeps every hour besides.
-A sweep that fails is logged and the next goes ahead.
+The enrichers set to find all are swept this way: a scan, a Download, or a Track
+added makes Tracks an enricher may be asked about, and a day passing makes a video
+asked about yesterday one again. Thumbnails are too: a Job ending may have kept
+images. Each notice asks for a sweep a little later, so a busy scan sweeps once; a
+tick sweeps every hour besides. A sweep that fails is logged and the next goes ahead.
 """
 
 import logging
@@ -21,21 +22,27 @@ _log = logging.getLogger(__name__)
 
 
 class Sweeps(Protocol):
-    """What a sweeper runs: the enrichment service's sweep."""
+    """What a sweeper runs, such as the enrichment service's sweep."""
 
     def sweep(self) -> int:
-        """Queue what the enrichers set to find all may ask about; return how many."""
+        """Queue what there is to do; return how many."""
         ...
 
 
 class EnrichmentSweeper:
-    """Sweep the enrichers set to find all on a thread of its own, when asked and every tick."""
+    """Sweep on a thread of its own, when asked and every tick: by default, the enrichers."""
 
     def __init__(
-        self, enrichment: Sweeps, *, delay: timedelta = DELAY, tick: timedelta = TICK
+        self,
+        enrichment: Sweeps,
+        *,
+        delay: timedelta = DELAY,
+        tick: timedelta = TICK,
+        what: str = "the enrichers",
     ) -> None:
-        """Create a sweeper over `enrichment`, not yet started."""
+        """Create a sweeper over `enrichment`, not yet started; `what` names it in the log."""
         self._enrichment = enrichment
+        self._what = what
         self._delay = delay.total_seconds()
         self._tick = tick.total_seconds()
         self._wake = threading.Condition()
@@ -55,7 +62,9 @@ class EnrichmentSweeper:
         with self._wake:
             self._stopping = False
             self._due_at = time.monotonic()
-        self._thread = threading.Thread(target=self._run, name="enrichment-sweep", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name=f"sweeping {self._what}", daemon=True
+        )
         self._thread.start()
 
     def stop(self) -> None:
@@ -83,4 +92,4 @@ class EnrichmentSweeper:
             try:
                 self._enrichment.sweep()
             except Exception:  # noqa: BLE001 -- any failure is logged, and the next sweep goes ahead
-                _log.exception("Sweeping the enrichers failed; trying again when next asked")
+                _log.exception("Sweeping %s failed; trying again when next asked", self._what)

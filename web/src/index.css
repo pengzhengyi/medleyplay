@@ -457,6 +457,12 @@ button[aria-disabled="true"] {
   color: var(--ink);
 }
 
+/* The key that takes the first completion, at the row's end. */
+.suggest-key {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
 .suggest-tag code {
   padding: 0;
   background: none;
@@ -1103,6 +1109,34 @@ button[aria-disabled="true"] {
   color: var(--muted);
 }
 
+/* An album's cover on its page, your rating beside it. */
+.album-about {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 0 0 1.25rem;
+}
+
+.album-art {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 7.5rem;
+  height: 7.5rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+  box-shadow: var(--lift);
+  color: var(--accent);
+  font-size: 2.5rem;
+}
+
+.album-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* About an artist, under its heading: a round mosaic of its covers, then what is known. */
 .artist-about {
   display: flex;
@@ -1150,9 +1184,10 @@ button[aria-disabled="true"] {
 
 /*
  * A photo suggested for an artist with none: ringed in the accent's dashes, its tag on
- * the ring's lower edge. The photo is its own controls: its lower half uses it, its
- * upper right quarter dismisses it, and its upper left chooses another; the ring turns
- * green, red, or solid as each is pointed at or focused.
+ * the ring's lower edge. The photo is its own controls: its lower two thirds use it,
+ * and the top third's right half dismisses it and its left half chooses another, so
+ * the photo stays mostly clear. Pointed at or focused, each tints its part green, red,
+ * or the accent, and the ring follows.
  */
 .photo-suggestion {
   display: grid;
@@ -1195,9 +1230,15 @@ button[aria-disabled="true"] {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template: 1fr 1fr / 1fr 1fr;
+  grid-template: 1fr 2fr / 1fr 1fr;
+  margin: 0;
   overflow: hidden;
   border-radius: 50%;
+}
+
+/* Pico spaces a group's buttons apart; these are the photo's own parts. */
+.photo-suggestion-frame .photo-suggestion-controls > button.photo-suggestion-control {
+  margin: 0;
 }
 
 .photo-suggestion-control {
@@ -1238,8 +1279,17 @@ button[aria-disabled="true"] {
   opacity: 0.7;
 }
 
-.photo-suggestion-control:is(:hover, :focus-visible):not(:disabled) {
-  background: rgb(0 0 0 / 38%);
+/* Pointed at, a control tints just the part of the photo it is: green, red, or the accent. */
+.photo-suggestion-use:is(:hover, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--yes) 32%, transparent);
+}
+
+.photo-suggestion-dismiss:is(:hover, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--no) 32%, transparent);
+}
+
+.photo-suggestion-change:is(:hover, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .photo-suggestion-control:is(:hover, :focus-visible) .photo-suggestion-icon {
@@ -1496,6 +1546,19 @@ button[aria-disabled="true"] {
   color: var(--ink);
   font-size: 1rem;
   font-weight: 500;
+}
+
+/*
+ * Who sings the song and its album, under its title in the player, and who an album
+ * is by, under its heading: links that keep the text's color, faintly underlined, as
+ * Now Playing's names are.
+ */
+.song-credits a,
+.subtitle > a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentcolor 30%, transparent);
+  text-underline-offset: 0.2em;
 }
 
 .found {
@@ -2374,6 +2437,15 @@ button[aria-disabled="true"] {
 .groups a:hover {
   background: var(--surface);
   box-shadow: var(--lift);
+}
+
+/* Pointed at, a credit link takes the ink and a full underline. */
+.song-credits a:hover,
+.song-credits a:focus-visible,
+.subtitle > a:hover,
+.subtitle > a:focus-visible {
+  color: var(--ink);
+  text-decoration-color: currentcolor;
 }
 
 .avatar,
@@ -3508,12 +3580,25 @@ details.dropdown[open] > summary.filter-summary {
   font-weight: 650;
 }
 
+/* Why a song can't play, or how far its Download has got: whole, the title giving way. */
 .tracks .why {
+  flex: none;
   padding: 0.05rem 0.5rem;
+  white-space: nowrap;
   border-radius: 999px;
   background: var(--raised);
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+/* A Download under way: a download mark and how far it has got, in a word or two. */
+.tracks .why.downloading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 /* A failed download: a warning mark opening why, and what to do, so the title keeps its room. */
@@ -3586,6 +3671,20 @@ details.dropdown[open] > summary.filter-summary {
 /* A row's "…" stays while its menu is open, though the pointer has left the row. */
 .tracks .actions button[data-state="open"] {
   opacity: 1;
+}
+
+/*
+ * A narrow table keeps only a row's "…", which holds its queue actions too, so the
+ * title keeps room to be read.
+ */
+@container (width < 64rem) {
+  .tracks .actions button:not(.more) {
+    display: none;
+  }
+
+  .tracks th.actions {
+    width: 2.75rem;
+  }
 }
 
 /* A heart and five stars, quiet until a row is pointed at, unless already given. */
@@ -4791,7 +4890,47 @@ dialog.modal::backdrop {
 
 .modal h2 {
   margin-bottom: 0.9rem;
+  padding-right: 2rem;
   font-size: 1.1rem;
+}
+
+/* The card and its ✕: as big as the card, which the dialog centers. */
+.modal-frame {
+  position: relative;
+}
+
+/* Closing, at the card's top right, apart from what the dialog does at its foot. */
+.modal-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.modal-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.modal-close:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.modal-close:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--ink);
 }
 
 /* Adding a song to Playlists. */
@@ -4860,6 +4999,11 @@ dialog.modal::backdrop {
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+
+/* As wide as its words, Save too: Pico stretches a form's submit button across the form. */
+.dialog-buttons .dialog-button {
+  width: auto;
 }
 
 /* Adding a video from Bilibili, and adding a Track's file by hand. */
@@ -5899,20 +6043,6 @@ button.songs-back:hover {
   list-style: none;
 }
 
-.list-editor-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-
-.list-editor-button {
-  width: auto;
-  margin: 0;
-  padding: 0.35rem 0.9rem;
-  font-size: 0.85rem;
-}
-
 /* A button that reads as a link, such as a problem's line. */
 button.link-button {
   width: auto;
@@ -6147,6 +6277,130 @@ button.song-handle {
   font-variant-numeric: tabular-nums;
   line-height: 1.6;
   resize: vertical;
+}
+
+/* Where the lyrics in the text came from, until saved. */
+.lyrics-editor-taken {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+/*
+ * Finding a song's lyrics: what to look for on one line, then the songs found, each
+ * with what tells it apart and its first lines, and a way to use it.
+ */
+.lyrics-finder {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.lyrics-finder-ask {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.lyrics-finder-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Pico spaces fields apart below; these sit on one line with the button. */
+.lyrics-finder-ask .lyrics-finder-input {
+  height: auto;
+  margin: 0;
+}
+
+/* Find stands as tall as the fields beside it. */
+.lyrics-finder-ask .dialog-button {
+  align-self: stretch;
+  height: auto;
+}
+
+.lyrics-finder-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.lyrics-found {
+  display: grid;
+  gap: 0.5rem;
+  max-height: min(24rem, 50dvh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.lyrics-found-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.65rem;
+  box-shadow: inset 0 0 0 1px var(--line);
+  list-style: none;
+}
+
+.lyrics-found-about {
+  display: grid;
+  flex: 1;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.lyrics-found-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-found-title {
+  font-weight: 600;
+}
+
+.lyrics-found-artist,
+.lyrics-found-meta {
+  color: var(--muted);
+}
+
+.lyrics-found-lines {
+  font-size: 0.85rem;
+}
+
+.lyrics-found-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.66rem;
+  font-weight: 700;
+  vertical-align: 0.1em;
+}
+
+@media (width <= 36rem) {
+  .lyrics-finder-ask {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  /* On its own row, Find keeps the compact height of every dialog's own action. */
+  .lyrics-finder-ask .dialog-button {
+    grid-column: 1 / -1;
+    height: 2.25rem;
+  }
 }
 
 .lyrics-editor-instrumental {
@@ -6799,8 +7053,9 @@ kbd {
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
 }
 
+/* The lyrics take a half as wide as the cover's, so they mirror it across the middle. */
 .np-stage.lyrics-open {
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 34rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .np-main {
@@ -7042,8 +7297,10 @@ kbd {
 /* The lyrics beside the cover: the line sung now large and bright, the others dim. */
 .lyrics-panel {
   display: grid;
-  align-self: stretch;
+  align-self: center;
   width: 100%;
+  max-width: 34rem;
+  height: 100%;
   min-height: 0;
   max-height: min(78dvh, 48rem);
 }
@@ -8580,6 +8837,11 @@ button.playing-kind[aria-expanded="true"] {
   font-size: 0.8rem;
 }
 
+/* The AI's pictures have no heading of their own: the tab names them. */
+.image-links .cover-finder-head {
+  justify-content: flex-end;
+}
+
 .cover-finder-note {
   display: flex;
   align-items: center;
@@ -8716,15 +8978,18 @@ button.playing-kind[aria-expanded="true"] {
 .picture-note .picture-note-text {
   flex: 1 1 auto;
   width: auto;
+  height: auto;
   min-width: 0;
   margin: 0;
   padding-block: 0.3rem;
   font-size: 0.85rem;
 }
 
+/* Ask stands as tall as the note beside it. */
 .picture-note .dialog-button {
   flex: none;
   width: auto;
+  height: auto;
   margin: 0;
 }
 
@@ -8821,6 +9086,16 @@ button.playing-kind[aria-expanded="true"] {
 .cover-frame.edit-artist-frame .cover-tools {
   border-radius: 0;
   padding-bottom: 0.9rem;
+}
+
+/* An album's cover on its page, its tools along its foot. */
+.cover-frame.album-frame {
+  flex: none;
+  width: 7.5rem;
+}
+
+.cover-frame.album-frame .cover-tools {
+  border-radius: 0 0 0.75rem 0.75rem;
 }
 
 /* An artist's photo on its page, round, its tools inside the circle. */

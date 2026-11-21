@@ -4,7 +4,8 @@
  * CodeMirror numbers the lines, colors each time and artist, offers the Library's
  * artists after a dash, and marks each line the server says is no song; the
  * problems are listed under it too, each moving to its line. The server reads the
- * list as a paste is read, so what checks clean here is what it takes.
+ * list as a paste is read, so what checks clean here is what it takes; the editor
+ * holding it saves the list once it checks clean.
  */
 
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
@@ -14,7 +15,7 @@ import { type Diagnostic, lintGutter, setDiagnostics } from "@codemirror/lint";
 import { EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, keymap, lineNumbers, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { ListCheck, Song } from "../api";
 
@@ -55,16 +56,15 @@ export default function ListEditor({
   initial,
   check,
   artists,
-  onUse,
-  onCancel,
+  onListed,
 }: {
   /** The list to start from, such as the rows the editor holds. */
   readonly initial: string;
   readonly check: (text: string) => Promise<ListCheck>;
   /** The artists to offer after a dash. */
   readonly artists: readonly string[];
-  readonly onUse: (songs: readonly Song[]) => void;
-  readonly onCancel: () => void;
+  /** Told the songs each time the list checks clean, and `undefined` while it doesn't. */
+  readonly onListed: (songs: readonly Song[] | undefined) => void;
 }) {
   const parent = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -172,6 +172,10 @@ export default function ListEditor({
   };
   // The songs to use once the list checks clean.
   const usable = checked?.problems.length === 0 ? checked.songs : undefined;
+  const listed = useEffectEvent(onListed);
+  useEffect(() => {
+    listed(usable);
+  }, [usable]);
   return (
     <div className="list-editor">
       <div ref={parent} className="list-editor-text" />
@@ -201,23 +205,6 @@ export default function ListEditor({
           ))}
         </ul>
       )}
-      <div className="list-editor-buttons">
-        <button type="button" className="secondary outline list-editor-button" onClick={onCancel}>
-          Back to the songs
-        </button>
-        <button
-          type="button"
-          className="list-editor-button"
-          disabled={usable === undefined}
-          onClick={() => {
-            if (usable !== undefined) {
-              onUse(usable);
-            }
-          }}
-        >
-          {usable === undefined ? "Use these songs" : `Use these ${String(usable.length)} songs`}
-        </button>
-      </div>
     </div>
   );
 }

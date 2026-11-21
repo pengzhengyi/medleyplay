@@ -14,6 +14,7 @@ from medleyplay.plugin_api import (
     COVER_CHOOSER,
     IMAGE_FETCHER,
     IMAGE_SUGGESTER,
+    LYRICS_CHOOSER,
     PICTURE_CHOOSER,
     TRACK_ENRICHER,
     Plugin,
@@ -23,6 +24,7 @@ from medleyplay.plugins.ai_details.artists import AiArtistChooser
 from medleyplay.plugins.ai_details.covers import AiCoverChooser
 from medleyplay.plugins.ai_details.describe import AiArtistDescriber
 from medleyplay.plugins.ai_details.images import AiImageSuggester, WebImageFetcher
+from medleyplay.plugins.ai_details.lyrics import AiLyricsChooser
 from medleyplay.plugins.ai_details.pictures import AiPictureChooser
 from medleyplay.plugins.ai_details.provider import AiDetails
 
@@ -34,6 +36,7 @@ def register(registry: Registry) -> None:
     registry.add(ARTIST_DESCRIBER, "ai-details", AiArtistDescriber())
     registry.add(COVER_CHOOSER, "ai-details", AiCoverChooser())
     registry.add(PICTURE_CHOOSER, "ai-details", AiPictureChooser())
+    registry.add(LYRICS_CHOOSER, "ai-details", AiLyricsChooser())
     registry.add(IMAGE_SUGGESTER, "ai-details", AiImageSuggester())
     registry.add(IMAGE_FETCHER, "ai-details", WebImageFetcher())
 

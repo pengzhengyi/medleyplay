@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { Track } from "../api";
 import { App } from "../App";
 import { hrefOf } from "../routes";
 import {
@@ -41,6 +42,13 @@ const LIBRARY = [
   trackOf(3, "クジラ", { artist: "ルワン", album: "空想", album_artist: "Various" }),
 ];
 
+/** `LIBRARY`, with *Supercell*'s songs showing its cover, named `supercell`. */
+function withCovers(): Track[] {
+  return LIBRARY.map((track) =>
+    track.album === "Supercell" ? { ...track, cover: "supercell" } : track,
+  );
+}
+
 /** The routes of a server with the Bilibili plugin on, holding `LIBRARY`. */
 function withBilibili(): Routes {
   return signedIn(LIBRARY, [favoritesPlaylistOf([1])], {
@@ -49,6 +57,16 @@ function withBilibili(): Routes {
     ai_set_up: false,
   });
 }
+
+/** What is read beside the songs: once they are in, and whenever the Library may change. */
+const SIDE_READS: ReadonlySet<string> = new Set([
+  "GET /api/artist-names",
+  "GET /api/names-to-tidy",
+  "GET /api/split-offers",
+  "GET /api/artist-splits",
+  "GET /api/shared-names",
+  "GET /api/artist-photos/missing",
+]);
 
 function open(
   hash: string,
@@ -106,6 +124,28 @@ describe("the views", () => {
       await screen.findByRole("link", { name: /Supercell.*ryo, 2 songs/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /空想.*Various, 1 song/ })).toBeInTheDocument();
+  });
+
+  it("shows a song's cover in its row as a small thumbnail", async () => {
+    open("", signedIn(withCovers(), [favoritesPlaylistOf([1])]));
+
+    const melt = (await screen.findByRole("button", { name: "Melt" })).closest("tr");
+
+    expect(melt?.querySelector(".cover img")).toHaveAttribute(
+      "src",
+      "/api/covers/supercell?size=small&recipe=1",
+    );
+  });
+
+  it("shows an album's cover on its tile as a medium thumbnail", async () => {
+    open("#/albums", signedIn(withCovers(), [favoritesPlaylistOf([1])]));
+
+    const supercell = await screen.findByRole("link", { name: /Supercell.*ryo, 2 songs/ });
+
+    expect(supercell.querySelector(".cover img")).toHaveAttribute(
+      "src",
+      "/api/covers/supercell?size=medium&recipe=1",
+    );
   });
 
   it("plays every album whole, one after another, from Albums", async () => {
@@ -297,6 +337,59 @@ describe("search suggestions", () => {
     expect(box).toHaveFocus();
   });
 
+  it("completes a site's name being typed, and searches it when chosen", async () => {
+    open("", withBilibili());
+    const box = await screen.findByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "bi");
+    await userEvent.click(screen.getByRole("option", { name: /^bilibili:/u }));
+
+    expect(screen.getByRole("radio", { name: "Bilibili" })).toBeChecked();
+    expect(box).toHaveValue("");
+    expect(box).toHaveFocus();
+  });
+
+  it("completes a tag's name being typed, keeping the words before it", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "melt ar");
+    await userEvent.click(screen.getByRole("option", { name: /^artist:/u }));
+
+    expect(box).toHaveAccessibleDescription("melt Artist:");
+    expect(box).toHaveValue("");
+  });
+
+  it("takes the first completion on Tab", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+    const box = screen.getByRole("combobox", { name: "Search" });
+
+    await userEvent.type(box, "ar{Tab}");
+
+    expect(box).toHaveAccessibleDescription("Artist:");
+    expect(box).toHaveFocus();
+  });
+
+  it("offers no completion for a single letter", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "a");
+
+    expect(screen.queryByRole("option", { name: /^artist:/u })).toBeNull();
+  });
+
+  it("offers no site to complete where only the Library can be searched", async () => {
+    open("");
+    await screen.findByRole("button", { name: "Melt" });
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "bi");
+
+    expect(screen.queryByRole("option", { name: /^bilibili:/u })).toBeNull();
+  });
+
   it("lists the tags when the pointer rests on an empty box", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });
@@ -338,6 +431,27 @@ describe("playlists", () => {
     );
 
     expect(await screen.findByText(/No favorites yet/)).toBeInTheDocument();
+  });
+
+  it("reads nothing beside the songs again for a heart given", async () => {
+    const { calls } = open("#/library", {
+      ...signedIn(LIBRARY),
+      "PUT /api/tracks/2/favorite": { body: trackOf(2, "Shiver", { favorite: true }) },
+    });
+    const sideReads = () => calls.filter((call) => SIDE_READS.has(call)).length;
+    await waitFor(() => {
+      expect(sideReads()).toBe(SIDE_READS.size);
+    });
+
+    await userEvent.click(
+      within(screen.getByRole("main")).getByRole("button", { name: "Favorite Shiver" }),
+    );
+    await waitFor(() => {
+      expect(calls).toContain("PUT /api/tracks/2/favorite");
+    });
+    await act(() => new Promise((settled) => setTimeout(settled, 500)));
+
+    expect(sideReads()).toBe(SIDE_READS.size);
   });
 
   it("plays a Playlist's songs in its order, a song as often as it holds it", async () => {
@@ -497,11 +611,27 @@ describe("search", () => {
 
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
 
-    const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
-    expect(await within(dialog).findByText("【MV】Night Drive")).toBeVisible();
+    expect(await screen.findByText("【MV】Night Drive")).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Add from Bilibili" })).toContainElement(
+      screen.getByText("【MV】Night Drive"),
+    );
     expect(calls).toContain("POST /api/links/lookup");
     expect(location.hash).toBe("");
     expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("");
+  });
+
+  it("opens the add dialog the moment Enter is pressed, saying it looks the video up", async () => {
+    // The site never answers, so all the dialog can show is that it asked.
+    open("", {
+      ...withBilibili(),
+      "POST /api/links/lookup": { body: lookupOf(1), after: new Promise(() => undefined) },
+    });
+    await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
+
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
+
+    const dialog = screen.getByRole("dialog", { name: "Add from Bilibili" });
+    expect(within(dialog).getByText("Looking the video up…")).toBeVisible();
   });
 
   it("adds what is chosen, says so, and asks for the Tracks again", async () => {
@@ -512,13 +642,15 @@ describe("search", () => {
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
-    const dialog = await screen.findByRole("dialog", { name: "Add from Bilibili" });
-    await within(dialog).findByText("【MV】Night Drive");
+    await screen.findByText("【MV】Night Drive");
+    const dialog = screen.getByRole("dialog", { name: "Add from Bilibili" });
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
     expect(await screen.findByText("Added 1 song. They are downloading.")).toBeVisible();
     expect(calls.filter((call) => call === "GET /api/tracks")).toHaveLength(2);
+    // The Downloads are read again, so the songs added show downloading at once.
+    expect(calls.filter((call) => call === "GET /api/downloads")).toHaveLength(2);
   });
 
   it("does not search the Library as you type with Bilibili chosen", async () => {
@@ -678,7 +810,10 @@ describe("an artist's page", () => {
 
     const ryo = await screen.findByRole("link", { name: /ryo/u });
     await waitFor(() => {
-      expect(ryo.querySelector(".avatar img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+      expect(ryo.querySelector(".avatar img")).toHaveAttribute(
+        "src",
+        "/api/covers/ryo-photo?size=medium&recipe=1",
+      );
     });
     const unlinked = screen.getByRole("link", { name: /ルワン/u });
     expect(unlinked.querySelector(".avatar img")).toBeNull();
@@ -694,7 +829,10 @@ describe("an artist's page", () => {
     const ryo = await screen.findByRole("option", { name: "ryo 2 songs" });
     // The artist names, which hold the photo, are read once the page is idle.
     await waitFor(() => {
-      expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+      expect(ryo.querySelector("img")).toHaveAttribute(
+        "src",
+        "/api/covers/ryo-photo?size=small&recipe=1",
+      );
     });
   });
 
@@ -750,6 +888,28 @@ describe("two artists of one name", () => {
 
   it("each open a page of their own songs", async () => {
     open(`#/artist?id=${OTHER_JAY}&name=Jay`, twoJays());
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Jay" })).toBeVisible();
+    await waitFor(() => {
+      expect(songs()).toEqual(["Blue Night"]);
+    });
+  });
+
+  it("are asked between when a link names only the name, the one it named first first", async () => {
+    open("#/artist?name=Jay", twoJays());
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Which Jay?" })).toBeVisible();
+    const choices = within(screen.getByRole("list", { name: "Artists called Jay" }));
+    expect(choices.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      `#/artist?id=${artistIdOf("Jay")}&name=Jay`,
+      `#/artist?id=${OTHER_JAY}&name=Jay`,
+    ]);
+  });
+
+  it("open the page of the one chosen", async () => {
+    open("#/artist?name=Jay", twoJays());
+
+    await userEvent.click(await screen.findByRole("link", { name: /Jay.*on Blue Night/u }));
 
     expect(await screen.findByRole("heading", { level: 2, name: "Jay" })).toBeVisible();
     await waitFor(() => {
@@ -856,6 +1016,19 @@ describe("a file split into songs", () => {
   });
 });
 
+describe("an album's page", () => {
+  it("links its artist to the artist's page", async () => {
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }));
+    const heading = await screen.findByRole("heading", { level: 2, name: "Supercell" });
+
+    await userEvent.click(
+      within(heading.closest("header") ?? document.body).getByRole("link", { name: "ryo" }),
+    );
+
+    expect(await screen.findByRole("heading", { level: 2, name: "ryo" })).toBeVisible();
+  });
+});
+
 describe("editing an album from its page", () => {
   it("sets what is typed on every song of an album of songs of their own", async () => {
     const sent: unknown[] = [];
@@ -870,7 +1043,7 @@ describe("editing an album from its page", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
     const editor = await screen.findByRole("dialog", { name: "Edit album" });
     await userEvent.type(within(editor).getByRole("textbox", { name: "Genre" }), "J-Pop");
-    await userEvent.click(within(editor).getByRole("button", { name: "Save to 2 songs" }));
+    await userEvent.click(within(editor).getByRole("button", { name: "Save" }));
 
     expect(sent).toEqual([{ track_ids: [1, 2], values: { genre: "J-Pop" } }]);
   });
@@ -886,9 +1059,9 @@ describe("editing an album from its page", () => {
       },
     });
     await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
-    const album = within(screen.getByRole("dialog", { name: "Edit album" }));
+    const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
     await userEvent.click(album.getByRole("button", { name: "Add a cover…" }));
-    const editor = within(screen.getByRole("dialog", { name: "Add a cover" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
 
     await userEvent.upload(
       editor.getByLabelText("Choose a cover file"),
@@ -900,6 +1073,61 @@ describe("editing an album from its page", () => {
       expect(sent).toEqual([{ track_ids: [1, 2], values: { cover: "cover-up" } }]);
     });
     expect(calls).toContain("PUT /api/tracks/1/cover");
+  });
+
+  it("uploads a cover from the album's own cover, giving every song that cover", async () => {
+    const sent: unknown[] = [];
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }), {
+      ...signedIn(LIBRARY),
+      "PUT /api/tracks/1/cover": { body: detailsOf(1, { cover: "cover-up" }) },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 2 } };
+      },
+    });
+    const about = within(await screen.findByRole("region", { name: "About the album" }));
+    await userEvent.click(about.getByRole("button", { name: "Add a cover…" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+
+    await userEvent.upload(
+      editor.getByLabelText("Choose a cover file"),
+      new File(["png"], "Supercell.png", { type: "image/png" }),
+    );
+    await userEvent.click(await editor.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ track_ids: [1, 2], values: { cover: "cover-up" } }]);
+    });
+  });
+
+  it("gives a cover from the page of an album that is one split file to that file", async () => {
+    const sent: unknown[] = [];
+    const jay = [
+      trackOf(9, "Jay", { artist: "周杰伦", album: "Jay", kind: "album", split: true }),
+      trackOf(11, "可爱女人", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+      trackOf(12, "完美主义", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+    ];
+    open(hrefOf({ view: "album", artist: "周杰伦", name: "Jay" }), {
+      ...signedIn(jay),
+      "PUT /api/tracks/9/cover": { body: detailsOf(9, { cover: "jay-cover" }) },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 1 } };
+      },
+    });
+    const about = within(await screen.findByRole("region", { name: "About the album" }));
+    await userEvent.click(about.getByRole("button", { name: "Add a cover…" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+
+    await userEvent.upload(
+      editor.getByLabelText("Choose a cover file"),
+      new File(["png"], "Jay.png", { type: "image/png" }),
+    );
+    await userEvent.click(await editor.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ track_ids: [9], values: { cover: "jay-cover" } }]);
+    });
   });
 
   it("edits an album that is one split file as that file, in Edit details", async () => {

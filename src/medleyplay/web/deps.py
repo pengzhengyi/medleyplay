@@ -23,6 +23,7 @@ from medleyplay.application.libraries import LibraryService
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_search import LyricsSearchService
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService
@@ -38,9 +39,12 @@ from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import SilenceService
 from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
+from medleyplay.application.thumbnails import ThumbnailService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import DeviceId
 from medleyplay.domain.errors import NotSignedInError
+from medleyplay.persistence.revision import DatabaseRevision
+from medleyplay.web.cached import CachedAnswers
 
 SESSION_COOKIE: Final = "medleyplay_session"
 DEVICE_COOKIE: Final = "medleyplay_device"
@@ -70,6 +74,8 @@ class Services:
     split_offers: SplitOfferService
     silences: SilenceService
     covers: CoverService
+    thumbnails: ThumbnailService
+    thumbnail_sweeper: EnrichmentSweeper
     enrichment: EnrichmentService
     sweeper: EnrichmentSweeper
     ai: AiService
@@ -83,6 +89,9 @@ class Services:
     artist_pictures: ArtistPictureService
     image_links: ImageLinkService
     lyrics: LyricsService
+    lyrics_search: LyricsSearchService
+    revision: DatabaseRevision
+    answers: CachedAnswers
 
 
 def services_of(request: Request) -> Services:
@@ -96,6 +105,10 @@ def _services(request: Request) -> Services:
         message = "The app was built without services; use medleyplay.web.app.create_app."
         raise TypeError(message)
     return services
+
+
+def _answers(services: Annotated[Services, Depends(_services)]) -> CachedAnswers:
+    return services.answers
 
 
 def _accounts(services: Annotated[Services, Depends(_services)]) -> AccountService:
@@ -178,6 +191,10 @@ def _album_covers(services: Annotated[Services, Depends(_services)]) -> AlbumCov
     return services.album_covers
 
 
+def _lyrics_search(services: Annotated[Services, Depends(_services)]) -> LyricsSearchService:
+    return services.lyrics_search
+
+
 def _artist_pictures(services: Annotated[Services, Depends(_services)]) -> ArtistPictureService:
     return services.artist_pictures
 
@@ -210,6 +227,10 @@ def _covers(services: Annotated[Services, Depends(_services)]) -> CoverService:
     return services.covers
 
 
+def _thumbnails(services: Annotated[Services, Depends(_services)]) -> ThumbnailService:
+    return services.thumbnails
+
+
 def _enrichment(services: Annotated[Services, Depends(_services)]) -> EnrichmentService:
     return services.enrichment
 
@@ -231,6 +252,7 @@ def _this_device(request: Request) -> DeviceId | None:
     return None if device_id is None else DeviceId(device_id)
 
 
+AnswersDep = Annotated[CachedAnswers, Depends(_answers)]
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -254,11 +276,13 @@ AlbumCoversDep = Annotated[AlbumCoverService, Depends(_album_covers)]
 ArtistPicturesDep = Annotated[ArtistPictureService, Depends(_artist_pictures)]
 ImageLinksDep = Annotated[ImageLinkService, Depends(_image_links)]
 LyricsDep = Annotated[LyricsService, Depends(_lyrics)]
+LyricsSearchDep = Annotated[LyricsSearchService, Depends(_lyrics_search)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]
 SilencesDep = Annotated[SilenceService, Depends(_silences)]
 CoversDep = Annotated[CoverService, Depends(_covers)]
+ThumbnailsDep = Annotated[ThumbnailService, Depends(_thumbnails)]
 EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
 AiDep = Annotated[AiService, Depends(_ai)]
 DevicesDep = Annotated[DeviceService, Depends(_devices)]

@@ -15,6 +15,7 @@ import {
   CaretDownIcon,
   CaretRightIcon,
   CaretUpIcon,
+  DownloadSimpleIcon,
   HeartIcon,
   ListPlusIcon,
   MusicNoteSimpleIcon,
@@ -53,7 +54,7 @@ import {
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { type ReactNode, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
 
-import type { CommunityRating, Track } from "../api";
+import type { CommunityRating, DownloadUnderWay, Track } from "../api";
 import { formatTime } from "../format";
 import { heartTitleOf } from "../heart";
 import type { CoverStatus } from "../library/lookups";
@@ -225,8 +226,14 @@ export interface TrackActions extends TrackMenuActions {
   readonly onRate: (track: Track, rating: number | null) => void;
   /** What the Track's cover shows of a lookup asked about it, if any. */
   readonly statusOf: (track: Track) => CoverStatus | undefined;
+  /** The Track's Download, while one is under way. */
+  readonly downloadOf: (track: Track) => DownloadUnderWay | undefined;
   /** Edit the album `songs`, songs of their own, make up; an album that is one file is edited as it. */
   readonly onEditAlbum?: (songs: readonly Track[]) => void;
+  /** Make `cover`, a cover kept already, the cover of `songs`: an album's songs, or its one file. */
+  readonly onUseAlbumCover?: (songs: readonly Track[], cover: string) => Promise<void>;
+  /** Make the image `image` the cover of `songs`, answering the cover it became. */
+  readonly onUploadAlbumCover?: (songs: readonly Track[], image: File) => Promise<string>;
 }
 
 /** The columns a browser shows and their widths, as it last left them. */
@@ -260,6 +267,52 @@ function saveLayout(layout: Layout): void {
   } catch {
     // Best effort: the next visit starts from the default.
   }
+}
+
+/**
+ * What a row says of its Download: `seen` in a word or two beside the title, after
+ * `unseen` words a screen reader hears too, and `hover`, said in full.
+ */
+function downloadSaidOf({ job }: DownloadUnderWay): {
+  readonly unseen: string;
+  readonly seen: string;
+  readonly hover: string;
+} {
+  if (job.state !== "running") {
+    return job.waits_for_online
+      ? {
+          unseen: "Downloading: ",
+          seen: "When online",
+          hover: "Downloading once medleyplay is Online",
+        }
+      : { unseen: "Downloading: ", seen: "Waiting", hover: "Waiting to download" };
+  }
+  const fraction = job.progress?.fraction ?? null;
+  if (fraction === null) {
+    return { unseen: "", seen: "Downloading", hover: "Downloading" };
+  }
+  const percent = `${String(Math.round(fraction * 100))}%`;
+  return { unseen: "Downloading ", seen: percent, hover: `Downloading ${percent}` };
+}
+
+/** What a Track's cover shows of its Download: a spinner, or a clock while it waits for Online. */
+function downloadStatusOf(download: DownloadUnderWay): CoverStatus {
+  const { hover } = downloadSaidOf(download);
+  return download.job.state !== "running" && download.job.waits_for_online
+    ? { kind: "waiting", label: hover }
+    : { kind: "looking", label: hover };
+}
+
+/** How far a row's Download has got, beside its title: a download mark and a word or two. */
+function DownloadNote({ download }: { readonly download: DownloadUnderWay }) {
+  const { unseen, seen, hover } = downloadSaidOf(download);
+  return (
+    <span className="why downloading" title={hover}>
+      <DownloadSimpleIcon weight="bold" aria-hidden />
+      {unseen !== "" && <span className="visually-hidden">{unseen}</span>}
+      {seen}
+    </span>
+  );
 }
 
 /**
@@ -876,6 +929,7 @@ const COLUMNS: Column[] = [
       const track = row.original;
       const playable = track.availability === "ok";
       const { actions, playingId } = meta(table);
+      const download = actions.downloadOf(track);
       const nestedHere = meta(table).songsIn !== undefined;
       return (
         <div className={row.depth > 0 ? "title-cell child" : "title-cell"}>
@@ -896,8 +950,11 @@ const COLUMNS: Column[] = [
             </span>
           )}
           <span className="thumb-frame">
-            <Cover cover={track.cover} className="thumb" />
-            <CoverBadge status={actions.statusOf(track)} playing={track.id === playingId} />
+            <Cover size="small" cover={track.cover} className="thumb" />
+            <CoverBadge
+              status={download === undefined ? actions.statusOf(track) : downloadStatusOf(download)}
+              playing={track.id === playingId}
+            />
           </span>
           <KindMark kind={track.kind} reason={track.kind_reason} />
           <button
@@ -910,7 +967,12 @@ const COLUMNS: Column[] = [
           >
             {track.title}
           </button>
-          {!playable && <span className="why">{WHY[track.availability]}</span>}
+          {!playable &&
+            (download === undefined ? (
+              <span className="why">{WHY[track.availability]}</span>
+            ) : (
+              <DownloadNote download={download} />
+            ))}
           {track.download_failed && <DownloadFailed track={track} onAddFile={actions.onAddFile} />}
           <span className="subtitle" aria-hidden>
             {track.artist}

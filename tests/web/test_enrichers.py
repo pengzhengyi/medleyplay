@@ -64,6 +64,19 @@ def test_the_enricher_shows_that_it_is_on_and_which_tracks_it_may_be_asked_about
     }
 
 
+def test_reading_the_enricher_writes_nothing(
+    enrichers_client: TestClient, enriching: Enriching, services: Services
+) -> None:
+    set_up_as_alice(enrichers_client)
+    enriching.add_site_track(RECORDED)
+    before = services.revision.value
+
+    response = enrichers_client.get(f"/api/enrichers/{NAME}")
+
+    assert response.status_code == 200
+    assert services.revision.value == before
+
+
 def test_with_the_plugin_off_the_enricher_shows_as_unavailable_with_no_track(
     client: TestClient,
 ) -> None:

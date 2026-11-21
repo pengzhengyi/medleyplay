@@ -38,29 +38,28 @@ function editorView(): EditorView {
 }
 
 describe("typing a song list", () => {
-  it("lists each line the server says is no song, and uses none until it checks clean", async () => {
-    const onUse = vi.fn();
+  it("lists each line the server says is no song, and offers no songs until it checks clean", async () => {
+    const onListed = vi.fn();
     render(
       <ListEditor
         initial={"0:00 Intro\nNight Drive"}
         check={check}
         artists={[]}
-        onUse={onUse}
-        onCancel={vi.fn()}
+        onListed={onListed}
       />,
     );
 
     expect(
       await screen.findByRole("button", { name: "Line 2: This line has no time." }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Use these songs" })).toBeDisabled();
+    expect(onListed).toHaveBeenLastCalledWith(undefined);
     act(() => {
       const view = editorView();
       view.dispatch({ changes: { from: view.state.doc.line(2).from, insert: "3:12 " } });
     });
-    await userEvent.click(await screen.findByRole("button", { name: "Use these 2 songs" }));
+    await screen.findByText("2 songs");
 
-    expect(onUse).toHaveBeenCalledWith([
+    expect(onListed).toHaveBeenLastCalledWith([
       { start_ms: 0, title: "Intro", artist: "" },
       { start_ms: 192_000, title: "Night Drive", artist: "" },
     ]);
@@ -72,8 +71,7 @@ describe("typing a song list", () => {
         initial={"0:00 Intro\n3:12 Night Drive\nEncore"}
         check={check}
         artists={[]}
-        onUse={vi.fn()}
-        onCancel={vi.fn()}
+        onListed={vi.fn()}
       />,
     );
 
@@ -87,7 +85,7 @@ describe("typing a song list", () => {
 
   it("numbers each line of the example an empty list shows, and only real lines once typed", () => {
     const { container } = render(
-      <ListEditor initial="" check={check} artists={[]} onUse={vi.fn()} onCancel={vi.fn()} />,
+      <ListEditor initial="" check={check} artists={[]} onListed={vi.fn()} />,
     );
     // The gutter's numbers, but for the hidden one CodeMirror sizes the gutter by.
     const numbers = () =>

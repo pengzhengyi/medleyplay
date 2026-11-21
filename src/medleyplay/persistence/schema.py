@@ -1030,6 +1030,32 @@ class TrackLyricsRow(Base):
     found_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class LyricsSearchRow(Base):
+    """The songs a site last found of the title and artist the household asked a song's lyrics by.
+
+    Each of `options` is a song found, what tells it apart, and its lyrics, the closest
+    in length first; none when the sites found none. `pick` is the place of the song an
+    AI model chose of `offered`, the songs it was shown, named as each was then, with
+    why, the model that answered and where; `None` until one chose, or when it chose none.
+    """
+
+    __tablename__ = "lyrics_search"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    title: Mapped[str] = mapped_column(String(512))
+    artist: Mapped[str] = mapped_column(String(512))
+    options: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    offered: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    pick: Mapped[int | None] = mapped_column(default=None)
+    why: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    model: Mapped[str] = mapped_column(String(128), default="", server_default="")
+    host: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    chosen_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+
+
 class NameSplitRow(Base):
     """What the household chose for an artist name written as several: split it, or keep it.
 

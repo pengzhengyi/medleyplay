@@ -121,14 +121,20 @@ def sign_out(response: Response, accounts: AccountsDep, token: SessionToken = No
     """Sign out this browser; signing out twice is fine."""
     if token is not None:
         accounts.sign_out(token)
-    response.delete_cookie(SESSION_COOKIE)
+    _forget(response)
 
 
 @router.delete("/sessions", status_code=status.HTTP_204_NO_CONTENT)
 def sign_out_everywhere(response: Response, me: SignedInAccount, accounts: AccountsDep) -> None:
     """Sign out every browser signed in as you, this one included."""
     accounts.sign_out_everywhere(me)
+    _forget(response)
+
+
+def _forget(response: Response) -> None:
+    """End the session cookie, and ask the browser to drop the private answers it kept."""
     response.delete_cookie(SESSION_COOKIE)
+    response.headers["Clear-Site-Data"] = '"cache"'
 
 
 @router.get("/me")

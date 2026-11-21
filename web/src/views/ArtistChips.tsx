@@ -63,7 +63,7 @@ export function ArtistChips({
           <li key={keyOf(credit.written)} className={`artist-chip ${credit.role}`}>
             <span className="artist-chip-face" aria-hidden title={linked?.name}>
               {linked?.photo ? (
-                <img src={coverUrl(linked.photo)} alt="" />
+                <img src={coverUrl(linked.photo, "small")} alt="" />
               ) : (
                 credit.written.charAt(0).toUpperCase()
               )}

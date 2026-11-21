@@ -2,14 +2,20 @@
 
 It is asked about the songs coming up, or when someone asks. LRCLIB is asked first;
 NetEase Cloud Music only for a song LRCLIB has no lyrics for, and only once the
-household has turned it on.
+household has turned it on. Looking for lyrics by hand, the household is offered the
+songs each site finds of a title and artist, LRCLIB's first.
 """
 
 from medleyplay.plugin_api import (
+    LYRICS_FINDER,
+    MAX_LYRICS_FOUND,
     TRACK_ENRICHER,
     Enriched,
     EnrichStatus,
     EnrichTrack,
+    FindLyrics,
+    FindStatus,
+    FoundLyricsOptions,
     LyricsProvider,
     Plugin,
     Registry,
@@ -37,10 +43,31 @@ class LyricsSites:
                 answer = asked.enrich(request)
         return answer
 
+    def find(self, request: FindLyrics) -> FoundLyricsOptions:
+        """Answer the songs LRCLIB finds, then those of each site turned on, in turn.
+
+        A site refusing is said so, and asked no more; what was found before is kept.
+        """
+        found = self._lrclib.find(request)
+        options = list(found.options)
+        for site in request.sites:
+            asked = self._sites.get(site)
+            if found.status is FindStatus.REFUSED or asked is None:
+                continue
+            found = asked.find(request)
+            options += found.options
+        return FoundLyricsOptions(
+            status=found.status if not options else FindStatus.OK,
+            message=found.message,
+            options=tuple(options[:MAX_LYRICS_FOUND]),
+        )
+
 
 def register(registry: Registry) -> None:
-    """Add the enricher `lyrics`."""
-    registry.add(TRACK_ENRICHER, "lyrics", LyricsSites(Lrclib(), Netease()))
+    """Add the enricher `lyrics`, and the finder `lyrics` of the lyrics the sites have."""
+    sites = LyricsSites(Lrclib(), Netease())
+    registry.add(TRACK_ENRICHER, "lyrics", sites)
+    registry.add(LYRICS_FINDER, "lyrics", sites)
 
 
 plugin = Plugin(api_version=1, register=register)

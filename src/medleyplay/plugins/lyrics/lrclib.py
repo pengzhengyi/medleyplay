@@ -23,10 +23,15 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from medleyplay.plugin_api import (
     MAX_LYRICS,
+    MAX_NAME,
     Enriched,
     EnrichStatus,
     EnrichTrack,
+    FindLyrics,
+    FindStatus,
     FoundLyrics,
+    FoundLyricsOptions,
+    LyricsOption,
     LyricsProvider,
     NetworkError,
 )
@@ -50,6 +55,8 @@ JITTER: Final = 0.3
 """The most added to a wait, as a part of it, so clients asked to wait don't come back at once."""
 MATCH_WITHIN: Final = 2.0
 """How many seconds a record's length may differ from the song's, as LRCLIB matches."""
+MAX_OFFERED: Final = 5
+"""The most songs LRCLIB's search offers, when the household looks for lyrics."""
 
 type Sleep = Callable[[float], None]
 type Clock = Callable[[], float]
@@ -62,6 +69,7 @@ class _Record(BaseModel):
 
     trackName: str = ""  # noqa: N815 -- LRCLIB's own name
     artistName: str = ""  # noqa: N815 -- LRCLIB's own name
+    albumName: str = ""  # noqa: N815 -- LRCLIB's own name
     duration: float | None = None
     instrumental: bool = False
     plainLyrics: str | None = None  # noqa: N815 -- LRCLIB's own name
@@ -107,6 +115,27 @@ class Lrclib:
         except _InvalidError as error:
             return Enriched(status=EnrichStatus.INVALID, message=str(error))
         return Enriched() if record is None else Enriched(lyrics=_lyrics_of(record))
+
+    def find(self, request: FindLyrics) -> FoundLyricsOptions:
+        """Answer the songs LRCLIB's search finds of the title and artist, with their lyrics.
+
+        The closest in length to the song come first, at most a few; a song with no
+        lyrics, and not instrumental, isn't offered.
+        """
+        params = {"track_name": request.title}
+        if request.artist:
+            params["artist_name"] = request.artist
+        try:
+            results = self._json(SEARCH, params)
+        except _RefusedError as error:
+            return FoundLyricsOptions(status=FindStatus.REFUSED, message=str(error))
+        if not isinstance(results, list):
+            message = "LRCLIB's search answered no list."
+            raise _InvalidError(message)
+        options = [option for each in results if (option := _option_of(_record(each))) is not None]
+        return FoundLyricsOptions(
+            options=tuple(closest_first(options, request.duration_ms)[:MAX_OFFERED])
+        )
 
     def _find(self, title: str, artist: str, album: str, seconds: float | None) -> _Record | None:
         if seconds is not None:
@@ -205,6 +234,38 @@ def _lyrics_of(record: _Record) -> FoundLyrics | None:
         if text and text.strip() and len(text) <= MAX_LYRICS:
             return FoundLyrics(provider=LyricsProvider.LRCLIB, text=text)
     return None
+
+
+def _option_of(record: _Record) -> LyricsOption | None:
+    """Return the record as a song offered, or `None` when it has no title or no lyrics."""
+    lyrics = _lyrics_of(record)
+    if lyrics is None or not record.trackName.strip():
+        return None
+    return LyricsOption(
+        provider=LyricsProvider.LRCLIB,
+        title=record.trackName.strip()[:MAX_NAME],
+        artist=record.artistName.strip()[:MAX_NAME],
+        album=record.albumName.strip()[:MAX_NAME],
+        duration_ms=None if record.duration is None else round(record.duration * 1000),
+        text=lyrics.text,
+        instrumental=lyrics.instrumental,
+    )
+
+
+def closest_first(options: list[LyricsOption], duration_ms: int | None) -> list[LyricsOption]:
+    """Return `options` the closest in length to `duration_ms` first, else as found.
+
+    A song of no known length comes after those whose length is known.
+    """
+    if duration_ms is None:
+        return options
+    return sorted(
+        options,
+        key=lambda each: (
+            each.duration_ms is None,
+            abs((each.duration_ms or 0) - duration_ms),
+        ),
+    )
 
 
 def _retry_after(response: requests.Response) -> float:

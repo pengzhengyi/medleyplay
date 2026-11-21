@@ -1,7 +1,7 @@
 /**
- * @file The panel under the search box: the artists a search names, each to show, its
- * songs, or its albums, and grouping the Library by artist; or, in an empty box, the
- * tags a search can use. Its options are chosen from the box, as a combobox's are.
+ * @file The panel under the search box: the tag or site a word being typed begins, the
+ * artists a search names, each to show, its songs, or its albums, and grouping the
+ * Library by artist; or, in an empty box, the tags a search can use. Its options are chosen from the box, as a combobox's are.
  */
 
 import type { ReactNode } from "react";
@@ -17,8 +17,16 @@ export interface PanelOption {
   readonly content: ReactNode;
   readonly className: string;
   readonly title?: string;
-  /** What choosing it does: show a view, start a tag in the box, or search a site. */
-  readonly does: { readonly go: Route } | { readonly tag: Field } | { readonly site: string };
+  /** The key that chooses it from the box, besides Enter, as `Tab`. */
+  readonly shortcut?: string;
+  /**
+   * What choosing it does: show a view, start a tag in the box after the words
+   * `before` it, or search a site for `rest`.
+   */
+  readonly does:
+    | { readonly go: Route }
+    | { readonly tag: Field; readonly before?: string }
+    | { readonly site: string; readonly rest?: string };
 }
 
 /**
@@ -50,11 +58,17 @@ export function SearchPanel({
       aria-selected={at === active}
       className={option.className}
       title={option.title}
+      aria-keyshortcuts={option.shortcut}
       onClick={() => {
         onChoose(option);
       }}
     >
       {option.content}
+      {option.shortcut !== undefined && (
+        <kbd className="suggest-key" aria-hidden>
+          {option.shortcut}
+        </kbd>
+      )}
     </div>
   );
   const shown: ReactNode[] = [];

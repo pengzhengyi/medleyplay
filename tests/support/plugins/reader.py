@@ -115,6 +115,8 @@ from medleyplay.plugin_api import (
     COVER_FINDER,
     IMAGE_FETCHER,
     IMAGE_SUGGESTER,
+    LYRICS_CHOOSER,
+    LYRICS_FINDER,
     PICTURE_CHOOSER,
     PICTURE_FINDER,
     TRACK_ENRICHER,
@@ -125,10 +127,12 @@ from medleyplay.plugin_api import (
     Chapter,
     ChooseArtists,
     ChooseCover,
+    ChooseLyrics,
     ChoosePicture,
     ChosenArtist,
     ChosenArtists,
     ChosenCover,
+    ChosenLyrics,
     ChosenPicture,
     CommunityRating,
     DescribeArtist,
@@ -141,6 +145,7 @@ from medleyplay.plugin_api import (
     FindArtist,
     FindArtistNames,
     FindCovers,
+    FindLyrics,
     FindPictures,
     FindStatus,
     FoundArtist,
@@ -149,10 +154,12 @@ from medleyplay.plugin_api import (
     FoundCover,
     FoundCovers,
     FoundLyrics,
+    FoundLyricsOptions,
     FoundPicture,
     FoundPictures,
     ImageLink,
     ImageSubject,
+    LyricsOption,
     LyricsProvider,
     NetworkError,
     Plugin,
@@ -612,6 +619,27 @@ class CoverChoices:
         )
 
 
+class LyricsChoices:
+    """Picks the timed song found titled as the song; *Refused* is refused, *Silence* none."""
+
+    def choose(self, request: ChooseLyrics) -> ChosenLyrics:
+        if request.title.startswith("Refused"):
+            return ChosenLyrics(status=FindStatus.REFUSED, message="The key was refused.")
+        timed = (
+            at
+            for at, option in enumerate(request.options)
+            if option.timed
+            and option.title == request.title
+            and not request.title.startswith("Silence")
+        )
+        option = next(timed, None)
+        return ChosenLyrics(
+            option=option,
+            why="" if option is None else "The studio recording, as long as the file",
+            ai_answered=request.ai[0].id,
+        )
+
+
 HELP_LINK: Final = "https://upload.wikimedia.org/wikipedia/en/e/e7/Help!_(The_Beatles_album).jpg"
 """The link to *Help!*'s cover the image suggester names first; the fetcher has it."""
 HELP_GONE: Final = "https://upload.wikimedia.org/wikipedia/en/0/00/Help_gone.jpg"
@@ -628,8 +656,8 @@ BEATLES_FETCHED: Final = jpeg_image("The Beatles from the web")
 class ImageLinks:
     """Names links as an AI model might: two to *Help!*'s cover, one to The Beatles.
 
-    A song *Refused* has the provider refuse the key, and any other album or artist
-    has it name no link.
+    A song *Refused* has the provider refuse the key, a note saying *first only* has it
+    name only the first, and any other album or artist has it name no link.
     """
 
     def suggest(self, request: SuggestImages) -> SuggestedImages:
@@ -643,6 +671,8 @@ class ImageLinks:
             )
         if request.subject is ImageSubject.ARTIST and request.name == "The Beatles":
             links = (ImageLink(url=BEATLES_LINK, why="A photo of the band"),)
+        if "first only" in request.hint:
+            links = links[:1]
         return SuggestedImages(links=links, ai_answered=request.ai[0].id)
 
 
@@ -692,6 +722,30 @@ class Lyricist:
         site = LyricsProvider.NETEASE if title == "Elsewhere" else LyricsProvider.LRCLIB
         return Enriched(lyrics=FoundLyrics(provider=site, text=lyrics_of(title)))
 
+    def find(self, request: FindLyrics) -> FoundLyricsOptions:
+        """Answer the songs titled as asked: the song, then a live take; none for *Nowhere*.
+
+        NetEase, once turned on, adds its own; *Refused* is refused.
+        """
+        match request.title:
+            case "Nowhere":
+                return FoundLyricsOptions()
+            case "Refused":
+                return FoundLyricsOptions(status=FindStatus.REFUSED, message="HTTP Error 403.")
+        song = LyricsOption(
+            provider=LyricsProvider.LRCLIB,
+            title=request.title,
+            artist=request.artist,
+            duration_ms=request.duration_ms,
+            text=lyrics_of(request.title),
+        )
+        live = song.model_copy(
+            update={"title": f"{request.title} (Live)", "duration_ms": None, "text": PLAIN_LYRICS}
+        )
+        elsewhere = song.model_copy(update={"provider": LyricsProvider.NETEASE})
+        on_netease = (elsewhere,) if LyricsProvider.NETEASE in request.sites else ()
+        return FoundLyricsOptions(options=(song, live, *on_netease))
+
 
 def register(registry: Registry) -> None:
     """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
@@ -702,7 +756,9 @@ def register(registry: Registry) -> None:
     registry.add(TRACK_ENRICHER, "bilibili-details", Reader())
     registry.add(TRACK_ENRICHER, "musicbrainz", Finder())
     registry.add(TRACK_ENRICHER, "ai-details", Suggester())
-    registry.add(TRACK_ENRICHER, "lyrics", Lyricist())
+    lyricist = Lyricist()
+    registry.add(TRACK_ENRICHER, "lyrics", lyricist)
+    registry.add(LYRICS_FINDER, "lyrics", lyricist)
     registry.add(ARTIST_FINDER, "musicbrainz", Artists())
     registry.add(ARTIST_NAME_FINDER, "wikipedia", ArtistNames())
     registry.add(ARTIST_CHOOSER, "ai-details", ArtistChoices())
@@ -711,6 +767,7 @@ def register(registry: Registry) -> None:
     registry.add(PICTURE_FINDER, "deezer", Pictures())
     registry.add(PICTURE_CHOOSER, "ai-details", PictureChoices())
     registry.add(COVER_CHOOSER, "ai-details", CoverChoices())
+    registry.add(LYRICS_CHOOSER, "ai-details", LyricsChoices())
     registry.add(IMAGE_SUGGESTER, "ai-details", ImageLinks())
     registry.add(IMAGE_FETCHER, "ai-details", Images())
 

@@ -158,8 +158,8 @@ values.
   still follows the file.
 - **Saving keeps the dialog open,** on the details read again as saved, with
   *Saved* beside the heading for a moment; closing is the household's choice, so an album's songs can be split
-  next without opening it again. *Save* waits for a change, and *Cancel* reads
-  *Close* once nothing is left to save.
+  next without opening it again. *Save* waits for a change; the ✕ at the top
+  right closes the dialog, saved or not.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works for any video, and asks the
@@ -315,6 +315,10 @@ place a picture comes from, listed down its side and across the top on a phone:
   is sent. An album's upload becomes its first song's cover, and then every song's.
 - **A song on no album** can't look its cover up: *MusicBrainz* and *Ask AI* are
   unavailable, saying the album is needed.
+- **An album's page** shows its cover under the heading, your rating beside it, with
+  *Save* and *Replace* on hover, as the album's editor does, so the cover changes
+  without *Edit details*. It is set on every song of the album, or on its one file
+  when the album is a split file.
 - **Built on** Radix UI's tabs, which the dropdown menus' Radix packages already
   bring, and `react-dropzone` for the drop panel.
 
@@ -363,11 +367,15 @@ The *Ask AI* tab of the picture editor shows the pictures an AI model names for 
 photo of the artist, each from its own site. Nothing is downloaded until one is
 approved.
 
-- **Asked only when someone chooses *Ask AI*,** with an AI set up and the
-  `ai-details` plugin on: a Job in the AI's lane shows a model the album, its
-  artist, and a few of its songs, or the artist's name, and it answers with at
-  most 6 places to find a picture, each with why. Asking again replaces what it
-  named.
+- **Asked on opening the *Ask AI* tab,** the first time for that album or artist,
+  with an AI set up and the `ai-details` plugin on: a Job in the AI's lane shows a
+  model the album, its artist, and a few of its songs, or the artist's name, and it
+  answers with at most 6 places to find a picture, each with why. With no AI set
+  up, the tab says so and links to Settings.
+- **Asked again with a note:** *Ask again* opens a field for what the listener
+  wants, such as "the 1997 first pressing", at most 500 characters. The note goes
+  to the model as a message of its own, after the question, so it can't change the
+  question's lines. Asking again replaces what the model named.
 - **Places a model can name rightly:** a model rarely knows an image's exact
   address, so it is asked for Wikipedia articles first (the album's, or the
   artist's, in the language they are best known in, and in English too), then

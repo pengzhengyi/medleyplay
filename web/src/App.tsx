@@ -4,7 +4,7 @@
 
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { type Account, type DeviceInfo, api, letIn, onDeviceRefused } from "./api";
+import { type Account, type DeviceInfo, api, forgetHeldReads, letIn, onDeviceRefused } from "./api";
 import { DeviceWaiting } from "./views/DeviceWaiting";
 import { Library } from "./views/Library";
 import { SignIn } from "./views/SignIn";
@@ -38,6 +38,14 @@ export function App() {
     // A server that can't say what the device is answers as before devices were asked about.
     api.device().then(answered, askWhoIsSignedIn);
   });
+  const accountId = account?.id;
+  useEffect(
+    () => () => {
+      // Signing out, or in as another, forgets the answers held for this Account.
+      forgetHeldReads();
+    },
+    [accountId],
+  );
   useEffect(() => {
     ask();
     return onDeviceRefused(() => {

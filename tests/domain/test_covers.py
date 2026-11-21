@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from medleyplay.domain.covers import CoverType, cover_id, cover_type, is_cover_id
+from medleyplay.domain.covers import CoverType, ThumbnailSize, cover_id, cover_type, is_cover_id
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 16
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 16
@@ -44,3 +44,10 @@ def test_a_cover_is_named_by_the_sha256_of_its_bytes() -> None:
 )
 def test_a_name_other_than_a_sha256_names_no_cover(name: str) -> None:
     assert not is_cover_id(name)
+
+
+def test_a_small_thumbnail_fits_a_song_row_and_a_medium_one_a_tile() -> None:
+    assert [(size.value, size.pixels) for size in ThumbnailSize] == [
+        ("small", 128),
+        ("medium", 512),
+    ]

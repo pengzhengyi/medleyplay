@@ -9,9 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Find a song's lyrics by hand** — the lyrics editor's *Find* lists the songs
+  LRCLIB, and NetEase once turned on, have of a title and artist you can change, each
+  with its site, album, length, kind, and first lines; *Use* fills the editor with
+  them to save. With an AI model set up, it asks which is the song, by the songs'
+  titles, artists, albums and lengths, and tags its pick *AI pick*. New:
+  `POST /api/tracks/{id}/lyrics/find`, `GET /api/tracks/{id}/lyrics/found`,
+  `POST /api/tracks/{id}/lyrics/choose` (migrations 0057, 0058).
+
+- **Names lead to their pages** — the player names the song's artists and its album
+  under its title, each a link to its page, as Now Playing does; an album's page
+  links the artist it is by.
+
+- **The search box completes tags and sites** — a word being typed offers the tag
+  or site it begins, as `bi` offers `bilibili:` and `ar` offers `artist:`; *Tab*
+  takes the first.
+
+- **An album's cover on its page** — under the heading, with *Save* and *Replace* on
+  hover; *Replace* opens the picture editor (upload, MusicBrainz, or Ask AI) without
+  going through *Edit details*.
+
 - **A suggested photo is its own controls** — on an artist's page and in Clean up,
-  its lower half uses it, its upper right dismisses it (never suggested again), and
-  its upper left opens the photo editor; the ring turns green or red to say which.
+  its lower two thirds use it, its top third's right half dismisses it (never suggested
+  again), and its left half opens the photo editor; the ring turns green or red to say which.
   An artist's photo opens the photo editor from the page itself. New:
   `POST /api/artists/{id}/pictures/dismiss` (migration 0056).
 
@@ -637,6 +657,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Covers load small in rows and tiles** — the server keeps a 128-pixel and a
+  512-pixel copy of each cover and photo, made ahead by a Job through the new
+  `ffmpeg-thumbnails` plugin; song rows, Up next, and the player show the small one,
+  album and artist tiles the larger one, and Now Playing, the editors, and *Save*
+  the original. Until a copy is made, or without ffmpeg, the original shows as
+  before. Scrolling the whole Library of the preview loads 0.9 MB of covers rather
+  than 21.6 MB, and the page holds about a third of the memory. New:
+  `GET /api/covers/{name}?size=small|medium&recipe=1`.
+
+- **The Library loads faster** — the songs and the artist names are kept once
+  built, until something changes, and sent gzipped; a browser holding them gets
+  *304 Not Modified*. The reads that take longest to build take turns, rather than
+  slowing each other down, and the artist names ask about active Jobs once. Fifteen
+  reads at once answer in 0.7 s rather than 1.9 s on a library of 1738 songs.
+  Signing out asks the browser to forget what it kept.
+
+- **Coming back to the page costs little when nothing changed** — the page asks
+  for the songs and the six lists beside them (artist names, names to tidy, split
+  offers, artist splits, shared names, artists missing a photo) with what it holds,
+  and an unchanged one comes back as *304 Not Modified* and renders nothing. A heart
+  or a rating no longer asks for those lists again, and when a session or device
+  was last seen no longer counts as a change. On a library of 1738 songs, coming
+  back sends 5.7 kB rather than 148 kB, and a heart sends one request rather than 13.
+
+- **An old artist link names one artist or asks which** — a link by the name alone,
+  such as `#/artist?name=Jay` saved before artist pages opened by id, asks *Which
+  Jay?* when the name goes by several artists, each a tile told apart by its album.
+
+- **Ask AI in the picture editor asks on opening** — the tab asks the AI the first
+  time it opens for an album or artist, without a button to press first. *Ask
+  again* takes a note of the picture wanted, as the songs editor does. New: a
+  `hint` in the body of `POST /api/image-links/album/suggest` and
+  `POST /api/image-links/artist/{id}/suggest`.
+
+- **Dialogs close from a ✕ at their top right,** with Escape and a click outside as
+  before; their footers hold only what they do, so *Save* stands alone. The main
+  action reads *Save* (not *Save songs*, *Save to 2 songs*, or *Use these songs*),
+  and the song list's *Back to the songs* is gone, as pressing *List* again does
+  the same. A song list's *Save* fills the songs and saves them at once.
+
 - **A faster first load** — the songs are read first and alone, then what shows
   around them once they are drawn, and what only some views need when the browser is
   idle; the Library shows rows shaped like songs meanwhile. Now Playing, the
@@ -699,6 +759,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- **Adding from Bilibili answers at once** — its dialog opens the moment Enter is
+  pressed, saying it looks the video up, rather than after its code loads; and a
+  song just added shows a download mark and how far it has got in its row, its
+  cover spinning, rather than *Unavailable*.
+
+- **Song titles readable beside Up next** — a table narrower than 64rem keeps only a
+  row's "…" (which holds the queue actions), so a title no longer shrinks to a
+  letter or two.
+
+- **A suggested photo's controls are exactly its halves and quarters** — pointed at,
+  each tints just its part: the lower half green to use it, the upper right red to
+  dismiss it, the upper left in the accent to choose another. They had stopped short
+  of the photo's bottom, so the halves weren't halves.
+
+- **Now Playing's lyrics mirror the cover** — they take the half of the page beside
+  the cover's half, so "No lyrics for this song." sits level with the player and as
+  far right of the middle as the cover is left of it.
+
+- **Asking the AI for a file's songs can be stopped:** pressing *AI* again while it
+  asks, or closing the editor, cancels the lookup, so no AI round runs for nothing.
 
 - **Tidy and Use … work on names a split file writes** — tidying an album name
   that only a split file's songs showed, as when the file named the album by its

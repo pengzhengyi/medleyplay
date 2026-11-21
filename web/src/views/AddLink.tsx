@@ -2,7 +2,7 @@
  * @file Adding a video from Bilibili: its parts with a title and artist each, or, for a
  * video that couldn't be read, the household's own details for the parts.
  *
- * Escape, Cancel, or a click outside close it without adding anything.
+ * Escape, its ✕, or a click outside close it without adding anything.
  */
 
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
@@ -106,30 +106,13 @@ export function AddLink({
             <p className="error" role="alert">
               {step.message}
             </p>
-            <footer className="dialog-buttons">
-              <button type="button" className="secondary dialog-button" onClick={close}>
-                Close
-              </button>
-            </footer>
           </>
         )}
         {step.state === "read" &&
           (step.lookup.readable ? (
-            <ReadVideo
-              link={link}
-              lookup={step.lookup}
-              add={add}
-              onAdded={finish}
-              onCancel={close}
-            />
+            <ReadVideo link={link} lookup={step.lookup} add={add} onAdded={finish} />
           ) : (
-            <UnreadableVideo
-              link={link}
-              lookup={step.lookup}
-              add={add}
-              onAdded={finish}
-              onCancel={close}
-            />
+            <UnreadableVideo link={link} lookup={step.lookup} add={add} onAdded={finish} />
           ))}
       </div>
     </Modal>
@@ -145,7 +128,6 @@ interface FormProps {
     parts: readonly PartChoice[],
   ) => Promise<readonly AddedPart[]>;
   readonly onAdded: (added: readonly AddedPart[]) => void;
-  readonly onCancel: () => void;
 }
 
 /** What the household is told while a form saves, or why it didn't. */
@@ -173,7 +155,7 @@ interface Row {
   readonly taken: boolean;
 }
 
-function ReadVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
+function ReadVideo({ link, lookup, add, onAdded }: FormProps) {
   const [rows, setRows] = useState<readonly Row[]>(() => {
     let room = MAX_PARTS;
     return lookup.parts.map((part) => {
@@ -286,7 +268,7 @@ function ReadVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
         </select>
       </label>
       <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, firstOf(rows))} />
-      <Footer error={error} saving={saving} disabled={!complete} onCancel={onCancel}>
+      <Footer error={error} saving={saving} disabled={!complete}>
         {chosen.length <= 1 ? "Add" : `Add ${String(chosen.length)} songs`}
       </Footer>
     </form>
@@ -304,7 +286,7 @@ interface Draft {
   readonly artist: string;
 }
 
-function UnreadableVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
+function UnreadableVideo({ link, lookup, add, onAdded }: FormProps) {
   const first = lookup.parts[0]?.part ?? 1;
   const [drafts, setDrafts] = useState<readonly Draft[]>([
     { key: 0, part: String(first), title: "", artist: "" },
@@ -424,7 +406,7 @@ function UnreadableVideo({ link, lookup, add, onAdded, onCancel }: FormProps) {
         </button>
       )}
       <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, first)} />
-      <Footer error={error} saving={saving} disabled={!complete} onCancel={onCancel}>
+      <Footer error={error} saving={saving} disabled={!complete}>
         {drafts.length === 1 ? "Add" : `Add ${String(drafts.length)} songs`}
       </Footer>
     </form>
@@ -435,13 +417,11 @@ function Footer({
   error,
   saving,
   disabled,
-  onCancel,
   children,
 }: {
   readonly error: string;
   readonly saving: boolean;
   readonly disabled: boolean;
-  readonly onCancel: () => void;
   readonly children: string;
 }) {
   return (
@@ -452,9 +432,6 @@ function Footer({
         </p>
       )}
       <footer className="dialog-buttons">
-        <button type="button" className="secondary outline dialog-button" onClick={onCancel}>
-          Cancel
-        </button>
         <button
           type="submit"
           className="dialog-button"

@@ -70,12 +70,17 @@ function refusalOf(rejection: FileRejection): string {
     : "Choose a JPEG, PNG, or WebP image.";
 }
 
-/** The editor that replaces the picture `sources` describe, closed by `onClose`. */
+/**
+ * The editor that replaces the picture `sources` describe, open on the tab `startOn`, closed
+ * by `onClose`.
+ */
 export function PictureEditor({
   sources,
+  startOn = "upload",
   onClose,
 }: {
   readonly sources: PictureSources;
+  readonly startOn?: "upload" | "musicbrainz" | "deezer" | "ai";
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -140,7 +145,14 @@ export function PictureEditor({
         <p id={`${id}-of`} className="picture-editor-of">
           {of}
         </p>
-        <Tabs.Root className="picture-editor-tabs" defaultValue="upload" orientation="vertical">
+        {/* A tab is chosen, not merely focused: opening the dialog focuses its first tab, and
+            some tabs ask a site or an AI model as soon as they show. */}
+        <Tabs.Root
+          className="picture-editor-tabs"
+          defaultValue={startOn}
+          orientation="vertical"
+          activationMode="manual"
+        >
           <Tabs.List className="picture-editor-sources" aria-label={`Where the ${noun} comes from`}>
             {tabs.map((tab) => (
               <Tabs.Trigger

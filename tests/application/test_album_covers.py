@@ -4,6 +4,8 @@ Nothing changes the album's cover until the household chooses one; what is found
 kept, and finding again replaces it.
 """
 
+# cspell:ignore Straße STRASSE Strasse strasse
+
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path

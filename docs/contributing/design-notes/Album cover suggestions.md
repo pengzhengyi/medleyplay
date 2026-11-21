@@ -1,9 +1,10 @@
 # Album cover suggestions
 
-> [!NOTE]
-> **Status: proposed.** This note describes how medleyplay suggests a cover for an
-> album that has none, on the album's page and in Clean up, and how the household
-> uses or dismisses it in one click. It builds on the album cover search of
+> [!IMPORTANT]
+> **Status: in progress.** The first step, the server and the album page, is built;
+> Clean up and the background search are next. This note describes how medleyplay
+> suggests a cover for an album that has none, on the album's page and in Clean up,
+> and how the household uses or dismisses it in one click. It builds on the album cover search of
 > [Track details](Track%20details.md) and mirrors the suggested artist photo of
 > [Artists](Artists.md).
 
@@ -37,18 +38,18 @@ listed in Clean up. Albums should work the same.
 
 ## What it delivers
 
-- [ ] **A suggested cover for an album without one:** the AI's pick, else the
+- [x] **A suggested cover for an album without one:** the AI's pick, else the
       best-ranked release whose title and artist match the album's; never one
       dismissed; none rather than a likely wrong one.
 - [ ] **Found without anyone searching:** when the album's page opens, and, by a
       Clean up setting, for the albums up next or for every album without a cover,
       paced so it never holds up other MusicBrainz lookups.
-- [ ] **On the album page,** the suggestion fills the empty cover with *Use*,
+- [x] **On the album page,** the suggestion fills the empty cover with *Use*,
       *Dismiss*, and *Change*.
 - [ ] **In Clean up,** *Find album covers* lists the albums without a cover,
       suggested ones first, with *Use*, *Dismiss*, *Change*, and *Use all*.
-- [ ] **A dismissed cover stays dismissed** when the album's covers are found again.
-- [ ] **The search table is keyed by finder,** so NetEase can add its covers later
+- [x] **A dismissed cover stays dismissed** when the album's covers are found again.
+- [x] **The search table is keyed by finder,** so NetEase can add its covers later
       without overwriting MusicBrainz's.
 
 ## Words
@@ -158,18 +159,22 @@ The settings are two new household settings beside `find_artist_photos`:
 NetEase is the planned second finder, for Chinese albums. Today one search row per
 album holds MusicBrainz's covers, and a new search replaces the row, so a second
 finder would overwrite the first. Migration 0059 makes the key `(key, finder)`, with
-`finder` `musicbrainz` for the rows there are, and the Job target names the finder.
+`finder` `musicbrainz` for the rows there are, and the Job target names the finder:
+`album-covers:musicbrainz:<key>`. The links an AI model suggested for an album are
+rekeyed by the same fold.
 The dismissed covers move to their own table, `album_cover_dismissal (key, cover)`,
 since a cover is named by its bytes whichever finder found it. Widening `CoverOption`
 past MusicBrainz release ids is left to the NetEase note.
 
 ## Using and dismissing
 
-- **Use** goes to the server, `POST /api/album-covers/use`, with the album as written
-  and the cover. In one transaction it checks the album still has no cover, then sets
-  the household cover on each song that shows none, or on the file of an album that is
-  one file. A song that gained its own cover meanwhile keeps it.
-- **Use all** in Clean up does the same for every suggested album listed.
+- **Use on the album page** sets the cover as choosing it in the cover editor does: on
+  every song of the album, or on the file of an album that is one file.
+- **Use in Clean up** goes to the server, `POST /api/album-covers/use`, with the album
+  as written and the cover, since the list may be stale. In one transaction it checks
+  the album still has no cover, then sets the household cover on each song that shows
+  none, or on the file. A song that gained its own cover meanwhile keeps it. *Use all*
+  does the same for every suggested album listed.
 - **Dismiss** adds the cover to the album's dismissed covers; the next suggestion, if
   any, takes its place.
 
@@ -178,7 +183,8 @@ past MusicBrainz release ids is left to the NetEase note.
 The album page already shows its cover with *Save* and *Replace* on hover. With no
 cover, the empty cover shows, in turn:
 
-- **Looking on MusicBrainz…** while a search runs, or *waits until Online*.
+- **Looking on MusicBrainz…** while a search runs, or *Looks on MusicBrainz once
+  Online*. The page asks only when the album is due a search and MusicBrainz is on.
 - **The suggested cover,** marked as a suggestion, with *Use* (the lower half, green),
   *Dismiss* (top right, red), and *Change* (top left), the zones a suggested artist
   photo has. *Change* opens the cover editor on the MusicBrainz tab.
@@ -186,7 +192,10 @@ cover, the empty cover shows, in turn:
   today.
 
 `SuggestedCover` is new, beside `SuggestedPhoto`; both use `SuggestedFrame`, which
-gains a noun, so a screen reader hears *Suggested cover of …* and *Use this cover*.
+gains a noun, so a screen reader hears *Suggested cover of …* and *Use this cover*,
+and a cover's frame is square where a photo's is round. The cover editor opens on a
+given tab, and its tabs are chosen rather than merely focused: opening a dialog
+focuses its first tab, and the MusicBrainz and *Ask AI* tabs ask as soon as they show.
 
 ## In Clean up
 
@@ -212,11 +221,13 @@ covers in the same pass.
 | `CoverSearch`, `Settings.find_album_covers`, `Settings.pick_album_covers_by_ai` | `domain/settings.py` | New |
 | `FindCovers.tried` | `plugin_api/album_covers.py` | New: how many releases to try, 12 by default |
 | `FindCovers.artist_ids`, `release_query(album, artist, artist_ids)` | `plugin_api/album_covers.py`, `plugins/musicbrainz/matching.py` | New: the album's linked MusicBrainz artists, searched by id when there are any |
-| `suggested_cover(found, pick, dismissed, names)` | `domain/covers.py` | New: the rule above, pure |
+| `suggested_cover(album, names, found, pick, dismissed)`, `FoundRelease` | `domain/album_covers.py` | New: the rule above, pure |
+| `goes_by(name, names)` | `domain/artists.py` | The artist-photo name match, shared |
 | `AlbumCoverService.missing()` | `application/album_covers.py` | New: grouped in SQL on the written album and artist, folded and merged in Python; searches read with one `IN`, and finding from the active Job targets |
 | `AlbumCoverService.find_missing(caller, track_ids, every)` | `application/album_covers.py` | New: queues background searches, paced |
 | `AlbumCoverService.use(caller, album, artist, cover)`, `.dismiss(...)` | `application/album_covers.py` | New |
-| `AlbumCovers.suggested` | `application/album_covers.py` | New field, for the page and the editor |
+| `AlbumCovers.suggested`, `.due`, `.may_find` | `application/album_covers.py` | New fields: the cover suggested, whether a search is due, whether MusicBrainz is on |
+| `PictureEditor`'s `startOn` | `web/src/views/PictureEditor.tsx` | New: the tab it opens on |
 | `GET /api/album-covers/missing` | `web/album_covers.py` | New, cached per revision |
 | `POST /api/album-covers/missing/find`, `/use`, `/dismiss` | `web/album_covers.py` | New; `POST /api/album-covers/find` stays the editor's |
 | `SuggestedCover`, `SuggestedFrame`'s noun | `web/src/views/` | New, and a prop |
@@ -265,10 +276,12 @@ covers in the same pass.
 
 ## Built in two steps
 
-1. **The server and the album page:** the one fold and migration 0059, the rule, the
-   search by linked artists, the page-open search, `use` and `dismiss`, and the suggestion on the page.
-2. **Clean up and the background:** `missing()`, the settings, the paced background
-   search with its AI pick, the Clean up section, and the look-ahead.
+1. **The server and the album page** (built): the one fold and migration 0059, the
+   rule, the search by linked artists, the page-open search, `dismiss`, and the
+   suggestion on the page.
+2. **Clean up and the background:** `missing()`, `use`, the settings, the paced
+   background search with its AI pick, the Clean up section, the look-ahead, and the
+   end-to-end test with a fake finder.
 
 Each is its own pull request, with the measurements in the first.
 

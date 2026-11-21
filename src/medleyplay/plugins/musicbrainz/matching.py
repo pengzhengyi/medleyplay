@@ -47,7 +47,7 @@ def recording_query(title: str, artist: str, album: str | None = None) -> str:
     return " AND ".join(parts)
 
 
-_MBID: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_ARTIST_ID: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 def release_query(album: str, artist: str, artist_ids: Sequence[str] = ()) -> str:
@@ -62,7 +62,7 @@ def release_query(album: str, artist: str, artist_ids: Sequence[str] = ()) -> st
     ```
     """
     query = f'release:"{escape_lucene(album)}"'
-    ids = [f'"{each}"' for each in artist_ids if _MBID.fullmatch(each)]
+    ids = [f'"{each}"' for each in artist_ids if _ARTIST_ID.fullmatch(each)]
     if ids:
         return f"{query} AND arid:({' OR '.join(ids)})"
     return f'{query} AND artist:"{escape_lucene(artist)}"' if artist else query

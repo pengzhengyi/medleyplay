@@ -398,8 +398,8 @@ def linked_artists_of(db: Session, album: str, artist: str) -> tuple[str, ...]:
         )
         .order_by(TrackArtistRow.track_id, TrackArtistRow.position)
     ).all()
-    of_album = [mbid for album_artist, mbid in rows if album_artist and mbid]
-    chosen = of_album or [mbid for album_artist, mbid in rows if not album_artist and mbid]
+    of_album = [linked for album_artist, linked in rows if album_artist and linked]
+    chosen = of_album or [linked for album_artist, linked in rows if not album_artist and linked]
     return tuple(dict.fromkeys(chosen))[:MAX_ARTIST_IDS]
 
 

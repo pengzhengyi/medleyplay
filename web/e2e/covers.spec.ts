@@ -22,7 +22,8 @@ test("an album with no cover is suggested one found, and using it in Clean up sh
     data: { link: "BVCoverAlbum", parts: [{ part: 1, title: "Cover Song", artist: ARTIST }] },
   });
   expect(added.ok()).toBe(true);
-  const [{ track_id: song }] = (await added.json()) as { readonly track_id: number }[];
+  const [first] = (await added.json()) as { readonly track_id: number }[];
+  const song = first?.track_id;
   const saved = await request.post("/api/tracks/details", {
     data: { track_ids: [song], values: { album: ALBUM } },
   });

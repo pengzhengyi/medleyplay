@@ -207,22 +207,26 @@ export function EditDetails({
       document.getElementById(panel === "songs" ? SONGS_TITLE : LYRICS_TITLE)?.focus();
     }
   }, [panel]);
-  const leaveSongs = useCallback(() => {
+  const backFromSongs = useCallback(() => {
+    setSongsLocked(false);
+    setPanel("details");
+  }, []);
+  // Songs saved return to the details, or close a dialog opened on them.
+  const songsSaved = useCallback(() => {
     if (startOnSongs) {
       dialog.current?.close();
     } else {
-      setSongsLocked(false);
-      setPanel("details");
+      backFromSongs();
     }
-  }, [startOnSongs]);
+  }, [startOnSongs, backFromSongs]);
   const controls = useMemo<SongsControls>(
     () => ({
       headingId: SONGS_TITLE,
-      onBack: leaveSongs,
+      onBack: backFromSongs,
       onLock: setSongsLocked,
-      onDone: leaveSongs,
+      onDone: songsSaved,
     }),
-    [leaveSongs],
+    [backFromSongs, songsSaved],
   );
   const leaveLyrics = useCallback(() => {
     setSongsLocked(false);

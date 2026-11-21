@@ -31,13 +31,6 @@ type SizeLabel = Annotated[str, Field(pattern=r"^[a-z]{1,16}$")]
 """What a thumbnail size is called, such as `small`; it ends the thumbnail's file name."""
 
 
-def is_cover_image(data: bytes) -> bool:
-    """Return whether `data` begins as a JPEG, PNG, or WebP image."""
-    return data.startswith((b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n")) or (
-        data[:4] == b"RIFF" and data[8:12] == b"WEBP"
-    )
-
-
 class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -48,6 +41,22 @@ class ImageKind(StrEnum):
     JPEG = "image/jpeg"
     PNG = "image/png"
     WEBP = "image/webp"
+
+
+def image_kind(data: bytes) -> ImageKind | None:
+    """Return the kind of image `data` begins as, or `None` for anything else."""
+    if data.startswith(b"\xff\xd8\xff"):
+        return ImageKind.JPEG
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ImageKind.PNG
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ImageKind.WEBP
+    return None
+
+
+def is_cover_image(data: bytes) -> bool:
+    """Return whether `data` begins as a JPEG, PNG, or WebP image."""
+    return image_kind(data) is not None
 
 
 class ThumbnailSize(_Model):

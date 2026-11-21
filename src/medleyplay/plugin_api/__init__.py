@@ -101,6 +101,7 @@ from medleyplay.plugin_api.covers import (
     Thumbnailer,
     ThumbnailSize,
     ThumbnailStatus,
+    image_kind,
     is_cover_image,
 )
 from medleyplay.plugin_api.enrichers import (
@@ -422,6 +423,7 @@ __all__ = [
     "check_key",
     "check_library_path",
     "fetch_public_image",
+    "image_kind",
     "is_cover_image",
     "is_public_address",
     "is_public_https",

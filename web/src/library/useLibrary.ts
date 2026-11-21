@@ -2,7 +2,15 @@
  * @file The signed-in Account's Tracks: loaded once, asked for again when needed, and written.
  */
 
-import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import {
   type AddedPart,
@@ -11,6 +19,7 @@ import {
   type Credit,
   type Detail,
   type Details,
+  type Enricher,
   type EnricherMode,
   type FavoritesRead,
   type Job,
@@ -33,6 +42,7 @@ import {
 import { newId } from "../ids";
 import { PAGE_ID } from "../page";
 import type { Speaker } from "../player/remote";
+import { type Asking, askingAt } from "./asking";
 import { downloadEnded, followDownload } from "./downloading";
 import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
 import { afterNextPaint } from "./stages";
@@ -243,10 +253,38 @@ export function useLibrary(onSignedOut: () => void): Library {
       commandListeners.current.delete(listener);
     };
   }, []);
-  const [findable, setFindable] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
-  const [askedRecently, setAskedRecently] = useState<ReadonlyMap<string, ReadonlySet<number>>>(
-    new Map(),
+  // Each enricher as the server last said, the Tracks asked about from this page since,
+  // and the time its waits are applied at: when an answer came or the next wait passed.
+  const [enrichers, setEnrichers] = useState<ReadonlyMap<string, Enricher>>(new Map());
+  const [askedHere, setAskedHere] = useState<ReadonlyMap<string, ReadonlySet<number>>>(new Map());
+  const [waitsAppliedAt, setWaitsAppliedAt] = useState(() => Date.now());
+  const askings = useMemo(
+    () => new Map([...enrichers].map(([name, read]) => [name, askingAt(read, waitsAppliedAt)])),
+    [enrichers, waitsAppliedAt],
   );
+  const findable = useMemo(
+    () => withoutAskedHere(askings, askedHere, (asking) => asking.findable),
+    [askings, askedHere],
+  );
+  const askedRecently = useMemo(
+    () => withoutAskedHere(askings, askedHere, (asking) => asking.askedRecently),
+    [askings, askedHere],
+  );
+  useEffect(() => {
+    const next = Math.min(...[...askings.values()].map((each) => each.changesAt ?? Infinity));
+    if (next === Infinity) {
+      return undefined;
+    }
+    const timer = setTimeout(
+      () => {
+        setWaitsAppliedAt(Date.now());
+      },
+      Math.min(Math.max(0, next - Date.now()), MAX_TIMEOUT_MS),
+    );
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [askings]);
   const [modes, setModes] = useState<ReadonlyMap<string, EnricherMode>>(new Map());
   const [lookups, setLookups] = useState<ReadonlyMap<number, TrackLookup>>(new Map());
   const [favoriteGroups, setFavoriteGroups] = useState<FavoriteGroups>(NO_FAVORITES);
@@ -358,9 +396,22 @@ export function useLibrary(onSignedOut: () => void): Library {
     for (const { enricher } of LOOKUPS) {
       api.enricher(enricher).then(
         (read) => {
-          setFindable((now) => new Map(now).set(enricher, new Set(read.eligible)));
-          setAskedRecently((now) => new Map(now).set(enricher, new Set(read.asked_recently)));
-          setModes((now) => new Map(now).set(enricher, read.mode));
+          // A 304 gives back the very answer held, which changes nothing.
+          setEnrichers((now) =>
+            now.get(enricher) === read ? now : new Map(now).set(enricher, read),
+          );
+          setAskedHere((now) => {
+            if (!now.has(enricher)) {
+              return now;
+            }
+            const left = new Map(now);
+            left.delete(enricher);
+            return left;
+          });
+          setWaitsAppliedAt(Date.now());
+          setModes((now) =>
+            now.get(enricher) === read.mode ? now : new Map(now).set(enricher, read.mode),
+          );
         },
         () => {
           // Without the enricher, no Track offers its lookup.
@@ -630,12 +681,9 @@ export function useLibrary(onSignedOut: () => void): Library {
       jobOfTrack.current.set(id, job.id);
       setLookup(id, { enricher, state: job.state, message: job.failure_message });
       // Asked: the Job is queued, so the Track no longer offers it until the Job is done.
-      const without = (now: ReadonlyMap<string, ReadonlySet<number>>) => {
-        const left = [...(now.get(enricher) ?? [])].filter((each) => each !== id);
-        return new Map(now).set(enricher, new Set(left));
-      };
-      setFindable(without);
-      setAskedRecently(without);
+      setAskedHere((now) =>
+        new Map(now).set(enricher, new Set([...(now.get(enricher) ?? []), id])),
+      );
     },
     stopFinding: async (id) => {
       const job = jobOfTrack.current.get(id);
@@ -821,4 +869,25 @@ function listen(
     clearTimeout(settling);
     events.close();
   };
+}
+
+/** The longest a timer may wait: a longer one fires at once. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
+/** Each enricher's Tracks from `pick`, less those asked about from this page since its answer. */
+function withoutAskedHere(
+  askings: ReadonlyMap<string, Asking>,
+  askedHere: ReadonlyMap<string, ReadonlySet<number>>,
+  pick: (asking: Asking) => ReadonlySet<number>,
+): ReadonlyMap<string, ReadonlySet<number>> {
+  return new Map(
+    [...askings].map(([name, asking]) => {
+      const asked = askedHere.get(name);
+      const tracks = pick(asking);
+      return [
+        name,
+        asked === undefined ? tracks : new Set([...tracks].filter((id) => !asked.has(id))),
+      ];
+    }),
+  );
 }

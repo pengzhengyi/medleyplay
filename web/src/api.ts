@@ -639,10 +639,15 @@ export interface Enricher {
   readonly available: boolean;
   /** Set after the site refused a request; nothing is asked until an admin resets it. */
   readonly stopped: { readonly at: string; readonly reason: string } | null;
-  /** The Tracks it may be asked about now; none while it is stopped or turned off. */
+  /**
+   * The Tracks it may be asked about; none while it is stopped or turned off. A Track in
+   * `waiting` may be asked about once its time has come.
+   */
   readonly eligible: readonly number[];
-  /** The Tracks the AI was asked about lately, asked again only when someone chooses to. */
-  readonly asked_recently: readonly number[];
+  /** The Tracks asked about before, and when each may be asked again. */
+  readonly waiting: Readonly<Record<string, string>>;
+  /** Someone may choose to ask again before the time comes: the AI only. */
+  readonly asks_again: boolean;
   readonly mode: EnricherMode;
 }
 
@@ -1681,7 +1686,7 @@ export const api = {
   /** Where another device on the network can reach the server: addresses, then names. */
   addresses: () => call<{ addresses: string[] }>("GET", "/api/addresses"),
   /** The enricher's state, and the Tracks it may be asked about. */
-  enricher: (name: string) => call<Enricher>("GET", `/api/enrichers/${name}`),
+  enricher: (name: string) => heldReads.read<Enricher>(`/api/enrichers/${name}`),
   /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */
   /** Ask the enricher about a Track; the AI may be asked `again`, with a `hint` of yours. */
   findDetails: (name: string, trackId: number, again?: { readonly hint: string }) =>

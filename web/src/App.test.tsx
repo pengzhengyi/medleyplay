@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { api } from "./api";
 import { ASK_AGAIN_MS } from "./views/DeviceWaiting";
-import { ALICE, modeOf, serve, signedIn, trackOf } from "./testing/server";
+import { ALICE, enricherOf, modeOf, serve, signedIn, trackOf } from "./testing/server";
 
 /** The rail of views, where who is signed in sits on a laptop. */
 const rail = () => within(screen.getByRole("navigation", { name: "Views" }));
@@ -149,7 +149,7 @@ describe("App", () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive"), trackOf(2, "Melt")]),
       "GET /api/enrichers/bilibili-details": {
-        body: { name: "bilibili-details", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("bilibili-details", [1]),
       },
     });
     render(<App />);
@@ -170,7 +170,7 @@ describe("App", () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Night Drive")]),
       "GET /api/enrichers/bilibili-details": {
-        body: { name: "bilibili-details", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("bilibili-details", [1]),
       },
       "POST /api/enrichers/bilibili-details/tracks/1": {
         body: { id: 9, state: "queued", failure_message: "" },
@@ -223,7 +223,7 @@ describe("App", () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive"), trackOf(2, "Melt")]),
       "GET /api/enrichers/musicbrainz": {
-        body: { name: "musicbrainz", available: true, stopped: null, eligible: [2] },
+        body: enricherOf("musicbrainz", [2]),
       },
     });
     render(<App />);
@@ -244,7 +244,7 @@ describe("App", () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Night Drive")]),
       "GET /api/enrichers/musicbrainz": {
-        body: { name: "musicbrainz", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("musicbrainz", [1]),
       },
       "POST /api/enrichers/musicbrainz/tracks/1": {
         body: { id: 9, state: "queued", failure_message: "" },
@@ -264,7 +264,7 @@ describe("App", () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Night Drive")]),
       "GET /api/enrichers/ai-details": {
-        body: { name: "ai-details", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("ai-details", [1]),
       },
       "POST /api/enrichers/ai-details/tracks/1": {
         body: { id: 9, state: "queued", failure_message: "" },
@@ -289,8 +289,9 @@ describe("App", () => {
           name: "ai-details",
           available: true,
           stopped: null,
-          eligible: [],
-          asked_recently: [1],
+          eligible: [1],
+          waiting: { "1": new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+          asks_again: true,
         },
       },
       "POST /api/enrichers/ai-details/tracks/1": (body) => {
@@ -315,7 +316,7 @@ describe("App", () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive")]),
       "GET /api/enrichers/ai-details": {
-        body: { name: "ai-details", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("ai-details", [1]),
       },
       "POST /api/enrichers/ai-details/tracks/1": {
         status: 409,
@@ -339,7 +340,7 @@ describe("App", () => {
       ...signedIn([trackOf(1, "Night Drive")]),
       "GET /api/mode": { body: modeOf({ online: false, reason: "no_network", network: null }) },
       "GET /api/enrichers/bilibili-details": {
-        body: { name: "bilibili-details", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("bilibili-details", [1]),
       },
       "POST /api/enrichers/bilibili-details/tracks/1": {
         body: { id: 9, state: "queued", failure_message: "" },
@@ -367,7 +368,7 @@ describe("App", () => {
     serve({
       ...signedIn([trackOf(1, "Night Drive")]),
       "GET /api/enrichers/bilibili-details": {
-        body: { name: "bilibili-details", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("bilibili-details", [1]),
       },
       "POST /api/enrichers/bilibili-details/tracks/1": {
         status: 409,

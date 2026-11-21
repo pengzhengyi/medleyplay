@@ -1,13 +1,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api } from "../api";
+import { type Enricher, api } from "../api";
 import { PAGE_ID } from "../page";
 import {
   artistIdOf,
   detailsOf,
   downloadOf,
   downloadUnderWayOf,
+  enricherOf,
   favoritesPlaylistOf,
   playlistOf,
   serve,
@@ -538,9 +539,9 @@ describe("saving a song's details", () => {
   });
 });
 
-/** The enricher of Bilibili's video details, on, with the Tracks it may be asked about. */
-const enricherOf = (eligible: readonly number[], change: object = {}) => ({
-  body: { name: "bilibili-details", available: true, stopped: null, eligible, ...change },
+/** The answer of Bilibili's video details enricher, on, with the Tracks it may be asked about. */
+const videoDetailsAnswer = (eligible: readonly number[], change: Partial<Enricher> = {}) => ({
+  body: enricherOf("bilibili-details", eligible, change),
 });
 
 /** The Tracks the enricher `name` may be asked about, as the library shows them. */
@@ -553,7 +554,7 @@ describe("finding a song's details online", () => {
   it("offers it for the Tracks the server says can be looked up, and no others", async () => {
     serve({
       ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
-      "GET /api/enrichers/bilibili-details": enricherOf([2]),
+      "GET /api/enrichers/bilibili-details": videoDetailsAnswer([2]),
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
 
@@ -575,7 +576,7 @@ describe("finding a song's details online", () => {
   it("asks the server to look the Track up, which then no longer offers it", async () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
-      "GET /api/enrichers/bilibili-details": enricherOf([1, 2]),
+      "GET /api/enrichers/bilibili-details": videoDetailsAnswer([1, 2]),
       "POST /api/enrichers/bilibili-details/tracks/1": {
         body: { id: 7, state: "queued", failure_message: "" },
       },
@@ -596,7 +597,7 @@ describe("finding a song's details online", () => {
   it("follows the lookup's Job, so the Track says what it is doing until it is done", async () => {
     serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "GET /api/enrichers/musicbrainz": videoDetailsAnswer([1]),
       "POST /api/enrichers/musicbrainz/tracks/1": {
         body: { id: 7, state: "queued", failure_message: "" },
       },
@@ -626,7 +627,7 @@ describe("finding a song's details online", () => {
   it("stops a lookup asked for, cancelling its Job and offering it again", async () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "GET /api/enrichers/musicbrainz": videoDetailsAnswer([1]),
       "POST /api/enrichers/musicbrainz/tracks/1": {
         body: { id: 7, state: "queued", failure_message: "" },
       },
@@ -658,7 +659,7 @@ describe("finding a song's details online", () => {
     });
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "GET /api/enrichers/musicbrainz": videoDetailsAnswer([1]),
       "POST /api/enrichers/musicbrainz/tracks/1": {
         body: { id: 8, state: "queued", failure_message: "" },
         after: answered,
@@ -685,7 +686,7 @@ describe("finding a song's details online", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "GET /api/enrichers/musicbrainz": videoDetailsAnswer([1]),
       "POST /api/enrichers/musicbrainz/tracks/1": {
         body: { id: 7, state: "queued", failure_message: "" },
       },
@@ -709,7 +710,7 @@ describe("finding a song's details online", () => {
   it("says why a lookup's Job failed", async () => {
     serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/musicbrainz": enricherOf([1]),
+      "GET /api/enrichers/musicbrainz": videoDetailsAnswer([1]),
       "POST /api/enrichers/musicbrainz/tracks/1": {
         body: { id: 7, state: "queued", failure_message: "" },
       },
@@ -741,7 +742,7 @@ describe("finding a song's details online", () => {
   it("passes on why the server refused, and keeps offering it", async () => {
     serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "GET /api/enrichers/bilibili-details": videoDetailsAnswer([1]),
       "POST /api/enrichers/bilibili-details/tracks/1": {
         status: 409,
         body: { detail: "This video was looked up in the last 24 hours." },
@@ -769,7 +770,7 @@ describe("finding a song's details online", () => {
   it("asks for the Tracks and what can be looked up again when a lookup finishes", async () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "GET /api/enrichers/bilibili-details": videoDetailsAnswer([1]),
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
     await waitFor(() => {
@@ -795,9 +796,9 @@ describe("finding a song's details online", () => {
   it("keeps what each enricher may be asked about apart", async () => {
     serve({
       ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
-      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "GET /api/enrichers/bilibili-details": videoDetailsAnswer([1]),
       "GET /api/enrichers/musicbrainz": {
-        body: { name: "musicbrainz", available: true, stopped: null, eligible: [1, 2] },
+        body: enricherOf("musicbrainz", [1, 2]),
       },
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
@@ -808,12 +809,36 @@ describe("finding a song's details online", () => {
     expect(findableBy(result.current, "bilibili-details")).toEqual([1]);
   });
 
+  it("offers a Track the AI waits for once its wait passes, without asking the server again", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const inAMinute = new Date(Date.now() + 60_000).toISOString();
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Intro")]),
+      "GET /api/enrichers/ai-details": {
+        body: enricherOf("ai-details", [1], { waiting: { "1": inAMinute }, asks_again: true }),
+      },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.askedRecently.get("ai-details")).toEqual(new Set([1]));
+    });
+    expect(findableBy(result.current, "ai-details")).toEqual([]);
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(findableBy(result.current, "ai-details")).toEqual([1]);
+    expect(result.current.askedRecently.get("ai-details")).toEqual(new Set());
+    expect(calls.filter((call) => call === "GET /api/enrichers/ai-details")).toHaveLength(1);
+  });
+
   it("asks MusicBrainz about the Track, which then no longer offers that and still offers the other", async () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "GET /api/enrichers/bilibili-details": videoDetailsAnswer([1]),
       "GET /api/enrichers/musicbrainz": {
-        body: { name: "musicbrainz", available: true, stopped: null, eligible: [1] },
+        body: enricherOf("musicbrainz", [1]),
       },
       "POST /api/enrichers/musicbrainz/tracks/1": {
         body: { id: 7, state: "queued", failure_message: "" },
@@ -837,7 +862,7 @@ describe("finding a song's details online", () => {
     serve({
       ...signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]),
       "GET /api/enrichers/ai-details": {
-        body: { name: "ai-details", available: true, stopped: null, eligible: [2] },
+        body: enricherOf("ai-details", [2]),
       },
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
@@ -852,7 +877,7 @@ describe("finding a song's details online", () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro")]),
       "GET /api/enrichers/ai-details": () => ({
-        body: { name: "ai-details", available: true, stopped: null, eligible },
+        body: enricherOf("ai-details", eligible),
       }),
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
@@ -933,7 +958,7 @@ describe("finding a song's details online", () => {
     const onSignedOut = vi.fn();
     serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "GET /api/enrichers/bilibili-details": enricherOf([1]),
+      "GET /api/enrichers/bilibili-details": videoDetailsAnswer([1]),
       "POST /api/enrichers/bilibili-details/tracks/1": {
         status: 401,
         body: { detail: "Sign in first." },

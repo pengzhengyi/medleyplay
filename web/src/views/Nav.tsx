@@ -32,7 +32,7 @@ import {
   SignOutIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { type ReactNode, useRef } from "react";
+import type { ReactNode } from "react";
 
 import { type RailView, setRailOrder, useRailOrder } from "../railOrder";
 import { type RailEntry, type Top, railEntriesIn } from "./railViews";
@@ -101,12 +101,8 @@ export function Nav({
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
   );
-  // A link let go after being dragged isn't followed.
-  const dragged = useRef(false);
   const drop = ({ active, over }: DragEndEvent) => {
-    setTimeout(() => {
-      dragged.current = false;
-    }, 0);
+    swallowNextClick();
     const from = order.indexOf(active.id as RailView);
     const to = over === null ? -1 : order.indexOf(over.id as RailView);
     if (from >= 0 && to >= 0 && from !== to) {
@@ -125,11 +121,6 @@ export function Nav({
         aria-current={current ? "page" : undefined}
         aria-label={counted ? named : undefined}
         title={collapsed ? named : undefined}
-        onClick={(event) => {
-          if (dragged.current) {
-            event.preventDefault();
-          }
-        }}
       >
         <ViewIcon weight={current ? "fill" : "regular"} aria-hidden />
         <span>{label}</span>
@@ -184,13 +175,8 @@ export function Nav({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragStart={() => {
-          dragged.current = true;
-        }}
         onDragEnd={drop}
-        onDragCancel={() => {
-          dragged.current = false;
-        }}
+        onDragCancel={swallowNextClick}
       >
         <SortableContext items={[...order]} strategy={rectSortingStrategy}>
           <ul className="views-list">
@@ -353,4 +339,19 @@ function MovableView({
       {children}
     </li>
   );
+}
+
+/** How long after a drop its click may come, in milliseconds. */
+const CLICK_AFTER_DROP_MS = 300;
+
+/** Keep the click that follows letting go of a dragged link from opening its view. */
+function swallowNextClick(): void {
+  const swallow = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  setTimeout(() => {
+    window.removeEventListener("click", swallow, { capture: true });
+  }, CLICK_AFTER_DROP_MS);
 }

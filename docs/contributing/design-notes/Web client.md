@@ -561,6 +561,15 @@ remembers both choices:
   screen reader, and what the view says under it shows under the menu. A view
   with a name of its own, as an artist's, keeps its heading.
 
+**The order of the views** is each browser's own too: Library, Artists, Albums,
+Radio, Playlists, Downloaded, and Insights until it chooses another. Clean up stays
+under Insights and Settings stays last. A mouse drags a view to another place once
+it has moved a few pixels, and a finger once it has held a moment, so a click or a
+tap still opens the view; the click that ends a drag opens nothing. Settings ›
+Appearance lists the same views with a handle to drag, *Move up*, *Move down*, and
+*Reset order*, which is also how a keyboard moves them: in the rail, Enter on a view
+opens it. Dragging uses `@dnd-kit`, as the songs editor does.
+
 Who is signed in sits at the rail's foot, as a round initial and the name,
 opening a menu with *Sign out*; the header leaves them out. Narrower, where
 there is no rail, the same menu sits in the header instead, as only the initial

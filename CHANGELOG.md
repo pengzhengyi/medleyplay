@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Choose the order of the views in the rail** — drag a view to another place in
+  the rail, or move it in Settings › Appearance, where *Reset order* goes back to
+  the default; each browser keeps its own order. Radio now sits below Albums and
+  above Playlists by default.
+
 - **Find a song's lyrics by hand** — the lyrics editor's *Find* lists the songs
   LRCLIB, and NetEase once turned on, have of a title and artist you can change, each
   with its site, album, length, kind, and first lines; *Use* fills the editor with

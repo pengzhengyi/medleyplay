@@ -58,6 +58,15 @@ describe("App", () => {
     expect(await screen.findByLabelText("Code 0042")).toBeInTheDocument();
   });
 
+  it("shows the starting mark while it asks who is signed in, as the page did before it", async () => {
+    serve(signedIn([trackOf(1, "Night Drive")]));
+
+    render(<App />);
+
+    expect(screen.getByText("medleyplay")).toHaveAttribute("aria-busy", "true");
+    expect(await screen.findByRole("navigation", { name: "Views" })).toBeInTheDocument();
+  });
+
   it("shows the Library to a signed-in browser", async () => {
     serve(signedIn([trackOf(1, "Night Drive")]));
 

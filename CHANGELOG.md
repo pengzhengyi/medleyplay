@@ -657,6 +657,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **No blank page while medleyplay starts or opens something** — the page shows its
+  colors, in the theme chosen, and a quiet *medleyplay* mark from the first moment,
+  where it was empty for about two seconds; Edit details, Edit album, Now Playing,
+  and the add dialogs open at once; the rest load while the browser is idle and show
+  a busy frame if opened first. A part that fails to load says why where it would
+  show, with *Try again*, or *Reload* when medleyplay was updated, and never empties
+  the page. Scripts and styles are sent gzipped, and a browser keeps them through a
+  304: the first visit's scripts and styles shrink from 1,107 KB to 484 KB with every
+  part preloaded.
+
 - **Coming back to the page waits less** — which songs each lookup may be asked
   about is kept on the server until something changes, and answered 304 to a page
   holding it; the answer says when each song asked before may be asked again, and

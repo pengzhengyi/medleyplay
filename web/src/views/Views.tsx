@@ -11,7 +11,7 @@ import {
   ShuffleIcon,
   PencilSimpleIcon,
 } from "@phosphor-icons/react";
-import { Fragment, type ReactNode, Suspense, lazy, useMemo } from "react";
+import { Fragment, type ReactNode, useMemo } from "react";
 
 import type {
   ArtistNames,
@@ -63,28 +63,12 @@ import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
 import { FavoriteHeart } from "./FavoriteHeart";
+import { LazyPart } from "./LazyPart";
+import { CleanUpView, InsightsView, SettingsView } from "./parts";
 import type { Station } from "../library/useStation";
 import { RadioView } from "./RadioView";
 import { EditArtistButton } from "./EditArtist";
 import { type TrackActions, TrackTable } from "./TrackTable";
-
-// Views most visits never open load when first opened, so the first page has less to load.
-const InsightsView = lazy(() =>
-  import("./InsightsView").then((loaded) => ({ default: loaded.InsightsView })),
-);
-const SettingsView = lazy(() =>
-  import("./SettingsView").then((loaded) => ({ default: loaded.SettingsView })),
-);
-const CleanUpView = lazy(() =>
-  import("./CleanUpView").then((loaded) => ({ default: loaded.CleanUpView })),
-);
-
-/** What shows while a view loads. */
-const LOADING_VIEW = (
-  <p className="empty" aria-busy="true">
-    Loading…
-  </p>
-);
 
 /** The route id of Favorites, the Playlist of favorites the server keeps for each Account. */
 export const FAVORITES = "favorites";
@@ -183,13 +167,13 @@ function viewOf(given: ViewProps) {
       );
     case "insights":
       return (
-        <Suspense fallback={LOADING_VIEW}>
-          <InsightsView
+        <LazyPart doing="Loading…">
+          <InsightsView.Component
             tracks={given.tracks}
             onPlay={props.actions.onPlay}
             toDo={props.toDo ?? 0}
           />
-        </Suspense>
+        </LazyPart>
       );
     case "artists":
       return <Artists tracks={props.tracks} favorites={props.favorites} links={props.links} />;
@@ -393,8 +377,8 @@ function viewOf(given: ViewProps) {
       return <SearchResults {...props} query={route.query} />;
     case "settings":
       return (
-        <Suspense fallback={LOADING_VIEW}>
-          <SettingsView
+        <LazyPart doing="Loading…">
+          <SettingsView.Component
             admin={props.admin}
             section={route.section}
             mode={props.mode}
@@ -404,12 +388,12 @@ function viewOf(given: ViewProps) {
             onRatingsChanged={props.onRatingsChanged}
             waitingDevices={props.waitingDevices}
           />
-        </Suspense>
+        </LazyPart>
       );
     case "clean-up":
       return (
-        <Suspense fallback={LOADING_VIEW}>
-          <CleanUpView
+        <LazyPart doing="Loading…">
+          <CleanUpView.Component
             tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
             artistNames={props.artistNames}
             // A split file may be all that writes a name, so its songs' names are tidied through it.
@@ -425,7 +409,7 @@ function viewOf(given: ViewProps) {
               }
             }}
           />
-        </Suspense>
+        </LazyPart>
       );
   }
 }

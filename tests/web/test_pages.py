@@ -10,13 +10,16 @@ from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
 
 PAGE = "<!doctype html><title>medleyplay</title>"
+SCRIPT = "export const songs = [];\n" * 200
+"""A script of about 5 KB, large enough to be worth compressing."""
 
 
 def _built(folder: Path) -> Path:
-    """A built client: `index.html`, and `assets/index-1a2b.js`."""
+    """A built client: `index.html`, a tiny `assets/index-1a2b.js`, and `assets/songs-3c4d.js`."""
     (folder / "assets").mkdir(parents=True)
     (folder / "index.html").write_text(PAGE)
     (folder / "assets" / "index-1a2b.js").write_text("console.log('hi')")
+    (folder / "assets" / "songs-3c4d.js").write_text(SCRIPT)
     return folder
 
 
@@ -42,6 +45,44 @@ def test_an_asset_is_kept_for_good(pages: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+
+def test_an_asset_is_sent_gzipped_to_a_browser_that_accepts_it(pages: TestClient) -> None:
+    response = pages.get("/assets/songs-3c4d.js", headers={"Accept-Encoding": "gzip"})
+
+    assert response.headers["content-encoding"] == "gzip"
+    assert "Accept-Encoding" in response.headers["vary"]
+    assert response.text == SCRIPT
+    assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+
+def test_an_asset_is_sent_as_it_is_to_a_browser_that_does_not_accept_gzip(
+    pages: TestClient,
+) -> None:
+    response = pages.get("/assets/songs-3c4d.js", headers={"Accept-Encoding": "identity"})
+
+    assert "content-encoding" not in response.headers
+    assert response.text == SCRIPT
+
+
+def test_a_range_of_an_asset_is_sent_as_it_is(pages: TestClient) -> None:
+    response = pages.get(
+        "/assets/songs-3c4d.js", headers={"Accept-Encoding": "gzip", "Range": "bytes=0-5"}
+    )
+
+    assert (response.status_code, response.text) == (206, "export")
+    assert "content-encoding" not in response.headers
+
+
+def test_a_browser_asking_whether_its_asset_changed_is_told_to_keep_it_for_good(
+    pages: TestClient,
+) -> None:
+    held = pages.get("/assets/index-1a2b.js")
+
+    again = pages.get("/assets/index-1a2b.js", headers={"If-None-Match": held.headers["etag"]})
+
+    assert again.status_code == 304
+    assert again.headers["cache-control"] == "public, max-age=31536000, immutable"
 
 
 def test_a_missing_asset_is_not_found(pages: TestClient) -> None:

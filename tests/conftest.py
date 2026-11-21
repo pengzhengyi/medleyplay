@@ -61,6 +61,7 @@ from medleyplay.application.silences import (
 from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
+from medleyplay.application.thumbnails import ThumbnailService, make_thumbnails_kind
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.web.app import create_app
@@ -203,6 +204,15 @@ def songs(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) ->
 @pytest.fixture
 def covers(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> CoverService:
     return CoverService(units, clock, tmp_path / "data" / "covers")
+
+
+@pytest.fixture
+def thumbnails(
+    clock: FakeClock, plugins: PluginService, jobs: JobService, tmp_path: Path
+) -> ThumbnailService:
+    data = tmp_path / "data"
+    kind = make_thumbnails_kind(data / "thumbnails", data / "jobs")
+    return ThumbnailService(clock, plugins, jobs, kind, data / "covers", data / "thumbnails")
 
 
 @pytest.fixture
@@ -517,6 +527,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     split_offers: SplitOfferService,
     silences: SilenceService,
     covers: CoverService,
+    thumbnails: ThumbnailService,
     enrichment: EnrichmentService,
     ai: AiService,
     devices: DeviceService,
@@ -559,6 +570,8 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         split_offers=split_offers,
         silences=silences,
         covers=covers,
+        thumbnails=thumbnails,
+        thumbnail_sweeper=EnrichmentSweeper(thumbnails, what="thumbnails"),
         enrichment=enrichment,
         sweeper=EnrichmentSweeper(enrichment),
         ai=ai,

@@ -39,6 +39,7 @@ from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import SilenceService
 from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.sweeper import EnrichmentSweeper
+from medleyplay.application.thumbnails import ThumbnailService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import DeviceId
 from medleyplay.domain.errors import NotSignedInError
@@ -73,6 +74,8 @@ class Services:
     split_offers: SplitOfferService
     silences: SilenceService
     covers: CoverService
+    thumbnails: ThumbnailService
+    thumbnail_sweeper: EnrichmentSweeper
     enrichment: EnrichmentService
     sweeper: EnrichmentSweeper
     ai: AiService
@@ -224,6 +227,10 @@ def _covers(services: Annotated[Services, Depends(_services)]) -> CoverService:
     return services.covers
 
 
+def _thumbnails(services: Annotated[Services, Depends(_services)]) -> ThumbnailService:
+    return services.thumbnails
+
+
 def _enrichment(services: Annotated[Services, Depends(_services)]) -> EnrichmentService:
     return services.enrichment
 
@@ -275,6 +282,7 @@ DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]
 SilencesDep = Annotated[SilenceService, Depends(_silences)]
 CoversDep = Annotated[CoverService, Depends(_covers)]
+ThumbnailsDep = Annotated[ThumbnailService, Depends(_thumbnails)]
 EnrichmentDep = Annotated[EnrichmentService, Depends(_enrichment)]
 AiDep = Annotated[AiService, Depends(_ai)]
 DevicesDep = Annotated[DeviceService, Depends(_devices)]

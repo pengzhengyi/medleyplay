@@ -1,16 +1,16 @@
 """The covers API: uploading the household's cover for a Track, and serving a cover by name."""
 
-from typing import Any, Final
+from typing import Annotated, Any, Final
 
-from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi.responses import FileResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
 from medleyplay.application.covers import CoverService
 from medleyplay.application.details import DetailsService
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.covers import MAX_COVER_BYTES
-from medleyplay.web.deps import CoversDep, DetailsDep, SignedInAccount
+from medleyplay.domain.covers import MAX_COVER_BYTES, THUMBNAIL_RECIPE, ThumbnailSize
+from medleyplay.web.deps import CoversDep, DetailsDep, SignedInAccount, ThumbnailsDep
 from medleyplay.web.details import DetailsOut
 from medleyplay.web.ids import RowId
 
@@ -18,16 +18,40 @@ router = APIRouter(prefix="/api", tags=["covers"])
 
 _CACHED: Final = "private, max-age=31536000, immutable"
 _COVER_RESPONSES: Final[dict[int | str, dict[str, Any]]] = {
-    200: {"content": {"image/jpeg": {}, "image/png": {}, "image/webp": {}}}
+    200: {"content": {"image/jpeg": {}, "image/png": {}, "image/webp": {}}},
+    307: {"description": "The thumbnail isn't made: the original instead"},
 }
 
 
 @router.get("/covers/{name}", response_class=FileResponse, responses=_COVER_RESPONSES)
-def cover(name: str, _: SignedInAccount, covers: CoversDep) -> FileResponse:
-    """Serve a cover as its bytes say; its name is its content, so a browser keeps it."""
+def cover(
+    name: str,
+    _: SignedInAccount,
+    covers: CoversDep,
+    thumbnails: ThumbnailsDep,
+    size: ThumbnailSize | None = None,
+    recipe: Annotated[int | None, Query(ge=0)] = None,
+) -> Response:
+    """Serve a cover as its bytes say, or its thumbnail of `size` made by `recipe`.
+
+    Its name is its content, so a browser keeps it. A thumbnail not made yet, or made
+    by another recipe, sends the browser to the original, without keeping that answer.
+    """
+    if (size is None) != (recipe is None):
+        message = "Ask for a thumbnail with both a size and a recipe."
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, message)
     found = covers.open(name)
     if found is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"There is no cover {name!r}.")
+    if size is not None:
+        thumbnail = thumbnails.found(name, size) if recipe == THUMBNAIL_RECIPE else None
+        if thumbnail is None:
+            return RedirectResponse(
+                f"/api/covers/{name}",
+                status.HTTP_307_TEMPORARY_REDIRECT,
+                headers={"Cache-Control": "no-store"},
+            )
+        found = thumbnail
     path, kind = found
     return FileResponse(
         path,

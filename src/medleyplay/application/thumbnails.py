@@ -51,6 +51,8 @@ MAX_THUMBNAIL_BYTES: Final = 1024 * 1024
 """A thumbnail larger than this is dropped, and its image marked unreadable."""
 NO_TOOL_PAUSE: Final = timedelta(hours=1)
 """How long reconcile waits after the thumbnailer had no program to run."""
+RECONCILE_DELAY: Final = timedelta(seconds=30)
+"""How long after a change or a Job ending reconcile runs, so a run of enrichments asks once."""
 TARGET: Final = "thumbnails"
 """The one target of every `make_thumbnails` Job, so one runs at a time."""
 

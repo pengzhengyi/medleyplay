@@ -7107,20 +7107,20 @@ kbd {
 }
 
 .np-stage {
+  /* The cover's column: the lyrics take one as wide, close beside it. */
+  --np-column: min(30rem, 48dvh, 42vw);
+
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   place-items: center;
-  gap: 3rem;
+  justify-content: center;
+  gap: clamp(2.5rem, 5vw, 4.5rem);
   min-height: 0;
 }
 
-.np-stage.queue-open {
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
-}
-
-/* The lyrics take a half as wide as the cover's, so they mirror it across the middle. */
+/* The cover and the lyrics as one pair in the middle, mirroring each other across it. */
 .np-stage.lyrics-open {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, var(--np-column));
 }
 
 .np-main {
@@ -7315,6 +7315,7 @@ kbd {
 
 .np-extras {
   display: flex;
+  position: relative;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -7348,15 +7349,42 @@ kbd {
   margin: 0;
 }
 
-.np-stage .queue {
+/* Up next: a window over the lyrics, from its button, level with the controls' foot. */
+.now-playing .np-up-next {
+  position: absolute;
+  bottom: 0;
+  left: calc(100% + 1.5rem);
+  z-index: 3;
+  width: min(22rem, calc(100vw - 2.5rem));
+}
+
+.np-up-next .queue {
   display: block;
   grid-area: auto;
   position: static;
-  align-self: center;
   width: 100%;
-  max-height: min(70dvh, 40rem);
+  max-height: min(60dvh, 34rem);
   margin: 0;
+  background: rgb(16 22 20 / 94%);
   backdrop-filter: blur(24px);
+  box-shadow: var(--float);
+}
+
+/* With no room beside the controls, it opens above its button instead. */
+@media (width <= 78rem) {
+  .np-stage:not(.lyrics-open) .np-up-next {
+    right: 0;
+    bottom: calc(100% + 0.75rem);
+    left: auto;
+  }
+}
+
+@media (width <= 48rem) {
+  .now-playing .np-up-next {
+    right: 0;
+    bottom: calc(100% + 0.75rem);
+    left: auto;
+  }
 }
 
 /* The lyrics beside the cover: the line sung now large and bright, the others dim. */
@@ -7368,6 +7396,12 @@ kbd {
   height: 100%;
   min-height: 0;
   max-height: min(78dvh, 48rem);
+  transition: opacity 200ms;
+}
+
+/* Under Up next, the lyrics step back, so the songs read first. */
+.np-stage.up-next-open .lyrics-panel {
+  opacity: 0.3;
 }
 
 .lyrics-lines {
@@ -7453,12 +7487,13 @@ kbd {
     scroll-behavior: auto;
   }
 
+  .lyrics-panel,
   .lyric-line {
     transition: none;
   }
 }
 
-/* On a phone, Up next or the lyrics take the cover's place. */
+/* On a phone, the lyrics take the cover's place. */
 @media (width <= 48rem) {
   .np-body {
     padding-inline: 1.25rem;
@@ -7468,17 +7503,17 @@ kbd {
     --np-width: min(100%, 26rem);
   }
 
-  .np-stage:is(.queue-open, .lyrics-open) {
+  .np-stage.lyrics-open {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
     gap: 1rem;
   }
 
-  .np-stage:is(.queue-open, .lyrics-open) .np-main {
+  .np-stage.lyrics-open .np-main {
     order: 2;
   }
 
-  .np-stage:is(.queue-open, .lyrics-open) .np-art {
+  .np-stage.lyrics-open .np-art {
     display: none;
   }
 
@@ -7492,6 +7527,10 @@ kbd {
 }
 
 @media (height <= 40rem) and (width > 48rem) {
+  .np-stage {
+    --np-column: min(24rem, 42dvh, 42vw);
+  }
+
   .np-main {
     --np-width: min(24rem, 100%, 42dvh);
 

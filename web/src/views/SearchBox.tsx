@@ -327,7 +327,7 @@ export function SearchBox({
               title: `Go to ${artist.name || "the songs with no artist"}`,
               content: (
                 <>
-                  <Cover cover={photoOf(artist.link)} className="suggest-initial">
+                  <Cover size="small" cover={photoOf(artist.link)} className="suggest-initial">
                     {initialOf(artist.name)}
                   </Cover>
                   <span className="suggest-name">{artist.name || "No artist"}</span>{" "}

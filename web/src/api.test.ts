@@ -1,8 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, HeldReads, api, uploadFile } from "./api";
+import { ApiError, HeldReads, THUMBNAIL_RECIPE, api, coverUrl, uploadFile } from "./api";
 import { downloadOf, serve } from "./testing/server";
 import { FakeUploads } from "./testing/uploads";
+
+describe("where a cover is served", () => {
+  const BREMEN = "5f3b6c9e0a1d2f4b8c7e6a5d4c3b2a1908f7e6d5c4b3a29180f7e6d5c4b3a291";
+
+  it("serves the original as it was kept", () => {
+    expect(coverUrl(BREMEN, "original")).toBe(`/api/covers/${BREMEN}`);
+  });
+
+  it("serves a thumbnail by its size and the recipe it is made by", () => {
+    expect(coverUrl(BREMEN, "small")).toBe(`/api/covers/${BREMEN}?size=small&recipe=1`);
+    expect(coverUrl(BREMEN, "medium")).toBe(`/api/covers/${BREMEN}?size=medium&recipe=1`);
+    expect(THUMBNAIL_RECIPE).toBe(1);
+  });
+});
 
 describe("a refused request", () => {
   it("says each check the request failed, as the server lists them", async () => {

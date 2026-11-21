@@ -42,7 +42,7 @@ export interface Track {
   readonly kind: Kind;
   /** Why it is that kind: settled, as named or split, or guessed. */
   readonly kind_reason: KindReason;
-  /** The cover shown, by name, served at `coverUrl(cover)`. */
+  /** The cover shown, by name, served at `coverUrl(cover, size)`. */
   readonly cover: string | null;
   /** What listeners elsewhere rated the song or its album, when enough did; it only shows. */
   readonly community: CommunityRating | null;
@@ -80,9 +80,28 @@ export function kindSettled(reason: KindReason): boolean {
   return reason === "named" || reason === "split" || reason === "segment";
 }
 
-/** Return where the cover named `cover` is served. */
-export function coverUrl(cover: string): string {
-  return `/api/covers/${cover}`;
+/**
+ * The number of how the server makes thumbnails: their sizes, quality, and rules. A
+ * thumbnail's URL carries it, so a new recipe reaches browsers that kept the old one.
+ */
+export const THUMBNAIL_RECIPE = 1;
+
+/**
+ * How large a cover is shown: a `small` thumbnail (128 pixels) in a song row or the
+ * player bar, a `medium` one (512 pixels) in a tile, or the `original` image.
+ */
+export type CoverSize = "small" | "medium" | "original";
+
+/**
+ * Return where the cover named `cover` is served at `size`.
+ *
+ * A thumbnail not made yet is sent on to the original, so it always shows.
+ */
+export function coverUrl(cover: string, size: CoverSize): string {
+  const original = `/api/covers/${cover}`;
+  return size === "original"
+    ? original
+    : `${original}?size=${size}&recipe=${String(THUMBNAIL_RECIPE)}`;
 }
 
 /** A detail of a Track the household can edit. */

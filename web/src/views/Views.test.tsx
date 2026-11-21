@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { Track } from "../api";
 import { App } from "../App";
 import { hrefOf } from "../routes";
 import {
@@ -40,6 +41,13 @@ const LIBRARY = [
   trackOf(2, "Shiver", { artist: "ryo", album: "Supercell", downloaded: true }),
   trackOf(3, "クジラ", { artist: "ルワン", album: "空想", album_artist: "Various" }),
 ];
+
+/** `LIBRARY`, with *Supercell*'s songs showing its cover, named `supercell`. */
+function withCovers(): Track[] {
+  return LIBRARY.map((track) =>
+    track.album === "Supercell" ? { ...track, cover: "supercell" } : track,
+  );
+}
 
 /** The routes of a server with the Bilibili plugin on, holding `LIBRARY`. */
 function withBilibili(): Routes {
@@ -116,6 +124,28 @@ describe("the views", () => {
       await screen.findByRole("link", { name: /Supercell.*ryo, 2 songs/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /空想.*Various, 1 song/ })).toBeInTheDocument();
+  });
+
+  it("shows a song's cover in its row as a small thumbnail", async () => {
+    open("", signedIn(withCovers(), [favoritesPlaylistOf([1])]));
+
+    const melt = (await screen.findByRole("button", { name: "Melt" })).closest("tr");
+
+    expect(melt?.querySelector(".cover img")).toHaveAttribute(
+      "src",
+      "/api/covers/supercell?size=small&recipe=1",
+    );
+  });
+
+  it("shows an album's cover on its tile as a medium thumbnail", async () => {
+    open("#/albums", signedIn(withCovers(), [favoritesPlaylistOf([1])]));
+
+    const supercell = await screen.findByRole("link", { name: /Supercell.*ryo, 2 songs/ });
+
+    expect(supercell.querySelector(".cover img")).toHaveAttribute(
+      "src",
+      "/api/covers/supercell?size=medium&recipe=1",
+    );
   });
 
   it("plays every album whole, one after another, from Albums", async () => {
@@ -780,7 +810,10 @@ describe("an artist's page", () => {
 
     const ryo = await screen.findByRole("link", { name: /ryo/u });
     await waitFor(() => {
-      expect(ryo.querySelector(".avatar img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+      expect(ryo.querySelector(".avatar img")).toHaveAttribute(
+        "src",
+        "/api/covers/ryo-photo?size=medium&recipe=1",
+      );
     });
     const unlinked = screen.getByRole("link", { name: /ルワン/u });
     expect(unlinked.querySelector(".avatar img")).toBeNull();
@@ -796,7 +829,10 @@ describe("an artist's page", () => {
     const ryo = await screen.findByRole("option", { name: "ryo 2 songs" });
     // The artist names, which hold the photo, are read once the page is idle.
     await waitFor(() => {
-      expect(ryo.querySelector("img")).toHaveAttribute("src", "/api/covers/ryo-photo");
+      expect(ryo.querySelector("img")).toHaveAttribute(
+        "src",
+        "/api/covers/ryo-photo?size=small&recipe=1",
+      );
     });
   });
 

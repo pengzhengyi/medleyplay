@@ -730,7 +730,7 @@ function CoverBox({
     <div className="cover-box">
       <PictureFrame
         replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
-        save={cover === undefined ? undefined : { href: coverUrl(cover), name: title }}
+        save={cover === undefined ? undefined : { href: coverUrl(cover, "original"), name: title }}
         removeLabel="Remove your cover"
         busy={busy}
         saving={covering ? "Saving the cover…" : undefined}
@@ -741,7 +741,7 @@ function CoverBox({
           {cover === undefined ? (
             <MusicNotesIcon weight="duotone" aria-hidden />
           ) : (
-            <img src={coverUrl(cover)} alt="Cover" />
+            <img src={coverUrl(cover, "original")} alt="Cover" />
           )}
         </span>
       </PictureFrame>

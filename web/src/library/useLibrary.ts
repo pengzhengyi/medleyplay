@@ -186,6 +186,8 @@ export interface Library {
 
 /** The Jobs whose end can change the Tracks. */
 const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track"]);
+/** The Jobs whose end changes nothing the Library reads: thumbnails are found by URL. */
+const CHANGES_NOTHING = new Set(["make_thumbnails"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
 /** How long after the last Job to end the Library is refreshed, so a busy scan does it once. */
 const SETTLE_MS = 1000;
@@ -801,7 +803,7 @@ function listen(
   events.addEventListener("job", (event: MessageEvent<string>) => {
     const job = JSON.parse(event.data) as JobEvent;
     onJob(job);
-    if (FINISHED.has(job.state)) {
+    if (FINISHED.has(job.state) && !CHANGES_NOTHING.has(job.kind)) {
       tracksChanged ||= CHANGES_TRACKS.has(job.kind);
       clearTimeout(settling);
       settling = setTimeout(() => {

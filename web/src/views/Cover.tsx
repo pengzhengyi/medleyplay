@@ -3,18 +3,22 @@
 import { MusicNotesIcon } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
 
-import { coverUrl } from "../api";
+import { type CoverSize, coverUrl } from "../api";
 
 /**
- * The image `cover` names, or `children` (a note by default) when it names none or
- * the image can't be loaded. It is decoration: the title beside it says what it is.
+ * The image `cover` names at `size`, or `children` (a note by default) when it names
+ * none or the image can't be loaded. It is decoration: the title beside it says what
+ * it is.
  */
 export function Cover({
   cover,
+  size,
   className,
   children,
 }: {
   readonly cover: string | null;
+  /** A `small` thumbnail for a row, a `medium` one for a tile, or the `original`. */
+  readonly size: CoverSize;
   readonly className?: string;
   readonly children?: ReactNode;
 }) {
@@ -32,7 +36,7 @@ export function Cover({
         (children ?? <MusicNotesIcon weight="duotone" />)
       ) : (
         <img
-          src={coverUrl(shown)}
+          src={coverUrl(shown, size)}
           alt=""
           loading="lazy"
           decoding="async"

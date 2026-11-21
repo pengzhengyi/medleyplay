@@ -9,11 +9,12 @@ import { applyTheme } from "./theme";
 function startingScript(): string {
   // Tests run from `web/`, where the page lives.
   const page = readFileSync(join(process.cwd(), "index.html"), "utf8");
-  const found = /<script>([\s\S]*?)<\/script>/u.exec(page);
-  if (found?.[1] === undefined) {
+  const parsed = new DOMParser().parseFromString(page, "text/html");
+  const inline = [...parsed.scripts].find((script) => script.src === "");
+  if (inline === undefined) {
     throw new Error("index.html has no inline script.");
   }
-  return found[1];
+  return inline.text;
 }
 
 /** Run the page's inline script as the browser does before the first paint. */

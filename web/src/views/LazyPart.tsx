@@ -154,7 +154,11 @@ async function whyPartFailed(error: unknown): Promise<Failure> {
     return "unreachable";
   }
   const running = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
-  const served = /<script type="module"[^>]*\ssrc="([^"]+)"/u.exec(page)?.[1];
+  const served =
+    new DOMParser()
+      .parseFromString(page, "text/html")
+      .querySelector<HTMLScriptElement>('script[type="module"][src]')
+      ?.getAttribute("src") ?? undefined;
   const newer =
     running !== undefined &&
     served !== undefined &&

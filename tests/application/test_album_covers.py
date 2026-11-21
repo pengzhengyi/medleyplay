@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.album_covers import AlbumCovers
+from medleyplay.application.album_covers import AlbumCovers, album_key
 from medleyplay.application.covers import COVERS_FOLDER
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, InvalidInputError
@@ -87,6 +87,15 @@ def test_an_album_written_alike_in_other_letters_shares_what_was_found(
     shared = enriching.album_covers.covers(alice, " help! ", "THE BEATLES")
 
     assert [each.option.release_id for each in shared.covers] == [HELP_VINYL, HELP_CD]
+
+
+def test_an_album_is_keyed_as_the_page_groups_it_katakana_as_hiragana() -> None:
+    assert album_key("アルバム", "ヨアソビ") == album_key(" あるばむ ", "よあそび")
+
+
+def test_an_album_is_keyed_as_the_page_groups_it_lower_cased_not_case_folded() -> None:
+    assert album_key("STRASSE", "") == album_key("strasse", "")
+    assert album_key("Straße", "") != album_key("Strasse", "")
 
 
 def test_nothing_is_known_of_an_albums_covers_until_asked(

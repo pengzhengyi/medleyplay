@@ -334,7 +334,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         ),
         artist_splits=ArtistSplitService(units, clock, changes.tell),
         shared_names=SharedNameService(units, clock, changes.tell),
-        album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs),
+        album_covers=AlbumCoverService(units, plugins, jobs, cover_jobs, clock),
         artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         lyrics=LyricsService(units, clock, changes.tell),

@@ -40,6 +40,15 @@ type ReleaseId = Annotated[
 ]
 """A release's MusicBrainz id."""
 
+type MusicBrainzArtistId = Annotated[
+    str,
+    StringConstraints(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+]
+"""An artist's MusicBrainz id."""
+
+MAX_ARTIST_IDS: Final = 8
+"""The most MusicBrainz artists an album is searched by."""
+
 
 class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -48,12 +57,15 @@ class _Model(BaseModel):
 class FindCovers(_Model):
     """Ask for the front covers of the releases of the album `album` by `artist`.
 
-    `artist` is the album artist, or empty when the album has none. Each cover goes
-    into `folder`, an empty folder the caller owns.
+    `artist` is the album artist, or empty when the album has none; `artist_ids` are the
+    MusicBrainz artists its songs are linked to, a finder that knows them searching by
+    them rather than by `artist`. Each cover goes into `folder`, an empty folder the
+    caller owns.
     """
 
     album: Name
     artist: Annotated[str, StringConstraints(max_length=MAX_NAME)] = ""
+    artist_ids: Annotated[tuple[MusicBrainzArtistId, ...], Field(max_length=MAX_ARTIST_IDS)] = ()
     folder: Annotated[str, StringConstraints(max_length=4096)] = ""
 
 

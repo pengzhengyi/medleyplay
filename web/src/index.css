@@ -1260,6 +1260,20 @@ button[aria-disabled="true"] {
   border-radius: 50%;
 }
 
+/* A cover suggested is square, rounded as an album's cover is. */
+.cover-suggestion .photo-suggestion-art,
+.cover-suggestion .photo-suggestion-controls {
+  border-radius: 0.75rem;
+}
+
+/* Said under an album's empty cover while MusicBrainz is asked. */
+.cover-looking {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
 /* Pico spaces a group's buttons apart; these are the photo's own parts. */
 .photo-suggestion-frame .photo-suggestion-controls > button.photo-suggestion-control {
   margin: 0;

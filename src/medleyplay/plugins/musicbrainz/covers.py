@@ -47,7 +47,9 @@ class MusicBrainzCovers:
         MusicBrainz or the archive refusing is a refusal; a network failure is raised.
         """
         try:
-            found = self.client.search_releases(release_query(request.album, request.artist))
+            found = self.client.search_releases(
+                release_query(request.album, request.artist, request.artist_ids)
+            )
             hits = {hit.id: hit for hit in found.releases if is_release_id(hit.id)}
             candidates = [
                 Candidate(hit.id, hit.title, hit.score, hit.status == "Official", hit.date)

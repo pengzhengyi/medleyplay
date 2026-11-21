@@ -271,6 +271,9 @@ export function albumCoversOf(
     failure: null,
     choice_failure: null,
     may_choose: false,
+    suggested: null,
+    due: false,
+    may_find: true,
     ...change,
   };
 }
@@ -685,7 +688,7 @@ export const CD: CoverRelease = {
   format: "CD",
 };
 
-/** Nothing known of an album's covers: never looked up. */
+/** Nothing known of an album's covers: never looked up, so due a search, MusicBrainz on. */
 export const UNKNOWN_COVERS: AlbumCovers = {
   covers: [],
   found_at: null,
@@ -696,6 +699,9 @@ export const UNKNOWN_COVERS: AlbumCovers = {
   failure: null,
   choice_failure: null,
   may_choose: false,
+  suggested: null,
+  due: true,
+  may_find: true,
 };
 
 /** *Help!*'s 1965 vinyl and 1987 CD found, `cover-1965` and `cover-1987`, with `known` on top. */
@@ -707,6 +713,7 @@ export function helpFound(known: Partial<AlbumCovers> = {}): AlbumCovers {
       { release: CD, cover: "cover-1987" },
     ],
     found_at: "2026-11-16T00:00:00Z",
+    due: false,
     ...known,
   };
 }

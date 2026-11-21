@@ -221,7 +221,7 @@ def running_enrichment(
                     ArtistKinds(find, find_names, choose, describe),
                     covers_folder=data_dir / COVERS_FOLDER,
                 ),
-                album_covers=AlbumCoverService(units, plugins, jobs, album_covers),
+                album_covers=AlbumCoverService(units, plugins, jobs, album_covers, clock),
                 lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_search),
                 artist_pictures=ArtistPictureService(units, plugins, jobs, pictures),
                 image_links=ImageLinkService(

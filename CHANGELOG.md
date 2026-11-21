@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A suggested cover for an album without one** — opening the album's page looks
+  it up on MusicBrainz, and the cover found whose title and artist are the album's,
+  or the one an AI model picked, stands in the empty cover with *Use*, *Dismiss*,
+  and *Change*. An album whose artist is linked to MusicBrainz is now looked up by
+  that artist, so *Jay周杰伦* or *陶喆/David Tao* finds its covers.
 - **Expand all and Collapse all** — one button beside *Group by* opens or folds
   every group, or every split file's songs, and this browser keeps the choice as
   how folds start. *Play all* in a grouped view plays the folded groups' songs too.
-
 - **Choose the order of the views in the rail** — drag a view to another place in
   the rail, or move it in Settings › Appearance, where *Reset order* goes back to
   the default; each browser keeps its own order. Radio now sits below Albums and

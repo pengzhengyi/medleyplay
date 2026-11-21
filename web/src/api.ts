@@ -513,6 +513,15 @@ export interface AlbumCovers {
   readonly choice_failure: string | null;
   /** Whether an AI model may be asked to pick: one is set up, and none picked among these. */
   readonly may_choose: boolean;
+  /**
+   * The cover suggested as the album's: the AI's pick, else the best-ranked release whose
+   * title and artist are the album's; never one dismissed, and none when none match.
+   */
+  readonly suggested: string | null;
+  /** Whether the album may be searched on its own: never searched, or in vain long ago. */
+  readonly due: boolean;
+  /** Whether the MusicBrainz plugin is on to be asked. */
+  readonly may_find: boolean;
 }
 
 /** What is known of the pictures Deezer has of an artist, and what is asked. */
@@ -1553,6 +1562,9 @@ export const api = {
   /** Ask an AI model which of an album's releases found is the album; nothing changes. */
   chooseAlbumCover: (album: string, artist: string) =>
     call<null>("POST", "/api/album-covers/choose", { album, artist }),
+  /** Suggest a cover found for an album no more, even once found again. */
+  dismissAlbumCover: (album: string, artist: string, cover: string) =>
+    call<undefined>("POST", "/api/album-covers/dismiss", { album, artist, cover }),
   /** The links an AI model last suggested for a picture, and what is asked. */
   imageLinks: (pictured: Pictured) =>
     call<PictureLinks>(

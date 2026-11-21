@@ -60,6 +60,16 @@ class AlbumCoversOut(BaseModel):
     may_choose: bool = Field(
         description="Whether an AI model may be asked to pick: one is set up, and none picked."
     )
+    suggested: str | None = Field(
+        description=(
+            "The cover suggested as the album's: the AI's pick, else the best-ranked release"
+            " whose title and artist are the album's; none dismissed, and none when none match."
+        )
+    )
+    due: bool = Field(
+        description="Whether the album may be searched on its own: never, or in vain long ago."
+    )
+    may_find: bool = Field(description="Whether the MusicBrainz plugin is on to be asked.")
 
     @staticmethod
     def of(known: AlbumCovers) -> "AlbumCoversOut":
@@ -83,6 +93,9 @@ class AlbumCoversOut(BaseModel):
             failure=known.failure,
             choice_failure=known.choice_failure,
             may_choose=known.may_choose,
+            suggested=known.suggested,
+            due=known.due,
+            may_find=known.may_find,
         )
 
 
@@ -104,3 +117,15 @@ def find(body: AlbumIn, me: SignedInAccount, service: AlbumCoversDep) -> None:
 def choose(body: AlbumIn, me: SignedInAccount, service: AlbumCoversDep) -> None:
     """Ask an AI model which of the releases found is the album; nothing is changed."""
     service.choose(me, body.album, body.artist)
+
+
+class DismissIn(AlbumIn):
+    """A cover found for the album that is not its cover."""
+
+    cover: str = Field(max_length=128)
+
+
+@router.post("/dismiss", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss(body: DismissIn, me: SignedInAccount, service: AlbumCoversDep) -> None:
+    """Suggest the cover found no more as the album's; nothing else is changed."""
+    service.dismiss(me, body.album, body.artist, body.cover)

@@ -332,7 +332,7 @@ def album_covers(
     tmp_path: Path,
 ) -> AlbumCoverService:
     return AlbumCoverService(
-        units, plugins, jobs, album_cover_kinds(clock, tmp_path / "data" / "covers")
+        units, plugins, jobs, album_cover_kinds(clock, tmp_path / "data" / "covers"), clock
     )
 
 

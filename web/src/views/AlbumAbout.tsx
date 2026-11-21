@@ -4,6 +4,7 @@
  *
  * The cover shows *Save* and *Replace* on hover, as the album's editor does; *Replace*
  * opens the picture editor, which looks the album up on MusicBrainz or asks an AI model.
+ * An album with no cover shows the one suggested for it, if any, to use in one click.
  */
 
 import { type ReactNode, useState } from "react";
@@ -12,6 +13,7 @@ import { type Track, coverUrl } from "../api";
 import { Cover } from "./Cover";
 import { PictureEditor } from "./PictureEditor";
 import { PictureFrame } from "./PictureFrame";
+import { SuggestedCover } from "./SuggestedCover";
 
 /**
  * The album `album` by `artist`: `songs` are what its cover is set on, its songs or its one
@@ -35,27 +37,42 @@ export function AlbumAbout({
   /** Shown beside the cover, as your rating of the album. */
   readonly children?: ReactNode;
 }) {
-  const [replacing, setReplacing] = useState(false);
+  const [replacing, setReplacing] = useState<"upload" | "musicbrainz">();
   const art = <Cover size="medium" cover={cover} className="album-art" />;
+  const framed = (
+    <PictureFrame
+      className="album-frame"
+      replaceLabel={cover === null ? "Add a cover" : "Replace the cover"}
+      save={cover === null ? undefined : { href: coverUrl(cover, "original"), name: album }}
+      onReplace={() => {
+        setReplacing("upload");
+      }}
+    >
+      {art}
+    </PictureFrame>
+  );
+  const editable = onUse !== undefined && onUpload !== undefined && songs.length > 0;
   return (
     <section className="album-about" aria-label="About the album">
-      {onUse === undefined || onUpload === undefined || songs.length === 0 ? (
+      {!editable ? (
         art
-      ) : (
-        <PictureFrame
-          className="album-frame"
-          replaceLabel={cover === null ? "Add a cover" : "Replace the cover"}
-          save={cover === null ? undefined : { href: coverUrl(cover, "original"), name: album }}
-          onReplace={() => {
-            setReplacing(true);
+      ) : cover === null ? (
+        <SuggestedCover
+          album={album}
+          artist={artist}
+          fallback={framed}
+          onUse={(chosen) => onUse(songs, chosen)}
+          onChange={() => {
+            setReplacing("musicbrainz");
           }}
-        >
-          {art}
-        </PictureFrame>
+        />
+      ) : (
+        framed
       )}
       {children}
-      {replacing && onUse !== undefined && onUpload !== undefined && (
+      {replacing !== undefined && onUse !== undefined && onUpload !== undefined && (
         <PictureEditor
+          startOn={replacing}
           sources={{
             kind: "cover",
             of: album,
@@ -68,7 +85,7 @@ export function AlbumAbout({
             use: (chosen) => onUse(songs, chosen),
           }}
           onClose={() => {
-            setReplacing(false);
+            setReplacing(undefined);
           }}
         />
       )}

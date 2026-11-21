@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from medleyplay.plugin_api import (
     CHOOSE_COVER,
     FIND_COVERS,
+    MAX_ARTIST_IDS,
     MAX_COVERS,
     MAX_NAME,
     MAX_SONGS_SHOWN,
@@ -18,6 +19,7 @@ from medleyplay.plugin_api import (
     CoverOption,
     FindCovers,
     FindStatus,
+    MusicBrainzArtistId,
     ReleaseId,
 )
 from medleyplay.plugin_host.job import AnswerFailedError, JobContext, JobProgram
@@ -35,10 +37,14 @@ class _Model(BaseModel):
 
 
 class FindCoversJob(_Model):
-    """Ask `finder` for the covers of the album `album` by `artist`, empty for none."""
+    """Ask `finder` for the covers of the album `album` by `artist`, empty for none.
+
+    `artist_ids` are the MusicBrainz artists the album's songs are linked to.
+    """
 
     album: _Name
     artist: _Artist = ""
+    artist_ids: Annotated[tuple[MusicBrainzArtistId, ...], Field(max_length=MAX_ARTIST_IDS)] = ()
     finder: Annotated[str, StringConstraints(max_length=64)] = "musicbrainz"
 
 
@@ -67,7 +73,12 @@ def run(request: FindCoversJob, context: JobContext) -> FoundCoversResult:
     answer = context.call(
         FIND_COVERS,
         request.finder,
-        FindCovers(album=request.album, artist=request.artist, folder=str(folder)),
+        FindCovers(
+            album=request.album,
+            artist=request.artist,
+            artist_ids=request.artist_ids,
+            folder=str(folder),
+        ),
     )
     if answer.status is FindStatus.REFUSED:
         message = answer.message or "The site refused the request."

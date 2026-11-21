@@ -1,21 +1,22 @@
 /**
- * @file A picture suggested as an artist's photo, ringed and tagged as a suggestion, that
- * is its own controls.
+ * @file A picture suggested as an artist's photo or an album's cover, ringed and tagged as
+ * a suggestion, that is its own controls.
  *
- * Its lower two thirds use it; of its top third, the right half dismisses it and the
- * left half opens the photo editor to choose another. Each shows its icon on hover or
- * focus, always on a touch screen, and turns the ring green, red, or solid.
+ * Its lower half uses it; of its upper half, the right dismisses it and the left opens the
+ * picture editor to choose another. Each shows its icon on hover or focus, always on a
+ * touch screen, and turns the ring green, red, or solid. A photo is round, a cover square.
  */
 
 import { CheckIcon, PencilSimpleIcon, SparkleIcon, XIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
 /**
- * The picture `children`, suggested as the photo of `of`, with its three controls; `why`
- * says why it was suggested.
+ * The picture `children`, suggested as the photo or cover, `noun`, of `of`, with its three
+ * controls; `why` says why it was suggested.
  */
 export function SuggestedFrame({
   of,
+  noun = "photo",
   why,
   picked,
   className,
@@ -25,8 +26,9 @@ export function SuggestedFrame({
   onChange,
   children,
 }: {
-  /** The artist's name. */
+  /** The artist's or album's name. */
   readonly of: string;
+  readonly noun?: "photo" | "cover";
   readonly why: string;
   /** Whether an AI model picked it, tagged *AI pick* rather than *Suggested*. */
   readonly picked: boolean;
@@ -39,13 +41,17 @@ export function SuggestedFrame({
   readonly children: ReactNode;
 }) {
   return (
-    <div className="photo-suggestion-frame">
+    <div
+      className={
+        noun === "cover" ? "photo-suggestion-frame cover-suggestion" : "photo-suggestion-frame"
+      }
+    >
       <div
         className={
           className === undefined ? "photo-suggestion-art" : `photo-suggestion-art ${className}`
         }
         role="img"
-        aria-label={`Suggested photo of ${of}: ${why}`}
+        aria-label={`Suggested ${noun} of ${of}: ${why}`}
         title={why}
       >
         {children}
@@ -53,15 +59,15 @@ export function SuggestedFrame({
       <div
         className="photo-suggestion-controls"
         role="group"
-        aria-label={`Suggested photo of ${of}`}
+        aria-label={`Suggested ${noun} of ${of}`}
         aria-busy={busy}
       >
         <button
           type="button"
           className="photo-suggestion-control photo-suggestion-change"
           disabled={busy}
-          aria-label={`Choose another photo of ${of}…`}
-          title="Choose another photo"
+          aria-label={`Choose another ${noun} of ${of}…`}
+          title={`Choose another ${noun}`}
           onClick={onChange}
         >
           <PencilSimpleIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
@@ -70,7 +76,7 @@ export function SuggestedFrame({
           type="button"
           className="photo-suggestion-control photo-suggestion-dismiss"
           disabled={busy}
-          aria-label={`Dismiss the suggested photo of ${of}`}
+          aria-label={`Dismiss the suggested ${noun} of ${of}`}
           title="Dismiss"
           onClick={onDismiss}
         >
@@ -80,8 +86,8 @@ export function SuggestedFrame({
           type="button"
           className="photo-suggestion-control photo-suggestion-use"
           disabled={busy}
-          aria-label={`Use the suggested photo of ${of}`}
-          title="Use this photo"
+          aria-label={`Use the suggested ${noun} of ${of}`}
+          title={`Use this ${noun}`}
           onClick={onUse}
         >
           <CheckIcon className="photo-suggestion-icon" weight="bold" aria-hidden />

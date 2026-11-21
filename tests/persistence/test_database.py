@@ -1,5 +1,6 @@
 """The database: migrations match the schema, and every connection is configured."""
 
+import hashlib
 import json
 import uuid
 from datetime import datetime
@@ -888,3 +889,76 @@ def test_undoing_favorites_by_id_keeps_each_by_every_name_of_its_artist(tmp_path
         )
         assert [tuple(each) for each in favorites] == [(1, "jay", "Jay"), (1, "周杰伦", "Jay")]
     engine.dispose()
+
+
+def _sha(text_: str) -> str:
+    return hashlib.sha256(text_.encode()).hexdigest()
+
+
+def _album_searches_keyed_case_folded(connection: Connection) -> None:
+    """One album, ヨアソビ's アルバム, searched twice under two spellings, and a link asked."""
+    for album, artist, found_at in (
+        ("アルバム", "ヨアソビ", "2026-11-01 00:00:00.000000"),
+        ("あるばむ", "よあそび", "2026-11-02 00:00:00.000000"),
+    ):
+        connection.execute(
+            text(
+                "INSERT INTO album_cover_search (key, album, artist, covers, found_at)"
+                " VALUES (:key, :album, :artist, :covers, :found_at)"
+            ),
+            {
+                "key": _sha(f"{artist}\n{album}"),
+                "album": album,
+                "artist": artist,
+                "covers": json.dumps([{"found": found_at}]),
+                "found_at": found_at,
+            },
+        )
+    connection.execute(
+        text(
+            "INSERT INTO image_links (subject, key, name, artist, links, model, host, asked_at)"
+            " VALUES ('album', :key, 'アルバム', 'ヨアソビ', '[]', 'm', 'h',"
+            " '2026-11-01 00:00:00.000000')"
+        ),
+        {"key": _sha("ヨアソビ\nアルバム")},
+    )
+
+
+def test_migrating_keys_each_album_as_the_page_groups_it_keeping_its_latest_search(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0058")
+    with engine.begin() as connection:
+        _album_searches_keyed_case_folded(connection)
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        searches = connection.execute(
+            text("SELECT key, finder, covers FROM album_cover_search")
+        ).all()
+        links = connection.scalars(text("SELECT key FROM image_links")).all()
+    engine.dispose()
+    expected = _sha("よあそび\nあるばむ")
+    assert [tuple(each) for each in searches] == [
+        (expected, "musicbrainz", json.dumps([{"found": "2026-11-02 00:00:00.000000"}]))
+    ]
+    assert links == [expected]
+
+
+def test_undoing_album_keys_keys_each_search_case_folded_again(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0058")
+    with engine.begin() as connection:
+        _album_searches_keyed_case_folded(connection)
+    migrate(engine)
+
+    _migrate_to(engine, "0058", down=True)
+
+    with engine.connect() as connection:
+        searches = connection.scalars(text("SELECT key FROM album_cover_search")).all()
+        links = connection.scalars(text("SELECT key FROM image_links")).all()
+    engine.dispose()
+    assert searches == [_sha("よあそび\nあるばむ")]
+    assert links == [_sha("ヨアソビ\nアルバム")]

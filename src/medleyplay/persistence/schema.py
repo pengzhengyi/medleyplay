@@ -775,9 +775,10 @@ class SplitOfferStateRow(Base):
 
 
 class AlbumCoverSearchRow(Base):
-    """What a site last answered for an album: the covers of its releases, best first.
+    """What a finder last answered for an album: the covers of its releases, best first.
 
-    `key` is a hash of the album and its artist as written, folded. Each of `covers`
+    `key` is a hash of the album and its artist as written, folded as the page groups
+    albums; `finder` is the site asked, such as `musicbrainz`. Each of `covers`
     names its release and what tells it apart, and the cover holding its front cover.
     `pick` is the release an AI model chose of `offered`, the releases it was shown,
     with why, the model that answered and where, as they were then; `None` until one
@@ -787,6 +788,7 @@ class AlbumCoverSearchRow(Base):
     __tablename__ = "album_cover_search"
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    finder: Mapped[str] = mapped_column(String(32), primary_key=True, server_default="musicbrainz")
     album: Mapped[str] = mapped_column(String(512))
     artist: Mapped[str] = mapped_column(String(512))
     covers: Mapped[list[dict[str, object]]] = mapped_column(JSON)
@@ -797,6 +799,19 @@ class AlbumCoverSearchRow(Base):
     model: Mapped[str] = mapped_column(String(128), default="", server_default="")
     host: Mapped[str] = mapped_column(String(255), default="", server_default="")
     chosen_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+
+
+class AlbumCoverDismissalRow(Base):
+    """A cover found for an album that the household said is not its cover.
+
+    `key` is the album's, as `AlbumCoverSearchRow` keys it; `cover` names the cover by its
+    bytes, whichever finder found it.
+    """
+
+    __tablename__ = "album_cover_dismissal"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    cover: Mapped[str] = mapped_column(String(64), primary_key=True)
 
 
 class ImageLinksRow(Base):

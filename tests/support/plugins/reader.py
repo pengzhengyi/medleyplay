@@ -81,7 +81,7 @@ The cover finder `musicbrainz` answers by the album asked about:
 
 | Album | Answers |
 | --- | --- |
-| `Help!` | its 1965 vinyl and its 1987 CD, each with its cover |
+| `Help!` by The Beatles by name or id, or by no one | its 1965 vinyl and 1987 CD, with covers |
 | `Forged` | one release, whose cover is no image |
 | `Refuse` | refused |
 | any other | no cover |
@@ -575,7 +575,8 @@ class Covers:
             return FoundCovers(
                 covers=(FoundCover(release_id=HELP_VINYL, title="Forged", file=HELP_VINYL),)
             )
-        if request.album != "Help!":
+        by_the_beatles = request.artist in {"", "The Beatles"} or BEATLES.id in request.artist_ids
+        if request.album != "Help!" or not by_the_beatles:
             return FoundCovers()
         (folder / HELP_VINYL).write_bytes(jpeg_image("Help! 1965"))
         (folder / HELP_CD).write_bytes(jpeg_image("Help! 1987"))

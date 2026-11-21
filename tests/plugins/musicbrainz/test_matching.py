@@ -68,6 +68,14 @@ def test_a_release_is_searched_by_its_title_and_artist() -> None:
     assert release_query("生如夏花", "朴树") == 'release:"生如夏花" AND artist:"朴树"'
 
 
+def test_a_release_by_artists_musicbrainz_knows_is_searched_by_any_of_their_ids() -> None:
+    jay, jj = "a223958d-5c56-4b2c-a30a-87e357bc121b", "9b1a3c0e-6f2d-4e8a-b1c5-3d7e2f4a6b8c"
+
+    query = release_query("我很忙", "Jay周杰伦", (jay, jj))
+
+    assert query == f'release:"我很忙" AND arid:("{jay}" OR "{jj}")'
+
+
 @pytest.mark.parametrize(
     ("first", "second"),
     [("OK Computer", "ok computer"), (full_width("OK Computer"), "OK Computer"), (" Ok ", "OK")],

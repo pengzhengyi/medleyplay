@@ -2,12 +2,14 @@
 
 import dataclasses
 from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.domain.enrichers import ASK_AGAIN_AFTER
 from medleyplay.domain.jobs import JobId, JobState
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
@@ -59,7 +61,8 @@ def test_the_enricher_shows_that_it_is_on_and_which_tracks_it_may_be_asked_about
         "available": True,
         "stopped": None,
         "eligible": [eligible],
-        "asked_recently": [],
+        "waiting": {},
+        "asks_again": False,
         "mode": "manual",
     }
 
@@ -77,6 +80,20 @@ def test_reading_the_enricher_writes_nothing(
     assert services.revision.value == before
 
 
+def test_reading_the_enricher_again_with_its_answer_held_answers_not_modified(
+    enrichers_client: TestClient, enriching: Enriching
+) -> None:
+    set_up_as_alice(enrichers_client)
+    enriching.add_site_track(RECORDED)
+    first = enrichers_client.get(f"/api/enrichers/{NAME}")
+
+    again = enrichers_client.get(
+        f"/api/enrichers/{NAME}", headers={"If-None-Match": first.headers["ETag"]}
+    )
+
+    assert (again.status_code, again.content) == (304, b"")
+
+
 def test_with_the_plugin_off_the_enricher_shows_as_unavailable_with_no_track(
     client: TestClient,
 ) -> None:
@@ -89,7 +106,8 @@ def test_with_the_plugin_off_the_enricher_shows_as_unavailable_with_no_track(
         "available": False,
         "stopped": None,
         "eligible": [],
-        "asked_recently": [],
+        "waiting": {},
+        "asks_again": False,
         "mode": "manual",
     }
 
@@ -252,7 +270,8 @@ def test_musicbrainz_shows_the_tracks_whose_words_it_may_search_for(
         "available": True,
         "stopped": None,
         "eligible": [song],
-        "asked_recently": [],
+        "waiting": {},
+        "asks_again": False,
         "mode": "manual",
     }
 
@@ -355,11 +374,12 @@ def test_asking_the_ai_about_a_track_queues_a_job_that_suggests_its_details(
 
 
 def test_a_track_the_ai_was_asked_about_today_is_asked_again_only_when_chosen(
-    enrichers_client: TestClient, enriching: Enriching
+    enrichers_client: TestClient, enriching: Enriching, clock: FakeClock
 ) -> None:
     set_up_as_alice(enrichers_client)
     enrichers_client.post("/api/ai/providers", json=PROVIDER)
     track_id = enriching.add_track_with_text("Night Drive")
+    tomorrow = clock.now + ASK_AGAIN_AFTER
     asked = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}").json()
     enriching.wait_for(JobId(asked["id"]), JobState.SUCCEEDED)
 
@@ -369,9 +389,29 @@ def test_a_track_the_ai_was_asked_about_today_is_asked_again_only_when_chosen(
         f"/api/enrichers/{AI_NAME}/tracks/{track_id}", json={"again": True}
     )
 
-    assert (state["eligible"], state["asked_recently"]) == ([], [track_id])
+    waits_until = datetime.fromisoformat(state["waiting"][str(track_id)])
+    assert (state["eligible"], state["asks_again"]) == ([track_id], True)
+    assert waits_until == tomorrow
     assert (refused.status_code, refused.json()["code"]) == (409, "asked_recently")
     assert again.status_code == 200
+
+
+def test_a_held_answer_stands_as_the_wait_passes_since_the_page_applies_the_wait(
+    enrichers_client: TestClient, enriching: Enriching, clock: FakeClock
+) -> None:
+    set_up_as_alice(enrichers_client)
+    enrichers_client.post("/api/ai/providers", json=PROVIDER)
+    track_id = enriching.add_track_with_text("Night Drive")
+    asked = enrichers_client.post(f"/api/enrichers/{AI_NAME}/tracks/{track_id}").json()
+    enriching.wait_for(JobId(asked["id"]), JobState.SUCCEEDED)
+    held = enrichers_client.get(f"/api/enrichers/{AI_NAME}")
+    clock.advance(ASK_AGAIN_AFTER)
+
+    again = enrichers_client.get(
+        f"/api/enrichers/{AI_NAME}", headers={"If-None-Match": held.headers["ETag"]}
+    )
+
+    assert again.status_code == 304
 
 
 def test_an_admin_chooses_to_find_all_and_every_track_is_queued_at_once(

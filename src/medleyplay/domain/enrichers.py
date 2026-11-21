@@ -330,6 +330,11 @@ def text_subject(track_id: TrackId, text: VideoText) -> str:
     return hashlib.sha256(f"ai-details\x1f{said}".encode()).hexdigest()
 
 
+def ask_again_at(facts: TrackFacts, enricher: Enricher) -> datetime | None:
+    """Return when the Track may be asked about again, or `None` when it never was."""
+    return None if facts.asked_at is None else facts.asked_at + enricher.ask_again_after
+
+
 def why_not(
     facts: TrackFacts,
     now: datetime,

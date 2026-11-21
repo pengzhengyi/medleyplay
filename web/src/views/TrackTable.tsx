@@ -17,6 +17,8 @@ import {
   CaretUpIcon,
   DownloadSimpleIcon,
   HeartIcon,
+  ArrowsInLineVerticalIcon,
+  ArrowsOutLineVerticalIcon,
   ListPlusIcon,
   MusicNoteSimpleIcon,
   PlayIcon,
@@ -261,6 +263,29 @@ function savedLayout(): Layout {
   return DEFAULT_LAYOUT;
 }
 
+/** Where this browser keeps whether the table's folds start open or folded. */
+const FOLDS = "medleyplay.folds";
+
+/** Whether every fold starts open or folded, as *Expand all* or *Collapse all* last chose. */
+type Folds = "open" | "folded";
+
+function savedFolds(): Folds | undefined {
+  try {
+    const saved = localStorage.getItem(FOLDS);
+    return saved === "open" || saved === "folded" ? saved : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveFolds(folds: Folds): void {
+  try {
+    localStorage.setItem(FOLDS, folds);
+  } catch {
+    // Best effort: the next visit folds as it would by default.
+  }
+}
+
 function saveLayout(layout: Layout): void {
   try {
     localStorage.setItem(SAVED, JSON.stringify(layout));
@@ -354,9 +379,12 @@ export function TrackTable({
   }, [layout]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [grouping, setGrouping] = useState<GroupingState>([]);
-  // Groups open when made; a split file's songs stay folded until asked for.
-  const folded: ExpandedState = songsIn === undefined ? true : {};
-  const [expanded, setExpanded] = useState<ExpandedState>(folded);
+  // Folds start as *Expand all* or *Collapse all* last chose in this browser; until one
+  // is chosen, groups open when made and a split file's songs stay folded until asked for.
+  const [folds, setFolds] = useState(savedFolds);
+  const foldsFor = (grouped: boolean): ExpandedState =>
+    folds === "open" ? true : folds === "folded" || (!grouped && songsIn !== undefined) ? {} : true;
+  const [expanded, setExpanded] = useState<ExpandedState>(() => foldsFor(false));
   // What a link last asked, so asking it again sets it again.
   const askedKey =
     asked === undefined ? undefined : JSON.stringify([asked.artist ?? null, asked.group ?? null]);
@@ -626,7 +654,7 @@ export function TrackTable({
             className="group-by-select"
             value={by}
             onChange={(event) => {
-              setExpanded(event.target.value === "" ? folded : true);
+              setExpanded(foldsFor(event.target.value !== ""));
               setGrouping(event.target.value === "" ? [] : [event.target.value]);
             }}
           >
@@ -638,6 +666,31 @@ export function TrackTable({
             ))}
           </select>
         </label>
+        {table.getCanSomeRowsExpand() && (
+          <button
+            type="button"
+            className="fold-all"
+            onClick={() => {
+              const open = !table.getIsAllRowsExpanded();
+              setExpanded(open ? true : {});
+              const chosen: Folds = open ? "open" : "folded";
+              setFolds(chosen);
+              saveFolds(chosen);
+            }}
+          >
+            {table.getIsAllRowsExpanded() ? (
+              <>
+                <ArrowsInLineVerticalIcon aria-hidden />
+                Collapse all
+              </>
+            ) : (
+              <>
+                <ArrowsOutLineVerticalIcon aria-hidden />
+                Expand all
+              </>
+            )}
+          </button>
+        )}
       </div>
       <FiltersOn
         filters={filters}
@@ -858,11 +911,10 @@ interface Played {
 function queueOf(table: Played): Track[] {
   const { songsIn } = meta(table);
   if (songsIn === undefined) {
-    // A group's row is no song; the songs are the rows shown under the groups.
-    return table
-      .getRowModel()
-      .rows.filter((each) => !each.getIsGrouped())
-      .map((each) => each.original);
+    // A group's row is no song; its songs play in their place, folded away or not.
+    const songsOf = (rows: readonly SongRow[]): Track[] =>
+      rows.flatMap((each) => (each.getIsGrouped() ? songsOf(each.subRows) : [each.original]));
+    return songsOf(table.getPreExpandedRowModel().rows);
   }
   return table.getPreExpandedRowModel().rows.flatMap((row) => {
     if (!row.original.split) {

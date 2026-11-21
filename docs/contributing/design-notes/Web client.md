@@ -195,9 +195,15 @@ Track's kind is decided.
 - **Group by** album, artist, album artist, year, or genre puts each group's
   songs under a row naming it, as *生如夏花 · 朴树 · 2 songs*, which folds and
   opens them; an album is its name and its album artist, so two albums of one
-  name are two groups. Groups open whenever the grouping changes, and keep the
-  order their first song has. A group's row has a cell per column, as a spacer
-  row has, so a column hidden for width goes from it too.
+  name are two groups. Groups keep the order their first song has, and *Play
+  all* plays every group's songs, folded or open. A group's row has a cell per
+  column, as a spacer row has, so a column hidden for width goes from it too.
+- **Expand all** and **Collapse all**, one button beside *Group by*, open or
+  fold every group, or every split file's songs when nothing is grouped. It
+  shows only when something folds. This browser keeps the last choice
+  (`medleyplay.folds`) and folds start that way, including when the grouping
+  changes; until one is chosen, groups open when made and a split file's songs
+  stay folded.
 - **One table module owns TanStack's types,** so the rest of the client sees
   Tracks and callbacks only; the Filter panel is given plain choices and
   values.

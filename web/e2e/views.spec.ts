@@ -70,3 +70,34 @@ test.describe("on a phone", () => {
     await expect(page.getByRole("heading", { name: "Albums" })).toBeVisible();
   });
 });
+
+/** A PNG of one pixel: no larger than any thumbnail, so it is always served as it is. */
+const ONE_PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test("an album's tile asks for a thumbnail of its cover, and shows the original while there is none", async ({
+  page,
+}) => {
+  const tracks = (await (await page.request.get("/api/tracks")).json()) as {
+    id: number;
+    title: string;
+  }[];
+  const bravo = tracks.find((each) => each.title === "Bravo")?.id;
+  const uploaded = await page.request.put(`/api/tracks/${String(bravo)}/cover`, {
+    data: ONE_PIXEL,
+    headers: { "Content-Type": "image/png" },
+  });
+  expect(uploaded.ok()).toBe(true);
+  try {
+    await page.goto("/#/albums");
+
+    const tile = page.locator(".cover-tile img").first();
+
+    await expect(tile).toHaveAttribute("src", /\?size=medium&recipe=1$/u);
+    await expect.poll(() => tile.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1);
+  } finally {
+    await page.request.delete(`/api/tracks/${String(bravo)}/cover`);
+  }
+});

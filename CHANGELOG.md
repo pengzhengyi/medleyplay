@@ -782,6 +782,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The player names the song of a split file** — a file playing whole after it was
+  split into songs showed its own title (such as the video's BV code) in the player;
+  it now names the song it has reached, as Now Playing does.
+
 - **The songs editor's way back** — *Details* at the top of the songs editor opened
   from *Split into songs* now shows the song's details; it closed the dialog. Saving
   the songs still closes it.

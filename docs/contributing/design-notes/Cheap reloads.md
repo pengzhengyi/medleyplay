@@ -13,6 +13,7 @@
 - [ETags that name the content](#etags-that-name-the-content)
 - [Bookkeeping writes leave the revision alone](#bookkeeping-writes-leave-the-revision-alone)
 - [More answers cached on the server](#more-answers-cached-on-the-server)
+- [The enricher reads hold no time](#the-enricher-reads-hold-no-time)
 - [Asking with the ETag held](#asking-with-the-etag-held)
 - [Keeping what didn't change](#keeping-what-didnt-change)
 - [When the side reads run](#when-the-side-reads-run)
@@ -66,8 +67,10 @@ The client reloads more than it needs to, and each reload renders everything aga
       rating. Their 2 s polls keep running through 304s.
 - [x] Before-and-after counts and timings: see [Measuring](#measuring).
 
-Left out: per-view reads, caching favorites, and the enricher reads. See
-[Open questions](#open-questions).
+- [x] **The enricher reads are kept too:** each says when a Track asked before may
+      be asked again, and the page applies the wait.
+
+Left out: per-view reads and caching favorites. See [Open questions](#open-questions).
 
 ## ETags that name the content
 
@@ -136,6 +139,32 @@ service to confirm this.
   light reads don't queue behind the songs.
 - **The routes that hold `heavy_read` today drop it,** and pass `heavy=True`
   instead; holding both would raise `HeavyReadReenteredError`.
+
+## The enricher reads hold no time
+
+`GET /api/enrichers/{name}` said which Tracks were asked in the last day, or the last
+month for lyrics, so its answer changed with the clock and couldn't be kept. It now
+sends what the rows say and lets the page apply each wait:
+
+```json
+{ "eligible": [12, 40], "waiting": { "12": "2026-11-21T09:30:00Z" }, "asks_again": true }
+```
+
+- **`eligible` lists every Track the enricher may be asked about apart from the
+  wait.** The wait is the last reason checked, so a Track that waits is otherwise
+  eligible.
+- **`waiting` gives, for each of them asked before, when it may be asked again,**
+  past times included, so nothing in the answer depends on when it was built.
+- **`asks_again` is the AI's:** someone may choose to ask it again before the time
+  comes, which the page shows as *asked lately*.
+- **Whether the plugin is on names the answer,** with the enricher, since it is no
+  row: the key is `("enricher", name, available)`. The build takes the heavy-read
+  lock, as the read did.
+
+The page works out which Tracks are findable with `askingAt(enricher, now)`, and sets
+a timer for the next wait to pass, so a Track comes back without another read. The
+server still refuses a lookup asked too soon, so a page whose clock runs ahead gets
+the *Ask again?* question it gets today.
 
 ## Asking with the ETag held
 
@@ -265,6 +294,9 @@ flowchart TD
 | `equalJson` | `web/src/library/store.ts` | New: deep equality of two JSON values |
 | `Library.refreshes` | `web/src/library/useLibrary.ts` | New: the count the side reads follow |
 | `useReadAgain(..., changing)` | `web/src/library/useReadAgain.ts` | New argument; returns `answered`, the count the polls follow |
+| `Askable`, `EnrichmentService.askable` | `application/enrichment.py` | New: the enricher's Tracks and waits, with no clock |
+| `EnricherOut.waiting`, `.asks_again` | `web/enrichers.py` | Replace `asked_recently`; the read answers through `CachedAnswers` |
+| `askingAt` | `web/src/library/asking.ts` | New: the findable and *asked lately* Tracks at a time, and when that changes |
 | `serve()` routes' `etag` | `web/src/testing/server.ts` | New: a test server answers 304 to a request holding the ETag |
 
 ## Boundary cases
@@ -319,9 +351,20 @@ Main-thread time is Chromium's task time until the page is quiet.
 | Main-thread time | 187 ms | 104 ms | 136–206 ms | 63–148 ms |
 | Last answer | 0.96 s | 0.40 s | 0.75–1.85 s | 0.08–0.13 s |
 
-The ten reads still answered 200 on a return are the small uncached ones: favorites,
+The ten reads still answered 200 on a return were the small uncached ones: favorites,
 preferences, Playlists, the Mode, five enrichers, the Downloads, and the features.
-The enricher reads are the next step named in [Open questions](#open-questions).
+
+The enricher reads were the heaviest of them: each built its answer under the
+heavy-read lock, one after another. Kept, they answer 304 with no build. Measured
+on two fresh Offline copies of the same library, before and after, with the songs
+and the four enricher reads the page makes sent together with their ETags, five
+times each:
+
+| | Before | After |
+| --- | --- | --- |
+| Enricher answers | 4 × 200, built each time | 4 × 304 |
+| Slowest enricher read | 293 ms | 30 ms |
+| Last answer of the return | 309 ms | 32 ms |
 
 ## Deferred: changed songs announced
 
@@ -357,10 +400,6 @@ a library past about 20,000 songs.
   read costs a 304. A further step could replace the five Clean up reads with one
   cached `GET /api/clean-up`: one request, one ETag. I'd leave both out, and
   revisit them if the measurements still show the side reads.
-- **The enricher reads.** Five heavy reads on each load, uncached because they
-  report "asked in the last 24 hours" from the clock. Sending when each Track was
-  asked, and letting the client apply the 24 hours, would make them cacheable. I'd
-  take that as its own step after this one.
 - **Favorites.** A heart moves the revision, and the client rebuilds its favorite
   groups from any answer, so caching them would buy nothing yet. Left out.
 - **The name `refreshes`.** It counts the times the Library may have changed, as

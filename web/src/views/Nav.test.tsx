@@ -1,8 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { act } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { moved, resetRailOrder, setRailOrder, DEFAULT_RAIL_ORDER } from "../railOrder";
 import { Nav } from "./Nav";
+
+/** The names of the rail's links, in order. */
+const railNames = () => screen.getAllByRole("link").map((link) => link.textContent);
+
+afterEach(() => {
+  resetRailOrder();
+});
 
 describe("moving between views", () => {
   it("puts Clean up under Insights, saying how many names wait", () => {
@@ -15,6 +24,42 @@ describe("moving between views", () => {
     expect(links.at(-1)).toHaveAccessibleName("Settings");
     expect(cleanUp).toHaveAccessibleName("Clean up, 30 to clean up");
     expect(cleanUp).toHaveAttribute("href", "#/clean-up");
+  });
+
+  it("lists Radio below Albums and above Playlists until this browser chooses another order", () => {
+    render(<Nav route={{ view: "library" }} />);
+
+    expect(railNames()).toEqual([
+      "Library",
+      "Artists",
+      "Albums",
+      "Radio",
+      "Playlists",
+      "Downloaded",
+      "Insights",
+      "Clean up",
+      "Settings",
+    ]);
+  });
+
+  it("lists the views in the order this browser chose, Clean up still under Insights", () => {
+    render(<Nav route={{ view: "library" }} />);
+
+    act(() => {
+      setRailOrder(moved(moved(DEFAULT_RAIL_ORDER, "insights", -1), "radio", -1));
+    });
+
+    expect(railNames()).toEqual([
+      "Library",
+      "Artists",
+      "Radio",
+      "Albums",
+      "Playlists",
+      "Insights",
+      "Clean up",
+      "Downloaded",
+      "Settings",
+    ]);
   });
 
   it("gives Insights the count too, for a phone, whose tab bar leaves Clean up out", () => {

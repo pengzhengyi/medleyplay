@@ -40,6 +40,7 @@ import { RatingsSettings } from "./RatingsSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { SplitSettings } from "./SplitSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { RailOrderSettings } from "./RailOrderSettings";
 import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
 const GB = 1_000_000_000;
@@ -209,6 +210,10 @@ export function SettingsView({
           What moves behind Now Playing. Still when this device asks for less motion.
         </p>
         <DynamicsSwitch />
+        <p className="hint">
+          The order of the views in the rail on this device. Drag a view there, or move it here.
+        </p>
+        <RailOrderSettings />
       </>
     ),
     "keyboard-shortcuts": <ShortcutSettings />,

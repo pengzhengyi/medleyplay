@@ -378,6 +378,18 @@ describe("storage settings", () => {
     expect(screen.getByText("1.2 GB")).toBeInTheDocument();
   });
 
+  it("names the room the Playlists kept downloaded need, estimating songs not downloaded yet", async () => {
+    open(false);
+
+    const kept = await storage().findByText("Playlists kept downloaded");
+
+    expect(kept).toHaveAttribute(
+      "title",
+      "The songs of the Playlists set to Keep downloaded: what their Downloads use, and an estimate for those not downloaded yet",
+    );
+    expect(kept.closest("div")).toHaveTextContent("1.2 GB");
+  });
+
   it("links the Downloads to the Downloaded view, which lists them", async () => {
     open(false);
 

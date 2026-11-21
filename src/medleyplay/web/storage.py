@@ -1,16 +1,19 @@
-"""The storage API: the space Downloads use, what the policy wants, and a plan at another limit."""
+"""The storage API: the space Downloads use, what the policy wants, and a plan at another limit.
+
+Also the folder the Downloads are kept in, which Finder shows on the server's own Mac.
+"""
 
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, status
 from pydantic import BaseModel
 
 from medleyplay.application.policy import Evaluation, Storage
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.policy import Plan, Remove, Shortfall
-from medleyplay.web.deps import PolicyDep, SignedInAccount
+from medleyplay.web.deps import PolicyDep, SignedInAccount, StorageFolderDep
 
 router = APIRouter(prefix="/api/storage", tags=["storage"])
 
@@ -143,3 +146,31 @@ def get_storage(
 ) -> StorageOut:
     """Return the storage now and the last evaluation; with `limit`, an admin's preview."""
     return StorageOut.of(policy.storage(me, preview_limit=limit))
+
+
+LOOPBACK = frozenset({"127.0.0.1", "::1"})
+"""The addresses a request from the server's own machine comes from."""
+
+
+class FolderOut(BaseModel):
+    """Where the Downloads folder is, from `~` where it is in the home folder."""
+
+    path: str
+    can_show: bool
+
+
+def _on_this_machine(request: Request) -> bool:
+    return request.client is not None and request.client.host in LOOPBACK
+
+
+@router.get("/folder")
+def get_folder(request: Request, me: SignedInAccount, folder: StorageFolderDep) -> FolderOut:
+    """Return where the Downloads folder is, and whether you may have Finder show it."""
+    where = folder.where(me, local=_on_this_machine(request))
+    return FolderOut(path=where.path, can_show=where.can_show)
+
+
+@router.post("/folder/show", status_code=status.HTTP_204_NO_CONTENT)
+def show_folder(request: Request, me: SignedInAccount, folder: StorageFolderDep) -> None:
+    """Have Finder show the Downloads folder: an admin's, from the Mac the server runs on."""
+    folder.show(me, local=_on_this_machine(request))

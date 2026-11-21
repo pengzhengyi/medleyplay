@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Keep a Playlist downloaded** — a *Keep downloaded* switch on each Playlist's page,
+  Favorites too, downloads every song it holds and never removes them to make room. In
+  Settings → Storage the space they need now reads *Playlists kept downloaded*, its
+  tooltip saying it counts an estimate for the songs not downloaded yet.
+- **Where the Downloads are kept** — the Downloads view and Settings → Storage show the
+  folder's path, with a button to copy it. An admin on the Mac medleyplay runs on also
+  gets *Show in Finder*.
 - **Find album covers in Clean up** — each album without a cover that MusicBrainz
   has one for shows it with *Use*, *Dismiss*, and *Change*, and *Use all* uses every
   one at once. Settings → MusicBrainz chooses which albums are looked up on their

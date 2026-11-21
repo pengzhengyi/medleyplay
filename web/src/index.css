@@ -6766,6 +6766,37 @@ button.enricher-reset {
   font-size: 0.8rem;
 }
 
+/* Where the Downloads are kept: a quiet line, its path to copy, and Finder on the server's Mac. */
+.downloads-folder,
+.keep-downloaded {
+  margin: 0 0 0.75rem;
+}
+
+.downloads-folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.downloads-folder-path {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.downloads-folder-show {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.downloads-folder .error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .listen-others {
   display: flex;
   flex-wrap: wrap;

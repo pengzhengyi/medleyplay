@@ -711,6 +711,12 @@ export interface AiSetting {
   readonly max_description: number;
 }
 
+/** Where the Downloads folder is, from `~` when in the home folder, and if Finder may show it. */
+export interface StorageFolder {
+  readonly path: string;
+  readonly can_show: boolean;
+}
+
 /** The household's settings, and the revision they were read at; 0 if never saved. */
 export interface Settings {
   /** The most the Downloads and cache may use, in bytes, or `null` for no limit. */
@@ -1693,12 +1699,19 @@ export const api = {
   /** Create or replace a plain Playlist under an id the client chose. */
   putPlaylist: (id: string, playlist: PlainPlaylist) =>
     call<Playlist>("PUT", `/api/playlists/${id}`, playlist),
+  /** Switch whether a Playlist, Favorites too, keeps its songs downloaded. */
+  setKeepDownloaded: (id: string, keep: boolean) =>
+    call<Playlist>("PUT", `/api/playlists/${id}/keep_downloaded`, { keep_downloaded: keep }),
   features: () => call<Features>("GET", "/api/features"),
   preferences: () => call<Preferences>("GET", "/api/me/preferences"),
   savePreferences: (change: PreferencesChange) =>
     call<Preferences>("PUT", "/api/me/preferences", change),
   settings: () => call<Settings>("GET", "/api/settings"),
   saveSettings: (settings: Settings) => call<Settings>("PUT", "/api/settings", settings),
+  /** Where the Downloads folder is, and whether this request may have Finder show it. */
+  storageFolder: () => call<StorageFolder>("GET", "/api/storage/folder"),
+  /** Have Finder show the Downloads folder: an admin's, on the Mac the server runs on. */
+  showStorageFolder: () => call<undefined>("POST", "/api/storage/folder/show"),
   storage: (previewLimit?: number) =>
     call<Storage>(
       "GET",

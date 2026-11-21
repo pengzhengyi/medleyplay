@@ -63,12 +63,14 @@ import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
+import { DownloadsFolder } from "./DownloadsFolder";
 import { FavoriteHeart } from "./FavoriteHeart";
 import { LazyPart } from "./LazyPart";
 import { CleanUpView, InsightsView, SettingsView } from "./parts";
 import type { Station } from "../library/useStation";
 import { RadioView } from "./RadioView";
 import { EditArtistButton } from "./EditArtist";
+import { KeepDownloaded } from "./KeepDownloaded";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** The route id of Favorites, the Playlist of favorites the server keeps for each Account. */
@@ -366,7 +368,12 @@ function viewOf(given: ViewProps) {
         <Songs
           title="Downloaded"
           {...props}
-          about={<Downloading downloads={given.downloading ?? []} tracks={given.tracks} />}
+          about={
+            <>
+              <DownloadsFolder />
+              <Downloading downloads={given.downloading ?? []} tracks={given.tracks} />
+            </>
+          }
           empty={
             <p className="empty">
               Nothing is downloaded yet. A song you add from a music site shows here as soon as it
@@ -834,6 +841,13 @@ function Playlists({
 
 function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
   const playlist = props.playlists.find((each) => each.id === id);
+  // The switch shows once the Playlist is read; Favorites' is the Playlist the server keeps.
+  const keepOf = (shown: Playlist | undefined) => {
+    const change = props.actions.onKeepDownloaded;
+    return shown === undefined || change === undefined ? undefined : (
+      <KeepDownloaded playlist={shown} onChange={change} />
+    );
+  };
   if (id === FAVORITES || playlist?.builtin === FAVORITES) {
     return (
       <Songs
@@ -841,6 +855,7 @@ function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
         back={{ view: "playlists" }}
         backLabel="Playlists"
         {...props}
+        about={keepOf(playlist ?? props.playlists.find((each) => each.builtin === FAVORITES))}
         empty={<p className="empty">No favorites yet. Tap a song's heart to keep it here.</p>}
       >
         {favoritesOf(props.tracks)}
@@ -862,6 +877,7 @@ function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
       back={{ view: "playlists" }}
       backLabel="Playlists"
       {...props}
+      about={keepOf(playlist)}
       empty={<p className="empty">This Playlist has no songs yet.</p>}
     >
       {tracksOfPlaylist(props.tracks, playlist)}

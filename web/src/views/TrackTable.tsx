@@ -56,7 +56,7 @@ import {
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { type ReactNode, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
 
-import type { CommunityRating, DownloadUnderWay, Track } from "../api";
+import type { CommunityRating, DownloadUnderWay, Playlist, Track } from "../api";
 import { formatTime } from "../format";
 import { heartTitleOf } from "../heart";
 import type { CoverStatus } from "../library/lookups";
@@ -236,6 +236,8 @@ export interface TrackActions extends TrackMenuActions {
   readonly onUseAlbumCover?: (songs: readonly Track[], cover: string) => Promise<void>;
   /** Make the image `image` the cover of `songs`, answering the cover it became. */
   readonly onUploadAlbumCover?: (songs: readonly Track[], image: File) => Promise<string>;
+  /** Switch whether a Playlist keeps its songs downloaded. */
+  readonly onKeepDownloaded?: (playlist: Playlist, keep: boolean) => Promise<void>;
 }
 
 /** The columns a browser shows and their widths, as it last left them. */

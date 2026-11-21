@@ -657,6 +657,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Covers load small in rows and tiles** — the server keeps a 128-pixel and a
+  512-pixel copy of each cover and photo, made ahead by a Job through the new
+  `ffmpeg-thumbnails` plugin; song rows, Up next, and the player show the small one,
+  album and artist tiles the larger one, and Now Playing, the editors, and *Save*
+  the original. Until a copy is made, or without ffmpeg, the original shows as
+  before. Scrolling the whole Library of the preview loads 0.9 MB of covers rather
+  than 21.6 MB, and the page holds about a third of the memory. New:
+  `GET /api/covers/{name}?size=small|medium&recipe=1`.
+
 - **The Library loads faster** — the songs and the artist names are kept once
   built, until something changes, and sent gzipped; a browser holding them gets
   *304 Not Modified*. The reads that take longest to build take turns, rather than

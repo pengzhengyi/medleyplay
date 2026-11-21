@@ -132,6 +132,7 @@ implementation.
 | `ArtistChooser` | Chooser name | Job | Recommend which artist offered each name names; see [Artists](Artists.md#asking-an-ai-model) | `ai-details` |
 | `ArtistDescriber` | Describer name | Job | Suggest the name to show an artist by, and a note about it; see [Artists](Artists.md#what-an-ai-model-suggests-for-an-artist) | `ai-details` |
 | `SilenceFinder` | Finder name | Job | Find where a file's audio falls quiet; see [Segments](Segments.md#snapping-starts-to-the-gaps) | `ffmpeg` |
+| `Thumbnailer` | Thumbnailer name | Job | Make smaller copies of a kept image; see [Cover thumbnails](Cover%20thumbnails.md#the-thumbnailer) | `ffmpeg-thumbnails` |
 
 Plugins implement core-defined extension points only. They add no HTTP routes, no
 tables, and no scheduled tasks; a new kind of feature starts as a new extension

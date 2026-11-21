@@ -20,6 +20,7 @@ import type {
   NameToTidy,
   Playlist,
   ArtistSplits,
+  MissingCover,
   MissingPhoto,
   SharedName,
   SplitOffers,
@@ -118,6 +119,11 @@ export interface ViewProps {
   readonly sharedNames?: { readonly names: readonly SharedName[]; readonly reload: () => void };
   readonly missingPhotos?: {
     readonly artists: readonly MissingPhoto[];
+    readonly reload: () => void;
+    readonly answered: number;
+  };
+  readonly missingCovers?: {
+    readonly albums: readonly MissingCover[];
     readonly reload: () => void;
     readonly answered: number;
   };
@@ -402,6 +408,16 @@ function viewOf(given: ViewProps) {
             {...(props.artistSplits === undefined ? {} : { artistSplits: props.artistSplits })}
             {...(props.sharedNames === undefined ? {} : { sharedNames: props.sharedNames })}
             {...(props.missingPhotos === undefined ? {} : { missingPhotos: props.missingPhotos })}
+            {...(props.missingCovers === undefined ? {} : { missingCovers: props.missingCovers })}
+            {...(props.actions.onUseAlbumCover === undefined ||
+            props.actions.onUploadAlbumCover === undefined
+              ? {}
+              : {
+                  albumCovers: {
+                    onUse: props.actions.onUseAlbumCover,
+                    onUpload: props.actions.onUploadAlbumCover,
+                  },
+                })}
             onEditSongs={(trackId) => {
               const file = props.tracks.find((track) => track.id === trackId);
               if (file !== undefined) {

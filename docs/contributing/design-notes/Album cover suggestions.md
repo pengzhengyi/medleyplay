@@ -1,8 +1,7 @@
 # Album cover suggestions
 
-> [!IMPORTANT]
-> **Status: in progress.** The first step, the server and the album page, is built;
-> Clean up and the background search are next. This note describes how medleyplay
+> [!NOTE]
+> **Status: implemented.** This note describes how medleyplay
 > suggests a cover for an album that has none, on the album's page and in Clean up,
 > and how the household uses or dismisses it in one click. It builds on the album cover search of
 > [Track details](Track%20details.md) and mirrors the suggested artist photo of
@@ -41,12 +40,12 @@ listed in Clean up. Albums should work the same.
 - [x] **A suggested cover for an album without one:** the AI's pick, else the
       best-ranked release whose title and artist match the album's; never one
       dismissed; none rather than a likely wrong one.
-- [ ] **Found without anyone searching:** when the album's page opens, and, as
+- [x] **Found without anyone searching:** when the album's page opens, and, as
       Settings → MusicBrainz says, for the albums up next or for every album without
       a cover, paced so it never holds up other MusicBrainz lookups.
 - [x] **On the album page,** the suggestion fills the empty cover with *Use*,
       *Dismiss*, and *Change*.
-- [ ] **In Clean up,** *Find album covers* shows each suggested cover with *Use*,
+- [x] **In Clean up,** *Find album covers* shows each suggested cover with *Use*,
       *Dismiss*, and *Change*, and *Use all*; the other albums without a cover are
       counted.
 - [x] **A dismissed cover stays dismissed** when the album's covers are found again.
@@ -296,9 +295,9 @@ covers in the same pass.
 1. **The server and the album page** (built): the one fold and migration 0059, the
    rule, the search by linked artists, the page-open search, `dismiss`, and the
    suggestion on the page.
-2. **Clean up and the background:** `missing()`, `use`, the settings, the paced
-   background search with its AI pick, the Clean up section, the look-ahead, and the
-   end-to-end test with a fake finder.
+2. **Clean up and the background** (built): `missing()`, `use`, the settings, the
+   paced background search with its AI pick, the Clean up section, the look-ahead, and
+   the end-to-end test with a stand-in cover finder.
 
 Each is its own pull request, with the measurements in the first.
 

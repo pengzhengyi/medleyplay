@@ -527,11 +527,13 @@ class AlbumCoverService:
                 due,
                 key=lambda key: (coming.get(key, len(coming)), -len(albums[key].tracks), key),
             )
-            nextup = next((albums[key] for key in ordered if not self._finding(albums[key])), None)
-            linked = () if nextup is None else linked_of(db, nextup.tracks)
-        if nextup is None:
+            searched = next(
+                (albums[key] for key in ordered if not self._finding(albums[key])), None
+            )
+            linked = () if searched is None else linked_of(db, searched.tracks)
+        if searched is None:
             return 0
-        self._submit(nextup, linked, None)
+        self._submit(searched, linked, None)
         return 1
 
     def _pick_one(self, settings: Settings) -> int:

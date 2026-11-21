@@ -1391,6 +1391,16 @@ button[aria-disabled="true"] {
   object-fit: cover;
 }
 
+/* A cover suggested in Clean up: as large as a photo there, square. */
+.cover-suggestion-picture {
+  display: block;
+  width: 6rem;
+  height: 6rem;
+  margin: 0;
+  border-radius: 0.75rem;
+  object-fit: cover;
+}
+
 .photo-suggestion-item .photo-suggestion-frame {
   margin-bottom: 0.6rem;
 }

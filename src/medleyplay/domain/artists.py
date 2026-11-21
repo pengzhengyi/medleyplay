@@ -170,20 +170,34 @@ def likeliest_picture(
     a name exactly beats one whose name holds a name, or is held in one; among those,
     the most followed. One matching no name is never likely.
     """
-    keys = {key for key in (artist_key(name) for name in names) if len(key) >= MIN_HELD}
-
-    def match(name: str) -> int:
-        key = artist_key(name)
-        if key in keys:
-            return 2
-        held = len(key) >= MIN_HELD and any(each in key or key in each for each in keys)
-        return 1 if held else 0
-
-    ranked = [(match(name), fans or 0, -at) for at, (name, fans) in enumerate(pictures)]
+    keys = _keys_of(names)
+    ranked = [(_closeness(name, keys), fans or 0, -at) for at, (name, fans) in enumerate(pictures)]
     if not ranked:
         return None
     best = max(ranked)
     return -best[2] if best[0] > 0 else None
+
+
+def goes_by(name: str, names: Iterable[str]) -> bool:
+    """Return whether an artist called `name` goes by one of `names`.
+
+    It does when `name` is one of them, folded, or holds one, or is held in one, as
+    *The Beatles feat. Billy Preston* holds *The Beatles*.
+    """
+    return _closeness(name, _keys_of(names)) > 0
+
+
+def _keys_of(names: Iterable[str]) -> set[str]:
+    return {key for key in (artist_key(name) for name in names) if len(key) >= MIN_HELD}
+
+
+def _closeness(name: str, keys: set[str]) -> int:
+    """Return 2 for a name that is one of `keys`, 1 for one holding or held in one, else 0."""
+    key = artist_key(name)
+    if key in keys:
+        return 2
+    held = len(key) >= MIN_HELD and any(each in key or key in each for each in keys)
+    return 1 if held else 0
 
 
 def _parts(name: str) -> tuple[str, ...]:

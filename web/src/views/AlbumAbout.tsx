@@ -36,7 +36,7 @@ export function AlbumAbout({
   readonly children?: ReactNode;
 }) {
   const [replacing, setReplacing] = useState(false);
-  const art = <Cover cover={cover} className="album-art" />;
+  const art = <Cover size="medium" cover={cover} className="album-art" />;
   return (
     <section className="album-about" aria-label="About the album">
       {onUse === undefined || onUpload === undefined || songs.length === 0 ? (
@@ -45,7 +45,7 @@ export function AlbumAbout({
         <PictureFrame
           className="album-frame"
           replaceLabel={cover === null ? "Add a cover" : "Replace the cover"}
-          save={cover === null ? undefined : { href: coverUrl(cover), name: album }}
+          save={cover === null ? undefined : { href: coverUrl(cover, "original"), name: album }}
           onReplace={() => {
             setReplacing(true);
           }}

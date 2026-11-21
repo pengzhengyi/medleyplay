@@ -293,7 +293,12 @@ export function ImageLinks({
                         <span className="image-link-missing">Unavailable</span>
                       )
                     ) : (
-                      <img src={coverUrl(link.cover)} alt="" loading="lazy" decoding="async" />
+                      <img
+                        src={coverUrl(link.cover, "medium")}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
                     )}
                     {downloading && (
                       <span className="cover-saving" role="status" aria-label="Downloading…">

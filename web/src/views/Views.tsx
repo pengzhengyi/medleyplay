@@ -627,6 +627,7 @@ function ArtistList({
           >
             <span className="tile-frame">
               <Cover
+                size="medium"
                 cover={links.photoOf(links.groupOfBound(artist.link, artist.id))}
                 className="avatar"
               >
@@ -754,7 +755,7 @@ function AlbumList({
           <li key={`${album.artist}\n${album.name}`} className={favorite ? "favorite" : ""}>
             <a href={hrefOf({ view: "album", artist: album.artist, name: album.name })}>
               <span className="tile-frame">
-                <Cover cover={album.cover} className="cover-tile">
+                <Cover size="medium" cover={album.cover} className="cover-tile">
                   {initialOf(album.name)}
                 </Cover>
                 {favorite && <FavoriteBadge />}

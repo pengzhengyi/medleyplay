@@ -95,7 +95,7 @@ export function PlayerBar({
       />
       <div className="now">
         {track === undefined ? (
-          <Cover cover={null} />
+          <Cover size="small" cover={null} />
         ) : (
           <button
             type="button"
@@ -104,7 +104,7 @@ export function PlayerBar({
             {...hintOf("Now Playing", keys.nowPlaying)}
             onClick={onOpenNowPlaying}
           >
-            <Cover cover={track.cover} />
+            <Cover size="small" cover={track.cover} />
           </button>
         )}
         {track !== undefined && (

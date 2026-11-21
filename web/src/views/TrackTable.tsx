@@ -950,7 +950,7 @@ const COLUMNS: Column[] = [
             </span>
           )}
           <span className="thumb-frame">
-            <Cover cover={track.cover} className="thumb" />
+            <Cover size="small" cover={track.cover} className="thumb" />
             <CoverBadge
               status={download === undefined ? actions.statusOf(track) : downloadStatusOf(download)}
               playing={track.id === playingId}

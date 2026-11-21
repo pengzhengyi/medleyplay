@@ -151,7 +151,7 @@ export function CoverFinder({
                     onUse(cover);
                   }}
                 >
-                  <img src={coverUrl(cover)} alt="" loading="lazy" decoding="async" />
+                  <img src={coverUrl(cover, "medium")} alt="" loading="lazy" decoding="async" />
                   {picked !== null && (
                     <span className="cover-pick">
                       <SparkleIcon weight="fill" aria-hidden /> AI pick

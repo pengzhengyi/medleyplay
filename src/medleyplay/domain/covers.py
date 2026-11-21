@@ -42,3 +42,27 @@ def cover_id(data: bytes) -> str:
 def is_cover_id(name: str) -> bool:
     """Return whether `name` could name a cover."""
     return _COVER_ID.fullmatch(name) is not None
+
+
+THUMBNAIL_RECIPE: Final = 1
+"""The number of how thumbnails are made: their sizes, their quality, and their rules.
+
+A thumbnail's URL carries it, so a new recipe reaches browsers that kept the old one.
+"""
+
+
+class ThumbnailSize(StrEnum):
+    """The sizes a kept image is thumbnailed at, by the length of its shorter side."""
+
+    SMALL = "small"
+    """For song rows, Up next, and the player bar: 128 pixels."""
+    MEDIUM = "medium"
+    """For album and artist tiles: 512 pixels."""
+
+    @property
+    def pixels(self) -> int:
+        """Return how long the thumbnail's shorter side is."""
+        return _PIXELS[self]
+
+
+_PIXELS: Final = {ThumbnailSize.SMALL: 128, ThumbnailSize.MEDIUM: 512}

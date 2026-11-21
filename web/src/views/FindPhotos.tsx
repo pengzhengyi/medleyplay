@@ -145,7 +145,7 @@ export function FindPhotos({
                   setChanging(each);
                 }}
               >
-                <Cover cover={each.suggested} className="photo-suggestion-picture" />
+                <Cover size="medium" cover={each.suggested} className="photo-suggestion-picture" />
               </SuggestedFrame>
               <a
                 className="photo-suggestion-name"

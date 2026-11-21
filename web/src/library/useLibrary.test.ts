@@ -211,6 +211,25 @@ describe("when the Library may have changed", () => {
     expect(asked(calls)).toBe(1);
   });
 
+  it("counts no refresh when only a Job making thumbnails ends", async () => {
+    serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    const before = result.current.refreshes;
+    vi.useFakeTimers();
+
+    act(() => {
+      stream().send("job", { id: 6, kind: "make_thumbnails", state: "succeeded" });
+    });
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(result.current.refreshes).toBe(before);
+  });
+
   it("counts a refresh once the Tracks are read again after a change made here", async () => {
     serve(signedIn([trackOf(1, "Intro")]));
     const { result } = renderHook(() => useLibrary(vi.fn()));

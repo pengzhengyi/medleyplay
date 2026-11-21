@@ -149,13 +149,17 @@ export function EditAlbum({
             <PictureFrame
               className="edit-album-frame"
               replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
-              save={cover === undefined ? undefined : { href: coverUrl(cover), name: shared.album }}
+              save={
+                cover === undefined
+                  ? undefined
+                  : { href: coverUrl(cover, "original"), name: shared.album }
+              }
               busy={saving}
               onReplace={() => {
                 setReplacingCover(true);
               }}
             >
-              <Cover cover={cover ?? null} className="edit-album-cover-image" />
+              <Cover size="original" cover={cover ?? null} className="edit-album-cover-image" />
             </PictureFrame>
           </div>
         )}

@@ -113,9 +113,13 @@ export function NowPlaying({
       }}
     >
       <div className="np-backdrop" aria-hidden>
-        {track.cover !== null && track.cover !== "" && <img src={coverUrl(track.cover)} alt="" />}
+        {track.cover !== null && track.cover !== "" && (
+          <img src={coverUrl(track.cover, "medium")} alt="" />
+        )}
         <Dynamics
-          cover={track.cover !== null && track.cover !== "" ? coverUrl(track.cover) : null}
+          cover={
+            track.cover !== null && track.cover !== "" ? coverUrl(track.cover, "medium") : null
+          }
         />
       </div>
       <div ref={body} className="np-body" tabIndex={-1}>
@@ -146,7 +150,7 @@ export function NowPlaying({
         >
           <div className="np-main">
             <div className={status.kind === "playing" ? "np-art" : "np-art resting"}>
-              <Cover cover={track.cover} />
+              <Cover size="original" cover={track.cover} />
             </div>
             <NowPlayingNames
               track={track}

@@ -728,7 +728,36 @@ export interface Settings {
   readonly pick_pictures_by_ai: boolean;
   /** Which artists with no photo the picture sites are asked about without anyone asking. */
   readonly find_artist_photos: PhotoSearch;
+  /** Which albums with no cover MusicBrainz is searched for without anyone asking. */
+  readonly find_album_covers: CoverSearch;
+  /** Whether an AI model is asked, in the background, which cover fits an album none plainly fits. */
+  readonly pick_album_covers_by_ai: boolean;
   readonly revision: number;
+}
+
+/** The albums with no cover searched on their own: of the songs up next, every one, or none. */
+export type CoverSearch = "off" | "up_next" | "missing";
+
+/** An album with no cover, as written, and the cover suggested for it. */
+export interface MissingCover {
+  readonly album: string;
+  /** Its album artist, else its artist. */
+  readonly artist: string;
+  readonly songs: number;
+  /** The cover suggested, if any. */
+  readonly suggested: string | null;
+  /** Whether an AI model picked the one suggested. */
+  readonly picked: boolean;
+  /** Whether MusicBrainz was searched for it. */
+  readonly found: boolean;
+  readonly finding: boolean;
+}
+
+/** A cover found for an album, to make the album's cover. */
+export interface ChosenAlbumCover {
+  readonly album: string;
+  readonly artist: string;
+  readonly cover: string;
 }
 
 /** The artists with no photo looked up on their own: of the songs up next, every one, or none. */
@@ -1565,6 +1594,14 @@ export const api = {
   /** Suggest a cover found for an album no more, even once found again. */
   dismissAlbumCover: (album: string, artist: string, cover: string) =>
     call<undefined>("POST", "/api/album-covers/dismiss", { album, artist, cover }),
+  /** Every album with no cover, those with a cover suggested first, then most songs. */
+  missingCovers: () => heldReads.read<{ albums: MissingCover[] }>("/api/album-covers/missing"),
+  /** Send the songs coming up, the one playing first; their albums with no cover are searched. */
+  findMissingCovers: (trackIds: readonly number[]) =>
+    call<{ asked: number }>("POST", "/api/album-covers/missing/find", { track_ids: trackIds }),
+  /** Make each cover found its album's, on songs with none; say how many albums now show it. */
+  useAlbumCovers: (albums: readonly ChosenAlbumCover[]) =>
+    call<{ used: number }>("POST", "/api/album-covers/use", { albums }),
   /** The links an AI model last suggested for a picture, and what is asked. */
   imageLinks: (pictured: Pictured) =>
     call<PictureLinks>(

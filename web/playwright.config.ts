@@ -24,14 +24,14 @@ export default defineConfig({
     { name: "setup", testMatch: /setup\.ts/ },
     {
       name: "chromium",
-      testIgnore: /manual-downloads\.spec\.ts/,
+      testIgnore: /(manual-downloads|covers)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], storageState: SIGNED_IN },
       dependencies: ["setup"],
     },
     { name: "tube-setup", testMatch: /setup-tube\.ts/, use: { baseURL: TUBE_URL } },
     {
       name: "tube",
-      testMatch: /manual-downloads\.spec\.ts/,
+      testMatch: /(manual-downloads|covers)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: TUBE_URL, storageState: SIGNED_IN_TUBE },
       dependencies: ["tube-setup"],
     },

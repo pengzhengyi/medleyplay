@@ -15,6 +15,7 @@ from medleyplay.plugin_api import (
     MAX_COVERS,
     MAX_NAME,
     MAX_SONGS_SHOWN,
+    MAX_TRIED,
     ChooseCover,
     CoverOption,
     FindCovers,
@@ -39,12 +40,14 @@ class _Model(BaseModel):
 class FindCoversJob(_Model):
     """Ask `finder` for the covers of the album `album` by `artist`, empty for none.
 
-    `artist_ids` are the MusicBrainz artists the album's songs are linked to.
+    `artist_ids` are the MusicBrainz artists the album's songs are linked to, and `tried`
+    the most releases asked for their cover.
     """
 
     album: _Name
     artist: _Artist = ""
     artist_ids: Annotated[tuple[MusicBrainzArtistId, ...], Field(max_length=MAX_ARTIST_IDS)] = ()
+    tried: Annotated[int, Field(ge=1, le=MAX_TRIED)] = MAX_TRIED
     finder: Annotated[str, StringConstraints(max_length=64)] = "musicbrainz"
 
 
@@ -77,6 +80,7 @@ def run(request: FindCoversJob, context: JobContext) -> FoundCoversResult:
             album=request.album,
             artist=request.artist,
             artist_ids=request.artist_ids,
+            tried=request.tried,
             folder=str(folder),
         ),
     )

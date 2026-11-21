@@ -18,6 +18,8 @@ const HELD: Settings = {
   picture_sites: [],
   pick_pictures_by_ai: false,
   find_artist_photos: "up_next",
+  find_album_covers: "up_next",
+  pick_album_covers_by_ai: false,
   revision: 2,
 };
 

@@ -2,7 +2,8 @@
 
 `tube` reads and downloads scripted videos (see `tests/support/plugins/tube.py`), so
 Tracks can be added from links and have their Downloads succeed or fail, without
-reaching Bilibili. Run from `web/` with `uv run --project .. python e2e/serve_tube.py`.
+reaching Bilibili; `covers` answers for MusicBrainz's album covers, without reaching it.
+Run from `web/` with `uv run --project .. python e2e/serve_tube.py`.
 """
 
 import os

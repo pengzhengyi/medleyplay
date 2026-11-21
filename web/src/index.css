@@ -102,6 +102,16 @@ body {
   background: var(--page);
 }
 
+/* The mark while the page starts, before the script runs and until the Account is known. */
+.starting {
+  display: grid;
+  place-content: center;
+  min-height: 100dvh;
+  margin: 0;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
 h1,
 h2 {
   color: var(--ink);

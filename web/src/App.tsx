@@ -8,6 +8,7 @@ import { type Account, type DeviceInfo, api, forgetHeldReads, letIn, onDeviceRef
 import { DeviceWaiting } from "./views/DeviceWaiting";
 import { Library } from "./views/Library";
 import { SignIn } from "./views/SignIn";
+import { Starting } from "./views/Starting";
 
 /**
  * Asks what this device is, then who is signed in, and shows the waiting
@@ -57,7 +58,7 @@ export function App() {
     return <DeviceWaiting device={keptOut} onAnswered={answered} />;
   }
   if (account === undefined) {
-    return null;
+    return <Starting />;
   }
   if (account === null) {
     return <SignIn onSignedIn={setAccount} />;

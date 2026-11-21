@@ -3,10 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>medleyplay</title>
+    <script>
+      // Before the first paint, the theme this browser chose, as theme.ts applies it.
+      try {
+        const theme = localStorage.getItem("medleyplay.theme");
+        if (theme === "light" || theme === "dark") {
+          document.documentElement.dataset.theme = theme;
+        }
+      } catch {
+        // Storage that can't be read leaves the system's theme.
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><p class="starting" aria-busy="true">medleyplay</p></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

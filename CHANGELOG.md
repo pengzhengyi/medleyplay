@@ -782,6 +782,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The songs editor's way back** — *Details* at the top of the songs editor opened
+  from *Split into songs* now shows the song's details; it closed the dialog. Saving
+  the songs still closes it.
+
 - **Adding from Bilibili answers at once** — its dialog opens the moment Enter is
   pressed, saying it looks the video up, rather than after its code loads; and a
   song just added shows a download mark and how far it has got in its row, its

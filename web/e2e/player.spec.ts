@@ -1,4 +1,4 @@
-import { type Page, expect as baseExpect, test } from "@playwright/test";
+import { type Locator, type Page, expect as baseExpect, test } from "@playwright/test";
 
 // Playback runs on the audio clock, which a busy machine slows; waits allow for that.
 const expect = baseExpect.configure({ timeout: 15_000 });
@@ -139,6 +139,49 @@ test("with no lyrics, Now Playing says so level with the player, mirroring the c
   const said = middle(await none.boundingBox());
   expect(Math.abs(said.x - (2 * stage.x - cover.x))).toBeLessThan(16);
   expect(Math.abs(said.y - main.y)).toBeLessThan(16);
+});
+
+/** Return where `element` is once it stops moving, as Now Playing does while it opens. */
+async function stillBox(element: Locator) {
+  let last = await element.boundingBox();
+  await expect
+    .poll(
+      async () => {
+        const now = await element.boundingBox();
+        const still = now?.x === last?.x && now?.y === last?.y;
+        last = now;
+        return still;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
+  return last;
+}
+
+test("Now Playing keeps the lyrics close beside the cover, and Up next opens over them without moving it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route("**/api/tracks/*/lyrics", (route) => route.fulfill({ json: null }));
+  await play(page, "Alpha");
+  await player(page).getByRole("button", { name: "Open Now Playing" }).click();
+  const nowPlaying = page.getByRole("dialog", { name: "Now Playing" });
+  await expect(nowPlaying.getByText("No lyrics for this song.")).toBeVisible();
+  // The cover's column, which stays still while the cover eases in and out of resting.
+  const column = nowPlaying.locator(".np-main");
+  const before = await stillBox(column);
+  const lyrics = await nowPlaying.getByRole("region", { name: "Lyrics" }).boundingBox();
+
+  await nowPlaying.getByRole("button", { name: "Up next" }).click();
+
+  const upNext = nowPlaying.getByRole("region", { name: "Up next" });
+  await expect(upNext).toBeVisible();
+  const after = await stillBox(column);
+  const queue = await upNext.boundingBox();
+  const columnRight = (before?.x ?? 0) + (before?.width ?? 0);
+  expect((lyrics?.x ?? 0) - columnRight).toBeLessThan(96);
+  expect(after).toEqual(before);
+  expect(queue?.x ?? 0).toBeGreaterThan(columnRight);
 });
 
 test("a Track that ends moves on to the next", async ({ page }) => {

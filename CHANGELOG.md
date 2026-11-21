@@ -676,6 +676,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Now Playing keeps the cover and its lyrics together** — the cover and the
+  lyrics sit side by side in the middle of the screen, as wide as each other, rather
+  than each in its own half. *Up next* opens in a window from its button, over the
+  dimmed lyrics, so the cover stays where it is; Escape, a click elsewhere, or the
+  button closes it.
 - **No blank page while medleyplay starts or opens something** — the page shows its
   colors, in the theme chosen, and a quiet *medleyplay* mark from the first moment,
   where it was empty for about two seconds; Edit details, Edit album, Now Playing,

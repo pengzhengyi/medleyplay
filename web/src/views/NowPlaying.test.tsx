@@ -263,6 +263,27 @@ describe("Now Playing", () => {
     expect(within(queue).getByText("Long Road")).toBeInTheDocument();
   });
 
+  it("closes Up next with Escape, leaving Now Playing open", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Up next" }));
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(within(nowPlaying).queryByRole("region", { name: "Up next" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Now Playing" })).toBeInTheDocument();
+  });
+
+  it("closes Up next with a click outside it", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Up next" }));
+
+    await userEvent.click(within(nowPlaying).getByRole("heading", { name: "Intro" }));
+
+    expect(within(nowPlaying).queryByRole("region", { name: "Up next" })).toBeNull();
+  });
+
   it("closes when its artist link names the view already open", async () => {
     await playingIntro();
     window.location.hash = "#/artist?name=The%20Band";
@@ -316,6 +337,28 @@ describe("the lyrics in Now Playing", () => {
       "false",
     );
     expect(localStorage.getItem("medleyplay.lyrics")).toBe("hidden");
+  });
+
+  it("keeps the lyrics beside the cover while Up next opens over them", async () => {
+    await playingIntro({
+      "GET /api/tracks/1/lyrics": {
+        body: {
+          origin: "tag",
+          synced: true,
+          instrumental: false,
+          lines: [{ at_ms: 0, text: "Here we go", translation: "", words: [] }],
+          plain: "",
+          found_at: "2026-11-17T12:00:00Z",
+        },
+      },
+    });
+    const nowPlaying = await openNowPlaying();
+    await within(nowPlaying).findByRole("button", { name: "Here we go" });
+
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Up next" }));
+
+    expect(within(nowPlaying).getByRole("region", { name: "Up next" })).toBeInTheDocument();
+    expect(within(nowPlaying).getByRole("region", { name: "Lyrics" })).toBeInTheDocument();
   });
 
   it("shows the line sung now under the artist in the player, until hidden", async () => {

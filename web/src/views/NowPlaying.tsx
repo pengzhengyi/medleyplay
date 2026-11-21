@@ -1,7 +1,7 @@
 /**
  * @file Now Playing: the song playing over the whole screen, its cover large over a
- * blur of itself, with the player's controls and, beside them, its lyrics or, when
- * asked, what plays next.
+ * blur of itself, with the player's controls and, beside them, its lyrics. What plays
+ * next opens, when asked, in a window over them, from its button.
  *
  * It opens from the player's cover and closes with Escape, its close button, or by
  * going to another view. The keyboard shortcuts work while it is open, and the song's
@@ -33,7 +33,7 @@ import { VolumeControl } from "./VolumeControl";
 
 /**
  * `track`, playing in `player`, over the whole screen, with the song's `lyrics` beside
- * it unless this browser hides them; `queueOpen` shows Up next there instead.
+ * it unless this browser hides them; `queueOpen` shows Up next over them.
  */
 export function NowPlaying({
   player,
@@ -69,6 +69,8 @@ export function NowPlaying({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const body = useRef<HTMLDivElement>(null);
+  const upNext = useRef<HTMLDivElement>(null);
+  const upNextButton = useRef<HTMLButtonElement>(null);
   // The open dialog, where the song's menu and the queue's announcements are drawn.
   const [inside, setInside] = useState<HTMLDialogElement | null>(null);
   const keys = useBindings();
@@ -93,7 +95,14 @@ export function NowPlaying({
   const remaining =
     shownDuration === undefined ? undefined : Math.max(0, shownDuration - shownPosition);
   const lyricsHidden = useLyricsHidden();
-  const lyricsOpen = !lyricsHidden && !queueOpen;
+  const lyricsOpen = !lyricsHidden;
+  // Closing Up next from inside it gives focus back to its button, not to the page.
+  const closeUpNext = () => {
+    if (upNext.current?.contains(document.activeElement) === true) {
+      upNextButton.current?.focus();
+    }
+    onToggleQueue();
+  };
   const song = songTimeOf(track, nowPlaying, position);
   return (
     <dialog
@@ -104,11 +113,28 @@ export function NowPlaying({
       onClose={onClose}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
-          // Escape in the song's menu closes the menu only.
+          // Escape in a menu closes the menu only; then Up next closes, then Now Playing.
           event.preventDefault();
-          if (!(event.target instanceof Element && event.target.closest("[role=menu]"))) {
+          if (event.target instanceof Element && event.target.closest("[role=menu]")) {
+            return;
+          }
+          if (queueOpen) {
+            closeUpNext();
+          } else {
             event.currentTarget.close();
           }
+        }
+      }}
+      onPointerDown={(event) => {
+        // Up next closes when anything else is pressed; its button closes it itself.
+        const target = event.target;
+        if (
+          queueOpen &&
+          target instanceof Node &&
+          upNext.current?.contains(target) !== true &&
+          upNextButton.current?.contains(target) !== true
+        ) {
+          onToggleQueue();
         }
       }}
     >
@@ -144,9 +170,9 @@ export function NowPlaying({
           </span>
         </header>
         <div
-          className={
-            queueOpen ? "np-stage queue-open" : lyricsOpen ? "np-stage lyrics-open" : "np-stage"
-          }
+          className={["np-stage", lyricsOpen && "lyrics-open", queueOpen && "up-next-open"]
+            .filter(Boolean)
+            .join(" ")}
         >
           <div className="np-main">
             <div className={status.kind === "playing" ? "np-art" : "np-art resting"}>
@@ -219,17 +245,13 @@ export function NowPlaying({
                 aria-pressed={lyricsOpen}
                 title={lyricsOpen ? "Hide the lyrics" : "Show the lyrics"}
                 onClick={() => {
-                  if (queueOpen) {
-                    onToggleQueue();
-                    setLyricsHidden(false);
-                  } else {
-                    setLyricsHidden(lyricsOpen);
-                  }
+                  setLyricsHidden(lyricsOpen);
                 }}
               >
                 <QuotesIcon weight={lyricsOpen ? "fill" : "regular"} aria-hidden />
               </button>
               <button
+                ref={upNextButton}
                 type="button"
                 className={queueOpen ? "icon np-queue-toggle on" : "icon np-queue-toggle"}
                 aria-label="Up next"
@@ -240,6 +262,17 @@ export function NowPlaying({
               >
                 <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />
               </button>
+              {queueOpen && (
+                <div ref={upNext} className="np-up-next">
+                  <QueuePanel
+                    id="now-playing-queue"
+                    player={player}
+                    sleep={sleep}
+                    tracks={tracks}
+                    announceIn={inside}
+                  />
+                </div>
+              )}
             </div>
             {status.kind === "failed" && (
               <p className="note failed" role="alert">
@@ -255,15 +288,6 @@ export function NowPlaying({
               onSeek={(seconds) => {
                 player.seek(song.from + seconds);
               }}
-            />
-          )}
-          {queueOpen && (
-            <QueuePanel
-              id="now-playing-queue"
-              player={player}
-              sleep={sleep}
-              tracks={tracks}
-              announceIn={inside}
             />
           )}
         </div>

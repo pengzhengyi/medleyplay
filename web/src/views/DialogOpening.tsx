@@ -1,22 +1,23 @@
 /**
  * @file A dialog's frame shown the moment it is asked for, while its own code loads, so
- * the household sees at once that its press was heard.
+ * the household sees at once that its press was heard; if the code fails to load, the
+ * frame says so.
  */
 
-import { useId, useLayoutEffect, useRef } from "react";
+import { type ReactNode, useId, useLayoutEffect, useRef } from "react";
 
 import { Modal } from "./Modal";
 
-/** The dialog `title`, of the look `className`, saying what it does first: `doing`. */
+/** The dialog `title`, of the look `className`, showing `children`: what it does first. */
 export function DialogOpening({
   className,
   title,
-  doing,
+  children,
   onClose,
 }: {
   readonly className: string;
   readonly title: string;
-  readonly doing: string;
+  readonly children: ReactNode;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -42,9 +43,7 @@ export function DialogOpening({
     >
       <div className="card">
         <h2 id={titleId}>{title}</h2>
-        <p className="empty" aria-busy="true">
-          {doing}
-        </p>
+        {children}
       </div>
     </Modal>
   );

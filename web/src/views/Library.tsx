@@ -8,7 +8,7 @@ import {
   KeyboardIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AI_ENRICHER,
@@ -19,7 +19,9 @@ import {
   type Track,
   api,
 } from "../api";
+import { preloadWhenIdle } from "../lazyPart";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
+import { afterNextPaint } from "../library/stages";
 import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
 import { useLyrics } from "../library/useLyrics";
@@ -49,9 +51,16 @@ import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { AskAiAgain } from "./AskAiAgain";
 import { CheckNetwork } from "./CheckNetwork";
+import { AddFile } from "./AddFile";
+import { AddLink } from "./AddLink";
 import { DialogOpening } from "./DialogOpening";
+import { EditAlbum } from "./EditAlbum";
+import { EditDetails } from "./EditDetails";
+import { LazyPart } from "./LazyPart";
 import type { AiAsk, SilenceFinder } from "./EditSongs";
 import { LibrarySkeleton } from "./LibrarySkeleton";
+import { NowPlaying } from "./NowPlaying";
+import { ListenOnDevice, LyricsEditor, PRELOADED, SongsEditor } from "./parts";
 import { AccountMenu, Nav } from "./Nav";
 import { PlayOn, type PlaysOn } from "./PlayOn";
 import { PlayerBar } from "./PlayerBar";
@@ -66,31 +75,6 @@ import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
 import { AiSetUpContext } from "./aiSetUp";
 import { setRailCollapsed, setRailMinimized, useRailCollapsed, useRailMinimized } from "../rail";
-
-// What opens only when asked for loads then, so the first page has less to load.
-const AddFile = lazy(() => import("./AddFile").then((loaded) => ({ default: loaded.AddFile })));
-const loadAddLink = () => import("./AddLink");
-const AddLink = lazy(() => loadAddLink().then((loaded) => ({ default: loaded.AddLink })));
-// Adding from a site is loaded soon after the page, so its dialog opens without a wait.
-const LOAD_ADD_LINK_AFTER_MS = 3000;
-const EditAlbum = lazy(() =>
-  import("./EditAlbum").then((loaded) => ({ default: loaded.EditAlbum })),
-);
-const EditDetails = lazy(() =>
-  import("./EditDetails").then((loaded) => ({ default: loaded.EditDetails })),
-);
-const ListenOnDevice = lazy(() =>
-  import("./ListenOnDevice").then((loaded) => ({ default: loaded.ListenOnDevice })),
-);
-const LyricsEditor = lazy(() =>
-  import("./LyricsEditor").then((loaded) => ({ default: loaded.LyricsEditor })),
-);
-const NowPlaying = lazy(() =>
-  import("./NowPlaying").then((loaded) => ({ default: loaded.NowPlaying })),
-);
-const SongsEditor = lazy(() =>
-  import("./EditSongs").then((loaded) => ({ default: loaded.SongsEditor })),
-);
 
 /** How long a notice, such as a song added to a Playlist, stays. */
 const NOTICE_MS = 4000;
@@ -256,24 +240,26 @@ export function Library({
     return {
       label: "Lyrics",
       editor: (
-        <LyricsEditor
-          load={() => api.lyrics(track.id)}
-          save={(text, instrumental) => edited(api.setLyrics(track.id, text, instrumental))}
-          forget={() => edited(api.forgetLyrics(track.id))}
-          song={{ id: track.id, title: track.title, artist: track.artist }}
-          player={{
-            current,
-            playing: current && player.status.kind === "playing",
-            seconds: current ? (songTime?.seconds ?? 0) : 0,
-            start: () => {
-              player.playNow(track);
-            },
-            toggle: player.toggle,
-            seek: (seconds) => {
-              player.seek((songTime?.from ?? 0) + seconds);
-            },
-          }}
-        />
+        <LazyPart doing="Opening the lyrics…">
+          <LyricsEditor.Component
+            load={() => api.lyrics(track.id)}
+            save={(text, instrumental) => edited(api.setLyrics(track.id, text, instrumental))}
+            forget={() => edited(api.forgetLyrics(track.id))}
+            song={{ id: track.id, title: track.title, artist: track.artist }}
+            player={{
+              current,
+              playing: current && player.status.kind === "playing",
+              seconds: current ? (songTime?.seconds ?? 0) : 0,
+              start: () => {
+                player.playNow(track);
+              },
+              toggle: player.toggle,
+              seek: (seconds) => {
+                player.seek((songTime?.from ?? 0) + seconds);
+              },
+            }}
+          />
+        </LazyPart>
       ),
     };
   };
@@ -384,16 +370,20 @@ export function Library({
     await setAlbumCover(songs, cover);
     return cover;
   };
+  // Once the Library has drawn, the parts that load apart load while the browser is idle.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      loadAddLink().catch(() => {
-        // Not loaded now, it loads when its dialog first opens.
-      });
-    }, LOAD_ADD_LINK_AFTER_MS);
+    if (!library.loaded) {
+      return undefined;
+    }
+    const stop = new AbortController();
+    const cancel = afterNextPaint(() => {
+      preloadWhenIdle(PRELOADED, stop.signal);
+    });
     return () => {
-      clearTimeout(timer);
+      cancel();
+      stop.abort();
     };
-  }, []);
+  }, [library.loaded]);
   // A song's Download under way shows on its row, from the moment it is added.
   const downloadsByTrack = useMemo(
     () => new Map(library.downloading.map((download) => [download.track_id, download])),
@@ -485,24 +475,26 @@ export function Library({
     return {
       label: file.split && count > 0 ? `${String(count)} songs` : "Split into songs",
       editor: (
-        <SongsEditor
-          album={file}
-          load={api.songs}
-          check={api.checkSongList}
-          artists={artists}
-          ai={askAi}
-          loadAudio={api.playback}
-          silences={SILENCES}
-          onListen={player.pause}
-          onSave={async (rows, known) => {
-            await library.saveSongs(file.id, rows, known);
-            setNotice(`Saved the songs of “${file.title}”.`);
-          }}
-          onUnsplit={async () => {
-            await library.unsplit(file.id);
-            setNotice(`“${file.title}” plays whole again.`);
-          }}
-        />
+        <LazyPart doing="Opening the songs…">
+          <SongsEditor.Component
+            album={file}
+            load={api.songs}
+            check={api.checkSongList}
+            artists={artists}
+            ai={askAi}
+            loadAudio={api.playback}
+            silences={SILENCES}
+            onListen={player.pause}
+            onSave={async (rows, known) => {
+              await library.saveSongs(file.id, rows, known);
+              setNotice(`Saved the songs of “${file.title}”.`);
+            }}
+            onUnsplit={async () => {
+              await library.unsplit(file.id);
+              setNotice(`“${file.title}” plays whole again.`);
+            }}
+          />
+        </LazyPart>
       ),
     };
   };
@@ -745,166 +737,165 @@ export function Library({
           )
         }
       />
-      {/* Each dialog loads when it first opens; until then, nothing shows in its place. */}
-      <Suspense fallback={null}>
-        {linking !== undefined && (
-          <Suspense
-            fallback={
-              <DialogOpening
-                className="add-link"
-                title="Add from Bilibili"
-                doing="Looking the video up…"
-                onClose={() => {
-                  setLinking(undefined);
-                }}
-              />
-            }
-          >
-            <AddLink
-              link={linking}
-              look={library.lookUpLink}
-              add={library.addLink}
-              onAdded={(count) => {
-                const songs = count === 1 ? "1 song" : `${String(count)} songs`;
-                const wait =
-                  library.mode?.online === false ? " They wait until medleyplay is Online." : "";
-                setNotice(`Added ${songs}. They are downloading.${wait}`);
-              }}
-              onClose={() => {
-                setLinking(undefined);
-              }}
-            />
-          </Suspense>
-        )}
-        {filing !== undefined && (
-          <AddFile
-            track={filing}
-            load={library.download}
-            upload={library.addFile}
-            onAdded={() => {
-              setNotice(`Added the file for “${filing.title}”.`);
-            }}
-            onClose={() => {
-              setFiling(undefined);
-            }}
-          />
-        )}
-        {nowPlaying && (
-          <NowPlaying
-            player={player}
-            sleep={sleep}
-            track={playing}
-            tracks={byId}
-            onFavorite={actions.onFavorite}
-            favorites={favorites}
-            onFavoriteArtist={favoriteArtist}
-            onFavoriteAlbum={library.setAlbumFavorite}
-            menuActions={actions}
-            lyrics={lyrics}
-            queueOpen={nowPlayingQueue}
-            onToggleQueue={() => {
-              setNowPlayingQueue((open) => !open);
-            }}
-            onClose={() => {
-              setNowPlayingOver(undefined);
-            }}
-          />
-        )}
-        {askingAgain !== undefined && (
-          <AskAiAgain
-            title={askingAgain.track.title}
-            onAsk={() => {
-              find(askingAgain.lookup, askingAgain.track, true);
-            }}
-            onClose={() => {
-              setAskingAgain(undefined);
-            }}
-          />
-        )}
-        {adding !== undefined && (
-          <AddToPlaylist
-            track={adding}
-            playlists={library.playlists}
-            onSave={(ids, newNames) => addTo(adding, ids, newNames)}
-            onClose={() => {
-              setAdding(undefined);
-            }}
-          />
-        )}
-        {editingAlbum !== undefined && (
-          <EditAlbum
-            songs={editingAlbum}
-            onUseCover={(cover) => setAlbumCover(editingAlbum, cover)}
-            onUploadCover={(image) => uploadAlbumCover(editingAlbum, image)}
-            onSave={async (changes) => {
-              const [first] = editingAlbum;
-              await library.setDetailsOn(
-                editingAlbum.map(({ id }) => id),
-                changes,
+      {linking !== undefined && (
+        <AddLink
+          link={linking}
+          look={library.lookUpLink}
+          add={library.addLink}
+          onAdded={(count) => {
+            const songs = count === 1 ? "1 song" : `${String(count)} songs`;
+            const wait =
+              library.mode?.online === false ? " They wait until medleyplay is Online." : "";
+            setNotice(`Added ${songs}. They are downloading.${wait}`);
+          }}
+          onClose={() => {
+            setLinking(undefined);
+          }}
+        />
+      )}
+      {filing !== undefined && (
+        <AddFile
+          track={filing}
+          load={library.download}
+          upload={library.addFile}
+          onAdded={() => {
+            setNotice(`Added the file for “${filing.title}”.`);
+          }}
+          onClose={() => {
+            setFiling(undefined);
+          }}
+        />
+      )}
+      {nowPlaying && (
+        <NowPlaying
+          player={player}
+          sleep={sleep}
+          track={playing}
+          tracks={byId}
+          onFavorite={actions.onFavorite}
+          favorites={favorites}
+          onFavoriteArtist={favoriteArtist}
+          onFavoriteAlbum={library.setAlbumFavorite}
+          menuActions={actions}
+          lyrics={lyrics}
+          queueOpen={nowPlayingQueue}
+          onToggleQueue={() => {
+            setNowPlayingQueue((open) => !open);
+          }}
+          onClose={() => {
+            setNowPlayingOver(undefined);
+          }}
+        />
+      )}
+      {askingAgain !== undefined && (
+        <AskAiAgain
+          title={askingAgain.track.title}
+          onAsk={() => {
+            find(askingAgain.lookup, askingAgain.track, true);
+          }}
+          onClose={() => {
+            setAskingAgain(undefined);
+          }}
+        />
+      )}
+      {adding !== undefined && (
+        <AddToPlaylist
+          track={adding}
+          playlists={library.playlists}
+          onSave={(ids, newNames) => addTo(adding, ids, newNames)}
+          onClose={() => {
+            setAdding(undefined);
+          }}
+        />
+      )}
+      {editingAlbum !== undefined && (
+        <EditAlbum
+          songs={editingAlbum}
+          onUseCover={(cover) => setAlbumCover(editingAlbum, cover)}
+          onUploadCover={(image) => uploadAlbumCover(editingAlbum, image)}
+          onSave={async (changes) => {
+            const [first] = editingAlbum;
+            await library.setDetailsOn(
+              editingAlbum.map(({ id }) => id),
+              changes,
+            );
+            setNotice(`Saved the album of ${String(editingAlbum.length)} songs.`);
+            // A renamed album is found under its new name; one whose name was emptied, in Albums.
+            if (first !== undefined && ("album" in changes || "album_artist" in changes)) {
+              const name = changes.album === undefined ? first.album : changes.album;
+              const artist =
+                changes.album_artist === undefined ? albumArtistOf(first) : changes.album_artist;
+              navigate(
+                typeof name === "string" && typeof artist === "string"
+                  ? { view: "album", artist, name }
+                  : { view: "albums" },
               );
-              setNotice(`Saved the album of ${String(editingAlbum.length)} songs.`);
-              // A renamed album is found under its new name; one whose name was emptied, in Albums.
-              if (first !== undefined && ("album" in changes || "album_artist" in changes)) {
-                const name = changes.album === undefined ? first.album : changes.album;
-                const artist =
-                  changes.album_artist === undefined ? albumArtistOf(first) : changes.album_artist;
-                navigate(
-                  typeof name === "string" && typeof artist === "string"
-                    ? { view: "album", artist, name }
-                    : { view: "albums" },
-                );
-              }
-            }}
-            onClose={() => {
-              setEditingAlbum(undefined);
-            }}
-          />
-        )}
-        {editing !== undefined && (
-          <EditDetails
-            track={editing.track}
-            load={api.details}
-            onSave={async (values, artists) => {
-              await library.saveDetails(editing.track.id, values, artists);
-              setNotice(`Saved the details of “${editing.track.title}”.`);
-            }}
-            onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
-            onSetCover={(image) => library.setCover(editing.track.id, image)}
-            onRemoveCover={() => library.removeCover(editing.track.id)}
-            onUseCover={async (cover) => {
-              await library.saveDetails(editing.track.id, { cover });
-              return api.details(editing.track.id);
-            }}
-            onChooseArtist={async (written, id) => {
-              const fresh = await api.chooseNamesake(editing.track.id, written, id);
-              library.reloadTracks();
-              artistNames.reload();
-              return fresh;
-            }}
-            findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing.track))}
-            lookup={library.lookups.get(editing.track.id)}
-            online={library.mode?.online !== false}
-            onFind={(lookup) => {
-              actions.onFind(lookup, editing.track);
-            }}
-            songs={songsOf(editing.track)}
-            lyrics={lyricsOf(editing.track)}
-            startOnSongs={editing.songs}
-            onClose={() => {
-              setEditing(undefined);
-            }}
-          />
-        )}
-        {listening && (
-          <ListenOnDevice
+            }
+          }}
+          onClose={() => {
+            setEditingAlbum(undefined);
+          }}
+        />
+      )}
+      {editing !== undefined && (
+        <EditDetails
+          track={editing.track}
+          load={api.details}
+          onSave={async (values, artists) => {
+            await library.saveDetails(editing.track.id, values, artists);
+            setNotice(`Saved the details of “${editing.track.title}”.`);
+          }}
+          onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
+          onSetCover={(image) => library.setCover(editing.track.id, image)}
+          onRemoveCover={() => library.removeCover(editing.track.id)}
+          onUseCover={async (cover) => {
+            await library.saveDetails(editing.track.id, { cover });
+            return api.details(editing.track.id);
+          }}
+          onChooseArtist={async (written, id) => {
+            const fresh = await api.chooseNamesake(editing.track.id, written, id);
+            library.reloadTracks();
+            artistNames.reload();
+            return fresh;
+          }}
+          findable={LOOKUPS.filter((lookup) => actions.canFind(lookup, editing.track))}
+          lookup={library.lookups.get(editing.track.id)}
+          online={library.mode?.online !== false}
+          onFind={(lookup) => {
+            actions.onFind(lookup, editing.track);
+          }}
+          songs={songsOf(editing.track)}
+          lyrics={lyricsOf(editing.track)}
+          startOnSongs={editing.songs}
+          onClose={() => {
+            setEditing(undefined);
+          }}
+        />
+      )}
+      {listening && (
+        <LazyPart
+          doing="Finding this computer's addresses…"
+          frame={(shown) => (
+            <DialogOpening
+              className="listen"
+              title="Listen on your device"
+              onClose={() => {
+                setListening(false);
+              }}
+            >
+              {shown}
+            </DialogOpening>
+          )}
+        >
+          <ListenOnDevice.Component
             username={account.username}
             load={api.addresses}
             onClose={() => {
               setListening(false);
             }}
           />
-        )}
-      </Suspense>
+        </LazyPart>
+      )}
       {listingShortcuts && (
         <ShortcutList
           onClose={() => {

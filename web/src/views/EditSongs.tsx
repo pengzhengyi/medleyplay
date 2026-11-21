@@ -50,8 +50,6 @@ import {
 } from "@phosphor-icons/react";
 import {
   type SubmitEvent,
-  Suspense,
-  lazy,
   useCallback,
   useContext,
   useEffect,
@@ -72,10 +70,10 @@ import { aiNameOf } from "../library/aiAnswer";
 import { snapStarts } from "../library/snap";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
+import { LazyPart } from "./LazyPart";
 import { OriginTag } from "./OriginTag";
+import { ListEditor } from "./parts";
 import { SongsControlsContext } from "./songsControls";
-
-const ListEditor = lazy(() => import("./ListEditor"));
 
 /** A row as the editor holds it: the start as typed, and the song it keeps, if any. */
 interface Row {
@@ -807,14 +805,14 @@ export function SongsEditor({
           )}
           {disagree !== null && <p className="songs-note songs-doubt">{disagree}</p>}
           {typing && (
-            <Suspense fallback={<p className="empty">Opening the list…</p>}>
-              <ListEditor
+            <LazyPart doing="Opening the list…">
+              <ListEditor.Component
                 initial={listTextOf(rows)}
                 check={(text) => check(album.id, text)}
                 artists={artists}
                 onListed={setListed}
               />
-            </Suspense>
+            </LazyPart>
           )}
           <audio
             ref={holdAudio}

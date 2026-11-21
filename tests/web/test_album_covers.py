@@ -55,6 +55,8 @@ def test_nothing_is_known_of_an_albums_covers_until_asked(client: TestClient) ->
         "failure": None,
         "choice_failure": None,
         "may_choose": False,
+        "suggested": None,
+        "due": True,
     }
 
 
@@ -77,6 +79,7 @@ def test_the_covers_found_are_listed_best_first_with_the_models_pick(
         "host": "api.deepseek.com",
         "at": "2026-11-03T00:00:00Z",
     }
+    assert (known["suggested"], known["due"]) == ("b2", False)
 
 
 def test_a_pick_among_releases_other_than_those_found_is_not_shown(
@@ -88,6 +91,29 @@ def test_a_pick_among_releases_other_than_those_found_is_not_shown(
     known = client.get("/api/album-covers", params=HELP).json()
 
     assert known["pick"] is None
+
+
+def test_a_dismissed_cover_is_suggested_no_more(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _help_found(units, offered=[VINYL, CD], pick=CD)
+
+    response = client.post("/api/album-covers/dismiss", json={**HELP, "cover": "b2"})
+
+    assert response.status_code == 204
+    assert client.get("/api/album-covers", params=HELP).json()["suggested"] is None
+
+
+def test_only_a_cover_found_for_the_album_may_be_dismissed(
+    client: TestClient, units: sessionmaker[Session]
+) -> None:
+    set_up_as_alice(client)
+    _help_found(units, offered=[VINYL, CD], pick=CD)
+
+    response = client.post("/api/album-covers/dismiss", json={**HELP, "cover": "c3"})
+
+    assert response.status_code == 422
 
 
 def test_no_covers_are_found_while_the_musicbrainz_plugin_is_off(client: TestClient) -> None:
@@ -110,3 +136,5 @@ def test_album_covers_are_for_signed_in_accounts(client: TestClient) -> None:
     assert client.get("/api/album-covers", params=HELP).status_code == 401
     assert client.post("/api/album-covers/find", json=HELP).status_code == 401
     assert client.post("/api/album-covers/choose", json=HELP).status_code == 401
+    dismissed = {**HELP, "cover": "b2"}
+    assert client.post("/api/album-covers/dismiss", json=dismissed).status_code == 401

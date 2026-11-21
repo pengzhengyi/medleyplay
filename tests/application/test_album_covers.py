@@ -5,6 +5,7 @@ kept, and finding again replaces it.
 """
 
 from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -112,6 +113,84 @@ def test_an_album_by_an_artist_linked_to_musicbrainz_is_searched_by_that_artist(
 
     found = enriching.album_covers.covers(alice, "Help!", "披头士")
     assert [each.option.release_id for each in found.covers] == [HELP_VINYL, HELP_CD]
+
+
+def _cover_of(found: AlbumCovers, release_id: str) -> str:
+    return next(each.cover for each in found.covers if each.option.release_id == release_id)
+
+
+def test_the_first_cover_found_whose_title_and_artist_are_the_albums_is_suggested(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+
+    assert found.suggested == _cover_of(found, HELP_VINYL)
+
+
+def test_the_cover_an_ai_model_picked_is_suggested(enriching: Enriching, alice: Account) -> None:
+    _found(enriching, alice)
+
+    chosen = _chosen(enriching, alice)
+
+    assert chosen.suggested == _cover_of(chosen, HELP_CD)
+
+
+def test_a_cover_found_by_a_linked_artists_name_is_suggested(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Ticket to Ride", artist="披头士", album="Help!")
+    enriching.artists.look_up(alice, ["披头士"])
+    enriching.finish_every_job()
+    enriching.artists.link(alice, "披头士", BEATLES)
+    enriching.album_covers.find(alice, "Help!", "披头士")
+    enriching.finish_every_job()
+
+    found = enriching.album_covers.covers(alice, "Help!", "披头士")
+
+    assert found.suggested == _cover_of(found, HELP_VINYL)
+
+
+def test_a_dismissed_cover_is_suggested_no_more_even_once_found_again(
+    enriching: Enriching, alice: Account
+) -> None:
+    found = _found(enriching, alice)
+
+    enriching.album_covers.dismiss(alice, "Help!", "The Beatles", _cover_of(found, HELP_VINYL))
+    again = _found(enriching, alice)
+
+    assert again.suggested == _cover_of(again, HELP_CD)
+
+
+def test_dismissing_a_cover_not_found_for_the_album_is_refused(
+    enriching: Enriching, alice: Account
+) -> None:
+    _found(enriching, alice)
+
+    with pytest.raises(InvalidInputError):
+        enriching.album_covers.dismiss(alice, "Help!", "The Beatles", "0" * 64)
+
+
+def test_an_album_never_searched_is_due_a_search(enriching: Enriching, alice: Account) -> None:
+    assert enriching.album_covers.covers(alice, "Help!", "The Beatles").due
+
+
+def test_an_album_whose_covers_were_found_is_not_due_a_search(
+    enriching: Enriching, alice: Account
+) -> None:
+    assert not _found(enriching, alice).due
+
+
+def test_an_album_searched_in_vain_is_due_again_after_30_days(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.album_covers.find(alice, "Rubber Soul", "The Beatles")
+    enriching.finish_every_job()
+    soon = enriching.album_covers.covers(alice, "Rubber Soul", "The Beatles")
+
+    enriching.clock.advance(timedelta(days=30, seconds=1))
+    later = enriching.album_covers.covers(alice, "Rubber Soul", "The Beatles")
+
+    assert (soon.due, later.due) == (False, True)
 
 
 def test_nothing_is_known_of_an_albums_covers_until_asked(

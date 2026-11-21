@@ -14,7 +14,7 @@ writes them alike shares what was found.
 import hashlib
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 from typing import Final
@@ -24,14 +24,17 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
 from medleyplay.application.ai import is_set_up, provider_named
+from medleyplay.application.artist_pictures import every_name_of
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.album_covers import FoundRelease, suggested_cover
 from medleyplay.domain.enrichers import AI_DETAILS, MUSICBRAINZ
 from medleyplay.domain.errors import ConflictError, InvalidInputError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
 from medleyplay.persistence.schema import (
+    AlbumCoverDismissalRow,
     AlbumCoverSearchRow,
     LibraryArtistRow,
     TrackArtistRow,
@@ -58,6 +61,8 @@ FINDER: Final = MUSICBRAINZ.name
 CHOOSE_COVER_KIND: Final = "choose_cover"
 CHOOSER: Final = AI_DETAILS.name
 """The chooser asked: the AI plugin, in the lane its enricher keeps to."""
+SEARCHED_IN_VAIN: Final = timedelta(days=30)
+"""How long an album searched in vain waits before it is searched on its own again."""
 CHOICE_TARGET: Final = "album-cover-choice:"
 """What the target of a Job that asks which release fits begins with, before the album's key."""
 
@@ -167,6 +172,8 @@ class AlbumCovers:
     medleyplay to be Online, or to try again. `failure` and `choice_failure` say why the
     last asking failed, to the Account that asked and to admins. `may_choose` says an AI
     model may be asked: one is set up, the covers are found, and none picked among them.
+    `suggested` is the cover suggested as the album's, if any, and `due` says the album
+    may be searched on its own: never searched, or searched in vain over 30 days ago.
     """
 
     covers: tuple[FoundAlbumCover, ...]
@@ -178,6 +185,8 @@ class AlbumCovers:
     failure: str | None
     choice_failure: str | None
     may_choose: bool
+    suggested: str | None = None
+    due: bool = False
 
 
 class AlbumCoverService:
@@ -189,12 +198,14 @@ class AlbumCoverService:
         plugins: PluginService,
         jobs: JobService,
         kinds: AlbumCoverKinds,
+        clock: Clock,
     ) -> None:
         """Create the service, submitting Jobs of `kinds` to `jobs`."""
         self._units = units
         self._plugins = plugins
         self._jobs = jobs
         self._kinds = kinds
+        self._clock = clock
 
     def find(self, caller: Account, album: str, artist: str) -> None:
         """Ask MusicBrainz for the covers of the album's releases; asking again while asked waits.
@@ -246,10 +257,18 @@ class AlbumCoverService:
         """Return what is known of the album's covers, and what is being asked."""
         album, artist = checked_album(album, artist)
         with self._units() as db:
-            row = db.get(AlbumCoverSearchRow, (album_key(album, artist), FINDER))
+            key = album_key(album, artist)
+            row = db.get(AlbumCoverSearchRow, (key, FINDER))
             found = () if row is None else _covers_of(row)
             pick = None if row is None else _pick_of(row, found)
             ai = is_set_up(db)
+            suggested = suggested_cover(
+                album,
+                _names_of(db, album, artist),
+                [FoundRelease(each.option.title, each.option.artist, each.cover) for each in found],
+                _cover_picked(pick, found),
+                _dismissed(db, key),
+            )
         finding = self._jobs.latest(FIND_COVERS_KIND, find_covers_target(album, artist))
         choosing = self._jobs.latest(CHOOSE_COVER_KIND, choose_cover_target(album, artist))
         asking = [job for job in (finding, choosing) if job is not None and job.state.is_active]
@@ -270,7 +289,22 @@ class AlbumCoverService:
             and not chosen
             and not choice_failed
             and CHOOSER in self._plugins.available_keys().get(COVER_CHOOSER.name, []),
+            suggested=suggested,
+            due=row is None or (not found and self._clock() - row.found_at > SEARCHED_IN_VAIN),
         )
+
+    def dismiss(self, caller: Account, album: str, artist: str, cover: str) -> None:
+        """Suggest the cover found for the album no more, even once found again."""
+        del caller
+        album, artist = checked_album(album, artist)
+        key = album_key(album, artist)
+        with self._units.begin() as db:
+            row = db.get(AlbumCoverSearchRow, (key, FINDER))
+            if row is None or all(each.cover != cover for each in _covers_of(row)):
+                message = "Only a cover found for the album may be dismissed."
+                raise InvalidInputError(message)
+            if db.get(AlbumCoverDismissalRow, (key, cover)) is None:
+                db.add(AlbumCoverDismissalRow(key=key, cover=cover))
 
 
 def checked_album(album: str, artist: str) -> tuple[str, str]:
@@ -296,6 +330,25 @@ def _covers_of(row: AlbumCoverSearchRow) -> tuple[FoundAlbumCover, ...]:
         FoundAlbumCover(option=CoverOption.model_validate(each["option"]), cover=str(each["cover"]))
         for each in row.covers
     )
+
+
+def _cover_picked(pick: CoverPick | None, found: tuple[FoundAlbumCover, ...]) -> str | None:
+    if pick is None:
+        return None
+    return next((each.cover for each in found if each.option.release_id == pick.release_id), None)
+
+
+def _dismissed(db: Session, key: str) -> set[str]:
+    dismissed = select(AlbumCoverDismissalRow.cover).where(AlbumCoverDismissalRow.key == key)
+    return set(db.scalars(dismissed))
+
+
+def _names_of(db: Session, album: str, artist: str) -> list[str]:
+    """Return every name the album's artist goes by: as written, and its linked artists' names."""
+    names = [artist]
+    for artist_id in linked_artists_of(db, album, artist):
+        names.extend(every_name_of(db, artist_id))
+    return names
 
 
 def _picked_among(row: AlbumCoverSearchRow, found: tuple[FoundAlbumCover, ...]) -> bool:

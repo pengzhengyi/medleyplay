@@ -291,7 +291,7 @@ class ArtistPictureService:
             settings = read_settings(db)
             turned_on = SITE in settings.picture_sites
             ai = is_set_up(db)
-            names = _every_name_of(db, artist_id)
+            names = every_name_of(db, artist_id)
         found = () if row is None else _pictures_of(row)
         pick = None if row is None else _pick_of(row, found)
         finding = self._jobs.latest(FIND_PICTURES_KIND, find_pictures_target(artist_id))
@@ -332,7 +332,7 @@ class ArtistPictureService:
                 )
             }
             named = {artist_id: _name_of(db, artist_id) for artist_id in songs}
-            names = {artist_id: _every_name_of(db, artist_id) for artist_id in songs}
+            names = {artist_id: every_name_of(db, artist_id) for artist_id in songs}
         finding = self._jobs.active_targets(FIND_PICTURES_KIND)
         found: list[MissingPhoto] = []
         for artist_id, count in songs.items():
@@ -478,7 +478,7 @@ def _pick_of(row: ArtistPictureSearchRow, found: tuple[FoundPicture, ...]) -> Pi
     )
 
 
-def _every_name_of(db: Session, artist_id: str) -> list[str]:
+def every_name_of(db: Session, artist_id: str) -> list[str]:
     """Return every name the artist goes by: the household's for it, MusicBrainz's, and aliases."""
     artist = db.get_one(ArtistRow, artist_id)
     household = db.get(ArtistHouseholdRow, artist_id)

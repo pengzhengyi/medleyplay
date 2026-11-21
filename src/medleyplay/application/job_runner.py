@@ -163,7 +163,7 @@ class JobRunner:
         plugins: PluginService,
         jobs_dir: Path,
         *,
-        processes: JobProcesses = JobProcesses(),  # noqa: B008 -- a frozen value
+        processes: JobProcesses = JobProcesses(),
         max_running: int = MAX_RUNNING,
         poll: timedelta = POLL,
         online: Callable[[], bool] = lambda: True,

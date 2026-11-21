@@ -169,7 +169,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     *,
     config: Config = Config(),  # noqa: B008 -- a frozen value
     safe_mode: bool = False,
-    source: PluginSource = PluginSource(),  # noqa: B008 -- a frozen value
+    source: PluginSource = PluginSource(),
     kinds: Mapping[str, AnyJobKind] | None = None,
     secrets: Secrets | None = None,
 ) -> Services:
@@ -360,7 +360,7 @@ def _remote(clock: Clock, events: Events) -> RemoteService:
     return remote
 
 
-def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:  # noqa: B008 -- a frozen value
+def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:
     """Return the server's app for `settings`.
 
     The app starts deciding the Mode and the plugin host, removes stale cache

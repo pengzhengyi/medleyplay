@@ -21,7 +21,7 @@ from medleyplay.application.image_links import (
 )
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.covers import cover_id
-from medleyplay.domain.errors import ConflictError, NotFoundError
+from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.persistence.schema import ImageLinksRow
 from medleyplay.plugin_api import ImageSubject
 from tests.support.ai import DEEPSEEK
@@ -65,12 +65,26 @@ def enriching(
 
 
 def _suggested(
-    enriching: Enriching, caller: Account, pictured: AlbumPictured | ArtistPictured = HELP
+    enriching: Enriching,
+    caller: Account,
+    pictured: AlbumPictured | ArtistPictured = HELP,
+    hint: str = "",
 ) -> PictureLinks:
-    """Have `caller` ask for links to the picture, and return them once the model answered."""
-    enriching.image_links.suggest(caller, pictured)
+    """Have `caller` ask for links to the picture, with a note, and return what was answered."""
+    enriching.image_links.suggest(caller, pictured, hint)
     enriching.finish_every_job()
     return enriching.image_links.links(caller, pictured)
+
+
+def test_the_listener_s_note_is_given_to_the_model(enriching: Enriching, alice: Account) -> None:
+    suggested = _suggested(enriching, alice, hint="first only")
+
+    assert [link.url for link in suggested.links] == [HELP_LINK]
+
+
+def test_a_note_too_long_for_the_ai_is_refused(enriching: Enriching, alice: Account) -> None:
+    with pytest.raises(InvalidInputError, match="500"):
+        enriching.image_links.suggest(alice, HELP, "x" * 501)
 
 
 def _approved(

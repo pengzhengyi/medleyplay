@@ -144,7 +144,7 @@ export function InsightsView({
                           );
                         }}
                       >
-                        <Cover cover={track.cover} className="thumb" />
+                        <Cover size="small" cover={track.cover} className="thumb" />
                         <span className="entry-title">{track.title}</span>
                         <span className="entry-artist">{track.artist}</span>
                         <span className="insights-plays">{playsOf(plays)}</span>
@@ -177,7 +177,7 @@ const hrefTo = (of: Of, listened: Listened) =>
 function TopCard({ of, listened }: { readonly of: Of; readonly listened: Listened }) {
   return (
     <a className="insights-top" href={hrefTo(of, listened)}>
-      <Cover cover={listened.cover} className="cover-tile insights-cover" />
+      <Cover size="medium" cover={listened.cover} className="cover-tile insights-cover" />
       <span className="insights-top-text">
         <span className="insights-top-label">{of === "artist" ? "Top artist" : "Top album"}</span>
         <span className="insights-top-name">{listened.name}</span>

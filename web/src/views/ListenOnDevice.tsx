@@ -170,17 +170,6 @@ export function ListenOnDevice({
           The phone plays the music itself, or on this computer: choose <strong>Play on</strong> in
           its player. Either way, keep this computer on and on the network.
         </p>
-        <footer className="dialog-buttons">
-          <button
-            type="button"
-            className="dialog-button"
-            onClick={() => {
-              dialog.current?.close();
-            }}
-          >
-            Done
-          </button>
-        </footer>
       </div>
     </Modal>
   );

@@ -4,12 +4,15 @@ Splitting a name binds every song showing it to each artist it lists; keeping it
 them to the name as written. Either is remembered until forgotten.
 """
 
-from fastapi import APIRouter, status
-from pydantic import BaseModel, Field
+from typing import Final
+
+from fastapi import APIRouter, Request, Response, status
+from pydantic import BaseModel, Field, TypeAdapter
 
 from medleyplay.application.artist_splits import SplitDecision, SplitOffer
 from medleyplay.domain.artist_split import Role
-from medleyplay.web.deps import ArtistSplitsDep, SignedInAccount
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AnswersDep, ArtistSplitsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/artist-splits", tags=["artists"])
 
@@ -68,13 +71,25 @@ class NamesIn(BaseModel):
     names: list[str] = Field(min_length=1, max_length=MAX_NAMES)
 
 
-@router.get("")
-def splits(_: SignedInAccount, service: ArtistSplitsDep) -> ArtistSplitsOut:
-    """Return every name offered to split, most songs first, and every name decided."""
-    return ArtistSplitsOut(
-        offers=[SplitOfferOut.of(each) for each in service.offers()],
-        decided=[DecisionOut.of(each) for each in service.decided()],
-    )
+ARTIST_SPLITS: Final = TypeAdapter(ArtistSplitsOut)
+
+
+@router.get("", response_model=ArtistSplitsOut, responses=NOT_MODIFIED)
+def splits(
+    request: Request, _: SignedInAccount, service: ArtistSplitsDep, answers: AnswersDep
+) -> Response:
+    """Return every name offered to split, most songs first, and every name decided.
+
+    304 when the request holds the answer already.
+    """
+
+    def build() -> ArtistSplitsOut:
+        return ArtistSplitsOut(
+            offers=[SplitOfferOut.of(each) for each in service.offers()],
+            decided=[DecisionOut.of(each) for each in service.decided()],
+        )
+
+    return answers.answer(request, ("artist-splits",), build, ARTIST_SPLITS, heavy=False)
 
 
 @router.post("/split", status_code=status.HTTP_204_NO_CONTENT)

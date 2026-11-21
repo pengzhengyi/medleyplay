@@ -4,15 +4,16 @@ Telling a name apart binds each album's songs to the artist chosen for them, whi
 confirms them; keeping a name as one stops it waiting until forgotten.
 """
 
-from typing import Annotated
+from typing import Annotated, Final
 
-from fastapi import APIRouter, status
-from pydantic import BaseModel, Field, model_validator
+from fastapi import APIRouter, Request, Response, status
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from medleyplay.application.shared_names import SharedName
 from medleyplay.application.track_artists import SongsBy
 from medleyplay.domain.catalog import TrackId
-from medleyplay.web.deps import SharedNamesDep, SignedInAccount
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AnswersDep, SharedNamesDep, SignedInAccount
 
 router = APIRouter(prefix="/api/shared-names", tags=["artists"])
 
@@ -115,10 +116,21 @@ class NamesIn(BaseModel):
     names: list[_Name] = Field(min_length=1, max_length=MAX_NAMES)
 
 
-@router.get("")
-def shared_names(_: SignedInAccount, service: SharedNamesDep) -> SharedNamesOut:
-    """Return every name that may name several artists, most songs first."""
-    return SharedNamesOut(names=[SharedNameOut.of(each) for each in service.names()])
+SHARED_NAMES: Final = TypeAdapter(SharedNamesOut)
+
+
+@router.get("", response_model=SharedNamesOut, responses=NOT_MODIFIED)
+def shared_names(
+    request: Request, _: SignedInAccount, service: SharedNamesDep, answers: AnswersDep
+) -> Response:
+    """Return every name that may name several artists, most songs first; 304 if unchanged."""
+    return answers.answer(
+        request,
+        ("shared-names",),
+        lambda: SharedNamesOut(names=[SharedNameOut.of(each) for each in service.names()]),
+        SHARED_NAMES,
+        heavy=True,
+    )
 
 
 @router.put("/albums", status_code=status.HTTP_204_NO_CONTENT)

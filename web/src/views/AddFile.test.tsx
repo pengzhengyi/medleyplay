@@ -104,7 +104,7 @@ describe("adding a Track's file by hand", () => {
     expect(within(dialog).getByLabelText("File")).toBeDisabled();
   });
 
-  it("stops the upload when it is cancelled", async () => {
+  it("stops the upload when asked, beside its progress", async () => {
     let signal: AbortSignal | undefined;
     const { dialog, onAdded } = renderDialog(undefined, (_id, _file, _progress, stopped) => {
       signal = stopped;
@@ -113,7 +113,7 @@ describe("adding a Track's file by hand", () => {
     await userEvent.upload(within(dialog).getByLabelText("File"), SONG);
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
-    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Stop" }));
 
     expect(signal?.aborted).toBe(true);
     expect(onAdded).not.toHaveBeenCalled();

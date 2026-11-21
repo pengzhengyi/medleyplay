@@ -62,6 +62,12 @@ export interface Library {
   readonly refreshFeatures: () => Promise<boolean | null>;
   /** Whether the server has listed the Tracks yet. */
   readonly loaded: boolean;
+  /**
+   * Counts the times the Library may have changed, as what is read beside the songs
+   * sees it: each load, a moment after any Job ends, and each read of the songs after
+   * a change made here; a heart or a rating leaves it alone.
+   */
+  readonly refreshes: number;
   /** Why the last request failed, or `""`. */
   readonly error: string;
   /** Whether medleyplay may contact music sites now, once the server has said. */
@@ -95,6 +101,8 @@ export interface Library {
    */
   /** Ask `enricher` about the Track `id`; the AI may be asked `again`, with a hint. */
   readonly find: (enricher: string, id: number, again?: { readonly hint: string }) => Promise<void>;
+  /** Stop the lookup asked about the Track while it waits or runs; nothing it found is kept. */
+  readonly stopFinding: (id: number) => Promise<void>;
   /**
    * The lookup last asked about each Track, by the Track's id, while its Job runs, a
    * moment after it succeeds, and until it is asked again after it fails.
@@ -178,8 +186,10 @@ export interface Library {
 
 /** The Jobs whose end can change the Tracks. */
 const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track"]);
+/** The Jobs whose end changes nothing the Library reads: thumbnails are found by URL. */
+const CHANGES_NOTHING = new Set(["make_thumbnails"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
-/** How long after the last such Job the Tracks are asked for, so a busy scan asks once. */
+/** How long after the last Job to end the Library is refreshed, so a busy scan does it once. */
 const SETTLE_MS = 1000;
 /** How long a lookup that succeeded still says so. */
 const DONE_MS = 4000;
@@ -196,6 +206,10 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "bas
  */
 export function useLibrary(onSignedOut: () => void): Library {
   const [store, dispatch] = useReducer(reduce, EMPTY);
+  const [refreshes, setRefreshes] = useState(0);
+  const refresh = useCallback(() => {
+    setRefreshes((count) => count + 1);
+  }, []);
   const [playlists, setPlaylists] = useState<readonly Playlist[]>([]);
   const [providers, setProviders] = useState<readonly string[]>([]);
   const [aiSetUp, setAiSetUp] = useState<boolean | null>(null);
@@ -243,6 +257,9 @@ export function useLibrary(onSignedOut: () => void): Library {
   // Each lookup's Job, and each Track's latest, so an older Job's end can't land after it.
   const trackOfJob = useRef(new Map<number, number>());
   const jobOfTrack = useRef(new Map<number, number>());
+  // The Tracks whose lookup is being asked for, and those of them stopped before it was.
+  const asking = useRef(new Set<number>());
+  const stoppedEarly = useRef(new Set<number>());
   const writes = useRef(0);
   // The latest change of each Track's details, so an older read-back can't land after it.
   const latestSave = useRef(new Map<number, number>());
@@ -369,10 +386,12 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.tracks().then(
         (tracks) => {
           dispatch({ type: "loaded", tracks });
+          refresh();
           readRest();
         },
         (failure: unknown) => {
           onFailure(failure);
+          refresh();
           readRest();
         },
       );
@@ -405,23 +424,31 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
     load();
     document.addEventListener("visibilitychange", onShown);
-    const stopListening = listen(load, setMode, onJob, setWaitingDevices, setSpeaker, (command) => {
-      for (const listener of commandListeners.current) {
-        listener(command);
-      }
-    });
+    const stopListening = listen(
+      { load, refresh },
+      setMode,
+      onJob,
+      setWaitingDevices,
+      setSpeaker,
+      (command) => {
+        for (const listener of commandListeners.current) {
+          listener(command);
+        }
+      },
+    );
     return () => {
       cancelRest?.();
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
     };
-  }, [loadFindable, loadFeatures, loadDownloading]);
+  }, [loadFindable, loadFeatures, loadDownloading, refresh]);
 
   /** Ask for the Tracks again; one that can't be read now shows on the next load. */
   const reloadTracks = () => {
     api.tracks().then(
       (tracks) => {
         dispatch({ type: "loaded", tracks });
+        refresh();
       },
       () => undefined,
     );
@@ -467,6 +494,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       (track) => {
         if (latestSave.current.get(id) === seq) {
           dispatch({ type: "details", track });
+          refresh();
         }
       },
       () => undefined,
@@ -559,6 +587,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     aiSetUp,
     refreshFeatures: loadFeatures,
     loaded: store.loaded,
+    refreshes,
     error,
     mode,
     modeChecked: setMode,
@@ -576,15 +605,26 @@ export function useLibrary(onSignedOut: () => void): Library {
       jobOfTrack.current.delete(id);
       setLookup(id, { enricher, state: "queued", message: "" });
       let job: Job;
+      asking.current.add(id);
       try {
         job = await api.findDetails(enricher, id, again);
       } catch (failure) {
+        asking.current.delete(id);
+        stoppedEarly.current.delete(id);
         if (failure instanceof ApiError && failure.status === 401) {
           onSignedOut();
         }
         const message = failure instanceof Error ? failure.message : String(failure);
         setLookup(id, { enricher, state: "failed", message });
         throw failure;
+      }
+      asking.current.delete(id);
+      if (stoppedEarly.current.delete(id)) {
+        // Stopped while it was being asked for: the Job it became is cancelled at once.
+        setLookup(id, undefined);
+        await api.cancelJob(job.id).catch(() => undefined);
+        loadFindable();
+        return;
       }
       trackOfJob.current.set(job.id, id);
       jobOfTrack.current.set(id, job.id);
@@ -596,6 +636,20 @@ export function useLibrary(onSignedOut: () => void): Library {
       };
       setFindable(without);
       setAskedRecently(without);
+    },
+    stopFinding: async (id) => {
+      const job = jobOfTrack.current.get(id);
+      if (job === undefined) {
+        if (asking.current.has(id)) {
+          stoppedEarly.current.add(id);
+        }
+        return;
+      }
+      jobOfTrack.current.delete(id);
+      setLookup(id, undefined);
+      await api.cancelJob(job);
+      // Stopped, the Track offers the lookup again.
+      loadFindable();
     },
     setFavorite: (id, favorite) => {
       setError("");
@@ -636,6 +690,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     addLink: async (link, quality, parts) => {
       const added = await signedOutOn401(api.addLink(link, quality, parts));
       reloadTracks();
+      loadDownloading();
       return added;
     },
     download: (id) => signedOutOn401(api.download(id)),
@@ -687,14 +742,15 @@ function listed(playlists: readonly Playlist[]): Playlist[] {
 /**
  * Call `load` when the event stream (re)connects, which may have missed changes,
  * a moment after a scan or a Download finishes, and when the Mode goes Online or
- * Offline, which changes what can play; tell `onMode` each Mode the stream sends,
- * `onJob` each Job, `onWaitingDevices` the devices waiting for an answer, which
- * only an admin's stream sends, `onSpeaker` the computer playing for the Account,
- * and `onCommand` each command for this page while it is that computer. Return what
- * stops listening.
+ * Offline, which changes what can play; a moment after any other Job ends, call
+ * `refresh`, as it may change what is read beside the songs. Tell `onMode` each
+ * Mode the stream sends, `onJob` each Job, `onWaitingDevices` the devices waiting
+ * for an answer, which only an admin's stream sends, `onSpeaker` the computer
+ * playing for the Account, and `onCommand` each command for this page while it is
+ * that computer. Return what stops listening.
  */
 function listen(
-  load: () => void,
+  { load, refresh }: { readonly load: () => void; readonly refresh: () => void },
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
   onWaitingDevices: (waiting: readonly WaitingDevice[]) => void,
@@ -706,6 +762,8 @@ function listen(
   }
   const events = new EventSource(`/api/events?page=${PAGE_ID}`);
   let settling: ReturnType<typeof setTimeout> | undefined;
+  // Whether a Job that ended while settling may have changed the Tracks.
+  let tracksChanged = false;
   let connected = false;
   let online: boolean | undefined;
   events.addEventListener("ready", () => {
@@ -745,9 +803,18 @@ function listen(
   events.addEventListener("job", (event: MessageEvent<string>) => {
     const job = JSON.parse(event.data) as JobEvent;
     onJob(job);
-    if (CHANGES_TRACKS.has(job.kind) && FINISHED.has(job.state)) {
+    if (FINISHED.has(job.state) && !CHANGES_NOTHING.has(job.kind)) {
+      tracksChanged ||= CHANGES_TRACKS.has(job.kind);
       clearTimeout(settling);
-      settling = setTimeout(load, SETTLE_MS);
+      settling = setTimeout(() => {
+        const reload = tracksChanged;
+        tracksChanged = false;
+        if (reload) {
+          load();
+        } else {
+          refresh();
+        }
+      }, SETTLE_MS);
     }
   });
   return () => {

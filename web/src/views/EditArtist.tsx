@@ -239,7 +239,11 @@ export function EditArtist({
             <PictureFrame
               className="edit-artist-frame"
               replaceLabel={artist.photo === null ? "Add a photo" : "Replace the photo"}
-              save={artist.photo === null ? undefined : { href: coverUrl(artist.photo), name }}
+              save={
+                artist.photo === null
+                  ? undefined
+                  : { href: coverUrl(artist.photo, "original"), name }
+              }
               removeLabel="Remove your photo"
               busy={busy}
               saving={picturing ? "Saving the photo…" : undefined}
@@ -258,7 +262,7 @@ export function EditArtist({
                 ) : (
                   <img
                     className="edit-artist-picture"
-                    src={coverUrl(artist.photo)}
+                    src={coverUrl(artist.photo, "original")}
                     alt={`Photo of ${name}`}
                   />
                 )}
@@ -382,14 +386,6 @@ export function EditArtist({
           </p>
         )}
         <footer className="dialog-buttons">
-          <button
-            type="button"
-            className="secondary outline dialog-button"
-            disabled={saving}
-            onClick={() => dialog.current?.close()}
-          >
-            {changed ? "Cancel" : "Close"}
-          </button>
           <button
             type="submit"
             className="dialog-button"

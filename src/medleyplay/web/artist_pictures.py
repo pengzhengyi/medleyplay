@@ -7,10 +7,10 @@ dismisses is not made again.
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Path, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Path, Request, Response, status
+from pydantic import BaseModel, Field, TypeAdapter
 
 from medleyplay.application.artist_pictures import (
     MAX_FIND_TRACKS,
@@ -19,7 +19,8 @@ from medleyplay.application.artist_pictures import (
     PicturePick,
 )
 from medleyplay.plugin_api import MAX_HINT
-from medleyplay.web.deps import ArtistPicturesDep, SignedInAccount
+from medleyplay.web.cached import NOT_MODIFIED
+from medleyplay.web.deps import AnswersDep, ArtistPicturesDep, SignedInAccount
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
 photos_router = APIRouter(prefix="/api/artist-photos", tags=["artists"])
@@ -194,10 +195,24 @@ class FoundPhotosOut(BaseModel):
     asked: int
 
 
-@photos_router.get("/missing")
-def missing_photos(_: SignedInAccount, service: ArtistPicturesDep) -> MissingPhotosOut:
-    """Return every artist linked to MusicBrainz with no photo, and the photo suggested."""
-    return MissingPhotosOut(artists=[MissingPhotoOut.of(each) for each in service.missing()])
+MISSING_PHOTOS: Final = TypeAdapter(MissingPhotosOut)
+
+
+@photos_router.get("/missing", response_model=MissingPhotosOut, responses=NOT_MODIFIED)
+def missing_photos(
+    request: Request, _: SignedInAccount, service: ArtistPicturesDep, answers: AnswersDep
+) -> Response:
+    """Return every artist linked to MusicBrainz with no photo, and the photo suggested.
+
+    304 when the request holds the answer already.
+    """
+    return answers.answer(
+        request,
+        ("artist-photos-missing",),
+        lambda: MissingPhotosOut(artists=[MissingPhotoOut.of(each) for each in service.missing()]),
+        MISSING_PHOTOS,
+        heavy=True,
+    )
 
 
 @photos_router.post("/find")

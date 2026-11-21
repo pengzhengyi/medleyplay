@@ -2,8 +2,10 @@
  * @file The search box: what to look for, and where, the Library or a music site.
  *
  * With the Library chosen, it searches as you type, and a field named as `artist:`
- * becomes a tag the words after it fill. Under it, a panel suggests the artists the
- * search names, each to show, its songs, or its albums; in an empty box, resting the
+ * becomes a tag the words after it fill. Under it, a panel completes the tag or site a
+ * word being typed begins, as `bi` begins `bilibili:` (Tab takes the first), and
+ * suggests the artists the search names, each to show, its songs, or its albums; in
+ * an empty box, resting the
  * pointer or pressing ↓ lists the tags instead. A site a plugin provides is a choice
  * too: there the box takes a link or a bare video code, and Enter looks it up.
  */
@@ -30,7 +32,7 @@ import {
   parseQuery,
   tagText,
 } from "../library/query";
-import { suggestedArtists } from "../library/suggestions";
+import { type Completion, completionsOf, suggestedArtists } from "../library/suggestions";
 
 import { type Route, navigate } from "../routes";
 import { hintOf, useBindings } from "../shortcuts";
@@ -275,96 +277,116 @@ export function SearchBox({
     );
   };
 
-  const options: readonly PanelOption[] =
-    helping && empty
-      ? [
-          ...FIELDS.map((each) => ({
-            key: each,
-            className: "suggest-tag",
-            content: (
-              <>
-                <code>{each}:</code>
-                <span className="suggest-meta">{VALUE_HINTS[each]}</span>
-              </>
-            ),
-            does: { tag: each },
-          })),
-          ...providers.map((provider) => ({
-            key: `site-${provider}`,
-            className: "suggest-tag",
-            content: (
-              <>
-                <code>{provider}:</code>
-                <span className="suggest-meta">{`search ${SITE_NAMES[provider] ?? provider}`}</span>
-              </>
-            ),
-            does: { site: provider },
-          })),
-        ]
-      : suggesting && artists.length > 0
-        ? [
-            ...artists.flatMap((artist): PanelOption[] => [
-              {
-                key: `${artist.link}-page`,
-                row: artist.link,
-                className: "suggest-artist",
-                title: `Go to ${artist.name || "the songs with no artist"}`,
-                content: (
-                  <>
-                    <Cover cover={photoOf(artist.link)} className="suggest-initial">
-                      {initialOf(artist.name)}
-                    </Cover>
-                    <span className="suggest-name">{artist.name || "No artist"}</span>{" "}
-                    <span className="suggest-meta">{songCount(artist.count)}</span>
-                  </>
-                ),
-                does: {
-                  go: {
-                    view: "artist",
-                    name: artist.link,
-                    ...(artist.id !== undefined && { id: artist.id }),
-                  },
-                },
-              },
-              {
-                key: `${artist.link}-songs`,
-                row: artist.link,
-                className: "suggest-chip",
-                title: `Only ${artist.name}'s songs in the Library`,
-                content: (
-                  <>
-                    <MusicNotesIcon aria-hidden />
-                    <span className="suggest-chip-label">Songs</span>
-                  </>
-                ),
-                does: { go: { view: "library", artist: artist.link } },
-              },
-              {
-                key: `${artist.link}-albums`,
-                row: artist.link,
-                className: "suggest-chip",
-                title: `Only the albums ${artist.name} sings on`,
-                content: (
-                  <>
-                    <VinylRecordIcon aria-hidden />
-                    <span className="suggest-chip-label">Albums</span>
-                  </>
-                ),
-                does: { go: { view: "albums", artist: artist.link } },
-              },
-            ]),
+  /** The option starting `tag`, after the words `before` it. */
+  const tagOption = (tag: Field, before?: string): PanelOption => ({
+    key: tag,
+    className: "suggest-tag",
+    content: (
+      <>
+        <code>{tag}:</code>
+        <span className="suggest-meta">{VALUE_HINTS[tag]}</span>
+      </>
+    ),
+    does: before === undefined ? { tag } : { tag, before },
+  });
+
+  /** The option searching `site` for `rest`. */
+  const siteOption = (site: string, rest?: string): PanelOption => ({
+    key: `site-${site}`,
+    className: "suggest-tag",
+    content: (
+      <>
+        <code>{site}:</code>
+        <span className="suggest-meta">{`search ${SITE_NAMES[site] ?? site}`}</span>
+      </>
+    ),
+    does: rest === undefined ? { site } : { site, rest },
+  });
+
+  // The tags and sites the word being typed begins, offered first; Tab takes the first.
+  const completing = tagging && field === undefined ? completionsOf(query, providers) : undefined;
+  const completed: readonly PanelOption[] = (completing?.completions ?? []).map(
+    (each: Completion, at) => ({
+      ...("tag" in each
+        ? tagOption(each.tag, completing?.before)
+        : siteOption(each.site, completing?.before)),
+      ...(at === 0 && { shortcut: "Tab" }),
+    }),
+  );
+
+  // Each artist the search names, to show, its songs, or its albums; then grouping by artist.
+  const suggested: readonly PanelOption[] =
+    artists.length === 0
+      ? []
+      : [
+          ...artists.flatMap((artist): PanelOption[] => [
             {
-              key: "group",
-              className: "suggest-action",
+              key: `${artist.link}-page`,
+              row: artist.link,
+              className: "suggest-artist",
+              title: `Go to ${artist.name || "the songs with no artist"}`,
               content: (
                 <>
-                  <UsersThreeIcon aria-hidden />
-                  Group the Library by artist
+                  <Cover size="small" cover={photoOf(artist.link)} className="suggest-initial">
+                    {initialOf(artist.name)}
+                  </Cover>
+                  <span className="suggest-name">{artist.name || "No artist"}</span>{" "}
+                  <span className="suggest-meta">{songCount(artist.count)}</span>
                 </>
               ),
-              does: { go: { view: "library", group: "artist" } },
+              does: {
+                go: {
+                  view: "artist",
+                  name: artist.link,
+                  ...(artist.id !== undefined && { id: artist.id }),
+                },
+              },
             },
-          ]
+            {
+              key: `${artist.link}-songs`,
+              row: artist.link,
+              className: "suggest-chip",
+              title: `Only ${artist.name}'s songs in the Library`,
+              content: (
+                <>
+                  <MusicNotesIcon aria-hidden />
+                  <span className="suggest-chip-label">Songs</span>
+                </>
+              ),
+              does: { go: { view: "library", artist: artist.link } },
+            },
+            {
+              key: `${artist.link}-albums`,
+              row: artist.link,
+              className: "suggest-chip",
+              title: `Only the albums ${artist.name} sings on`,
+              content: (
+                <>
+                  <VinylRecordIcon aria-hidden />
+                  <span className="suggest-chip-label">Albums</span>
+                </>
+              ),
+              does: { go: { view: "albums", artist: artist.link } },
+            },
+          ]),
+          {
+            key: "group",
+            className: "suggest-action",
+            content: (
+              <>
+                <UsersThreeIcon aria-hidden />
+                Group the Library by artist
+              </>
+            ),
+            does: { go: { view: "library", group: "artist" } },
+          },
+        ];
+
+  const options: readonly PanelOption[] =
+    helping && empty
+      ? [...FIELDS.map((each) => tagOption(each)), ...providers.map((each) => siteOption(each))]
+      : suggesting
+        ? [...completed, ...suggested]
         : [];
   const open = options.length > 0;
   // The option pointed at, while the options still hold it.
@@ -375,10 +397,15 @@ export function SearchBox({
     if ("go" in option.does) {
       leaveFor(option.does.go);
     } else if ("site" in option.does) {
-      searchIn(option.does.site);
+      searchIn(option.does.site, option.does.rest);
       box.current?.focus();
     } else {
-      change({ tokens, field: option.does.tag, query: "" });
+      const before = option.does.before ?? "";
+      change({
+        tokens: before === "" ? tokens : [...tokens, { value: before }],
+        field: option.does.tag,
+        query: "",
+      });
       setSuggesting(false);
       box.current?.focus();
     }
@@ -551,6 +578,16 @@ export function SearchBox({
             if (open && event.key === "Enter" && pointed >= 0) {
               event.preventDefault();
               const chosen = options[pointed];
+              if (chosen !== undefined) {
+                choose(chosen);
+              }
+              return;
+            }
+            if (open && event.key === "Tab" && !event.shiftKey && completed.length > 0) {
+              // Tab takes the completion pointed at, or else the first.
+              event.preventDefault();
+              const taken = pointed >= 0 && pointed < completed.length ? pointed : 0;
+              const chosen = options[taken];
               if (chosen !== undefined) {
                 choose(chosen);
               }

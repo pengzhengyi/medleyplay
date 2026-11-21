@@ -42,7 +42,7 @@ export interface Track {
   readonly kind: Kind;
   /** Why it is that kind: settled, as named or split, or guessed. */
   readonly kind_reason: KindReason;
-  /** The cover shown, by name, served at `coverUrl(cover)`. */
+  /** The cover shown, by name, served at `coverUrl(cover, size)`. */
   readonly cover: string | null;
   /** What listeners elsewhere rated the song or its album, when enough did; it only shows. */
   readonly community: CommunityRating | null;
@@ -80,9 +80,28 @@ export function kindSettled(reason: KindReason): boolean {
   return reason === "named" || reason === "split" || reason === "segment";
 }
 
-/** Return where the cover named `cover` is served. */
-export function coverUrl(cover: string): string {
-  return `/api/covers/${cover}`;
+/**
+ * The number of how the server makes thumbnails: their sizes, quality, and rules. A
+ * thumbnail's URL carries it, so a new recipe reaches browsers that kept the old one.
+ */
+export const THUMBNAIL_RECIPE = 1;
+
+/**
+ * How large a cover is shown: a `small` thumbnail (128 pixels) in a song row or the
+ * player bar, a `medium` one (512 pixels) in a tile, or the `original` image.
+ */
+export type CoverSize = "small" | "medium" | "original";
+
+/**
+ * Return where the cover named `cover` is served at `size`.
+ *
+ * A thumbnail not made yet is sent on to the original, so it always shows.
+ */
+export function coverUrl(cover: string, size: CoverSize): string {
+  const original = `/api/covers/${cover}`;
+  return size === "original"
+    ? original
+    : `${original}?size=${size}&recipe=${String(THUMBNAIL_RECIPE)}`;
 }
 
 /** A detail of a Track the household can edit. */
@@ -130,6 +149,44 @@ export interface Details {
 
 /** Where a song's lyrics came from: the first held of each shows. */
 export type LyricsOrigin = "household" | "sidecar" | "tag" | "lrclib" | "netease";
+
+/** A song a lyrics site found of a title and artist, what tells it apart, and its lyrics. */
+export interface LyricsOption {
+  readonly provider: "lrclib" | "netease";
+  readonly title: string;
+  readonly artist: string;
+  readonly album: string;
+  readonly duration_ms: number | null;
+  /** LRC or plain text; empty for a song that is instrumental. */
+  readonly text: string;
+  readonly instrumental: boolean;
+}
+
+/** What was found when a song's lyrics were last looked for, and what is being asked. */
+export interface LyricsFound {
+  /** The title asked by; empty until asked. */
+  readonly title: string;
+  readonly artist: string;
+  /** The songs found, the closest in length first. */
+  readonly options: readonly LyricsOption[];
+  readonly found_at: string | null;
+  /** The song an AI model picked of those found, by its place, why, and who answered. */
+  readonly pick: {
+    readonly option: number;
+    readonly why: string;
+    readonly model: string;
+    readonly host: string;
+    readonly at: string;
+  } | null;
+  readonly finding: boolean;
+  readonly choosing: boolean;
+  readonly waiting: boolean;
+  readonly failure: string | null;
+  /** Why the last asking of an AI model failed. */
+  readonly choice_failure: string | null;
+  /** Whether an AI model may be asked to pick: one is set up, and none picked among these. */
+  readonly may_choose: boolean;
+}
 
 /** A site the household may turn on to be asked for the lyrics LRCLIB lacks. */
 export type LyricsSite = "netease";
@@ -1182,6 +1239,114 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
+/** The last answer read from a path, and the ETag it came with. */
+interface Held {
+  readonly etag: string;
+  readonly value: unknown;
+}
+
+/** The read under way for a path, and the one asked for after it, if any. */
+interface Flying {
+  readonly answer: Promise<unknown>;
+  next: Promise<unknown> | null;
+}
+
+/**
+ * Reads of answers the server caches, each asked with the ETag of the last answer
+ * held. A 304 gives back the very object held, so a caller sees that nothing changed
+ * by its identity alone.
+ *
+ * A request carrying `If-None-Match` skips the browser's cache, so the 304 reaches
+ * the page; the first read of a path, with nothing held, goes through that cache.
+ * One read per path runs at a time: one asked for meanwhile waits for a single read
+ * after it, shared by every caller who asked, so an older answer never lands after
+ * a newer one.
+ */
+export class HeldReads {
+  private readonly held = new Map<string, Held>();
+  private readonly flying = new Map<string, Flying>();
+  /** Moves on each `forget`, so an answer asked for before it isn't held after. */
+  private era = 0;
+
+  /** Read `path`, or wait for the read after the one under way. */
+  read<T>(path: string): Promise<T> {
+    const flying = this.flying.get(path);
+    if (flying === undefined) {
+      return this.start(path) as Promise<T>;
+    }
+    flying.next ??= flying.answer.then(ignore, ignore).then(() => this.start(path));
+    return flying.next as Promise<T>;
+  }
+
+  /** Forget every answer held, as when the Account signs out. */
+  forget(): void {
+    this.held.clear();
+    this.era += 1;
+  }
+
+  private start(path: string): Promise<unknown> {
+    const answer = this.ask(path).finally(() => {
+      const flying = this.flying.get(path);
+      // A read asked for meanwhile takes this one's place as it starts.
+      if (flying?.answer === answer && flying.next === null) {
+        this.flying.delete(path);
+      }
+    });
+    this.flying.set(path, { answer, next: null });
+    return answer;
+  }
+
+  private async ask(path: string): Promise<unknown> {
+    const era = this.era;
+    const kept = this.held.get(path);
+    const init: RequestInit = { credentials: "same-origin" };
+    if (kept !== undefined) {
+      init.headers = { "If-None-Match": kept.etag };
+    }
+    const response = await fetch(path, init);
+    if (response.status === 304) {
+      if (kept === undefined) {
+        throw new ApiError(304, "The server said nothing changed, but nothing was held.");
+      }
+      return kept.value;
+    }
+    if (!response.ok) {
+      throw await refusalOf(response);
+    }
+    const value: unknown = await response.json();
+    if (import.meta.env.DEV) {
+      freezeDeeply(value);
+    }
+    const etag = response.headers.get("ETag");
+    if (etag !== null && era === this.era) {
+      this.held.set(path, { etag, value });
+    }
+    return value;
+  }
+}
+
+function ignore(): void {
+  // A failed read still lets the one after it start.
+}
+
+/** Freeze `value` and everything in it, so code that changes an answer fails at once. */
+function freezeDeeply(value: unknown): void {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const each of Object.values(value)) {
+      freezeDeeply(each);
+    }
+  }
+}
+
+/** The held reads of this page; forgotten whenever the Account signed in changes. */
+const heldReads = new HeldReads();
+
+/** Forget every answer held, so the next Account starts with nothing. */
+export function forgetHeldReads(): void {
+  heldReads.forget();
+}
+
 /** Send `file` as the request's body, as it is. */
 async function send<T>(method: string, path: string, file: Blob): Promise<T> {
   const response = await fetch(path, { method, credentials: "same-origin", body: file });
@@ -1284,7 +1449,7 @@ export const api = {
   report: (page: string, state: SpeakerState) =>
     call<{ speaker: boolean }>("PUT", "/api/remote/report", { page, ...state }),
   command: (command: RemoteCommand) => call<undefined>("POST", "/api/remote/commands", { command }),
-  tracks: () => call<Track[]>("GET", "/api/tracks"),
+  tracks: () => heldReads.read<Track[]>("/api/tracks"),
   track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
   details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),
   /** Bind the song's artist `name` to one of the artists going by it, or `null` for another. */
@@ -1313,8 +1478,17 @@ export const api = {
   /** Drop the household's lyrics for the song; answers what it shows now. */
   forgetLyrics: (trackId: number) =>
     call<Lyrics | null>("DELETE", `/api/tracks/${String(trackId)}/lyrics`),
+  /** What was found when the song's lyrics were last looked for by hand. */
+  lyricsFound: (trackId: number) =>
+    call<LyricsFound>("GET", `/api/tracks/${String(trackId)}/lyrics/found`),
+  /** Look for the songs titled `title` by `artist` on the lyrics sites, for the song. */
+  findLyrics: (trackId: number, title: string, artist: string) =>
+    call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/find`, { title, artist }),
+  /** Ask an AI model which of the songs found is the song. */
+  chooseLyrics: (trackId: number) =>
+    call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/choose`),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
-  artistNames: () => call<ArtistNames>("GET", "/api/artist-names"),
+  artistNames: () => heldReads.read<ArtistNames>("/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */
   lookUpArtists: (names: readonly string[]) =>
     call<{ asked: number }>("POST", "/api/artist-names/look-up", { names }),
@@ -1350,7 +1524,7 @@ export const api = {
   findArtistPictures: (artistId: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/find`),
   /** Every artist linked to MusicBrainz with no photo, those with a photo suggested first. */
-  missingPhotos: () => call<{ artists: MissingPhoto[] }>("GET", "/api/artist-photos/missing"),
+  missingPhotos: () => heldReads.read<{ artists: MissingPhoto[] }>("/api/artist-photos/missing"),
   /** Ask Deezer about the artists with no photo of `trackIds`, or every one for `null`. */
   findPhotos: (trackIds: readonly number[] | null) =>
     call<{ asked: number }>("POST", "/api/artist-photos/find", { track_ids: trackIds }),
@@ -1383,8 +1557,8 @@ export const api = {
         : picturePath(pictured),
     ),
   /** Ask an AI model for links to a picture; nothing is fetched. */
-  suggestImageLinks: (pictured: Pictured) =>
-    call<null>("POST", `${picturePath(pictured)}/suggest`, pictureBody(pictured)),
+  suggestImageLinks: (pictured: Pictured, hint = "") =>
+    call<null>("POST", `${picturePath(pictured)}/suggest`, { ...pictureBody(pictured), hint }),
   /** Fetch the picture at a link suggested; answers its cover when it was fetched before. */
   approveImageLink: (pictured: Pictured, url: string) =>
     call<{ readonly cover: string | null }>("POST", `${picturePath(pictured)}/approve`, {
@@ -1395,7 +1569,7 @@ export const api = {
   useArtistPhotoCover: (artistId: string, cover: string) =>
     call<undefined>("POST", `/api/artists/${encodeURIComponent(artistId)}/photo/cover`, { cover }),
   /** The long files a song list was found for, to split or keep as one file. */
-  splitOffers: () => call<SplitOffers>("GET", "/api/split-offers"),
+  splitOffers: () => heldReads.read<SplitOffers>("/api/split-offers"),
   /** Split each file by the offer seen for it; one whose offer changed is left as it is. */
   splitFiles: (files: readonly { readonly track_id: number; readonly signature: string }[]) =>
     call<{ split: number; left: number }>("POST", "/api/split-offers/split", { files }),
@@ -1403,7 +1577,7 @@ export const api = {
   keepFiles: (trackIds: readonly number[]) =>
     call<{ kept: number }>("POST", "/api/split-offers/keep", { track_ids: trackIds }),
   /** The artist names written as several artists, to split, and those decided. */
-  artistSplits: () => call<ArtistSplits>("GET", "/api/artist-splits"),
+  artistSplits: () => heldReads.read<ArtistSplits>("/api/artist-splits"),
   /** Split each name into the artists it lists. */
   splitArtistNames: (names: readonly string[]) =>
     call<null>("POST", "/api/artist-splits/split", { names }),
@@ -1414,7 +1588,7 @@ export const api = {
   forgetArtistNames: (names: readonly string[]) =>
     call<null>("POST", "/api/artist-splits/forget", { names }),
   /** The names that may name several artists, most songs first. */
-  sharedNames: () => call<{ names: SharedName[] }>("GET", "/api/shared-names"),
+  sharedNames: () => heldReads.read<{ names: SharedName[] }>("/api/shared-names"),
   /** Bind each album's songs of a name to the artist chosen for them, confirming them. */
   tellApart: (name: string, albums: readonly SongsBy[]) =>
     call<null>("PUT", "/api/shared-names/albums", { name, albums }),
@@ -1425,7 +1599,7 @@ export const api = {
   forgetSharedNames: (names: readonly string[]) =>
     call<null>("POST", "/api/shared-names/forget", { names }),
   /** The artist and album names written with more than the name in them, tidied. */
-  namesToTidy: () => call<{ names: NameToTidy[] }>("GET", "/api/names-to-tidy"),
+  namesToTidy: () => heldReads.read<{ names: NameToTidy[] }>("/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */
   tidyName: (kind: NameToTidy["kind"], written: string) =>
     call<{ changed: number }>("POST", "/api/names-to-tidy/tidy", { kind, written }),
@@ -1533,6 +1707,8 @@ export const api = {
   downloads: () => call<DownloadUnderWay[]>("GET", "/api/downloads"),
   /** Run a failed or cancelled Job again, as a new Job. */
   retryJob: (jobId: number) => call<Job>("POST", `/api/jobs/${String(jobId)}/retry`),
+  /** Cancel a Job the Account asked for; cancelling one that ended changes nothing. */
+  cancelJob: (jobId: number) => call<Job>("POST", `/api/jobs/${String(jobId)}/cancel`),
   mode: () => call<Mode>("GET", "/api/mode"),
   /** Read the network and check the internet now; one reached is Online at once. */
   checkMode: () => call<Mode>("POST", "/api/mode/check"),

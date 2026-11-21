@@ -96,7 +96,7 @@ export function SuggestedPhoto({
           setChanging(true);
         }}
       >
-        <Cover cover={suggested} className="artist-tile" />
+        <Cover size="medium" cover={suggested} className="artist-tile" />
       </SuggestedFrame>
       {problem}
       {editor}

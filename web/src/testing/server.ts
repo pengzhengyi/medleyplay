@@ -5,6 +5,8 @@
 import { vi } from "vitest";
 
 import type {
+  LyricsFound,
+  LyricsOption,
   Lyrics,
   CoverRelease,
   AlbumCovers,
@@ -50,6 +52,8 @@ export interface Answer {
   readonly body?: unknown;
   /** Answer only once this settles, as a slow server would. */
   readonly after?: Promise<unknown>;
+  /** The answer's ETag: a request holding it is answered 304, as the server does. */
+  readonly etag?: string;
 }
 
 /** Routes keyed by method and path, such as `"GET /api/me"`. */
@@ -64,16 +68,17 @@ export function serve(routes: Routes): { readonly calls: string[] } {
     const found = routes[route];
     const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     const answer = typeof found === "function" ? found(body) : (found ?? { status: 404 });
-    const status = answer.status ?? 200;
+    const held = new Headers(init?.headers).get("If-None-Match");
+    const unchanged = answer.etag !== undefined && held === answer.etag;
+    const status = unchanged ? 304 : (answer.status ?? 200);
+    const headers: Record<string, string> = answer.etag === undefined ? {} : { ETag: answer.etag };
     return (answer.after ?? Promise.resolve()).then(
       () =>
         new Response(
-          status === 204
+          status === 204 || status === 304
             ? null
             : JSON.stringify(answer.body === undefined ? { detail: "Not Found" } : answer.body),
-          {
-            status,
-          },
+          { status, headers },
         ),
     );
   });
@@ -753,6 +758,41 @@ export function lyricsOf(change: Partial<Lyrics> = {}): Lyrics {
     plain: "",
     text: "[00:12.34]朝目が覚めて\n",
     found_at: "2026-11-17T12:00:00Z",
+    ...change,
+  };
+}
+
+/** *Melt* by ryo as LRCLIB has it, 4:20 long, timed, with `change` on top. */
+export function lyricsOptionOf(change: Partial<LyricsOption> = {}): LyricsOption {
+  return {
+    provider: "lrclib",
+    title: "Melt",
+    artist: "ryo",
+    album: "Re:Start",
+    duration_ms: 260_000,
+    text: "[ar:ryo]\n[00:12.34]朝目が覚めて\n[00:15.50]真っ先に思い浮かぶ\n[00:18.00]君の顔\n",
+    instrumental: false,
+    ...change,
+  };
+}
+
+/** What was found looking for *Melt* by ryo: `options`, with `change` on top. */
+export function lyricsFoundOf(
+  options: readonly LyricsOption[] = [lyricsOptionOf()],
+  change: Partial<LyricsFound> = {},
+): LyricsFound {
+  return {
+    title: "Melt",
+    artist: "ryo",
+    options,
+    found_at: "2026-11-19T12:00:00Z",
+    pick: null,
+    finding: false,
+    choosing: false,
+    waiting: false,
+    failure: null,
+    choice_failure: null,
+    may_choose: false,
     ...change,
   };
 }

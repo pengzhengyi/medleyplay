@@ -33,6 +33,7 @@ from medleyplay.domain.errors import (
     NotSignedInError,
     SignInRefusedError,
 )
+from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.persistence.schema import AccountRow, SessionRow
 
 SESSION_IDLE_TIMEOUT: Final = timedelta(days=30)
@@ -209,9 +210,13 @@ class AccountService:
             return self._start_session(db, row, device_id)
 
     def authenticate(self, token: str) -> Account:
-        """Return the Account a session token belongs to, keeping the session alive."""
+        """Return the Account a session token belongs to, keeping the session alive.
+
+        Keeping it alive is bookkeeping no cached answer is built from, so it leaves the
+        database revision alone.
+        """
         now = self._clock()
-        with self._units.begin() as db:
+        with DatabaseRevision.ignoring(), self._units.begin() as db:
             found = db.scalars(
                 select(SessionRow).where(SessionRow.token_hash == hash_token(token))
             ).one_or_none()

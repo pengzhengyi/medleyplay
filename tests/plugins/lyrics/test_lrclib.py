@@ -10,12 +10,22 @@ import pytest
 from medleyplay.plugin_api import (
     EnrichStatus,
     EnrichTrack,
+    FindLyrics,
+    FindStatus,
     FoundLyrics,
+    LyricsOption,
     LyricsProvider,
     NetworkError,
     ShownDetail,
 )
-from medleyplay.plugins.lyrics.lrclib import GET, MAX_ATTEMPTS, SEARCH, USER_AGENT, Lrclib
+from medleyplay.plugins.lyrics.lrclib import (
+    GET,
+    MAX_ATTEMPTS,
+    MAX_OFFERED,
+    SEARCH,
+    USER_AGENT,
+    Lrclib,
+)
 from tests.support.transport import FakeTransport, FakeWaits, Reply
 
 MELT = """\
@@ -174,3 +184,74 @@ def test_lyrics_answered_in_another_shape_are_invalid() -> None:
     found = lrclib_of(fake).enrich(asking_for_melt())
 
     assert found.status is EnrichStatus.INVALID
+
+
+def finding_melt(duration_ms: int | None = 260_400) -> FindLyrics:
+    """Find the songs titled *Melt* by ryo, as long as the file is."""
+    return FindLyrics(title="Melt", artist="ryo", duration_ms=duration_ms)
+
+
+def test_the_songs_found_by_title_and_artist_are_offered_closest_in_length_first() -> None:
+    acoustic = melt(id=2, trackName="Melt (Acoustic)", duration=291.0, syncedLyrics=None)
+    fake = FakeTransport().answer(SEARCH, Reply.json([acoustic, melt()]))
+
+    found = lrclib_of(fake).find(finding_melt())
+
+    assert found.options == (
+        LyricsOption(
+            provider=LyricsProvider.LRCLIB,
+            title="Melt",
+            artist="ryo",
+            album="Re:Start",
+            duration_ms=260_000,
+            text=MELT,
+        ),
+        LyricsOption(
+            provider=LyricsProvider.LRCLIB,
+            title="Melt (Acoustic)",
+            artist="ryo",
+            album="Re:Start",
+            duration_ms=291_000,
+            text="朝目が覚めて\n真っ先に思い浮かぶ",
+        ),
+    )
+    assert (fake.parameter("track_name"), fake.parameter("artist_name")) == ("Melt", "ryo")
+
+
+def test_a_song_found_with_no_lyrics_is_not_offered_and_an_instrumental_is() -> None:
+    wordless = melt(id=2, plainLyrics=None, syncedLyrics=None)
+    instrumental = melt(id=3, trackName="Melt (Off Vocal)", instrumental=True, syncedLyrics=None)
+    fake = FakeTransport().answer(SEARCH, Reply.json([wordless, instrumental]))
+
+    found = lrclib_of(fake).find(finding_melt())
+
+    assert [(each.title, each.instrumental) for each in found.options] == [
+        ("Melt (Off Vocal)", True)
+    ]
+
+
+def test_a_song_of_no_known_length_keeps_the_order_lrclib_found_its_songs_in() -> None:
+    first, second = melt(id=1, trackName="Melt A"), melt(id=2, trackName="Melt B", duration=10.0)
+    fake = FakeTransport().answer(SEARCH, Reply.json([first, second]))
+
+    found = lrclib_of(fake).find(finding_melt(duration_ms=None))
+
+    assert [each.title for each in found.options] == ["Melt A", "Melt B"]
+
+
+def test_at_most_a_few_songs_are_offered_from_lrclib() -> None:
+    many = [melt(id=at, trackName=f"Melt {at}") for at in range(MAX_OFFERED + 3)]
+    fake = FakeTransport().answer(SEARCH, Reply.json(many))
+
+    found = lrclib_of(fake).find(finding_melt())
+
+    assert len(found.options) == MAX_OFFERED
+
+
+def test_lrclib_refusing_a_search_is_a_refusal() -> None:
+    fake = FakeTransport().answer(SEARCH, Reply.json({"code": 403}, status=403))
+
+    found = lrclib_of(fake).find(finding_melt())
+
+    assert found.status is FindStatus.REFUSED
+    assert found.options == ()

@@ -57,7 +57,7 @@ export function HistoryList({
                     }
                   }}
                 >
-                  <Cover cover={track?.cover ?? null} className="thumb" />
+                  <Cover size="small" cover={track?.cover ?? null} className="thumb" />
                   {track !== undefined && <KindMark kind={track.kind} reason={track.kind_reason} />}
                   <span className="entry-title">{title}</span>
                   <span className="entry-artist">{track?.artist}</span>

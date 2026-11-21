@@ -40,6 +40,44 @@ function requestClose(dialog: HTMLElement) {
 }
 
 describe("a modal", () => {
+  it("closes from the ✕ at its top right", async () => {
+    const { dialog, onClose } = renderModal();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(dialog).not.toHaveAttribute("open");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("offers no ✕ to press while locked", () => {
+    renderModal(true);
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+  });
+
+  it("focuses itself on opening while it has no field yet, not the ✕", () => {
+    const onClose = vi.fn();
+    function Empty() {
+      const ref = useRef<HTMLDialogElement>(null);
+      return (
+        <Modal ref={ref} className="test" labelledBy="empty-title" onClose={onClose}>
+          <div className="card">
+            <h2 id="empty-title">Loading</h2>
+          </div>
+        </Modal>
+      );
+    }
+    render(<Empty />);
+
+    expect(screen.getByRole("dialog", { name: "Loading" })).toHaveFocus();
+  });
+
+  it("focuses its own first field on opening, not the ✕", () => {
+    renderModal();
+
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveFocus();
+  });
+
   it("closes on a close request such as the Back button", () => {
     const { dialog, onClose } = renderModal();
 

@@ -335,6 +335,9 @@ and the full views are in [Web client](Web%20client.md).
   point at a row, a row's actions and the seek bar's thumb always show.
 - **The player** shows the Track, shuffle, previous, play and pause, next,
   repeat, a seek bar, the volume, and the time.
+  - **Under the title, the song's artists and its album are links** to their
+    pages (*周杰伦, 费玉清 — 叶惠美*), each artist to its own page by its id, as
+    Now Playing's names are. A file that is the album itself leaves the album out.
   - **One persistent `<audio>` element;** the next Track swaps its `src`, so
     autoplay keeps working on iOS after the first tap.
   - **The next Track is asked for ahead of time,** once the current one loads,

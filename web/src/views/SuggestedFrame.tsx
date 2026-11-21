@@ -2,8 +2,8 @@
  * @file A picture suggested as an artist's photo, ringed and tagged as a suggestion, that
  * is its own controls.
  *
- * Its lower half uses it, its upper right quarter dismisses it, and its upper left
- * quarter opens the photo editor to choose another. Each shows its icon on hover or
+ * Its lower two thirds use it; of its top third, the right half dismisses it and the
+ * left half opens the photo editor to choose another. Each shows its icon on hover or
  * focus, always on a touch screen, and turns the ring green, red, or solid.
  */
 

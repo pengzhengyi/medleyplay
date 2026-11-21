@@ -1,5 +1,6 @@
 /**
- * @file The long files a song list was found for, read again whenever the Tracks change.
+ * @file The long files a song list was found for, read again whenever the Library may
+ * have changed.
  */
 
 import { type SplitOffers, api } from "../api";

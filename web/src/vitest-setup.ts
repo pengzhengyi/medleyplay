@@ -1,11 +1,12 @@
 /**
  * @file Adds the Testing Library matchers to Vitest, stands in for media playback, pointer
- * capture, dialogs, and object URLs, and unmounts between tests.
+ * capture, dialogs, and object URLs, and unmounts and forgets held answers between tests.
  */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach } from "vitest";
 
+import { forgetHeldReads } from "./api";
 import { forgetBindings } from "./shortcuts";
 
 // The first render of a file loads its modules; in a full run, beside every other
@@ -43,4 +44,6 @@ afterEach(() => {
   cleanup();
   // The shortcuts live in one place for the whole page; each test is a new page.
   forgetBindings();
+  // Each test is a new page, with no answer held from another.
+  forgetHeldReads();
 });

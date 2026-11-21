@@ -25,12 +25,18 @@ test("a song list typed beside the details is checked line by line, then fills t
   ).toBeVisible();
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type("0:00 Intro\n0:30 Night Drive - Blue Room");
-  await dialog.getByRole("button", { name: "Use these 2 songs" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
+  // Saved, the details show the file split in two.
+  const split = dialog.getByRole("button", { name: "2 songs" });
+  await expect(split).toBeVisible();
+  await split.click();
   await expect(dialog.getByRole("textbox", { name: "Title of song 2" })).toHaveValue("Night Drive");
   await expect(dialog.getByRole("textbox", { name: "Artist of song 2" })).toHaveValue("Blue Room");
-  await dialog.getByRole("button", { name: "Details" }).click();
-  await expect(dialog.getByRole("textbox", { name: "Title" })).toBeVisible();
+  // Unsplit again, so the file is whole for the tests after.
+  await dialog.getByRole("button", { name: "Unsplit", exact: true }).click();
+  await dialog.getByRole("button", { name: "Unsplit and remove 2 songs" }).click();
+  await expect(dialog.getByRole("button", { name: "Split into songs" })).toBeVisible();
 });
 
 test("an empty song list's caret is one line tall, not as tall as the two-line example", async ({

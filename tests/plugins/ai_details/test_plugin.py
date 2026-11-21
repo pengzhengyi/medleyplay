@@ -16,6 +16,7 @@ def test_the_plugin_answers_each_of_its_operations_for_the_key_ai_details() -> N
         ("cover_chooser", "ai-details", "choose"),
         ("image_fetcher", "ai-details", "fetch"),
         ("image_suggester", "ai-details", "suggest"),
+        ("lyrics_chooser", "ai-details", "choose"),
         ("picture_chooser", "ai-details", "choose"),
         ("track_enricher", "ai-details", "enrich"),
     ]

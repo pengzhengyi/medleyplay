@@ -418,7 +418,7 @@ function QueueItem({
       >
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
-      <Cover cover={track?.cover ?? null} className="thumb" />
+      <Cover size="small" cover={track?.cover ?? null} className="thumb" />
       {track !== undefined && <KindMark kind={track.kind} reason={track.kind_reason} />}
       <button
         type="button"

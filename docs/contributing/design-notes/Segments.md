@@ -183,10 +183,15 @@ as one file.
     as it is typed with `POST …/songs/check`, so each line that is no song is
     marked and listed with why, and a problem chosen moves to its line. The
     parser is the paste's, so what checks clean is what the server takes.
+    *Save* waits for the list to check clean, then fills the rows from it and
+    saves them, asking first when that removes songs; pressing *List* again
+    goes back to the rows, leaving them as they were.
   - **The video's list**, one button per list found in its details.
   - ***AI*** uses the list the AI suggested, or, with none yet, asks the AI
     about the file as *Suggest details with AI* does, says so while it runs,
-    and fills the rows once it answers.
+    and fills the rows once it answers. Pressed again while it runs, it stops
+    asking; closing the editor while it runs stops it too, cancelling the
+    lookup's Job, so no answer is waited for that nobody will see.
 - **A list filled in keeps each song it still names:** a song with the same
   title, folded, or else starting at the same time, keeps its id, so filling
   from a list after editing the text loses no ratings or plays. What filled the

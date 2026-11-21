@@ -126,6 +126,17 @@ describe("Now Playing", () => {
     expect(within(nowPlaying).getByRole("link", { name: "Blue" })).toBeInTheDocument();
   });
 
+  it("names in the player the song's artist and album, each opening its page", async () => {
+    await playingIntro();
+    const player = screen.getByRole("region", { name: "Player" });
+
+    await userEvent.click(within(player).getByRole("link", { name: "The Band" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "The Band" })).toBeVisible();
+    await userEvent.click(within(player).getByRole("link", { name: "Blue" }));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Blue" })).toBeVisible();
+  });
+
   it("offers no cover to open while nothing plays", async () => {
     serve(signedIn([trackOf(1, "Intro")]));
     render(<App />);

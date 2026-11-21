@@ -1254,7 +1254,7 @@ button[aria-disabled="true"] {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template: 1fr 2fr / 1fr 1fr;
+  grid-template: 1fr 1fr / 1fr 1fr;
   margin: 0;
   overflow: hidden;
   border-radius: 50%;

@@ -35,8 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   going through *Edit details*.
 
 - **A suggested photo is its own controls** — on an artist's page and in Clean up,
-  its lower two thirds use it, its top third's right half dismisses it (never suggested
-  again), and its left half opens the photo editor; the ring turns green or red to say which.
+  its lower half uses it, its top half's right quarter dismisses it (never suggested
+  again), and its left quarter opens the photo editor; the ring turns green or red to say which.
   An artist's photo opens the photo editor from the page itself. New:
   `POST /api/artists/{id}/pictures/dismiss` (migration 0056).
 

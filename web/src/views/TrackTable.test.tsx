@@ -949,6 +949,74 @@ describe("the Library", () => {
   });
 });
 
+describe("folding all", () => {
+  it("opens every split file's songs, then folds them again", async () => {
+    renderLibrary();
+
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    const opened = shownTitles();
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+
+    expect(opened).toEqual(["Melt", "生如夏花", "傲慢的上校", "浮游", "生如夏花", "Bremen"]);
+    expect(shownTitles()).toEqual(["Melt", "生如夏花", "Bremen"]);
+  });
+
+  it("folds every group, then opens them again", async () => {
+    renderTable(LIBRARY);
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Artist");
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    const folded = shownTitles();
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }));
+
+    expect(folded).toEqual([]);
+    expect(shownTitles()).toHaveLength(5);
+  });
+
+  it("keeps the last choice in this browser for the next visit", async () => {
+    const first = renderLibrary();
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    first.unmount();
+
+    renderLibrary();
+
+    expect(shownTitles()).toEqual(["Melt", "生如夏花", "傲慢的上校", "浮游", "生如夏花", "Bremen"]);
+    expect(screen.getByRole("button", { name: "Collapse all" })).toBeVisible();
+  });
+
+  it("opens new groups folded once Collapse all was chosen", async () => {
+    renderTable(LIBRARY);
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Artist");
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Album");
+
+    expect(shownTitles()).toEqual([]);
+    expect(screen.getAllByRole("button", { expanded: false })).toHaveLength(3);
+  });
+
+  it("plays every song of the folded groups that can play, in the order shown", async () => {
+    const { actions } = renderTable(LIBRARY);
+    await userEvent.selectOptions(screen.getByLabelText("Group by"), "Artist");
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Play all" }));
+
+    expect(vi.mocked(actions.onPlayAll).mock.calls[0]?.[0].map((track) => track.title)).toEqual([
+      "Colorful Days",
+      "生如夏花",
+      "Let Down",
+      "New Song",
+    ]);
+  });
+
+  it("is not offered when nothing folds", () => {
+    renderTable(LIBRARY);
+
+    expect(screen.queryByRole("button", { name: /^(Expand|Collapse) all$/u })).toBeNull();
+  });
+});
+
 describe("showing a song asked for", () => {
   it("lights the song and moves to its title, once", async () => {
     const onFocused = vi.fn();

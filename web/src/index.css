@@ -3407,6 +3407,33 @@ details.dropdown[open] > summary.filter-summary {
   font-size: 0.85rem;
 }
 
+/* Expand all or Collapse all: quiet beside Group by, as Filter is. */
+.table-tools button.fold-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+
+.table-tools button.fold-all:hover,
+.table-tools button.fold-all:focus-visible {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.table-tools button.fold-all:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .group-by-select {
   width: auto;
   margin: 0;

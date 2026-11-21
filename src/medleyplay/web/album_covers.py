@@ -69,6 +69,7 @@ class AlbumCoversOut(BaseModel):
     due: bool = Field(
         description="Whether the album may be searched on its own: never, or in vain long ago."
     )
+    may_find: bool = Field(description="Whether the MusicBrainz plugin is on to be asked.")
 
     @staticmethod
     def of(known: AlbumCovers) -> "AlbumCoversOut":
@@ -94,6 +95,7 @@ class AlbumCoversOut(BaseModel):
             may_choose=known.may_choose,
             suggested=known.suggested,
             due=known.due,
+            may_find=known.may_find,
         )
 
 

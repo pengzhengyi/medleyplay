@@ -174,6 +174,7 @@ class AlbumCovers:
     model may be asked: one is set up, the covers are found, and none picked among them.
     `suggested` is the cover suggested as the album's, if any, and `due` says the album
     may be searched on its own: never searched, or searched in vain over 30 days ago.
+    `may_find` says MusicBrainz is on to be asked.
     """
 
     covers: tuple[FoundAlbumCover, ...]
@@ -187,6 +188,7 @@ class AlbumCovers:
     may_choose: bool
     suggested: str | None = None
     due: bool = False
+    may_find: bool = False
 
 
 class AlbumCoverService:
@@ -291,6 +293,7 @@ class AlbumCoverService:
             and CHOOSER in self._plugins.available_keys().get(COVER_CHOOSER.name, []),
             suggested=suggested,
             due=row is None or (not found and self._clock() - row.found_at > SEARCHED_IN_VAIN),
+            may_find=FINDER in self._plugins.available_keys().get(COVER_FINDER.name, []),
         )
 
     def dismiss(self, caller: Account, album: str, artist: str, cover: str) -> None:

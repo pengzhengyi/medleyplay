@@ -170,8 +170,12 @@ def test_dismissing_a_cover_not_found_for_the_album_is_refused(
         enriching.album_covers.dismiss(alice, "Help!", "The Beatles", "0" * 64)
 
 
-def test_an_album_never_searched_is_due_a_search(enriching: Enriching, alice: Account) -> None:
-    assert enriching.album_covers.covers(alice, "Help!", "The Beatles").due
+def test_an_album_never_searched_is_due_a_search_musicbrainz_may_answer(
+    enriching: Enriching, alice: Account
+) -> None:
+    known = enriching.album_covers.covers(alice, "Help!", "The Beatles")
+
+    assert (known.due, known.may_find) == (True, True)
 
 
 def test_an_album_whose_covers_were_found_is_not_due_a_search(

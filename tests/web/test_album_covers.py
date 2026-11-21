@@ -57,6 +57,7 @@ def test_nothing_is_known_of_an_albums_covers_until_asked(client: TestClient) ->
         "may_choose": False,
         "suggested": None,
         "due": True,
+        "may_find": False,
     }
 
 

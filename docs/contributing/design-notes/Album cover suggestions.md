@@ -102,9 +102,18 @@ The search already asks MusicBrainz for that title by that artist and drops weak
 answers, so this rule rejects only the near misses that would put a wrong cover on
 the album in one click. *Change* always opens the editor's grid of every cover found.
 
-Before building, the rule's hit rate is measured on the `album_cover_search` rows the
-preview library already holds, offline, against the stricter rule of equal folded
-names, and the numbers go into this note.
+### Measured, and what it changed
+
+On the preview library's 17 searched albums, the rule and the stricter rule of equal
+folded names suggest a cover for the same 5: every release a search keeps already
+has the album's title and artist. The 12 others found nothing at all, and 11 of them
+have songs linked to a MusicBrainz artist. The search asked for the written artist,
+such as *Jay周杰伦*, *陶喆/David Tao*, or *Prince王子*, a name MusicBrainz doesn't hold.
+
+So **the search names the linked artists.** When the album's songs are linked to
+MusicBrainz artists, the release search asks for the title by any of them, by their
+ids (`release:"我很忙" AND arid:(…)`); an album with no linked artist is searched by
+its written artist, as now. The rule stays as the guard for a one-click *Use*.
 
 ## When medleyplay searches
 
@@ -202,6 +211,7 @@ covers in the same pass.
 | `album_cover_dismissal` | `persistence/schema.py`, migration 0059 | New: `(key, cover)` |
 | `CoverSearch`, `Settings.find_album_covers`, `Settings.pick_album_covers_by_ai` | `domain/settings.py` | New |
 | `FindCovers.tried` | `plugin_api/album_covers.py` | New: how many releases to try, 12 by default |
+| `FindCovers.artist_ids`, `release_query(album, artist, artist_ids)` | `plugin_api/album_covers.py`, `plugins/musicbrainz/matching.py` | New: the album's linked MusicBrainz artists, searched by id when there are any |
 | `suggested_cover(found, pick, dismissed, names)` | `domain/covers.py` | New: the rule above, pure |
 | `AlbumCoverService.missing()` | `application/album_covers.py` | New: grouped in SQL on the written album and artist, folded and merged in Python; searches read with one `IN`, and finding from the active Job targets |
 | `AlbumCoverService.find_missing(caller, track_ids, every)` | `application/album_covers.py` | New: queues background searches, paced |
@@ -233,6 +243,8 @@ covers in the same pass.
 - **`suggested_cover`:** the pick first; else the best-ranked match; an edition note on
   either side still matches; an alias of a linked artist matches; a near miss suggests
   nothing; dismissed covers are skipped, the pick included.
+- **`release_query`:** an album with linked artists asks for any of their ids; one
+  without asks for its written artist.
 - **`album_key`:** agrees with the page's `fold` on kana, case, and spaces; the
   migration rekeys rows so a search kept before is still found.
 - **`AlbumCoverService`:** `missing()` lists albums without a cover, suggested first,
@@ -254,7 +266,7 @@ covers in the same pass.
 ## Built in two steps
 
 1. **The server and the album page:** the one fold and migration 0059, the rule, the
-   page-open search, `use` and `dismiss`, and the suggestion on the page.
+   search by linked artists, the page-open search, `use` and `dismiss`, and the suggestion on the page.
 2. **Clean up and the background:** `missing()`, the settings, the paced background
    search with its AI pick, the Clean up section, and the look-ahead.
 

@@ -23,6 +23,7 @@ from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
 from tests.support.images import jpeg_image
+from tests.support.musicbrainz import BEATLES
 from tests.support.plugins.reader import HELP_CD, HELP_VINYL
 
 
@@ -96,6 +97,21 @@ def test_an_album_is_keyed_as_the_page_groups_it_katakana_as_hiragana() -> None:
 def test_an_album_is_keyed_as_the_page_groups_it_lower_cased_not_case_folded() -> None:
     assert album_key("STRASSE", "") == album_key("strasse", "")
     assert album_key("Straße", "") != album_key("Strasse", "")
+
+
+def test_an_album_by_an_artist_linked_to_musicbrainz_is_searched_by_that_artist(
+    enriching: Enriching, alice: Account
+) -> None:
+    enriching.add_song("Ticket to Ride", artist="披头士", album="Help!")
+    enriching.artists.look_up(alice, ["披头士"])
+    enriching.finish_every_job()
+    enriching.artists.link(alice, "披头士", BEATLES)
+
+    enriching.album_covers.find(alice, "Help!", "披头士")
+    enriching.finish_every_job()
+
+    found = enriching.album_covers.covers(alice, "Help!", "披头士")
+    assert [each.option.release_id for each in found.covers] == [HELP_VINYL, HELP_CD]
 
 
 def test_nothing_is_known_of_an_albums_covers_until_asked(

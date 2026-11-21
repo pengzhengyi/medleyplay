@@ -103,6 +103,21 @@ def test_the_album_and_its_artist_are_searched_for(tmp_path: Path) -> None:
     assert fake.parameter("query") == 'release:"生如夏花" AND artist:"朴树"'
 
 
+def test_an_album_by_an_artist_musicbrainz_knows_is_searched_for_by_its_id(
+    tmp_path: Path,
+) -> None:
+    fake = shu_pu_covers()
+    shu_pu = "8d5a4a0c-2c4e-4c63-a6f5-7d4b8c3f9e21"
+
+    finder_of(fake).find(
+        FindCovers(
+            album="生如夏花", artist="朴树Pu Shu", artist_ids=(shu_pu,), folder=str(tmp_path)
+        )
+    )
+
+    assert fake.parameter("query") == f'release:"生如夏花" AND arid:("{shu_pu}")'
+
+
 def test_an_album_with_no_artist_is_searched_for_by_its_name_alone(tmp_path: Path) -> None:
     fake = shu_pu_covers()
 

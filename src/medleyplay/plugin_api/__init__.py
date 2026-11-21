@@ -16,6 +16,7 @@ from medleyplay.plugin_api.album_covers import (
     COVER_CHOOSER,
     COVER_FINDER,
     FIND_COVERS,
+    MAX_ARTIST_IDS,
     MAX_COVERS,
     ChooseCover,
     ChosenCover,
@@ -25,6 +26,7 @@ from medleyplay.plugin_api.album_covers import (
     FindCovers,
     FoundCover,
     FoundCovers,
+    MusicBrainzArtistId,
     ReleaseId,
 )
 from medleyplay.plugin_api.artist_pictures import (
@@ -273,6 +275,7 @@ __all__ = [
     "MAX_AI_PROVIDERS",
     "MAX_ALIASES",
     "MAX_ARTISTS",
+    "MAX_ARTIST_IDS",
     "MAX_CHOICES",
     "MAX_COVERS",
     "MAX_COVER_BYTES",
@@ -384,6 +387,7 @@ __all__ = [
     "LyricsProvider",
     "MadeThumbnails",
     "MakeThumbnails",
+    "MusicBrainzArtistId",
     "NameToChoose",
     "NetworkError",
     "Operation",

@@ -15,6 +15,7 @@ Let Down, album OK Computer
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -46,15 +47,24 @@ def recording_query(title: str, artist: str, album: str | None = None) -> str:
     return " AND ".join(parts)
 
 
-def release_query(album: str, artist: str) -> str:
-    """Return the query for a release called `album` by `artist`, or by anyone for no artist.
+_MBID: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def release_query(album: str, artist: str, artist_ids: Sequence[str] = ()) -> str:
+    """Return the query for a release called `album` by any of the artists `artist_ids`.
+
+    With no ids, it is by `artist` as written, or by anyone for no artist.
 
     ```text
+    release:"我很忙" AND arid:("a223958d-…" OR "9b1a3c0e-…")
     release:"生如夏花" AND artist:"朴树"
     release:"生如夏花"
     ```
     """
     query = f'release:"{escape_lucene(album)}"'
+    ids = [f'"{each}"' for each in artist_ids if _MBID.fullmatch(each)]
+    if ids:
+        return f"{query} AND arid:({' OR '.join(ids)})"
     return f'{query} AND artist:"{escape_lucene(artist)}"' if artist else query
 
 

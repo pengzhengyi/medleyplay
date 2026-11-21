@@ -31,10 +31,16 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.enrichers import AI_DETAILS, MUSICBRAINZ
 from medleyplay.domain.errors import ConflictError, InvalidInputError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
-from medleyplay.persistence.schema import AlbumCoverSearchRow, TrackRow
+from medleyplay.persistence.schema import (
+    AlbumCoverSearchRow,
+    LibraryArtistRow,
+    TrackArtistRow,
+    TrackRow,
+)
 from medleyplay.plugin_api import (
     COVER_CHOOSER,
     COVER_FINDER,
+    MAX_ARTIST_IDS,
     MAX_NAME,
     MAX_SONGS_SHOWN,
     CoverOption,
@@ -199,7 +205,9 @@ class AlbumCoverService:
         if FINDER not in self._plugins.available_keys().get(COVER_FINDER.name, []):
             message = "Turn on the MusicBrainz plugin to find covers."
             raise ConflictError(message)
-        request = FindCoversJob(album=album, artist=artist, finder=FINDER)
+        with self._units() as db:
+            linked = linked_artists_of(db, album, artist)
+        request = FindCoversJob(album=album, artist=artist, artist_ids=linked, finder=FINDER)
         self._jobs.submit(self._kinds.find, find_covers_target(album, artist), request, caller.id)
 
     def choose(self, caller: Account, album: str, artist: str) -> None:
@@ -301,6 +309,42 @@ def _pick_of(row: AlbumCoverSearchRow, found: tuple[FoundAlbumCover, ...]) -> Co
     return CoverPick(
         release_id=row.pick, why=row.why, model=row.model, host=row.host, at=row.chosen_at
     )
+
+
+def track_ids_of(db: Session, album: str, artist: str) -> list[int]:
+    """Return the Tracks of the album, as the Library writes it."""
+    key = album_key(album, artist)
+    rows = db.execute(
+        select(TrackRow.id, TrackRow.album, TrackRow.album_artist, TrackRow.artist).where(
+            TrackRow.album != ""
+        )
+    )
+    return [
+        track_id
+        for track_id, written, album_artist, track_artist in rows
+        if album_key(written, album_artist or track_artist) == key
+    ]
+
+
+def linked_artists_of(db: Session, album: str, artist: str) -> tuple[str, ...]:
+    """Return the MusicBrainz artists the album's songs are linked to, a few at most.
+
+    Those its album artists name come first; without any, those its songs' main artists name.
+    """
+    track_ids = track_ids_of(db, album, artist)
+    rows = db.execute(
+        select(TrackArtistRow.album_artist, LibraryArtistRow.musicbrainz_id)
+        .join(LibraryArtistRow, LibraryArtistRow.id == TrackArtistRow.artist_id)
+        .where(
+            TrackArtistRow.track_id.in_(track_ids),
+            TrackArtistRow.role == "main",
+            LibraryArtistRow.musicbrainz_id.is_not(None),
+        )
+        .order_by(TrackArtistRow.track_id, TrackArtistRow.position)
+    ).all()
+    of_album = [mbid for album_artist, mbid in rows if album_artist and mbid]
+    chosen = of_album or [mbid for album_artist, mbid in rows if not album_artist and mbid]
+    return tuple(dict.fromkeys(chosen))[:MAX_ARTIST_IDS]
 
 
 def songs_of(db: Session, album: str, artist: str) -> tuple[str, ...]:

@@ -58,7 +58,9 @@ class EnricherOut(BaseModel):
             available=state.available,
             stopped=stopped,
             eligible=list(askable.eligible) if state.available else [],
-            waiting=dict(askable.waiting) if state.available else {},
+            waiting={int(track): at for track, at in askable.waiting.items()}
+            if state.available
+            else {},
             asks_again=enricher_named(state.name).uses_ai,
             mode=state.mode,
         )

@@ -21,6 +21,7 @@ from medleyplay.domain.enrichers import (
     LyricsHeld,
     SearchTerms,
     TrackFacts,
+    ask_again_at,
     enricher_named,
     message_of,
     search_terms,
@@ -88,6 +89,17 @@ def test_a_video_asked_less_than_a_day_ago_is_not_asked_for_again() -> None:
     facts = a_track_with_a_video(asked_at=just_under)
 
     assert why_not(facts, NOW, stopped=False, enricher=BILIBILI_DETAILS) is Ineligible.ASKED
+
+
+def test_a_track_never_asked_about_has_no_time_to_wait_for() -> None:
+    assert ask_again_at(a_track_with_a_video(), BILIBILI_DETAILS) is None
+
+
+def test_a_track_asked_about_may_be_asked_again_once_the_enrichers_wait_has_passed() -> None:
+    facts = a_track_with_a_video(asked_at=NOW)
+
+    assert ask_again_at(facts, BILIBILI_DETAILS) == NOW + timedelta(days=1)
+    assert ask_again_at(facts, LYRICS) == NOW + timedelta(days=30)
 
 
 def test_a_stopped_enricher_asks_for_no_track() -> None:

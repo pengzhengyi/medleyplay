@@ -52,6 +52,7 @@ from medleyplay.domain.enrichers import (
     Ineligible,
     LyricsHeld,
     Subject,
+    ask_again_at,
     enricher_named,
     message_of,
     why_not,
@@ -113,6 +114,18 @@ def track_of_target(target: str) -> TrackId:
     A Job queued before targets named their enricher has the Track's alone.
     """
     return TrackId(int(target.removeprefix("track:").partition(":")[0]))
+
+
+@dataclass(frozen=True)
+class Askable:
+    """The Tracks an enricher may be asked about, and when each asked before may be asked again.
+
+    A Track in `waiting` may be asked about once its time has come. Nothing here depends
+    on the clock, so it changes only when rows do.
+    """
+
+    eligible: tuple[TrackId, ...]
+    waiting: Mapping[TrackId, datetime]
 
 
 @dataclass(frozen=True)
@@ -402,6 +415,31 @@ class EnrichmentService:
             if why_not(each.facts, now, stopped=False, enricher=enricher, set_up=set_up)
             is Ineligible.ASKED
         ]
+
+    def askable(self, name: str) -> Askable:
+        """Return the Tracks the enricher may be asked about, and when each may be asked again.
+
+        A Track that waits only for the time since it was last asked is listed too; while
+        the enricher is stopped there are none.
+        """
+        enricher = enricher_named(name)
+        now = self._clock()
+        with self._units() as db:
+            if db.get(EnricherStopRow, enricher.name) is not None:
+                return Askable(eligible=(), waiting={})
+            set_up = is_set_up(db)
+            found = candidates(db, enricher, None)
+        eligible: list[TrackId] = []
+        waiting: dict[TrackId, datetime] = {}
+        for track_id, each in found.items():
+            # The wait is the last reason checked, so a Track that waits is eligible otherwise.
+            why = why_not(each.facts, now, stopped=False, enricher=enricher, set_up=set_up)
+            if why is None or why is Ineligible.ASKED:
+                eligible.append(track_id)
+                again_at = ask_again_at(each.facts, enricher)
+                if again_at is not None:
+                    waiting[track_id] = again_at
+        return Askable(eligible=tuple(eligible), waiting=waiting)
 
     def find_details(
         self,

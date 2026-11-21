@@ -13,6 +13,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.details import record_video_text
 from medleyplay.application.enrichment import (
     ENRICH_KIND,
+    Askable,
     EnrichmentService,
     enrich_target,
     enrich_track_kind,
@@ -530,6 +531,16 @@ def test_the_first_refusal_stops_the_enricher_and_fails_its_queued_jobs_with_a_c
         )
         assert "An admin can reset it" in view.job.failure_message
     assert all(view.job.started_at is None for view in queued)
+
+
+def test_a_stopped_enricher_may_be_asked_about_no_track(
+    enriching: Enriching, alice: Account
+) -> None:
+    refused = enriching.add_site_track("BVRefused")
+    enriching.add_site_track(RECORDED)
+    _failed(enriching, alice, refused)
+
+    assert enriching.enrichment.askable(NAME) == Askable(eligible=(), waiting={})
 
 
 def test_a_stopped_enricher_asks_nothing_more_and_says_why(

@@ -258,6 +258,28 @@ export function tracksOfAlbum(tracks: readonly Track[], artist: string, name: st
 }
 
 /**
+ * Where a cover chosen for one song is kept, so its album shows one cover: on the
+ * split file the song comes from (`file`), whose songs all take its cover, or on
+ * every song of the song's album (`songs`). A song on no album, or a split file
+ * itself, keeps the cover alone.
+ */
+export type CoverPlace =
+  | { readonly kind: "file"; readonly id: number }
+  | { readonly kind: "songs"; readonly ids: readonly number[] };
+
+/** Return where a cover chosen for `track`, one of `tracks`, is kept. */
+export function coverPlaceOf(track: Track, tracks: readonly Track[]): CoverPlace {
+  if (track.segment_of !== null) {
+    return { kind: "file", id: track.segment_of };
+  }
+  if (track.split || track.album === "") {
+    return { kind: "songs", ids: [track.id] };
+  }
+  const album = tracksOfAlbum(tracks, albumArtistOf(track), track.album).map(({ id }) => id);
+  return { kind: "songs", ids: album.includes(track.id) ? album : [track.id, ...album] };
+}
+
+/**
  * Return the one file an album is, if it is one: the file its songs were split from,
  * listed among them or not, or the album itself as one file not yet split.
  */

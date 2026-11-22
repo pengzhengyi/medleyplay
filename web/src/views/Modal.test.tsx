@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -115,5 +115,78 @@ describe("a modal", () => {
 
     expect(dialog).toHaveAttribute("open");
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A modal with a second one open inside it, as Edit details opens the cover editor:
+ * "Edit details" holds "Change the cover". The outer one is `locked` when asked.
+ */
+function renderNested(outerLocked = false) {
+  const onOuterClose = vi.fn();
+  const onInnerClose = vi.fn();
+  function Nested() {
+    const outer = useRef<HTMLDialogElement>(null);
+    const inner = useRef<HTMLDialogElement>(null);
+    return (
+      <Modal
+        ref={outer}
+        className="outer"
+        labelledBy="outer-title"
+        locked={outerLocked}
+        onClose={onOuterClose}
+      >
+        <div className="card">
+          <h2 id="outer-title">Edit details</h2>
+          <Modal ref={inner} className="inner" labelledBy="inner-title" onClose={onInnerClose}>
+            <div className="card">
+              <h2 id="inner-title">Change the cover</h2>
+              <input aria-label="Link" />
+            </div>
+          </Modal>
+        </div>
+      </Modal>
+    );
+  }
+  render(<Nested />);
+  return {
+    outer: screen.getByRole("dialog", { name: "Edit details" }),
+    inner: screen.getByRole("dialog", { name: "Change the cover" }),
+    onOuterClose,
+    onInnerClose,
+  };
+}
+
+describe("a modal opened inside another", () => {
+  it("closing it leaves the one it was opened from open", async () => {
+    const { outer, inner, onOuterClose, onInnerClose } = renderNested();
+
+    await userEvent.click(within(inner).getByRole("button", { name: "Close" }));
+
+    expect(inner).not.toHaveAttribute("open");
+    expect(onInnerClose).toHaveBeenCalledOnce();
+    expect(outer).toHaveAttribute("open");
+    expect(onOuterClose).not.toHaveBeenCalled();
+  });
+
+  it("Escape closes only it", async () => {
+    const { outer, inner, onOuterClose, onInnerClose } = renderNested();
+
+    await userEvent.type(within(inner).getByRole("textbox", { name: "Link" }), "{Escape}");
+
+    expect(onInnerClose).toHaveBeenCalledOnce();
+    expect(outer).toHaveAttribute("open");
+    expect(onOuterClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on a close request while the one it was opened from is locked", () => {
+    const { outer, inner, onOuterClose, onInnerClose } = renderNested(true);
+
+    requestClose(inner);
+
+    expect(inner).not.toHaveAttribute("open");
+    expect(onInnerClose).toHaveBeenCalledOnce();
+    expect(outer).toHaveAttribute("open");
+    expect(onOuterClose).not.toHaveBeenCalled();
   });
 });

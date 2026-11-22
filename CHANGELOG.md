@@ -808,6 +808,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A cover chosen in Edit details** — using, uploading, or removing a cover in a
+  song's *Edit details* now returns to *Edit details*; it closed the whole dialog. A
+  window opened from another one, such as the cover editor, now closes on its own.
+
+- **A song's cover is its album's** — a cover chosen in a song's *Edit details* now
+  goes on every song of its album (for a song of a split file, on the file), so *Up
+  next* and the album show it on each song; it went on that one song alone. A song on
+  no album keeps a cover of its own.
+
 - **The player names the song of a split file** — a file playing whole after it was
   split into songs showed its own title (such as the video's BV code) in the player;
   it now names the song it has reached, as Now Playing does.

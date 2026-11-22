@@ -3,7 +3,8 @@
  * MusicBrainz and answers any album with one cover of its name.
  *
  * Opening an album with no cover searches it; the cover found is suggested on its page
- * and in Clean up, and using it there puts it on the album's songs.
+ * and in Clean up, and using it there puts it on the album's songs. A cover chosen in a
+ * song's Edit details is its album's too.
  */
 
 import { expect as baseExpect, test } from "@playwright/test";
@@ -46,4 +47,68 @@ test("an album with no cover is suggested one found, and using it in Clean up sh
   await expect(section.getByRole("list", { name: "Covers suggested" })).toBeHidden();
   await page.goto(`/#/album?${new URLSearchParams({ artist: ARTIST, name: ALBUM }).toString()}`);
   await expect(page.getByRole("button", { name: "Replace the cover" })).toBeVisible();
+});
+
+/** A PNG of one pixel. */
+const ONE_PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test("a cover chosen in a song's Edit details goes on its album's other songs, and Edit details stays open", async ({
+  page,
+  request,
+}, { retry }) => {
+  // A retry has an album of its own: the first try may have given it a cover.
+  const ALBUM = `Tube Edit Cover ${String(retry + 1)}`;
+  const ids: number[] = [];
+  for (const [mark, title] of [
+    ["A", "Edit Cover One"],
+    ["B", "Edit Cover Two"],
+  ] as const) {
+    const added = await request.post("/api/links", {
+      data: {
+        link: `BVEdiCover${mark}${String(retry)}`,
+        parts: [{ part: 1, title, artist: ARTIST }],
+      },
+    });
+    expect(added.ok()).toBe(true);
+    const [first] = (await added.json()) as { readonly track_id: number }[];
+    ids.push(first?.track_id ?? 0);
+  }
+  const saved = await request.post("/api/tracks/details", {
+    data: { track_ids: ids, values: { album: ALBUM } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto(`/#/album?${new URLSearchParams({ artist: ARTIST, name: ALBUM }).toString()}`);
+  await page.getByRole("button", { name: "More actions for Edit Cover One" }).click();
+  await page.getByRole("menuitem", { name: "Edit details…" }).click();
+  const details = page.getByRole("dialog", { name: "Edit details" });
+
+  await details.getByRole("button", { name: "Add a cover…" }).click();
+  const editor = page.getByRole("dialog", { name: "Add a cover" });
+  await editor.getByLabel("Choose a cover file").setInputFiles({
+    name: "cover.png",
+    mimeType: "image/png",
+    buffer: ONE_PIXEL,
+  });
+  await editor.getByRole("button", { name: "Use this cover" }).click();
+
+  await expect(editor).toBeHidden();
+  await expect(details).toBeVisible();
+  await expect(details.getByRole("img", { name: "Cover" })).toHaveAttribute(
+    "src",
+    /^\/api\/covers\//u,
+  );
+  // Both songs now show the one cover chosen.
+  await expect
+    .poll(async () => {
+      const tracks = (await (await request.get("/api/tracks")).json()) as {
+        readonly id: number;
+        readonly cover: string | null;
+      }[];
+      const [one, two] = ids.map((each) => tracks.find(({ id }) => id === each)?.cover ?? null);
+      return one !== null && one === two ? "one cover" : `${String(one)} and ${String(two)}`;
+    })
+    .toBe("one cover");
 });

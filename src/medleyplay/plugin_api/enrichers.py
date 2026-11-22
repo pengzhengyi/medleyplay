@@ -146,7 +146,9 @@ class EnrichTrack(_Model):
     that reads it, and `ai` the providers an enricher that asks an AI model asks, the
     first first, each next one when the one before fails. `hint` is a note the listener
     added when asking the AI, on one line, or empty. `lyrics_sites` are the sites the
-    household turned on to be asked for lyrics after an enricher's own, in order.
+    household turned on to be asked for lyrics after an enricher's own, in order, and
+    `suggest_lyrics` whether a song none of them has is to be given the lyrics of the
+    nearest song they have, as a suggestion.
     """
 
     video: VideoId | None = None
@@ -162,6 +164,7 @@ class EnrichTrack(_Model):
     )
     hint: Annotated[str, StringConstraints(max_length=MAX_HINT)] = Field(default="", repr=False)
     lyrics_sites: Annotated[tuple[LyricsProvider, ...], Field(max_length=4)] = ()
+    suggest_lyrics: bool = False
 
 
 class EnrichStatus(StrEnum):
@@ -208,11 +211,16 @@ MAX_LYRICS: Final = 64 * 1024
 
 
 class FoundLyrics(_Model):
-    """A song's lyrics as a provider has them: LRC or plain text, or none, it being instrumental."""
+    """A song's lyrics as a provider has them: LRC or plain text, or none, it being instrumental.
+
+    `suggested` says they are the lyrics of the song nearest this one the provider has,
+    for the household to keep or dismiss, not of this song as it is named.
+    """
 
     provider: LyricsProvider
     text: Annotated[str, StringConstraints(max_length=MAX_LYRICS)] = ""
     instrumental: bool = False
+    suggested: bool = False
 
     @model_validator(mode="after")
     def _words_or_instrumental(self) -> "FoundLyrics":

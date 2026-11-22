@@ -14,6 +14,7 @@ is a refusal, which stops the enricher; any other answer it can't use is invalid
 import secrets
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from http import HTTPStatus
 from importlib.metadata import version
 from typing import Final
@@ -35,6 +36,7 @@ from medleyplay.plugin_api import (
     LyricsProvider,
     NetworkError,
 )
+from medleyplay.plugins.lyrics.nearest import Candidate, nearest, song_title_of
 
 API: Final = "https://lrclib.net/api"
 GET: Final = f"{API}/get"
@@ -76,6 +78,13 @@ class _Record(BaseModel):
     syncedLyrics: str | None = None  # noqa: N815 -- LRCLIB's own name
 
 
+@dataclass(frozen=True)
+class _Near(Candidate):
+    """A song LRCLIB's search found, weighed against the Track."""
+
+    record: _Record
+
+
 class _RefusedError(Exception):
     """LRCLIB refused the request, so nothing more should be asked of it."""
 
@@ -109,7 +118,9 @@ class Lrclib:
             return Enriched()
         seconds = None if request.duration_ms is None else request.duration_ms / 1000
         try:
-            record = self._find(title, artist, shown.get("album", ""), seconds)
+            record, searched = self._find(title, artist, shown.get("album", ""), seconds)
+            if record is None and request.suggest_lyrics:
+                return Enriched(lyrics=self._suggestion(title, artist, seconds, searched))
         except _RefusedError as error:
             return Enriched(status=EnrichStatus.REFUSED, message=str(error))
         except _InvalidError as error:
@@ -137,23 +148,50 @@ class Lrclib:
             options=tuple(closest_first(options, request.duration_ms)[:MAX_OFFERED])
         )
 
-    def _find(self, title: str, artist: str, album: str, seconds: float | None) -> _Record | None:
+    def _find(
+        self, title: str, artist: str, album: str, seconds: float | None
+    ) -> tuple[_Record | None, list[_Record]]:
+        """Return the song LRCLIB has of these words and length, and what its search found."""
         if seconds is not None:
             params = {"track_name": title, "artist_name": artist, "duration": str(round(seconds))}
             if album:
                 params["album_name"] = album
             found = self._json(GET, params)
             if found is not None:
-                return _record(found)
-        results = self._json(SEARCH, {"track_name": title, "artist_name": artist})
+                return _record(found), []
+        results = self._search({"track_name": title, "artist_name": artist})
+        matched = next((each for each in results if _matches(each, title, artist, seconds)), None)
+        return matched, results
+
+    def _suggestion(
+        self, title: str, artist: str, seconds: float | None, searched: list[_Record]
+    ) -> FoundLyrics | None:
+        """Return the lyrics of the song nearest the Track LRCLIB has, as a suggestion.
+
+        The songs searched for already are weighed, and, when the Track's title is a
+        video's, those found by the song's own title too.
+        """
+        song = song_title_of(title, artist)
+        found = searched if song == title else [*searched, *self._search({"track_name": song})]
+        near = nearest(
+            (
+                _Near(each.trackName, each.artistName, each.duration, each)
+                for each in found
+                if _lyrics_of(each) is not None
+            ),
+            song,
+            artist,
+            seconds,
+        )
+        lyrics = None if near is None else _lyrics_of(near.record)
+        return None if lyrics is None else lyrics.model_copy(update={"suggested": True})
+
+    def _search(self, params: Mapping[str, str]) -> list[_Record]:
+        results = self._json(SEARCH, params)
         if not isinstance(results, list):
             message = "LRCLIB's search answered no list."
             raise _InvalidError(message)
-        for each in results:
-            record = _record(each)
-            if _matches(record, title, artist, seconds):
-                return record
-        return None
+        return [_record(each) for each in results]
 
     def _json(self, url: str, params: Mapping[str, str]) -> object | None:
         for attempt in range(1, MAX_ATTEMPTS + 1):

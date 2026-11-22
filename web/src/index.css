@@ -281,6 +281,46 @@ button[aria-disabled="true"] {
   display: none;
 }
 
+/*
+ * A button whose action runs waits in place: a soft light sweeps slowly across its fill,
+ * its label kept, and it holds still where motion is reduced. Busy buttons are often
+ * disabled meanwhile; the sweep shows that they are working rather than unavailable.
+ */
+button[aria-busy="true"] {
+  position: relative;
+  overflow: hidden;
+}
+
+/* A layer of its own, so no button's background rule hides the sweep. */
+button[aria-busy="true"]::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    color-mix(in srgb, currentcolor 28%, transparent) 50%,
+    transparent 75%
+  );
+  pointer-events: none;
+  transform: translateX(-100%);
+  animation: busy-sweep 1.8s ease-in-out infinite;
+}
+
+@keyframes busy-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button[aria-busy="true"]::after {
+    background: color-mix(in srgb, currentcolor 10%, transparent);
+    transform: none;
+    animation: none;
+  }
+}
+
 /* The signed-in page: the views, the Library, and the queue; the player floats below. */
 
 .library {
@@ -5410,7 +5450,7 @@ dialog.modal::backdrop {
   padding-block: 0;
 }
 
-/* A label with a way to add to its box beside it, such as Artist's *Add artist*. */
+/* A label with a way to add to its box beside it, such as Artist's *More artists*. */
 .detail-label-row {
   display: flex;
   align-items: baseline;
@@ -9562,17 +9602,42 @@ small.ai-set-up-hint {
   }
 }
 
-/* Beside a label, the ways to change its box, such as Artist's *Which Jay?* and *Add artist*. */
+/* Beside a label, the ways to change its box, such as Artist's *Another artist named Jay?*
+   and *More artists*. */
 .detail-actions {
   display: inline-flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
   gap: 0.2rem 0.8rem;
+}
+
+/* In a narrow column a link shrinks, its artist's name ending in an ellipsis. */
+.detail-actions > .detail-add {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Which artist going by a name a song is by: each told apart by its albums, on one line. */
 .which-artist {
   max-width: min(22rem, calc(100vw - 2rem));
+}
+
+/* A long artist name ends in an ellipsis; the whole name is in the tooltip. */
+.detail-add-text {
+  display: inline-flex;
+  overflow: hidden;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.detail-add-name {
+  overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 2em;
+  max-width: 8rem;
+  margin-inline-start: 0.25em;
+  text-overflow: ellipsis;
 }
 
 .which-artist-text {

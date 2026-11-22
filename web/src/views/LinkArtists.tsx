@@ -172,6 +172,7 @@ export function LinkArtists({
               type="button"
               className="secondary outline dialog-button"
               disabled={asking}
+              aria-busy={asking}
               aria-disabled={noAi.missing}
               title={
                 noAi.missing

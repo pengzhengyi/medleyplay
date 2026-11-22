@@ -870,7 +870,9 @@ describe("looking a song up from its details", () => {
     lookUp({ enricher: "musicbrainz", state: "running", message: "" });
 
     expect(within(dialog).getByRole("status", { name: "Looking up on MusicBrainz" })).toBeVisible();
-    expect(within(dialog).getByRole("button", { name: "Find on MusicBrainz" })).toBeDisabled();
+    const find = within(dialog).getByRole("button", { name: "Find on MusicBrainz" });
+    expect(find).toBeDisabled();
+    expect(find).toHaveAttribute("aria-busy", "true");
   });
 
   it("reads the details again once the lookup is done, keeping what was typed", async () => {
@@ -1098,7 +1100,7 @@ describe("a song's artists, one chip each", () => {
   it("turns the artist into a chip and adds the next one typed", async () => {
     const { dialog, onSave } = await renderDialog(ONE_ARTIST);
 
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add artist" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "More artists" }));
     await userEvent.type(box(dialog, "Artists"), "GUMI{Enter}");
     const added = chips(dialog);
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -1114,7 +1116,7 @@ describe("a song's artists, one chip each", () => {
 
   it("credits an artist as featured in its place", async () => {
     const { dialog, onSave } = await renderDialog(ONE_ARTIST);
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add artist" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "More artists" }));
     await userEvent.type(box(dialog, "Artists"), "GUMI{Enter}");
 
     const featured = within(dialog).getByRole("button", { name: "GUMI, featured" });
@@ -1210,7 +1212,7 @@ describe("a song's artists, one chip each", () => {
       kind: { value: "album", reason: "split" },
     });
 
-    expect(within(dialog).queryByRole("button", { name: "Add artist" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "More artists" })).toBeNull();
   });
 });
 
@@ -1226,9 +1228,25 @@ describe("which artist going by a name a song is by", () => {
   };
 
   const openMenu = async (dialog: HTMLElement) => {
-    await userEvent.click(within(dialog).getByRole("button", { name: "Which Jay?" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Another artist named Jay?" }),
+    );
     return screen.findByRole("menu");
   };
+
+  it("says in the tooltips why there is another artist of the name, and why more artists", async () => {
+    const { dialog } = await renderDialog(BY_JAY, undefined, undefined, {
+      onChooseArtist: vi.fn(() => Promise.resolve(BY_JAY)),
+    });
+
+    expect(
+      within(dialog).getByRole("button", { name: "Another artist named Jay?" }),
+    ).toHaveAttribute("title", "Two artists share the name Jay: choose which one sings this song");
+    expect(within(dialog).getByRole("button", { name: "More artists" })).toHaveAttribute(
+      "title",
+      "This song is by more than one artist: add each one",
+    );
+  });
 
   it("offers another artist called the song's artist, and binds the song to it at once", async () => {
     const onChooseArtist = vi.fn(() => Promise.resolve(BY_JAY));
@@ -1277,6 +1295,6 @@ describe("which artist going by a name a song is by", () => {
   it("is not offered where the artist can't be chosen", async () => {
     const { dialog } = await renderDialog(BY_JAY);
 
-    expect(within(dialog).queryByRole("button", { name: "Which Jay?" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Another artist named Jay?" })).toBeNull();
   });
 });

@@ -726,9 +726,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still hear the keys in words.
 
 - **Busy buttons wait in place** — a button whose action runs, such as *Find* for
-  lyrics, *Find on MusicBrainz*, or *Ask AI*, shows a soft light sweeping across it,
-  its label kept, and is marked busy for screen readers; it holds still where motion
-  is reduced.
+  lyrics, *Find on MusicBrainz*, or *Ask AI*, shows one spinner, its label kept, and is
+  marked busy for screen readers.
 
 - **Clearer links beside a song's Artist** — *Which Jay?* is now *Another artist
   named Jay?* and *Add artist* is *More artists*, each with a tooltip saying what it

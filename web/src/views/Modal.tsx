@@ -3,7 +3,8 @@
  *
  * A native modal `<dialog>`, so focus stays in it and the page behind is inert.
  * The ✕ at its top right, Escape, or a click outside the card closes it, unless it is
- * `locked`; so does `ref.current.close()`. Its own buttons are only what it does.
+ * `locked`; so does `ref.current.close()`. Its own buttons are only what it does. A modal
+ * opened inside another closes alone, leaving the other open.
  */
 
 import { XIcon } from "@phosphor-icons/react";
@@ -52,15 +53,22 @@ export function Modal({
       aria-describedby={describedBy}
       // Focusable itself, so opening can focus it rather than the ✕.
       tabIndex={-1}
-      onClose={onClose}
+      // React passes these events on to the modals around this one, which they don't concern.
+      onClose={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
       onCancel={(event) => {
         // A close request that isn't a key, such as Android's Back button.
-        if (locked) {
+        if (locked && event.target === event.currentTarget) {
           event.preventDefault();
         }
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
+          // Escape closes only the innermost modal.
+          event.stopPropagation();
           event.preventDefault();
           if (!locked) {
             event.currentTarget.close();

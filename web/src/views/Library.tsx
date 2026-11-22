@@ -39,7 +39,7 @@ import { usePhotoLookAhead } from "../library/usePhotoLookAhead";
 import { useSharedNames } from "../library/useSharedNames";
 import { useSplitOffers } from "../library/useSplitOffers";
 import { toDoOf } from "../library/cleanUp";
-import { albumArtistOf } from "../library/views";
+import { albumArtistOf, coverPlaceOf } from "../library/views";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
@@ -375,6 +375,21 @@ export function Library({
     }
     await setAlbumCover(songs, cover);
     return cover;
+  };
+  /**
+   * Make `cover` the cover of `track`'s album, or drop the album's with `null`: on its split
+   * file, dropping the song's own so it shows the file's, or on every song of its album.
+   */
+  const coverAlbumOf = async (track: Track, cover: string | null) => {
+    const place = coverPlaceOf(track, tracks);
+    if (place.kind === "songs") {
+      await library.setDetailsOn(place.ids, { cover });
+      return;
+    }
+    await library.setDetailsOn(cover === null ? [place.id, track.id] : [place.id], { cover });
+    if (cover !== null) {
+      await library.setDetailsOn([track.id], { cover: null });
+    }
   };
   // Once the Library has drawn, the parts that load apart load while the browser is idle.
   useEffect(() => {
@@ -854,10 +869,20 @@ export function Library({
             setNotice(`Saved the details of “${editing.track.title}”.`);
           }}
           onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
-          onSetCover={(image) => library.setCover(editing.track.id, image)}
-          onRemoveCover={() => library.removeCover(editing.track.id)}
+          onSetCover={async (image) => {
+            const kept = (await library.setCover(editing.track.id, image)).origins.household?.cover;
+            if (typeof kept !== "string") {
+              throw new Error("The cover could not be kept.");
+            }
+            await coverAlbumOf(editing.track, kept);
+            return api.details(editing.track.id);
+          }}
+          onRemoveCover={async () => {
+            await coverAlbumOf(editing.track, null);
+            return api.details(editing.track.id);
+          }}
           onUseCover={async (cover) => {
-            await library.saveDetails(editing.track.id, { cover });
+            await coverAlbumOf(editing.track, cover);
             return api.details(editing.track.id);
           }}
           onChooseArtist={async (written, id) => {

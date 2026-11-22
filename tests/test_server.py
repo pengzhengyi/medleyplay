@@ -17,6 +17,7 @@ from medleyplay.server import (
     build_app,
     build_services,
     default_data_dir,
+    former_data_dir,
     local_host_names,
     open_database,
 )
@@ -33,10 +34,22 @@ def test_the_data_folder_comes_from_medleyplay_data_dir(tmp_path: Path) -> None:
     assert settings.data_dir == tmp_path
 
 
-def test_on_macos_the_data_folder_defaults_to_application_support() -> None:
+def test_on_macos_the_data_folder_defaults_to_one_in_the_music_folder() -> None:
     folder = default_data_dir({}, platform="darwin")
 
-    assert folder == Path.home() / "Library" / "Application Support" / "medleyplay"
+    assert folder == Path.home() / "Music" / "medleyplay"
+
+
+def test_on_macos_the_former_data_folder_is_in_application_support() -> None:
+    assert (
+        former_data_dir("darwin") == Path.home() / "Library" / "Application Support" / "medleyplay"
+    )
+    assert former_data_dir("linux") is None
+
+
+def test_a_data_folder_is_chosen_only_when_medleyplay_data_dir_names_one(tmp_path: Path) -> None:
+    assert Settings.from_environment({"MEDLEYPLAY_DATA_DIR": str(tmp_path)}).data_dir_chosen
+    assert not Settings.from_environment({}, platform="darwin").data_dir_chosen
 
 
 def test_elsewhere_the_data_folder_follows_xdg_data_home() -> None:

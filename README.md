@@ -9,9 +9,10 @@ Play music on your local network, from your own files and from Bilibili.
 
 ## Running the server
 
-The server keeps its database and its config file, `medleyplay.toml`, in
-`MEDLEYPLAY_DATA_DIR`, by default `~/Library/Application Support/medleyplay` on
-macOS.
+The server keeps its data (its database, covers, downloads, and its config file,
+`medleyplay.toml`) in one folder: by default `~/Music/medleyplay` on macOS, and
+`$XDG_DATA_HOME/medleyplay` elsewhere. Every command takes `--data-dir <folder>`
+to use another, as does `MEDLEYPLAY_DATA_DIR`.
 
 ```bash
 uv run medleyplay serve                    # every interface, port 8000
@@ -19,7 +20,15 @@ uv run medleyplay serve --safe-mode        # with every plugin off, for this run
 uv run medleyplay reset-password <name>    # a lost password; signs the Account out
 uv run medleyplay devices                  # with the server stopped: the allowed devices
 uv run medleyplay devices choose allow-all # … or what happens to new ones
+uv run medleyplay move-data [<folder>]     # with the server stopped: move the data folder
 ```
+
+`move-data` copies the data folder to `<folder>`, by default the default one,
+checks the copy (every file's size and the database's integrity), and only
+then deletes the old folder. On a Mac whose data is still in
+`~/Library/Application Support/medleyplay`, where it was kept before, `serve`
+asks whether to move it; a server started where it can't ask, such as by a
+service manager, keeps using it there and says how to move it.
 
 The server serves the web player, which you build once, and again after
 changing it; it needs Node 24+:

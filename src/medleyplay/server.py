@@ -97,18 +97,26 @@ class Settings:
     data_dir: Path
     allowed_hosts: tuple[str, ...]
     safe_mode: bool = False
+    data_dir_chosen: bool = True
+    """Whether someone chose the data folder, rather than it being the platform's default."""
 
     @classmethod
-    def from_environment(cls, environ: Mapping[str, str]) -> "Settings":
+    def from_environment(
+        cls, environ: Mapping[str, str], platform: str = sys.platform
+    ) -> "Settings":
         """Read the settings from environment variables, falling back to defaults.
 
         `MEDLEYPLAY_DATA_DIR` overrides the data folder. `MEDLEYPLAY_ALLOWED_HOSTS`
         adds comma-separated host names, such as a router's DNS name for the server.
         """
         configured = environ.get(DATA_DIR_VARIABLE)
-        data_dir = Path(configured) if configured else default_data_dir(environ)
+        data_dir = Path(configured) if configured else default_data_dir(environ, platform)
         extra = tuple(h.strip() for h in environ.get(ALLOWED_HOSTS_VARIABLE, "").split(",") if h)
-        return cls(data_dir=data_dir, allowed_hosts=(*local_host_names(), *extra))
+        return cls(
+            data_dir=data_dir,
+            allowed_hosts=(*local_host_names(), *extra),
+            data_dir_chosen=bool(configured),
+        )
 
 
 @dataclass(frozen=True)
@@ -120,11 +128,22 @@ class PluginSource:
 
 
 def default_data_dir(environ: Mapping[str, str], platform: str = sys.platform) -> Path:
-    """Return the platform's folder for an application's data."""
+    """Return where medleyplay keeps its data unless told otherwise.
+
+    On a Mac, a folder of its own in the Music folder, beside the music it plays;
+    elsewhere, the platform's folder for an application's data.
+    """
     if platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "medleyplay"
+        return Path.home() / "Music" / "medleyplay"
     xdg = environ.get("XDG_DATA_HOME")
     return (Path(xdg) if xdg else Path.home() / ".local" / "share") / "medleyplay"
+
+
+def former_data_dir(platform: str = sys.platform) -> Path | None:
+    """Return where medleyplay kept its data by default before, if that differs from now."""
+    if platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "medleyplay"
+    return None
 
 
 def local_host_names() -> tuple[str, ...]:

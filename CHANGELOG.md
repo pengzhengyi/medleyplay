@@ -687,6 +687,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The data folder is in the Music folder on a Mac** — `~/Music/medleyplay` by
+  default, beside the music. On a Mac whose data is still in
+  `~/Library/Application Support/medleyplay`, `serve` asks to move it there. The new
+  `medleyplay move-data [<folder>]` moves it anywhere while the server is stopped:
+  it copies the folder, checks the copy, and only then deletes the old one. Every
+  command takes `--data-dir` to choose the folder, as `MEDLEYPLAY_DATA_DIR` does.
 - **The line sung now runs the player's whole width** — in a row of its own along the
   bottom of the player bar, centred, so a long line fits; a line still longer ends in
   "…" with the whole of it in its tooltip. Between lines the row stays empty, so the bar

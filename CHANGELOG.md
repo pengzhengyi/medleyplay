@@ -687,6 +687,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Busy buttons wait in place** — a button whose action runs, such as *Find* for
+  lyrics, *Find on MusicBrainz*, or *Ask AI*, shows a soft light sweeping across it,
+  its label kept, and is marked busy for screen readers; it holds still where motion
+  is reduced.
+
+- **Clearer links beside a song's Artist** — *Which Jay?* is now *Another artist
+  named Jay?* and *Add artist* is *More artists*, each with a tooltip saying what it
+  is for; a long name ends in an ellipsis.
+
 - **Now Playing keeps the cover and its lyrics together** — the cover and the
   lyrics sit side by side in the middle of the screen, as wide as each other, rather
   than each in its own half. *Up next* opens in a window from its button, over the

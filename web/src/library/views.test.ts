@@ -13,6 +13,7 @@ import {
 import { linksOf } from "./artistLinks";
 import {
   albumFileOf,
+  albumYearOf,
   albumsOf,
   artistRouteOf,
   coverPlaceOf,
@@ -493,6 +494,29 @@ describe("albumFileOf", () => {
     const other = trackOf(13, "龙卷风", { album: "Jay", segment_of: 10 });
 
     expect(albumFileOf([...songs, other], byId)).toBeUndefined();
+  });
+});
+
+describe("albumYearOf", () => {
+  it("is the year most of the album's songs give", () => {
+    const songs = [
+      trackOf(1, "Melt", { year: 2010 }),
+      trackOf(2, "Shiver", { year: 2011 }),
+      trackOf(3, "Bless", { year: 2011 }),
+    ];
+
+    expect(albumYearOf(songs)).toBe(2011);
+  });
+
+  it("is the earlier year when as many songs give each", () => {
+    const songs = [trackOf(1, "Melt", { year: 2011 }), trackOf(2, "Shiver", { year: 2009 })];
+
+    expect(albumYearOf(songs)).toBe(2009);
+  });
+
+  it("leaves out the songs that give no year, and is none when no song gives one", () => {
+    expect(albumYearOf([trackOf(1, "Melt", { year: 2010 }), trackOf(2, "Shiver")])).toBe(2010);
+    expect(albumYearOf([trackOf(1, "Melt"), trackOf(2, "Shiver")])).toBeNull();
   });
 });
 

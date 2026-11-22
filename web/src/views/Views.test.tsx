@@ -1082,6 +1082,54 @@ describe("an album's page", () => {
   });
 });
 
+describe("an album's page header", () => {
+  /** *Supercell* by ryo: Melt and Shiver from 2009, Bless from 2010. */
+  const SUPERCELL = [
+    trackOf(1, "Melt", { artist: "ryo", album: "Supercell", year: 2009, duration_ms: 300_000 }),
+    trackOf(2, "Shiver", { artist: "ryo", album: "Supercell", year: 2009, duration_ms: 240_000 }),
+    trackOf(3, "Bless", { artist: "ryo", album: "Supercell", year: 2010, duration_ms: 360_000 }),
+  ];
+  const header = async () => {
+    const heading = await screen.findByRole("heading", { level: 2, name: "Supercell" });
+    return within(heading.closest("header") ?? document.body);
+  };
+
+  it("names its year under its artist, the year most of its songs give", async () => {
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }), signedIn(SUPERCELL));
+
+    expect((await header()).getByText("2009")).toBeVisible();
+  });
+
+  it("names no year when none of its songs gives one", async () => {
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }));
+
+    expect((await header()).queryByText(/^\d{4}$/u)).not.toBeInTheDocument();
+  });
+
+  it("plays the album from Play in its header", async () => {
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }), signedIn(SUPERCELL));
+
+    await userEvent.click((await header()).getByRole("button", { name: "Play all" }));
+
+    const queue = screen.getByRole("region", { name: "Up next" });
+    expect(
+      within(queue)
+        .getAllByRole("listitem")
+        .map((item) => item.querySelector(".entry-title")?.textContent),
+    ).toEqual(["Shiver", "Bless"]);
+  });
+
+  it("says how many songs it holds and how long they last under its songs, not its title", async () => {
+    open(hrefOf({ view: "album", artist: "ryo", name: "Supercell" }), signedIn(SUPERCELL));
+
+    expect((await header()).queryByText("3 songs, 15 min")).not.toBeInTheDocument();
+    const length = screen.getByText("3 songs, 15 min");
+    expect(
+      screen.getByRole("table").compareDocumentPosition(length) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});
+
 describe("editing an album from its page", () => {
   it("sets what is typed on every song of an album of songs of their own", async () => {
     const sent: unknown[] = [];

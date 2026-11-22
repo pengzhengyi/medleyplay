@@ -4292,10 +4292,21 @@ button.icon.heart.on:hover,
   white-space: pre;
 }
 
-/* The line sung now, under the artist. */
-.player .names .lyric-now {
+/*
+ * The line sung now: a row of its own across the whole bar, along its bottom edge, centred.
+ * Between lines it stays, empty, so the bar never changes height mid-song.
+ */
+.player > .lyric-now {
+  grid-column: 1 / -1;
+  min-height: 1.35em;
+  margin: -0.55rem 0 -0.4rem;
+  overflow: hidden;
   color: var(--accent);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :is(.player, .now-playing) .controls {
@@ -4883,6 +4894,10 @@ button.icon.heart.on:hover,
   .player .status {
     grid-column: 1 / -1;
     justify-content: space-between;
+  }
+
+  .player > .lyric-now {
+    margin-top: -0.15rem;
   }
 }
 

@@ -1048,33 +1048,24 @@ function DetailBox({
   const suggestion = suggestionOf(details, name);
   const credits = chips?.credits;
   const use = chips === undefined ? onChange : chips.onUse;
+  // The one artist saved, shown as a tag until clicked to edit; typed, it is a box again.
+  const [editing, setEditing] = useState(false);
+  const tagged =
+    chips !== undefined &&
+    credits === undefined &&
+    !editing &&
+    typed.trim() !== "" &&
+    typed === boxText(details, {}, name);
+  const which = chips?.onChoose !== undefined && (tagged || credits !== undefined) && (
+    <WhichArtist artists={details.artists} disabled={chips.disabled} onChoose={chips.onChoose} />
+  );
+  const face = details.artists[0]?.linked;
   return (
     <div className={`detail detail-${kind} detail-${name}`}>
       <div className="detail-label-row">
-        <label htmlFor={id} className="detail-label">
+        <label id={`${id}-label`} htmlFor={id} className="detail-label">
           {credits === undefined ? label : `${label}s`}
         </label>
-        {chips !== undefined && (
-          <span className="detail-actions">
-            {chips.onChoose !== undefined && (
-              <WhichArtist
-                artists={details.artists}
-                disabled={chips.disabled}
-                onChoose={chips.onChoose}
-              />
-            )}
-            <button
-              type="button"
-              className="link-button detail-add"
-              disabled={chips.disabled}
-              title="This song is by more than one artist: add each one"
-              onClick={chips.onAdd}
-            >
-              <PlusIcon weight="bold" aria-hidden />
-              More artists
-            </button>
-          </span>
-        )}
       </div>
       {chips !== undefined && credits !== undefined && (
         <ArtistChips
@@ -1091,39 +1082,85 @@ function DetailBox({
           {chips.said}
         </span>
       )}
-      <input
-        id={id}
-        ref={chips?.box}
-        className="detail-input"
-        type={kind === "number" ? "number" : "text"}
-        inputMode={kind === "number" ? "numeric" : undefined}
-        min={range?.[0]}
-        max={range?.[1]}
-        maxLength={kind === "text" ? MAX_TEXT : undefined}
-        placeholder={credits === undefined ? undefined : "Add an artist"}
-        value={credits === undefined || chips === undefined ? typed : chips.draft}
-        aria-describedby={described}
-        onChange={(event) => {
-          if (credits !== undefined && chips !== undefined) {
-            chips.onDraft(event.currentTarget.value);
-          } else {
-            onChange({ ...own, [name]: event.currentTarget.value });
-          }
-        }}
-        onKeyDown={(event) => {
-          // Enter adds what is typed as a chip; with nothing typed, it saves, as in any box.
-          if (
-            chips !== undefined &&
-            credits !== undefined &&
-            event.key === "Enter" &&
-            !event.nativeEvent.isComposing &&
-            chips.draft.trim() !== ""
-          ) {
-            event.preventDefault();
-            chips.onAdd();
-          }
-        }}
-      />
+      <div className={chips === undefined ? "detail-field" : "detail-field with-add"}>
+        {tagged ? (
+          <div className="artist-tag">
+            <button
+              type="button"
+              className="artist-tag-name"
+              aria-label={`Edit the artist ${typed}`}
+              title="Edit the artist"
+              aria-describedby={described}
+              disabled={chips.disabled}
+              onClick={() => {
+                setEditing(true);
+              }}
+            >
+              <span className="artist-chip-face" aria-hidden title={face?.name}>
+                {face?.photo ? (
+                  <img src={coverUrl(face.photo, "small")} alt="" />
+                ) : (
+                  typed.charAt(0).toUpperCase()
+                )}
+              </span>
+              <span className="artist-tag-text">{typed}</span>
+            </button>
+            {which}
+          </div>
+        ) : (
+          <input
+            id={id}
+            ref={chips?.box}
+            className="detail-input"
+            type={kind === "number" ? "number" : "text"}
+            inputMode={kind === "number" ? "numeric" : undefined}
+            min={range?.[0]}
+            max={range?.[1]}
+            maxLength={kind === "text" ? MAX_TEXT : undefined}
+            placeholder={credits === undefined ? undefined : "Add an artist"}
+            value={credits === undefined || chips === undefined ? typed : chips.draft}
+            aria-describedby={described}
+            onChange={(event) => {
+              if (credits !== undefined && chips !== undefined) {
+                chips.onDraft(event.currentTarget.value);
+              } else {
+                onChange({ ...own, [name]: event.currentTarget.value });
+              }
+            }}
+            onKeyDown={(event) => {
+              // Enter adds what is typed as a chip; with nothing typed, it saves, as in any box.
+              if (
+                chips !== undefined &&
+                credits !== undefined &&
+                event.key === "Enter" &&
+                !event.nativeEvent.isComposing &&
+                chips.draft.trim() !== ""
+              ) {
+                event.preventDefault();
+                chips.onAdd();
+              }
+            }}
+            // Clicking the artist's tag opens it to edit, to type at once.
+            autoFocus={editing}
+            onBlur={() => {
+              setEditing(false);
+            }}
+          />
+        )}
+        {credits !== undefined && which}
+        {chips !== undefined && (
+          <button
+            type="button"
+            className="detail-add-icon"
+            aria-label="More artists"
+            disabled={chips.disabled}
+            title="This song is by more than one artist: add each one"
+            onClick={chips.onAdd}
+          >
+            <PlusIcon weight="bold" aria-hidden />
+          </button>
+        )}
+      </div>
       {origin !== undefined &&
         (origin.from === undefined ? (
           <small id={described} className={yours ? "detail-origin yours" : "detail-origin"}>

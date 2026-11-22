@@ -336,7 +336,7 @@ describe("editing a song's details", () => {
   it("is dismissed from its ✕, saving nothing", async () => {
     const { dialog, onSave, onClose } = await renderDialog();
 
-    await userEvent.type(box(dialog, "Artist"), " feat. Hatsune");
+    await userEvent.type(box(dialog, "Title"), " (Live)");
     await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
 
     expect(onSave).not.toHaveBeenCalled();
@@ -1293,6 +1293,31 @@ describe("which artist going by a name a song is by", () => {
     );
     return screen.findByRole("menu");
   };
+
+  it("shows the saved artist as a tag the width of its column, edited as text once clicked", async () => {
+    const { dialog } = await renderDialog(BY_JAY, undefined, undefined, {
+      onChooseArtist: vi.fn(() => Promise.resolve(BY_JAY)),
+    });
+    expect(within(dialog).queryByRole("textbox", { name: "Artist" })).toBeNull();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Edit the artist Jay" }));
+
+    expect(box(dialog, "Artist")).toHaveValue("Jay");
+    expect(box(dialog, "Artist")).toHaveFocus();
+  });
+
+  it("asks which artist of the name from ? in the artist's tag, never while it is typed", async () => {
+    const { dialog } = await renderDialog(BY_JAY, undefined, undefined, {
+      onChooseArtist: vi.fn(() => Promise.resolve(BY_JAY)),
+    });
+    expect(
+      within(dialog).getByRole("button", { name: "Another artist named Jay?" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Edit the artist Jay" }));
+
+    expect(within(dialog).queryByRole("button", { name: "Another artist named Jay?" })).toBeNull();
+  });
 
   it("says in the tooltips why there is another artist of the name, and why more artists", async () => {
     const { dialog } = await renderDialog(BY_JAY, undefined, undefined, {

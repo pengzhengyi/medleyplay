@@ -701,6 +701,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Shuffle, the heart, and a round pencil for *Edit details* on the photo's bottom line.
   How many songs there are and how long they last show under them, as on an album. On
   a phone, the photo is on top and the rest centered under it.
+- **A song's artist as a tag in Edit details** — once saved, the artist shows as a tag
+  the width of its column, with its photo, and clicking it edits it as text again. *Another
+  artist named …?* is now a ? inside the tag, and *More artists* a + beside it, so the
+  Artist box lines up with Genre's.
 - **The data folder is in the Music folder on a Mac** — `~/Music/medleyplay` by
   default, beside the music. On a Mac whose data is still in
   `~/Library/Application Support/medleyplay`, `serve` asks to move it there. The new

@@ -1,7 +1,8 @@
 /**
  * @file Which artist going by a song's artist name the song is by, for two artists of one name.
  *
- * Beside the Artist label, *Another artist named Jay?* opens a menu of every artist the song shows. Under
+ * The ? in the artist's tag, *Another artist named Jay?*, opens a menu of every artist the
+ * song shows. Under
  * each are the artists going by its name: the one the song is by now, checked; each other
  * one, with the albums its songs are on; and *Another artist called Jay*, which adds one.
  * A choice moves this song alone, at once.
@@ -16,7 +17,7 @@
  */
 
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { CheckIcon, PlusIcon, UsersThreeIcon } from "@phosphor-icons/react";
+import { CheckIcon, PlusIcon, QuestionIcon } from "@phosphor-icons/react";
 import { Fragment } from "react";
 
 import type { Namesake, TrackArtist } from "../api";
@@ -51,15 +52,15 @@ export function WhichArtist({
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger asChild disabled={disabled}>
-        <button type="button" className="link-button detail-add" title={why}>
-          <UsersThreeIcon weight="bold" aria-hidden />
-          {one ? (
-            <span className="detail-add-text">
-              Another artist named <span className="detail-add-name">{only.written}</span>?
-            </span>
-          ) : (
-            "Another artist of the same name?"
-          )}
+        <button
+          type="button"
+          className="icon artist-tag-which"
+          title={why}
+          aria-label={
+            one ? `Another artist named ${only.written}?` : "Another artist of the same name?"
+          }
+        >
+          <QuestionIcon weight="bold" aria-hidden />
         </button>
       </Menu.Trigger>
       <Menu.Content

@@ -1,6 +1,7 @@
 """The remote play API: the host page plays, and a phone of the same account controls it."""
 
 import json
+import time
 from collections.abc import Iterator
 from typing import Final
 
@@ -281,10 +282,25 @@ def test_the_speaker_is_forgotten_when_its_page_stream_ends(
     with host.stream("GET", f"/api/events?page={HOST_PAGE}"):
         host.put("/api/remote/report", json=report_playing())
 
-    with phone.stream("GET", "/api/events") as stream:
-        heard = next_event(events_of(stream.iter_lines()), "remote")
+    heard = remote_once_forgotten(phone)
 
     assert heard == {"page": None, "state": None, "age_ms": None}
+
+
+def remote_once_forgotten(client: TestClient, within: float = 10.0) -> object:
+    """The `remote` event a new stream opens with, once it no longer names a speaker.
+
+    A stream's end is noticed by the server a moment after the client lets go, so
+    a stream opened at once may still hear of the speaker; this asks again until
+    it does not, or `within` seconds pass.
+    """
+    ends = time.monotonic() + within
+    while True:
+        with client.stream("GET", "/api/events") as stream:
+            heard = next_event(events_of(stream.iter_lines()), "remote")
+        if heard == {"page": None, "state": None, "age_ms": None} or time.monotonic() > ends:
+            return heard
+        time.sleep(0.05)
 
 
 def test_another_account_hears_nothing_of_the_speaker(host: TestClient, app: FastAPI) -> None:

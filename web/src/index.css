@@ -5451,19 +5451,10 @@ dialog.modal::backdrop {
   padding-block: 0;
 }
 
-/* A label with a way to add to its box beside it, such as Artist's *More artists*. */
 .detail-label-row {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 0.5rem;
-}
-
-.edit-details .detail-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  font-size: 0.8rem;
 }
 
 /* A song's artists, one chip each: main ones filled, featured ones dashed, as in Clean up. */
@@ -9737,42 +9728,9 @@ small.ai-set-up-hint {
   }
 }
 
-/* Beside a label, the ways to change its box, such as Artist's *Another artist named Jay?*
-   and *More artists*. */
-.detail-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  min-width: 0;
-  gap: 0.2rem 0.8rem;
-}
-
-/* In a narrow column a link shrinks, its artist's name ending in an ellipsis. */
-.detail-actions > .detail-add {
-  min-width: 0;
-  max-width: 100%;
-}
-
 /* Which artist going by a name a song is by: each told apart by its albums, on one line. */
 .which-artist {
   max-width: min(22rem, calc(100vw - 2rem));
-}
-
-/* A long artist name ends in an ellipsis; the whole name is in the tooltip. */
-.detail-add-text {
-  display: inline-flex;
-  overflow: hidden;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.detail-add-name {
-  overflow: hidden;
-  flex: 0 1 auto;
-  min-width: 2em;
-  max-width: 8rem;
-  margin-inline-start: 0.25em;
-  text-overflow: ellipsis;
 }
 
 .which-artist-text {
@@ -10035,4 +9993,85 @@ button.rail-order-handle {
   .artist-heading .artist-places {
     justify-content: center;
   }
+}
+
+/*
+ * The artist's box, or its tag once saved, with + beside it, outside, to add more artists:
+ * the label row holds only the label, so Artist's box lines up with Genre's.
+ */
+.detail-field.with-add {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.detail-field.with-add > .detail-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The saved artist: a tag as tall and wide as the box, the ? for its namesakes inside. */
+.artist-tag {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  height: 2.4rem;
+  padding-inline: 0.3rem;
+  border: 1px solid var(--pico-form-element-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-form-element-background-color);
+}
+
+.edit-details .artist-tag-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 0.4rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 1rem;
+  text-align: start;
+}
+
+.artist-tag-name .artist-chip-face {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.edit-details .artist-tag-which {
+  flex: none;
+  margin: 0;
+}
+
+.artist-tag-text {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edit-details .detail-add-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+}
+
+.edit-details .detail-add-icon:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }

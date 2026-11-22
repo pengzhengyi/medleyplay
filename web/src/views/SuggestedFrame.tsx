@@ -5,9 +5,16 @@
  * Its lower half uses it; of its upper half, the right dismisses it and the left opens the
  * picture editor to choose another. Each shows its icon on hover or focus, always on a
  * touch screen, and turns the ring green, red, or solid. A photo is round, a cover square.
+ * While a choice made on it is saved, it is faded, tagged *Saving…*, and takes no input.
  */
 
-import { CheckIcon, PencilSimpleIcon, SparkleIcon, XIcon } from "@phosphor-icons/react";
+import {
+  CheckIcon,
+  CircleNotchIcon,
+  PencilSimpleIcon,
+  SparkleIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
 /**
@@ -34,6 +41,7 @@ export function SuggestedFrame({
   readonly picked: boolean;
   /** The class of the ring around the picture, which sets its size. */
   readonly className?: string;
+  /** Whether a choice made on it, to use or dismiss it, is being saved. */
   readonly busy?: boolean;
   readonly onUse: () => void;
   readonly onDismiss: () => void;
@@ -42,9 +50,13 @@ export function SuggestedFrame({
 }) {
   return (
     <div
-      className={
-        noun === "cover" ? "photo-suggestion-frame cover-suggestion" : "photo-suggestion-frame"
-      }
+      className={[
+        "photo-suggestion-frame",
+        noun === "cover" && "cover-suggestion",
+        busy && "photo-suggestion-saving",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <div
         className={
@@ -93,8 +105,12 @@ export function SuggestedFrame({
           <CheckIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
         </button>
       </div>
-      <span className="photo-suggestion-tag" aria-hidden>
-        {picked ? (
+      <span className="photo-suggestion-tag" aria-hidden={!busy}>
+        {busy ? (
+          <>
+            <CircleNotchIcon weight="bold" className="spin" aria-hidden /> Saving…
+          </>
+        ) : picked ? (
           <>
             <SparkleIcon weight="fill" /> AI pick
           </>

@@ -32,7 +32,9 @@ export function FindPhotos({
   /** Called after a change, or to read the artists again. */
   readonly onChanged: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  // The artists whose photo is being used or dismissed: each stays saving until it is gone.
+  const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
+  const [usingAll, setUsingAll] = useState(false);
   const [error, setError] = useState("");
   // The artist whose photo is chosen in the photo editor, if any.
   const [changing, setChanging] = useState<MissingPhoto>();
@@ -66,34 +68,36 @@ export function FindPhotos({
   );
   const unfit = artists.filter((each) => each.suggested === null && each.found).length;
   const unasked = artists.filter((each) => !each.found).length;
-  const use = async (
-    chosen: readonly { readonly artist_id: string; readonly suggested: string }[],
-  ) => {
-    setBusy(true);
+  const ready = suggested.filter((each) => !saving.has(each.artist_id));
+  // Saves `change` to the artists `ids`, saving until they are read again without them.
+  const save = async (ids: readonly string[], change: () => Promise<unknown>) => {
+    setSaving((was) => new Set([...was, ...ids]));
     setError("");
     try {
-      for (const each of chosen) {
-        await api.useArtistPhotoCover(each.artist_id, each.suggested);
-      }
+      await change();
     } catch (failure) {
+      setSaving((was) => new Set([...was].filter((id) => !ids.includes(id))));
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
-      setBusy(false);
       onChanged();
     }
   };
-  const dismiss = async (artist: MissingPhoto & { readonly suggested: string }) => {
-    setBusy(true);
-    setError("");
-    try {
-      await api.dismissArtistPicture(artist.artist_id, artist.suggested);
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
-    } finally {
-      setBusy(false);
-      onChanged();
-    }
+  const take = (chosen: readonly { readonly artist_id: string; readonly suggested: string }[]) =>
+    save(
+      chosen.map((each) => each.artist_id),
+      async () => {
+        for (const each of chosen) {
+          await api.useArtistPhotoCover(each.artist_id, each.suggested);
+        }
+      },
+    );
+  const takeAll = async () => {
+    setUsingAll(true);
+    await take(ready);
+    setUsingAll(false);
   };
+  const dismiss = (artist: MissingPhoto & { readonly suggested: string }) =>
+    save([artist.artist_id], () => api.dismissArtistPicture(artist.artist_id, artist.suggested));
   return (
     <section className="clean-up-section" aria-labelledby="find-photos-title">
       <header className="clean-up-head">
@@ -106,9 +110,9 @@ export function FindPhotos({
           <button
             type="button"
             className="dialog-button"
-            disabled={busy}
-            aria-busy={busy}
-            onClick={() => void use(suggested)}
+            disabled={usingAll || ready.length === 0}
+            aria-busy={usingAll}
+            onClick={() => void takeAll()}
           >
             {`Use all ${String(suggested.length)}`}
           </button>
@@ -138,8 +142,8 @@ export function FindPhotos({
                   each.picked ? "An AI model picked this" : "Going by this artist's name on Deezer"
                 }
                 picked={each.picked}
-                busy={busy}
-                onUse={() => void use([each])}
+                busy={saving.has(each.artist_id)}
+                onUse={() => void take([each])}
                 onDismiss={() => void dismiss(each)}
                 onChange={() => {
                   setChanging(each);

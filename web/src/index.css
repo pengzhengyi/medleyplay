@@ -9999,3 +9999,15 @@ button.rail-order-handle {
     margin-left: 0;
   }
 }
+
+/*
+ * A suggested picture whose choice is being saved: faded, with only its tag's spinner,
+ * not Pico's on its busy controls.
+ */
+.photo-suggestion-frame .photo-suggestion-controls[aria-busy="true"]::before {
+  display: none;
+}
+
+.photo-suggestion-saving .photo-suggestion-art > * {
+  opacity: 0.55;
+}

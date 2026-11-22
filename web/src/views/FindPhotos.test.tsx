@@ -50,6 +50,12 @@ function cleanUp(artists: readonly MissingPhoto[]) {
 
 const section = () => within(screen.getByRole("region", { name: /^Find artist photos/u }));
 
+/** The suggested photo's tile of the artist `name`. */
+const tileOf = (name: string) =>
+  section()
+    .getAllByRole("listitem")
+    .find((tile) => within(tile).queryByRole("link", { name }) !== null) ?? document.body;
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -95,6 +101,83 @@ describe("finding artist photos in Clean up", () => {
 
     expect(sent).toEqual([{ cover: "picture-beatles" }]);
     expect(reload).toHaveBeenCalled();
+  });
+
+  it("shows a photo being used as saving at once, taking no more input", async () => {
+    serve({
+      [FIND]: { body: { asked: 0 } },
+      "POST /api/artists/beatles/photo/cover": { body: null, after: new Promise(() => undefined) },
+    });
+    cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the suggested photo of The Beatles" }),
+    );
+
+    const beatles = within(tileOf("The Beatles"));
+    expect(beatles.getByRole("group", { name: "Suggested photo of The Beatles" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(beatles.getByText("Saving…")).toBeVisible();
+    for (const control of beatles.getAllByRole("button")) {
+      expect(control).toBeDisabled();
+    }
+    expect(
+      section().getByRole("button", { name: "Use the suggested photo of 周杰伦" }),
+    ).toBeEnabled();
+  });
+
+  it("keeps a photo used saving until the artists are read again without it", async () => {
+    serve({
+      [FIND]: { body: { asked: 0 } },
+      "POST /api/artists/beatles/photo/cover": { body: null },
+    });
+    const { reload } = cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the suggested photo of The Beatles" }),
+    );
+
+    expect(reload).toHaveBeenCalled();
+    expect(within(tileOf("The Beatles")).getByText("Saving…")).toBeVisible();
+    expect(
+      section().getByRole("button", { name: "Use the suggested photo of The Beatles" }),
+    ).toBeDisabled();
+  });
+
+  it("lets a photo be used again when saving it fails", async () => {
+    serve({
+      [FIND]: { body: { asked: 0 } },
+      "POST /api/artists/beatles/photo/cover": { status: 500, body: { detail: "Disk full" } },
+    });
+    cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the suggested photo of The Beatles" }),
+    );
+
+    expect(await section().findByRole("alert")).toHaveTextContent("Disk full");
+    expect(within(tileOf("The Beatles")).queryByText("Saving…")).not.toBeInTheDocument();
+    expect(
+      section().getByRole("button", { name: "Use the suggested photo of The Beatles" }),
+    ).toBeEnabled();
+  });
+
+  it("shows every photo as saving while all are used", async () => {
+    serve({
+      [FIND]: { body: { asked: 0 } },
+      "POST /api/artists/beatles/photo/cover": { body: null, after: new Promise(() => undefined) },
+    });
+    cleanUp(SUGGESTED);
+
+    await userEvent.click(section().getByRole("button", { name: "Use all 2" }));
+
+    expect(section().getAllByText("Saving…")).toHaveLength(2);
+    expect(section().getByRole("button", { name: "Use all 2" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
   });
 
   it("dismisses a photo suggested in one click", async () => {

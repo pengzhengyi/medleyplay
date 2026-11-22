@@ -67,6 +67,12 @@ function cleanUp(albums: readonly MissingCover[], onUse = vi.fn(() => Promise.re
 
 const section = () => within(screen.getByRole("region", { name: /^Find album covers/u }));
 
+/** The suggested cover's tile of the album `name`. */
+const tileOf = (name: string) =>
+  section()
+    .getAllByRole("listitem")
+    .find((tile) => within(tile).queryByRole("link", { name }) !== null) ?? document.body;
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -112,6 +118,55 @@ describe("finding album covers in Clean up", () => {
       { albums: [{ album: "Help!", artist: "The Beatles", cover: "cover-help" }] },
     ]);
     expect(reload).toHaveBeenCalled();
+  });
+
+  it("shows a cover being used as saving at once, taking no more input", async () => {
+    serve({ [USE]: { body: { used: 1 }, after: new Promise(() => undefined) } });
+    cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the suggested cover of Help!" }),
+    );
+
+    const help = within(tileOf("Help!"));
+    expect(help.getByRole("group", { name: "Suggested cover of Help!" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(help.getByText("Saving…")).toBeVisible();
+    for (const control of help.getAllByRole("button")) {
+      expect(control).toBeDisabled();
+    }
+    expect(
+      section().getByRole("button", { name: "Use the suggested cover of 范特西" }),
+    ).toBeEnabled();
+  });
+
+  it("keeps a cover used saving until the albums are read again without it", async () => {
+    serve({ [USE]: { body: { used: 1 } } });
+    const { reload } = cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the suggested cover of Help!" }),
+    );
+
+    expect(reload).toHaveBeenCalled();
+    expect(within(tileOf("Help!")).getByText("Saving…")).toBeVisible();
+  });
+
+  it("lets a cover be used again when saving it fails", async () => {
+    serve({ [USE]: { status: 500, body: { detail: "Disk full" } } });
+    cleanUp(SUGGESTED);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Use the suggested cover of Help!" }),
+    );
+
+    expect(await section().findByRole("alert")).toHaveTextContent("Disk full");
+    expect(within(tileOf("Help!")).queryByText("Saving…")).not.toBeInTheDocument();
+    expect(
+      section().getByRole("button", { name: "Use the suggested cover of Help!" }),
+    ).toBeEnabled();
   });
 
   it("reads the songs again once a cover is used, so the album shows it", async () => {

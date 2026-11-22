@@ -700,6 +700,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An artist's page is laid out like an album's** — its photo large on the left; its
+  name, who MusicBrainz says it is, its other names, and its links beside it; and Play,
+  Shuffle, the heart, and a round pencil for *Edit details* on the photo's bottom line.
+  How many songs there are and how long they last show under them, as on an album. On
+  a phone, the photo is on top and the rest centered under it.
+- **A song's artist as a tag in Edit details** — once saved, the artist shows as a tag
+  the width of its column, with its photo, and clicking it edits it as text again. *Another
+  artist named …?* is now a ? inside the tag, and *More artists* a + beside it, so the
+  Artist box lines up with Genre's.
 - **The data folder is in the Music folder on a Mac** — `~/Music/medleyplay` by
   default, beside the music. On a Mac whose data is still in
   `~/Library/Application Support/medleyplay`, `serve` asks to move it there. The new
@@ -858,6 +867,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Using a suggested photo or cover shows it was received** — in Clean up, *Use*,
+  *Dismiss*, and *Use all* on a suggested artist photo or album cover now fade it and tag
+  it *Saving…* at once. It takes no more clicks until it is recorded and leaves; if saving
+  fails, it can be used again.
 - **Back from a song's Edit songs to its own details** — *Edit songs* in a song's menu
   opened the songs of its file over the whole file's details, so *‹ Details* led to the
   file, which has no lyrics of its own, and *Lyrics* was missing. It now leads back to

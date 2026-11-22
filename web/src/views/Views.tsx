@@ -61,8 +61,9 @@ import { isRailNamed } from "../rail";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumAbout } from "./AlbumAbout";
 import { AlbumHeading } from "./AlbumHeading";
+import { PictureHeading } from "./PictureHeading";
 import { AlbumRatingNote } from "./AlbumRatingNote";
-import { ArtistAbout } from "./ArtistAbout";
+import { ArtistFacts, ArtistPicture } from "./ArtistAbout";
 import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
 import { DownloadsFolder } from "./DownloadsFolder";
@@ -237,55 +238,67 @@ function viewOf(given: ViewProps) {
       const named = known?.names.find((each) => fold(each.name.trim()) === fold(name.trim()));
       const shown = artist?.shown_as ?? name;
       const reload = props.artistNames?.reload;
+      const title = shown || UNKNOWN_ARTIST;
       return (
-        <Songs
-          title={shown || UNKNOWN_ARTIST}
-          about={
-            name !== "" && (
-              <ArtistAbout
-                name={shown}
-                songs={songs}
-                artist={artist}
-                toLink={
-                  !namesake && named !== undefined && !named.linked && named.look_up === "yes"
-                }
-                {...(reload === undefined ? {} : { onPhotoUsed: reload })}
-              />
-            )
-          }
-          edit={
-            artist !== undefined &&
-            reload !== undefined && (
-              <EditArtistButton
-                artist={artist}
-                written={mostWritten(songs) ?? name}
-                onChanged={reload}
-              />
-            )
-          }
-          back={{ view: "artists" }}
-          backLabel="Artists"
-          heart={
-            canFavorite(name) && (
-              <FavoriteHeart
-                kind="artist"
-                name={shown}
-                favorite={isFavoriteArtist(props.favorites, name, route.id)}
-                onChange={(favorite) => {
-                  props.onFavoriteArtist(name, favorite, route.id);
-                }}
-                loved={favoriteSongsSuggesting(songs)}
-                suggestionKey={`${String(props.accountId)}:artist:${
-                  namesake ? (route.id ?? "") : fold(name.trim())
-                }`}
-              />
-            )
-          }
-          {...props}
+        <AlbumPage
+          songs={songs}
+          playingId={props.playingId}
+          actions={props.actions}
+          heading={(playPlace) => (
+            <PictureHeading
+              title={title}
+              back={{ view: "artists" }}
+              backLabel="Artists"
+              playPlace={playPlace}
+              className="artist-heading"
+              picture={
+                <ArtistPicture
+                  name={title}
+                  songs={songs}
+                  artist={artist}
+                  onPhotoUsed={name === "" ? undefined : reload}
+                />
+              }
+              heart={
+                canFavorite(name) && (
+                  <FavoriteHeart
+                    kind="artist"
+                    name={shown}
+                    favorite={isFavoriteArtist(props.favorites, name, route.id)}
+                    onChange={(favorite) => {
+                      props.onFavoriteArtist(name, favorite, route.id);
+                    }}
+                    loved={favoriteSongsSuggesting(songs)}
+                    suggestionKey={`${String(props.accountId)}:artist:${
+                      namesake ? (route.id ?? "") : fold(name.trim())
+                    }`}
+                  />
+                )
+              }
+              edit={
+                artist !== undefined &&
+                reload !== undefined && (
+                  <EditArtistButton
+                    artist={artist}
+                    written={mostWritten(songs) ?? name}
+                    onChanged={reload}
+                  />
+                )
+              }
+            >
+              {name !== "" && (
+                <ArtistFacts
+                  name={shown}
+                  artist={artist}
+                  toLink={
+                    !namesake && named !== undefined && !named.linked && named.look_up === "yes"
+                  }
+                />
+              )}
+            </PictureHeading>
+          )}
           empty={<p className="empty">No songs by this artist are in your Library now.</p>}
-        >
-          {songs}
-        </Songs>
+        />
       );
     }
     case "albums":

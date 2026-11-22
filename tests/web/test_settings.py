@@ -2,6 +2,7 @@
 
 from fastapi.testclient import TestClient
 
+from medleyplay.domain.settings import DEFAULT_AI_NOTES
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 
 TWENTY_GIB = 20 * 1024**3
@@ -23,6 +24,7 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "find_artist_photos": "up_next",
         "find_album_covers": "up_next",
         "pick_album_covers_by_ai": False,
+        "ai_notes": [{"ask": note.ask, "text": note.text} for note in DEFAULT_AI_NOTES],
         "revision": 0,
     }
 
@@ -217,3 +219,18 @@ def test_finding_album_covers_is_one_of_three_choices(client: TestClient) -> Non
     )
 
     assert refused.status_code == 422
+
+
+def test_an_admin_edits_the_notes_offered_to_the_ai_and_saving_without_them_keeps_them(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    notes = [{"ask": "songs", "text": "A concert: one song per chapter."}]
+    chosen = client.put(
+        "/api/settings", json={"storage_limit": None, "ai_notes": notes, "revision": 0}
+    )
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert chosen.json()["ai_notes"] == notes
+    assert saved.json()["ai_notes"] == notes

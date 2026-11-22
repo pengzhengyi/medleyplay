@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ask the AI with a note** — beside each *Ask AI* button (a song's details, and the
+  songs of a file), ▾ or a right-click opens the note to ask with: the household's notes
+  for that ask to tick, such as *One song per track of the album's standard edition.*,
+  and more details typed, which this browser remembers. An admin adds, rewords, and
+  removes the notes in Settings → AI.
+- **Ask the AI about a song with no video text** — from its details, someone may now ask
+  the AI about any song or album, by the title, artist, album, and length it shows and
+  what the model knows; only songs with a video's text are asked about on their own.
+
 - **Previous album and Next album shortcuts** — Alt + Shift + ← and Alt + Shift + →
   step past the album playing, like the player's outer buttons; change them in
   Settings like any shortcut.

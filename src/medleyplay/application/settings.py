@@ -4,6 +4,7 @@ The revision guards every change, so a form left open in a forgotten tab can't
 lower the limit over a newer change.
 """
 
+import dataclasses
 from enum import StrEnum
 from typing import Final, Literal
 
@@ -20,6 +21,11 @@ from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInput
 from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import (
     ALBUM_MINUTES,
+    DEFAULT_AI_NOTES,
+    MAX_AI_NOTE,
+    MAX_AI_NOTES,
+    AiAsk,
+    AiNote,
     CoverSearch,
     PhotoSearch,
     RemovalOrder,
@@ -30,6 +36,15 @@ from medleyplay.persistence.schema import SettingRow
 
 SETTINGS_ROW: Final = 1
 MAX_ALBUM_MINUTES: Final = 600
+
+
+class AiNoteDocument(BaseModel):
+    """A note offered to the AI, as stored: one line of words, for one kind of ask."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    ask: AiAsk
+    text: str = Field(min_length=1, max_length=MAX_AI_NOTE)
 
 
 class SettingsDocument(BaseModel):
@@ -48,6 +63,20 @@ class SettingsDocument(BaseModel):
     find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
     find_album_covers: CoverSearch = CoverSearch.UP_NEXT
     pick_album_covers_by_ai: bool = False
+    ai_notes: tuple[AiNoteDocument, ...] = Field(
+        default=tuple(AiNoteDocument(ask=n.ask, text=n.text) for n in DEFAULT_AI_NOTES),
+        max_length=MAX_AI_NOTES,
+    )
+
+    @field_validator("ai_notes")
+    @classmethod
+    def _each_note_once_per_ask(
+        cls, notes: tuple[AiNoteDocument, ...]
+    ) -> tuple[AiNoteDocument, ...]:
+        if len({(note.ask, note.text) for note in notes}) != len(notes):
+            message = "each note may be offered once for each ask"
+            raise ValueError(message)
+        return notes
 
     @field_validator("lyrics_sites", "picture_sites")
     @classmethod
@@ -84,18 +113,9 @@ class SettingsService:
             message = "Only an admin can change the settings."
             raise ForbiddenError(message)
         try:
-            document = SettingsDocument(
-                storage_limit=settings.storage_limit,
-                removal_order=settings.removal_order,
-                album_minutes=settings.album_minutes,
-                split_albums=settings.split_albums,
-                lyrics_sites=settings.lyrics_sites,
-                picture_sites=settings.picture_sites,
-                pick_pictures_by_ai=settings.pick_pictures_by_ai,
-                find_artist_photos=settings.find_artist_photos,
-                find_album_covers=settings.find_album_covers,
-                pick_album_covers_by_ai=settings.pick_album_covers_by_ai,
-            ).model_dump(mode="json")
+            # From plain data, so a value that isn't valid is named by where it is.
+            fields = {k: v for k, v in dataclasses.asdict(settings).items() if k != "revision"}
+            document = SettingsDocument.model_validate(fields).model_dump(mode="json")
         except ValidationError as error:
             where = ".".join(str(part) for part in error.errors()[0]["loc"])
             message = f"The settings aren't valid at {where}: {error.errors()[0]['msg']}"
@@ -153,5 +173,6 @@ def read_settings(db: Session) -> Settings:
         find_artist_photos=document.find_artist_photos,
         find_album_covers=document.find_album_covers,
         pick_album_covers_by_ai=document.pick_album_covers_by_ai,
+        ai_notes=tuple(AiNote(note.ask, note.text) for note in document.ai_notes),
         revision=row.revision,
     )

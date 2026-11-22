@@ -6075,24 +6075,82 @@ button.songs-back:hover {
   }
 }
 
-/* Asking the AI again: a note of the listener's, and the button that asks. */
-.ai-again {
-  display: grid;
-  gap: 0.3rem;
-  margin: 0 0 0.75rem;
+/* Ask AI and ▾ beside it, which opens the note to ask with: one pill split in two. */
+.ai-split {
+  display: inline-flex;
 }
 
-.ai-again-row {
+.ai-split > :first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.ai-split > .ai-note-toggle {
+  margin-left: -1px;
+  padding-inline: 0.45rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* The note to ask the AI with: the household's notes to tick, and more details typed. */
+.ai-note {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--raised);
+}
+
+.ai-note-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ai-note-choice {
   display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Square, as a tick-box: any number of notes may be ticked. */
+.ai-note-choice > [type="checkbox"] {
+  flex: none;
+  margin: 0.15rem 0 0;
+  border-radius: 0.3rem;
+}
+
+.ai-note .ai-note-details {
+  margin: 0;
+  resize: vertical;
+}
+
+.ai-note-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
 
-.ai-again-row .detail-input {
-  flex: 1;
-  margin: 0;
+.ai-note-count {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
-.songs-panel .ai-again-ask {
+.ai-note-count.over {
+  color: #d1495b;
+}
+
+.ai-note .ai-note-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   width: auto;
   margin: 0;
   padding: 0.35rem 1rem;
@@ -6101,9 +6159,34 @@ button.songs-back:hover {
   white-space: nowrap;
 }
 
-.ai-again-count {
-  color: var(--muted);
-  font-size: 0.75rem;
+/* The notes offered when asking the AI, in Settings: a field and a remove button each. */
+.ai-notes {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ai-notes-group {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.ai-notes-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ai-notes-row .detail-input {
+  flex: 1;
+  margin: 0;
+}
+
+.ai-notes .ai-notes-add {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.3rem;
 }
 
 /* A song list typed as text, its lines numbered and checked as it is typed. */

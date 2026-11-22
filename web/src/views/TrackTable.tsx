@@ -55,6 +55,7 @@ import {
 } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { type ReactNode, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { CommunityRating, DownloadUnderWay, Playlist, Track } from "../api";
 import { formatTime } from "../format";
@@ -356,6 +357,7 @@ export function TrackTable({
   onFocused,
   asked,
   onAsked,
+  playAllIn,
 }: {
   readonly tracks: readonly Track[];
   readonly playingId: number | undefined;
@@ -374,6 +376,11 @@ export function TrackTable({
     { readonly artist?: readonly string[]; readonly group?: LibraryGroup } | undefined;
   /** Called once what was asked is set, so it isn't set again. */
   readonly onAsked?: (() => void) | undefined;
+  /**
+   * Where Play and Shuffle go, when not above the table: an element of the page's heading,
+   * or `null` while it is not there yet, which shows neither.
+   */
+  readonly playAllIn?: HTMLElement | null | undefined;
 }) {
   const [layout, setLayout] = useState(savedLayout);
   useEffect(() => {
@@ -577,55 +584,56 @@ export function TrackTable({
   };
   const by = grouping[0] ?? "";
 
+  const playButtons = (
+    <div className="play-all">
+      <span className={songsIn === undefined ? undefined : "split-button"}>
+        <button
+          type="button"
+          aria-label="Play all"
+          disabled={playable.length === 0}
+          onClick={() => {
+            playAll(playable, false, unitOf);
+          }}
+        >
+          <PlayIcon weight="fill" aria-hidden />
+          Play
+        </button>
+        {songsIn !== undefined && (
+          <MoreWays label="More ways to play" ways={ways(false)} disabled={playable.length === 0} />
+        )}
+      </span>
+      <span className={songsIn === undefined ? undefined : "split-button secondary"}>
+        <button
+          type="button"
+          className="secondary"
+          aria-label="Shuffle all"
+          disabled={playable.length === 0}
+          onClick={() => {
+            playAll(playable, true, unitOf);
+          }}
+        >
+          <ShuffleIcon weight="bold" aria-hidden />
+          Shuffle
+        </button>
+        {songsIn !== undefined && (
+          <MoreWays
+            label="More ways to shuffle"
+            ways={ways(true)}
+            disabled={playable.length === 0}
+          />
+        )}
+      </span>
+    </div>
+  );
+
   if (tracks.length === 0) {
     return <>{empty}</>;
   }
   return (
     <>
+      {playAllIn !== undefined && playAllIn !== null && createPortal(playButtons, playAllIn)}
       <div className="table-tools">
-        <div className="play-all">
-          <span className={songsIn === undefined ? undefined : "split-button"}>
-            <button
-              type="button"
-              aria-label="Play all"
-              disabled={playable.length === 0}
-              onClick={() => {
-                playAll(playable, false, unitOf);
-              }}
-            >
-              <PlayIcon weight="fill" aria-hidden />
-              Play
-            </button>
-            {songsIn !== undefined && (
-              <MoreWays
-                label="More ways to play"
-                ways={ways(false)}
-                disabled={playable.length === 0}
-              />
-            )}
-          </span>
-          <span className={songsIn === undefined ? undefined : "split-button secondary"}>
-            <button
-              type="button"
-              className="secondary"
-              aria-label="Shuffle all"
-              disabled={playable.length === 0}
-              onClick={() => {
-                playAll(playable, true, unitOf);
-              }}
-            >
-              <ShuffleIcon weight="bold" aria-hidden />
-              Shuffle
-            </button>
-            {songsIn !== undefined && (
-              <MoreWays
-                label="More ways to shuffle"
-                ways={ways(true)}
-                disabled={playable.length === 0}
-              />
-            )}
-          </span>
-        </div>
+        {playAllIn === undefined && playButtons}
         <details className="dropdown columns-menu">
           <summary>
             <SlidersHorizontalIcon weight="regular" aria-hidden />

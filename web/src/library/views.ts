@@ -280,6 +280,27 @@ export function coverPlaceOf(track: Track, tracks: readonly Track[]): CoverPlace
 }
 
 /**
+ * Return the year an album came out, as most of its `songs` give it, the earlier year when
+ * two are given as often; `null` when none of them gives a year.
+ */
+export function albumYearOf(songs: readonly Track[]): number | null {
+  const counts = new Map<number, number>();
+  for (const { year } of songs) {
+    if (year !== null) {
+      counts.set(year, (counts.get(year) ?? 0) + 1);
+    }
+  }
+  let found: number | null = null;
+  for (const [year, count] of counts) {
+    const most = found === null ? 0 : (counts.get(found) ?? 0);
+    if (found === null || count > most || (count === most && year < found)) {
+      found = year;
+    }
+  }
+  return found;
+}
+
+/**
  * Return the one file an album is, if it is one: the file its songs were split from,
  * listed among them or not, or the album itself as one file not yet split.
  */

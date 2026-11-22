@@ -11,7 +11,7 @@ import {
   ShuffleIcon,
   PencilSimpleIcon,
 } from "@phosphor-icons/react";
-import { Fragment, type ReactNode, useMemo } from "react";
+import { Fragment, type ReactNode, useMemo, useState } from "react";
 
 import type {
   ArtistNames,
@@ -42,6 +42,7 @@ import {
   type Artist,
   albumsOf,
   albumFileOf,
+  albumYearOf,
   artistsCalled,
   artistsOf,
   downloadedOf,
@@ -59,12 +60,14 @@ import { querySaid } from "../library/query";
 import { isRailNamed } from "../rail";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumAbout } from "./AlbumAbout";
+import { AlbumHeading } from "./AlbumHeading";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistAbout } from "./ArtistAbout";
 import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
 import { DownloadsFolder } from "./DownloadsFolder";
 import { FavoriteHeart } from "./FavoriteHeart";
+import { Hint } from "./Hint";
 import { LazyPart } from "./LazyPart";
 import { CleanUpView, InsightsView, SettingsView } from "./parts";
 import type { Station } from "../library/useStation";
@@ -300,67 +303,74 @@ function viewOf(given: ViewProps) {
       const file = albumFileOf(songs, new Map(given.tracks.map((track) => [track.id, track])));
       const { onEditAlbum } = props.actions;
       return (
-        <Songs
-          title={route.name || UNKNOWN_ALBUM}
-          subtitle={route.artist || UNKNOWN_ARTIST}
-          subtitleTo={route.artist === "" ? undefined : { view: "artist", name: route.artist }}
-          back={{ view: "albums" }}
-          backLabel="Albums"
-          heart={
-            canFavorite(route.name) && (
-              <FavoriteHeart
-                kind="album"
-                name={route.name}
-                favorite={isFavoriteAlbum(props.favorites, route.artist, route.name)}
-                onChange={(favorite) => {
-                  props.onFavoriteAlbum(route.artist, route.name, favorite);
-                }}
-                loved={favoriteSongsSuggesting(songs)}
-                suggestionKey={`${String(props.accountId)}:album:${albumKey(route.artist, route.name)}`}
-              />
-            )
-          }
-          edit={
-            songs.length > 0 &&
-            (file !== undefined || onEditAlbum !== undefined) && (
-              <button
-                type="button"
-                className="secondary outline edit-heading"
-                onClick={() => {
-                  if (file === undefined) {
-                    onEditAlbum?.(songs);
-                  } else {
-                    props.actions.onEditDetails(file);
-                  }
-                }}
-              >
-                <PencilSimpleIcon aria-hidden />
-                Edit details
-              </button>
-            )
-          }
-          about={
-            <AlbumAbout
-              album={route.name}
-              artist={route.artist}
-              // A split file's songs share its cover, so the file is what changes.
-              songs={file === undefined ? songs : [file]}
-              cover={file?.cover ?? albumsOf(songs)[0]?.cover ?? null}
-              {...(route.name === ""
-                ? {}
-                : {
-                    onUse: props.actions.onUseAlbumCover,
-                    onUpload: props.actions.onUploadAlbumCover,
-                  })}
-            >
-              <AlbumRatingNote artist={route.artist} album={route.name} />
-            </AlbumAbout>
-          }
-          {...props}
+        <AlbumPage
+          songs={songs}
+          playingId={props.playingId}
+          actions={props.actions}
+          heading={(playPlace) => (
+            <AlbumHeading
+              title={route.name || UNKNOWN_ALBUM}
+              artist={route.artist || UNKNOWN_ARTIST}
+              artistTo={route.artist === "" ? undefined : { view: "artist", name: route.artist }}
+              year={albumYearOf(songs)}
+              back={{ view: "albums" }}
+              backLabel="Albums"
+              playPlace={playPlace}
+              cover={
+                <AlbumAbout
+                  album={route.name}
+                  artist={route.artist}
+                  // A split file's songs share its cover, so the file is what changes.
+                  songs={file === undefined ? songs : [file]}
+                  cover={file?.cover ?? albumsOf(songs)[0]?.cover ?? null}
+                  {...(route.name === ""
+                    ? {}
+                    : {
+                        onUse: props.actions.onUseAlbumCover,
+                        onUpload: props.actions.onUploadAlbumCover,
+                      })}
+                />
+              }
+              note={<AlbumRatingNote artist={route.artist} album={route.name} />}
+              heart={
+                canFavorite(route.name) && (
+                  <FavoriteHeart
+                    kind="album"
+                    name={route.name}
+                    favorite={isFavoriteAlbum(props.favorites, route.artist, route.name)}
+                    onChange={(favorite) => {
+                      props.onFavoriteAlbum(route.artist, route.name, favorite);
+                    }}
+                    loved={favoriteSongsSuggesting(songs)}
+                    suggestionKey={`${String(props.accountId)}:album:${albumKey(route.artist, route.name)}`}
+                  />
+                )
+              }
+              edit={
+                songs.length > 0 &&
+                (file !== undefined || onEditAlbum !== undefined) && (
+                  <Hint name="Edit details" keys={[]}>
+                    <button
+                      type="button"
+                      className="secondary outline edit-heading"
+                      aria-label="Edit details"
+                      onClick={() => {
+                        if (file === undefined) {
+                          onEditAlbum?.(songs);
+                        } else {
+                          props.actions.onEditDetails(file);
+                        }
+                      }}
+                    >
+                      <PencilSimpleIcon aria-hidden />
+                    </button>
+                  </Hint>
+                )
+              }
+            />
+          )}
           empty={<p className="empty">No songs from this album are in your Library now.</p>}
-        >
-          {songs}
-        </Songs>
+        />
       );
     }
     case "downloaded":
@@ -527,6 +537,42 @@ function Songs({
       </ViewHeading>
       {about}
       <TrackTable tracks={children} playingId={playingId} actions={actions} empty={empty} />
+    </>
+  );
+}
+
+/**
+ * An album's page: its heading, then its songs, then how many there are and how long they
+ * last. Play and Shuffle sit in the heading but play what the table shows.
+ */
+function AlbumPage({
+  songs,
+  playingId,
+  actions,
+  heading,
+  empty,
+}: {
+  readonly songs: readonly Track[];
+  readonly playingId: number | undefined;
+  readonly actions: TrackActions;
+  /** The heading, given where its Play and Shuffle go. */
+  readonly heading: (playPlace: (place: HTMLDivElement | null) => void) => ReactNode;
+  readonly empty: ReactNode;
+}) {
+  const [playPlace, setPlayPlace] = useState<HTMLDivElement | null>(null);
+  return (
+    <>
+      {heading(setPlayPlace)}
+      <TrackTable
+        tracks={songs}
+        playingId={playingId}
+        actions={actions}
+        empty={empty}
+        playAllIn={playPlace}
+      />
+      {songs.length > 0 && (
+        <p className="album-length">{formatLength(songs.length, durationOf(songs))}</p>
+      )}
     </>
   );
 }

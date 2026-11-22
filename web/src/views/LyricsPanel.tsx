@@ -109,7 +109,11 @@ function TimedLyrics({
   );
 }
 
-/** The line of `lyrics` sung `seconds` into the song, for the player; none between lines. */
+/**
+ * The line of `lyrics` sung `seconds` into the song, for the player, with the whole line in
+ * its tooltip. Between lines it stays, empty, so the player keeps its height; plain lyrics
+ * have no line sung now, and show none.
+ */
 export function LyricNow({
   lyrics,
   seconds,
@@ -120,9 +124,10 @@ export function LyricNow({
   if (!lyrics?.synced) {
     return null;
   }
-  const line = lyrics.lines[lineAt(lyrics.lines, seconds * 1000)];
-  if (line === undefined || line.text === "") {
-    return null;
-  }
-  return <span className="lyric-now">{line.text}</span>;
+  const text = lyrics.lines[lineAt(lyrics.lines, seconds * 1000)]?.text ?? "";
+  return (
+    <p className="lyric-now" title={text === "" ? undefined : text}>
+      {text}
+    </p>
+  );
 }

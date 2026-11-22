@@ -49,6 +49,26 @@ npm run e2e      # Playwright against the real server (needs: uv sync, npx playw
   a field beside the field, and follow the conventions people know from other
   apps. Prefer an icon or a short tag to a sentence. Each icon-only control or tag
   keeps an accessible name and a tooltip.
+- **A control that started something waits in place.** It shows one spinner,
+  Pico's or its own in its icon's place, keeps its label, and is marked
+  `aria-busy`. Nothing else on it moves.
+- **An action that saves is acknowledged at once.** After *Use*, *Save*, or
+  *Approve*, the item shows that it is saving, takes no more input, and leaves or
+  changes once the server has recorded it.
+- **Errors sit by what they concern** and say how to fix it. A toast is only for an
+  event with no place on screen, such as a background job that finished while its
+  view was closed.
+- **Suggestions show in place,** marked as suggested (*Suggested*, *Found on the
+  web*), with *Use*, *Dismiss*, and *Change* on the item itself. Nothing suggested
+  changes the household's data until someone uses it.
+- **Dialogs:** a ✕ at the top right closes; there is no footer *Close* or *Cancel*;
+  the main action is *Save*; no two buttons do the same thing.
+- **Settings save as they change,** with a faint *Saved.* that fades.
+- **Words:** plain, sentence case, and an action keeps one name throughout, so
+  *Use* leads to *Used*. Each icon-only control keeps an accessible name, a tooltip
+  for pointer users, and a visible focus ring.
+- **Every view works** in light and dark, at phone width (390 pixels) and on a
+  desktop, and holds still where reduced motion is preferred.
 
 ## Comments
 

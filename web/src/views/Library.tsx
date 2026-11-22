@@ -457,10 +457,11 @@ export function Library({
         },
       );
     },
+    // The songs of a song's file open over that song's own details, the way back from them.
     onEditSongs: (track: Track) => {
       const file = track.segment_of === null ? track : byId.get(track.segment_of);
       if (file !== undefined) {
-        setEditing({ track: file, songs: true });
+        setEditing({ track, songs: true });
       }
     },
   };

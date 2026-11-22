@@ -4,7 +4,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { KnownArtist } from "../api";
 import { beatlesPictures, knownArtistOf, serve, trackOf } from "../testing/server";
-import { ArtistAbout } from "./ArtistAbout";
+import { ArtistFacts, ArtistPicture } from "./ArtistAbout";
+
+/** The artist's picture and what is known of it, as its page's heading shows them. */
+function ArtistAbout({
+  onPhotoUsed,
+  ...about
+}: {
+  readonly name: string;
+  readonly songs: Parameters<typeof ArtistPicture>[0]["songs"];
+  readonly artist: KnownArtist | undefined;
+  readonly toLink: boolean;
+  readonly onPhotoUsed?: () => void;
+}) {
+  return (
+    <>
+      <ArtistPicture {...about} onPhotoUsed={onPhotoUsed} />
+      <ArtistFacts {...about} />
+    </>
+  );
+}
 
 /** The Beatles as MusicBrainz knows them, going by 披头士 and 甲壳虫乐队 too. */
 const BEATLES: KnownArtist = knownArtistOf("b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d", "The Beatles", {

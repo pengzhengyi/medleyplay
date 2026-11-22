@@ -696,6 +696,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An artist's page is laid out like an album's** — its photo large on the left; its
+  name, who MusicBrainz says it is, its other names, and its links beside it; and Play,
+  Shuffle, the heart, and a round pencil for *Edit details* on the photo's bottom line.
+  How many songs there are and how long they last show under them, as on an album. On
+  a phone, the photo is on top and the rest centered under it.
 - **The data folder is in the Music folder on a Mac** — `~/Music/medleyplay` by
   default, beside the music. On a Mac whose data is still in
   `~/Library/Application Support/medleyplay`, `serve` asks to move it there. The new

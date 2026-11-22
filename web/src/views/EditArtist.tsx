@@ -25,6 +25,7 @@ import { initialOf } from "../format";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
+import { Hint } from "./Hint";
 import { Modal } from "./Modal";
 import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { PictureFrame } from "./PictureFrame";
@@ -414,16 +415,18 @@ export function EditArtistButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        type="button"
-        className="secondary outline edit-heading"
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        <PencilSimpleIcon aria-hidden />
-        Edit details
-      </button>
+      <Hint name="Edit details" keys={[]}>
+        <button
+          type="button"
+          className="secondary outline edit-heading"
+          aria-label="Edit details"
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          <PencilSimpleIcon aria-hidden />
+        </button>
+      </Hint>
       {open && (
         <EditArtist
           artist={artist}

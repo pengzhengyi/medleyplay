@@ -23,6 +23,8 @@ export type Command =
   | "forward"
   | "previous"
   | "next"
+  | "previousAlbum"
+  | "nextAlbum"
   | "volumeDown"
   | "volumeUp"
   | "mute"
@@ -45,8 +47,10 @@ export const COMMANDS: readonly { readonly command: Command; readonly name: stri
   { command: "toggle", name: "Play or pause" },
   { command: "back", name: "Back 5 seconds" },
   { command: "forward", name: "Ahead 5 seconds" },
-  { command: "previous", name: "Previous" },
-  { command: "next", name: "Next" },
+  { command: "previous", name: "Previous song" },
+  { command: "next", name: "Next song" },
+  { command: "previousAlbum", name: "Previous album" },
+  { command: "nextAlbum", name: "Next album" },
   { command: "volumeDown", name: "Volume down" },
   { command: "volumeUp", name: "Volume up" },
   { command: "mute", name: "Mute or unmute" },
@@ -65,6 +69,8 @@ export const DEFAULT_BINDINGS: Bindings = {
   forward: ["right"],
   previous: ["shift+left"],
   next: ["shift+right"],
+  previousAlbum: ["alt+shift+left"],
+  nextAlbum: ["alt+shift+right"],
   volumeDown: ["minus"],
   volumeUp: ["equal"],
   mute: ["m"],

@@ -36,6 +36,19 @@ test("Shift and → skips to the next song", async ({ page }) => {
   await expect(player(page).getByText("Bravo", { exact: true })).toBeVisible();
 });
 
+test("Shift and → skips to the next song even after the position was clicked, which focuses it", async ({
+  page,
+}) => {
+  await play(page, "Alpha");
+  const position = player(page).getByRole("slider", { name: "Position" });
+  await position.click();
+  await expect(position).toBeFocused();
+
+  await page.keyboard.press("Shift+ArrowRight");
+
+  await expect(player(page).getByText("Bravo", { exact: true })).toBeVisible();
+});
+
 test("/ goes to the search box, where the keys type", async ({ page }) => {
   await play(page, "Alpha");
 

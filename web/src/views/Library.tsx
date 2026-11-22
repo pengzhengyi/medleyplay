@@ -26,7 +26,7 @@ import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
 import { useLyrics } from "../library/useLyrics";
 import { songTimeOf } from "../lyrics";
-import { playingOf } from "../player/albumNow";
+import { type StepCommand, albumSteps, playingOf, stepFor } from "../player/albumNow";
 import { useStation } from "../library/useStation";
 import { linksOf, withLinkedFavorites } from "../library/artistLinks";
 import { useArtistNames } from "../library/useArtistNames";
@@ -529,6 +529,29 @@ export function Library({
     setNotice(`Added “${track.title}” to ${listFormat.format(names)}.`);
   };
 
+  /**
+   * Step as `command` says: within and past the album playing, or along the queue while a
+   * song of its own plays, where Previous and Next album step as Previous and Next do.
+   */
+  const step = (command: StepCommand) => {
+    if (playing === undefined) {
+      return;
+    }
+    const { position, queue } = player;
+    const steps = albumSteps(queue, byId, playingOf(queue, byId, position), position);
+    if (steps === undefined) {
+      if (command === "previous" || command === "previousAlbum") {
+        player.previous();
+      } else {
+        player.next();
+      }
+      return;
+    }
+    const to = stepFor(steps, command);
+    if (to !== undefined) {
+      player.playAt(to.key, to.seconds);
+    }
+  };
   // A shortcut changes what isn't in view, or isn't focused, so what it did is said.
   const shortcuts: ShortcutHandlers = {
     toggle: player.toggle,
@@ -539,14 +562,16 @@ export function Library({
       player.seek(Math.min(player.duration ?? Infinity, player.position + SEEK_SECONDS));
     },
     previous: () => {
-      if (playing !== undefined) {
-        player.previous();
-      }
+      step("previous");
     },
     next: () => {
-      if (playing !== undefined) {
-        player.next();
-      }
+      step("next");
+    },
+    previousAlbum: () => {
+      step("previousAlbum");
+    },
+    nextAlbum: () => {
+      step("nextAlbum");
     },
     volumeDown: () => {
       player.setVolume(stepVolume(player.volume, -1));

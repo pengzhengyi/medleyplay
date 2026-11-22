@@ -382,8 +382,8 @@ class TrackStateRow(Base):
     rating: Mapped[int | None]
     play_count: Mapped[int] = mapped_column(default=0)
     last_played_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
-    listened_ms: Mapped[int] = mapped_column(default=0, server_default=text("0"))
-    timed_plays: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    listened_ms: Mapped[int] = mapped_column(default=0, server_default="0")
+    timed_plays: Mapped[int] = mapped_column(default=0, server_default="0")
 
 
 class FavoriteArtistRow(Base):
@@ -463,7 +463,7 @@ class PlayRow(Base):
     track_id: Mapped[int] = mapped_column(ForeignKey("track.id", ondelete="CASCADE"), index=True)
     played_at: Mapped[datetime] = mapped_column(UtcDateTime)
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
-    cleared: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    cleared: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     listened_ms: Mapped[int | None]
 
 
@@ -483,7 +483,7 @@ class PlaylistRow(Base):
     )
     name: Mapped[str] = mapped_column(String(128))
     rules: Mapped[dict[str, object] | None] = mapped_column(JSON)
-    keep_downloaded: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
+    keep_downloaded: Mapped[bool] = mapped_column(default=False, server_default="0")
     builtin: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
@@ -1031,7 +1031,8 @@ class TrackLyricsRow(Base):
     """A song's lyrics as one source has them: LRC or plain text, or none for an instrumental.
 
     `origin` is where they came from: the household, a file beside the audio, the
-    audio's tags, or a site that finds lyrics.
+    audio's tags, or a site that finds lyrics; or they are a suggestion, the nearest
+    song's, which `dismissed` says the household dismissed.
     """
 
     __tablename__ = "track_lyrics"
@@ -1043,6 +1044,7 @@ class TrackLyricsRow(Base):
     text: Mapped[str] = mapped_column(Text, default="")
     instrumental: Mapped[bool] = mapped_column(default=False)
     found_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    dismissed: Mapped[bool] = mapped_column(default=False, server_default="0")
 
 
 class LyricsSearchRow(Base):

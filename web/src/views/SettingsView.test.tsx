@@ -349,6 +349,27 @@ describe("the Lyrics section", () => {
     expect(sent).toEqual([{ ...LIMIT_20, lyrics_sites: ["netease"] }]);
     expect(netease).toBeChecked();
   });
+
+  it("turns suggesting the lyrics of a song that nearly matches off at once", async () => {
+    const sent: unknown[] = [];
+    open(true, {
+      "GET /api/enrichers/lyrics": { body: { ...enricherOf("lyrics", [1]), mode: "next" } },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...LIMIT_20, suggest_lyrics: false, revision: 3 } };
+      },
+    });
+    const suggest = await lyrics().findByRole("switch", {
+      name: "Suggest lyrics that nearly match",
+    });
+
+    expect(suggest).toBeChecked();
+    await userEvent.click(suggest);
+
+    expect(await lyrics().findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([{ ...LIMIT_20, suggest_lyrics: false }]);
+    expect(suggest).not.toBeChecked();
+  });
 });
 
 describe("the Deezer section", () => {

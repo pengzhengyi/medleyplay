@@ -19,6 +19,7 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "album_minutes": 20,
         "split_albums": "approval",
         "lyrics_sites": [],
+        "suggest_lyrics": True,
         "picture_sites": [],
         "pick_pictures_by_ai": False,
         "find_artist_photos": "up_next",
@@ -27,6 +28,16 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "ai_notes": [{"ask": note.ask, "text": note.text} for note in DEFAULT_AI_NOTES],
         "revision": 0,
     }
+
+
+def test_an_admin_turns_lyrics_suggestions_off_keeping_the_rest(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    saved = client.put(
+        "/api/settings", json={"storage_limit": None, "suggest_lyrics": False, "revision": 0}
+    )
+
+    assert (saved.json()["suggest_lyrics"], saved.json()["album_minutes"]) == (False, 20)
 
 
 def test_an_admin_saves_a_limit_at_the_revision_read(client: TestClient) -> None:

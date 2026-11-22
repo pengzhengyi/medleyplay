@@ -49,14 +49,21 @@ def melt(**changes: object) -> dict[str, object]:
     }
 
 
-def asking_for_melt(duration_ms: int | None = 260_400) -> EnrichTrack:
-    """Ask about *Melt* by ryo on *Re:Start*, as long as the file is."""
+def asking_for_melt(
+    duration_ms: int | None = 260_400, *, title: str = "Melt", suggest: bool = False
+) -> EnrichTrack:
+    """Ask about *Melt* by ryo on *Re:Start*, as long as the file is, by the `title` shown.
+
+    With `suggest`, the household wants the nearest song's lyrics when none match.
+    """
     shown = (
-        ShownDetail(field="title", value="Melt", origin="files"),
+        ShownDetail(field="title", value=title, origin="files"),
         ShownDetail(field="artist", value="ryo", origin="files"),
         ShownDetail(field="album", value="Re:Start", origin="files"),
     )
-    return EnrichTrack(shown=shown, duration_ms=duration_ms, folder="/unused")
+    return EnrichTrack(
+        shown=shown, duration_ms=duration_ms, folder="/unused", suggest_lyrics=suggest
+    )
 
 
 def lrclib_of(fake: FakeTransport, waits: FakeWaits | None = None) -> Lrclib:
@@ -128,6 +135,61 @@ def test_a_song_found_nowhere_has_no_lyrics() -> None:
     )
 
     found = lrclib_of(fake).enrich(asking_for_melt())
+
+    assert (found.status, found.lyrics) == (EnrichStatus.OK, None)
+
+
+def test_a_song_with_none_as_long_is_suggested_the_nearest_lrclib_has_when_wanted() -> None:
+    fake = (
+        FakeTransport()
+        .answer(GET, Reply.json({"code": 404}, status=404))
+        .answer(SEARCH, Reply.json([melt(duration=266.0)]))
+    )
+
+    found = lrclib_of(fake).enrich(asking_for_melt(suggest=True))
+
+    assert found.lyrics == FoundLyrics(provider=LyricsProvider.LRCLIB, text=MELT, suggested=True)
+    assert fake.urls() == [GET, SEARCH]
+
+
+def test_nothing_is_suggested_unless_the_household_wants_suggestions() -> None:
+    fake = (
+        FakeTransport()
+        .answer(GET, Reply.json({"code": 404}, status=404))
+        .answer(SEARCH, Reply.json([melt(duration=266.0)]))
+    )
+
+    found = lrclib_of(fake).enrich(asking_for_melt())
+
+    assert found.lyrics is None
+
+
+def test_a_videos_title_is_searched_for_again_as_its_songs_title_to_suggest() -> None:
+    fake = (
+        FakeTransport()
+        .answer(GET, Reply.json({"code": 404}, status=404))
+        .answer(SEARCH, Reply.json([]), Reply.json([melt(duration=263.0)]))
+    )
+
+    found = lrclib_of(fake).enrich(asking_for_melt(title="【ryo】Melt 官方MV", suggest=True))
+
+    assert found.lyrics is not None
+    assert found.lyrics.suggested
+    assert fake.urls() == [GET, SEARCH, SEARCH]
+    assert fake.parameter("track_name", index=2) == "Melt"
+
+
+def test_a_song_far_from_any_lrclib_has_is_suggested_nothing() -> None:
+    fake = (
+        FakeTransport()
+        .answer(GET, Reply.json({"code": 404}, status=404))
+        .answer(
+            SEARCH,
+            Reply.json([melt(duration=300.0), melt(trackName="Melting Point", duration=265.0)]),
+        )
+    )
+
+    found = lrclib_of(fake).enrich(asking_for_melt(suggest=True))
 
     assert (found.status, found.lyrics) == (EnrichStatus.OK, None)
 

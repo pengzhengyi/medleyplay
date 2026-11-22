@@ -14,6 +14,7 @@
 - [Lyrics from the files](#lyrics-from-the-files)
 - [Looking lyrics up on LRCLIB](#looking-lyrics-up-on-lrclib)
 - [Looking lyrics up on NetEase](#looking-lyrics-up-on-netease)
+- [Suggesting lyrics that nearly match](#suggesting-lyrics-that-nearly-match)
 - [Finding lyrics by hand](#finding-lyrics-by-hand)
 - [What the API shows](#what-the-api-shows)
 - [Showing them](#showing-them)
@@ -39,6 +40,7 @@ as the source gave them, and the first held shows:
 | The audio's tags (ID3 USLT or SYLT, Vorbis LYRICS, MP4 ©lyr) | `tag` | Built |
 | LRCLIB, an open lyrics database | `lrclib` | Built |
 | NetEase Cloud Music, once turned on, for a song LRCLIB lacks | `netease` | Built |
+| The nearest song LRCLIB has, suggested, for a song no site has | `suggested` | Built |
 
 - **Instrumental is an answer:** a source may say a song has no lyrics, which shows
   as such and is kept as lyrics are.
@@ -133,6 +135,28 @@ A Library scan reads both, and keeps them apart, so removing one leaves the othe
   NetEase answers a request it takes for a bot's, is a refusal, which stops the
   enricher until an admin resets it; a busy answer fails the lookup without asking
   again.
+
+## Suggesting lyrics that nearly match
+
+A video's song is often on LRCLIB under a slightly different title or length, and so
+matches nothing. While `suggest_lyrics` is on (the default; Settings → Lyrics turns it
+off), such a song is shown the lyrics of the nearest song LRCLIB has, as a suggestion:
+
+- **Nearest:** LRCLIB is searched again by the song's own title, read out of the
+  video's (`plugins/lyrics/nearest.py`). A song found is near when its title is the
+  same, words in brackets aside, and it is within 8 s of the length, or within 2 s
+  when by another artist. The artist's own come first, then the exact title, then the
+  closest length.
+- **Kept apart:** the suggestion is kept under `suggested`, last of the origins, so
+  any other source's lyrics show before it. A suggestion counts as lyrics found online,
+  so the song is looked up again only when someone asks.
+- **Saved or dismissed:** Now Playing's big picture shows a bar tagged *Found on the
+  web*, with *Save*, which keeps the text as the household's, and *Dismiss*. A
+  dismissed suggestion is kept, marked `dismissed`, so the same lyrics suggested again
+  stay dismissed; others are shown. The song's own lyrics, once found, replace the
+  suggestion, as the household's do.
+- **Asked again on turning it on:** the flag is part of the subject a song's lyrics are
+  looked up by, so turning suggestions on asks the songs with none again.
 
 ## Finding lyrics by hand
 

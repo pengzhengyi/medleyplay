@@ -307,15 +307,20 @@ def lyrics_subject(
     track_id: TrackId,
     duration_ms: int | None,
     sites: tuple[LyricsSite, ...] = (),
+    *,
+    suggest: bool = False,
 ) -> str:
     """Return the subject that says a song's lyrics were looked up by these words and length.
 
     A song whose words or length change, as a corrected title, is a new subject, and so
-    is one asked of other `sites` after LRCLIB, as when the household turns one on.
+    is one asked of other `sites` after LRCLIB, as when the household turns one on, or
+    one to `suggest` the nearest song's lyrics for, as when suggestions are turned on.
     """
     said = f"lyrics\x1f{terms.key(track_id)}\x1f{duration_ms}"
     if sites:
         said += "\x1f" + ",".join(sites)
+    if suggest:
+        said += "\x1f" + "suggest"
     return hashlib.sha256(said.encode()).hexdigest()
 
 

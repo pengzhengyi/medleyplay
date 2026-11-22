@@ -165,6 +165,81 @@ def test_dropping_the_households_lyrics_shows_those_found_again(
     assert shown.origin is LyricsOrigin.LRCLIB
 
 
+def test_a_song_no_site_has_shows_the_nearest_songs_lyrics_as_suggested(
+    enriching: Enriching, alice: Account
+) -> None:
+    song = enriching.add_song("Nearly")
+
+    _looked_up(enriching, alice, song)
+
+    shown = enriching.lyrics.lyrics(song)
+    assert shown is not None
+    assert shown.origin is LyricsOrigin.SUGGESTED
+    assert shown.lyrics.lines[0] == Line(1_000, "Nearly")
+
+
+def test_a_song_no_site_has_shows_none_while_suggestions_are_turned_off(
+    enriching: Enriching, alice: Account
+) -> None:
+    song = enriching.add_song("Nearly")
+    SettingsService(enriching.units, enriching.clock).put(alice, Settings(suggest_lyrics=False))
+
+    _looked_up(enriching, alice, song)
+
+    assert enriching.lyrics.lyrics(song) is None
+
+
+def test_a_dismissed_suggestion_shows_no_more(enriching: Enriching, alice: Account) -> None:
+    song = enriching.add_song("Nearly")
+    _looked_up(enriching, alice, song)
+
+    shown = enriching.lyrics.dismiss_suggestion(song)
+
+    assert shown is None
+    assert enriching.lyrics.lyrics(song) is None
+
+
+def test_a_dismissed_suggestion_stays_dismissed_when_found_again(
+    enriching: Enriching, alice: Account
+) -> None:
+    song = enriching.add_song("Nearly")
+    _looked_up(enriching, alice, song)
+    enriching.lyrics.dismiss_suggestion(song)
+
+    _looked_up(enriching, alice, song, again=True)
+
+    assert enriching.lyrics.lyrics(song) is None
+
+
+def test_lyrics_a_site_has_for_the_song_replace_its_suggestion(
+    enriching: Enriching, alice: Account
+) -> None:
+    song = enriching.add_song("Nearly")
+    _looked_up(enriching, alice, song)
+    SettingsService(enriching.units, enriching.clock).put(
+        alice, Settings(lyrics_sites=(LyricsSite.NETEASE,))
+    )
+
+    _looked_up(enriching, alice, song, again=True)
+
+    shown = enriching.lyrics.lyrics(song)
+    assert shown is not None
+    assert shown.origin is LyricsOrigin.NETEASE
+    assert enriching.lyrics.dismiss_suggestion(song) == shown
+
+
+def test_the_households_own_lyrics_replace_a_suggestion(
+    enriching: Enriching, alice: Account
+) -> None:
+    song = enriching.add_song("Nearly")
+    _looked_up(enriching, alice, song)
+    enriching.lyrics.set_own(song, OWN)
+
+    shown = enriching.lyrics.forget_own(song)
+
+    assert shown is None
+
+
 def test_the_household_may_say_a_song_is_instrumental(enriching: Enriching) -> None:
     song = enriching.add_song("Let Down")
 

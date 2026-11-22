@@ -47,7 +47,8 @@ class EnrichJob(_Model):
     the Track showed when the Job was queued, and `whole_album` says it is a whole album,
     by its Kind. `text` is the Track's video text, when the enricher reads it, and
     `hint` a note the listener added when asking the AI again. `lyrics_sites` are the
-    sites the household turned on to be asked for lyrics after LRCLIB.
+    sites the household turned on to be asked for lyrics after LRCLIB, and
+    `suggest_lyrics` whether a song none has is given the nearest song's, suggested.
     """
 
     enricher: str
@@ -60,6 +61,7 @@ class EnrichJob(_Model):
     text: VideoText | None = None
     hint: str = ""
     lyrics_sites: tuple[LyricsProvider, ...] = ()
+    suggest_lyrics: bool = False
 
 
 class EnrichedTrack(_Model):
@@ -101,6 +103,7 @@ def run(request: EnrichJob, context: JobContext) -> EnrichedTrack:
             ai=context.ai,
             hint=request.hint,
             lyrics_sites=request.lyrics_sites,
+            suggest_lyrics=request.suggest_lyrics,
         ),
     )
     if answer.status is EnrichStatus.REFUSED:

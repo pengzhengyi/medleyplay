@@ -96,7 +96,9 @@ class Settings:
     pictures of an artist, and `pick_pictures_by_ai` says whether an AI model is asked
     which is of the artist as soon as they are found; `find_artist_photos` says which
     artists with no photo they are asked about without anyone asking. `lyrics_sites` are the sites
-    asked for a song's lyrics, in turn, when LRCLIB has none. `find_album_covers` says which
+    asked for a song's lyrics, in turn, when LRCLIB has none, and `suggest_lyrics` says whether
+    a song none of them has is shown the lyrics of the nearest song they have, as a
+    suggestion. `find_album_covers` says which
     albums with no cover MusicBrainz is searched for without anyone asking, and
     `pick_album_covers_by_ai` whether an AI model is then asked which cover found fits,
     when none plainly does. `ai_notes` are offered to whoever asks the AI, to tell it
@@ -108,6 +110,7 @@ class Settings:
     album_minutes: int | None = ALBUM_MINUTES
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
     lyrics_sites: tuple[LyricsSite, ...] = ()
+    suggest_lyrics: bool = True
     picture_sites: tuple[PictureSite, ...] = ()
     pick_pictures_by_ai: bool = False
     find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT

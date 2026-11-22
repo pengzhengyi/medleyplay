@@ -77,6 +77,90 @@ describe("the lyrics beside the cover", () => {
   });
 });
 
+/** *Melt*'s lyrics, suggested: those of the nearest song a site has. */
+const SUGGESTED: Lyrics = { ...MELT, origin: "suggested" };
+
+function suggested(
+  onSave = vi.fn(() => Promise.resolve()),
+  onDismiss = vi.fn(() => Promise.resolve()),
+) {
+  render(
+    <LyricsPanel
+      lyrics={SUGGESTED}
+      seconds={13}
+      onSeek={vi.fn()}
+      onSave={onSave}
+      onDismiss={onDismiss}
+    />,
+  );
+  return {
+    bar: within(screen.getByRole("group", { name: "Lyrics suggested" })),
+    onSave,
+    onDismiss,
+  };
+}
+
+describe("lyrics suggested, of the nearest song a site has", () => {
+  it("are tagged as found on the web, with what that means in the tooltip", () => {
+    const { bar } = suggested();
+
+    expect(bar.getByText("Found on the web")).toHaveAttribute(
+      "title",
+      "The lyrics of the nearest song LRCLIB has, not saved",
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+  });
+
+  it("are saved as the household's in one click", async () => {
+    const { bar, onSave } = suggested();
+
+    await userEvent.click(bar.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledOnce();
+  });
+
+  it("are dismissed in one click", async () => {
+    const { bar, onDismiss } = suggested();
+
+    await userEvent.click(bar.getByRole("button", { name: "Dismiss" }));
+
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it("show saving at once, taking no more input", async () => {
+    const { bar } = suggested(vi.fn(() => new Promise<void>(() => undefined)));
+
+    await userEvent.click(bar.getByRole("button", { name: "Save" }));
+
+    expect(bar.getByRole("button", { name: "Save" })).toHaveAttribute("aria-busy", "true");
+    expect(bar.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(bar.getByRole("button", { name: "Dismiss" })).toBeDisabled();
+  });
+
+  it("say why they were not saved, and can be saved again", async () => {
+    const { bar } = suggested(vi.fn(() => Promise.reject(new Error("Disk full"))));
+
+    await userEvent.click(bar.getByRole("button", { name: "Save" }));
+
+    expect(await bar.findByRole("alert")).toHaveTextContent("Disk full");
+    expect(bar.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("show no bar for lyrics a site has for the song", () => {
+    render(
+      <LyricsPanel
+        lyrics={MELT}
+        seconds={13}
+        onSeek={vi.fn()}
+        onSave={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("group", { name: "Lyrics suggested" })).toBeNull();
+  });
+});
+
 describe("the line sung now, in the player", () => {
   it("at 13 seconds is the line sung then, whole in its tooltip", () => {
     const { container } = render(<LyricNow lyrics={MELT} seconds={13} />);
@@ -95,6 +179,12 @@ describe("the line sung now, in the player", () => {
     const line = container.querySelector(".lyric-now");
     expect(line).toBeInTheDocument();
     expect(line).toBeEmptyDOMElement();
+  });
+
+  it("shows suggested lyrics too", () => {
+    render(<LyricNow lyrics={SUGGESTED} seconds={13} />);
+
+    expect(screen.getByText("朝目が覚めて")).toBeVisible();
   });
 
   it("is none for plain lyrics", () => {

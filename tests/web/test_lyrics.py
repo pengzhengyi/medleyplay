@@ -77,6 +77,27 @@ def test_the_households_lyrics_are_dropped(client: TestClient, catalog: CatalogS
     assert (dropped.status_code, dropped.json()) == (200, None)
 
 
+def test_dismissing_a_suggestion_answers_the_lyrics_shown_now(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    song = _song(catalog)
+    client.put(f"/api/tracks/{song}/lyrics", json={"text": MELT})
+
+    dismissed = client.delete(f"/api/tracks/{song}/lyrics/suggestion")
+
+    assert dismissed.status_code == 200
+    assert dismissed.json()["origin"] == "household"
+
+
+def test_dismissing_a_suggestion_needs_a_signed_in_account(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    song = _song(catalog)
+
+    assert client.delete(f"/api/tracks/{song}/lyrics/suggestion").status_code == 401
+
+
 def test_empty_lyrics_are_refused_unless_the_song_is_instrumental(
     client: TestClient, catalog: CatalogService
 ) -> None:

@@ -1,8 +1,11 @@
 """The command line: `python -m medleyplay`."""
 
+# cspell:ignore delenv
+
 import asyncio
 import re
 import runpy
+import shlex
 import socket
 import sys
 import threading
@@ -276,3 +279,162 @@ def test_devices_refuses_a_data_folder_with_no_database(
     assert exit_code == 1
     assert str(data_dir) in capsys.readouterr().err
     assert list(data_dir.iterdir()) == []
+
+
+# Where the data folder is, and moving it.
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A home folder with no data folder chosen, as on a Mac that never set one."""
+    folder = tmp_path / "home"
+    folder.mkdir()
+    monkeypatch.setenv("HOME", str(folder))
+    monkeypatch.delenv("MEDLEYPLAY_DATA_DIR", raising=False)
+    return folder
+
+
+def _former_folder_with_alice(home: Path) -> Path:
+    """The data folder where medleyplay kept it on a Mac before, its household Alice's."""
+    former = home / "Library" / "Application Support" / "medleyplay"
+    _household_with_alice(former)
+    return former
+
+
+def _serve_on_a_mac(
+    *answers: str, interactive: bool = True, arguments: tuple[str, ...] = ()
+) -> list[Path]:
+    """Run `serve` as on a Mac, answering its questions with `answers`; return where it served."""
+    served: list[Path] = []
+    replies = _answers(*answers)
+    main(
+        ["serve", *arguments],
+        serve=lambda settings, _, __: served.append(settings.data_dir),
+        ask=lambda _: next(replies),
+        interactive=lambda: interactive,
+        platform="darwin",
+    )
+    return served
+
+
+def test_on_a_mac_serve_keeps_its_data_in_the_music_folder(home: Path) -> None:
+    assert _serve_on_a_mac() == [home / "Music" / "medleyplay"]
+
+
+def test_serve_moves_the_data_from_where_it_was_kept_before_when_agreed(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    former = _former_folder_with_alice(home)
+
+    served = _serve_on_a_mac("")
+
+    music = home / "Music" / "medleyplay"
+    assert served == [music]
+    assert not former.exists()
+    assert (music / "medleyplay.sqlite3").exists()
+    assert f"Moved medleyplay's data to {music}" in capsys.readouterr().out
+
+
+def test_serve_keeps_the_data_where_it_was_when_the_move_is_declined(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    former = _former_folder_with_alice(home)
+
+    served = _serve_on_a_mac("n")
+
+    assert served == [former]
+    assert not (home / "Music" / "medleyplay").exists()
+    assert f"MEDLEYPLAY_DATA_DIR={shlex.quote(str(former))}" in capsys.readouterr().out
+
+
+def test_serve_that_cannot_ask_keeps_the_data_where_it_was_and_says_how_to_move_it(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    former = _former_folder_with_alice(home)
+
+    served = _serve_on_a_mac(interactive=False)
+
+    assert served == [former]
+    assert "medleyplay move-data" in capsys.readouterr().err
+
+
+def test_serve_never_asks_about_a_folder_chosen_with_data_dir(home: Path, tmp_path: Path) -> None:
+    _former_folder_with_alice(home)
+    chosen = tmp_path / "chosen"
+
+    served = _serve_on_a_mac(arguments=("--data-dir", str(chosen)))
+
+    assert served == [chosen]
+
+
+def test_data_dir_chooses_the_folder_of_any_command(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    chosen = tmp_path / "chosen"
+    _household_with_alice(chosen)
+
+    exit_code = main(["devices", "--data-dir", str(chosen)])
+
+    assert exit_code == 0
+    assert capsys.readouterr().out.startswith(f"Data folder: {chosen}\n")
+
+
+def test_move_data_moves_the_data_folder_and_says_to_point_the_variable_there(
+    data_dir: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = data_dir / "medleyplay"
+    _household_with_alice(source)
+    target = tmp_path / "elsewhere"
+
+    exit_code = main(["move-data", "--data-dir", str(source), str(target)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert not source.exists()
+    assert (target / "medleyplay.sqlite3").exists()
+    assert f"Moved medleyplay's data to {target}" in out
+    assert f"--data-dir {target}" in out
+
+
+def test_move_data_on_a_mac_moves_the_former_folder_to_the_music_folder(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    former = _former_folder_with_alice(home)
+
+    exit_code = main(["move-data"], platform="darwin")
+
+    assert exit_code == 0
+    assert not former.exists()
+    assert (home / "Music" / "medleyplay" / "medleyplay.sqlite3").exists()
+    assert "--data-dir" not in capsys.readouterr().out
+
+
+def test_move_data_refuses_while_a_server_uses_the_data_folder(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "data"
+    _household_with_alice(source)
+
+    with hold_instance_lock(source):
+        exit_code = main(["move-data", "--data-dir", str(source), str(tmp_path / "new")])
+
+    assert exit_code == 1
+    assert "Stop it first" in capsys.readouterr().err
+    assert (source / "medleyplay.sqlite3").exists()
+    assert not (tmp_path / "new").exists()
+
+
+def test_move_data_says_why_it_refuses_a_folder_that_holds_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "data"
+    _household_with_alice(source)
+    taken = tmp_path / "taken"
+    taken.mkdir()
+    (taken / "mine.txt").write_text("not medleyplay's")
+
+    exit_code = main(["move-data", "--data-dir", str(source), str(taken)])
+
+    assert exit_code == 1
+    assert "already holds files" in capsys.readouterr().err
+    assert (source / "medleyplay.sqlite3").exists()

@@ -687,6 +687,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The data folder is in the Music folder on a Mac** — `~/Music/medleyplay` by
+  default, beside the music. On a Mac whose data is still in
+  `~/Library/Application Support/medleyplay`, `serve` asks to move it there. The new
+  `medleyplay move-data [<folder>]` moves it anywhere while the server is stopped:
+  it copies the folder, checks the copy, and only then deletes the old one. Every
+  command takes `--data-dir` to choose the folder, as `MEDLEYPLAY_DATA_DIR` does.
 - **Both names in the player bar** — when the artist or the album is long, each is
   shortened on its own, the longer one giving up more room, so both stay in sight with
   the dash between them; hovering either shows it whole. Short names show as before.

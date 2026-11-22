@@ -1,5 +1,9 @@
 import { type Page, expect, test } from "@playwright/test";
 
+// Both tests open Alpha's songs and the first splits it, so they run one after the other,
+// in a project of their own that waits for every other test (see playwright.config.ts).
+test.describe.configure({ mode: "default" });
+
 const row = (page: Page, title: string) =>
   page.getByRole("row").filter({ has: page.getByRole("button", { name: title, exact: true }) });
 

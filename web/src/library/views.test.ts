@@ -15,6 +15,7 @@ import {
   albumFileOf,
   albumsOf,
   artistRouteOf,
+  coverPlaceOf,
   artistsOf,
   artistWrittenOf,
   downloadedOf,
@@ -492,5 +493,40 @@ describe("albumFileOf", () => {
     const other = trackOf(13, "龙卷风", { album: "Jay", segment_of: 10 });
 
     expect(albumFileOf([...songs, other], byId)).toBeUndefined();
+  });
+});
+
+describe("coverPlaceOf", () => {
+  it("is the file a split file's song comes from, so the file's other songs show it too", () => {
+    const song = trackOf(11, "可爱女人", { album: "Jay", segment_of: 9 });
+
+    expect(coverPlaceOf(song, [song])).toEqual({ kind: "file", id: 9 });
+  });
+
+  it("is every song of the album a song is on, its artist and name compared folded", () => {
+    const melt = trackOf(1, "Melt", { artist: "ryo", album: "Supercell" });
+    const songs = [
+      melt,
+      trackOf(2, "君の知らない物語", { artist: "RYO", album: "supercell" }),
+      trackOf(3, "Shiver", { artist: "ryo", album: "Other" }),
+    ];
+
+    expect(coverPlaceOf(melt, songs)).toEqual({ kind: "songs", ids: [1, 2] });
+  });
+
+  it("is the song alone when it is on no album", () => {
+    const untitled = trackOf(3, "Untitled", { album: "" });
+
+    expect(coverPlaceOf(untitled, [untitled, trackOf(4, "Draft", { album: "" })])).toEqual({
+      kind: "songs",
+      ids: [3],
+    });
+  });
+
+  it("is a split file itself, whose songs take its cover", () => {
+    const file = trackOf(9, "Jay", { album: "Jay", kind: "album", split: true });
+    const song = trackOf(11, "可爱女人", { album: "Jay", segment_of: 9 });
+
+    expect(coverPlaceOf(file, [song])).toEqual({ kind: "songs", ids: [9] });
   });
 });

@@ -24,17 +24,18 @@ describe("changing the keyboard shortcuts", () => {
     renderSaving();
 
     expect(keysShownFor("Play or pause")).toEqual(["Space", "K"]);
-    expect(keysShownFor("Next")).toEqual(["Shift + →"]);
+    expect(keysShownFor("Next song")).toEqual(["Shift + →"]);
+    expect(keysShownFor("Next album")).toEqual(["Alt + Shift + →"]);
   });
 
   it("adds the next keys pressed to a command, and saves them with the Account", async () => {
     const calls = renderSaving();
 
-    await userEvent.click(screen.getByRole("button", { name: "Add keys to Next" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add keys to Next song" }));
     await userEvent.keyboard("{Shift>}n{/Shift}");
 
-    expect(keysShownFor("Next")).toEqual(["Shift + →", "Shift + N"]);
-    expect(screen.getByRole("status")).toHaveTextContent("Next now also has Shift + N.");
+    expect(keysShownFor("Next song")).toEqual(["Shift + →", "Shift + N"]);
+    expect(screen.getByRole("status")).toHaveTextContent("Next song now also has Shift + N.");
     await waitFor(() => {
       expect(calls).toContain("PUT /api/me/preferences");
     });

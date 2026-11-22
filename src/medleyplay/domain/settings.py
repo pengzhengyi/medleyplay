@@ -56,6 +56,34 @@ class RemovalOrder(StrEnum):
     LEAST_FAVORITE = "least_favorite"
 
 
+class AiAsk(StrEnum):
+    """What someone asks the AI from: a Track's details, or the songs of its file."""
+
+    DETAILS = "details"
+    SONGS = "songs"
+
+
+@dataclass(frozen=True)
+class AiNote:
+    """A note offered to whoever asks the AI, beside the button for `ask`, to send with it."""
+
+    ask: AiAsk
+    text: str
+
+
+MAX_AI_NOTE: Final = 200
+"""The most characters a note offered to the AI may have; several are sent as one."""
+MAX_AI_NOTES: Final = 30
+DEFAULT_AI_NOTES: Final = (
+    AiNote(AiAsk.DETAILS, "Name the album the song first came out on."),
+    AiNote(AiAsk.DETAILS, "Keep names in their own language; don't translate them."),
+    AiNote(AiAsk.SONGS, "One song per track of the album's standard edition."),
+    AiNote(AiAsk.SONGS, "A live album: leave out the talking between songs."),
+    AiNote(AiAsk.SONGS, "A deluxe edition: the bonus tracks come after the album's own."),
+)
+"""The notes a household starts with, until an admin edits them."""
+
+
 @dataclass(frozen=True)
 class Settings:
     """The settings, and the revision they were read at; revision 0 was never saved.
@@ -71,7 +99,8 @@ class Settings:
     asked for a song's lyrics, in turn, when LRCLIB has none. `find_album_covers` says which
     albums with no cover MusicBrainz is searched for without anyone asking, and
     `pick_album_covers_by_ai` whether an AI model is then asked which cover found fits,
-    when none plainly does.
+    when none plainly does. `ai_notes` are offered to whoever asks the AI, to tell it
+    more than the default question does.
     """
 
     storage_limit: int | None = None
@@ -84,6 +113,7 @@ class Settings:
     find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
     find_album_covers: CoverSearch = CoverSearch.UP_NEXT
     pick_album_covers_by_ai: bool = False
+    ai_notes: tuple[AiNote, ...] = DEFAULT_AI_NOTES
     revision: int = 0
 
     @property

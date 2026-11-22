@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EditorView } from "@codemirror/view";
 
@@ -62,6 +62,11 @@ const NO_GAPS_KNOWN: SilenceFinder = {
 
 /** An AI provider set up, as the page says once the server has. */
 const SET_UP: AiSetUp = { missing: false, admin: true };
+
+// The details typed in the note to the AI are remembered in this browser, test to test too.
+afterEach(() => {
+  localStorage.clear();
+});
 
 /**
  * Open *Bremen*'s details on its songs, as its menu's *Edit songs…* does, its file
@@ -350,7 +355,7 @@ describe("editing a file's songs", () => {
 
     await press(dialog, "Ask the AI again");
     await userEvent.type(
-      within(dialog).getByRole("textbox", { name: "Anything the AI should know?" }),
+      within(dialog).getByRole("textbox", { name: "More details" }),
       "It's the 2007 concert, with 22 songs{Enter}",
     );
 
@@ -358,11 +363,42 @@ describe("editing a file's songs", () => {
     expect(within(dialog).getByText("Asking the AI…")).toHaveRole("status");
   });
 
+  it("asks the AI with a note from ▾ beside its button, before it was ever asked", async () => {
+    const askAgain = vi.fn();
+    const { dialog } = await renderEditor(splitSongsOf(104, []), {
+      ai: { ...AI_UNASKED, askAgain },
+    });
+
+    await press(dialog, "Ask AI with a note");
+    await userEvent.type(
+      within(dialog).getByRole("textbox", { name: "More details" }),
+      "One song per track{Enter}",
+    );
+
+    expect(askAgain).toHaveBeenCalledExactlyOnceWith("One song per track");
+    expect(within(dialog).queryByRole("group", { name: "Ask AI with a note" })).toBeNull();
+  });
+
+  it("opens the note to ask the AI with on a right-click of its button", async () => {
+    const { dialog } = await renderEditor(splitSongsOf(104, []));
+
+    await userEvent.pointer({
+      keys: "[MouseRight]",
+      target: within(dialog).getByRole("button", { name: "Fill with AI" }),
+    });
+
+    expect(within(dialog).getByRole("group", { name: "Ask AI with a note" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Ask AI with a note" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
   it("says why asking again failed, keeping the songs the AI gave before", async () => {
     const { dialog, answerAi } = await renderEditor(splitSongsOf(104, [], [], LISTED));
     await press(dialog, "Fill with AI");
     await press(dialog, "Ask the AI again");
-    await press(dialog, "Ask again");
+    await press(dialog, "Ask AI");
 
     answerAi({ ...AI_UNASKED, state: "failed", message: "DeepSeek refused the key." });
 

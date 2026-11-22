@@ -1,4 +1,7 @@
-"""The enricher: asks AI models in turn what a Track's video text says, and checks the answer."""
+"""The enricher: asks AI models in turn what music a Track holds, and checks the answer.
+
+A Track is asked about by its video text, or, with none, by the details it shows.
+"""
 
 from dataclasses import dataclass, field
 
@@ -19,7 +22,7 @@ from medleyplay.plugins.ai_details.turns import (
 
 @dataclass(frozen=True)
 class AiDetails:
-    """Asks AI models for a Track's details and its song list, from its video text."""
+    """Asks AI models for a Track's details and its song list, from its video text or details."""
 
     client: ChatClient = field(default_factory=chat_client)
 
@@ -32,8 +35,8 @@ class AiDetails:
         answers, a refusal by every one is a refusal, any that couldn't be reached or
         stayed busy is a network failure, which is raised, and otherwise it is `INVALID`.
         """
-        if not request.ai or request.text is None:
-            message = "ai-details is asked with a video's text and a provider."
+        if not request.ai:
+            message = "ai-details is asked with a provider."
             raise ValueError(message)
         outcome = ask_in_turn(self.client, request.ai, asking(request), parse_answer)
         if isinstance(outcome, tuple):

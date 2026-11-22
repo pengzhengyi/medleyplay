@@ -32,6 +32,7 @@ import type {
   PreferencesChange,
   Namesake,
   Role,
+  Settings,
   Song,
   Songs,
   SpeakerState,
@@ -747,6 +748,29 @@ export function beatlesPictures(known: Partial<ArtistPictures> = {}): ArtistPict
     ],
     found_at: "2026-11-18T00:00:00Z",
     ...known,
+  };
+}
+
+/** The household's settings never saved: every default, the built-in notes for the AI. */
+export function settingsOf(change: Partial<Settings> = {}): Settings {
+  return {
+    storage_limit: null,
+    removal_order: "least_favorite",
+    album_minutes: 20,
+    split_albums: "approval",
+    lyrics_sites: [],
+    picture_sites: [],
+    pick_pictures_by_ai: false,
+    find_artist_photos: "up_next",
+    find_album_covers: "up_next",
+    pick_album_covers_by_ai: false,
+    ai_notes: [
+      { ask: "details", text: "Name the album the song first came out on." },
+      { ask: "songs", text: "One song per track of the album's standard edition." },
+      { ask: "songs", text: "A live album: leave out the talking between songs." },
+    ],
+    revision: 0,
+    ...change,
   };
 }
 

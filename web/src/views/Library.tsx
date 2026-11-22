@@ -925,6 +925,11 @@ export function Library({
           onFind={(lookup) => {
             actions.onFind(lookup, editing.track);
           }}
+          onAskAi={(note) => {
+            library.find(AI_ENRICHER, editing.track.id, { hint: note }).catch(() => {
+              // The lookup's state says why, beside the AI button.
+            });
+          }}
           songs={songsOf(editing.track)}
           lyrics={lyricsOf(editing.track)}
           startOnSongs={editing.songs}

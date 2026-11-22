@@ -335,6 +335,23 @@ def ask_again_at(facts: TrackFacts, enricher: Enricher) -> datetime | None:
     return None if facts.asked_at is None else facts.asked_at + enricher.ask_again_after
 
 
+def details_subject(
+    track_id: TrackId, values: Mapping[Origin, Values], duration_ms: int | None
+) -> str:
+    """Return the subject that says the AI was asked about a Track with no video text.
+
+    Such a Track is asked about by what it shows, apart from what the AI said before,
+    and its length; a title the household corrects asks again at once.
+    """
+    found = shown({origin: each for origin, each in values.items() if origin is not Origin.AI})
+    words = [
+        str(found[field].value) if field in found else ""
+        for field in (Field.TITLE, Field.ARTIST, Field.ALBUM, Field.ALBUM_ARTIST)
+    ]
+    said = json.dumps([track_id, *words, duration_ms], ensure_ascii=False)
+    return hashlib.sha256(f"ai-details-shown\x1f{said}".encode()).hexdigest()
+
+
 def why_not(
     facts: TrackFacts,
     now: datetime,

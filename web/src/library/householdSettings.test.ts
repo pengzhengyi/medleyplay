@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Settings } from "../api";
-import { serve } from "../testing/server";
+import { serve, settingsOf } from "../testing/server";
 import { saveChange } from "./householdSettings";
 
 afterEach(() => {
@@ -9,19 +9,7 @@ afterEach(() => {
 });
 
 /** The settings as first read: no limit, no lyrics sites turned on, at revision 2. */
-const HELD: Settings = {
-  storage_limit: null,
-  removal_order: "least_favorite",
-  album_minutes: 20,
-  split_albums: "approval",
-  lyrics_sites: [],
-  picture_sites: [],
-  pick_pictures_by_ai: false,
-  find_artist_photos: "up_next",
-  find_album_covers: "up_next",
-  pick_album_covers_by_ai: false,
-  revision: 2,
-};
+const HELD: Settings = settingsOf({ revision: 2 });
 
 describe("saving one setting over another's save", () => {
   it("saves a list over a save that changed another field, the list read again unchanged", async () => {

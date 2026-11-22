@@ -4,7 +4,8 @@ An enricher that reads videos is asked about a Track's video. One that searches 
 words is asked about the Track's title and artist, or, for a Track whose Kind is
 album, its album: what a Track would be searched for with is kept apart from what the
 searched site said before, so its answer doesn't change the question. One that reads
-a Track's video text is asked about the Track alone.
+a Track's video text is asked about the Track alone, and about a Track with none, by
+what it shows, only when someone chooses to.
 """
 
 from collections import defaultdict
@@ -27,6 +28,7 @@ from medleyplay.domain.enrichers import (
     LyricsHeld,
     Subject,
     TrackFacts,
+    details_subject,
     lyrics_subject,
     search_terms,
     text_subject,
@@ -61,12 +63,18 @@ class Candidate:
 
 
 def candidates(
-    db: Session, enricher: Enricher, track_ids: Sequence[TrackId] | None
+    db: Session,
+    enricher: Enricher,
+    track_ids: Sequence[TrackId] | None,
+    *,
+    by_hand: bool = False,
 ) -> dict[TrackId, Candidate]:
     """Return each Track's candidacy for the enricher.
 
     With `track_ids`, those Tracks that exist; otherwise every Track with a Source the
-    enricher can read: a Bilibili Source or a Library file.
+    enricher can read: a Bilibili Source or a Library file. The AI reads a Track's
+    video text; asked `by_hand`, by someone who chose to, it is asked about a Track
+    with none by what the Track shows.
     """
     sources = _sources(db, track_ids)
     ids = set(sources)
@@ -87,6 +95,12 @@ def candidates(
             track_id: text_subject(track_id, texts[track_id][1]) if track_id in texts else None
             for track_id in ids
         }
+        if by_hand:
+            words, lengths = _words(db, ids), _lengths(db, ids)
+            for track_id in ids - texts.keys():
+                subjects[track_id] = details_subject(
+                    track_id, words.get(track_id, {}), lengths.get(track_id)
+                )
         videos = dict.fromkeys(ids)
     elif enricher.subject is Subject.LYRICS:
         # A song is looked up by its own words and length, a song inside a longer file too.

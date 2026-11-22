@@ -15,6 +15,7 @@ from medleyplay.plugin_api import (
     EnrichStatus,
     EnrichTrack,
     NetworkError,
+    ShownDetail,
     SuggestedSong,
 )
 from medleyplay.plugin_api.testing import check_track_enricher
@@ -369,12 +370,22 @@ def test_providers_none_of_which_answer_are_a_network_failure_if_any_was_unreach
 def test_an_ask_without_a_provider_is_a_fault_of_the_caller(tmp_path: Path) -> None:
     request = EnrichTrackFactory.night_drive_video(tmp_path)
 
-    with pytest.raises(ValueError, match="text and a provider"):
+    with pytest.raises(ValueError, match="a provider"):
         enricher_over(FakeTransport()).enrich(request)
 
 
-def test_an_ask_without_the_videos_text_is_a_fault_of_the_caller(tmp_path: Path) -> None:
-    request = EnrichTrack(ai=(AiEndpointFactory.deepseek(),), folder=str(tmp_path))
+def test_a_track_with_no_video_text_is_asked_about_by_the_details_it_shows(
+    tmp_path: Path,
+) -> None:
+    fake = FakeAiFactory.answering(ChatReplyFactory.night_drive())
+    request = EnrichTrack(
+        ai=(AiEndpointFactory.deepseek(),),
+        folder=str(tmp_path),
+        shown=(ShownDetail(field="title", value="1989", origin="household"),),
+    )
 
-    with pytest.raises(ValueError, match="text and a provider"):
-        enricher_over(FakeTransport()).enrich(request)
+    answer = enricher_over(fake).enrich(request)
+
+    _, user = fake.body()["messages"]
+    assert user["content"] == "Details shown now:\n- title: 1989 (household)"
+    assert answer.values["title"] == "Night Drive"

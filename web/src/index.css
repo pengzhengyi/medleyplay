@@ -9999,3 +9999,35 @@ button.rail-order-handle {
     margin-left: 0;
   }
 }
+
+/* Lyrics suggested: a bar over them, tagged, with Save and Dismiss. */
+.lyrics-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.lyrics-suggestion-tag {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.lyrics-suggestion > button.lyrics-suggestion-save,
+.lyrics-suggestion > button.lyrics-suggestion-dismiss {
+  width: auto;
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.lyrics-suggestion > .error {
+  flex: 1 1 100%;
+  margin: 0;
+}

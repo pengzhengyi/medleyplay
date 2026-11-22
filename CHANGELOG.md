@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
+  those of the nearest song LRCLIB has, of the same title and nearly as long, tagged
+  *Found on the web* in Now Playing's big picture, with *Save* to keep them as yours and
+  *Dismiss*. It is on by default; Settings → Lyrics turns it off.
 - **Ask the AI with a note** — beside each *Ask AI* button (a song's details, and the
   songs of a file), ▾ or a right-click opens the note to ask with: the household's notes
   for that ask to tick, such as *One song per track of the album's standard edition.*,

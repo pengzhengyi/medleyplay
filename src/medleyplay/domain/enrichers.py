@@ -320,7 +320,7 @@ def lyrics_subject(
     if sites:
         said += "\x1f" + ",".join(sites)
     if suggest:
-        said += "\x1fsuggest"
+        said += "\x1f" + "suggest"
     return hashlib.sha256(said.encode()).hexdigest()
 
 

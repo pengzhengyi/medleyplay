@@ -9798,44 +9798,44 @@ button.rail-order-handle {
  * An album's page heading: its cover large on the left; its name, artist and year centered
  * beside it; Play, Shuffle, the heart and Edit details on the line of the cover's bottom edge.
  */
-.album-heading {
-  --album-cover: 15rem;
+.picture-heading {
+  --picture-size: 15rem;
 
   margin-bottom: 1.25rem;
 }
 
-.album-hero {
+.picture-hero {
   display: grid;
-  grid-template-columns: var(--album-cover) minmax(0, 1fr);
+  grid-template-columns: var(--picture-size) minmax(0, 1fr);
   gap: 1.75rem;
   margin-top: 0.5rem;
 }
 
-.album-hero .album-about {
+.picture-hero .album-about {
   display: block;
   margin: 0;
 }
 
-.album-hero .album-art,
-.album-hero .cover-frame.album-frame {
-  width: var(--album-cover);
-  height: var(--album-cover);
+.picture-hero .album-art,
+.picture-hero .cover-frame.album-frame {
+  width: var(--picture-size);
+  height: var(--picture-size);
 }
 
-.album-side {
+.picture-side {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
-  height: var(--album-cover);
+  height: var(--picture-size);
 }
 
-.album-names {
+.picture-names {
   align-self: center;
   min-width: 0;
 }
 
 /* A long name takes two lines, then ends in an ellipsis. */
-.album-names .section {
+.picture-names .section {
   display: -webkit-box;
   overflow: hidden;
   font-size: 2rem;
@@ -9845,19 +9845,19 @@ button.rail-order-handle {
   -webkit-line-clamp: 2;
 }
 
-.album-heading .album-names .subtitle {
+.picture-heading .picture-names .subtitle {
   margin-top: 0.35rem;
   font-size: 1.3rem;
   font-weight: 600;
 }
 
-.album-heading .album-names .subtitle > a {
+.picture-heading .picture-names .subtitle > a {
   color: var(--accent);
   text-decoration: none;
 }
 
-.album-heading .album-names .subtitle > a:hover,
-.album-heading .album-names .subtitle > a:focus-visible {
+.picture-heading .picture-names .subtitle > a:hover,
+.picture-heading .picture-names .subtitle > a:focus-visible {
   text-decoration: underline;
 }
 
@@ -9866,29 +9866,29 @@ button.rail-order-handle {
   color: var(--muted);
 }
 
-.album-names .album-rating {
+.picture-names .album-rating {
   margin: 0.6rem 0 0;
 }
 
-.album-actions {
+.picture-actions {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
 }
 
-.album-play .play-all {
+.picture-play .play-all {
   margin: 0;
 }
 
-.album-actions button.favorite-heart {
+.picture-actions button.favorite-heart {
   width: 2.25rem;
   height: 2.25rem;
   font-size: 1.35rem;
 }
 
 /* Edit details: a round pencil at the end of the line. */
-.album-actions button.edit-heading {
+.picture-actions button.edit-heading {
   display: inline-grid;
   place-items: center;
   width: 2.6rem;
@@ -9908,17 +9908,17 @@ button.rail-order-handle {
 
 /* A phone: the cover on top, the names centered under it, Play and Shuffle sharing a row. */
 @media (width <= 40rem) {
-  .album-heading {
-    --album-cover: min(70vw, 16rem);
+  .picture-heading {
+    --picture-size: min(70vw, 16rem);
   }
 
-  .album-hero {
+  .picture-hero {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     gap: 1rem;
   }
 
-  .album-side {
+  .picture-side {
     grid-template-rows: auto auto;
     gap: 1rem;
     width: 100%;
@@ -9926,35 +9926,72 @@ button.rail-order-handle {
     text-align: center;
   }
 
-  .album-names .section {
+  .picture-names .section {
     font-size: 1.6rem;
   }
 
-  .album-heading .album-names .subtitle {
+  .picture-heading .picture-names .subtitle {
     font-size: 1.1rem;
   }
 
-  .album-actions {
+  .picture-actions {
     flex-wrap: wrap;
     justify-content: center;
   }
 
-  .album-play {
+  .picture-play {
     flex: 1 1 100%;
   }
 
-  .album-play .play-all {
+  .picture-play .play-all {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
 
-  .album-play .play-all button {
+  .picture-play .play-all button {
     justify-content: center;
     width: 100%;
   }
 
-  .album-actions button.edit-heading {
+  .picture-actions button.edit-heading {
     margin-left: 0;
+  }
+}
+
+/*
+ * An artist's page heading: its photo round and as large as an album's cover, and what is
+ * known of it under its name, the side growing past the photo when that runs long.
+ */
+.artist-heading .artist-picture {
+  width: var(--picture-size);
+}
+
+.artist-heading .artist-art,
+.artist-heading .cover-frame.artist-frame {
+  width: var(--picture-size);
+  height: var(--picture-size);
+}
+
+.artist-heading .artist-initial {
+  font-size: 5rem;
+}
+
+.artist-heading .picture-side {
+  height: auto;
+  min-height: var(--picture-size);
+}
+
+.artist-heading .artist-facts {
+  margin-top: 0.6rem;
+}
+
+@media (width <= 40rem) {
+  .artist-heading .artist-facts {
+    justify-items: center;
+  }
+
+  .artist-heading .artist-places {
+    justify-content: center;
   }
 }
 

@@ -696,6 +696,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An artist's page is laid out like an album's** — its photo large on the left; its
+  name, who MusicBrainz says it is, its other names, and its links beside it; and Play,
+  Shuffle, the heart, and a round pencil for *Edit details* on the photo's bottom line.
+  How many songs there are and how long they last show under them, as on an album. On
+  a phone, the photo is on top and the rest centered under it.
 - **A song's artist as a tag in Edit details** — once saved, the artist shows as a tag
   the width of its column, with its photo, and clicking it edits it as text again. *Another
   artist named …?* is now a ? inside the tag, and *More artists* a + beside it, so the

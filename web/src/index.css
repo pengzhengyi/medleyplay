@@ -4269,6 +4269,29 @@ button.icon.heart.on:hover,
   font-size: 0.85rem;
 }
 
+/*
+ * Who sings it, then its album. Each piece is given an equal share of the line and keeps
+ * its whole name when that fits; a longer one takes what the other leaves and ends in "…",
+ * so both stay in sight and the dash between them always shows.
+ */
+.player .names .song-credits {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) max-content minmax(0, max-content);
+  justify-content: start;
+  min-width: 0;
+  text-overflow: clip;
+}
+
+.player .names .song-credits .credit {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player .names .song-credits .credit-gap {
+  white-space: pre;
+}
+
 /* The line sung now, under the artist. */
 .player .names .lyric-now {
   color: var(--accent);

@@ -687,6 +687,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Both names in the player bar** — when the artist or the album is long, each is
+  shortened on its own, the longer one giving up more room, so both stay in sight with
+  the dash between them; hovering either shows it whole. Short names show as before.
+
 - **An album's page, laid out like a record** — the cover sits large on the left; the
   album's name, its artist and the year it came out are centered beside it, and Play,
   Shuffle, the heart and a pencil for *Edit details* line up with the cover's bottom

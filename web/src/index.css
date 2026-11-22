@@ -276,49 +276,12 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
-/* A busy button that shows its own spinner in its icon's place leaves out Pico's. */
+/*
+ * A button whose action runs waits in place with one spinner, its label kept: Pico's,
+ * or its own in its icon's place, which leaves out Pico's.
+ */
 [aria-busy="true"]:has(.spin)::before {
   display: none;
-}
-
-/*
- * A button whose action runs waits in place: a soft light sweeps slowly across its fill,
- * its label kept, and it holds still where motion is reduced. Busy buttons are often
- * disabled meanwhile; the sweep shows that they are working rather than unavailable.
- */
-button[aria-busy="true"] {
-  position: relative;
-  overflow: hidden;
-}
-
-/* A layer of its own, so no button's background rule hides the sweep. */
-button[aria-busy="true"]::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  background: linear-gradient(
-    100deg,
-    transparent 25%,
-    color-mix(in srgb, currentcolor 28%, transparent) 50%,
-    transparent 75%
-  );
-  pointer-events: none;
-  transform: translateX(-100%);
-  animation: busy-sweep 1.8s ease-in-out infinite;
-}
-
-@keyframes busy-sweep {
-  to {
-    transform: translateX(100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  button[aria-busy="true"]::after {
-    background: color-mix(in srgb, currentcolor 10%, transparent);
-    transform: none;
-    animation: none;
-  }
 }
 
 /* The signed-in page: the views, the Library, and the queue; the player floats below. */

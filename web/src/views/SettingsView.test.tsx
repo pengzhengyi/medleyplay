@@ -3,25 +3,20 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MeteredNetwork, Mode, Settings, Storage } from "../api";
-import { type Routes, enricherOf, modeOf, modeSettingsOf, serve } from "../testing/server";
+import {
+  type Routes,
+  enricherOf,
+  modeOf,
+  modeSettingsOf,
+  serve,
+  settingsOf,
+} from "../testing/server";
 import { SettingsView } from "./SettingsView";
 
 const GB = 1_000_000_000;
 
 /** A limit of 20 GB, saved twice before, so at revision 2. */
-const LIMIT_20: Settings = {
-  storage_limit: 20 * GB,
-  removal_order: "least_favorite",
-  album_minutes: 20,
-  split_albums: "approval",
-  lyrics_sites: [],
-  picture_sites: [],
-  pick_pictures_by_ai: false,
-  find_artist_photos: "up_next",
-  find_album_covers: "up_next",
-  pick_album_covers_by_ai: false,
-  revision: 2,
-};
+const LIMIT_20: Settings = settingsOf({ storage_limit: 20 * GB, revision: 2 });
 
 /** 1.5 GB of Downloads and 0.5 GB of prepared copies, under a 20 GB limit. */
 const USING_2: Storage = {
@@ -200,6 +195,70 @@ describe("the AI section", () => {
     expect(screen.queryByRole("button", { name: "Go to AI" })).toBeNull();
     expect(calls).not.toContain("GET /api/ai");
     expect(calls).not.toContain("GET /api/enrichers/ai-details");
+  });
+});
+
+describe("the notes offered when asking the AI", () => {
+  /** Open an admin's AI section over `LIMIT_20`, keeping each save in `sent`. */
+  async function notesOpen(sent: unknown[]) {
+    open(true, {
+      "GET /api/settings": { body: LIMIT_20 },
+      "PUT /api/settings": (body) => {
+        sent.push(body);
+        return { body: { ...(body as Settings), revision: 3 } };
+      },
+    });
+    const ai = within(screen.getByRole("region", { name: "AI" }));
+    return {
+      ai,
+      details: within(await ai.findByRole("group", { name: "Notes when asking for details" })),
+      songs: within(await ai.findByRole("group", { name: "Notes when asking for songs" })),
+    };
+  }
+
+  it("lists the household's notes for asking for details and for songs", async () => {
+    const { details, songs } = await notesOpen([]);
+
+    expect(details.getAllByRole("textbox").map((box) => (box as HTMLInputElement).value)).toEqual([
+      "Name the album the song first came out on.",
+    ]);
+    expect(songs.getAllByRole("textbox")).toHaveLength(2);
+  });
+
+  it("adds a note for asking for songs, saved once typed", async () => {
+    const sent: unknown[] = [];
+    const { ai, songs } = await notesOpen(sent);
+    const user = userEvent.setup();
+
+    await user.click(songs.getByRole("button", { name: "Add a note" }));
+    await user.keyboard("A concert: one song per chapter.{Enter}");
+
+    expect(await ai.findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([
+      {
+        ...LIMIT_20,
+        ai_notes: [
+          ...LIMIT_20.ai_notes,
+          { ask: "songs", text: "A concert: one song per chapter." },
+        ],
+      },
+    ]);
+  });
+
+  it("removes a note at once", async () => {
+    const sent: unknown[] = [];
+    const { ai, details } = await notesOpen(sent);
+
+    await userEvent.click(
+      details.getByRole("button", {
+        name: "Remove the note “Name the album the song first came out on.”",
+      }),
+    );
+
+    expect(await ai.findByText("Saved.")).toBeVisible();
+    expect(sent).toEqual([
+      { ...LIMIT_20, ai_notes: LIMIT_20.ai_notes.filter((note) => note.ask === "songs") },
+    ]);
   });
 });
 

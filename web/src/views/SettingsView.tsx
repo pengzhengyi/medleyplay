@@ -28,6 +28,7 @@ import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSet
 import { DownloadsFolder } from "./DownloadsFolder";
 import { AccentPicker } from "./AccentPicker";
 import { DynamicsSwitch } from "./DynamicsSwitch";
+import { AiNotesSettings } from "./AiNotesSettings";
 import { AiSettings } from "./AiSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
@@ -253,7 +254,12 @@ export function SettingsView({
         <LyricsSites settings={household} onSettings={keepNewest} />
       </>
     ),
-    ai: <AiSettings onChanged={onEnrichersChanged} />,
+    ai: (
+      <>
+        <AiSettings onChanged={onEnrichersChanged} />
+        <AiNotesSettings settings={household} onSettings={keepNewest} />
+      </>
+    ),
   };
   return (
     <>

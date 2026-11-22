@@ -7,6 +7,9 @@ from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.settings import (
     ALBUM_MINUTES,
+    DEFAULT_AI_NOTES,
+    AiAsk,
+    AiNote,
     CoverSearch,
     PhotoSearch,
     RemovalOrder,
@@ -16,6 +19,22 @@ from medleyplay.domain.settings import (
 from medleyplay.web.deps import SettingsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+
+class AiNoteIn(BaseModel):
+    """A note offered beside the AI's button for `ask`, to send with the question."""
+
+    ask: AiAsk
+    text: str = Field(examples=["One song per track of the album's standard edition."])
+
+    @classmethod
+    def of(cls, note: AiNote) -> "AiNoteIn":
+        """Return the API view of `note`."""
+        return cls(ask=note.ask, text=note.text)
+
+    def note(self) -> AiNote:
+        """Return the note this describes."""
+        return AiNote(self.ask, self.text)
 
 
 class SettingsIn(BaseModel):
@@ -81,6 +100,13 @@ class SettingsIn(BaseModel):
             " when none plainly does. Left out, it stays as saved."
         ),
     )
+    ai_notes: tuple[AiNoteIn, ...] = Field(
+        default=tuple(AiNoteIn.of(note) for note in DEFAULT_AI_NOTES),
+        description=(
+            "The notes offered to whoever asks the AI, beside the button for each ask, each"
+            " at most 200 characters. Left out, they stay as saved."
+        ),
+    )
     revision: int = Field(ge=0)
 
 
@@ -97,6 +123,7 @@ class SettingsOut(BaseModel):
     find_artist_photos: PhotoSearch
     find_album_covers: CoverSearch
     pick_album_covers_by_ai: bool
+    ai_notes: tuple[AiNoteIn, ...]
     revision: int
 
     @classmethod
@@ -113,6 +140,7 @@ class SettingsOut(BaseModel):
             find_artist_photos=settings.find_artist_photos,
             find_album_covers=settings.find_album_covers,
             pick_album_covers_by_ai=settings.pick_album_covers_by_ai,
+            ai_notes=tuple(AiNoteIn.of(note) for note in settings.ai_notes),
             revision=settings.revision,
         )
 
@@ -171,6 +199,11 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
                 body.pick_album_covers_by_ai
                 if "pick_album_covers_by_ai" in body.model_fields_set
                 else saved_before.pick_album_covers_by_ai
+            ),
+            ai_notes=(
+                tuple(note.note() for note in body.ai_notes)
+                if "ai_notes" in body.model_fields_set
+                else saved_before.ai_notes
             ),
             revision=body.revision,
         ),

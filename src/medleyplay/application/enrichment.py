@@ -408,7 +408,7 @@ class EnrichmentService:
             if db.get(EnricherStopRow, enricher.name) is not None:
                 return []
             set_up = is_set_up(db)
-            found = candidates(db, enricher, None)
+            found = candidates(db, enricher, None, by_hand=True)
         return [
             track_id
             for track_id, each in found.items()
@@ -417,7 +417,7 @@ class EnrichmentService:
         ]
 
     def askable(self, name: str) -> Askable:
-        """Return the Tracks the enricher may be asked about, and when each may be asked again.
+        """Return the Tracks someone may ask the enricher about, and when each may be asked again.
 
         A Track that waits only for the time since it was last asked is listed too; while
         the enricher is stopped there are none.
@@ -428,7 +428,7 @@ class EnrichmentService:
             if db.get(EnricherStopRow, enricher.name) is not None:
                 return Askable(eligible=(), waiting={})
             set_up = is_set_up(db)
-            found = candidates(db, enricher, None)
+            found = candidates(db, enricher, None, by_hand=True)
         eligible: list[TrackId] = []
         waiting: dict[TrackId, datetime] = {}
         for track_id, each in found.items():
@@ -473,7 +473,7 @@ class EnrichmentService:
                 else "This song's lyrics are still being looked up; ask again once they are."
             )
             raise ConflictError(message)
-        return self._submit(enricher, track_id, caller.id, again=again, hint=note)
+        return self._submit(enricher, track_id, caller.id, again=again, hint=note, by_hand=True)
 
     def _submit(
         self,
@@ -483,12 +483,13 @@ class EnrichmentService:
         *,
         again: bool = False,
         hint: str = "",
+        by_hand: bool = False,
     ) -> Job:
         self._require_available(enricher)
         now = self._clock()
         with self._units() as db:
             stopped = db.get(EnricherStopRow, enricher.name) is not None
-            found = candidates(db, enricher, [track_id]).get(track_id)
+            found = candidates(db, enricher, [track_id], by_hand=by_hand).get(track_id)
             if found is None:
                 message = f"No Track has the id {track_id}."
                 raise NotFoundError(message)

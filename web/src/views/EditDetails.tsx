@@ -19,6 +19,7 @@
  */
 
 import {
+  CaretDownIcon,
   CaretRightIcon,
   MusicNoteSimpleIcon,
   MusicNotesIcon,
@@ -32,12 +33,14 @@ import {
   type SubmitEvent,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
 } from "react";
 
 import {
+  AI_ENRICHER,
   type Credit,
   type Detail,
   type Details,
@@ -66,6 +69,7 @@ import {
   suggestionOf,
 } from "../library/details";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
+import { AiNotePanel } from "./AiNotePanel";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { onlyArtist, sameCredits, toggled, withCredit, withoutCredit } from "../library/credits";
@@ -102,7 +106,8 @@ const LYRICS_TITLE = "edit-lyrics-title";
 /**
  * Edit `track`'s details, read with `load`; `onSave` sends the household's values
  * changed, `null` dropping one, and `onReadVideo` a video's pasted text. `onFind`
- * asks one of the lookups `findable`, and `lookup` is how the last one asked goes.
+ * asks one of the lookups `findable`, and `lookup` is how the last one asked goes;
+ * `onAskAi` asks the AI with a note.
  * `songs` opens the songs of its file in place of the details, first when
  * `startOnSongs`.
  */
@@ -119,6 +124,7 @@ export function EditDetails({
   lookup,
   online,
   onFind,
+  onAskAi,
   songs,
   lyrics,
   startOnSongs = false,
@@ -143,6 +149,8 @@ export function EditDetails({
   /** Whether medleyplay is Online, so a lookup asked runs now. */
   readonly online: boolean;
   readonly onFind: (lookup: Lookup) => void;
+  /** Ask the AI about the song with a note from the household's, or typed. */
+  readonly onAskAi?: ((note: string) => void) | undefined;
   /** The way to its file's songs: what it is called, and the editor, which the dialog controls. */
   readonly songs?: { readonly label: string; readonly editor: ReactNode } | undefined;
   /** The way to the song's lyrics: what it is called, and the editor, which the dialog controls. */
@@ -505,7 +513,13 @@ export function EditDetails({
                   }}
                 />
               )}
-              <LookupBar findable={findable} lookup={lookup} online={online} onFind={onFind} />
+              <LookupBar
+                findable={findable}
+                lookup={lookup}
+                online={online}
+                onFind={onFind}
+                onAskAi={onAskAi}
+              />
               {songs !== undefined && (
                 <button
                   ref={songsEntry}
@@ -777,12 +791,18 @@ function LookupBar({
   lookup,
   online,
   onFind,
+  onAskAi,
 }: {
   readonly findable: readonly Lookup[];
   readonly lookup: TrackLookup | undefined;
   readonly online: boolean;
   readonly onFind: (lookup: Lookup) => void;
+  readonly onAskAi: ((note: string) => void) | undefined;
 }) {
+  // The note to ask the AI with: opened by ▾ beside its button, or a right-click on it.
+  const [noting, setNoting] = useState(false);
+  const noteToggle = useRef<HTMLButtonElement>(null);
+  const notePanel = useId();
   // The one asked stays offered while it runs, though the song isn't findable meanwhile.
   const offered = LOOKUPS.filter(
     (each) => findable.includes(each) || each.enricher === lookup?.enricher,
@@ -792,25 +812,50 @@ function LookupBar({
   if (offered.length === 0) {
     return null;
   }
+  const noted = (each: Lookup) => each.enricher === AI_ENRICHER && onAskAi !== undefined;
   return (
     <div className="lookup-bar">
       <div className="lookup-buttons">
         {offered.map((each) => (
-          <button
-            key={each.enricher}
-            type="button"
-            className="lookup-button"
-            title={each.label}
-            aria-label={each.label}
-            aria-busy={running && each.enricher === lookup?.enricher}
-            disabled={running}
-            onClick={() => {
-              onFind(each);
-            }}
-          >
-            <each.icon weight="bold" aria-hidden />
-            <span aria-hidden>{each.short}</span>
-          </button>
+          <span key={each.enricher} className={noted(each) ? "ai-split" : undefined}>
+            <button
+              type="button"
+              className="lookup-button"
+              title={each.label}
+              aria-label={each.label}
+              aria-busy={running && each.enricher === lookup?.enricher}
+              disabled={running}
+              onClick={() => {
+                onFind(each);
+              }}
+              onContextMenu={(event) => {
+                if (noted(each) && !running) {
+                  event.preventDefault();
+                  setNoting(true);
+                }
+              }}
+            >
+              <each.icon weight="bold" aria-hidden />
+              <span aria-hidden>{each.short}</span>
+            </button>
+            {noted(each) && (
+              <button
+                ref={noteToggle}
+                type="button"
+                className="lookup-button ai-note-toggle"
+                aria-label="Ask AI with a note"
+                title="Ask AI with a note"
+                aria-expanded={noting}
+                aria-controls={notePanel}
+                disabled={running}
+                onClick={() => {
+                  setNoting((open) => !open);
+                }}
+              >
+                <CaretDownIcon weight="bold" aria-hidden />
+              </button>
+            )}
+          </span>
         ))}
       </div>
       {status !== undefined && (
@@ -818,6 +863,28 @@ function LookupBar({
           <span className="lookup-mark">{STATUS_ICONS[status.kind]}</span>
           <span aria-hidden>{status.label}</span>
         </p>
+      )}
+      {noting && onAskAi !== undefined && (
+        <div id={notePanel} className="lookup-note">
+          <AiNotePanel
+            ask="details"
+            onAsk={(note) => {
+              setNoting(false);
+              if (note === "") {
+                const ai = offered.find((each) => each.enricher === AI_ENRICHER);
+                if (ai !== undefined) {
+                  onFind(ai);
+                }
+              } else {
+                onAskAi(note);
+              }
+            }}
+            onClose={() => {
+              setNoting(false);
+              noteToggle.current?.focus();
+            }}
+          />
+        </div>
       )}
     </div>
   );

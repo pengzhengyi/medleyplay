@@ -34,6 +34,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  CaretDownIcon,
   CaretLeftIcon,
   CircleNotchIcon,
   DotsSixVerticalIcon,
@@ -68,6 +69,7 @@ import { formatStart, parseStart } from "../library/songTimes";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf } from "../library/aiAnswer";
 import { snapStarts } from "../library/snap";
+import { AiNotePanel } from "./AiNotePanel";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
 import { LazyPart } from "./LazyPart";
@@ -116,7 +118,6 @@ export interface SilenceFinder {
 const GAPS_EVERY_MS = 500;
 
 /** The longest note to the AI, as the server takes it. */
-const MAX_HINT = 500;
 
 /** The most songs a file is split into, as the server keeps them. */
 const MAX_SONGS = 300;
@@ -174,8 +175,10 @@ export function SongsEditor({
   const [editedSinceAsking, setEditedSinceAsking] = useState(false);
   // The last answer of the AI asked here: shown in its button until it is asked again.
   const [aiOutcome, setAiOutcome] = useState<"answered" | "failed" | undefined>(undefined);
-  const [askingAgain, setAskingAgain] = useState(false);
-  const [hint, setHint] = useState("");
+  // The note to ask the AI with: opened by ▾ beside its button, a right-click, or asking again.
+  const [noting, setNoting] = useState(false);
+  const noteToggle = useRef<HTMLButtonElement>(null);
+  const notePanel = useId();
   const [busy, setBusy] = useState(false);
   const [snapping, setSnapping] = useState(false);
   // The rows a snap moved, until the next edit, and the rows before it, to undo it.
@@ -326,7 +329,7 @@ export function SongsEditor({
   /** Ask the AI, at once or `again` with a note, and keep the rows as they are until it answers. */
   const askAi = (again?: string) => {
     setTyping(false);
-    setAskingAgain(false);
+    setNoting(false);
     setFillNote("");
     setAiOutcome(undefined);
     setAskedAi(true);
@@ -665,56 +668,84 @@ export function SongsEditor({
                 <OriginTag origin="video" full="From the video" /> {list.length}
               </button>
             ))}
-            <button
-              type="button"
-              className="fill-button ai-button"
-              data-status={aiStatus}
-              disabled={busy}
-              aria-disabled={noAi}
-              aria-label={
-                thinking ? "Stop asking the AI" : fromAi ? "Ask the AI again" : "Fill with AI"
-              }
-              aria-expanded={fromAi && !thinking ? askingAgain : undefined}
-              aria-busy={thinking}
-              title={
-                thinking
-                  ? "Stop asking the AI"
-                  : fromAi
-                    ? "Ask the AI again, with a note if you like"
-                    : songs.suggested.length > 0
-                      ? `The ${songCount(songs.suggested.length)} ${aiNameOf(songs.suggested_by)} suggested`
-                      : ai.can
-                        ? "Ask the AI for the songs"
-                        : aiSetUp.missing
-                          ? aiSetUp.why
-                          : "The AI can't be asked about this file now"
-              }
-              onClick={() => {
-                if (thinking) {
-                  stopAi();
-                  return;
+            <span className="ai-split">
+              <button
+                type="button"
+                className="fill-button ai-button"
+                data-status={aiStatus}
+                onContextMenu={(event) => {
+                  if (!noAi && !thinking && !busy) {
+                    event.preventDefault();
+                    setTyping(false);
+                    setNoting(true);
+                  }
+                }}
+                disabled={busy}
+                aria-disabled={noAi}
+                aria-label={
+                  thinking ? "Stop asking the AI" : fromAi ? "Ask the AI again" : "Fill with AI"
                 }
-                if (noAi) {
-                  return;
+                aria-expanded={fromAi && !thinking ? noting : undefined}
+                aria-busy={thinking}
+                title={
+                  thinking
+                    ? "Stop asking the AI"
+                    : fromAi
+                      ? "Ask the AI again, with a note if you like"
+                      : songs.suggested.length > 0
+                        ? `The ${songCount(songs.suggested.length)} ${aiNameOf(songs.suggested_by)} suggested`
+                        : ai.can
+                          ? "Ask the AI for the songs"
+                          : aiSetUp.missing
+                            ? aiSetUp.why
+                            : "The AI can't be asked about this file now"
                 }
-                setTyping(false);
-                if (fromAi) {
-                  setAskingAgain((open) => !open);
-                } else if (songs.suggested.length > 0) {
-                  fill(songs.suggested, `from ${aiNameOf(songs.suggested_by)}`, true);
-                } else {
-                  askAi();
-                }
-              }}
-            >
-              {thinking ? (
-                <CircleNotchIcon className="spin" aria-hidden />
-              ) : (
-                <SparkleIcon aria-hidden />
-              )}{" "}
-              AI
-              {aiStatus !== undefined && <span className="ai-status" aria-hidden />}
-            </button>
+                onClick={() => {
+                  if (thinking) {
+                    stopAi();
+                    return;
+                  }
+                  if (noAi) {
+                    return;
+                  }
+                  setTyping(false);
+                  if (fromAi) {
+                    setNoting((open) => !open);
+                  } else if (songs.suggested.length > 0) {
+                    fill(songs.suggested, `from ${aiNameOf(songs.suggested_by)}`, true);
+                  } else {
+                    askAi();
+                  }
+                }}
+              >
+                {thinking ? (
+                  <CircleNotchIcon className="spin" aria-hidden />
+                ) : (
+                  <SparkleIcon aria-hidden />
+                )}{" "}
+                AI
+                {aiStatus !== undefined && <span className="ai-status" aria-hidden />}
+              </button>
+              <button
+                ref={noteToggle}
+                type="button"
+                className="fill-button ai-note-toggle"
+                disabled={busy || thinking}
+                aria-disabled={noAi}
+                aria-label="Ask AI with a note"
+                title="Ask AI with a note"
+                aria-expanded={noting}
+                aria-controls={notePanel}
+                onClick={() => {
+                  if (!noAi) {
+                    setTyping(false);
+                    setNoting((open) => !open);
+                  }
+                }}
+              >
+                <CaretDownIcon weight="bold" aria-hidden />
+              </button>
+            </span>
             {noAi && <AiSetUpHint newTab />}
             <button
               type="button"
@@ -759,48 +790,22 @@ export function SongsEditor({
               </button>
             )}
           </div>
-          {askingAgain && (
-            <div className="ai-again">
-              <label htmlFor="ai-again-hint" className="detail-label">
-                Anything the AI should know?
-              </label>
-              <div className="ai-again-row">
-                <input
-                  id="ai-again-hint"
-                  className="detail-input"
-                  value={hint}
-                  maxLength={MAX_HINT}
-                  placeholder="It's the 2007 concert, with 22 songs"
-                  aria-describedby="ai-again-count"
-                  // The field opens on pressing AI, to type the note at once.
-                  autoFocus
-                  onChange={(event) => {
-                    setHint(event.currentTarget.value);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                      event.preventDefault();
-                      askAi(hint);
-                    } else if (event.key === "Escape") {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setAskingAgain(false);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="ai-again-ask"
-                  onClick={() => {
-                    askAi(hint);
-                  }}
-                >
-                  Ask again
-                </button>
-              </div>
-              <small id="ai-again-count" className="ai-again-count">
-                {`${String(hint.length)} of ${String(MAX_HINT)} characters`}
-              </small>
+          {noting && (
+            <div id={notePanel}>
+              <AiNotePanel
+                ask="songs"
+                onAsk={(note) => {
+                  if (note === "") {
+                    askAi();
+                  } else {
+                    askAi(note);
+                  }
+                }}
+                onClose={() => {
+                  setNoting(false);
+                  noteToggle.current?.focus();
+                }}
+              />
             </div>
           )}
           {disagree !== null && <p className="songs-note songs-doubt">{disagree}</p>}

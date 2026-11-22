@@ -132,3 +132,7 @@ def test_with_no_note_there_is_no_message_for_it(tmp_path: Path) -> None:
 def test_the_system_message_lets_the_listeners_note_name_songs_the_text_does_not() -> None:
     assert "own message" in SYSTEM
     assert "what you know" in SYSTEM
+
+
+def test_the_system_message_says_a_track_with_no_video_text_is_named_by_its_details() -> None:
+    assert "no video text" in SYSTEM

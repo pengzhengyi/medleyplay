@@ -8,7 +8,14 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.artists import PictureSite
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
 from medleyplay.domain.lyrics import LyricsSite
-from medleyplay.domain.settings import RemovalOrder, Settings, SplitAlbums
+from medleyplay.domain.settings import (
+    DEFAULT_AI_NOTES,
+    AiAsk,
+    AiNote,
+    RemovalOrder,
+    Settings,
+    SplitAlbums,
+)
 from tests.support.factories import NewAccountFactory
 
 FIVE_GB = 5 * 10**9
@@ -136,3 +143,59 @@ def test_a_picture_site_named_twice_is_refused(
 
     with pytest.raises(InvalidInputError, match="picture_sites"):
         settings.put(alice, Settings(picture_sites=(PictureSite.DEEZER, PictureSite.DEEZER)))
+
+
+# The notes offered to the AI
+
+
+def test_settings_never_saved_offer_the_ai_the_built_in_notes_for_details_and_songs(
+    settings: SettingsService,
+) -> None:
+    notes = settings.get().ai_notes
+
+    assert notes == DEFAULT_AI_NOTES
+    assert {note.ask for note in notes} == {AiAsk.DETAILS, AiAsk.SONGS}
+
+
+def test_an_admin_replaces_the_notes_offered_to_the_ai(
+    settings: SettingsService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    notes = (AiNote(AiAsk.SONGS, "A concert: one song per chapter."),)
+
+    settings.put(alice, Settings(ai_notes=notes))
+
+    assert settings.get().ai_notes == notes
+
+
+def test_an_admin_may_offer_the_ai_no_notes_at_all(
+    settings: SettingsService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    settings.put(alice, Settings(ai_notes=()))
+
+    assert settings.get().ai_notes == ()
+
+
+@pytest.mark.parametrize("text", ["", "   ", "x" * 201])
+def test_a_note_for_the_ai_that_is_empty_or_over_200_characters_is_refused(
+    settings: SettingsService, accounts: AccountService, text: str
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    with pytest.raises(InvalidInputError, match="ai_notes"):
+        settings.put(alice, Settings(ai_notes=(AiNote(AiAsk.DETAILS, text),)))
+
+
+def test_a_note_offered_twice_for_one_ask_is_refused_but_once_for_each_is_kept(
+    settings: SettingsService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    text = "Keep names in their own language."
+
+    with pytest.raises(InvalidInputError, match="ai_notes"):
+        settings.put(alice, Settings(ai_notes=(AiNote(AiAsk.DETAILS, text),) * 2))
+    settings.put(alice, Settings(ai_notes=(AiNote(AiAsk.DETAILS, text), AiNote(AiAsk.SONGS, text))))
+
+    assert len(settings.get().ai_notes) == 2

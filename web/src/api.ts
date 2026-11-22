@@ -718,6 +718,21 @@ export interface StorageFolder {
 }
 
 /** The household's settings, and the revision they were read at; 0 if never saved. */
+/** What someone asks the AI from: a Track's details, or the songs of its file. */
+export type AiAsk = "details" | "songs";
+
+/** A note offered beside the AI's button for `ask`, to send with the question. */
+export interface AiNote {
+  readonly ask: AiAsk;
+  readonly text: string;
+}
+
+/** The most characters one note offered to the AI may have. */
+export const MAX_AI_NOTE = 200;
+
+/** The most characters a note sent with a question to the AI may have, all told. */
+export const MAX_HINT = 500;
+
 export interface Settings {
   /** The most the Downloads and cache may use, in bytes, or `null` for no limit. */
   readonly storage_limit: number | null;
@@ -738,6 +753,8 @@ export interface Settings {
   readonly find_album_covers: CoverSearch;
   /** Whether an AI model is asked, in the background, which cover fits an album none plainly fits. */
   readonly pick_album_covers_by_ai: boolean;
+  /** The notes offered to whoever asks the AI, beside the button for each ask. */
+  readonly ai_notes: readonly AiNote[];
   readonly revision: number;
 }
 

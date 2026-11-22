@@ -362,14 +362,48 @@ def test_a_track_with_video_text_from_the_household_is_eligible(
     assert enriching.enrichment.eligible(NAME) == [track_id]
 
 
-def test_a_track_with_no_video_text_is_not_eligible_and_says_why(
+def test_a_track_with_no_video_text_is_asked_about_from_what_it_shows_when_someone_asks(
     enriching: Enriching, alice: Account
 ) -> None:
-    track_id = enriching.add_file_track("Night Drive.m4a")
+    track_id = enriching.add_file_track("1989.m4a")
+
+    _suggested(enriching, alice, track_id)
+
+    assert _suggestion(enriching, track_id) == NIGHT_DRIVE_SUGGESTION
+
+
+def test_a_track_with_no_video_text_may_be_asked_about_but_is_never_asked_on_its_own(
+    enriching: Enriching,
+) -> None:
+    track_id = enriching.add_file_track("1989.m4a")
 
     assert enriching.enrichment.eligible(NAME) == []
-    with pytest.raises(ConflictError, match="no video text"):
+    assert enriching.enrichment.askable(NAME).eligible == (track_id,)
+
+
+def test_a_track_with_no_video_text_is_asked_once_a_day_for_what_it_shows(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_file_track("1989.m4a")
+    _suggested(enriching, alice, track_id)
+
+    with pytest.raises(AskedRecentlyError):
         enriching.enrichment.find_details(alice, track_id, NAME)
+    assert enriching.enrichment.asked_recently(NAME) == [track_id]
+
+
+def test_a_track_with_no_video_text_is_asked_again_at_once_with_a_note(
+    enriching: Enriching, alice: Account
+) -> None:
+    track_id = enriching.add_file_track("1989.m4a")
+    _suggested(enriching, alice, track_id)
+
+    job = enriching.enrichment.find_details(
+        alice, track_id, NAME, hint="One song per track of the standard edition."
+    )
+    enriching.pause_passes()
+
+    enriching.wait_for(job.id, JobState.SUCCEEDED)
 
 
 def test_a_song_inside_a_longer_file_is_not_eligible(enriching: Enriching, alice: Account) -> None:

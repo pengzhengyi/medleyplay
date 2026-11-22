@@ -56,6 +56,7 @@ async function renderDialog(
 ) {
   const onClose = vi.fn();
   const onFind = vi.fn<(lookup: Lookup) => void>();
+  const onAskAi = vi.fn<(note: string) => void>();
   const load = vi.fn(() => Promise.resolve(details));
   const dialogOf = (lookup: TrackLookup | undefined) => (
     <EditDetails
@@ -73,6 +74,7 @@ async function renderDialog(
       lookup={lookup}
       online
       onFind={onFind}
+      onAskAi={onAskAi}
       songs={more.songs}
       lyrics={more.lyrics}
       startOnSongs={more.startOnSongs ?? false}
@@ -91,7 +93,7 @@ async function renderDialog(
     }
     rerender(dialogOf(lookup));
   };
-  return { dialog, onSave, onClose, onFind, load, lookUp };
+  return { dialog, onSave, onClose, onFind, onAskAi, load, lookUp };
 }
 
 /** The lookup that asks MusicBrainz. */
@@ -99,6 +101,15 @@ const MUSICBRAINZ = ((): Lookup => {
   const found = LOOKUPS.find((lookup) => lookup.enricher === "musicbrainz");
   if (found === undefined) {
     throw new Error("No lookup asks MusicBrainz.");
+  }
+  return found;
+})();
+
+/** The lookup that asks the AI. */
+const AI = ((): Lookup => {
+  const found = LOOKUPS.find((lookup) => lookup.enricher === "ai-details");
+  if (found === undefined) {
+    throw new Error("The AI is a lookup.");
   }
   return found;
 })();
@@ -869,6 +880,40 @@ describe("looking a song up from its details", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Find on MusicBrainz" }));
 
     expect(onFind).toHaveBeenCalledExactlyOnceWith(MUSICBRAINZ);
+  });
+
+  it("asks the AI with a note from ▾ beside its button", async () => {
+    const { dialog, onAskAi, onFind } = await renderDialog(detailsOf(7), undefined, undefined, {
+      findable: [AI],
+    });
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Ask AI with a note" }));
+    await userEvent.type(
+      within(dialog).getByRole("textbox", { name: "More details" }),
+      "It's Taylor Swift's 1989{Enter}",
+    );
+
+    expect(onAskAi).toHaveBeenCalledExactlyOnceWith("It's Taylor Swift's 1989");
+    expect(onFind).not.toHaveBeenCalled();
+  });
+
+  it("opens the note to ask the AI with on a right-click of its button", async () => {
+    const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, { findable: [AI] });
+
+    await userEvent.pointer({
+      keys: "[MouseRight]",
+      target: within(dialog).getByRole("button", { name: "Suggest details with AI" }),
+    });
+
+    expect(within(dialog).getByRole("group", { name: "Ask AI with a note" })).toBeVisible();
+  });
+
+  it("offers a note only beside the AI's button", async () => {
+    const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
+      findable: [MUSICBRAINZ],
+    });
+
+    expect(within(dialog).queryByRole("button", { name: "Ask AI with a note" })).toBeNull();
   });
 
   it("offers no lookup the song can't be asked about", async () => {

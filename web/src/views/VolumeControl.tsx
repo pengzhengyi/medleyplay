@@ -6,8 +6,9 @@ import { SpeakerHighIcon, SpeakerLowIcon, SpeakerSlashIcon } from "@phosphor-ico
 import { type CSSProperties, useRef } from "react";
 
 import { stepVolume } from "../player/volume";
-import { hintOf, labelsOf, useBindings } from "../shortcuts";
+import { labelsOf, useBindings } from "../shortcuts";
 import { useHeldRange } from "./useHeldRange";
+import { Hint } from "./Hint";
 
 /**
  * Change `volume`, from 0 to 1: a button moves it one mark, and the bar once it
@@ -30,21 +31,22 @@ export function VolumeControl({
   const keys = useBindings();
   return (
     <div className={muted ? "volume muted" : "volume"} role="group" aria-label="Volume">
-      <button
-        type="button"
-        className="icon"
-        aria-label="Volume down"
-        {...hintOf("Volume down", keys.volumeDown)}
-        onClick={() => {
-          onVolume(stepVolume(volume, -1));
-        }}
-      >
-        {muted ? (
-          <SpeakerSlashIcon weight="regular" aria-hidden />
-        ) : (
-          <SpeakerLowIcon weight="regular" aria-hidden />
-        )}
-      </button>
+      <Hint name={"Volume down"} keys={keys.volumeDown}>
+        <button
+          type="button"
+          className="icon"
+          aria-label="Volume down"
+          onClick={() => {
+            onVolume(stepVolume(volume, -1));
+          }}
+        >
+          {muted ? (
+            <SpeakerSlashIcon weight="regular" aria-hidden />
+          ) : (
+            <SpeakerLowIcon weight="regular" aria-hidden />
+          )}
+        </button>
+      </Hint>
       <input
         ref={bar}
         type="range"
@@ -58,17 +60,18 @@ export function VolumeControl({
         style={{ "--played": `${String(percent)}%` } as CSSProperties}
         onChange={range.onChange}
       />
-      <button
-        type="button"
-        className="icon"
-        aria-label="Volume up"
-        {...hintOf("Volume up", keys.volumeUp)}
-        onClick={() => {
-          onVolume(stepVolume(volume, 1));
-        }}
-      >
-        <SpeakerHighIcon weight="regular" aria-hidden />
-      </button>
+      <Hint name={"Volume up"} keys={keys.volumeUp}>
+        <button
+          type="button"
+          className="icon"
+          aria-label="Volume up"
+          onClick={() => {
+            onVolume(stepVolume(volume, 1));
+          }}
+        >
+          <SpeakerHighIcon weight="regular" aria-hidden />
+        </button>
+      </Hint>
     </div>
   );
 }

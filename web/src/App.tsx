@@ -6,6 +6,7 @@ import { useEffect, useEffectEvent, useState } from "react";
 
 import { type Account, type DeviceInfo, api, forgetHeldReads, letIn, onDeviceRefused } from "./api";
 import { DeviceWaiting } from "./views/DeviceWaiting";
+import { Hints } from "./views/Hint";
 import { Library } from "./views/Library";
 import { SignIn } from "./views/SignIn";
 import { Starting } from "./views/Starting";
@@ -64,12 +65,14 @@ export function App() {
     return <SignIn onSignedIn={setAccount} />;
   }
   return (
-    <Library
-      account={account}
-      onHost={onHost}
-      onSignedOut={() => {
-        setAccount(null);
-      }}
-    />
+    <Hints>
+      <Library
+        account={account}
+        onHost={onHost}
+        onSignedOut={() => {
+          setAccount(null);
+        }}
+      />
+    </Hints>
   );
 }

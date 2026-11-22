@@ -16,7 +16,7 @@ import { songTimeOf, useLyricsHidden } from "../lyrics";
 import { albumSteps, albumTimeline, playingOf, songPlaying } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
-import { hintOf, useBindings } from "../shortcuts";
+import { useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { FavoriteHeart } from "./FavoriteHeart";
 import { LyricNow } from "./LyricsPanel";
@@ -27,6 +27,7 @@ import { SongCredits } from "./SongCredits";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { FavoriteButton, Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
+import { Hint } from "./Hint";
 
 /** The current Track and its controls, with the line of its `lyrics` sung now unless hidden. */
 export function PlayerBar({
@@ -99,15 +100,16 @@ export function PlayerBar({
         {track === undefined ? (
           <Cover size="small" cover={null} />
         ) : (
-          <button
-            type="button"
-            className="open-now-playing"
-            aria-label="Open Now Playing"
-            {...hintOf("Now Playing", keys.nowPlaying)}
-            onClick={onOpenNowPlaying}
-          >
-            <Cover size="small" cover={track.cover} />
-          </button>
+          <Hint name={"Now Playing"} keys={keys.nowPlaying}>
+            <button
+              type="button"
+              className="open-now-playing"
+              aria-label="Open Now Playing"
+              onClick={onOpenNowPlaying}
+            >
+              <Cover size="small" cover={track.cover} />
+            </button>
+          </Hint>
         )}
         {track !== undefined && (
           <PlayingKind
@@ -151,17 +153,18 @@ export function PlayerBar({
         steps={albumSteps(player.queue, tracks, nowPlaying, position)}
       />
       <div className="status">
-        <button
-          type="button"
-          className={queueOpen ? "icon queue-toggle on" : "icon queue-toggle"}
-          aria-label="Up next"
-          aria-expanded={queueOpen}
-          aria-controls="queue"
-          {...hintOf("Up next", keys.queue)}
-          onClick={onToggleQueue}
-        >
-          <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />
-        </button>
+        <Hint name={"Up next"} keys={keys.queue}>
+          <button
+            type="button"
+            className={queueOpen ? "icon queue-toggle on" : "icon queue-toggle"}
+            aria-label="Up next"
+            aria-expanded={queueOpen}
+            aria-controls="queue"
+            onClick={onToggleQueue}
+          >
+            <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />
+          </button>
+        </Hint>
         {playOn}
         {status.kind === "preparing" && <span className="note">Preparing…</span>}
         {status.kind === "blocked" && <span className="note">{status.message}</span>}

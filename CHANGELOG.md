@@ -687,6 +687,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Shortcut keys as key caps** — hovering a player control, or reaching it with the
+  keyboard, shows a tooltip with its name and each key as a cap of its own, such as
+  *Next album* ⌥ ⇧ →, the modifiers as symbols on Apple devices; screen readers
+  still hear the keys in words.
+
 - **Busy buttons wait in place** — a button whose action runs, such as *Find* for
   lyrics, *Find on MusicBrainz*, or *Ask AI*, shows a soft light sweeping across it,
   its label kept, and is marked busy for screen readers; it holds still where motion

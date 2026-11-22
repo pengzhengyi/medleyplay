@@ -11,7 +11,11 @@ import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.lyrics_search import LyricsFound
+from medleyplay.application.lyrics_search import (
+    FIND_LYRICS_KIND,
+    LyricsFound,
+    find_lyrics_target,
+)
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
@@ -68,7 +72,13 @@ def test_the_songs_found_are_kept_with_their_lyrics_and_what_was_asked(
     ]
     assert found.options[0].duration_ms == 260_000
     assert (found.title, found.artist, found.finding, found.failure) == ("Melt", "ryo", False, None)
-    assert found.found_at == enriching.clock()
+    # Found while its Job ran: the clock goes on moving once every Job is done.
+    job = enriching.jobs.latest(FIND_LYRICS_KIND, find_lyrics_target(song))
+    assert job is not None
+    assert job.started_at is not None
+    assert job.finished_at is not None
+    assert found.found_at is not None
+    assert job.started_at <= found.found_at <= job.finished_at
 
 
 def test_nothing_changes_the_songs_lyrics_until_some_are_chosen(

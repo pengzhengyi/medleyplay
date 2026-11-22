@@ -1,13 +1,13 @@
 /**
  * @file Which artist going by a song's artist name the song is by, for two artists of one name.
  *
- * Beside the Artist label, *Which Jay?* opens a menu of every artist the song shows. Under
+ * Beside the Artist label, *Another artist named Jay?* opens a menu of every artist the song shows. Under
  * each are the artists going by its name: the one the song is by now, checked; each other
  * one, with the albums its songs are on; and *Another artist called Jay*, which adds one.
  * A choice moves this song alone, at once.
  *
  * ```text
- * Which Jay?
+ * Another artist named Jay?
  *   Jay
  *   ✓ The one it is by now
  *     On Jay, 范特西 · 3 songs
@@ -44,17 +44,22 @@ export function WhichArtist({
   if (only === undefined) {
     return null;
   }
-  const label = artists.length === 1 ? `Which ${only.written}?` : "Which artists?";
+  const one = artists.length === 1;
+  const why = one
+    ? `Two artists share the name ${only.written}: choose which one sings this song`
+    : "Two artists share one of these names: choose which ones sing this song";
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger asChild disabled={disabled}>
-        <button
-          type="button"
-          className="link-button detail-add"
-          title="Choose which artist going by the name this song is by"
-        >
+        <button type="button" className="link-button detail-add" title={why}>
           <UsersThreeIcon weight="bold" aria-hidden />
-          {label}
+          {one ? (
+            <span className="detail-add-text">
+              Another artist named <span className="detail-add-name">{only.written}</span>?
+            </span>
+          ) : (
+            "Another artist of the same name?"
+          )}
         </button>
       </Menu.Trigger>
       <Menu.Content

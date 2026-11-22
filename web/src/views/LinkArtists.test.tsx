@@ -270,8 +270,8 @@ describe("linking names to artists", () => {
 
     const asking = screen.getByRole("button", { name: "Asking the AI…" });
     expect(asking).toBeDisabled();
-    // Its own spinner alone: busy, Pico would draw a second.
-    expect(asking).not.toHaveAttribute("aria-busy");
+    // Busy, it waits in place; its own spinner hides Pico's.
+    expect(asking).toHaveAttribute("aria-busy", "true");
     expect(asking.querySelectorAll(".spin")).toHaveLength(1);
   });
 

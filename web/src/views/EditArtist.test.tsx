@@ -249,7 +249,9 @@ describe("asking the AI about an artist", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
 
-    expect(await screen.findByRole("button", { name: "Asking the AI…" })).toBeDisabled();
+    const asking = await screen.findByRole("button", { name: "Asking the AI…" });
+    expect(asking).toBeDisabled();
+    expect(asking).toHaveAttribute("aria-busy", "true");
     state = { ...UNASKED, suggestion: artistSuggestionOf() };
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);

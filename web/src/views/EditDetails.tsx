@@ -802,6 +802,7 @@ function LookupBar({
             className="lookup-button"
             title={each.label}
             aria-label={each.label}
+            aria-busy={running && each.enricher === lookup?.enricher}
             disabled={running}
             onClick={() => {
               onFind(each);
@@ -999,11 +1000,11 @@ function DetailBox({
               type="button"
               className="link-button detail-add"
               disabled={chips.disabled}
-              title="Credit another artist on this song"
+              title="This song is by more than one artist: add each one"
               onClick={chips.onAdd}
             >
               <PlusIcon weight="bold" aria-hidden />
-              Add artist
+              More artists
             </button>
           </span>
         )}

@@ -55,6 +55,16 @@ describe("finding a song's lyrics", () => {
     expect(asked).toEqual([{ title: "【MV】Melt", artist: "初音ミク" }]);
   });
 
+  it("shows Find waiting, its label kept, while it looks", async () => {
+    finding(lyricsFoundOf([], { finding: true }));
+
+    await screen.findByText("Looking for lyrics…");
+
+    const find = screen.getByRole("button", { name: "Find" });
+    expect(find).toHaveAttribute("aria-busy", "true");
+    expect(find).toBeDisabled();
+  });
+
   it("does not look again on opening once looked for, showing what was asked", async () => {
     const asked: unknown[] = [];
     finding(lyricsFoundOf(), asked);

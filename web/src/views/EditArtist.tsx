@@ -288,6 +288,7 @@ export function EditArtist({
                 type="button"
                 className="secondary outline edit-artist-ask-button"
                 disabled={ai.asking}
+                aria-busy={ai.asking}
                 aria-disabled={noAi.missing}
                 title={
                   noAi.missing

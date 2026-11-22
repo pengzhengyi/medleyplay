@@ -26,7 +26,7 @@ import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
 import { useLyrics } from "../library/useLyrics";
 import { songTimeOf } from "../lyrics";
-import { playingOf } from "../player/albumNow";
+import { type StepCommand, albumSteps, playingOf, stepFor } from "../player/albumNow";
 import { useStation } from "../library/useStation";
 import { linksOf, withLinkedFavorites } from "../library/artistLinks";
 import { useArtistNames } from "../library/useArtistNames";
@@ -39,7 +39,7 @@ import { usePhotoLookAhead } from "../library/usePhotoLookAhead";
 import { useSharedNames } from "../library/useSharedNames";
 import { useSplitOffers } from "../library/useSplitOffers";
 import { toDoOf } from "../library/cleanUp";
-import { albumArtistOf } from "../library/views";
+import { albumArtistOf, coverPlaceOf } from "../library/views";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
@@ -376,6 +376,21 @@ export function Library({
     await setAlbumCover(songs, cover);
     return cover;
   };
+  /**
+   * Make `cover` the cover of `track`'s album, or drop the album's with `null`: on its split
+   * file, dropping the song's own so it shows the file's, or on every song of its album.
+   */
+  const coverAlbumOf = async (track: Track, cover: string | null) => {
+    const place = coverPlaceOf(track, tracks);
+    if (place.kind === "songs") {
+      await library.setDetailsOn(place.ids, { cover });
+      return;
+    }
+    await library.setDetailsOn(cover === null ? [place.id, track.id] : [place.id], { cover });
+    if (cover !== null) {
+      await library.setDetailsOn([track.id], { cover: null });
+    }
+  };
   // Once the Library has drawn, the parts that load apart load while the browser is idle.
   useEffect(() => {
     if (!library.loaded) {
@@ -514,6 +529,29 @@ export function Library({
     setNotice(`Added “${track.title}” to ${listFormat.format(names)}.`);
   };
 
+  /**
+   * Step as `command` says: within and past the album playing, or along the queue while a
+   * song of its own plays, where Previous and Next album step as Previous and Next do.
+   */
+  const step = (command: StepCommand) => {
+    if (playing === undefined) {
+      return;
+    }
+    const { position, queue } = player;
+    const steps = albumSteps(queue, byId, playingOf(queue, byId, position), position);
+    if (steps === undefined) {
+      if (command === "previous" || command === "previousAlbum") {
+        player.previous();
+      } else {
+        player.next();
+      }
+      return;
+    }
+    const to = stepFor(steps, command);
+    if (to !== undefined) {
+      player.playAt(to.key, to.seconds);
+    }
+  };
   // A shortcut changes what isn't in view, or isn't focused, so what it did is said.
   const shortcuts: ShortcutHandlers = {
     toggle: player.toggle,
@@ -524,14 +562,16 @@ export function Library({
       player.seek(Math.min(player.duration ?? Infinity, player.position + SEEK_SECONDS));
     },
     previous: () => {
-      if (playing !== undefined) {
-        player.previous();
-      }
+      step("previous");
     },
     next: () => {
-      if (playing !== undefined) {
-        player.next();
-      }
+      step("next");
+    },
+    previousAlbum: () => {
+      step("previousAlbum");
+    },
+    nextAlbum: () => {
+      step("nextAlbum");
     },
     volumeDown: () => {
       player.setVolume(stepVolume(player.volume, -1));
@@ -854,10 +894,20 @@ export function Library({
             setNotice(`Saved the details of “${editing.track.title}”.`);
           }}
           onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
-          onSetCover={(image) => library.setCover(editing.track.id, image)}
-          onRemoveCover={() => library.removeCover(editing.track.id)}
+          onSetCover={async (image) => {
+            const kept = (await library.setCover(editing.track.id, image)).origins.household?.cover;
+            if (typeof kept !== "string") {
+              throw new Error("The cover could not be kept.");
+            }
+            await coverAlbumOf(editing.track, kept);
+            return api.details(editing.track.id);
+          }}
+          onRemoveCover={async () => {
+            await coverAlbumOf(editing.track, null);
+            return api.details(editing.track.id);
+          }}
           onUseCover={async (cover) => {
-            await library.saveDetails(editing.track.id, { cover });
+            await coverAlbumOf(editing.track, cover);
             return api.details(editing.track.id);
           }}
           onChooseArtist={async (written, id) => {

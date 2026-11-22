@@ -14,6 +14,8 @@ function spies() {
     forward: vi.fn(),
     previous: vi.fn(),
     next: vi.fn(),
+    previousAlbum: vi.fn(),
+    nextAlbum: vi.fn(),
     volumeDown: vi.fn(),
     volumeUp: vi.fn(),
     mute: vi.fn(),
@@ -130,6 +132,34 @@ describe("the keyboard shortcuts", () => {
 
     expect(on.forward).not.toHaveBeenCalled();
     expect(on.toggle).toHaveBeenCalledOnce();
+  });
+
+  it("go to the next song with Shift + → even while a slider is focused, whose arrows have no Shift", async () => {
+    const on = listening(<input type="range" aria-label="Position" />);
+    screen.getByRole("slider", { name: "Position" }).focus();
+
+    await userEvent.keyboard("{Shift>}{ArrowRight}{/Shift}");
+
+    expect(on.next).toHaveBeenCalledOnce();
+    expect(on.forward).not.toHaveBeenCalled();
+  });
+
+  it("go to the next album with Alt + Shift + →, not to the next song", async () => {
+    const on = listening();
+
+    await userEvent.keyboard("{Alt>}{Shift>}{ArrowRight}{/Shift}{/Alt}");
+
+    expect(on.nextAlbum).toHaveBeenCalledOnce();
+    expect(on.next).not.toHaveBeenCalled();
+  });
+
+  it("go to the previous album with Alt + Shift + ←", async () => {
+    const on = listening();
+
+    await userEvent.keyboard("{Alt>}{Shift>}{ArrowLeft}{/Shift}{/Alt}");
+
+    expect(on.previousAlbum).toHaveBeenCalledOnce();
+    expect(on.previous).not.toHaveBeenCalled();
   });
 
   it("leave typing to a text box", async () => {

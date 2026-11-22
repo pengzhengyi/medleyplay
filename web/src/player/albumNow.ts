@@ -268,6 +268,27 @@ export function albumSteps(
   };
 }
 
+/** A command that steps: by song, or by album. */
+export type StepCommand = "previous" | "next" | "previousAlbum" | "nextAlbum";
+
+/**
+ * Return where `command` steps to while an album plays: Previous and Next by song,
+ * going on by album past the album's ends or where no songs are known, and the album
+ * commands by album; `undefined` with none to step to.
+ */
+export function stepFor(steps: AlbumSteps, command: StepCommand): Step | undefined {
+  switch (command) {
+    case "previous":
+      return steps.previousSong ?? steps.previousAlbum;
+    case "next":
+      return steps.nextSong ?? steps.nextAlbum;
+    case "previousAlbum":
+      return steps.previousAlbum;
+    case "nextAlbum":
+      return steps.nextAlbum;
+  }
+}
+
 /** Return the first place of the album, or the song of its own, at `place`; -1 for none. */
 function runStart(queue: Queue, tracks: ReadonlyMap<number, Track>, place: number): number {
   const entry = queue.entries[place];

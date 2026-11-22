@@ -3,7 +3,8 @@
  *
  * A key the focused control uses itself stays with it: Space presses a button
  * reached with the keyboard, an arrow moves a focused slider, and typing goes
- * into a text box. An open dialog or menu keeps every key, except a dialog marked
+ * into a text box. An arrow with Shift, Alt, Ctrl, or ⌘ is no control's own move,
+ * so Shift + → goes to the next song even from the position slider. An open dialog or menu keeps every key, except a dialog marked
  * `data-shortcuts`, such as Now Playing, which lets them through.
  */
 
@@ -66,8 +67,13 @@ function belongsToWidget(event: KeyboardEvent, clicked: boolean): boolean {
   // A clicked button keeps focus, yet Space after a click means play or pause, not click again.
   return (
     (PRESSES.has(event.code) && !clicked && target.closest(PRESSED) !== null) ||
-    (MOVES.has(event.code) && target.closest(MOVED) !== null)
+    (MOVES.has(event.code) && !modified(event) && target.closest(MOVED) !== null)
   );
+}
+
+/** Whether `event`'s key is held with Shift, Alt, Ctrl, or ⌘. */
+function modified(event: KeyboardEvent): boolean {
+  return event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
 }
 
 /** Whether typing goes into `element`; a select picks an option as letters are typed. */

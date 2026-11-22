@@ -85,7 +85,7 @@ export function Transport({
           type="button"
           className="icon"
           aria-label="Previous album"
-          title="Previous album"
+          {...hintOf("Previous album", keys.previousAlbum)}
           onClick={() => {
             go(steps.previousAlbum);
           }}
@@ -153,7 +153,7 @@ export function Transport({
           type="button"
           className="icon"
           aria-label="Next album"
-          title="Next album"
+          {...hintOf("Next album", keys.nextAlbum)}
           onClick={() => {
             go(steps.nextAlbum);
           }}

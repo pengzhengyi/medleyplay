@@ -571,6 +571,21 @@ describe("editing a song's details", () => {
       expect(screen.queryByRole("dialog", { name: "Add a cover" })).toBeNull();
     });
 
+    it("returns to Edit details once a cover is used, rather than closing it", async () => {
+      const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7, { cover: COVER })));
+      const { dialog, onClose } = await renderDialog(detailsOf(7), undefined, undefined, {
+        onSetCover,
+      });
+
+      await uploaded(await pictureEditor(dialog, "Add a cover"), PNG);
+
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: "Add a cover" })).toBeNull();
+      });
+      expect(dialog).toHaveAttribute("open");
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
     it("offers the cover shown to save as an image, or to replace", async () => {
       const onSetCover = vi.fn(() => Promise.resolve(detailsOf(7, { cover: COVER })));
       const { dialog } = await renderDialog(

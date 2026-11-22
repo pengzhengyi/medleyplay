@@ -489,7 +489,7 @@ not.
   and Radio's favorites, and opens from each artist's page or the name as written.
   Now Playing names each artist with its own page and heart, and a song's menu goes
   to each. Using a likely name for one of them changes only that one.
-- **Edit details, one chip per artist:** *Add artist* beside the song's Artist turns
+- **Edit details, one chip per artist:** *More artists* beside the song's Artist turns
   its artist into a chip and adds the next one typed, Enter adding it (not while a
   word is being composed, as in Chinese or Japanese). Each chip shows the artist's
   photo, or its initial, says whether it is linked, and has *+ feat.* to credit it
@@ -564,7 +564,7 @@ not.
   own favorite, in Now Playing's hearts and Radio too. A link by the name alone,
   as `#/artist?name=Jay` from before pages opened by id, asks *Which Jay?* with a
   tile for each artist with songs going by it, the name's first first; a name
-  naming one artist opens its page. *Which Jay?* beside a song's Artist in *Edit details*
+  naming one artist opens its page. *Another artist named Jay?* beside a song's Artist in *Edit details*
   lists, under each of its artists, *The one it is by now*, checked, each other
   artist going by the name as *On Blue Night · 3 songs*, and *Another artist called
   Jay*; choosing one moves the song at once.

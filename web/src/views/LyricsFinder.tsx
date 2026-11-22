@@ -168,6 +168,7 @@ export function LyricsFinder({
         <button
           type="submit"
           className="dialog-button"
+          aria-busy={finding && state !== undefined}
           disabled={busy || finding || asking.title.trim() === ""}
         >
           Find

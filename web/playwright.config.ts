@@ -24,9 +24,17 @@ export default defineConfig({
     { name: "setup", testMatch: /setup\.ts/ },
     {
       name: "chromium",
-      testIgnore: /(manual-downloads|covers)\.spec\.ts/,
+      testIgnore: /(manual-downloads|covers|songs)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], storageState: SIGNED_IN },
       dependencies: ["setup"],
+    },
+    // Splitting a file into songs changes what every other test plays, so it runs once
+    // they have all finished.
+    {
+      name: "chromium-after",
+      testMatch: /songs\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], storageState: SIGNED_IN },
+      dependencies: ["chromium"],
     },
     { name: "tube-setup", testMatch: /setup-tube\.ts/, use: { baseURL: TUBE_URL } },
     {

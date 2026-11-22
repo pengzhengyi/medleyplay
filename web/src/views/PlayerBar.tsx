@@ -29,7 +29,10 @@ import { FavoriteButton, Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
 import { Hint } from "./Hint";
 
-/** The current Track and its controls, with the line of its `lyrics` sung now unless hidden. */
+/**
+ * The current Track and its controls, with the line of its `lyrics` sung now unless hidden,
+ * on a row of its own along the bar's bottom edge.
+ */
 export function PlayerBar({
   player,
   track,
@@ -132,9 +135,6 @@ export function PlayerBar({
           ) : (
             <SongCredits track={named} />
           )}
-          {track !== undefined && !lyricsHidden && (
-            <LyricNow lyrics={lyrics} seconds={songTimeOf(track, nowPlaying, position).seconds} />
-          )}
         </div>
         {track !== undefined && (
           <PlayingHeart
@@ -181,6 +181,9 @@ export function PlayerBar({
           <PlayTime at={shownPosition} length={shownDuration} />
         </span>
       </div>
+      {track !== undefined && !lyricsHidden && (
+        <LyricNow lyrics={lyrics} seconds={songTimeOf(track, nowPlaying, position).seconds} />
+      )}
     </section>
   );
 }

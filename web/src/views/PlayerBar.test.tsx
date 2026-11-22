@@ -1,10 +1,10 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Track } from "../api";
+import type { Lyrics, Track } from "../api";
 import { NO_FAVORITES } from "../library/favoriteGroups";
 import { playerOf } from "../testing/player";
-import { trackOf } from "../testing/server";
+import { lyricsOf, trackOf } from "../testing/server";
 import { PlayerBar } from "./PlayerBar";
 import type { TrackMenuActions } from "./TrackMenu";
 
@@ -50,7 +50,12 @@ const ACTIONS: TrackMenuActions = {
 };
 
 /** Show the bar playing `file` whole from the queue, `position` seconds into it. */
-function renderPlayingWhole(file: Track, songs: readonly Track[], position: number) {
+function renderPlayingWhole(
+  file: Track,
+  songs: readonly Track[],
+  position: number,
+  lyrics: Lyrics | null = null,
+) {
   const player = playerOf({
     queue: { ...playerOf().queue, entries: [{ key: "w", trackId: file.id }], position: 0 },
     position,
@@ -65,7 +70,7 @@ function renderPlayingWhole(file: Track, songs: readonly Track[], position: numb
       favorites={NO_FAVORITES}
       onFavoriteAlbum={vi.fn()}
       menuActions={ACTIONS}
-      lyrics={null}
+      lyrics={lyrics}
       queueOpen={false}
       onToggleQueue={vi.fn()}
       onOpenNowPlaying={vi.fn()}
@@ -94,5 +99,18 @@ describe("the player bar", () => {
     const bar = renderPlayingWhole(unsplit, [], 45);
 
     expect(within(bar).getByText("BV12C4y1c7jB")).toBeVisible();
+  });
+});
+
+describe("the line sung now in the player bar", () => {
+  it("runs on a row of its own across the bar, not under the song's names", () => {
+    const lyrics = lyricsOf({
+      lines: [{ at_ms: 0, text: "爱是昂贵的，你买不起", translation: "", words: [] }],
+    });
+
+    const bar = renderPlayingWhole(FILE, [FIRST, SECOND], 45, lyrics);
+
+    const line = within(bar).getByText("爱是昂贵的，你买不起");
+    expect(line.parentElement).toBe(bar);
   });
 });

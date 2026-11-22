@@ -693,6 +693,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `medleyplay move-data [<folder>]` moves it anywhere while the server is stopped:
   it copies the folder, checks the copy, and only then deletes the old one. Every
   command takes `--data-dir` to choose the folder, as `MEDLEYPLAY_DATA_DIR` does.
+- **The line sung now runs the player's whole width** — in a row of its own along the
+  bottom of the player bar, centred, so a long line fits; a line still longer ends in
+  "…" with the whole of it in its tooltip. Between lines the row stays empty, so the bar
+  keeps its height.
 - **Both names in the player bar** — when the artist or the album is long, each is
   shortened on its own, the longer one giving up more room, so both stay in sight with
   the dash between them; hovering either shows it whole. Short names show as before.
@@ -842,6 +846,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Back from a song's Edit songs to its own details** — *Edit songs* in a song's menu
+  opened the songs of its file over the whole file's details, so *‹ Details* led to the
+  file, which has no lyrics of its own, and *Lyrics* was missing. It now leads back to
+  the song chosen, with *Lyrics* as when *Edit details* opens it.
 - **Shift + → goes to the next song** — after a click on the position bar, which
   focuses it, Shift + → only showed its focus ring; arrows held with Shift, Alt,
   Ctrl, or ⌘ now always go to the shortcuts. While an album plays, Shift + ← and

@@ -78,14 +78,23 @@ describe("the lyrics beside the cover", () => {
 });
 
 describe("the line sung now, in the player", () => {
+  it("at 13 seconds is the line sung then, whole in its tooltip", () => {
+    const { container } = render(<LyricNow lyrics={MELT} seconds={13} />);
+
+    const line = container.querySelector(".lyric-now");
+    expect(line).toHaveTextContent("朝目が覚めて");
+    expect(line).toHaveAttribute("title", "朝目が覚めて");
+  });
+
   it.each([
-    [13, "朝目が覚めて"],
-    [11, ""],
-    [21, ""],
-  ])("at %i seconds is “%s”", (seconds, line) => {
+    [11, "before the first line"],
+    [21, "in a pause"],
+  ])("at %i seconds, %s, keeps its row empty so the player does not change height", (seconds) => {
     const { container } = render(<LyricNow lyrics={MELT} seconds={seconds} />);
 
-    expect(container).toHaveTextContent(line);
+    const line = container.querySelector(".lyric-now");
+    expect(line).toBeInTheDocument();
+    expect(line).toBeEmptyDOMElement();
   });
 
   it("is none for plain lyrics", () => {

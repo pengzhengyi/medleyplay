@@ -1247,6 +1247,28 @@ describe("editing an album from its page", () => {
     const editor = await screen.findByRole("dialog", { name: "Edit details" });
     expect(within(editor).queryByRole("button", { name: /^Save to/ })).not.toBeInTheDocument();
   });
+
+  it("goes back from a song's Edit songs to that song's own details, its lyrics a click away", async () => {
+    const jay = [
+      trackOf(9, "Jay", { artist: "周杰伦", album: "Jay", kind: "album", split: true }),
+      trackOf(11, "可爱女人", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+      trackOf(12, "完美主义", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
+    ];
+    open(hrefOf({ view: "album", artist: "周杰伦", name: "Jay" }), {
+      ...signedIn(jay),
+      "GET /api/tracks/9/details": { body: detailsOf(9) },
+      "GET /api/tracks/11/details": { body: detailsOf(11) },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions for 可爱女人" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit songs…" }));
+    const editor = await screen.findByRole("dialog");
+    const back = await within(editor).findByRole("button", { name: "Details" });
+
+    await user.click(back);
+
+    expect(await within(editor).findByRole("button", { name: "Lyrics" })).toBeVisible();
+  });
 });
 
 describe("showing a song in the Library", () => {

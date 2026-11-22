@@ -49,7 +49,7 @@ import { useSleepTimer } from "../player/useSleepTimer";
 import { useSpeaker } from "../player/useSpeaker";
 import { stepVolume } from "../player/volume";
 import { hrefOf, navigate, useRoute } from "../routes";
-import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
+import { learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { AskAiAgain } from "./AskAiAgain";
 import { CheckNetwork } from "./CheckNetwork";
@@ -76,6 +76,7 @@ import { WaitingDevices } from "./WaitingDevices";
 import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
 import { AiSetUpContext } from "./aiSetUp";
+import { Hint } from "./Hint";
 import { setRailCollapsed, setRailMinimized, useRailCollapsed, useRailMinimized } from "../rail";
 
 /** How long a notice, such as a song added to a Playlist, stays. */
@@ -689,17 +690,18 @@ export function Library({
         >
           <DeviceMobileSpeakerIcon weight="regular" aria-hidden />
         </button>
-        <button
-          type="button"
-          className="icon keys-button"
-          aria-label="Keyboard shortcuts"
-          {...hintOf("Keyboard shortcuts", keys.help)}
-          onClick={() => {
-            setListingShortcuts(true);
-          }}
-        >
-          <KeyboardIcon weight="regular" aria-hidden />
-        </button>
+        <Hint name={"Keyboard shortcuts"} keys={keys.help}>
+          <button
+            type="button"
+            className="icon keys-button"
+            aria-label="Keyboard shortcuts"
+            onClick={() => {
+              setListingShortcuts(true);
+            }}
+          >
+            <KeyboardIcon weight="regular" aria-hidden />
+          </button>
+        </Hint>
         <span className="header-account">
           <AccountMenu account={{ name: account.display_name, onSignOut: signOut }} />
         </span>

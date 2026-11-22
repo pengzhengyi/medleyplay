@@ -11,7 +11,9 @@ import {
   bindingOf,
   bindingsOf,
   changesOf,
-  hintOf,
+  hintTextOf,
+  keyCapsOf,
+  keyshortcutsOf,
   labelOf,
   labelsOf,
   openAccount,
@@ -68,15 +70,27 @@ describe("a binding's names", () => {
 });
 
 describe("a control's hint", () => {
-  it("names every key of its command on hover and to assistive technology", () => {
-    expect(hintOf("Play", ["space", "k"])).toEqual({
-      title: "Play (Space or K)",
-      "aria-keyshortcuts": "Space K",
-    });
+  it("says what it does and every key of its command", () => {
+    expect(hintTextOf("Play", ["space", "k"])).toBe("Play (Space or K)");
   });
 
   it("is only the control's name when its command has no keys", () => {
-    expect(hintOf("Play", [])).toEqual({ title: "Play" });
+    expect(hintTextOf("Play", [])).toBe("Play");
+  });
+
+  it("names every key of its command to assistive technology", () => {
+    expect(keyshortcutsOf(["space", "k"])).toBe("Space K");
+    expect(keyshortcutsOf([])).toBeUndefined();
+  });
+});
+
+describe("key caps", () => {
+  it("are one cap a key, the modifiers in words", () => {
+    expect(keyCapsOf("alt+shift+right", false)).toEqual(["Alt", "Shift", "→"]);
+  });
+
+  it("show the modifiers as a Mac prints them on its keys", () => {
+    expect(keyCapsOf("ctrl+alt+shift+meta+k", true)).toEqual(["⌃", "⌥", "⇧", "⌘", "K"]);
   });
 });
 

@@ -74,13 +74,17 @@ test("? lists the shortcuts, and Escape puts the list away", async ({ page }) =>
   await expect(list).toBeHidden();
 });
 
-test("a control names its keys on hover", async ({ page }) => {
+test("a control names its keys on hover, each key a cap of its own", async ({ page }) => {
   await page.goto("/");
+  const help = page.getByRole("button", { name: "Keyboard shortcuts" });
 
-  await expect(page.getByRole("button", { name: "Keyboard shortcuts" })).toHaveAttribute(
-    "title",
-    "Keyboard shortcuts (Shift + /)",
-  );
+  await help.hover();
+
+  await expect(page.getByRole("tooltip")).toHaveText("Keyboard shortcuts (Shift + /)");
+  const caps = page.locator(".control-hint kbd");
+  await expect(caps).toHaveCount(2);
+  await expect(caps.last()).toHaveText("/");
+  await expect(help).toHaveAttribute("aria-keyshortcuts", "Shift+/");
 });
 
 test("keys added in Settings work from then on, in any browser the Account signs in to", async ({

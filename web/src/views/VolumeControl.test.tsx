@@ -40,10 +40,9 @@ describe("the volume", () => {
 
     render(<VolumeControl volume={0.5} onVolume={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Volume down" })).toHaveAttribute(
-      "title",
-      "Volume down (-)",
-    );
+    await userEvent.hover(screen.getByRole("button", { name: "Volume down" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Volume down (-)");
     expect(screen.getByRole("button", { name: "Volume up" })).toHaveAttribute(
       "aria-keyshortcuts",
       "= Shift+=",

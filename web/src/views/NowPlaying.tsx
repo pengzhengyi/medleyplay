@@ -19,7 +19,7 @@ import { albumSteps, albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import type { SleepTimer } from "../player/useSleepTimer";
 import { canSetVolume } from "../player/volume";
-import { hintOf, useBindings } from "../shortcuts";
+import { useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { NowPlayingNames } from "./NowPlayingNames";
 import { AlbumCard } from "./PlayingKind";
@@ -30,6 +30,7 @@ import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
+import { Hint } from "./Hint";
 
 /**
  * `track`, playing in `player`, over the whole screen, with the song's `lyrics` beside
@@ -150,15 +151,11 @@ export function NowPlaying({
       </div>
       <div ref={body} className="np-body" tabIndex={-1}>
         <header className="np-top">
-          <button
-            type="button"
-            className="icon"
-            aria-label="Close Now Playing"
-            {...hintOf("Close Now Playing", keys.nowPlaying)}
-            onClick={close}
-          >
-            <CaretDownIcon weight="bold" aria-hidden />
-          </button>
+          <Hint name={"Close Now Playing"} keys={keys.nowPlaying}>
+            <button type="button" className="icon" aria-label="Close Now Playing" onClick={close}>
+              <CaretDownIcon weight="bold" aria-hidden />
+            </button>
+          </Hint>
           <span className="np-actions">
             <TrackMenu
               track={track}
@@ -250,18 +247,19 @@ export function NowPlaying({
               >
                 <QuotesIcon weight={lyricsOpen ? "fill" : "regular"} aria-hidden />
               </button>
-              <button
-                ref={upNextButton}
-                type="button"
-                className={queueOpen ? "icon np-queue-toggle on" : "icon np-queue-toggle"}
-                aria-label="Up next"
-                aria-expanded={queueOpen}
-                aria-controls="now-playing-queue"
-                {...hintOf("Up next", keys.queue)}
-                onClick={onToggleQueue}
-              >
-                <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />
-              </button>
+              <Hint name={"Up next"} keys={keys.queue}>
+                <button
+                  ref={upNextButton}
+                  type="button"
+                  className={queueOpen ? "icon np-queue-toggle on" : "icon np-queue-toggle"}
+                  aria-label="Up next"
+                  aria-expanded={queueOpen}
+                  aria-controls="now-playing-queue"
+                  onClick={onToggleQueue}
+                >
+                  <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />
+                </button>
+              </Hint>
               {queueOpen && (
                 <div ref={upNext} className="np-up-next">
                   <QueuePanel

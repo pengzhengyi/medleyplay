@@ -94,6 +94,13 @@ const MODIFIER_NAMES: Readonly<Record<string, readonly [label: string, aria: str
   shift: ["Shift", "Shift"],
   meta: ["⌘", "Meta"],
 };
+/** The modifiers as a Mac prints them on its keys. */
+const APPLE_MODIFIERS: Readonly<Record<string, string>> = {
+  ctrl: "⌃",
+  alt: "⌥",
+  shift: "⇧",
+  meta: "⌘",
+};
 /** Keys whose names read better as words or symbols, for people and for assistive technology. */
 const KEY_NAMES: Readonly<Record<string, readonly [label: string, aria: string]>> = {
   space: ["Space", "Space"],
@@ -137,13 +144,29 @@ function printedBy(part: string): string | undefined {
 
 /** Return one binding as people read it, such as `Shift + →`. */
 export function labelOf(keys: string): string {
+  return keyCapsOf(keys, false).join(" + ");
+}
+
+/**
+ * Return the keys of one binding, one cap each, such as `⇧ →` on a Mac, whose keys
+ * print the modifiers as symbols, and `Shift →` elsewhere.
+ */
+export function keyCapsOf(keys: string, apple = onApple()): string[] {
   return keys
     .split("+")
     .map(
       (part) =>
-        MODIFIER_NAMES[part]?.[0] ?? KEY_NAMES[part]?.[0] ?? printedBy(part) ?? part.toUpperCase(),
-    )
-    .join(" + ");
+        (apple ? APPLE_MODIFIERS[part] : undefined) ??
+        MODIFIER_NAMES[part]?.[0] ??
+        KEY_NAMES[part]?.[0] ??
+        printedBy(part) ??
+        part.toUpperCase(),
+    );
+}
+
+/** Whether this is a Mac, iPhone, or iPad, whose keyboards print the modifiers as symbols. */
+function onApple(): boolean {
+  return /Mac|iPhone|iPad/u.test(navigator.platform || navigator.userAgent);
 }
 
 /** Return a command's bindings as people read them, such as `Space or K`. */
@@ -162,17 +185,14 @@ export function ariaKeysOf(keys: string): string {
     .join("+");
 }
 
-/** Return the hover text and `aria-keyshortcuts` for a control named `name`, on `keys`. */
-export function hintOf(
-  name: string,
-  keys: readonly string[],
-): { readonly title: string; readonly "aria-keyshortcuts"?: string } {
-  return keys.length === 0
-    ? { title: name }
-    : {
-        title: `${name} (${labelsOf(keys)})`,
-        "aria-keyshortcuts": keys.map(ariaKeysOf).join(" "),
-      };
+/** Return what a control named `name` does and its keys, such as `Next song (Shift + →)`. */
+export function hintTextOf(name: string, keys: readonly string[]): string {
+  return keys.length === 0 ? name : `${name} (${labelsOf(keys)})`;
+}
+
+/** Return a command's keys as `aria-keyshortcuts` writes them, or `undefined` for none. */
+export function keyshortcutsOf(keys: readonly string[]): string | undefined {
+  return keys.length === 0 ? undefined : keys.map(ariaKeysOf).join(" ");
 }
 
 /** Return the binding a key press would be, or `undefined` for a press that can't be one. */

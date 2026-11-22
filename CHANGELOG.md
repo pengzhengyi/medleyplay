@@ -687,6 +687,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Shortcut keys as key caps** — hovering a player control, or reaching it with the
+  keyboard, shows a tooltip with its name and each key as a cap of its own, such as
+  *Next album* ⌥ ⇧ →, the modifiers as symbols on Apple devices; screen readers
+  still hear the keys in words.
+
 - **Now Playing keeps the cover and its lyrics together** — the cover and the
   lyrics sit side by side in the middle of the screen, as wide as each other, rather
   than each in its own half. *Up next* opens in a window from its button, over the

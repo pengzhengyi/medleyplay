@@ -321,8 +321,12 @@ Track's kind is decided.
   holding Space doesn't flicker between play and pause.
 - **A screen reader's browse mode** takes bare letters and arrows for itself,
   so the shortcuts work in its focus mode, as on any page.
-- **A control names its keys** in its hover text, such as *Play (Space or K)*,
-  and in `aria-keyshortcuts`. The header's keyboard button, or *?*, lists them
+- **A control names its keys** in its tooltip, its name then each key as a cap of
+  its own (the modifiers as ⇧ ⌥ ⌃ ⌘ on Apple devices, as words elsewhere), and in
+  `aria-keyshortcuts`; a screen reader hears *Play (Space or K)*. Radix's tooltip
+  draws it, after a short rest of the pointer or when the control is reached with
+  the keyboard; the search box's shows on hover alone, so it never covers what is
+  typed. The header's keyboard button, or *?*, lists them
   all, with a link to change them; a phone, which has no keyboard, hides the
   button.
 - **Holding ⌘** (Ctrl off Apple devices) on its own for a second and a half shows the same

@@ -35,10 +35,11 @@ import {
 import { type Completion, completionsOf, suggestedArtists } from "../library/suggestions";
 
 import { type Route, navigate } from "../routes";
-import { hintOf, useBindings } from "../shortcuts";
+import { useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { type PanelOption, SearchPanel } from "./SearchPanel";
 import { SiteMark } from "./SiteMark";
+import { Hint } from "./Hint";
 
 /** How long after typing stops the search runs. */
 const SETTLE_MS = 150;
@@ -503,141 +504,148 @@ export function SearchBox({
             ].join(" ")}
           </span>
         )}
-        <input
-          ref={box}
-          id="search"
-          type="search"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={open ? panelId : undefined}
-          aria-autocomplete="list"
-          aria-activedescendant={open && pointed >= 0 ? `${panelId}-${String(pointed)}` : undefined}
-          {...hintOf("Search", keys.search)}
-          // The tags sit in the label too; they describe the box, and don't name it.
-          aria-labelledby={nameId}
-          aria-describedby={tagged ? tagsId : undefined}
-          value={query}
-          placeholder={placeholder}
-          onChange={(event) => {
-            const text = event.currentTarget.value;
-            if (!tagging) {
-              setQuery(text);
-              return;
+        <Hint name="Search" keys={keys.search} showOnFocus={false}>
+          <input
+            ref={box}
+            id="search"
+            type="search"
+            role="combobox"
+            aria-expanded={open}
+            aria-controls={open ? panelId : undefined}
+            aria-autocomplete="list"
+            aria-activedescendant={
+              open && pointed >= 0 ? `${panelId}-${String(pointed)}` : undefined
             }
-            const named = siteTyped(text, providers);
-            if (named !== undefined) {
-              // A site's name and a colon searches that site, as its button does.
-              searchIn(named.site, named.rest);
-              return;
-            }
-            const pasted = (event.nativeEvent as InputEvent).inputType === "insertFromPaste";
-            const found = tokensOf(text);
-            if (pasted && field === undefined && found.tokens.length > 0) {
-              // Tags pasted in become tags, as if typed.
-              change({
-                tokens: [...tokens, ...found.tokens],
-                field: undefined,
-                query: found.words,
-              });
-              return;
-            }
-            const typed = fieldTyped(text);
-            if (typed === undefined) {
-              change({ tokens, field, query: text });
-              return;
-            }
-            const before: readonly Token[] =
-              typed.before === ""
-                ? []
-                : [field === undefined ? { value: typed.before } : { field, value: typed.before }];
-            change({ tokens: [...tokens, ...before], field: typed.field, query: "" });
-          }}
-          onBlur={close}
-          onKeyDown={(event) => {
-            const at = event.currentTarget;
-            if (tagging && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-              event.preventDefault();
-              if (!open) {
-                if (empty) {
-                  setHelping(true);
-                  setActive(0);
-                } else {
-                  setSuggesting(true);
-                  setActive(event.key === "ArrowDown" ? 0 : -1);
+            // The tags sit in the label too; they describe the box, and don't name it.
+            aria-labelledby={nameId}
+            aria-describedby={tagged ? tagsId : undefined}
+            value={query}
+            placeholder={placeholder}
+            onChange={(event) => {
+              const text = event.currentTarget.value;
+              if (!tagging) {
+                setQuery(text);
+                return;
+              }
+              const named = siteTyped(text, providers);
+              if (named !== undefined) {
+                // A site's name and a colon searches that site, as its button does.
+                searchIn(named.site, named.rest);
+                return;
+              }
+              const pasted = (event.nativeEvent as InputEvent).inputType === "insertFromPaste";
+              const found = tokensOf(text);
+              if (pasted && field === undefined && found.tokens.length > 0) {
+                // Tags pasted in become tags, as if typed.
+                change({
+                  tokens: [...tokens, ...found.tokens],
+                  field: undefined,
+                  query: found.words,
+                });
+                return;
+              }
+              const typed = fieldTyped(text);
+              if (typed === undefined) {
+                change({ tokens, field, query: text });
+                return;
+              }
+              const before: readonly Token[] =
+                typed.before === ""
+                  ? []
+                  : [
+                      field === undefined
+                        ? { value: typed.before }
+                        : { field, value: typed.before },
+                    ];
+              change({ tokens: [...tokens, ...before], field: typed.field, query: "" });
+            }}
+            onBlur={close}
+            onKeyDown={(event) => {
+              const at = event.currentTarget;
+              if (tagging && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+                event.preventDefault();
+                if (!open) {
+                  if (empty) {
+                    setHelping(true);
+                    setActive(0);
+                  } else {
+                    setSuggesting(true);
+                    setActive(event.key === "ArrowDown" ? 0 : -1);
+                  }
+                  return;
+                }
+                const step = event.key === "ArrowDown" ? 1 : -1;
+                // From none to the first and on to the last, then back to none.
+                setActive((was) => {
+                  const next = was + step;
+                  return next >= options.length ? -1 : next < -1 ? options.length - 1 : next;
+                });
+                return;
+              }
+              if (open && event.key === "Enter" && pointed >= 0) {
+                event.preventDefault();
+                const chosen = options[pointed];
+                if (chosen !== undefined) {
+                  choose(chosen);
                 }
                 return;
               }
-              const step = event.key === "ArrowDown" ? 1 : -1;
-              // From none to the first and on to the last, then back to none.
-              setActive((was) => {
-                const next = was + step;
-                return next >= options.length ? -1 : next < -1 ? options.length - 1 : next;
-              });
-              return;
-            }
-            if (open && event.key === "Enter" && pointed >= 0) {
-              event.preventDefault();
-              const chosen = options[pointed];
-              if (chosen !== undefined) {
-                choose(chosen);
-              }
-              return;
-            }
-            if (open && event.key === "Tab" && !event.shiftKey && completed.length > 0) {
-              // Tab takes the completion pointed at, or else the first.
-              event.preventDefault();
-              const taken = pointed >= 0 && pointed < completed.length ? pointed : 0;
-              const chosen = options[taken];
-              if (chosen !== undefined) {
-                choose(chosen);
-              }
-              return;
-            }
-            if (open && event.key === "Escape") {
-              event.preventDefault();
-              close();
-              return;
-            }
-            if (
-              tagging &&
-              event.key === "Backspace" &&
-              at.selectionStart === 0 &&
-              at.selectionEnd === 0
-            ) {
-              if (field !== undefined || tokens.length > 0) {
+              if (open && event.key === "Tab" && !event.shiftKey && completed.length > 0) {
+                // Tab takes the completion pointed at, or else the first.
                 event.preventDefault();
-                // A held key repeats; only a second press removes the tag chosen.
-                if (!event.repeat) {
-                  backspace();
+                const taken = pointed >= 0 && pointed < completed.length ? pointed : 0;
+                const chosen = options[taken];
+                if (chosen !== undefined) {
+                  choose(chosen);
                 }
+                return;
               }
-              return;
-            }
-            if (!tagging && event.key === "Backspace" && at.value === "") {
-              // Backspace in an empty box leaves the site, as it removes a tag.
-              event.preventDefault();
-              searchIn(LIBRARY);
-              return;
-            }
-            if (tagging && event.key === "Escape" && (tagged || query !== "")) {
-              event.preventDefault();
-              clear();
-              return;
-            }
-            if (event.key !== "Shift") {
-              setPicked(false);
-            }
-            if (tagging && event.key === "Enter" && field !== undefined) {
-              event.preventDefault();
-              keepTag();
-            }
-            if (site !== undefined && event.key === "Enter" && query.trim() !== "") {
-              event.preventDefault();
-              onLookUp(query.trim());
-              setQuery("");
-            }
-          }}
-        />
+              if (open && event.key === "Escape") {
+                event.preventDefault();
+                close();
+                return;
+              }
+              if (
+                tagging &&
+                event.key === "Backspace" &&
+                at.selectionStart === 0 &&
+                at.selectionEnd === 0
+              ) {
+                if (field !== undefined || tokens.length > 0) {
+                  event.preventDefault();
+                  // A held key repeats; only a second press removes the tag chosen.
+                  if (!event.repeat) {
+                    backspace();
+                  }
+                }
+                return;
+              }
+              if (!tagging && event.key === "Backspace" && at.value === "") {
+                // Backspace in an empty box leaves the site, as it removes a tag.
+                event.preventDefault();
+                searchIn(LIBRARY);
+                return;
+              }
+              if (tagging && event.key === "Escape" && (tagged || query !== "")) {
+                event.preventDefault();
+                clear();
+                return;
+              }
+              if (event.key !== "Shift") {
+                setPicked(false);
+              }
+              if (tagging && event.key === "Enter" && field !== undefined) {
+                event.preventDefault();
+                keepTag();
+              }
+              if (site !== undefined && event.key === "Enter" && query.trim() !== "") {
+                event.preventDefault();
+                onLookUp(query.trim());
+                setQuery("");
+              }
+            }}
+          />
+        </Hint>
         {tagging && (tagged || query !== "") && (
           <button
             type="button"

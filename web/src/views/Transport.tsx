@@ -26,8 +26,9 @@ import { heartTitleOf } from "../heart";
 import type { AlbumSteps, Step } from "../player/albumNow";
 import { repeatAfter } from "../player/queue";
 import type { Player } from "../player/usePlayer";
-import { hintOf, useBindings } from "../shortcuts";
+import { useBindings } from "../shortcuts";
 import { REPEATS, shuffleSaid } from "./playModes";
+import { Hint } from "./Hint";
 
 /** What the player may be doing for its play button to work. */
 const PLAYABLE_NOW = new Set(["playing", "paused", "blocked"]);
@@ -56,129 +57,138 @@ export function Transport({
   const bySong = steps !== undefined && (steps.previousSong ?? steps.nextSong) !== undefined;
   return (
     <div className="controls">
-      <button
-        type="button"
-        className={shuffled ? "icon mode on" : "icon mode"}
-        aria-label="Shuffle"
-        aria-pressed={shuffled}
-        {...hintOf(shuffled ? "Shuffle: on" : "Shuffle: off", keys.shuffle)}
-        onClick={() => {
-          player.shuffle(!shuffled);
-          setSaid(shuffleSaid(!shuffled));
-        }}
-      >
-        <ShuffleIcon weight={shuffled ? "bold" : "regular"} aria-hidden />
-      </button>
-      {steps === undefined ? (
+      <Hint name={shuffled ? "Shuffle: on" : "Shuffle: off"} keys={keys.shuffle}>
         <button
           type="button"
-          className="icon"
-          aria-label="Previous"
-          {...hintOf("Previous", keys.previous)}
-          onClick={player.previous}
-          disabled={track === undefined}
-        >
-          <SkipBackIcon weight="fill" aria-hidden />
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="icon"
-          aria-label="Previous album"
-          {...hintOf("Previous album", keys.previousAlbum)}
+          className={shuffled ? "icon mode on" : "icon mode"}
+          aria-label="Shuffle"
+          aria-pressed={shuffled}
           onClick={() => {
-            go(steps.previousAlbum);
+            player.shuffle(!shuffled);
+            setSaid(shuffleSaid(!shuffled));
           }}
         >
-          <SkipBackIcon weight="fill" aria-hidden />
+          <ShuffleIcon weight={shuffled ? "bold" : "regular"} aria-hidden />
         </button>
+      </Hint>
+      {steps === undefined ? (
+        <Hint name={"Previous"} keys={keys.previous}>
+          <button
+            type="button"
+            className="icon"
+            aria-label="Previous"
+            onClick={player.previous}
+            disabled={track === undefined}
+          >
+            <SkipBackIcon weight="fill" aria-hidden />
+          </button>
+        </Hint>
+      ) : (
+        <Hint name={"Previous album"} keys={keys.previousAlbum}>
+          <button
+            type="button"
+            className="icon"
+            aria-label="Previous album"
+            onClick={() => {
+              go(steps.previousAlbum);
+            }}
+          >
+            <SkipBackIcon weight="fill" aria-hidden />
+          </button>
+        </Hint>
       )}
       {bySong && (
-        <button
-          type="button"
-          className="icon song-step"
-          aria-label="Previous song"
-          {...hintOf("Previous song", keys.previous)}
-          onClick={() => {
-            go(steps.previousSong);
-          }}
-          disabled={steps.previousSong === undefined}
-        >
-          <CaretLeftIcon weight="bold" aria-hidden />
-        </button>
+        <Hint name={"Previous song"} keys={keys.previous}>
+          <button
+            type="button"
+            className="icon song-step"
+            aria-label="Previous song"
+            onClick={() => {
+              go(steps.previousSong);
+            }}
+            disabled={steps.previousSong === undefined}
+          >
+            <CaretLeftIcon weight="bold" aria-hidden />
+          </button>
+        </Hint>
       )}
-      <button
-        type="button"
-        className="icon play"
-        aria-label={playing ? "Pause" : "Play"}
-        {...hintOf(playing ? "Pause" : "Play", keys.toggle)}
-        onClick={player.toggle}
-        disabled={!PLAYABLE_NOW.has(status.kind)}
-      >
-        {status.kind === "preparing" ? (
-          <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-        ) : playing ? (
-          <PauseIcon weight="fill" aria-hidden />
-        ) : (
-          <PlayIcon weight="fill" aria-hidden />
-        )}
-      </button>
-      {bySong && (
+      <Hint name={playing ? "Pause" : "Play"} keys={keys.toggle}>
         <button
           type="button"
-          className="icon song-step"
-          aria-label="Next song"
-          {...hintOf("Next song", keys.next)}
-          onClick={() => {
-            go(steps.nextSong);
-          }}
-          disabled={steps.nextSong === undefined}
+          className="icon play"
+          aria-label={playing ? "Pause" : "Play"}
+          onClick={player.toggle}
+          disabled={!PLAYABLE_NOW.has(status.kind)}
         >
-          <CaretRightIcon weight="bold" aria-hidden />
+          {status.kind === "preparing" ? (
+            <CircleNotchIcon weight="bold" className="spin" aria-hidden />
+          ) : playing ? (
+            <PauseIcon weight="fill" aria-hidden />
+          ) : (
+            <PlayIcon weight="fill" aria-hidden />
+          )}
         </button>
+      </Hint>
+      {bySong && (
+        <Hint name={"Next song"} keys={keys.next}>
+          <button
+            type="button"
+            className="icon song-step"
+            aria-label="Next song"
+            onClick={() => {
+              go(steps.nextSong);
+            }}
+            disabled={steps.nextSong === undefined}
+          >
+            <CaretRightIcon weight="bold" aria-hidden />
+          </button>
+        </Hint>
       )}
       {steps === undefined ? (
-        <button
-          type="button"
-          className="icon"
-          aria-label="Next"
-          {...hintOf("Next", keys.next)}
-          onClick={player.next}
-          disabled={track === undefined}
-        >
-          <SkipForwardIcon weight="fill" aria-hidden />
-        </button>
+        <Hint name={"Next"} keys={keys.next}>
+          <button
+            type="button"
+            className="icon"
+            aria-label="Next"
+            onClick={player.next}
+            disabled={track === undefined}
+          >
+            <SkipForwardIcon weight="fill" aria-hidden />
+          </button>
+        </Hint>
       ) : (
+        <Hint name={"Next album"} keys={keys.nextAlbum}>
+          <button
+            type="button"
+            className="icon"
+            aria-label="Next album"
+            onClick={() => {
+              go(steps.nextAlbum);
+            }}
+            disabled={steps.nextAlbum === undefined}
+          >
+            <SkipForwardIcon weight="fill" aria-hidden />
+          </button>
+        </Hint>
+      )}
+      <Hint name={REPEATS[repeat].label} keys={keys.repeat}>
         <button
           type="button"
-          className="icon"
-          aria-label="Next album"
-          {...hintOf("Next album", keys.nextAlbum)}
+          className={repeat === "off" ? "icon mode" : "icon mode on"}
+          aria-label={REPEATS[repeat].label}
           onClick={() => {
-            go(steps.nextAlbum);
+            const then = repeatAfter(repeat);
+            player.setRepeat(then);
+            setSaid(REPEATS[then].said);
           }}
-          disabled={steps.nextAlbum === undefined}
         >
-          <SkipForwardIcon weight="fill" aria-hidden />
+          {repeat === "one" ? (
+            <RepeatOnceIcon weight="bold" aria-hidden />
+          ) : (
+            <RepeatIcon weight={repeat === "all" ? "bold" : "regular"} aria-hidden />
+          )}
         </button>
-      )}
-      <button
-        type="button"
-        className={repeat === "off" ? "icon mode" : "icon mode on"}
-        aria-label={REPEATS[repeat].label}
-        {...hintOf(REPEATS[repeat].label, keys.repeat)}
-        onClick={() => {
-          const then = repeatAfter(repeat);
-          player.setRepeat(then);
-          setSaid(REPEATS[then].said);
-        }}
-      >
-        {repeat === "one" ? (
-          <RepeatOnceIcon weight="bold" aria-hidden />
-        ) : (
-          <RepeatIcon weight={repeat === "all" ? "bold" : "regular"} aria-hidden />
-        )}
-      </button>
+      </Hint>
       <span className="visually-hidden" role="status">
         {said}
       </span>
@@ -196,17 +206,18 @@ export function FavoriteButton({
 }) {
   const keys = useBindings();
   return (
-    <button
-      type="button"
-      className={track.favorite ? "icon heart on" : "icon heart"}
-      aria-label={`Favorite ${track.title}`}
-      aria-pressed={track.favorite}
-      {...hintOf(heartTitleOf(track.title, track.favorite), keys.favorite)}
-      onClick={() => {
-        onFavorite(track, !track.favorite);
-      }}
-    >
-      <HeartIcon weight={track.favorite ? "fill" : "regular"} aria-hidden />
-    </button>
+    <Hint name={heartTitleOf(track.title, track.favorite)} keys={keys.favorite}>
+      <button
+        type="button"
+        className={track.favorite ? "icon heart on" : "icon heart"}
+        aria-label={`Favorite ${track.title}`}
+        aria-pressed={track.favorite}
+        onClick={() => {
+          onFavorite(track, !track.favorite);
+        }}
+      >
+        <HeartIcon weight={track.favorite ? "fill" : "regular"} aria-hidden />
+      </button>
+    </Hint>
   );
 }

@@ -836,6 +836,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Back from a song's Edit songs to its own details** — *Edit songs* in a song's menu
+  opened the songs of its file over the whole file's details, so *‹ Details* led to the
+  file, which has no lyrics of its own, and *Lyrics* was missing. It now leads back to
+  the song chosen, with *Lyrics* as when *Edit details* opens it.
 - **Shift + → goes to the next song** — after a click on the position bar, which
   focuses it, Shift + → only showed its focus ring; arrows held with Shift, Alt,
   Ctrl, or ⌘ now always go to the shortcuts. While an album plays, Shift + ← and

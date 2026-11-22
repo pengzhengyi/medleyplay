@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Previous album and Next album shortcuts** — Alt + Shift + ← and Alt + Shift + →
+  step past the album playing, like the player's outer buttons; change them in
+  Settings like any shortcut.
+
 - **Keep a Playlist downloaded** — a *Keep downloaded* switch on each Playlist's page,
   Favorites too, downloads every song it holds and never removes them to make room. In
   Settings → Storage the space they need now reads *Playlists kept downloaded*, its
@@ -807,6 +811,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- **Shift + → goes to the next song** — after a click on the position bar, which
+  focuses it, Shift + → only showed its focus ring; arrows held with Shift, Alt,
+  Ctrl, or ⌘ now always go to the shortcuts. While an album plays, Shift + ← and
+  Shift + → step by song, as the tooltip said, rather than by album.
 
 - **The player names the song of a split file** — a file playing whole after it was
   split into songs showed its own title (such as the video's BV code) in the player;

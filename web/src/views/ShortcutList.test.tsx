@@ -15,7 +15,8 @@ describe("the list of keyboard shortcuts", () => {
 
     const list = within(screen.getByRole("dialog", { name: "Keyboard shortcuts" }));
     expect(list.getByText("Play or pause").nextElementSibling).toHaveTextContent(/^J$/);
-    expect(list.getByText("Next").nextElementSibling).toHaveTextContent("Shift + →");
+    expect(list.getByText("Next song").nextElementSibling).toHaveTextContent("Shift + →");
+    expect(list.getByText("Next album").nextElementSibling).toHaveTextContent("Alt + Shift + →");
     expect(list.getByText("Mute or unmute").nextElementSibling).toHaveTextContent("None");
   });
 

@@ -294,7 +294,8 @@ Track's kind is decided.
 | --- | --- |
 | Space or K | Play or pause |
 | ← and → | Back or ahead 5 seconds |
-| Shift + ← and Shift + → | Previous and Next |
+| Shift + ← and Shift + → | Previous and Next song; past an album's first or last song, on by album |
+| Alt + Shift + ← and Alt + Shift + → | Previous and Next album |
 | - and = | Volume down and up, a mark at a time |
 | M | Mute or unmute; changing the volume turns the sound back on |
 | S, R, and L | Shuffle, Repeat, and favorite the song playing |

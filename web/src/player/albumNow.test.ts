@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
 import { trackOf } from "../testing/server";
-import { albumSteps, albumTimeline, playingOf, songAt, songPlaying } from "./albumNow";
+import {
+  type AlbumSteps,
+  albumSteps,
+  albumTimeline,
+  playingOf,
+  songAt,
+  songPlaying,
+  stepFor,
+} from "./albumNow";
 import { EMPTY, type Entry, type Queue } from "./queue";
 
 /**
@@ -309,5 +317,40 @@ describe("albumSteps", () => {
 
   it("is nothing while a song of its own plays", () => {
     expect(stepsAt(3, 1)).toBeUndefined();
+  });
+});
+
+describe("stepFor", () => {
+  /** In the middle of an album, the songs and the albums either side. */
+  const MIDDLE: AlbumSteps = {
+    previousSong: { key: "e", seconds: 0 },
+    nextSong: { key: "g", seconds: 0 },
+    previousAlbum: { key: "a", seconds: 0 },
+    nextAlbum: { key: "h", seconds: 0 },
+  };
+
+  it("goes by song with Previous and Next", () => {
+    expect(stepFor(MIDDLE, "previous")).toEqual({ key: "e", seconds: 0 });
+    expect(stepFor(MIDDLE, "next")).toEqual({ key: "g", seconds: 0 });
+  });
+
+  it("goes by album with Previous album and Next album", () => {
+    expect(stepFor(MIDDLE, "previousAlbum")).toEqual({ key: "a", seconds: 0 });
+    expect(stepFor(MIDDLE, "nextAlbum")).toEqual({ key: "h", seconds: 0 });
+  });
+
+  it("goes on to the next album with Next from an album's last song", () => {
+    expect(stepFor({ ...MIDDLE, nextSong: undefined }, "next")).toEqual({ key: "h", seconds: 0 });
+  });
+
+  it("goes back by album with Previous in an album of no songs known", () => {
+    expect(stepFor({ ...MIDDLE, previousSong: undefined }, "previous")).toEqual({
+      key: "a",
+      seconds: 0,
+    });
+  });
+
+  it("goes nowhere with Next album from the last album", () => {
+    expect(stepFor({ ...MIDDLE, nextAlbum: undefined }, "nextAlbum")).toBeUndefined();
   });
 });

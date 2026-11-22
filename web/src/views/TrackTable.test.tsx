@@ -23,6 +23,7 @@ function renderTable(
   songsIn?: ReadonlyMap<number, readonly Track[]>,
   focus?: { readonly id: number; readonly onFocused: () => void },
   downloads: readonly DownloadUnderWay[] = [],
+  playAllIn?: HTMLElement | null,
 ) {
   const actions: TrackActions = {
     statusOf: (track) => statuses.get(track.id),
@@ -50,6 +51,7 @@ function renderTable(
       songsIn={songsIn}
       focus={focus?.id}
       onFocused={focus?.onFocused}
+      playAllIn={playAllIn}
     />,
   );
   return { actions, ...view };
@@ -239,6 +241,36 @@ describe("playing them all", () => {
     renderTable([trackOf(2, "Long Road", { availability: "waiting_online" })]);
 
     expect(screen.getByText("When online")).toBeVisible();
+  });
+
+  it("puts Play and Shuffle in the place given, playing the Tracks the table shows", async () => {
+    const place = document.createElement("div");
+    document.body.append(place);
+    const actions = renderTable(
+      TRACKS,
+      undefined,
+      new Map(),
+      undefined,
+      undefined,
+      [],
+      place,
+    ).actions;
+    const title = screen.getByRole("button", { name: "Title" });
+    await userEvent.click(title);
+    await userEvent.click(title);
+
+    await userEvent.click(within(place).getByRole("button", { name: "Play all" }));
+
+    expect(actions.onPlayAll).toHaveBeenCalledExactlyOnceWith([TRACKS[2], TRACKS[0]], false);
+    expect(within(place).getByRole("button", { name: "Shuffle all" })).toBeVisible();
+    place.remove();
+  });
+
+  it("shows no Play or Shuffle until the place given for them is there", () => {
+    renderTable(TRACKS, undefined, new Map(), undefined, undefined, [], null);
+
+    expect(screen.queryByRole("button", { name: "Play all" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Title" })).toBeVisible();
   });
 
   it("can't play them all when none can play", () => {

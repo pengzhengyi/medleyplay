@@ -687,6 +687,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An album's page, laid out like a record** — the cover sits large on the left; the
+  album's name, its artist and the year it came out are centered beside it, and Play,
+  Shuffle, the heart and a pencil for *Edit details* line up with the cover's bottom
+  edge. How many songs it holds and how long they last moves under the songs. On a phone
+  the cover sits on top, the names under it, and Play and Shuffle share a row.
+
 - **Shortcut keys as key caps** — hovering a player control, or reaching it with the
   keyboard, shows a tooltip with its name and each key as a cap of its own, such as
   *Next album* ⌥ ⇧ →, the modifiers as symbols on Apple devices; screen readers

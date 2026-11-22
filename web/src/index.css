@@ -9751,3 +9751,167 @@ button.rail-order-handle {
   z-index: 1;
   opacity: 0.85;
 }
+
+/*
+ * An album's page heading: its cover large on the left; its name, artist and year centered
+ * beside it; Play, Shuffle, the heart and Edit details on the line of the cover's bottom edge.
+ */
+.album-heading {
+  --album-cover: 15rem;
+
+  margin-bottom: 1.25rem;
+}
+
+.album-hero {
+  display: grid;
+  grid-template-columns: var(--album-cover) minmax(0, 1fr);
+  gap: 1.75rem;
+  margin-top: 0.5rem;
+}
+
+.album-hero .album-about {
+  display: block;
+  margin: 0;
+}
+
+.album-hero .album-art,
+.album-hero .cover-frame.album-frame {
+  width: var(--album-cover);
+  height: var(--album-cover);
+}
+
+.album-side {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  height: var(--album-cover);
+}
+
+.album-names {
+  align-self: center;
+  min-width: 0;
+}
+
+/* A long name takes two lines, then ends in an ellipsis. */
+.album-names .section {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 2rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.album-heading .album-names .subtitle {
+  margin-top: 0.35rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.album-heading .album-names .subtitle > a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.album-heading .album-names .subtitle > a:hover,
+.album-heading .album-names .subtitle > a:focus-visible {
+  text-decoration: underline;
+}
+
+.album-year {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+}
+
+.album-names .album-rating {
+  margin: 0.6rem 0 0;
+}
+
+.album-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.album-play .play-all {
+  margin: 0;
+}
+
+.album-actions button.favorite-heart {
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: 1.35rem;
+}
+
+/* Edit details: a round pencil at the end of the line. */
+.album-actions button.edit-heading {
+  display: inline-grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.1rem;
+}
+
+/* How many songs and how long they last, under them. */
+.album-length {
+  margin: 0.75rem 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* A phone: the cover on top, the names centered under it, Play and Shuffle sharing a row. */
+@media (width <= 40rem) {
+  .album-heading {
+    --album-cover: min(70vw, 16rem);
+  }
+
+  .album-hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 1rem;
+  }
+
+  .album-side {
+    grid-template-rows: auto auto;
+    gap: 1rem;
+    width: 100%;
+    height: auto;
+    text-align: center;
+  }
+
+  .album-names .section {
+    font-size: 1.6rem;
+  }
+
+  .album-heading .album-names .subtitle {
+    font-size: 1.1rem;
+  }
+
+  .album-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .album-play {
+    flex: 1 1 100%;
+  }
+
+  .album-play .play-all {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .album-play .play-all button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .album-actions button.edit-heading {
+    margin-left: 0;
+  }
+}

@@ -9996,6 +9996,18 @@ button.rail-order-handle {
 }
 
 /*
+ * A suggested picture whose choice is being saved: faded, with only its tag's spinner,
+ * not Pico's on its busy controls.
+ */
+.photo-suggestion-frame .photo-suggestion-controls[aria-busy="true"]::before {
+  display: none;
+}
+
+.photo-suggestion-saving .photo-suggestion-art > * {
+  opacity: 0.55;
+}
+
+/*
  * The artist's box, or its tag once saved, with + beside it, outside, to add more artists:
  * the label row holds only the label, so Artist's box lines up with Genre's.
  */

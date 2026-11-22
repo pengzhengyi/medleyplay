@@ -23,6 +23,9 @@ const READ_EVERY_MS = 3000;
 
 type Suggested = MissingCover & { readonly suggested: string };
 
+/** The key of `album` among those shown. */
+const keyOf = (album: MissingCover) => `${album.artist}\n${album.album}`;
+
 /** The ways to set an album's cover, as its page sets it: on its songs, or on its one file. */
 export interface AlbumCoverActions {
   readonly onUse: (songs: readonly Track[], cover: string) => Promise<void>;
@@ -57,7 +60,9 @@ export function FindAlbumCovers({
   /** Called once covers found were used, to read the songs again. */
   readonly onUsed?: (() => void) | undefined;
 }) {
-  const [busy, setBusy] = useState(false);
+  // The albums whose cover is being used or dismissed: each stays saving until it is gone.
+  const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
+  const [usingAll, setUsingAll] = useState(false);
   const [error, setError] = useState("");
   // The album whose cover is chosen in the cover editor, if any.
   const [changing, setChanging] = useState<MissingCover>();
@@ -91,8 +96,15 @@ export function FindAlbumCovers({
   }, [albums]);
   const unfit = albums.filter((each) => each.suggested === null && each.found).length;
   const unasked = albums.filter((each) => !each.found).length;
-  const act = async (place: number | undefined, change: () => Promise<unknown>) => {
-    setBusy(true);
+  const ready = suggested.filter((each) => !saving.has(keyOf(each)));
+  // Saves `change` to the albums `chosen`, saving until they are read again without them.
+  const act = async (
+    chosen: readonly Suggested[],
+    place: number | undefined,
+    change: () => Promise<unknown>,
+  ) => {
+    const keys = chosen.map(keyOf);
+    setSaving((was) => new Set([...was, ...keys]));
     setError("");
     try {
       await change();
@@ -100,21 +112,26 @@ export function FindAlbumCovers({
         refocus.current = { place, from: albums };
       }
     } catch (failure) {
+      setSaving((was) => new Set([...was].filter((key) => !keys.includes(key))));
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
-      setBusy(false);
       onChanged();
     }
   };
-  const use = (chosen: readonly Suggested[], place?: number) =>
-    act(place, async () => {
+  const take = (chosen: readonly Suggested[], place?: number) =>
+    act(chosen, place, async () => {
       await api.useAlbumCovers(
         chosen.map(({ album, artist, suggested: cover }) => ({ album, artist, cover })),
       );
       onUsed?.();
     });
   const dismiss = (album: Suggested, place: number) =>
-    act(place, () => api.dismissAlbumCover(album.album, album.artist, album.suggested));
+    act([album], place, () => api.dismissAlbumCover(album.album, album.artist, album.suggested));
+  const takeAll = async () => {
+    setUsingAll(true);
+    await take(ready);
+    setUsingAll(false);
+  };
   const changingTarget = changing === undefined ? [] : targetOf(tracks, changing);
   return (
     <section className="clean-up-section" aria-labelledby="find-covers-title">
@@ -128,9 +145,9 @@ export function FindAlbumCovers({
           <button
             type="button"
             className="dialog-button"
-            disabled={busy}
-            aria-busy={busy}
-            onClick={() => void use(suggested)}
+            disabled={usingAll || ready.length === 0}
+            aria-busy={usingAll}
+            onClick={() => void takeAll()}
           >
             {`Use all ${String(suggested.length)}`}
           </button>
@@ -154,7 +171,7 @@ export function FindAlbumCovers({
       {suggested.length > 0 && (
         <ul ref={list} className="photo-suggestions" aria-label="Covers suggested">
           {suggested.map((each, place) => (
-            <li key={`${each.artist}\n${each.album}`} className="photo-suggestion-item">
+            <li key={keyOf(each)} className="photo-suggestion-item">
               <SuggestedFrame
                 of={each.album}
                 noun="cover"
@@ -164,8 +181,8 @@ export function FindAlbumCovers({
                     : "A MusicBrainz release with this album's title and artist"
                 }
                 picked={each.picked}
-                busy={busy}
-                onUse={() => void use([each], place)}
+                busy={saving.has(keyOf(each))}
+                onUse={() => void take([each], place)}
                 onDismiss={() => void dismiss(each, place)}
                 onChange={() => {
                   if (actions === undefined) {

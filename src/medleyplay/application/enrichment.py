@@ -28,7 +28,7 @@ from medleyplay.application import Clock, details
 from medleyplay.application.ai import is_set_up, record_answered_by, record_answers
 from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
-from medleyplay.application.lyrics import lyrics_held, record_lyrics
+from medleyplay.application.lyrics import forget_lyrics, lyrics_held, record_lyrics
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.application.settings import read_settings
@@ -66,7 +66,8 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.jobs import Job, JobId, JobState
-from medleyplay.domain.lyrics import LyricsOrigin, LyricsSite
+from medleyplay.domain.lyrics import LyricsOrigin
+from medleyplay.domain.settings import Settings
 from medleyplay.domain.video_text import Chapter, Song, VideoText
 from medleyplay.persistence.schema import (
     CommunityRatingRow,
@@ -74,6 +75,7 @@ from medleyplay.persistence.schema import (
     EnricherModeRow,
     EnricherStopRow,
     JobRow,
+    TrackLyricsRow,
     TrackRow,
     VideoTextRow,
 )
@@ -211,9 +213,19 @@ def _complete(
 
 
 def _record_found_lyrics(db: Session, track_id: TrackId, found: FoundLyrics, now: datetime) -> None:
-    """Keep the lyrics a site found for the song, unless the household or its files have some."""
+    """Keep the lyrics a site found for the song, unless the household or its files have some.
+
+    Lyrics suggested, the nearest song's, are kept as the song's suggestion, unless the
+    same were dismissed; the song's own, once found, replace its suggestion.
+    """
     if lyrics_held(db).get(track_id) is LyricsHeld.LOCAL:
         return
+    if found.suggested:
+        before = db.get(TrackLyricsRow, (track_id, LyricsOrigin.SUGGESTED.value))
+        if before is None or not before.dismissed or before.text != found.text:
+            record_lyrics(db, track_id, LyricsOrigin.SUGGESTED, found.text, now)
+        return
+    forget_lyrics(db, track_id, LyricsOrigin.SUGGESTED)
     origin = LyricsOrigin(found.provider.value)
     record_lyrics(db, track_id, origin, found.text, now, instrumental=found.instrumental)
 
@@ -500,7 +512,7 @@ class EnrichmentService:
             duration_ms = db.scalar(select(TrackRow.duration_ms).where(TrackRow.id == track_id))
             set_up = is_set_up(db)
             text = details.video_text_of(db, track_id) if enricher.uses_ai else None
-            sites = read_settings(db).lyrics_sites if enricher.subject is Subject.LYRICS else ()
+            lyrics = read_settings(db) if enricher.subject is Subject.LYRICS else None
         reason = why_not(
             found.facts, now, stopped=stopped, enricher=enricher, set_up=set_up, again=again
         )
@@ -511,7 +523,7 @@ class EnrichmentService:
         return self._jobs.submit(
             self._kind,
             enrich_target(track_id, enricher.name),
-            _request(enricher, found, shown_now, duration_ms, text, hint, sites),
+            _request(enricher, found, shown_now, duration_ms, text, hint, lyrics),
             requested_by,
         )
 
@@ -608,8 +620,9 @@ def _request(
     duration_ms: int | None,
     text: VideoText | None,
     hint: str = "",
-    sites: tuple[LyricsSite, ...] = (),
+    lyrics: Settings | None = None,
 ) -> EnrichJob:
+    """Return the Job asking `enricher` of the Track `found`; `lyrics` sets how lyrics are found."""
     subject = found.facts.subject
     if subject is None:  # pragma: no cover -- an eligible Track has something to ask about
         raise ValueError(subject)
@@ -626,7 +639,10 @@ def _request(
         whole_album=found.whole_album,
         text=None if text is None else _asked_text(text),
         hint=hint,
-        lyrics_sites=tuple(LyricsProvider(site.value) for site in sites),
+        lyrics_sites=()
+        if lyrics is None
+        else tuple(LyricsProvider(site.value) for site in lyrics.lyrics_sites),
+        suggest_lyrics=lyrics is not None and lyrics.suggest_lyrics,
     )
 
 

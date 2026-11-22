@@ -106,9 +106,16 @@ def candidates(
         # A song is looked up by its own words and length, a song inside a longer file too.
         words = _words(db, ids)
         lengths = _lengths(db, ids)
-        sites = read_settings(db).lyrics_sites
+        settings = read_settings(db)
         subjects = {
-            track_id: _lyrics_key(words, track_id, lengths.get(track_id), sites) for track_id in ids
+            track_id: _lyrics_key(
+                words,
+                track_id,
+                lengths.get(track_id),
+                settings.lyrics_sites,
+                suggest=settings.suggest_lyrics,
+            )
+            for track_id in ids
         }
         videos = dict.fromkeys(ids)
         came_from = {}
@@ -166,10 +173,16 @@ def _lyrics_key(
     track_id: TrackId,
     duration_ms: int | None,
     sites: tuple[LyricsSite, ...],
+    *,
+    suggest: bool,
 ) -> str | None:
     """Return the subject a song's lyrics are looked up by: its words, length, and the sites."""
     terms = search_terms(words.get(track_id, {}), whole_album=False)
-    return None if terms is None else lyrics_subject(terms, track_id, duration_ms, sites)
+    return (
+        None
+        if terms is None
+        else lyrics_subject(terms, track_id, duration_ms, sites, suggest=suggest)
+    )
 
 
 def _lengths(db: Session, ids: set[TrackId]) -> dict[TrackId, int]:

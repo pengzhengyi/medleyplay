@@ -759,6 +759,7 @@ export function settingsOf(change: Partial<Settings> = {}): Settings {
     album_minutes: 20,
     split_albums: "approval",
     lyrics_sites: [],
+    suggest_lyrics: true,
     picture_sites: [],
     pick_pictures_by_ai: false,
     find_artist_photos: "up_next",

@@ -47,6 +47,8 @@ export function NowPlaying({
   onFavoriteAlbum,
   menuActions,
   lyrics,
+  onSaveLyrics,
+  onDismissLyrics,
   queueOpen,
   onToggleQueue,
   onClose,
@@ -64,6 +66,10 @@ export function NowPlaying({
   readonly menuActions: TrackMenuActions;
   /** The lyrics of the song playing: `null` for none, `undefined` while they are read. */
   readonly lyrics: Lyrics | null | undefined;
+  /** Save the lyrics suggested for the song playing as the household's. */
+  readonly onSaveLyrics?: (() => Promise<void>) | undefined;
+  /** Dismiss the lyrics suggested for the song playing. */
+  readonly onDismissLyrics?: (() => Promise<void>) | undefined;
   readonly queueOpen: boolean;
   readonly onToggleQueue: () => void;
   readonly onClose: () => void;
@@ -282,6 +288,8 @@ export function NowPlaying({
           {lyricsOpen && (
             <LyricsPanel
               lyrics={song.song === undefined ? null : lyrics}
+              onSave={onSaveLyrics}
+              onDismiss={onDismissLyrics}
               seconds={song.seconds}
               onSeek={(seconds) => {
                 player.seek(song.from + seconds);

@@ -64,6 +64,13 @@ class SettingsIn(BaseModel):
             " Left out, they stay as saved."
         ),
     )
+    suggest_lyrics: bool = Field(
+        default=True,
+        description=(
+            "Whether a song no site has lyrics for shows the lyrics of the nearest song one"
+            " has, as a suggestion to save or dismiss. Left out, it stays as saved."
+        ),
+    )
     picture_sites: tuple[PictureSite, ...] = Field(
         default=(),
         description=(
@@ -118,6 +125,7 @@ class SettingsOut(BaseModel):
     album_minutes: int | None
     split_albums: SplitAlbums
     lyrics_sites: tuple[LyricsSite, ...]
+    suggest_lyrics: bool
     picture_sites: tuple[PictureSite, ...]
     pick_pictures_by_ai: bool
     find_artist_photos: PhotoSearch
@@ -135,6 +143,7 @@ class SettingsOut(BaseModel):
             album_minutes=settings.album_minutes,
             split_albums=settings.split_albums,
             lyrics_sites=settings.lyrics_sites,
+            suggest_lyrics=settings.suggest_lyrics,
             picture_sites=settings.picture_sites,
             pick_pictures_by_ai=settings.pick_pictures_by_ai,
             find_artist_photos=settings.find_artist_photos,
@@ -179,6 +188,11 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
                 body.picture_sites
                 if "picture_sites" in body.model_fields_set
                 else saved_before.picture_sites
+            ),
+            suggest_lyrics=(
+                body.suggest_lyrics
+                if "suggest_lyrics" in body.model_fields_set
+                else saved_before.suggest_lyrics
             ),
             pick_pictures_by_ai=(
                 body.pick_pictures_by_ai

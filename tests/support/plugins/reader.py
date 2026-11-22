@@ -701,14 +701,30 @@ PLAIN_LYRICS: Final = "First line\nSecond line"
 
 
 class Lyricist:
-    """Answers each song's lyrics as the table says."""
+    """Answers each song's lyrics as the table says.
 
-    def enrich(self, request: EnrichTrack) -> Enriched:
+    *Nearly* has none of its own on LRCLIB: it is given the nearest song's, suggested,
+    while suggestions are asked for, and NetEase, once turned on, has its own.
+    """
+
+    def enrich(self, request: EnrichTrack) -> Enriched:  # noqa: PLR0911 -- one per song
         title = str({each.field: each.value for each in request.shown}.get("title", ""))
         match title:
             case "Nowhere":
                 return Enriched()
             case "Elsewhere" if LyricsProvider.NETEASE not in request.lyrics_sites:
+                return Enriched()
+            case "Nearly" if LyricsProvider.NETEASE in request.lyrics_sites:
+                return Enriched(
+                    lyrics=FoundLyrics(provider=LyricsProvider.NETEASE, text=lyrics_of(title))
+                )
+            case "Nearly" if request.suggest_lyrics:
+                return Enriched(
+                    lyrics=FoundLyrics(
+                        provider=LyricsProvider.LRCLIB, text=lyrics_of(title), suggested=True
+                    )
+                )
+            case "Nearly":
                 return Enriched()
             case "Instrumental":
                 return Enriched(

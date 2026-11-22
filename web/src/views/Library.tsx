@@ -829,6 +829,18 @@ export function Library({
           onFavoriteAlbum={library.setAlbumFavorite}
           menuActions={actions}
           lyrics={lyrics}
+          {...(song === undefined || !lyrics
+            ? {}
+            : {
+                onSaveLyrics: async () => {
+                  await api.setLyrics(song.id, lyrics.text);
+                  setLyricsEdits((count) => count + 1);
+                },
+                onDismissLyrics: async () => {
+                  await api.dismissLyricsSuggestion(song.id);
+                  setLyricsEdits((count) => count + 1);
+                },
+              })}
           queueOpen={nowPlayingQueue}
           onToggleQueue={() => {
             setNowPlayingQueue((open) => !open);

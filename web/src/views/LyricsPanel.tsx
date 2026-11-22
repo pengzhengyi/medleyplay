@@ -4,9 +4,11 @@
  * Timed lyrics follow the song: the line sung now is large and bright, the others dim,
  * and each line, pressed, plays from its time. Scrolling them oneself stops the
  * following for a few seconds, so a line can be found. Plain lyrics read as written.
+ * Lyrics suggested, the nearest song's when no site has the song's, come with a bar to
+ * save them as the household's or dismiss them.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { LyricLine, Lyrics } from "../api";
 import { lineAt } from "../lyrics";
@@ -16,22 +18,30 @@ const BROWSE_MS = 4000;
 
 /**
  * The lyrics `lyrics`, `seconds` into the song; `onSeek` plays from a line's time.
- * `undefined` lyrics are still being read, and show nothing yet.
+ * `undefined` lyrics are still being read, and show nothing yet. Lyrics suggested offer
+ * `onSave` and `onDismiss`, when given, each settled once the server answers.
  */
 export function LyricsPanel({
   lyrics,
   seconds,
   onSeek,
+  onSave,
+  onDismiss,
 }: {
   readonly lyrics: Lyrics | null | undefined;
   readonly seconds: number;
   readonly onSeek: (seconds: number) => void;
+  readonly onSave?: (() => Promise<void>) | undefined;
+  readonly onDismiss?: (() => Promise<void>) | undefined;
 }) {
   if (lyrics === undefined) {
     return <section className="lyrics-panel" aria-label="Lyrics" aria-busy="true" />;
   }
   return (
     <section className="lyrics-panel" aria-label="Lyrics">
+      {lyrics?.origin === "suggested" && onSave !== undefined && onDismiss !== undefined && (
+        <SuggestionBar key={lyrics.text} onSave={onSave} onDismiss={onDismiss} />
+      )}
       {lyrics === null ? (
         <p className="lyrics-none">No lyrics for this song.</p>
       ) : lyrics.instrumental ? (
@@ -42,6 +52,65 @@ export function LyricsPanel({
         <p className="lyrics-plain">{lyrics.plain}</p>
       )}
     </section>
+  );
+}
+
+/**
+ * Says the lyrics are suggested, with *Save* and *Dismiss*: the one pressed waits in place
+ * and neither takes input until the server answers, and the bar leaves once the lyrics
+ * read again are no longer suggested.
+ */
+function SuggestionBar({
+  onSave,
+  onDismiss,
+}: {
+  readonly onSave: () => Promise<void>;
+  readonly onDismiss: () => Promise<void>;
+}) {
+  const [doing, setDoing] = useState<"save" | "dismiss">();
+  const [error, setError] = useState("");
+  const act = async (which: "save" | "dismiss", change: () => Promise<void>) => {
+    setDoing(which);
+    setError("");
+    try {
+      await change();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+      setDoing(undefined);
+    }
+  };
+  return (
+    <div className="lyrics-suggestion" role="group" aria-label="Lyrics suggested">
+      <span
+        className="lyrics-suggestion-tag"
+        title="The lyrics of the nearest song LRCLIB has, not saved"
+      >
+        Found on the web
+      </span>
+      <button
+        type="button"
+        className="lyrics-suggestion-save"
+        disabled={doing !== undefined}
+        aria-busy={doing === "save"}
+        onClick={() => void act("save", onSave)}
+      >
+        Save
+      </button>
+      <button
+        type="button"
+        className="secondary outline lyrics-suggestion-dismiss"
+        disabled={doing !== undefined}
+        aria-busy={doing === "dismiss"}
+        onClick={() => void act("dismiss", onDismiss)}
+      >
+        Dismiss
+      </button>
+      {error !== "" && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

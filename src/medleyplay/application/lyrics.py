@@ -1,8 +1,10 @@
 """A song's lyrics: each source's, and the one shown, the first held in `LyricsOrigin` order.
 
 The household's own come first, then a `.lrc` file beside the audio, then the audio's
-tags, then a site that finds lyrics. The text is kept as each source gave it and read
-when shown, so a better reading needs no lookup again.
+tags, then a site that finds lyrics, then, when no site has the song's, the lyrics of
+the nearest song one has, suggested until the household saves or dismisses them. The
+text is kept as each source gave it and read when shown, so a better reading needs no
+lookup again.
 """
 
 from collections.abc import Callable
@@ -48,6 +50,7 @@ def record_lyrics(
         track_id=track_id, origin=origin.value
     )
     row.text, row.instrumental, row.found_at = "" if instrumental else text, instrumental, now
+    row.dismissed = False
     db.add(row)
     db.flush()
 
@@ -62,9 +65,14 @@ def forget_lyrics(db: Session, track_id: TrackId, origin: LyricsOrigin) -> None:
 
 
 def lyrics_held(db: Session) -> dict[TrackId, LyricsHeld]:
-    """Return which lyrics each song holding some has: its own or its files', or found online."""
+    """Return which lyrics each song holding some has: its own or its files', or found online.
+
+    A suggestion counts as found online, one dismissed as none.
+    """
     held: dict[TrackId, LyricsHeld] = {}
-    for track_id, origin in db.execute(select(TrackLyricsRow.track_id, TrackLyricsRow.origin)):
+    for track_id, origin in db.execute(
+        select(TrackLyricsRow.track_id, TrackLyricsRow.origin).where(~TrackLyricsRow.dismissed)
+    ):
         local = LyricsOrigin(origin).local
         if local or held.get(TrackId(track_id)) is not LyricsHeld.LOCAL:
             held[TrackId(track_id)] = LyricsHeld.LOCAL if local else LyricsHeld.ONLINE
@@ -75,7 +83,11 @@ def shown_lyrics(db: Session, track_id: TrackId) -> ShownLyrics | None:
     """Return the lyrics the song shows: the first source's in `LyricsOrigin` order, if any."""
     rows = {
         LyricsOrigin(row.origin): row
-        for row in db.scalars(select(TrackLyricsRow).where(TrackLyricsRow.track_id == track_id))
+        for row in db.scalars(
+            select(TrackLyricsRow).where(
+                TrackLyricsRow.track_id == track_id, ~TrackLyricsRow.dismissed
+            )
+        )
     }
     for origin in LyricsOrigin:
         row = rows.get(origin)
@@ -120,6 +132,7 @@ class LyricsService:
             record_lyrics(
                 db, track_id, LyricsOrigin.HOUSEHOLD, text, self._clock(), instrumental=instrumental
             )
+            forget_lyrics(db, track_id, LyricsOrigin.SUGGESTED)
             shown = shown_lyrics(db, track_id)
         self._changed()
         if shown is None:  # pragma: no cover -- the household's were just kept
@@ -131,6 +144,20 @@ class LyricsService:
         with self._units.begin() as db:
             _require(db, track_id)
             forget_lyrics(db, track_id, LyricsOrigin.HOUSEHOLD)
+            shown = shown_lyrics(db, track_id)
+        self._changed()
+        return shown
+
+    def dismiss_suggestion(self, track_id: TrackId) -> ShownLyrics | None:
+        """Stop showing the song's suggested lyrics, and return what shows now.
+
+        The same lyrics suggested again stay dismissed; others are shown.
+        """
+        with self._units.begin() as db:
+            _require(db, track_id)
+            row = db.get(TrackLyricsRow, (track_id, LyricsOrigin.SUGGESTED.value))
+            if row is not None:
+                row.dismissed = True
             shown = shown_lyrics(db, track_id)
         self._changed()
         return shown

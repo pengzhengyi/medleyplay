@@ -148,7 +148,14 @@ export interface Details {
 }
 
 /** Where a song's lyrics came from: the first held of each shows. */
-export type LyricsOrigin = "household" | "sidecar" | "tag" | "lrclib" | "netease";
+export type LyricsOrigin =
+  | "household"
+  | "sidecar"
+  | "tag"
+  | "lrclib"
+  | "netease"
+  /** The nearest song's, when no site has the song's: shown until saved or dismissed. */
+  | "suggested";
 
 /** A song a lyrics site found of a title and artist, what tells it apart, and its lyrics. */
 export interface LyricsOption {
@@ -743,6 +750,8 @@ export interface Settings {
   readonly split_albums: SplitAlbums;
   /** The sites asked for a song's lyrics, in turn, when LRCLIB has none. */
   readonly lyrics_sites: readonly LyricsSite[];
+  /** Whether a song no site has lyrics for shows the nearest song's, suggested. */
+  readonly suggest_lyrics: boolean;
   /** The sites asked for pictures of an artist, to choose its photo from. */
   readonly picture_sites: readonly PictureSite[];
   /** Whether an AI model is asked which picture is of an artist as soon as they are found. */
@@ -1544,6 +1553,9 @@ export const api = {
   /** Drop the household's lyrics for the song; answers what it shows now. */
   forgetLyrics: (trackId: number) =>
     call<Lyrics | null>("DELETE", `/api/tracks/${String(trackId)}/lyrics`),
+  /** Stop showing the lyrics suggested for the song; answers what it shows now. */
+  dismissLyricsSuggestion: (trackId: number) =>
+    call<Lyrics | null>("DELETE", `/api/tracks/${String(trackId)}/lyrics/suggestion`),
   /** What was found when the song's lyrics were last looked for by hand. */
   lyricsFound: (trackId: number) =>
     call<LyricsFound>("GET", `/api/tracks/${String(trackId)}/lyrics/found`),

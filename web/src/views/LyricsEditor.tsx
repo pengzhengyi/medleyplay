@@ -37,6 +37,7 @@ const FROM: Record<LyricsOrigin, string> = {
   tag: "From its tags",
   lrclib: "Found on LRCLIB",
   netease: "Found on NetEase Cloud Music",
+  suggested: "Found on the web: the nearest song LRCLIB has, not saved",
 };
 
 /** The player, as syncing the song's lyrics needs it. */

@@ -58,6 +58,7 @@ class SettingsDocument(BaseModel):
     album_minutes: int | None = Field(default=ALBUM_MINUTES, ge=1, le=MAX_ALBUM_MINUTES)
     split_albums: SplitAlbums = SplitAlbums.APPROVAL
     lyrics_sites: tuple[LyricsSite, ...] = Field(default=(), max_length=len(LyricsSite))
+    suggest_lyrics: bool = True
     picture_sites: tuple[PictureSite, ...] = Field(default=(), max_length=len(PictureSite))
     pick_pictures_by_ai: bool = False
     find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
@@ -168,6 +169,7 @@ def read_settings(db: Session) -> Settings:
         album_minutes=document.album_minutes,
         split_albums=document.split_albums,
         lyrics_sites=document.lyrics_sites,
+        suggest_lyrics=document.suggest_lyrics,
         picture_sites=document.picture_sites,
         pick_pictures_by_ai=document.pick_pictures_by_ai,
         find_artist_photos=document.find_artist_photos,

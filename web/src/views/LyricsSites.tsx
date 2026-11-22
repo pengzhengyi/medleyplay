@@ -1,6 +1,6 @@
 /**
- * @file *NetEase Cloud Music*, in the Lyrics section: whether NetEase is asked for the lyrics
- * LRCLIB lacks.
+ * @file The Lyrics section's switches: whether NetEase is asked for the lyrics LRCLIB lacks,
+ * and whether a song no site has lyrics for shows the nearest song's, suggested.
  *
  * NetEase offers no public API, so medleyplay asks only its plain endpoints, as itself; a
  * refusal stops looking lyrics up until an admin resets it. The choice saves at once.
@@ -11,7 +11,7 @@ import { useState } from "react";
 import type { LyricsSite, Settings } from "../api";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 
-/** The switch that turns NetEase on or off, for an admin. */
+/** The switches that turn NetEase and suggestions on or off, for an admin. */
 export function LyricsSites({
   settings,
   onSettings,
@@ -28,13 +28,12 @@ export function LyricsSites({
   }
   const on = settings.lyrics_sites.includes("netease");
 
-  const turn = async (netease: boolean) => {
+  const save = async (change: Partial<Settings>) => {
     setSaving(true);
     setNote("");
     setError("");
-    const sites: readonly LyricsSite[] = netease ? ["netease"] : [];
     try {
-      const { outcome, settings: now } = await saveChange(settings, { lyrics_sites: sites });
+      const { outcome, settings: now } = await saveChange(settings, change);
       onSettings(now);
       setNote(outcome === "conflict" ? CHANGED_ELSEWHERE : "Saved.");
     } catch (failure) {
@@ -52,7 +51,10 @@ export function LyricsSites({
           role="switch"
           checked={on}
           disabled={saving}
-          onChange={(event) => void turn(event.target.checked)}
+          onChange={(event) => {
+            const sites: readonly LyricsSite[] = event.target.checked ? ["netease"] : [];
+            void save({ lyrics_sites: sites });
+          }}
         />
         Also look on NetEase Cloud Music
       </label>
@@ -60,6 +62,20 @@ export function LyricsSites({
         Asked for a song LRCLIB has no lyrics for, by its title and artist, once a second at most;
         turning it on looks those songs up again. NetEase has no public API, so it may stop
         answering.
+      </small>
+      <label className="lyrics-sites-switch">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={settings.suggest_lyrics}
+          disabled={saving}
+          onChange={(event) => void save({ suggest_lyrics: event.target.checked })}
+        />
+        Suggest lyrics that nearly match
+      </label>
+      <small className="hint">
+        A song no site has lyrics for shows those of the nearest song LRCLIB has, of the same title
+        and nearly as long, tagged Found on the web, to save or dismiss.
       </small>
       {error !== "" && <p role="alert">{error}</p>}
       <p className="hint saved" role="status">

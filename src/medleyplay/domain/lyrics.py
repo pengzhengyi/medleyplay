@@ -43,6 +43,9 @@ class LyricsOrigin(StrEnum):
     """LRCLIB, the open lyrics database at lrclib.net."""
     NETEASE = "netease"
     """NetEase Cloud Music, asked when LRCLIB has none and the household turned it on."""
+    SUGGESTED = "suggested"
+    """The lyrics of the song nearest this one a site has, when none has this one's:
+    shown until the household saves them as its own or dismisses them."""
 
     @property
     def local(self) -> bool:

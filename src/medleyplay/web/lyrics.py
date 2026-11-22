@@ -103,6 +103,12 @@ def forget_lyrics(track_id: RowId, _: SignedInAccount, service: LyricsDep) -> Ly
     return LyricsOut.of(service.forget_own(TrackId(track_id)))
 
 
+@router.delete("/{track_id}/lyrics/suggestion")
+def dismiss_suggestion(track_id: RowId, _: SignedInAccount, service: LyricsDep) -> LyricsOut | None:
+    """Stop showing the lyrics suggested for the song; return what it shows now."""
+    return LyricsOut.of(service.dismiss_suggestion(TrackId(track_id)))
+
+
 class FindLyricsIn(BaseModel):
     """What to look for a song's lyrics by: a title, and an artist or none."""
 

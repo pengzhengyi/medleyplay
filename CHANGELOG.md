@@ -687,6 +687,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Both names in the player bar** — when the artist or the album is long, each is
+  shortened on its own, the longer one giving up more room, so both stay in sight with
+  the dash between them; hovering either shows it whole. Short names show as before.
+
 - **Shortcut keys as key caps** — hovering a player control, or reaching it with the
   keyboard, shows a tooltip with its name and each key as a cap of its own, such as
   *Next album* ⌥ ⇧ →, the modifiers as symbols on Apple devices; screen readers

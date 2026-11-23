@@ -46,6 +46,7 @@
   "{{count}} to clean up": "{{count}} 项待整理",
   "downloading_other": "正在下载 {{count}} 首歌",
   "Settings sections": "设置分类",
+  "No matching settings.": "没有匹配的设置。",
   "Go to {{section}}": "前往{{section}}",
   "Open all": "全部展开",
   "Fold all": "全部折叠",

@@ -23,7 +23,12 @@ import {
 import { useAutoSave } from "../useAutoSave";
 import { classOf } from "../useNote";
 import { formatBytes } from "../format";
-import { hrefOf } from "../routes";
+import { type Route, hrefOf } from "../routes";
+import {
+  SETTINGS_SECTIONS,
+  type SectionId,
+  visibleSettingsSections,
+} from "../library/settingsSections";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 import { DownloadsFolder } from "./DownloadsFolder";
 import { AccentPicker } from "./AccentPicker";
@@ -51,35 +56,6 @@ import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
 const GB = 1_000_000_000;
 
-/** The sections, in the order the page shows them. */
-const SECTIONS = [
-  { id: "appearance", title: "Appearance" },
-  { id: "keyboard-shortcuts", title: "Keyboard shortcuts" },
-  { id: "network", title: "Network" },
-  { id: "devices", title: "Other devices" },
-  { id: "kinds", title: "Songs and albums" },
-  { id: "ratings", title: "Your ratings" },
-  { id: "storage", title: "Downloads and storage" },
-  { id: "bilibili", title: "Bilibili" },
-  { id: "musicbrainz", title: "MusicBrainz" },
-  { id: "deezer", title: "Deezer" },
-  { id: "image-search", title: "Image search" },
-  { id: "lyrics", title: "Lyrics" },
-  { id: "ai", title: "AI" },
-] as const;
-
-type SectionId = (typeof SECTIONS)[number]["id"];
-
-/** The sections only an admin sees: they run lookups for every Track, or let devices in. */
-const ADMIN_ONLY: ReadonlySet<SectionId> = new Set([
-  "devices",
-  "bilibili",
-  "musicbrainz",
-  "deezer",
-  "image-search",
-  "ai",
-]);
-
 const FOLDED = "medleyplay.settings.folded.v1";
 
 /** Return the sections this browser last kept folded. */
@@ -87,7 +63,9 @@ function loadFolded(): ReadonlySet<SectionId> {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(FOLDED) ?? "[]");
     return new Set(
-      SECTIONS.map(({ id }) => id).filter((id) => Array.isArray(saved) && saved.includes(id)),
+      SETTINGS_SECTIONS.map(({ id }) => id).filter(
+        (id) => Array.isArray(saved) && saved.includes(id),
+      ),
     );
   } catch {
     return new Set();
@@ -146,7 +124,7 @@ function keepInView(id: string): () => void {
 /** The Settings view; `admin` may change what the household shares. */
 export function SettingsView({
   admin,
-  section,
+  route,
   mode,
   onModeChecked,
   onEnrichersChanged,
@@ -155,8 +133,7 @@ export function SettingsView({
   waitingDevices = [],
 }: {
   readonly admin: boolean;
-  /** The id of the section to open and go to, as a link names it; the page shows them all. */
-  readonly section?: string | undefined;
+  readonly route?: Extract<Route, { view: "settings" }>;
   readonly mode: Mode | null;
   /** Show the Mode a check of the network came to. */
   readonly onModeChecked: (mode: Mode) => void;
@@ -170,12 +147,12 @@ export function SettingsView({
   readonly waitingDevices?: readonly WaitingDevice[];
 }) {
   const t = useWords();
-  const [folded, setFolded] = useState(() => openedAt(loadFolded(), section));
-  // The section a link last named, so naming another opens that one too.
-  const [named, setNamed] = useState(section);
-  if (named !== section) {
-    setNamed(section);
-    setFolded((held) => openedAt(held, section));
+  const [folded, setFolded] = useState(() => openedAt(loadFolded(), route?.section));
+  // A new visit opens the section even when the listener chose the same link again.
+  const [visit, setVisit] = useState(route);
+  if (visit !== route) {
+    setVisit(route);
+    setFolded((held) => openedAt(held, route?.section));
   }
   // One copy for the sections that save the settings, so each saves at the latest revision.
   const [household, setHousehold] = useState<Settings | undefined>(undefined);
@@ -199,14 +176,15 @@ export function SettingsView({
     }
     scrollTo(id);
   };
-  const sections = SECTIONS.filter(({ id }) => admin || !ADMIN_ONLY.has(id));
+  const sections = visibleSettingsSections(admin);
   useEffect(() => {
+    const section = route?.section;
     if (section === undefined) {
       return undefined;
     }
     scrollTo(section);
     return keepInView(section);
-  }, [section]);
+  }, [route]);
   const allFolded = sections.every(({ id }) => folded.has(id));
   const contents: Record<SectionId, ReactNode> = {
     appearance: (

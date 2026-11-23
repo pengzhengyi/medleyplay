@@ -661,6 +661,7 @@ export function Library({
         </h1>
         <SearchBox
           route={route}
+          admin={admin}
           providers={library.providers}
           onLookUp={(link) => {
             openVideo(library.lookUpLink(link));

@@ -395,6 +395,12 @@ Track's kind is decided.
   offers `artist:`, first in the panel, above the artists. Choosing one is typing
   it in full, keeping the words before it; *Tab* takes the first, or the one the
   arrow keys point at. One letter offers nothing, as it begins too many names.
+- **`settings:` finds a Settings section** in the Library search box. With
+  nothing after the colon, it lists the sections this account can see. Words
+  match a section's title or stable link ID, ignoring case. For example,
+  `settings: rating` offers *Your ratings*. The arrow keys move the selection;
+  Enter or a click opens the section and focuses its heading, even when the same
+  section is already in the URL. Typing the command does not open Settings.
 - **Library search** matches the words typed, each anywhere in a Track's title,
   artist, or album, ignoring case, width, and hiragana or katakana: NFKC, lower
   case, and katakana shifted to hiragana, so `ｍｅｌｔ` finds *Melt* and

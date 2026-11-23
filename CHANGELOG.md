@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Type `settings: rating` in the search box and choose *Your ratings* to open
+  that Settings section. Type `settings:` to see every section you can visit.
 - Open a saved song's lyrics directly from an album's Songs editor without saving
   the list. **Auto-Match lyrics** can ask the configured AI to choose among lyrics
   found for each saved song. It asks first and never replaces existing lyrics.

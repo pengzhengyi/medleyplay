@@ -432,7 +432,7 @@ function viewOf(given: ViewProps) {
         <LazyPart doing="Loading…">
           <SettingsView.Component
             admin={props.admin}
-            section={route.section}
+            route={route}
             mode={props.mode}
             onModeChecked={props.onModeChecked}
             onEnrichersChanged={props.onEnrichersChanged}

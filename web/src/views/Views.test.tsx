@@ -1,5 +1,5 @@
 // cspell:ignore supercell ｍｅｌｔ
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,7 @@ import type { Track } from "../api";
 import { App } from "../App";
 import { hrefOf } from "../routes";
 import {
+  ALICE,
   OTHER_JAY,
   type Routes,
   artistIdOf,
@@ -202,6 +203,78 @@ describe("the views", () => {
 
     expect(await screen.findByRole("button", { name: "Shiver" })).toBeInTheDocument();
     expect(songs()).toEqual(["Shiver"]);
+  });
+});
+
+describe("Settings search", () => {
+  afterEach(() => {
+    localStorage.removeItem("medleyplay.settings.folded.v1");
+  });
+
+  it("waits for Enter before opening Your ratings, and opens it again by click", async () => {
+    const { calls } = open("#/library");
+    const box = await screen.findByRole("combobox", { name: "Search" });
+    await userEvent.click(box);
+    vi.useFakeTimers();
+    fireEvent.change(box, { target: { value: "settings" } });
+    fireEvent.change(box, { target: { value: "settings: rating" } });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    vi.useRealTimers();
+
+    expect(location.hash).toBe("#/library");
+    expect(screen.getByRole("option", { name: "Your ratings" })).toBeVisible();
+    await userEvent.keyboard("{Enter}");
+    const toggle = await screen.findByRole("button", { name: "Your ratings" });
+    expect(location.hash).toBe("#/settings?section=ratings");
+    expect(toggle).toHaveFocus();
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    const section = screen.getByRole("region", { name: "Your ratings" });
+    const scroll = vi.spyOn(section, "scrollIntoView");
+    await userEvent.click(box);
+    await userEvent.paste("SETTINGS: RATING");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(screen.getByRole("option", { name: "Your ratings" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveFocus();
+    expect(scroll).toHaveBeenCalled();
+    expect(calls.filter((call) => !call.startsWith("GET "))).toEqual([]);
+  });
+
+  it("matches a translated title on Settings and keeps the section ID in the URL", async () => {
+    open("#/settings");
+    const language = await screen.findByLabelText("Language");
+    await userEvent.selectOptions(language, "zh-Hans");
+    try {
+      await userEvent.click(screen.getByRole("combobox", { name: "Search" }));
+      await userEvent.paste("settings: 评分");
+      await userEvent.click(screen.getByRole("option", { name: "我的评分" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "我的评分" })).toHaveFocus());
+      expect(location.hash).toBe("#/settings?section=ratings");
+    } finally {
+      await userEvent.selectOptions(await screen.findByLabelText("语言"), "auto");
+    }
+  });
+
+  it.each(["member", "admin"])("offers only sections visible to the %s role", async (role) => {
+    open("#/albums", { ...signedIn(LIBRARY), "GET /api/me": { body: { ...ALICE, role } } });
+    const box = await screen.findByRole("combobox", { name: "Search" });
+    await userEvent.click(box);
+    await userEvent.paste("settings:");
+    expect(screen.getByRole("option", { name: "Appearance" })).toBeVisible();
+    expect(Boolean(screen.queryByRole("option", { name: "Other devices" }))).toBe(role === "admin");
+    await userEvent.keyboard("{ArrowDown}{ArrowUp}");
+    expect(screen.getByRole("option", { selected: true })).toHaveAccessibleName("Appearance");
+    await userEvent.keyboard("{Escape}{Enter}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    await userEvent.paste(" nowhere");
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByText("No matching settings.")).toBeVisible();
+    expect(screen.queryByRole("option")).toBeNull();
+    expect(location.hash).toBe("#/albums");
   });
 });
 

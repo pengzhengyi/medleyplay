@@ -71,6 +71,10 @@ Two builds do needless work, which caching alone would only hide:
   FastAPI validated and serialized them again for the `response_model`. A cached
   answer serializes the list once, with a `TypeAdapter` and `by_alias` as FastAPI
   does, so the bytes are the same for less work.
+- **The track list shares its source read.** The catalog reads only the source
+  columns it needs for availability, downloads, and video links. A split song
+  can use its album file's source from that same read instead of fetching it
+  again. Source order and the response bytes do not change.
 
 Each change is measured on its own, so the pull request shows what it bought.
 
@@ -277,6 +281,23 @@ with each favorite. What remains slowest when the reads arrive together is reads
 this note leaves alone: the shared names (under the heavy-read lock), the
 Playlists, the names to tidy, and the artist splits, each 0.35 to 0.66 s. The
 client step, asking for fewer of them at once, is where they go next.
+
+### First catalog read after restart
+
+Each pair compares fresh processes with the same synthetic catalog. The mixed
+catalogs contain local files, video parts, split songs, and downloads. These are
+server response times; they do not include browser rendering.
+
+| Catalog | Pairs | First `GET /api/tracks`, before | After |
+| --- | ---: | ---: | ---: |
+| 1,738 local tracks | 5 | 304 ms | 192 ms |
+| 1,738 mixed tracks | 9 | 334 ms | 279 ms |
+| 7,000 mixed tracks | 5 | 1,425 ms | 1,180 ms |
+
+The table shows medians from the repeat trials. The smaller mixed catalog was
+slower in the first trial (433 ms vs. 513 ms), so the improvement is not
+consistent in every run. Each pair returned identical track data. Cached
+conditional reads were about 6 to 8 ms in the repeat trials.
 
 ## Open questions
 

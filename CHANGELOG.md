@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Search for album covers on Google Images beside Upload, or see pictures and
+  their source pages in the editor with an optional household Tavily key.
+
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged
   *Found on the web* in Now Playing's big picture, with *Save* to keep them as yours and
@@ -869,6 +872,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A successful Job's finish time includes saving its result, so a lyrics search
   no longer appears to finish before its songs were found.
+- Clicking a split album in the Library plays the whole file. Expand it and
+  click a song to play just that song instead.
 
 - **Using a suggested photo or cover shows it was received** — in Clean up, *Use*,
   *Dismiss*, and *Use all* on a suggested artist photo or album cover now fade it and tag

@@ -44,6 +44,7 @@ from medleyplay.web import (
     enrichers,
     events,
     image_links,
+    image_search,
     jobs,
     libraries,
     linked_accounts,
@@ -116,6 +117,7 @@ ROUTERS: Final = (
     shared_names.router,
     album_covers.router,
     image_links.router,
+    image_search.router,
     lyrics.router,
     mode.router,
     details.router,
@@ -183,7 +185,10 @@ async def _handle_invalid_request(request: Request, error: RequestValidationErro
     if request.url.path.startswith(PROXIES_PATH):
         detail = 'The body must be JSON like {"url": "socks5h://127.0.0.1:7890"}.'
         return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
-    if request.url.path.startswith(AI_PATH):
+    if (
+        request.url.path.startswith(AI_PATH)
+        or request.url.path == image_search.router.prefix + "/key"
+    ):
         return JSONResponse(
             {"detail": _ai_body_like(request.url.path)},
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -76,6 +76,7 @@ function serveSettings(
 ) {
   return serve({
     "GET /api/settings": { body: LIMIT_20 },
+    "GET /api/image-search": { body: { configured: false } },
     "GET /api/storage": { body: USING_2 },
     "GET /api/proxies/bilibili": { body: null },
     "GET /api/enrichers/bilibili-details": {
@@ -121,6 +122,36 @@ const folded = () =>
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("the image search section", () => {
+  it("lets an admin save and remove the key without showing it again", async () => {
+    let saved: unknown;
+    const { calls } = open(true, {
+      "PUT /api/image-search/key": (body) => {
+        saved = body;
+        return { status: 204 };
+      },
+      "DELETE /api/image-search/key": { status: 204 },
+    });
+    const section = within(screen.getByRole("region", { name: "Image search" }));
+    const key = await section.findByLabelText("Tavily API key");
+    const user = userEvent.setup();
+    await user.type(key, "example-only");
+    await user.click(section.getByRole("button", { name: "Save key" }));
+
+    expect(saved).toEqual({ key: "example-only" });
+    expect(key).toHaveValue("");
+    await user.click(await section.findByRole("button", { name: "Remove key" }));
+    expect(calls).toContain("DELETE /api/image-search/key");
+    expect(section.queryByRole("button", { name: "Remove key" })).toBeNull();
+  });
+
+  it("does not show or read key settings for a member", () => {
+    const { calls } = open(false);
+    expect(screen.queryByRole("region", { name: "Image search" })).toBeNull();
+    expect(calls).not.toContain("GET /api/image-search");
+  });
 });
 
 describe("the Bilibili section", () => {
@@ -790,6 +821,7 @@ describe("the Settings sections", () => {
       "Bilibili",
       "MusicBrainz",
       "Deezer",
+      "Image search",
       "Lyrics",
       "AI",
     ]);

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from medleyplay.config import ConfigError
 from medleyplay.domain.ai import key_secret
+from medleyplay.plugin_host.loader import plugin_names
 from medleyplay.server import (
     AlreadyRunningError,
     PluginSource,
@@ -119,13 +120,9 @@ def _data_dir_with_config(tmp_path: Path, config: str) -> Path:
 
 
 TEST_SOURCE = PluginSource(TEST_PLUGINS, TEST_COMMAND)
-# Every test plugin but `parrot` is off, so the server starts quickly.
 ONLY_PARROT = "\n".join(
-    f"[plugins.{name}]\nenabled = false"
-    for name in ("broken-import", "crashes-on-import", "future-version", "hangs-on-import",
-                 "liar", "mute", "mynah", "not-a-plugin", "reader", "sketcher", "squatter",
-                 "stutter", "tube")
-)  # fmt: skip
+    f"[plugins.{name}]\nenabled = false" for name in plugin_names(TEST_PLUGINS) if name != "parrot"
+)
 
 
 def test_one_account_is_the_default(tmp_path: Path) -> None:

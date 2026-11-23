@@ -306,6 +306,8 @@ place a picture comes from, listed down its side and across the top on a phone:
 | --- | --- | --- |
 | *Upload* | A panel to drop a picture on, or *Choose a file…*; the picture chosen shows before *Use this cover* | Every picture |
 | *MusicBrainz* | The covers of the album's releases, below | A cover of a song or an album |
+| *Tavily* | Image search results with source pages, if a household key is set | A cover with a known album |
+| *Google* | A Google Images link and a panel to upload the saved picture | A cover with a known album |
 | *Deezer* | The pictures Deezer has of the artists going by the artist's name ([Artists](Artists.md#pictures-on-deezer)) | An artist's photo |
 | *Ask AI* | The pictures an AI model names, below | Every picture |
 
@@ -313,8 +315,8 @@ place a picture comes from, listed down its side and across the top on a phone:
   one that can't be used says why there, and the editor stays open.
 - **Upload** takes a JPEG, PNG, or WebP image of at most 10 MiB, checked before it
   is sent. An album's upload becomes its first song's cover, and then every song's.
-- **A song on no album** can't look its cover up: *MusicBrainz* and *Ask AI* are
-  unavailable, saying the album is needed.
+- **A song on no album** can't look its cover up: *MusicBrainz*, *Google*, and
+  *Ask AI* are unavailable, saying the album is needed.
 - **An album's page** shows its cover under the heading, your rating beside it, with
   *Save* and *Replace* on hover, as the album's editor does, so the cover changes
   without *Edit details*. It is set on every song of the album, or on its one file
@@ -363,10 +365,10 @@ releases MusicBrainz knows, to choose one. Nothing changes until one is chosen.
 
 ### Searching the web for album covers
 
-*External Search* works without a key. Open the Google Images link for the album
+*Google* works without a key. Open the Google Images link for the album
 and artist, check the source page, and save an image you have permission to use.
-Drop or choose that file in the same tab, preview it, then select *Use this cover*.
-The Google Images link is also available on the *Upload* tab.
+Drop or choose that file below the instructions, preview it, then select *Use this cover*.
+Use *Upload* for a file you already have.
 
 If an admin sets a Tavily key in **Settings → Image search**, a *Tavily* tab
 appears below *MusicBrainz*. Selecting it starts a search or follows the album's

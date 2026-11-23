@@ -64,8 +64,7 @@ it hasn't loaded, and today that takes the whole page down.
 ## What it delivers
 
 - [x] **A page before the script:** the page's colors, in the theme the browser
-      chose, and a quiet *medleyplay* mark, from the first paint until the Library's
-      skeleton.
+      chose, and a *medleyplay* mark with a small loading ring from the first paint.
 - [x] **The small parts load with the page:** Now Playing, *Edit details*, *Edit
       album*, *Add from Bilibili*, and *Add file*, about 15 KB gzipped.
 - [x] **A frame for each lazy part,** each with its own boundary: a dialog's frame
@@ -87,13 +86,15 @@ it hasn't loaded, and today that takes the whole page down.
 - **`<meta name="color-scheme" content="light dark">`** colors the canvas before the
   stylesheet arrives. The stylesheet already gives the body its page color.
 - **The mark inside `#root`:** `<p class="starting" aria-busy="true">medleyplay</p>`,
-  styled in `index.css`, in the muted ink.
-- **`Starting` renders the same mark** while `App` reads the Account, where it now
-  renders nothing. The Library's skeleton takes over from there.
+  styled in `index.css` with muted ink and a small CSS ring. The ring spins only
+  when the browser does not request reduced motion.
+- **`Starting` renders the same mark** in the same position while `App` checks the
+  device and reads the Account. It gives way to device approval, sign-in, or the
+  Library.
 
 ```mermaid
 flowchart LR
-  H[index.html: mark] --> S[App reads the Account: Starting, the same mark]
+  H[index.html: mark] --> S[App checks admission: Starting, the same mark]
   S --> K[Library skeleton] --> L[Songs]
 ```
 
@@ -253,8 +254,9 @@ On a first visit this sends about 290 KB instead of 1,085 KB.
   tests cover.
 - **`ClientFiles`:** an asset is sent gzipped, with `Vary`, to a request that accepts
   gzip, and as it is otherwise; a 304 for an asset keeps `immutable`.
-- **End to end:** the built client loads with gzipped assets, and opening *Edit
-  details* shows the dialog at once.
+- **End to end:** the startup ring holds its place before and after the app
+  starts, and stays still with reduced motion. The built client loads with
+  gzipped assets, and opening *Edit details* shows the dialog at once.
 
 ## Measuring
 

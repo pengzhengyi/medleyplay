@@ -65,6 +65,10 @@
   the rows on screen, so tens of thousands of Tracks scroll smoothly. Loading
   page by page from the server would make every view and search a server query;
   it waits until a Library is too large to load whole.
+- **While a song plays,** the client prepares the album and artist song lists
+  for it and the next queue entry. It asks the browser to prefetch their local
+  heading pictures. Preparing the pages does not open them, ask an outside
+  site, or start a Job to search for artwork.
 
 ## Views
 

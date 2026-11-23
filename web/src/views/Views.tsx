@@ -28,6 +28,8 @@ import type {
   WaitingDevice,
 } from "../api";
 import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
+import { coverUrl } from "../api";
+import { playingPages } from "../library/playingPages";
 import { formatLength, formatLibraryLength, initialOf } from "../format";
 import {
   type FavoriteGroups,
@@ -41,7 +43,6 @@ import {
   type Album,
   type Artist,
   albumsOf,
-  albumFileOf,
   albumYearOf,
   artistsCalled,
   artistsOf,
@@ -49,10 +50,7 @@ import {
   favoritesOf,
   fold,
   search,
-  songsOf,
   albumArtistOf,
-  tracksOfAlbum,
-  artistWrittenOf,
   tracksOfArtist,
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
@@ -89,6 +87,7 @@ export interface ViewProps {
   readonly tracks: readonly Track[];
   readonly playlists: readonly Playlist[];
   readonly playingId: number | undefined;
+  readonly nextId?: number | undefined;
   readonly actions: TrackActions;
   /** Whether the Account may change what the household shares, such as the storage limit. */
   readonly admin: boolean;
@@ -147,7 +146,19 @@ export function CurrentView(given: ViewProps) {
     given.route.view === "search" || given.route.view === "library"
       ? given.route.view
       : JSON.stringify(given.route);
-  return <Fragment key={key}>{viewOf(given)}</Fragment>;
+  const { tracks, links, playingId, nextId } = given;
+  const pages = useMemo(
+    () => playingPages(tracks, links, playingId, nextId),
+    [tracks, links, playingId, nextId],
+  );
+  return (
+    <>
+      {[...pages.pictures].map((cover) => (
+        <link key={cover} rel="prefetch" as="image" href={coverUrl(cover, "medium")} />
+      ))}
+      <Fragment key={key}>{viewOf(given, pages)}</Fragment>
+    </>
+  );
 }
 
 /** The artist name most of `songs` write, or `undefined` for no songs. */
@@ -162,9 +173,9 @@ function mostWritten(songs: readonly Track[]): string | undefined {
   )?.[0];
 }
 
-function viewOf(given: ViewProps) {
+function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
   // A Playlist names its Tracks by id among them all; every other view lists songs.
-  const props = { ...given, tracks: songsOf(given.tracks) };
+  const props = { ...given, tracks: pages.songs };
   const { route } = props;
   switch (route.view) {
     case "library":
@@ -223,13 +234,10 @@ function viewOf(given: ViewProps) {
         );
       }
       // A page opened by an artist's id shows its songs by the name most of them write.
-      const name =
-        (route.id === undefined ? undefined : artistWrittenOf(props.tracks, route.id)) ??
-        route.name;
+      const { name, songs } = pages.artist(route.name, route.id);
       // Another artist called the name than its first has its own songs, kept by its id.
       const links = props.links ?? NO_LINKS;
       const namesake = route.id !== undefined && links.isNamesake(route.id);
-      const songs = tracksOfArtist(props.tracks, name, props.links, route.id);
       const known = props.artistNames?.names;
       const group = links.groupOfBound(name, route.id);
       const artist = group.startsWith("artist:")
@@ -312,8 +320,7 @@ function viewOf(given: ViewProps) {
         />
       );
     case "album": {
-      const songs = tracksOfAlbum(props.tracks, route.artist, route.name);
-      const file = albumFileOf(songs, new Map(given.tracks.map((track) => [track.id, track])));
+      const { songs, file, cover } = pages.album(route.artist, route.name);
       const { onEditAlbum } = props.actions;
       return (
         <AlbumPage
@@ -335,7 +342,7 @@ function viewOf(given: ViewProps) {
                   artist={route.artist}
                   // A split file's songs share its cover, so the file is what changes.
                   songs={file === undefined ? songs : [file]}
-                  cover={file?.cover ?? albumsOf(songs)[0]?.cover ?? null}
+                  cover={cover}
                   {...(route.name === ""
                     ? {}
                     : {

@@ -729,6 +729,7 @@ export function Library({
             tracks={tracks}
             playlists={library.playlists}
             playingId={playingId}
+            nextId={upNext(player.queue)[0]?.trackId}
             actions={actions}
             admin={account.role === "admin"}
             mode={library.mode}

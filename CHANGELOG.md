@@ -700,6 +700,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The player prepares the album and artist pages for the current and next songs,
+  including the pictures already in the Library.
+
 - **An artist's page is laid out like an album's** — its photo large on the left; its
   name, who MusicBrainz says it is, its other names, and its links beside it; and Play,
   Shuffle, the heart, and a round pencil for *Edit details* on the photo's bottom line.

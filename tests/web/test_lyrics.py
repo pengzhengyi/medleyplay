@@ -229,6 +229,24 @@ def test_album_matching_does_not_queue_work_with_the_lyrics_plugin_off(
     assert client.get("/api/jobs").json() == []
 
 
+def test_background_auto_match_requires_sign_in_and_does_not_queue_with_the_plugin_off(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    album = _song(catalog)
+    route = f"/api/tracks/{album}/songs/lyrics-match"
+    saved = [{"track_id": 2, "segment_id": 1, "start_ms": 0, "title": "Melt", "artist": "ryo"}]
+
+    assert client.post(route, json=saved).status_code == 401
+    assert client.get(route).status_code == 401
+    set_up_as_alice(client)
+    response = client.post(route, json=saved)
+
+    assert response.status_code == 409
+    assert "lyrics plugin" in response.json()["detail"]
+    assert client.get(route).json() == []
+    assert client.get("/api/jobs").json() == []
+
+
 def test_no_model_is_asked_while_the_ai_plugin_is_off(
     client: TestClient, catalog: CatalogService
 ) -> None:

@@ -1,8 +1,9 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Lyrics } from "../api";
+import type { ComponentProps } from "react";
 import { lyricsFoundOf, lyricsOf, lyricsOptionOf, serve } from "../testing/server";
 import { LyricsEditor, type SyncPlayer } from "./LyricsEditor";
 import { SongsControlsContext } from "./songsControls";
@@ -38,7 +39,10 @@ function editing(
   );
   const forget = vi.fn(() => Promise.resolve(null));
   const controls = { headingId: "lyrics-title", onBack: vi.fn(), onLock: vi.fn(), onDone: vi.fn() };
-  const element = (shown: SyncPlayer) => (
+  const element = (
+    shown: SyncPlayer,
+    changes: Partial<ComponentProps<typeof LyricsEditor>> = {},
+  ) => (
     <SongsControlsContext value={controls}>
       <LyricsEditor
         load={() => Promise.resolve(lyrics)}
@@ -46,6 +50,7 @@ function editing(
         forget={forget}
         player={shown}
         song={song}
+        {...changes}
       />
     </SongsControlsContext>
   );
@@ -58,6 +63,10 @@ function editing(
     play: (next: SyncPlayer) => {
       rerender(element(next));
     },
+    refresh: (load: () => Promise<Lyrics | null>) => {
+      const refreshVersion = { refreshVersion: "new lyrics" };
+      rerender(element(player, { load, ...refreshVersion }));
+    },
   };
 }
 
@@ -69,6 +78,41 @@ describe("editing a song's lyrics", () => {
     expect(
       within(region()).getByRole("textbox", { name: "Lyrics, as LRC or plain text" }),
     ).toHaveValue("[00:12.34]朝目が覚めて\n");
+  });
+
+  it("shows new lyrics and their source in a clean open editor", async () => {
+    const { region, refresh } = editing(null);
+    await within(region()).findByText("None yet");
+
+    refresh(() => Promise.resolve(PLAIN));
+
+    expect(await within(region()).findByText("Found on LRCLIB")).toBeVisible();
+    expect(within(region()).getByRole("textbox")).toHaveValue(PLAIN.text);
+  });
+
+  it("keeps a draft entered before the refresh finishes", async () => {
+    const { region, refresh, save } = editing(null);
+    await within(region()).findByText("None yet");
+    let answer: (lyrics: Lyrics) => void = () => undefined;
+    const response = new Promise<Lyrics>((resolve) => {
+      answer = resolve;
+    });
+    const load = vi.fn(() => response);
+
+    refresh(load);
+    await waitFor(() => {
+      expect(load).toHaveBeenCalledOnce();
+    });
+    const box = within(region()).getByRole("textbox");
+    await userEvent.type(box, "My version");
+    await act(async () => {
+      answer(PLAIN);
+      await response;
+    });
+
+    expect(box).toHaveValue("My version");
+    await userEvent.click(within(region()).getByRole("button", { name: "Save lyrics" }));
+    expect(save).toHaveBeenCalledExactlyOnceWith("My version", false);
   });
 
   it("saves the text as the household's, and goes back to the details", async () => {

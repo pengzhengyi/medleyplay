@@ -15,9 +15,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.jobs import JobService
+from medleyplay.application.lyrics_match_state import supersede_match
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.enrichers import LyricsHeld
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
+from medleyplay.domain.jobs import JobId
 from medleyplay.domain.lyrics import Lyrics, LyricsOrigin, parse_lyrics
 from medleyplay.persistence.schema import TrackLyricsRow, TrackRow
 
@@ -106,11 +109,14 @@ class LyricsService:
         units: sessionmaker[Session],
         clock: Clock,
         on_change: Callable[[str], None] | None = None,
+        *,
+        jobs: JobService | None = None,
     ) -> None:
         """Create a service over the database `units` open, telling `on_change` of each change."""
         self._units = units
         self._clock = clock
         self._on_change = on_change
+        self._jobs = jobs
 
     def lyrics(self, track_id: TrackId) -> ShownLyrics | None:
         """Return the lyrics the song shows, or `None` when no source has any."""
@@ -128,13 +134,15 @@ class LyricsService:
             raise InvalidInputError(message)
         parse_lyrics(text)
         with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             _require(db, track_id)
+            cancelled = supersede_match(db, self._jobs, track_id)
             record_lyrics(
                 db, track_id, LyricsOrigin.HOUSEHOLD, text, self._clock(), instrumental=instrumental
             )
             forget_lyrics(db, track_id, LyricsOrigin.SUGGESTED)
             shown = shown_lyrics(db, track_id)
-        self._changed()
+        self._changed(cancelled)
         if shown is None:  # pragma: no cover -- the household's were just kept
             raise NotFoundError(_NO_TRACK)
         return shown
@@ -142,10 +150,12 @@ class LyricsService:
     def forget_own(self, track_id: TrackId) -> ShownLyrics | None:
         """Drop the household's lyrics for the song; return what shows now."""
         with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             _require(db, track_id)
+            cancelled = supersede_match(db, self._jobs, track_id)
             forget_lyrics(db, track_id, LyricsOrigin.HOUSEHOLD)
             shown = shown_lyrics(db, track_id)
-        self._changed()
+        self._changed(cancelled)
         return shown
 
     def dismiss_suggestion(self, track_id: TrackId) -> ShownLyrics | None:
@@ -154,15 +164,19 @@ class LyricsService:
         The same lyrics suggested again stay dismissed; others are shown.
         """
         with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             _require(db, track_id)
+            cancelled = supersede_match(db, self._jobs, track_id)
             row = db.get(TrackLyricsRow, (track_id, LyricsOrigin.SUGGESTED.value))
             if row is not None:
                 row.dismissed = True
             shown = shown_lyrics(db, track_id)
-        self._changed()
+        self._changed(cancelled)
         return shown
 
-    def _changed(self) -> None:
+    def _changed(self, cancelled: JobId | None) -> None:
+        if cancelled is not None and self._jobs is not None:
+            self._jobs.announce_cancelled(cancelled)
         if self._on_change is not None:
             self._on_change("lyrics")
 

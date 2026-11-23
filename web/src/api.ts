@@ -385,6 +385,15 @@ export interface JobEvent {
   readonly waits_for_online?: boolean;
 }
 
+/** A saved song's outcome from Auto-Match, or why no Job was started. */
+export interface LyricsMatch {
+  readonly track_id: number;
+  readonly job_id: number | null;
+  readonly previous_job_id?: number | null;
+  readonly state: "searching" | "choosing" | "waiting" | "saved" | "skipped" | "failed";
+  readonly note: string;
+}
+
 /** A Track whose Download a Job is getting, and that Job, with how far it has got. */
 export interface DownloadUnderWay {
   readonly track_id: number;
@@ -1344,6 +1353,11 @@ export class ApiError extends Error {
   }
 }
 
+/** Whether the lyrics lookup was deferred because Auto-Match is working on this song. */
+export function lyricsMatchInProgress(failure: unknown): boolean {
+  return failure instanceof ApiError && failure.code === "lyrics_match_in_progress";
+}
+
 /** The codes of a request refused because this device isn't let in. */
 const DEVICE_REFUSALS: ReadonlySet<string> = new Set(["device_waiting", "device_refused"]);
 const deviceListeners = new Set<() => void>();
@@ -1647,20 +1661,20 @@ export const api = {
   /** Ask an AI model which of the songs found is the song. */
   chooseLyrics: (trackId: number) =>
     call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/choose`),
-  startLyricsMatch: (song: SplitSong) =>
-    call<number>("POST", `/api/tracks/${String(song.track_id)}/lyrics/match/find`, {
-      segment_id: song.id,
-      start_ms: song.start_ms,
-      title: song.title,
-      artist: song.artist,
-    }),
-  chooseLyricsMatch: (trackId: number, job: number) =>
-    call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/match/choose`, { search_job: job }),
-  applyLyricsMatch: (trackId: number, job: number, at: string) =>
-    call<undefined>("POST", `/api/tracks/${String(trackId)}/lyrics/match/apply`, {
-      search_job: job,
-      chosen_at: at,
-    }),
+  lyricsMatches: (album: number) =>
+    call<readonly LyricsMatch[]>("GET", `/api/tracks/${String(album)}/songs/lyrics-match`),
+  startLyricsMatch: (album: number, songs: readonly SplitSong[]) =>
+    call<readonly LyricsMatch[]>(
+      "POST",
+      `/api/tracks/${String(album)}/songs/lyrics-match`,
+      songs.map(({ id, track_id, start_ms, title, artist }) => ({
+        segment_id: id,
+        track_id,
+        start_ms,
+        title,
+        artist,
+      })),
+    ),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
   artistNames: () => heldReads.read<ArtistNames>("/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */

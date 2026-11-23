@@ -61,6 +61,7 @@ type Mode = "text" | "sync" | "find";
  * Edit the song's lyrics, read with `load`: `save` makes text, or an instrumental, the
  * household's, and `forget` drops the household's; `player` plays the song to sync them.
  * `song`, the Track as the Library names it, lets the household find its lyrics.
+ * A new `refreshVersion` reads the saved lyrics again without replacing a draft.
  */
 export function LyricsEditor({
   load,
@@ -68,6 +69,7 @@ export function LyricsEditor({
   forget,
   player,
   song,
+  refreshVersion,
 }: {
   readonly load: () => Promise<Lyrics | null>;
   readonly save: (text: string, instrumental: boolean) => Promise<unknown>;
@@ -75,6 +77,7 @@ export function LyricsEditor({
   readonly player: SyncPlayer;
   readonly song?:
     { readonly id: number; readonly title: string; readonly artist: string } | undefined;
+  readonly refreshVersion?: string;
 }) {
   const controls = useContext(SongsControlsContext);
   const textId = useId();
@@ -91,22 +94,39 @@ export function LyricsEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const syncList = useRef<HTMLDivElement>(null);
+  // An edit can happen while a read is still pending, before its answer reaches the editor.
+  const edited = useRef(false);
 
-  // Read once, as the editor opens; the page around it renders again as the song plays.
-  const loadOnce = useEffectEvent(load);
+  const setSyncLines = (text: string) => {
+    const next = linesOf(text);
+    setLines(next);
+    const first = next.findIndex((line) => line.at_ms === null);
+    setCursor(first === -1 ? 0 : first);
+  };
+  const readLyrics = useEffectEvent(load);
+  const showLyrics = useEffectEvent((read: Lyrics | null) => {
+    if (edited.current) return;
+    setShown(read);
+    setDraft(read?.text ?? "");
+    setInstrumental(read?.instrumental ?? false);
+    setError("");
+    if (syncing) {
+      if (read === null || read.instrumental || read.text.trim() === "") {
+        setMode("text");
+      } else {
+        setSyncLines(read.text);
+      }
+    }
+  });
   useEffect(() => {
     let open = true;
-    loadOnce().then(
+    readLyrics().then(
       (read) => {
-        if (open) {
-          setShown(read);
-          setDraft(read?.text ?? "");
-          setInstrumental(read?.instrumental ?? false);
-        }
+        if (open) showLyrics(read);
       },
       (failure: unknown) => {
-        if (open) {
-          setShown(null);
+        if (open && !edited.current) {
+          setShown((prior) => prior ?? null);
           setError(failure instanceof Error ? failure.message : String(failure));
         }
       },
@@ -114,7 +134,7 @@ export function LyricsEditor({
     return () => {
       open = false;
     };
-  }, []);
+  }, [refreshVersion]);
 
   // Syncing starts with focus in the list, so the first Space stamps a line.
   useEffect(() => {
@@ -125,6 +145,7 @@ export function LyricsEditor({
 
   /** Show `next` as the lines, and write them back to the text. */
   const change = (next: readonly SyncLine[]) => {
+    edited.current = true;
     setLines(next);
     setDraft(lrcOf(next));
   };
@@ -137,6 +158,7 @@ export function LyricsEditor({
   };
   /** Do `work` with the dialog's other actions waiting, and go back once it is done. */
   const act = async (work: () => Promise<unknown>) => {
+    edited.current = true;
     setBusy(true);
     setError("");
     controls.onLock(true);
@@ -188,10 +210,7 @@ export function LyricsEditor({
           disabled={instrumental || draft.trim() === ""}
           title={draft.trim() === "" ? "Write or paste the lyrics first" : undefined}
           onClick={() => {
-            const next = linesOf(draft);
-            setLines(next);
-            const first = next.findIndex((line) => line.at_ms === null);
-            setCursor(first === -1 ? 0 : first);
+            setSyncLines(draft);
             setMode("sync");
           }}
         >
@@ -218,6 +237,7 @@ export function LyricsEditor({
           artist={song.artist}
           busy={busy}
           onUse={(option) => {
+            edited.current = true;
             setDraft(option.text);
             setInstrumental(option.instrumental);
             setTaken(option);
@@ -241,6 +261,7 @@ export function LyricsEditor({
             disabled={instrumental || busy}
             placeholder={"[00:12.34]A line, at the time it is sung\nOr every line, as written"}
             onChange={(event) => {
+              edited.current = true;
               setDraft(event.currentTarget.value);
             }}
           />
@@ -250,6 +271,7 @@ export function LyricsEditor({
               checked={instrumental}
               disabled={busy}
               onChange={(event) => {
+                edited.current = true;
                 setInstrumental(event.currentTarget.checked);
               }}
             />

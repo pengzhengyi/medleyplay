@@ -10,6 +10,7 @@ export function AlbumLyricsMatch({
   busy,
   confirm,
   count,
+  error,
   why,
   onPress,
   onConfirm,
@@ -41,7 +42,7 @@ export function AlbumLyricsMatch({
             ? t("Search for lyrics for one saved song?")
             : t("Search for lyrics for {{count}} saved songs?", { count })}{" "}
           {t(
-            "This may make paid AI calls to choose recordings. Existing lyrics are kept; new or changed rows are skipped.",
+            "This may make paid AI calls. Matching lyrics are saved in the background. Existing lyrics are kept; new or changed rows are skipped.",
           )}
           <button type="button" className="fill-button" disabled={Boolean(why)} onClick={onConfirm}>
             {t("Start matching")}
@@ -50,6 +51,11 @@ export function AlbumLyricsMatch({
             {t("Cancel matching")}
           </button>
         </div>
+      )}
+      {error !== "" && (
+        <p className="songs-note" role="status">
+          {error}
+        </p>
       )}
     </>
   );

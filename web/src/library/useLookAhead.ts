@@ -8,19 +8,24 @@
  * do. What a lookup comes to shows on the song's row.
  */
 
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import type { Track } from "../api";
+import { LYRICS_ENRICHER, lyricsMatchInProgress, type Track } from "../api";
 import { LOOKUPS } from "./lookups";
 import type { Library } from "./useLibrary";
 
 export function useLookAhead(
   ids: readonly (number | undefined)[],
   tracks: ReadonlyMap<number, Track>,
-  library: Pick<Library, "modes" | "findable" | "find">,
+  library: Pick<
+    Library,
+    "modes" | "findable" | "find" | "lyricsMatchEnds" | "lyricsStreamConnections"
+  >,
 ): void {
   // Each enricher and Track asked about already, so a song coming round again isn't.
   const asked = useRef(new Set<string>());
+  const deferred = useRef(new Map<number, { jobId: number; reconnects: number }>());
+  const [refusals, setRefusals] = useState(0);
   const lookAhead = useEffectEvent(() => {
     for (const id of ids) {
       if (id === undefined) {
@@ -30,13 +35,27 @@ export function useLookAhead(
         const forSong = LOOKUPS.some((lookup) => lookup.enricher === enricher && lookup.forSong);
         const target = forSong ? id : (tracks.get(id)?.segment_of ?? id);
         const key = `${enricher}\n${String(target)}`;
+        const end = library.lyricsMatchEnds.get(target);
+        if (enricher === LYRICS_ENRICHER) {
+          const held = deferred.current.get(target);
+          if (held !== undefined) {
+            const ended = end !== undefined && end.jobId > held.jobId;
+            if (!ended && library.lyricsStreamConnections === held.reconnects) continue;
+            deferred.current.delete(target);
+            if (!ended || !end.saved) asked.current.delete(key);
+          }
+        }
         if (mode !== "next" || asked.current.has(key)) {
           continue;
         }
         if (library.findable.get(enricher)?.has(target) === true) {
           asked.current.add(key);
-          library.find(enricher, target).catch(() => {
-            // The song's row says why, as it does for any lookup.
+          const reconnects = library.lyricsStreamConnections;
+          library.find(enricher, target).catch((failure: unknown) => {
+            if (enricher === LYRICS_ENRICHER && lyricsMatchInProgress(failure)) {
+              deferred.current.set(target, { jobId: end?.jobId ?? 0, reconnects });
+              setRefusals((count) => count + 1);
+            }
           });
         }
       }
@@ -45,5 +64,12 @@ export function useLookAhead(
   const coming = ids.join(",");
   useEffect(() => {
     lookAhead();
-  }, [coming, library.modes, library.findable]);
+  }, [
+    coming,
+    library.modes,
+    library.findable,
+    library.lyricsMatchEnds,
+    library.lyricsStreamConnections,
+    refusals,
+  ]);
 }

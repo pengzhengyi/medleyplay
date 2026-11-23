@@ -560,17 +560,25 @@ class JobRunner:
         except (OSError, ValidationError) as error:
             self._settle_failure(running.job_id, "program", f"Its result is unreadable: {error}")
             return
+        queued: tuple[JobId, ...] = ()
         try:
             with self._units.begin() as db:
                 if self._set_in(db, running.job_id, JobState.SUCCEEDED):
                     row = _get(db, running.job_id)
-                    kind.complete(db, to_job(row), result)
+                    completed = kind.complete(db, to_job(row), result)
+                    if completed is not None:
+                        queued = completed.queued
+                        if completed.failure is not None:
+                            row.state = JobState.FAILED
+                            row.failure_kind, row.failure_message = completed.failure
                     row.finished_at = self._clock()
         except Exception as error:  # noqa: BLE001 -- a failed completion fails its Job
             message = f"Its completion failed: {type(error).__name__}: {error}"
             self._settle_failure(running.job_id, "program", message)
             return
         self._publish(running.job_id)
+        for job_id in queued:
+            self._publish(job_id)
 
     def _retry_or_fail(self, running: _Running, message: str) -> None:
         with self._units() as db:

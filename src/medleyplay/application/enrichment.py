@@ -29,6 +29,11 @@ from medleyplay.application.ai import is_set_up, record_answered_by, record_answ
 from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.lyrics import forget_lyrics, lyrics_held, record_lyrics
+from medleyplay.application.lyrics_match_state import (
+    MATCH_BUSY,
+    LyricsMatchInProgressError,
+    active_match,
+)
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.scan_covers import NotACoverError, keep_copy
 from medleyplay.application.settings import read_settings
@@ -46,6 +51,7 @@ from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
 from medleyplay.domain.enrichers import (
     AI_DETAILS,
     ENRICHERS,
+    LYRICS,
     MESSAGES,
     Enricher,
     EnricherMode,
@@ -171,7 +177,27 @@ def enrich_track_kind(covers_folder: Path, clock: Clock) -> EnrichKind:
         },
         refuse_start=_refuse_start,
         on_failure=partial(_on_failure, clock=clock),
+        on_submit=partial(_check_lyrics_submission, clock=clock),
     )
+
+
+def _check_lyrics_submission(db: Session, job: Job, *, clock: Clock) -> None:
+    if not job.target.endswith(f":{LYRICS.name}"):
+        return
+    track_id = track_of_target(job.target)
+    if active_match(db, track_id) is not None:
+        raise LyricsMatchInProgressError(MATCH_BUSY)
+    request = EnrichJob.model_validate(db.get_one(JobRow, job.id).request)
+    if request.lyrics_again:
+        return
+    found = candidates(db, LYRICS, [track_id]).get(track_id)
+    if found is None:
+        message = f"No Track has the id {track_id}."
+        raise NotFoundError(message)
+    stopped = db.get(EnricherStopRow, LYRICS.name) is not None
+    reason = why_not(found.facts, clock(), stopped=stopped, enricher=LYRICS)
+    if reason is not None:
+        raise ConflictError(message_of(reason, LYRICS))
 
 
 def _complete(
@@ -520,10 +546,13 @@ class EnrichmentService:
             raise AskedRecentlyError(message_of(reason, enricher))
         if reason is not None:
             raise ConflictError(message_of(reason, enricher))
+        request = _request(enricher, found, shown_now, duration_ms, text, hint, lyrics)
+        if lyrics is not None and again:
+            request = request.model_copy(update={"lyrics_again": True})
         return self._jobs.submit(
             self._kind,
             enrich_target(track_id, enricher.name),
-            _request(enricher, found, shown_now, duration_ms, text, hint, lyrics),
+            request,
             requested_by,
         )
 

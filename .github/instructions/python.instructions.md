@@ -150,17 +150,9 @@ it grows past that.
 
 ## Before pushing
 
-Run what CI runs, from the repository root:
-
-```bash
-uv sync --locked
-uv run ruff format --check
-uv run ruff check
-uv run bandit -q -c pyproject.toml -r src
-uv run mypy
-uv run pytest --cov --cov-report=term-missing
-uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-project --quiet) --disable-pip --progress-spinner off   # needs network
-```
+Run the affected pytest node or file with `-n 0`; include tests of callers when
+their behavior changes. Leave the full suite, coverage, typing, import boundaries
+and security checks to CI. See [Local checks and PR verification](../../CONTRIBUTING.md#local-checks-and-pr-verification).
 
 `uv run ruff format` and `uv run ruff check --fix` apply the fixes ruff can make.
 CI fails below 90% line or 85% branch coverage; see

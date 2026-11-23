@@ -7,7 +7,7 @@
  * An album with no cover shows the one suggested for it, if any, to use in one click.
  */
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import { type Track, coverUrl } from "../api";
 import { Cover } from "./Cover";
@@ -26,6 +26,7 @@ export function AlbumAbout({
   cover,
   onUse,
   onUpload,
+  onCloseRequestedEditor,
   children,
 }: {
   readonly album: string;
@@ -34,10 +35,13 @@ export function AlbumAbout({
   readonly cover: string | null;
   readonly onUse?: ((songs: readonly Track[], cover: string) => Promise<void>) | undefined;
   readonly onUpload?: ((songs: readonly Track[], image: File) => Promise<string>) | undefined;
+  readonly onCloseRequestedEditor?: (() => void) | undefined;
   /** Shown beside the cover, as your rating of the album. */
   readonly children?: ReactNode;
 }) {
   const [replacing, setReplacing] = useState<"upload" | "musicbrainz">();
+  const about = useRef<HTMLElement>(null);
+  const editor = onCloseRequestedEditor === undefined ? replacing : "upload";
   const art = <Cover size="medium" cover={cover} className="album-art" />;
   const framed = (
     <PictureFrame
@@ -53,7 +57,7 @@ export function AlbumAbout({
   );
   const editable = onUse !== undefined && onUpload !== undefined && songs.length > 0;
   return (
-    <section className="album-about" aria-label="About the album">
+    <section ref={about} tabIndex={-1} className="album-about" aria-label="About the album">
       {!editable ? (
         art
       ) : cover === null ? (
@@ -70,9 +74,9 @@ export function AlbumAbout({
         framed
       )}
       {children}
-      {replacing !== undefined && onUse !== undefined && onUpload !== undefined && (
+      {editable && editor !== undefined && (
         <PictureEditor
-          startOn={replacing}
+          startOn={editor}
           sources={{
             kind: "cover",
             of: album,
@@ -86,6 +90,10 @@ export function AlbumAbout({
           }}
           onClose={() => {
             setReplacing(undefined);
+            if (onCloseRequestedEditor !== undefined) {
+              onCloseRequestedEditor();
+              about.current?.focus();
+            }
           }}
         />
       )}

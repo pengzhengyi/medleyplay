@@ -8,18 +8,35 @@ import { AddLink } from "./AddLink";
 
 const FIRST: AddedPart = { part: 1, track_id: 7, source_id: 70, job: null };
 
-function renderDialog(lookup: LinkLookup | Error, link = "BV1Xx41117Tz") {
-  const look = vi.fn(() =>
-    lookup instanceof Error ? Promise.reject(lookup) : Promise.resolve(lookup),
-  );
-  const add = vi.fn((_link: string, _quality: string, parts: readonly PartChoice[]) =>
+function renderDialog(lookup: LinkLookup | Error) {
+  const load = vi.fn();
+  const opening =
+    lookup instanceof Error
+      ? Promise.reject(lookup)
+      : Promise.resolve({
+          id: 8,
+          state: "succeeded" as const,
+          label: "Night Drive",
+          message: "",
+          result: lookup,
+        });
+  const add = vi.fn((_id: number, _quality: string, parts: readonly PartChoice[]) =>
     Promise.resolve(parts.map((part) => ({ ...FIRST, part: part.part }))),
   );
   const onAdded = vi.fn();
   const onClose = vi.fn();
-  render(<AddLink link={link} look={look} add={add} onAdded={onAdded} onClose={onClose} />);
+  render(
+    <AddLink
+      opening={opening}
+      listed={[]}
+      load={load}
+      add={add}
+      onAdded={onAdded}
+      onClose={onClose}
+    />,
+  );
   return {
-    look,
+    load,
     add,
     onAdded,
     onClose,
@@ -28,12 +45,12 @@ function renderDialog(lookup: LinkLookup | Error, link = "BV1Xx41117Tz") {
 }
 
 describe("adding a video that was read", () => {
-  it("looks the link up and suggests the video's title and uploader for its only part", async () => {
-    const { look, dialog } = renderDialog(lookupOf(1));
+  it("suggests the saved video's title and uploader without requesting the parts again", async () => {
+    const { load, dialog } = renderDialog(lookupOf(1));
 
     expect(await within(dialog).findByText("【MV】Night Drive")).toBeVisible();
 
-    expect(look).toHaveBeenCalledExactlyOnceWith("BV1Xx41117Tz");
+    expect(load).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("textbox", { name: "Title of part 1" })).toHaveValue(
       "Night Drive",
     );
@@ -56,7 +73,7 @@ describe("adding a video that was read", () => {
     );
     await userEvent.click(within(dialog).getByRole("button", { name: "Add 2 songs" }));
 
-    expect(add).toHaveBeenCalledExactlyOnceWith("BV1Xx41117Tz", "30216", [
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "30216", [
       { part: 1, title: "Mixtape 1", artist: "Blue Room" },
       { part: 3, title: "Side C", artist: "Blue Room" },
     ]);
@@ -191,7 +208,7 @@ describe("adding a video that could not be read", () => {
     );
     await userEvent.click(within(dialog).getByRole("button", { name: "Add 2 songs" }));
 
-    expect(add).toHaveBeenCalledExactlyOnceWith("BV1Xx41117Tz", "best", [
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", [
       { part: 1, title: "Side A", artist: "Blue Room" },
       { part: 2, title: "Side B", artist: "Blue Room" },
     ]);

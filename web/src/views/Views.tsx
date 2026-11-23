@@ -105,6 +105,7 @@ export interface ViewProps {
   readonly waitingDevices: readonly WaitingDevice[];
   /** The Downloads under way, oldest first; none, unless given. */
   readonly downloading?: readonly DownloadUnderWay[];
+  readonly videoLookups?: ReactNode;
   /** The station playing, and a way to start one. */
   readonly station: Station;
   readonly accountId: number;
@@ -145,7 +146,9 @@ export function CurrentView(given: ViewProps) {
   const key =
     given.route.view === "search" || given.route.view === "library"
       ? given.route.view
-      : JSON.stringify(given.route);
+      : given.route.view === "album"
+        ? hrefOf({ view: "album", artist: given.route.artist, name: given.route.name })
+        : JSON.stringify(given.route);
   const { tracks, links, playingId, nextId } = given;
   const pages = useMemo(
     () => playingPages(tracks, links, playingId, nextId),
@@ -340,6 +343,16 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
                 <AlbumAbout
                   album={route.name}
                   artist={route.artist}
+                  onCloseRequestedEditor={
+                    route.editCover
+                      ? () => {
+                          navigate(
+                            { view: "album", artist: route.artist, name: route.name },
+                            { replace: true },
+                          );
+                        }
+                      : undefined
+                  }
                   // A split file's songs share its cover, so the file is what changes.
                   songs={file === undefined ? songs : [file]}
                   cover={cover}
@@ -401,6 +414,7 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
           about={
             <>
               <DownloadsFolder />
+              {given.videoLookups}
               <Downloading downloads={given.downloading ?? []} tracks={given.tracks} />
             </>
           }
@@ -425,7 +439,7 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
         <LazyPart doing="Loading…">
           <SettingsView.Component
             admin={props.admin}
-            section={route.section}
+            route={route}
             mode={props.mode}
             onModeChecked={props.onModeChecked}
             onEnrichersChanged={props.onEnrichersChanged}

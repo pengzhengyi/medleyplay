@@ -19,6 +19,7 @@ from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
+from medleyplay.application.video_lookups import LOOKUP_KIND, VideoLookups
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
@@ -32,6 +33,7 @@ class Site:
     """The services around a running `tube` plugin, and the folders they keep files in."""
 
     links: LinkService
+    video_lookups: VideoLookups
     downloads: DownloadService
     manual: ManualDownloadService
     download_kind: DownloadKind
@@ -73,7 +75,11 @@ def running_site(
     jobs_dir = data_dir / "jobs"
     download = download_source_kind(data_dir, jobs_dir, clock)
     cache = cache_source_kind(data_dir)
-    kinds: dict[str, AnyJobKind] = {download.name: download, cache.name: cache}
+    kinds: dict[str, AnyJobKind] = {
+        download.name: download,
+        cache.name: cache,
+        LOOKUP_KIND.name: LOOKUP_KIND,
+    }
     with started_plugins(units, clock, "tube") as plugins:
         linked = LinkedAccountService(units, clock, plugins, secrets)
         proxies = ProxyService(units, clock, secrets)
@@ -100,6 +106,7 @@ def running_site(
         try:
             yield Site(
                 links=links,
+                video_lookups=VideoLookups(units, links, jobs, plugins),
                 downloads=downloads,
                 manual=manual,
                 download_kind=download,

@@ -14,11 +14,11 @@ afterEach(() => {
  * A signed-in page playing Intro, by The Band from the album Blue, with Long Road and
  * Outro up next; the server answers `routes` too.
  */
-async function playingIntro(routes: Routes = {}) {
+async function playingIntro(routes: Routes = {}, intro = trackOf(1, "Intro")) {
   const served = serve({
     ...routes,
     "PUT /api/tracks/1/favorite": { body: trackOf(1, "Intro", { favorite: true }) },
-    ...signedIn([trackOf(1, "Intro"), trackOf(2, "Long Road"), trackOf(3, "Outro")]),
+    ...signedIn([intro, trackOf(2, "Long Road"), trackOf(3, "Outro")]),
     ...Object.fromEntries(
       [1, 2, 3].map((id) => [
         `POST /api/tracks/${String(id)}/playback`,
@@ -304,6 +304,59 @@ describe("Now Playing", () => {
       expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
     });
     expect(window.location.hash).toContain("#/album");
+    expect(screen.queryByRole("dialog", { name: /a cover|the cover/ })).toBeNull();
+  });
+
+  it("opens the album artist's cover editor from the big picture and returns to that album", async () => {
+    await playingIntro({}, trackOf(1, "Intro", { album_artist: "Guest & Co", cover: "blue.jpg" }));
+    const nowPlaying = await openNowPlaying();
+    const cover = within(nowPlaying).getByRole("link", { name: "Edit album cover for Blue" });
+
+    cover.focus();
+    await userEvent.keyboard("{Enter}");
+
+    const editor = await screen.findByRole("dialog", { name: "Replace the cover" });
+    expect(editor).toHaveAccessibleDescription("Blue");
+    expect(editor.contains(document.activeElement)).toBe(true);
+    expect(nowPlaying).not.toBeInTheDocument();
+    await userEvent.click(within(editor).getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Blue" })).toBeVisible();
+    expect(window.location.hash).toBe("#/album?artist=Guest+%26+Co&name=Blue");
+    expect(screen.queryByRole("button", { name: "Long Road" })).toBeNull();
+    expect(editor).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "About the album" })).toHaveFocus();
+    window.history.back();
+    expect(await screen.findByRole("button", { name: "Long Road" })).toBeVisible();
+    window.history.forward();
+    expect(await screen.findByRole("heading", { level: 2, name: "Blue" })).toBeVisible();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens the editor over the current album without adding another Back step", async () => {
+    await playingIntro();
+    const player = screen.getByRole("region", { name: "Player" });
+    await userEvent.click(within(player).getByRole("link", { name: "Blue" }));
+    await screen.findByRole("heading", { name: "Blue" });
+    const nowPlaying = await openNowPlaying();
+
+    await userEvent.click(
+      within(nowPlaying).getByRole("link", { name: "Edit album cover for Blue" }),
+    );
+    const editor = await screen.findByRole("dialog", { name: "Add a cover" });
+    await userEvent.keyboard("{Escape}");
+
+    expect(editor).not.toBeInTheDocument();
+    window.history.back();
+    expect(await screen.findByRole("heading", { name: "Library" })).toBeVisible();
+  });
+
+  it("leaves the big picture without a cover action when the song has no album", async () => {
+    await playingIntro({}, trackOf(1, "Intro", { album: "" }));
+    const nowPlaying = await openNowPlaying();
+
+    expect(within(nowPlaying).queryByRole("link", { name: /edit album cover/i })).toBeNull();
+    expect(within(nowPlaying).getByRole("button", { name: "Next" })).toBeVisible();
   });
 });
 

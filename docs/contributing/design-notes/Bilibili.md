@@ -89,15 +89,9 @@ Each is keyed by Source kind, `bilibili`.
   (`30250`, E-AC-3) and Hi-Res (`30251`, FLAC) are left out of the MVP, since
   not every household browser plays them. *Best* means the best of those three
   that the login allows.
-- **`read` has no login,** since logins reach only Jobs. So a members-only video
-  can't be added yet; the lookup says why.
-- **The plugin host answers one call at a time,** so a lookup holds up other
-  calls, such as locating a Library file, for up to its deadline. The core runs
-  one lookup at a time and keeps each video's details for ten minutes, so the
-  add that follows a lookup, or a lookup repeated, asks Bilibili nothing. Playing
-  a file already played locates nothing, so the cost is a first play during a
-  lookup waiting a few seconds, which suits one household. yt-dlp's own socket
-  timeout is set below the deadlines.
+- **`read` has no login.** A members-only video can still be added by entering
+  the parts by hand. Interactive lookup Jobs run one at a time, with the site's
+  proxy supplied at execution. They do not occupy the server's plugin host.
 - **`download` reports progress** as bytes arrive, through the plugin API's
   `report_progress`, which inside a Job becomes the Job's progress, so the idle
   timeout catches a stalled download. It returns the file's name in the folder,
@@ -257,19 +251,22 @@ standard `proxy` option, and does nothing more.
 sequenceDiagram
   participant B as Browser
   participant C as Core
-  participant H as Plugin host
-  B->>C: POST /api/links/lookup {link}
-  C->>C: allowlist
-  C->>H: canonicalize, then read
-  C-->>B: title, uploader, parts (with any Track already added), qualities
-  B->>C: POST /api/links {link, quality, parts: [{part, title, artist}]}
+  participant J as Lookup Job
+  B->>C: Submit a code or link
+  C-->>B: Lookup id
+  C->>J: Public video or short link
+  J->>J: Canonicalize, then read
+  J-->>C: Save video metadata
+  B->>C: Open the saved result
+  C-->>B: Parts, existing Tracks, qualities
+  B->>C: Confirm the chosen parts and quality
   C->>C: a Track and a Source per new part, a Download Job each
   C-->>B: the Tracks, and their Jobs
 ```
 
 - **Looking up** answers the video's details, each part's Track if it is
-  already in the catalog, and the qualities. It waits on host calls, never on a
-  Job. A link that is not a video answers 422 with why. It takes a bare `BV` or
+  already in the catalog, and the qualities. An invalid input is refused before
+  submission; a short link that does not identify a video fails its Job. It takes a bare `BV` or
   `av` code as well as a link. A video that can't be read, because it is gone,
   needs a login, or the read failed, answers `readable: false` with why instead,
   and can still be added; see [Manual downloads](Manual%20downloads.md).
@@ -277,9 +274,9 @@ sequenceDiagram
   with several parts, otherwise the video's, with bracketed tags such as
   `【MV】` at either end removed; the uploader is the artist. The household edits
   both before adding.
-- **Adding** doesn't trust the client: it canonicalizes the link again, and
-  checks each part and the quality against the video's details, from the
-  lookup's ten-minute memory or a fresh `read`. At most 50 parts are added at
+- **Adding** checks each part and the quality against the saved metadata, not
+  details supplied by the client. Confirming a lookup never reads the site
+  again. At most 50 parts are added at
   once, a title is 1 to 512 characters, and an artist at most 512. A video that
   couldn't be read has no details to check against, so its parts are added on
   the household's own details, at the quality `best`.

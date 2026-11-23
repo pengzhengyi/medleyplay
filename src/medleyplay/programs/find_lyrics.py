@@ -30,6 +30,15 @@ class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
+class MatchSong(_Model):
+    """The saved segment an album search is for, as it was when requested."""
+
+    segment_id: Annotated[int, Field(ge=1)]
+    start_ms: Annotated[int, Field(ge=0)]
+    title: _Name
+    artist: _Artist
+
+
 class FindLyricsJob(_Model):
     """Ask `finder` for the songs titled `title` by `artist`, for the Track `track_id`.
 
@@ -43,6 +52,7 @@ class FindLyricsJob(_Model):
     duration_ms: Annotated[int, Field(ge=0)] | None = None
     sites: tuple[LyricsProvider, ...] = ()
     finder: Annotated[str, StringConstraints(max_length=64)] = "lyrics"
+    match: MatchSong | None = None
 
 
 class FoundLyricsResult(_Model):
@@ -97,6 +107,7 @@ class ChooseLyricsJob(_Model):
     options: Annotated[tuple[LyricsChoice, ...], Field(min_length=1, max_length=MAX_LYRICS_FOUND)]
     offered: Annotated[tuple[str, ...], Field(max_length=MAX_LYRICS_FOUND)]
     chooser: Annotated[str, StringConstraints(max_length=64)] = "ai-details"
+    search_job: int | None = None
 
 
 class ChosenLyricsResult(_Model):

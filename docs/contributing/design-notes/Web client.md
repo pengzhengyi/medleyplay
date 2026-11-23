@@ -272,6 +272,9 @@ Track's kind is decided.
 - **It opens from the player's cover,** which shows on every width for that,
   or with F, and closes with Escape, its close button, F again, or by going to
   another view, as its artist and album links and its menu's *Go to* do.
+- **The large cover opens the album's cover editor** on the album page. Closing
+  the editor leaves that page open. The album name still opens the page without
+  the editor, and a song with no album has no cover link.
 - **Its own palette is light on dark,** whatever the theme: it sets the page's
   tokens inside itself, so the controls it shares with the player take white
   for the accent. Without a cover, the blur is a gradient of the theme's accent.
@@ -396,6 +399,12 @@ Track's kind is decided.
   offers `artist:`, first in the panel, above the artists. Choosing one is typing
   it in full, keeping the words before it; *Tab* takes the first, or the one the
   arrow keys point at. One letter offers nothing, as it begins too many names.
+- **`settings:` finds a Settings section** in the Library search box. With
+  nothing after the colon, it lists the sections this account can see. Words
+  match a section's title or stable link ID, ignoring case. For example,
+  `settings: rating` offers *Your ratings*. The arrow keys move the selection;
+  Enter or a click opens the section and focuses its heading, even when the same
+  section is already in the URL. Typing the command does not open Settings.
 - **Library search** matches the words typed, each anywhere in a Track's title,
   artist, or album, ignoring case, width, and hiragana or katakana: NFKC, lower
   case, and katakana shifted to hiragana, so `ｍｅｌｔ` finds *Melt* and

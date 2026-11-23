@@ -7,6 +7,7 @@ import { createContext } from "react";
 
 export interface SongsControls {
   readonly headingId: string;
+  readonly backLabel?: string;
   readonly onBack: () => void;
   readonly onLock: (locked: boolean) => void;
   readonly onDone: () => void;

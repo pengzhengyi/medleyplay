@@ -1679,6 +1679,41 @@ button[aria-disabled="true"] {
   margin: 0.375rem 0 0;
 }
 
+.video-lookups {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0;
+}
+
+.video-lookups li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--raised);
+  border-radius: var(--pico-border-radius);
+}
+
+.video-lookup-label {
+  display: grid;
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.video-lookups [role="status"] {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.video-lookups button {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+
 /* Settings: a raised card for each section. */
 .settings-section {
   max-width: 42rem;
@@ -6748,8 +6783,8 @@ button.lyrics-sync-text:hover {
   }
 }
 
-@media (width < 22rem) {
-  /* Too narrow for the artist beside six buttons: the buttons take a line of their own. */
+@media (width < 26rem) {
+  /* Leave the artist field its own line when the row actions need the full width. */
   .song-row {
     grid-template-areas:
       "handle start title"
@@ -7353,6 +7388,17 @@ kbd {
 /* Paused, the cover settles back a little, as a record does when the music stops. */
 .np-art.resting {
   transform: scale(0.88);
+}
+
+.np-edit-cover {
+  display: block;
+  height: 100%;
+  border-radius: 1rem;
+}
+
+.np-edit-cover:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 4px;
 }
 
 .np-art .cover {

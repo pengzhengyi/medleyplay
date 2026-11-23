@@ -35,6 +35,7 @@ def site_services(
                 playback=site.playback,
                 linked=site.linked,
                 links=site.links,
+                video_lookups=site.video_lookups,
                 manual_downloads=site.manual,
             ),
         )

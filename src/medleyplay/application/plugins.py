@@ -25,7 +25,6 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.plugins import PluginState, PluginStatus
-from medleyplay.domain.proxies import redact_proxy
 from medleyplay.persistence.schema import PluginStateRow
 from medleyplay.plugin_api import Operation
 from medleyplay.plugin_host.client import (
@@ -35,6 +34,7 @@ from medleyplay.plugin_host.client import (
     LoadReport,
 )
 from medleyplay.plugin_host.job_wire import KeyOutcome
+from medleyplay.proxy_redaction import redact_proxy
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

@@ -8,12 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.links import LOOKUP_MEMORY, PartChoice, PartLookup, Reason
+from medleyplay.application.links import LOOKUP_MEMORY, PartChoice, PartLookup
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.catalog import SourceState, TrackId
 from medleyplay.domain.errors import InvalidInputError, OfflineError
 from medleyplay.domain.jobs import JobState
 from medleyplay.persistence.schema import SourceRow, TrackRow
+from medleyplay.programs.lookup_video import Reason
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock, MemorySecrets
 from tests.support.sites import Site, running_site

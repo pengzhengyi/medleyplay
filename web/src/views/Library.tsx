@@ -15,6 +15,7 @@ import {
   type Account,
   ApiError,
   type Kind,
+  type SavedVideoLookup,
   LYRICS_ENRICHER,
   type Track,
   api,
@@ -55,6 +56,7 @@ import { AskAiAgain } from "./AskAiAgain";
 import { CheckNetwork } from "./CheckNetwork";
 import { AddFile } from "./AddFile";
 import { AddLink } from "./AddLink";
+import { VideoLookups } from "./VideoLookups";
 import { DialogOpening } from "./DialogOpening";
 import { EditAlbum } from "./EditAlbum";
 import { EditDetails } from "./EditDetails";
@@ -288,7 +290,11 @@ export function Library({
   // The songs of their own whose album is being edited, while its dialog is open.
   const [editingAlbum, setEditingAlbum] = useState<readonly Track[] | undefined>(undefined);
   // The link or code being added from Bilibili, and the Track whose file is being added by hand.
-  const [linking, setLinking] = useState<string | undefined>(undefined);
+  const [linking, setLinking] = useState<{ page: string; opening: Promise<SavedVideoLookup> }>();
+  if (linking && linking.page !== here) setLinking(undefined);
+  const openVideo = (opening: Promise<SavedVideoLookup>) => {
+    setLinking({ page: here, opening });
+  };
   const [filing, setFiling] = useState<Track | undefined>(undefined);
   // The Track whose lookup waits for someone to agree to ask the AI about it again.
   const [askingAgain, setAskingAgain] = useState<
@@ -502,6 +508,11 @@ export function Library({
         <LazyPart doing="Opening the songs…">
           <SongsEditor.Component
             album={file}
+            matchOnline={library.mode?.online === true}
+            lyricsOf={(id) => {
+              const child = byId.get(id);
+              return child?.segment_of === file.id ? lyricsOf(child)?.editor : undefined;
+            }}
             load={api.songs}
             check={api.checkSongList}
             artists={artists}
@@ -650,8 +661,11 @@ export function Library({
         </h1>
         <SearchBox
           route={route}
+          admin={admin}
           providers={library.providers}
-          onLookUp={setLinking}
+          onLookUp={(link) => {
+            openVideo(library.lookUpLink(link));
+          }}
           tracks={tracks}
           links={links}
         />
@@ -742,6 +756,16 @@ export function Library({
             onRatingsChanged={library.reloadTracks}
             waitingDevices={library.waitingDevices}
             downloading={library.downloading}
+            videoLookups={
+              <VideoLookups
+                rows={library.videoLookups}
+                offline={library.mode?.online === false}
+                choose={(id) => {
+                  openVideo(library.videoLookup(id));
+                }}
+                dismiss={library.dismissLookup}
+              />
+            }
             station={station}
             accountId={account.id}
             favorites={favorites}
@@ -791,8 +815,9 @@ export function Library({
       />
       {linking !== undefined && (
         <AddLink
-          link={linking}
-          look={library.lookUpLink}
+          opening={linking.opening}
+          listed={library.videoLookups}
+          load={library.videoLookup}
           add={library.addLink}
           onAdded={(count) => {
             const songs = count === 1 ? "1 song" : `${String(count)} songs`;

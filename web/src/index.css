@@ -7353,6 +7353,17 @@ kbd {
   transform: scale(0.88);
 }
 
+.np-edit-cover {
+  display: block;
+  height: 100%;
+  border-radius: 1rem;
+}
+
+.np-edit-cover:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 4px;
+}
+
 .np-art .cover {
   display: grid;
   place-items: center;

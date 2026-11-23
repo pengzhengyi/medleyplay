@@ -261,6 +261,9 @@ Track's kind is decided.
 - **It opens from the player's cover,** which shows on every width for that,
   or with F, and closes with Escape, its close button, F again, or by going to
   another view, as its artist and album links and its menu's *Go to* do.
+- **The large cover opens the album's cover editor** on the album page. Closing
+  the editor leaves that page open. The album name still opens the page without
+  the editor, and a song with no album has no cover link.
 - **Its own palette is light on dark,** whatever the theme: it sets the page's
   tokens inside itself, so the controls it shares with the player take white
   for the accent. Without a cover, the blur is a gradient of the theme's accent.

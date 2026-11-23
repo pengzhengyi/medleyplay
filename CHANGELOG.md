@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Click the large cover in Now Playing to open that album's cover editor.
+
 - Search for album covers on Google Images beside Upload, or see pictures and
   their source pages in the editor with an optional household Tavily key.
 

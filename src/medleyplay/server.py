@@ -39,6 +39,7 @@ from medleyplay.application.downloads import DownloadService, download_source_ki
 from medleyplay.application.enrichment import EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
 from medleyplay.application.image_links import ImageLinkService, image_link_kinds
+from medleyplay.application.image_search import IMAGE_SEARCH, ImageSearchService, TavilyKeys
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
@@ -211,6 +212,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     linked = LinkedAccountService(units, clock, plugins, keychain, changes.tell)
     proxies = ProxyService(units, clock, keychain)
     ai = AiService(units, clock, keychain)
+    tavily_keys = TavilyKeys(keychain)
     scan = scan_library_kind(clock, data_dir / COVERS_FOLDER)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
@@ -237,6 +239,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         cover_jobs.choose.name: cover_jobs.choose,
         link_jobs.suggest.name: link_jobs.suggest,
         link_jobs.fetch.name: link_jobs.fetch,
+        IMAGE_SEARCH.name: IMAGE_SEARCH,
         find_silences.name: find_silences,
         make_thumbnails.name: make_thumbnails,
         lyrics_jobs.find.name: lyrics_jobs.find,
@@ -260,6 +263,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         logins=linked,
         proxies=proxies,
         ai=ai,
+        tavily_key=tavily_keys.lend,
         events=events,
         network_failed=mode.check_soon,
     )
@@ -364,6 +368,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         cover_sweeper=cover_sweeper,
         artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
+        image_search=ImageSearchService(units, plugins, jobs, tavily_keys),
         lyrics=LyricsService(units, clock, changes.tell),
         lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs),
         storage_folder=StorageFolder(

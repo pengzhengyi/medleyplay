@@ -361,6 +361,18 @@ releases MusicBrainz knows, to choose one. Nothing changes until one is chosen.
   `POST /api/album-covers/choose`, with `{album, artist}`, ask MusicBrainz and an
   AI model, answering 202.
 
+### Searching the web for album covers
+
+*Search Google Images* beside Upload opens a search for the album and artist
+in another tab. No key is needed. To see results in the editor instead, an
+admin can set a Tavily key in **Settings → Image search**. Opening the editor
+does not send the album name to either service.
+
+*Search with Tavily* asks for pictures only when pressed. Each result links
+to the page that showed it. A matching image is not permission to copy it:
+check the source and its license before using Upload. A web search never
+changes the album cover automatically.
+
 ### Pictures an AI model names
 
 The *Ask AI* tab of the picture editor shows the pictures an AI model names for the album's cover or for a

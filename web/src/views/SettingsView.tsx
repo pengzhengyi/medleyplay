@@ -30,6 +30,7 @@ import { AccentPicker } from "./AccentPicker";
 import { DynamicsSwitch } from "./DynamicsSwitch";
 import { AiNotesSettings } from "./AiNotesSettings";
 import { AiSettings } from "./AiSettings";
+import { ImageSearchSettings } from "./ImageSearchSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
 import { KindSettings } from "./KindSettings";
@@ -60,6 +61,7 @@ const SECTIONS = [
   { id: "bilibili", title: "Bilibili" },
   { id: "musicbrainz", title: "MusicBrainz" },
   { id: "deezer", title: "Deezer" },
+  { id: "image-search", title: "Image search" },
   { id: "lyrics", title: "Lyrics" },
   { id: "ai", title: "AI" },
 ] as const;
@@ -72,6 +74,7 @@ const ADMIN_ONLY: ReadonlySet<SectionId> = new Set([
   "bilibili",
   "musicbrainz",
   "deezer",
+  "image-search",
   "ai",
 ]);
 
@@ -248,6 +251,7 @@ export function SettingsView({
       </>
     ),
     deezer: <PictureSites settings={household} onSettings={keepNewest} />,
+    "image-search": <ImageSearchSettings />,
     lyrics: (
       <>
         <LyricsSettings onChanged={onEnrichersChanged} />

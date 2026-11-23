@@ -205,7 +205,7 @@ def test_a_new_search_invalidates_an_album_match_even_for_the_same_song(
     assert enriching.lyrics.lyrics(child.track_id) is None
 
 
-def test_retiming_a_saved_song_while_matching_refuses_its_pick(
+def test_changing_a_saved_songs_length_while_matching_refuses_its_pick(
     enriching: Enriching, alice: Account, songs: SongsService
 ) -> None:
     _with_ai(enriching, alice)

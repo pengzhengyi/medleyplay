@@ -62,10 +62,7 @@
       "detail": "Python: run the tests in parallel.",
       "type": "shell",
       "command": "uv run pytest",
-      "group": {
-        "kind": "test",
-        "isDefault": true
-      },
+      "group": "test",
       "problemMatcher": []
     },
     {
@@ -73,7 +70,10 @@
       "detail": "Python inner loop: run one file, class, or test, stopping at the first failure.",
       "type": "shell",
       "command": "uv run pytest -x -n 0 ${input:pytestTarget}",
-      "group": "test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
       "problemMatcher": []
     },
     {
@@ -130,7 +130,7 @@
     },
     {
       "label": "verify: all",
-      "detail": "Everything CI runs for Python and the web client, in order.",
+      "detail": "Optional broad local checks for diagnosing CI, not needed before a push.",
       "type": "shell",
       "group": {
         "kind": "test"
@@ -184,7 +184,7 @@
       "id": "pytestTarget",
       "type": "promptString",
       "description": "pytest target (for example: tests/test_cli.py::test_no_arguments_exits_successfully)",
-      "default": "tests/"
+      "default": "tests/application/test_lyrics_search.py"
     }
   ]
 }

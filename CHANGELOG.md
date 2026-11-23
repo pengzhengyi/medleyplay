@@ -21,9 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Choose English or Simplified Chinese on the sign-in screen or in
   Settings → Appearance. The first translated screens include sign-in, device
   approval, navigation and playback controls. Other screens still use English.
-- Find an album cover on Google Images and preview and use your saved image in
-  **External Search**. With a household key, select **Tavily** below MusicBrainz
-  to search and see pictures with their source pages.
+- Use **Google** to find an album cover on Google Images, then preview and use your
+  saved image in the same tab. **Upload** just takes a file from your device. With a
+  household key, select **Tavily** below MusicBrainz to search and see pictures
+  with their source pages.
 
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged

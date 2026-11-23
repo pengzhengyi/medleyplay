@@ -157,7 +157,7 @@ export function PictureEditor({
             : []),
           {
             value: "search",
-            label: "External Search",
+            label: "Google",
             icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
             why: album === undefined ? "Fill in the album to search for its cover." : undefined,
           },
@@ -210,17 +210,17 @@ export function PictureEditor({
           </Tabs.List>
           <Tabs.Content value="upload" className="picture-editor-panel">
             {upload}
-            {album !== undefined && <GoogleImagesLink {...album} />}
           </Tabs.Content>
           {album !== undefined && (
             <Tabs.Content value="search" className="picture-editor-panel">
-              <ol>
+              <ol className="picture-editor-google-steps">
                 <li>
                   <GoogleImagesLink {...album} /> for this album.
                 </li>
                 <li>Open the source page and save a picture you have permission to use.</li>
-                <li>Replace the cover here: {upload}</li>
+                <li>Replace the cover below.</li>
               </ol>
+              {upload}
             </Tabs.Content>
           )}
           {album !== undefined && tavily && (

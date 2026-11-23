@@ -1600,12 +1600,11 @@ button[aria-disabled="true"] {
 }
 
 /*
- * Who sings the song and its album, under its title in the player, and who an album
- * is by, under its heading: links that keep the text's color, faintly underlined, as
- * Now Playing's names are.
+ * Artist and album links keep the surrounding text's color with a faint underline.
  */
 .song-credits a,
-.subtitle > a {
+.subtitle > a,
+.album-link {
   color: inherit;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentcolor 30%, transparent);
@@ -2529,7 +2528,9 @@ button[aria-disabled="true"] {
 .song-credits a:hover,
 .song-credits a:focus-visible,
 .subtitle > a:hover,
-.subtitle > a:focus-visible {
+.subtitle > a:focus-visible,
+.album-link:hover,
+.album-link:focus-visible {
   color: var(--ink);
   text-decoration-color: currentcolor;
 }

@@ -896,6 +896,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Album column opens the song's album without starting playback.
 - The search dropdown stays above the sticky section bar in Settings and Clean up.
 
 - A successful Job's finish time includes saving its result, so a lyrics search

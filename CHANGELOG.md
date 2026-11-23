@@ -706,6 +706,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Hovering over a Library row or focusing a control in it shows an empty heart
+  in the accent color. A filled heart still means the track is a favorite.
 - A saved Tavily key shows **Change Key** and **Remove Key** side by side in Settings.
 
 - **An artist's page is laid out like an album's** — its photo large on the left; its

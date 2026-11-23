@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saved image in the same tab. **Upload** just takes a file from your device. With a
   household key, select **Tavily** below MusicBrainz to search and see pictures
   with their source pages.
+- In the artist photo editor, use **Google** to find a photo, then preview and
+  use your saved file in the same tab. Select **Tavily** to search with a
+  household key and see photos with their source pages.
 
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged

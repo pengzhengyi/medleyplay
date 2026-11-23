@@ -19,6 +19,7 @@ const BEATLES: KnownArtist = knownArtistOf("b10bbbfc", "The Beatles", {
 });
 const DETAILS = "PUT /api/artists/b10bbbfc/details";
 const PHOTO = "/api/artists/b10bbbfc/photo";
+const PHOTO_SEARCH = "GET /api/image-search/artist/b10bbbfc";
 const SUGGESTION = "/api/artists/b10bbbfc/suggestion";
 /** No AI model asked about the artist yet. */
 const UNASKED: ArtistSuggestionState = {
@@ -136,6 +137,7 @@ describe("editing an artist", () => {
   it("sets a photo of the household's once it is used in the picture editor", async () => {
     const server = serve({
       [`GET ${SUGGESTION}`]: { body: UNASKED },
+      [PHOTO_SEARCH]: { body: { configured: false, name: "The Beatles" } },
       [`PUT ${PHOTO}`]: { status: 204 },
     });
     const { onChanged } = editing();
@@ -146,12 +148,15 @@ describe("editing an artist", () => {
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
     });
-    expect(server.calls).toEqual([`GET ${SUGGESTION}`, `PUT ${PHOTO}`]);
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`, PHOTO_SEARCH, `PUT ${PHOTO}`]);
     expect(screen.queryByRole("dialog", { name: "Replace the photo" })).toBeNull();
   });
 
   it("sends no photo past 10 MiB, and says so in the picture editor", async () => {
-    const server = serve({ [`GET ${SUGGESTION}`]: { body: UNASKED } });
+    const server = serve({
+      [`GET ${SUGGESTION}`]: { body: UNASKED },
+      [PHOTO_SEARCH]: { body: { configured: false, name: "The Beatles" } },
+    });
     const photo = new File(["jpeg"], "huge.jpg", { type: "image/jpeg" });
     Object.defineProperty(photo, "size", { value: MAX_PICTURE_BYTES + 1 });
     editing();
@@ -160,7 +165,7 @@ describe("editing an artist", () => {
 
     expect(await editor.findByRole("alert")).toHaveTextContent("A picture is at most 10 MiB.");
     expect(editor.queryByRole("button", { name: "Use this photo" })).toBeNull();
-    expect(server.calls).toEqual([`GET ${SUGGESTION}`]);
+    expect(server.calls).toEqual([`GET ${SUGGESTION}`, PHOTO_SEARCH]);
   });
 
   it("says why a photo was refused, in the picture editor", async () => {

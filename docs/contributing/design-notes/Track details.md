@@ -304,11 +304,11 @@ place a picture comes from, listed down its side and across the top on a phone:
 
 | Tab | Shows | For |
 | --- | --- | --- |
-| *Upload* | A panel to drop a picture on, or *Choose a file…*; the picture chosen shows before *Use this cover* | Every picture |
+| *Upload* | A panel to drop a picture on, or *Choose a file…*; the picture chosen shows before *Use this cover* or *Use this photo* | Every picture |
 | *MusicBrainz* | The covers of the album's releases, below | A cover of a song or an album |
-| *Tavily* | Image search results with source pages, if a household key is set | A cover with a known album |
-| *Google* | A Google Images link and a panel to upload the saved picture | A cover with a known album |
 | *Deezer* | The pictures Deezer has of the artists going by the artist's name ([Artists](Artists.md#pictures-on-deezer)) | An artist's photo |
+| *Tavily* | Image search results with source pages, if a household key is set | A cover with a known album or a photo with a named artist profile |
+| *Google* | A Google Images link and a panel to upload the saved picture | A cover with a known album or a photo with a named artist profile |
 | *Ask AI* | The pictures an AI model names, below | Every picture |
 
 - **Nothing changes until a picture is used,** and using one closes the editor;
@@ -363,19 +363,30 @@ releases MusicBrainz knows, to choose one. Nothing changes until one is chosen.
   `POST /api/album-covers/choose`, with `{album, artist}`, ask MusicBrainz and an
   AI model, answering 202.
 
-### Searching the web for album covers
+### Searching the web for covers and photos
 
 *Google* works without a key. Open the Google Images link for the album
 and artist, check the source page, and save an image you have permission to use.
 Drop or choose that file below the instructions, preview it, then select *Use this cover*.
 Use *Upload* for a file you already have.
 
+For an artist photo, the *Google* tab searches by the artist's profile name.
+Check the source page for permission, preview the file in that tab, and select
+*Use this photo* to save it. The artist editor's *Upload* tab only takes files.
+
 If an admin sets a Tavily key in **Settings → Image search**, a *Tavily* tab
-appears below *MusicBrainz*. Selecting it starts a search or follows the album's
-active search. Offline jobs wait for Online. Each result links to its source.
+appears below *MusicBrainz* for a cover or below *Deezer* for a photo. Selecting
+it starts a search or follows an active one for the same album or artist
+profile. Offline jobs wait for Online. Each result links to its source and is
+never applied automatically.
 Opening the editor or moving keyboard focus to the tab does not ask Tavily.
 The saved key is never displayed: **Change Key** opens an empty field for its
 replacement, and **Remove Key** clears it.
+
+For a photo, only the profile name goes into the search query. Results are kept
+by profile, separate from album results and from other artists with the same
+name. If the profile is missing or unnamed, neither web search is offered.
+If the Keychain is unavailable, the artist's *Google* tab still works.
 
 ### Pictures an AI model names
 

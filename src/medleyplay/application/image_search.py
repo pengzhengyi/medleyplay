@@ -1,5 +1,6 @@
 """Household Tavily settings and explicitly requested web picture searches."""
 
+import hashlib
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Final
@@ -7,14 +8,16 @@ from typing import Final
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.album_covers import album_key
+from medleyplay.application.image_links import AlbumPictured, Pictured
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.secrets import Secrets
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.ai import check_key
-from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
+from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job, JobState, failure_shown_to
-from medleyplay.persistence.schema import PictureSearchRow
+from medleyplay.persistence.schema import ArtistRow, PictureSearchRow
+from medleyplay.plugin_api import MAX_NAME
 from medleyplay.plugin_api.image_search import (
     IMAGE_SEARCHER,
     TAVILY,
@@ -110,23 +113,33 @@ class ImageSearchService:
         self._jobs = jobs
         self.keys = keys
 
-    def search(self, caller: Account, album: str, artist: str) -> None:
+    def artist_name(self, artist_id: str) -> str:
+        """Return the profile's name for a web search, without any household details."""
+        with self._units() as db:
+            row = db.get(ArtistRow, artist_id)
+            if row is None:
+                message = "There is no such artist."
+                raise NotFoundError(message)
+            name = " ".join(row.name.split())[:MAX_NAME]
+        if not name:
+            message = "The artist needs a name to search for pictures."
+            raise InvalidInputError(message)
+        return name
+
+    def search(self, caller: Account, pictured: Pictured) -> None:
         """Submit a paced network Job, sharing an already active search for this target."""
-        request = _subject(album, artist)
+        key, request = self._subject(pictured)
         if not self.keys.configured():
             message = "Set the Tavily key in Settings to search for pictures."
             raise ConflictError(message)
         if TAVILY not in self._plugins.plugins_for(IMAGE_SEARCH.points):
             message = "Enable the Tavily plugin to search for pictures."
             raise ConflictError(message)
-        self._jobs.submit(
-            IMAGE_SEARCH, album_key(request.album, request.artist), request, caller.id
-        )
+        self._jobs.submit(IMAGE_SEARCH, key, request, caller.id)
 
-    def results(self, viewer: Account, album: str, artist: str) -> SearchState:
+    def results(self, viewer: Account, pictured: Pictured) -> SearchState:
         """Return saved results without contacting Tavily or reading a key."""
-        request = _subject(album, artist)
-        key = album_key(request.album, request.artist)
+        key, _ = self._subject(pictured)
         with self._units() as db:
             row = db.get(PictureSearchRow, key)
             images = tuple(PictureCandidate.model_validate(x) for x in row.images) if row else ()
@@ -143,10 +156,14 @@ class ImageSearchService:
             images=images,
         )
 
-
-def _subject(album: str, artist: str) -> PictureSearchJob:
-    album, artist = " ".join(album.split()), " ".join(artist.split())
-    if not album and not artist:
-        message = "Name the album or artist to search for pictures."
-        raise InvalidInputError(message)
-    return PictureSearchJob(album=album, artist=artist)
+    def _subject(self, pictured: Pictured) -> tuple[str, PictureSearchJob]:
+        if isinstance(pictured, AlbumPictured):
+            album = " ".join(pictured.album.split())
+            artist = " ".join(pictured.artist.split())
+            if not album and not artist:
+                message = "Name the album or artist to search for pictures."
+                raise InvalidInputError(message)
+            return album_key(album, artist), PictureSearchJob(album=album, artist=artist)
+        name = self.artist_name(pictured.artist_id)
+        key = hashlib.sha256(f"artist:{pictured.artist_id}".encode()).hexdigest()
+        return key, PictureSearchJob(album="", artist=name)

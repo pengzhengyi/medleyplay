@@ -1,12 +1,18 @@
-/** @file Album cover discovery: follow a web search or ask Tavily for pictures and their source pages. */
+/** @file Find covers and photos on the web with Google Images or Tavily. */
 
 import { useEffect, useState } from "react";
 
-import { api, type ImageSearchResults } from "../api";
-import type { CoverAlbum } from "./PictureEditor";
+import { api, type ImageSearchResults, type Pictured } from "../api";
 
-export function GoogleImagesLink({ album, artist }: CoverAlbum) {
-  const query = new URLSearchParams({ udm: "2", q: `${artist} ${album} album cover`.trim() });
+export function GoogleImagesLink({
+  artist,
+  album,
+}: {
+  readonly artist: string;
+  readonly album?: string;
+}) {
+  const q = album === undefined ? `${artist} artist photo` : `${artist} ${album} album cover`;
+  const query = new URLSearchParams({ udm: "2", q: q.trim() });
   return (
     <a href={`https://www.google.com/search?${query.toString()}`} target="_blank" rel="noreferrer">
       Search Google Images
@@ -14,19 +20,23 @@ export function GoogleImagesLink({ album, artist }: CoverAlbum) {
   );
 }
 
-export function TavilySearch({ album, artist }: CoverAlbum) {
+export function TavilySearch(pictured: Pictured) {
+  const { album, artist } = pictured.kind === "album" ? pictured : { album: "", artist: "" };
+  const artistId = pictured.kind === "artist" ? pictured.artistId : undefined;
   const [result, setResult] = useState<ImageSearchResults>();
   const [error, setError] = useState("");
   const [requested, setRequested] = useState(0);
   useEffect(() => {
+    const subject: Pictured =
+      artistId === undefined ? { kind: "album", album, artist } : { kind: "artist", artistId };
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const read = async (start: boolean) => {
       try {
-        const answer = await api.imageSearchResults(album, artist);
+        const answer = await api.imageSearchResults(subject);
         if (!isCurrent()) return;
         if (start && !answer.searching && !answer.waiting) {
-          await api.searchImages(album, artist);
+          await api.searchImages(subject);
           if (isCurrent()) void read(false);
         } else {
           setResult(answer);
@@ -45,7 +55,7 @@ export function TavilySearch({ album, artist }: CoverAlbum) {
       active = false;
       clearTimeout(timer);
     };
-  }, [album, artist, requested]);
+  }, [album, artist, artistId, requested]);
 
   const busy = !error && (!result || result.searching || result.waiting);
   const failure = error || result?.failure;

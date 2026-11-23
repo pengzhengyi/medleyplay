@@ -870,6 +870,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Clicking a split album in the Library plays the whole file. Expand it and
+  click a song to play just that song instead.
+
 - **Using a suggested photo or cover shows it was received** — in Clean up, *Use*,
   *Dismiss*, and *Use all* on a suggested artist photo or album cover now fade it and tag
   it *Saving…* at once. It takes no more clicks until it is recorded and leaves; if saving

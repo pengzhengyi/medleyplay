@@ -12,6 +12,7 @@
 import {
   CircleNotchIcon,
   ImageSquareIcon,
+  MagnifyingGlassIcon,
   SparkleIcon,
   UploadSimpleIcon,
   UserSquareIcon,
@@ -22,6 +23,7 @@ import { type FileRejection, useDropzone } from "react-dropzone";
 
 import type { Pictured } from "../api";
 import { ArtistPictureFinder } from "./ArtistPictureFinder";
+import { AlbumImageSearch, GoogleImagesLink } from "./AlbumImageSearch";
 import { CoverFinder } from "./CoverFinder";
 import { ImageLinks } from "./ImageLinks";
 import { Modal } from "./Modal";
@@ -119,6 +121,12 @@ export function PictureEditor({
             icon: <ImageSquareIcon weight="bold" aria-hidden />,
             why: album === undefined ? "Fill in the album to find its covers." : undefined,
           },
+          {
+            value: "search",
+            label: "Image search",
+            icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
+            why: album === undefined ? "Fill in the album to search for its cover." : undefined,
+          },
         ]
       : []),
     ...(artistId !== undefined
@@ -172,7 +180,13 @@ export function PictureEditor({
               busy={using}
               onUse={(image) => void change(() => sources.upload(image))}
             />
+            {album !== undefined && <GoogleImagesLink {...album} />}
           </Tabs.Content>
+          {album !== undefined && (
+            <Tabs.Content value="search" className="picture-editor-panel">
+              <AlbumImageSearch key={JSON.stringify([album.album, album.artist])} {...album} />
+            </Tabs.Content>
+          )}
           {album !== undefined && (
             <Tabs.Content value="musicbrainz" className="picture-editor-panel">
               <CoverFinder

@@ -718,6 +718,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The player prepares the album and artist pages for the current and next songs,
+  including the pictures already in the Library.
+
 - Hovering over a Library row or focusing a control in it shows an empty heart
   in the accent color. A filled heart still means the track is a favorite.
 - A saved Tavily key shows **Change Key** and **Remove Key** side by side in Settings.

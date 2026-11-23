@@ -40,7 +40,6 @@ import {
   DotsSixVerticalIcon,
   EarIcon,
   MapPinIcon,
-  MicrophoneStageIcon,
   PlayIcon,
   PlusIcon,
   SparkleIcon,
@@ -71,8 +70,9 @@ import { formatStart, parseStart } from "../library/songTimes";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf } from "../library/aiAnswer";
 import { snapStarts } from "../library/snap";
+import { useWords } from "../locale";
 import { AiNotePanel } from "./AiNotePanel";
-import { AlbumLyricsMatch } from "./AlbumLyricsMatch";
+import { AlbumLyricsMatch, SongLyricsButton } from "./AlbumLyricsMatch";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
 import { LazyPart } from "./LazyPart";
@@ -80,6 +80,7 @@ import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { ListEditor } from "./parts";
 import { SongsControlsContext } from "./songsControls";
+import { type LyricsMatchStatus, useAlbumLyricsMatch } from "./useAlbumLyricsMatch";
 
 /** A row as the editor holds it: the start as typed, and the song it keeps, if any. */
 interface Row {
@@ -170,6 +171,7 @@ export function SongsEditor({
   readonly lyricsOf: (trackId: number) => ReactNode;
   readonly matchOnline: boolean;
 }) {
+  const t = useWords();
   const { headingId, onBack, onLock, onDone } = useContext(SongsControlsContext);
   const [songs, setSongs] = useState<Songs | undefined>(undefined);
   const [rows, setRows] = useState<readonly Row[]>([]);
@@ -631,6 +633,25 @@ export function SongsEditor({
             : []),
         ]);
 
+  const { results: lyricResults, ...lyricsMatch } = useAlbumLyricsMatch(
+    songs?.songs.filter((song) =>
+      rows.some(
+        (row) =>
+          row.trackId === song.track_id &&
+          row.trackId !== lyricsTrack &&
+          row.title === song.title &&
+          row.artist === song.artist &&
+          startOf(row) === song.start_ms,
+      ),
+    ) ?? [],
+    !matchOnline
+      ? t("Go Online to match lyrics")
+      : aiSetUp.missing
+        ? aiSetUp.why
+        : typing || busy || snapping || thinking
+          ? t("Finish editing the song list first")
+          : "",
+  );
   const childLyrics = lyricsTrack !== null && (
     <Modal
       ref={lyricsDialog}
@@ -821,27 +842,7 @@ export function SongsEditor({
               )}{" "}
               Snap
             </button>
-            <AlbumLyricsMatch
-              songs={songs.songs.filter((song) =>
-                rows.some(
-                  (row) =>
-                    row.trackId === song.track_id &&
-                    row.trackId !== lyricsTrack &&
-                    row.title === song.title &&
-                    row.artist === song.artist &&
-                    startOf(row) === song.start_ms,
-                ),
-              )}
-              unavailable={
-                !matchOnline
-                  ? "Go Online to match lyrics"
-                  : aiSetUp.missing
-                    ? aiSetUp.why
-                    : typing || busy || snapping || thinking
-                      ? "Finish editing the song list first"
-                      : ""
-              }
-            />
+            <AlbumLyricsMatch {...lyricsMatch} />
             <span className="songs-fill-note" role="status">
               {thinking ? "Asking the AI…" : fillNote}
             </span>
@@ -933,6 +934,7 @@ export function SongsEditor({
                     <SongRow
                       key={row.key}
                       row={row}
+                      lyricsMatch={row.trackId === null ? undefined : lyricResults.get(row.trackId)}
                       onLyrics={(button) => {
                         audio.current?.pause();
                         lyricsEntry.current = button;
@@ -1062,6 +1064,7 @@ function SongRow({
   long,
   snapped,
   playing,
+  lyricsMatch,
   onLyrics,
   onChange,
   artistOffer,
@@ -1073,6 +1076,7 @@ function SongRow({
   onStartHere,
 }: {
   readonly row: Row;
+  readonly lyricsMatch: LyricsMatchStatus | undefined;
   readonly onLyrics: (button: HTMLButtonElement) => void;
   readonly place: number;
   readonly first: boolean;
@@ -1237,22 +1241,12 @@ function SongRow({
         >
           <ArrowDownIcon aria-hidden />
         </button>
-        <button
-          type="button"
-          className="icon"
-          aria-label={`Lyrics for ${named}`}
-          title={
-            row.trackId === null
-              ? "Save the songs first to edit lyrics"
-              : `Edit lyrics for ${named}`
-          }
-          disabled={row.trackId === null}
-          onClick={(event) => {
-            onLyrics(event.currentTarget);
-          }}
-        >
-          <MicrophoneStageIcon aria-hidden />
-        </button>
+        <SongLyricsButton
+          song={named}
+          saved={row.trackId !== null}
+          match={lyricsMatch}
+          onOpen={onLyrics}
+        />
         <button type="button" className="icon" aria-label={`Remove ${named}`} onClick={onRemove}>
           <TrashIcon aria-hidden />
         </button>

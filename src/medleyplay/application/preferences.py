@@ -15,7 +15,7 @@ from medleyplay.application import Clock
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.errors import ConflictError, InvalidInputError
 from medleyplay.domain.history import HistoryLength
-from medleyplay.domain.preferences import Preferences
+from medleyplay.domain.preferences import LyricsMatchConfirmation, Preferences
 from medleyplay.persistence.schema import PreferenceRow
 
 MAX_COMMANDS: Final = 64
@@ -36,6 +36,7 @@ class PreferencesDocument(BaseModel):
         default=None, max_length=MAX_COMMANDS
     )
     history_length: HistoryLength | None = None
+    lyrics_match_confirmation: LyricsMatchConfirmation | None = None
 
 
 class PreferencesService:
@@ -68,6 +69,7 @@ class PreferencesService:
                     if shortcuts is None
                     else {command: list(keys) for command, keys in shortcuts.items()},
                     "history_length": preferences.history_length,
+                    "lyrics_match_confirmation": preferences.lyrics_match_confirmation,
                 }
             ).model_dump(mode="json")
         except ValidationError as error:
@@ -109,5 +111,6 @@ def _preferences_of(document: PreferencesDocument, revision: int) -> Preferences
         if shortcuts is None
         else {command: tuple(keys) for command, keys in shortcuts.items()},
         history_length=document.history_length,
+        lyrics_match_confirmation=document.lyrics_match_confirmation,
         revision=revision,
     )

@@ -563,7 +563,9 @@ class JobRunner:
         try:
             with self._units.begin() as db:
                 if self._set_in(db, running.job_id, JobState.SUCCEEDED):
-                    kind.complete(db, to_job(_get(db, running.job_id)), result)
+                    row = _get(db, running.job_id)
+                    kind.complete(db, to_job(row), result)
+                    row.finished_at = self._clock()
         except Exception as error:  # noqa: BLE001 -- a failed completion fails its Job
             message = f"Its completion failed: {type(error).__name__}: {error}"
             self._settle_failure(running.job_id, "program", message)

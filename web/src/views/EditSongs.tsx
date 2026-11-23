@@ -40,6 +40,7 @@ import {
   DotsSixVerticalIcon,
   EarIcon,
   MapPinIcon,
+  MicrophoneStageIcon,
   PlayIcon,
   PlusIcon,
   SparkleIcon,
@@ -50,6 +51,7 @@ import {
   WaveformIcon,
 } from "@phosphor-icons/react";
 import {
+  type ReactNode,
   type SubmitEvent,
   useCallback,
   useContext,
@@ -70,9 +72,11 @@ import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf } from "../library/aiAnswer";
 import { snapStarts } from "../library/snap";
 import { AiNotePanel } from "./AiNotePanel";
+import { AlbumLyricsMatch } from "./AlbumLyricsMatch";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
 import { LazyPart } from "./LazyPart";
+import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { ListEditor } from "./parts";
 import { SongsControlsContext } from "./songsControls";
@@ -81,6 +85,7 @@ import { SongsControlsContext } from "./songsControls";
 interface Row {
   readonly key: string;
   readonly id: number | null;
+  readonly trackId: number | null;
   readonly start: string;
   /** The start as loaded, kept to the millisecond while its text is as it was shown. */
   readonly loaded: { readonly text: string; readonly ms: number };
@@ -146,6 +151,8 @@ export function SongsEditor({
   onListen,
   onSave,
   onUnsplit,
+  lyricsOf,
+  matchOnline,
 }: {
   readonly album: Track;
   readonly load: (trackId: number) => Promise<Songs>;
@@ -160,10 +167,18 @@ export function SongsEditor({
   /** Save `rows`, refused when the file's songs are no longer the `known` ones the editor saw. */
   readonly onSave: (rows: readonly SongRowIn[], known: readonly number[]) => Promise<void>;
   readonly onUnsplit: () => Promise<void>;
+  readonly lyricsOf: (trackId: number) => ReactNode;
+  readonly matchOnline: boolean;
 }) {
   const { headingId, onBack, onLock, onDone } = useContext(SongsControlsContext);
   const [songs, setSongs] = useState<Songs | undefined>(undefined);
   const [rows, setRows] = useState<readonly Row[]>([]);
+  const [lyricsTrack, setLyricsTrack] = useState<number | null>(null);
+  const [lyricsLocked, setLyricsLocked] = useState(false);
+  const lyricsDialog = useRef<HTMLDialogElement>(null);
+  const lyricsEntry = useRef<HTMLButtonElement | null>(null);
+  const lyricsHeading = useId();
+  const closeLyrics = () => lyricsDialog.current?.close();
   const [typing, setTyping] = useState(false);
   // The songs the list typed comes to, once it checks clean.
   const [listed, setListed] = useState<readonly Song[] | undefined>(undefined);
@@ -249,7 +264,9 @@ export function SongsEditor({
       (loaded) => {
         if (open) {
           setSongs(loaded);
-          setRows(loaded.songs.map((song) => rowOf(song, song.id)));
+          setRows(
+            loaded.songs.map((song) => ({ ...rowOf(song, song.id), trackId: song.track_id })),
+          );
         }
       },
       (failure: unknown) => {
@@ -614,7 +631,39 @@ export function SongsEditor({
             : []),
         ]);
 
-  return (
+  const childLyrics = lyricsTrack !== null && (
+    <Modal
+      ref={lyricsDialog}
+      className="edit-details"
+      labelledBy={lyricsHeading}
+      describedBy={`${lyricsHeading}-song`}
+      locked={lyricsLocked}
+      onClose={() => {
+        setLyricsTrack(null);
+        lyricsEntry.current?.focus();
+      }}
+    >
+      <div className="card lyrics-card">
+        <p id={`${lyricsHeading}-song`} className="edit-details-song">
+          {songs?.songs.find((song) => song.track_id === lyricsTrack)?.title}
+        </p>
+        <SongsControlsContext
+          value={{
+            headingId: lyricsHeading,
+            backLabel: "Songs",
+            onBack: closeLyrics,
+            onDone: closeLyrics,
+            onLock: setLyricsLocked,
+          }}
+        >
+          {lyricsOf(lyricsTrack) ?? (
+            <h2 id={lyricsHeading}>This song is no longer in the album.</h2>
+          )}
+        </SongsControlsContext>
+      </div>
+    </Modal>
+  );
+  const listForm = (
     <form className="songs-panel" onSubmit={save}>
       <header className="songs-heading">
         <button type="button" className="songs-back" onClick={onBack}>
@@ -772,6 +821,27 @@ export function SongsEditor({
               )}{" "}
               Snap
             </button>
+            <AlbumLyricsMatch
+              songs={songs.songs.filter((song) =>
+                rows.some(
+                  (row) =>
+                    row.trackId === song.track_id &&
+                    row.trackId !== lyricsTrack &&
+                    row.title === song.title &&
+                    row.artist === song.artist &&
+                    startOf(row) === song.start_ms,
+                ),
+              )}
+              unavailable={
+                !matchOnline
+                  ? "Go Online to match lyrics"
+                  : aiSetUp.missing
+                    ? aiSetUp.why
+                    : typing || busy || snapping || thinking
+                      ? "Finish editing the song list first"
+                      : ""
+              }
+            />
             <span className="songs-fill-note" role="status">
               {thinking ? "Asking the AI…" : fillNote}
             </span>
@@ -863,6 +933,11 @@ export function SongsEditor({
                     <SongRow
                       key={row.key}
                       row={row}
+                      onLyrics={(button) => {
+                        audio.current?.pause();
+                        lyricsEntry.current = button;
+                        setLyricsTrack(row.trackId);
+                      }}
                       place={index + 1}
                       first={index === 0}
                       last={index === rows.length - 1}
@@ -965,6 +1040,12 @@ export function SongsEditor({
       </footer>
     </form>
   );
+  return (
+    <>
+      {listForm}
+      {childLyrics}
+    </>
+  );
 }
 
 /**
@@ -981,6 +1062,7 @@ function SongRow({
   long,
   snapped,
   playing,
+  onLyrics,
   onChange,
   artistOffer,
   onArtistKey,
@@ -991,6 +1073,7 @@ function SongRow({
   onStartHere,
 }: {
   readonly row: Row;
+  readonly onLyrics: (button: HTMLButtonElement) => void;
   readonly place: number;
   readonly first: boolean;
   readonly last: boolean;
@@ -1154,6 +1237,22 @@ function SongRow({
         >
           <ArrowDownIcon aria-hidden />
         </button>
+        <button
+          type="button"
+          className="icon"
+          aria-label={`Lyrics for ${named}`}
+          title={
+            row.trackId === null
+              ? "Save the songs first to edit lyrics"
+              : `Edit lyrics for ${named}`
+          }
+          disabled={row.trackId === null}
+          onClick={(event) => {
+            onLyrics(event.currentTarget);
+          }}
+        >
+          <MicrophoneStageIcon aria-hidden />
+        </button>
         <button type="button" className="icon" aria-label={`Remove ${named}`} onClick={onRemove}>
           <TrashIcon aria-hidden />
         </button>
@@ -1197,6 +1296,7 @@ function rowOf(song: Song, id: number | null, start = formatStart(song.start_ms)
   return {
     key: newId(),
     id,
+    trackId: null,
     start,
     loaded: { text: start, ms: song.start_ms },
     title: song.title,

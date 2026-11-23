@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Open a saved song's lyrics directly from an album's Songs editor without saving
+  the list. **Auto-Match lyrics** can ask the configured AI to choose among lyrics
+  found for each saved song. It asks first and never replaces existing lyrics.
+
 - Search for album covers on Google Images beside Upload, or see pictures and
   their source pages in the editor with an optional household Tavily key.
 

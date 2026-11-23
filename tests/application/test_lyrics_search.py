@@ -16,13 +16,17 @@ from medleyplay.application.lyrics_search import (
     LyricsFound,
     find_lyrics_target,
 )
+from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.lyrics import LyricsSite
+from medleyplay.domain.segments import SongRow
 from medleyplay.domain.settings import Settings
+from medleyplay.domain.video_text import Song
 from medleyplay.plugin_api import LyricsProvider
+from medleyplay.programs.find_lyrics import MatchSong
 from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
@@ -149,6 +153,93 @@ def test_finding_the_lyrics_of_no_song_is_refused(enriching: Enriching, alice: A
 
 def _with_ai(enriching: Enriching, caller: Account) -> None:
     enriching.ai.add(caller, DEEPSEEK, "deepseek-flash", None)
+
+
+_ALBUM = [SongRow(None, Song(0, "Melt", "ryo")), SongRow(None, Song(260_000, "Encore"))]
+
+
+def test_auto_match_keeps_only_the_current_pick_without_replacing_saved_lyrics(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    _with_ai(enriching, alice)
+    album = enriching.add_song("Album")
+    child = songs.save(album, _ALBUM).songs[0]
+    service = enriching.lyrics_search
+    match = MatchSong(segment_id=child.id, start_ms=0, title="Melt", artist="ryo")
+    job = service.start_match(alice, child.track_id, match)
+    enriching.finish_every_job()
+    assert service.start_match(alice, child.track_id, match) == job
+    service.choose(alice, child.track_id, match_job=job)
+    enriching.finish_every_job()
+    chosen = service.found(alice, child.track_id)
+    assert chosen.pick is not None
+
+    service.apply_match(child.track_id, job, chosen.pick.at)
+
+    kept = enriching.lyrics.lyrics(child.track_id)
+    assert kept is not None
+    assert (kept.origin.value, kept.text) == ("lrclib", lyrics_of("Melt"))
+    edited = enriching.lyrics.set_own(child.track_id, "Our corrections")
+    with pytest.raises(ConflictError, match="lyrics"):
+        service.apply_match(child.track_id, job, chosen.pick.at)
+    assert enriching.lyrics.lyrics(child.track_id) == edited
+
+
+def test_a_new_search_invalidates_an_album_match_even_for_the_same_song(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    _with_ai(enriching, alice)
+    album = enriching.add_song("Album")
+    child = songs.save(album, _ALBUM).songs[0]
+    service = enriching.lyrics_search
+    match = MatchSong(segment_id=child.id, start_ms=0, title="Melt", artist="ryo")
+    job = service.start_match(alice, child.track_id, match)
+    enriching.finish_every_job()
+    chosen = _chosen(enriching, alice, child.track_id)
+    assert chosen.pick is not None
+    _found(enriching, alice, child.track_id)
+
+    with pytest.raises(ConflictError, match="changed"):
+        service.apply_match(child.track_id, job, chosen.pick.at)
+
+    assert enriching.lyrics.lyrics(child.track_id) is None
+
+
+def test_retiming_a_saved_song_while_matching_refuses_its_pick(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    _with_ai(enriching, alice)
+    album = enriching.add_song("Album")
+    child, encore = songs.save(album, _ALBUM).songs
+    service = enriching.lyrics_search
+    match = MatchSong(segment_id=child.id, start_ms=0, title="Melt", artist="ryo")
+    job = service.start_match(alice, child.track_id, match)
+    enriching.finish_every_job()
+    chosen = _chosen(enriching, alice, child.track_id)
+    assert chosen.pick is not None
+
+    songs.save(
+        album,
+        [SongRow(child.id, Song(0, "Melt", "ryo")), SongRow(encore.id, Song(240_000, "Encore"))],
+    )
+
+    with pytest.raises(ConflictError, match="changed"):
+        service.apply_match(child.track_id, job, chosen.pick.at)
+    assert enriching.lyrics.lyrics(child.track_id) is None
+
+
+def test_auto_match_starts_no_search_while_offline(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    _with_ai(enriching, alice)
+    child = songs.save(enriching.add_song("Album"), _ALBUM).songs[0]
+    match = MatchSong(segment_id=child.id, start_ms=0, title="Melt", artist="ryo")
+    enriching.online.online = False
+
+    with pytest.raises(ConflictError, match="Online"):
+        enriching.lyrics_search.start_match(alice, child.track_id, match)
+
+    assert enriching.jobs.list_jobs() == []
 
 
 def test_an_ai_model_picks_the_song_found_that_is_the_song_with_why_and_who(

@@ -215,6 +215,20 @@ def test_finding_lyrics_needs_a_signed_in_account(
     assert client.post(f"/api/tracks/{song}/lyrics/choose").status_code == 401
 
 
+def test_album_matching_does_not_queue_work_with_the_lyrics_plugin_off(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    song = _song(catalog)
+    response = client.post(
+        f"/api/tracks/{song}/lyrics/match/find",
+        json={"segment_id": 1, "start_ms": 0, "title": "Melt", "artist": "ryo"},
+    )
+    assert response.status_code == 409
+    assert "lyrics plugin" in response.json()["detail"]
+    assert client.get("/api/jobs").json() == []
+
+
 def test_no_model_is_asked_while_the_ai_plugin_is_off(
     client: TestClient, catalog: CatalogService
 ) -> None:

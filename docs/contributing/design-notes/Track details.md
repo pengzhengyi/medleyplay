@@ -363,17 +363,17 @@ releases MusicBrainz knows, to choose one. Nothing changes until one is chosen.
 
 ### Searching the web for album covers
 
-*Search Google Images* beside Upload opens a search for the album and artist
-in another tab. No key is needed. To see results in the editor instead, an
-admin can set a Tavily key in **Settings → Image search**. Once saved, the key
-is never displayed: **Change Key** opens an empty field for its replacement,
-and **Remove Key** clears it. Opening the editor does not send the album name
-to either service.
+*External Search* works without a key. Open the Google Images link for the album
+and artist, check the source page, and save an image you have permission to use.
+Drop or choose that file in the same tab, preview it, then select *Use this cover*.
+The Google Images link is also available on the *Upload* tab.
 
-*Search with Tavily* asks for pictures only when pressed. Each result links
-to the page that showed it. A matching image is not permission to copy it:
-check the source and its license before using Upload. A web search never
-changes the album cover automatically.
+If an admin sets a Tavily key in **Settings → Image search**, a *Tavily* tab
+appears below *MusicBrainz*. Selecting it starts a search or follows the album's
+active search. Offline jobs wait for Online. Each result links to its source.
+Opening the editor or moving keyboard focus to the tab does not ask Tavily.
+The saved key is never displayed: **Change Key** opens an empty field for its
+replacement, and **Remove Key** clears it.
 
 ### Pictures an AI model names
 

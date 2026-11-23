@@ -53,8 +53,8 @@ afterEach(() => {
 });
 
 describe("the picture editor", () => {
-  it("opens on Upload with a keyless image search for this album and makes no request", () => {
-    const { calls } = serve({});
+  it("opens on Upload with a keyless image search for this album without starting a job", () => {
+    const { calls } = serve({ "GET /api/image-search": { body: { configured: false } } });
 
     const { dialog } = editing(helpCover());
 
@@ -63,7 +63,7 @@ describe("the picture editor", () => {
       within(sources)
         .getAllByRole("tab")
         .map((tab) => tab.textContent.trim()),
-    ).toEqual(["Upload", "MusicBrainz", "Image search", "Ask AI"]);
+    ).toEqual(["Upload", "MusicBrainz", "External Search", "Ask AI"]);
     expect(dialog.getByRole("tab", { name: "Upload" })).toHaveAttribute("aria-selected", "true");
     expect(dialog.getByText("Help!")).toBeVisible();
     const link = dialog.getByRole("link", { name: "Search Google Images" });
@@ -71,7 +71,7 @@ describe("the picture editor", () => {
     expect(search.hostname).toBe("www.google.com");
     expect(search.searchParams.get("q")).toBe("The Beatles Help! album cover");
     expect(search.searchParams.get("udm")).toBe("2");
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(["GET /api/image-search"]);
   });
 
   it("searches with Tavily only on request and opens the candidate's source without saving", async () => {
@@ -91,31 +91,78 @@ describe("the picture editor", () => {
       },
     });
     const sources = helpCover();
-    const { dialog } = editing(sources);
+    const onClose = vi.fn();
+    const { rerender } = render(<PictureEditor sources={sources} onClose={onClose} />, {
+      reactStrictMode: true,
+    });
+    const dialog = within(screen.getByRole("dialog"));
     const user = userEvent.setup();
-    await user.click(dialog.getByRole("tab", { name: "Image search" }));
-    const search = await dialog.findByRole("button", { name: "Search with Tavily" });
+    const search = await dialog.findByRole("tab", { name: "Tavily" });
+    expect(dialog.getAllByRole("tab").map((tab) => tab.textContent.trim())).toEqual([
+      "Upload",
+      "MusicBrainz",
+      "Tavily",
+      "External Search",
+      "Ask AI",
+    ]);
+    search.focus();
+    expect(search).toHaveFocus();
     expect(calls).not.toContain("POST /api/image-search/results");
 
-    await user.click(search);
+    await user.keyboard("{Enter}");
 
     expect(await dialog.findByRole("link", { name: /Original pressing/u })).toHaveAttribute(
       "href",
       page,
     );
     expect(searched).toEqual(subject);
+    rerender(<PictureEditor sources={helpCover()} onClose={onClose} />);
+    expect(calls.filter((call) => call === "POST /api/image-search/results")).toHaveLength(1);
     expect(sources.use).not.toHaveBeenCalled();
   });
 
-  it("keeps external search available without a Tavily key", async () => {
-    const { calls } = serve({ "GET /api/image-search": { body: { configured: false } } });
+  it("follows an already waiting Tavily job without submitting another search", async () => {
+    const { calls } = serve({
+      "GET /api/image-search": { body: { configured: true } },
+      "GET /api/image-search/results?album=Help%21&artist=The+Beatles": {
+        body: { searching: true, waiting: true, failure: null, images: [] },
+      },
+    });
     const { dialog } = editing(helpCover());
 
-    await userEvent.click(dialog.getByRole("tab", { name: "Image search" }));
+    await userEvent.click(await dialog.findByRole("tab", { name: "Tavily" }));
 
-    expect(await dialog.findByText(/key in Settings/u)).toBeVisible();
-    expect(dialog.getByRole("link", { name: "Search Google Images" })).toBeVisible();
-    expect(dialog.queryByRole("button", { name: "Search with Tavily" })).toBeNull();
+    expect(await dialog.findByText("Waiting to search.")).toBeVisible();
+    expect(calls).not.toContain("POST /api/image-search/results");
+  });
+
+  it("offers a keyless external search and previews and uses the file in the same tab", async () => {
+    const { calls } = serve({ "GET /api/image-search": { body: { configured: false } } });
+    const sources = helpCover();
+    const { dialog, onClose } = editing(sources);
+    const user = userEvent.setup();
+
+    await user.click(dialog.getByRole("tab", { name: "External Search" }));
+
+    const steps = dialog.getAllByRole("listitem");
+    const link = dialog.getByRole<HTMLAnchorElement>("link", {
+      name: "Search Google Images",
+    });
+    expect(steps[0]).toContainElement(link);
+    expect(new URL(link.href).searchParams.get("q")).toBe("The Beatles Help! album cover");
+    expect(steps[1]).toHaveTextContent(/permission/u);
+    expect(dialog.queryByRole("tab", { name: "Tavily" })).toBeNull();
+    const file = jpeg("found.jpg");
+    const choose = dialog.getByLabelText("Choose a cover file");
+    expect(steps[2]).toContainElement(choose);
+    await user.upload(choose, file);
+    expect(await dialog.findByRole("img", { name: "The cover chosen" })).toBeVisible();
+    expect(sources.upload).not.toHaveBeenCalled();
+    await user.click(dialog.getByRole("button", { name: "Use this cover" }));
+    expect(sources.upload).toHaveBeenCalledWith(file);
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledOnce();
+    });
     expect(calls).toEqual(["GET /api/image-search"]);
   });
 
@@ -195,7 +242,7 @@ describe("the picture editor", () => {
 
     const { dialog } = editing(helpCover({ album: undefined, pictured: undefined }));
 
-    for (const name of ["MusicBrainz", "Image search", "Ask AI"]) {
+    for (const name of ["MusicBrainz", "External Search", "Ask AI"]) {
       const tab = dialog.getByRole("tab", { name });
       expect(tab).toBeDisabled();
       expect(tab).toHaveAttribute("title", expect.stringMatching(/^Fill in the album/u));

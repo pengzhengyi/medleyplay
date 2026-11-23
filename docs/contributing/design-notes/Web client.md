@@ -453,7 +453,9 @@ Track's kind is decided.
 
 ## Favorites and ratings
 
-- **A heart** marks a favorite, in a row and in the player.
+- **A filled heart** marks a favorite, in a row and in the player. Hovering over
+  a Library row or focusing a control in it shows an empty heart in the accent
+  color if the song is not a favorite. On touch screens the heart stays visible.
 - **Five stars** rate a Track in its row; choosing the rating already given
   clears it. A phone, which has no room for the rating column, rates from the
   player.

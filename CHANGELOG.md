@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
   the server without losing the result. In *Downloaded*, select *Choose parts*
   to finish or *Dismiss* to discard it. Nothing is added until you confirm.
+- Choose English or Simplified Chinese on the sign-in screen or in
+  Settings → Appearance. The first translated screens include sign-in, device
+  approval, navigation and playback controls. Other screens still use English.
 - Search for album covers on Google Images beside Upload, or see pictures and
   their source pages in the editor with an optional household Tavily key.
 

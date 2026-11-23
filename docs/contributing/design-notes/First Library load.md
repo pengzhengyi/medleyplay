@@ -1,120 +1,74 @@
 # First Library load
 
-> [!IMPORTANT]
-> **Approved for implementation.** Start the device check while the browser loads
-> the application, rather than after React mounts. Keep the existing admission
-> and sign-in rules. This is a proposal for first navigation, not for returning
-> to an open tab; see [Cheap reloads](Cheap%20reloads.md) for the latter.
+> [!NOTE]
+> **Status: implemented.** The page checks the device and account while the
+> browser loads the application. This note covers first navigation; see
+> [Cheap reloads](Cheap%20reloads.md) for returning to an open tab.
 
-## What the listener waits for
+## What blocks the first song
 
-The startup mark paints before the Library is usable. Here the finish line is
-the first song title button inserted into the Library table. It is a repeatable
-proxy for readiness, not a measure of when a user sees the next frame, clicks
-the button, or hears audio. Waiting for all network activity would include
-background work that does not block that row.
+The startup mark can paint before the user can play anything. For an admitted,
+signed-in device, the first song depends on the application script, the account
+check, the track response, and the first table render. The page overlaps device
+and account reads with script loading. It waits for the account before fetching
+tracks.
+
+## Admission on first navigation
+
+- The [HTML page](../../../web/index.html) starts `/api/device`. If the server
+  reports a known admitted state, the page starts `/api/me`. The first mounted
+  app takes the pending responses and removes the handoff; retrying the app
+  reads a fresh session.
+- The [root component](../../../web/src/App.tsx) subscribes to device refusals
+  before consuming either response through the API client. A refusal during
+  the account read triggers a fresh admission check, not the login form. A
+  stale response cannot replace a newer admission result or session. Checks
+  from the waiting or refusal screens follow the same ordering.
+- Only the initial mount uses those responses. React can retry its effect
+  without sending the same device request again. Later checks always read the
+  server. No track data or identity is kept when the browser opens the page again.
+- If the device is waiting or refused, the page shows its status and does not
+  read the account or tracks. If the device endpoint is unavailable, the root
+  falls back to asking for the account as it does without the handoff.
 
 ## Measurements
 
-The production build at `d639d52` ran on a temporary loopback server with a
-signed-in test account, 1,738 generated tracks and sources, 64 artist names,
-128 album names, no covers, and no enabled plugins. No household database,
-browser session, or music was used. For each network profile, headless Chromium
-opened three fresh browser contexts and navigated twice in each. The first
-navigation had an empty browser cache; the second reused the same context.
-The server stayed running. The shaped profile used 60 ms latency and
-1,048,576 bytes/s in each direction, with no CPU throttling.
+Production builds shared a loopback server and a synthetic Library with 1,738
+tracks, no covers, and no plugins. Chrome used a fresh browser context for each
+cold navigation and reused it for the immediately following warm navigation.
+The server stayed running. The simulated connection used 60 ms latency and
+1,048,576 bytes/s in each direction without CPU throttling.
 
-| Median navigation to first song (ms) | Local, cold | Local, warm | Shaped, cold | Shaped, warm |
-| --- | ---: | ---: | ---: | ---: |
-| Current app, initial run | 481 | 247 | 986 | 415 |
-| Current app, repeat control | 492 | 248 | 987 | 436 |
-| Browser experiment: start admission early | 422 | 196 | 792 | 376 |
+| Time to first song, median (range), ms | Original order | Early device and account |
+| --- | ---: | ---: |
+| Simulated connection, cold | 1,509 (1,391–1,900) | 1,303 (1,250–1,448) |
+| Simulated connection, warm | 926 (831–1,082) | 1,012 (722–1,346) |
+| Loopback, cold | 1,226 (1,099–1,890) | 1,211 (1,157–1,600) |
+| Loopback, warm | 828 (568–1,178) | 764 (664–992) |
 
-**Where the second goes.** In the shaped cold run nearest the initial median:
+These are seven alternating pairs per connection. In two earlier trials,
+starting only the device read saved 75 ms on the simulated cold connection;
+starting both reads saved 136–141 ms. The table shows the final build. Warm
+and loopback results varied across trials and do not establish a repeatable
+gain or regression. Time to the signed-out form on the simulated
+cold connection went from 986 to 857 ms. Each navigation requested the device
+and account once; only signed-in page loads requested tracks.
 
-| Milestone | Time since navigation |
-| --- | ---: |
-| HTML received / first content painted | 62 / 236 ms |
-| Entry JavaScript requested / received | 67 / 473 ms |
-| `/api/device` requested / received | 594 / 660 ms |
-| `/api/me` requested / received | 661 / 726 ms |
-| `/api/tracks` requested / received | 773 / 872 ms |
-| First song button inserted | 986 ms |
+On the simulated cold connection the track request started at a median of
+1,009 ms in the original build and 888 ms with both reads early. First paint of
+page content was 368 vs. 348 ms. The change gets the first song ready sooner;
+it does not speed up the startup mark or shrink the application script.
 
-The entry script is 1,074,556 bytes uncompressed and 312,607 bytes on the
-wire before headers; the stylesheet is 35,294 compressed bytes. In contrast,
-the fixture's track list is 33,938 compressed bytes. The first 594 ms elapse
-*before the app asks who may use it*. Not all of that is transfer: the gap
-after the entry arrives includes module evaluation, scheduling and initial
-rendering; resource timings alone cannot divide it further.
+The finish line is the first song title button inserted into the table. This
+measures readiness, not when the listener hears audio. Tests cover request
+ordering, waiting and refusal, fallback, stale responses, and sign-in. These
+benchmarks are not timing assertions in CI and do not represent every device or
+library.
 
-[`App.tsx`](../../../web/src/App.tsx) asks for the device in an effect, then
-asks for the account. Only then does it mount `Library`, whose
-[`useLibrary`](../../../web/src/library/useLibrary.ts) asks for tracks and
-favorites together. The first table also needs time after the track response
-ends. Code for idle-preloaded editors is not the explanation for this trace:
-their preload is scheduled after the Library loads.
+## What to measure next
 
-**There is a separate cold-server case.** The very first loopback navigation
-took 1,389 ms; `/api/tracks` alone took 627 ms, versus 18–19 ms on the next two
-cold-browser loopback runs. That is consistent with a first response build,
-but is only one observation, not a database profile. Do not treat every slow
-start as an asset problem. These measurements do not establish why a particular
-phone or household session takes several seconds.
-
-## Recommended first change
-
-The experiment started the device request at document start, then fetched the
-account **only after a positive admission answer**. The unmodified app consumed
-the pending responses. Each measured navigation made one request to each
-endpoint. No production code was changed. Against the repeat control the
-shaped cold median fell by 195 ms (20%); warm fell by 60 ms. The runs were
-sequential, not randomized. A browser initialization script gets an earlier
-start than a downloaded module; treat this as evidence for overlap, not a
-promise of a 195 ms improvement. Only the signed-in loopback host was tested;
-the experiment did not cover every admitted device or failure path. The
-difference also includes variation in rendering after the tracks arrived.
-
-Start with **device lookup only**: React still handles account lookup and
-revocation. Compare that with the two-read experiment before adding an early
-account read. Prefer the simpler version if both meet the review criterion.
-
-| Part | Proposed responsibility |
-| --- | --- |
-| Small startup module | Start admission without waiting for the Library dependency graph. Start loading the app in parallel, not after the answer. Measure the emitted build to check the module really stays small. |
-| First account lookup | Keep this in the mounted app unless measuring the extra overlap justifies moving it. Use `letIn` for every device state. Share results only for this navigation; do not cache identity across accounts or start track reads early. |
-| Application root | Consume that initial result once; preserve the waiting, refused, signed-out and signed-in screens. Later revocation or account changes start fresh reads. |
-
-- [ ] A waiting or refused device never starts a speculative account or track
-  request. Preserve the current fallback when the device endpoint is unavailable.
-- [ ] A signed-out listener sees the login form, never the Library. A late initial
-  answer cannot undo a later refusal or account change.
-- [ ] Test an admitted remote device as well as the host. If account lookup
-  moves earlier, retain a device refusal received before React subscribes:
-  recheck admission, show the refusal screen, and make no track request.
-- [ ] One device and one account read for an admitted initial navigation,
-  including React development-mode remounts. Normal later reads still work.
-- [ ] Alternate the current, early-device and early-device-plus-account builds
-  on the same fixture, at least five cold/warm pairs per profile. Report first
-  paint, track request start, first song, request counts, bytes and ranges.
-  Aim for at least 100 ms lower median on
-  shaped cold loads with no repeatable warm or sign-in regression. This is a
-  review criterion, not a timing assertion for shared CI runners.
-
-Use controlled promises for admission, session and stale-response tests, and
-one browser flow for a signed-in first navigation. Measure time to the login
-form and the device refusal screen separately: neither shows a song row.
-
-## Alternatives and decision
-
-| Option | When it earns a separate change |
-| --- | --- |
-| Reduce initial JavaScript | Profile the entry's largest eager imports if most of the delay remains before `/api/device`. Splitting a component needed immediately can add a round trip rather than save one. |
-| Optimize catalog reads or first table render | Repeat fresh-server trials and capture query/build versus browser time if `/api/tracks` or the interval after it dominates on a representative slow device. |
-| Combine admission and session into a server endpoint | Consider only if overlapping the existing reads is insufficient. It changes an API and must reproduce both admission and sign-in semantics. |
-
-**Decision for review:** try the bounded admission change first, or first
-collect a trace on the affected device if its delay is substantially longer
-than this fixture's. No schema change, dependency, server rewrite or change
-to cache policy is proposed.
+Profile the downloads and evaluation of the scripts needed before the Library
+appears. Measure a separate server restart series before changing the catalog:
+one early loopback run spent 627 ms on the first track response, versus 18–19 ms
+on its next two cold-browser runs. Finally, separate JSON parsing, preparing the
+table, and rendering the first row before changing how the full list is loaded.

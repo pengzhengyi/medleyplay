@@ -6,6 +6,27 @@
     <meta name="color-scheme" content="light dark" />
     <title>medleyplay</title>
     <script>
+      {
+        const get = (path) => fetch(path, { credentials: "same-origin" });
+        const device = get("/api/device");
+        const account = device.then(
+          async (response) => {
+            if (!response.ok) return;
+            const info = await response
+              .clone()
+              .json()
+              .catch(() => undefined);
+            if (["host", "allowed", "admitted"].includes(info?.presence)) {
+              return get("/api/me");
+            }
+          },
+          () => undefined,
+        );
+        void account.catch(() => {});
+        window.medleyplayFirstReads = { device, account };
+      }
+    </script>
+    <script>
       // Before the first paint, the theme this browser chose, as theme.ts applies it.
       try {
         const theme = localStorage.getItem("medleyplay.theme");

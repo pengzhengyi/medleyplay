@@ -638,7 +638,9 @@ export function Library({
   const railCollapsed = useRailCollapsed();
   const railMinimized = useRailMinimized();
   const signOut = () => {
-    void api.signOut().finally(onSignedOut);
+    void api.signOut().then(onSignedOut, (failure: unknown) => {
+      if (!(failure instanceof ApiError && failure.deviceRefusal)) onSignedOut();
+    });
   };
 
   const page = (

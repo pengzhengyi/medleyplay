@@ -722,6 +722,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Library checks the device and account while loading the app, shortening
+  the wait for the first songs on slower connections.
+
 - The player prepares the album and artist pages for the current and next songs,
   including the pictures already in the Library.
 

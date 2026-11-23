@@ -3,6 +3,40 @@ import { type Page, expect, test } from "@playwright/test";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Views" });
 
+test("a row previews its favorite action without marking the song as a favorite", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const row = page
+    .getByRole("row")
+    .filter({ has: page.locator('button.heart[aria-pressed="false"]') })
+    .first();
+  const heart = row.locator("button.heart");
+  await heart.waitFor();
+  const accent = await heart.evaluate((button) => {
+    const sample = document.createElement("span");
+    sample.style.color = "var(--accent)";
+    button.append(sample);
+    const color = getComputedStyle(sample).color;
+    sample.remove();
+    return color;
+  });
+
+  const title = row.locator("button.title");
+  await expect(heart).toHaveCSS("opacity", "0");
+  await title.hover();
+
+  await expect(heart).toHaveCSS("opacity", "1");
+  await expect(heart).toHaveCSS("color", accent);
+  await expect(heart).toHaveAttribute("aria-pressed", "false");
+
+  await nav(page).hover();
+  await expect(heart).toHaveCSS("opacity", "0");
+  await title.focus();
+  await expect(heart).toHaveCSS("opacity", "1");
+  await expect(heart).toHaveCSS("color", accent);
+});
+
 test("the views follow the links, Back, and Forward", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Alpha", exact: true })).toBeVisible();

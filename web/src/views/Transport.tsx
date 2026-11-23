@@ -22,6 +22,7 @@ import {
 import { useState } from "react";
 
 import type { Track } from "../api";
+import { useWords } from "../locale";
 import { heartTitleOf } from "../heart";
 import type { AlbumSteps, Step } from "../player/albumNow";
 import { repeatAfter } from "../player/queue";
@@ -45,6 +46,7 @@ export function Transport({
   readonly steps?: AlbumSteps | undefined;
 }) {
   const { status, shuffled, repeat } = player;
+  const t = useWords();
   // A label that changes on a focused button isn't always read out, so the change is said.
   const [said, setSaid] = useState("");
   const playing = status.kind === "playing";
@@ -57,11 +59,11 @@ export function Transport({
   const bySong = steps !== undefined && (steps.previousSong ?? steps.nextSong) !== undefined;
   return (
     <div className="controls">
-      <Hint name={shuffled ? "Shuffle: on" : "Shuffle: off"} keys={keys.shuffle}>
+      <Hint name={t(shuffled ? "Shuffle: on" : "Shuffle: off")} keys={keys.shuffle}>
         <button
           type="button"
           className={shuffled ? "icon mode on" : "icon mode"}
-          aria-label="Shuffle"
+          aria-label={t("Shuffle")}
           aria-pressed={shuffled}
           onClick={() => {
             player.shuffle(!shuffled);
@@ -72,11 +74,11 @@ export function Transport({
         </button>
       </Hint>
       {steps === undefined ? (
-        <Hint name={"Previous"} keys={keys.previous}>
+        <Hint name={t("Previous")} keys={keys.previous}>
           <button
             type="button"
             className="icon"
-            aria-label="Previous"
+            aria-label={t("Previous")}
             onClick={player.previous}
             disabled={track === undefined}
           >
@@ -84,11 +86,11 @@ export function Transport({
           </button>
         </Hint>
       ) : (
-        <Hint name={"Previous album"} keys={keys.previousAlbum}>
+        <Hint name={t("Previous album")} keys={keys.previousAlbum}>
           <button
             type="button"
             className="icon"
-            aria-label="Previous album"
+            aria-label={t("Previous album")}
             onClick={() => {
               go(steps.previousAlbum);
             }}
@@ -98,11 +100,11 @@ export function Transport({
         </Hint>
       )}
       {bySong && (
-        <Hint name={"Previous song"} keys={keys.previous}>
+        <Hint name={t("Previous song")} keys={keys.previous}>
           <button
             type="button"
             className="icon song-step"
-            aria-label="Previous song"
+            aria-label={t("Previous song")}
             onClick={() => {
               go(steps.previousSong);
             }}
@@ -112,11 +114,11 @@ export function Transport({
           </button>
         </Hint>
       )}
-      <Hint name={playing ? "Pause" : "Play"} keys={keys.toggle}>
+      <Hint name={t(playing ? "Pause" : "Play")} keys={keys.toggle}>
         <button
           type="button"
           className="icon play"
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={t(playing ? "Pause" : "Play")}
           onClick={player.toggle}
           disabled={!PLAYABLE_NOW.has(status.kind)}
         >
@@ -130,11 +132,11 @@ export function Transport({
         </button>
       </Hint>
       {bySong && (
-        <Hint name={"Next song"} keys={keys.next}>
+        <Hint name={t("Next song")} keys={keys.next}>
           <button
             type="button"
             className="icon song-step"
-            aria-label="Next song"
+            aria-label={t("Next song")}
             onClick={() => {
               go(steps.nextSong);
             }}
@@ -145,11 +147,11 @@ export function Transport({
         </Hint>
       )}
       {steps === undefined ? (
-        <Hint name={"Next"} keys={keys.next}>
+        <Hint name={t("Next")} keys={keys.next}>
           <button
             type="button"
             className="icon"
-            aria-label="Next"
+            aria-label={t("Next")}
             onClick={player.next}
             disabled={track === undefined}
           >
@@ -157,11 +159,11 @@ export function Transport({
           </button>
         </Hint>
       ) : (
-        <Hint name={"Next album"} keys={keys.nextAlbum}>
+        <Hint name={t("Next album")} keys={keys.nextAlbum}>
           <button
             type="button"
             className="icon"
-            aria-label="Next album"
+            aria-label={t("Next album")}
             onClick={() => {
               go(steps.nextAlbum);
             }}
@@ -171,11 +173,11 @@ export function Transport({
           </button>
         </Hint>
       )}
-      <Hint name={REPEATS[repeat].label} keys={keys.repeat}>
+      <Hint name={t(REPEATS[repeat].label)} keys={keys.repeat}>
         <button
           type="button"
           className={repeat === "off" ? "icon mode" : "icon mode on"}
-          aria-label={REPEATS[repeat].label}
+          aria-label={t(REPEATS[repeat].label)}
           onClick={() => {
             const then = repeatAfter(repeat);
             player.setRepeat(then);
@@ -190,7 +192,7 @@ export function Transport({
         </button>
       </Hint>
       <span className="visually-hidden" role="status">
-        {said}
+        {said === "" ? "" : t(said)}
       </span>
     </div>
   );

@@ -146,7 +146,9 @@ export function CurrentView(given: ViewProps) {
   const key =
     given.route.view === "search" || given.route.view === "library"
       ? given.route.view
-      : JSON.stringify(given.route);
+      : given.route.view === "album"
+        ? hrefOf({ view: "album", artist: given.route.artist, name: given.route.name })
+        : JSON.stringify(given.route);
   return <Fragment key={key}>{viewOf(given)}</Fragment>;
 }
 
@@ -333,6 +335,16 @@ function viewOf(given: ViewProps) {
                 <AlbumAbout
                   album={route.name}
                   artist={route.artist}
+                  onCloseRequestedEditor={
+                    route.editCover
+                      ? () => {
+                          navigate(
+                            { view: "album", artist: route.artist, name: route.name },
+                            { replace: true },
+                          );
+                        }
+                      : undefined
+                  }
                   // A split file's songs share its cover, so the file is what changes.
                   songs={file === undefined ? songs : [file]}
                   cover={file?.cover ?? albumsOf(songs)[0]?.cover ?? null}

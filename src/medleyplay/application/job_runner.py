@@ -31,6 +31,7 @@ from medleyplay.domain.linked_accounts import redact
 from medleyplay.domain.proxies import redact_proxy
 from medleyplay.persistence.schema import JobRow
 from medleyplay.plugin_api import AiEndpoint
+from medleyplay.plugin_api.image_search import TAVILY
 from medleyplay.plugin_api.progress import MAX_MESSAGE as MAX_PROGRESS_MESSAGE
 from medleyplay.plugin_host.job_wire import (
     FROM_JOB,
@@ -139,6 +140,7 @@ class _Running:
     proxy: str | None = None
     lane: str | None = None
     ai: tuple[AiEndpoint, ...] = ()
+    tavily_key: str | None = field(default=None, repr=False)
     thread: threading.Thread | None = None
     held: bool = False
     """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
@@ -146,6 +148,8 @@ class _Running:
     """Its process has ended, so nothing is left to stop."""
 
     def redact(self, message: str) -> str:
+        if self.tavily_key and self.tavily_key in message:
+            return "Tavily search failed."
         text = redact(message, self.login.lent.text if self.login else None)
         for endpoint in self.ai:
             text = redact_key(text, endpoint.key)
@@ -171,6 +175,7 @@ class JobRunner:
         logins: Logins | None = None,
         proxies: Proxies | None = None,
         ai: AiProviders | None = None,
+        tavily_key: Callable[[], str | None] | None = None,
         events: Events | None = None,
         network_failed: Callable[[], None] | None = None,
     ) -> None:
@@ -188,6 +193,7 @@ class JobRunner:
         self._logins = logins
         self._proxies = proxies
         self._ai = ai
+        self._tavily_key = tavily_key
         self._events = events
         self._network_failed = network_failed
         self._network_kinds = tuple(name for name, kind in kinds.items() if kind.needs_network)
@@ -375,11 +381,16 @@ class JobRunner:
             login = self._lend(kind, login_account, work_dir)
             proxy = self._proxy(kind, lane_rules)
             ai = self._ai_providers(lane_rules)
+            plugins, tavily_key = self._job_plugins(kind)
             process = self._spawn(work_dir)
         except KeychainUnavailableError as error:
             # The Keychain can be locked or prompting; it usually answers again soon.
             shutil.rmtree(work_dir, ignore_errors=True)
-            what = "key" if lane_rules is not None and lane_rules.lends_ai else "login or proxy"
+            what = (
+                "key"
+                if kind.lends_tavily or (lane_rules and lane_rules.lends_ai)
+                else "login or proxy"
+            )
             failure = ("keychain", f"Its {what} couldn't be read: {error}")
             self._set(
                 job_id,
@@ -392,7 +403,7 @@ class JobRunner:
             self._settle_failure(job_id, "program", f"Its process didn't start: {error}")
             shutil.rmtree(work_dir, ignore_errors=True)
             return
-        running = _Running(job_id, kind, work_dir, process, login, proxy, lane, ai)
+        running = _Running(job_id, kind, work_dir, process, login, proxy, lane, ai, tavily_key)
         with self._lock:
             self._running[job_id] = running
         # The Mode may have gone Offline since the claim, before `follow_mode` could
@@ -407,17 +418,26 @@ class JobRunner:
             process.send(
                 JobStart(
                     package=self._processes.package,
-                    plugins=self._plugins.plugins_for(kind.points),
+                    plugins=plugins,
                     program=kind.program,
                     request=request,  # type: ignore[arg-type] # a JSON column holds JSON
                     work_dir=str(work_dir),
                     login=str(work_dir / LOGIN_FILE) if login else None,
                     proxy=proxy,
                     ai=ai,
+                    tavily_key=tavily_key,
                 )
             )
         running.thread = threading.Thread(target=self._supervise, args=(running,), daemon=True)
         running.thread.start()
+
+    def _job_plugins(self, kind: AnyJobKind) -> tuple[tuple[str, ...], str | None]:
+        plugins = self._plugins.plugins_for(kind.points)
+        if not kind.lends_tavily:
+            return plugins, None
+        if TAVILY not in plugins:
+            return (), None
+        return (TAVILY,), self._tavily_key() if self._tavily_key else None
 
     def _proxy(self, kind: AnyJobKind, lane: Lane | None) -> str | None:
         # The Job keeps the proxy it starts with; it goes to its process, never to disk.
@@ -543,7 +563,9 @@ class JobRunner:
         try:
             with self._units.begin() as db:
                 if self._set_in(db, running.job_id, JobState.SUCCEEDED):
-                    kind.complete(db, to_job(_get(db, running.job_id)), result)
+                    row = _get(db, running.job_id)
+                    kind.complete(db, to_job(row), result)
+                    row.finished_at = self._clock()
         except Exception as error:  # noqa: BLE001 -- a failed completion fails its Job
             message = f"Its completion failed: {type(error).__name__}: {error}"
             self._settle_failure(running.job_id, "program", message)

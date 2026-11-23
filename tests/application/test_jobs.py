@@ -53,6 +53,20 @@ def test_a_job_runs_its_program_and_the_completion_applies_its_result(
     assert list((tmp_path / "jobs").iterdir()) == []
 
 
+def test_a_job_finishes_after_its_result_is_applied(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    def apply_result(*_: object) -> None:
+        clock.advance(timedelta(seconds=5))
+
+    kind = echo_kind([], complete=apply_result)
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind) as jobs:
+        job = jobs.submit(EchoJob(text="hello"))
+        done = jobs.wait_for(job.id, JobState.SUCCEEDED)
+
+    assert done.job.finished_at == clock()
+
+
 def test_a_running_job_shows_its_progress(
     units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
 ) -> None:

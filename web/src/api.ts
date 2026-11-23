@@ -584,6 +584,17 @@ export interface SuggestedLink {
   readonly failure: string | null;
 }
 
+export interface ImageSearchResults {
+  readonly images: readonly {
+    readonly url: string;
+    readonly page: string;
+    readonly title: string;
+  }[];
+  readonly searching: boolean;
+  readonly waiting: boolean;
+  readonly failure: string | null;
+}
+
 /** The links an AI model last suggested for a picture, and what is asked. */
 export interface PictureLinks {
   /** Best first. */
@@ -1637,6 +1648,16 @@ export const api = {
   /** Make each cover found its album's, on songs with none; say how many albums now show it. */
   useAlbumCovers: (albums: readonly ChosenAlbumCover[]) =>
     call<{ used: number }>("POST", "/api/album-covers/use", { albums }),
+  imageSearch: () => call<{ configured: boolean }>("GET", "/api/image-search"),
+  saveImageSearchKey: (key: string) => call<unknown>("PUT", "/api/image-search/key", { key }),
+  removeImageSearchKey: () => call<unknown>("DELETE", "/api/image-search/key"),
+  searchImages: (album: string, artist: string) =>
+    call<unknown>("POST", "/api/image-search/results", { album, artist }),
+  imageSearchResults: (album: string, artist: string) =>
+    call<ImageSearchResults>(
+      "GET",
+      `/api/image-search/results?${new URLSearchParams({ album, artist }).toString()}`,
+    ),
   /** The links an AI model last suggested for a picture, and what is asked. */
   imageLinks: (pictured: Pictured) =>
     call<PictureLinks>(

@@ -916,9 +916,9 @@ interface Played {
 
 /**
  * Return the Tracks the table plays, in its order. In the Library, a split file plays
- * as its songs the filters keep, in their own order, whether shown or folded away.
+ * as its filtered songs unless the listener selects the file or a single song within it.
  */
-function queueOf(table: Played): Track[] {
+function queueOf(table: Played, selected?: Track): Track[] {
   const { songsIn } = meta(table);
   if (songsIn === undefined) {
     // A group's row is no song; its songs play in their place, folded away or not.
@@ -930,6 +930,9 @@ function queueOf(table: Played): Track[] {
     if (!row.original.split) {
       return [row.original];
     }
+    if (selected && (selected.id === row.original.id || selected.segment_of === row.original.id)) {
+      return [selected];
+    }
     const songs = songsIn.get(row.original.id) ?? [];
     // A file the filters keep for itself, as an album, plays as all its songs.
     if (row.subRows.length === 0) {
@@ -940,18 +943,16 @@ function queueOf(table: Played): Track[] {
   });
 }
 
-/** Play `row`'s song, or a split file's first song, with the Tracks the table plays around it. */
+/** Play the selected Track with the surrounding items in table order. */
 function playFrom(table: Played, row: SongRow) {
   const { actions, songsIn } = meta(table);
-  const queue = queueOf(table);
   const chosen = row.original;
-  const index = chosen.split
-    ? queue.findIndex((song) => song.segment_of === chosen.id)
-    : queue.indexOf(chosen);
+  const queue = queueOf(table, chosen);
+  const index = queue.indexOf(chosen);
   if (songsIn === undefined) {
     actions.onPlay(queue, index);
   } else {
-    actions.onPlay(queue, index, fileUnit);
+    actions.onPlay(queue, index, (track) => (track.id === chosen.id ? undefined : fileUnit(track)));
   }
 }
 

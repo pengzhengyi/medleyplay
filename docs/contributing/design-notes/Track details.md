@@ -365,8 +365,10 @@ releases MusicBrainz knows, to choose one. Nothing changes until one is chosen.
 
 *Search Google Images* beside Upload opens a search for the album and artist
 in another tab. No key is needed. To see results in the editor instead, an
-admin can set a Tavily key in **Settings → Image search**. Opening the editor
-does not send the album name to either service.
+admin can set a Tavily key in **Settings → Image search**. Once saved, the key
+is never displayed: **Change Key** opens an empty field for its replacement,
+and **Remove Key** clears it. Opening the editor does not send the album name
+to either service.
 
 *Search with Tavily* asks for pictures only when pressed. Each result links
 to the page that showed it. A matching image is not permission to copy it:

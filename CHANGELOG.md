@@ -705,6 +705,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Hovering over a Library row or focusing a control in it shows an empty heart
   in the accent color. A filled heart still means the track is a favorite.
+- A saved Tavily key shows **Change Key** and **Remove Key** side by side in Settings.
 
 - **An artist's page is laid out like an album's** — its photo large on the left; its
   name, who MusicBrainz says it is, its other names, and its links beside it; and Play,
@@ -872,6 +873,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- A successful Job's finish time includes saving its result, so a lyrics search
+  no longer appears to finish before its songs were found.
+- Clicking a split album in the Library plays the whole file. Expand it and
+  click a song to play just that song instead.
 
 - **Using a suggested photo or cover shows it was received** — in Clean up, *Use*,
   *Dismiss*, and *Use all* on a suggested artist photo or album cover now fade it and tag

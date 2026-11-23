@@ -38,7 +38,9 @@ household are not translation keys. Screens without a translation use English.
   from that data, with pure functions, so moving between views asks the server
   nothing. Until the first answer, the Library shows rows shaped like songs, still
   under reduced motion, and tells a screen reader it is loading.
-- **The first load comes in stages,** as the server answers one read faster than
+- **[First Library load](First%20Library%20load.md)** overlaps device and account
+  checks with script loading. Once signed in, the client loads data in stages,
+  as the server answers one read faster than
   many at once, and reads sent beside the songs' made them wait:
   1. the songs and the favorites, alone;
   2. once the songs are drawn, the Playlists, the Mode, the Downloads under way,

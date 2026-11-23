@@ -87,7 +87,7 @@ These hold for every change, whoever makes it.
 Follow [Local checks and PR verification](CONTRIBUTING.md#local-checks-and-pr-verification):
 exercise the change and its direct callers locally, then let GitHub Actions run
 the full gates. Record local evidence separately from CI. Before merging,
-verify required checks on the current PR revision; an unpushed commit has not
+verify required checks on the current PR revision; a local-only commit has not
 passed CI. This does not change preview, release, or approval requirements.
 
 A test name has no contractions (the spelling check reads it). A test that fails

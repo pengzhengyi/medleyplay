@@ -722,6 +722,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Library loads its first songs faster after a server restart by reading
+  less data from the catalog.
 - A small ring spins beside *medleyplay* while the app starts. It stays still when
   reduced motion is enabled.
 - The Library checks the device and account while loading the app, shortening

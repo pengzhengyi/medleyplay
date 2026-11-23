@@ -4,8 +4,8 @@ Every command here is idempotent: repeating it leaves the same state as doing it
 """
 
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
 from sqlalchemy import ColumnElement, Select, case, delete, func, select, update
@@ -165,13 +165,17 @@ class CatalogService:
         online = self._online() if online is None else online
         with self._units() as db:
             rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
-            available = _availability(db, select(SourceRow), online=online)
-            downloaded = _downloaded(db, select(SourceRow.track_id))
+            sources = _source_reads(db)
+            held = set(db.scalars(select(DownloadRow.source_id)))
+            available = _availability(db, sources, held, online=online)
+            downloaded = {source.track_id for source in sources if source.id in held}
             sites = _site_sources(db)
             failed = _download_failed(db, sites, downloaded)
             segment_of = album_file_of(db)
             split = set(segment_of.values())
-            videos = _video_pages(db)
+            videos = _videos_of(
+                (source.track_id, source.kind, source.locator) for source in sources
+            )
             album_from_ms = read_settings(db).album_from_ms
             community = _community_ratings(db, select(CommunityRatingRow), segment_of)
             rated = album_ratings_of(db, account_id)
@@ -206,9 +210,9 @@ class CatalogService:
             found = db.execute(_tracks_for(account_id).where(TrackRow.id == track_id)).one_or_none()
             if found is None:
                 raise _no_track(track_id)
-            available = _availability(
-                db, select(SourceRow).where(SourceRow.track_id == track_id), online=self._online()
-            )
+            sources = _source_reads(db, SourceRow.track_id == track_id)
+            held = set(db.scalars(select(DownloadRow.source_id)))
+            available = _availability(db, sources, held, online=self._online())
             segment_of = album_file_of(db)
             looked_at = segment_of.get(track_id, track_id)
             downloaded = _downloaded(
@@ -686,16 +690,31 @@ def _count_play(db: Session, account_id: AccountId, track_id: TrackId, when: dat
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _SourceRead:
+    id: int
+    track_id: int
+    kind: str
+    locator: str
+    state: str
+
+
+def _source_reads(db: Session, *where: ColumnElement[bool]) -> list[_SourceRead]:
+    query = select(
+        SourceRow.id, SourceRow.track_id, SourceRow.kind, SourceRow.locator, SourceRow.state
+    )
+    return [_SourceRead(*row) for row in db.execute(query.where(*where).order_by(SourceRow.id))]
+
+
 def _availability(
-    db: Session, sources: Select[SourceRow], *, online: bool
+    db: Session, sources: Sequence[_SourceRead], downloaded: set[int], *, online: bool
 ) -> defaultdict[int, Availability]:
     # A Library's Source can play only while its Library is online; another kind must
     # be downloaded, which waits while the Mode is Offline. A Source with a Download
     # plays it, whatever its state. A song plays as its album file's Source does.
     mounted = {row.id: row.state == LibraryState.ONLINE for row in db.scalars(select(LibraryRow))}
-    downloaded = set(db.scalars(select(DownloadRow.source_id)))
 
-    def of(source: SourceRow) -> Availability:
+    def of(source: _SourceRead) -> Availability:
         if source.id in downloaded:
             return Availability.OK
         if source.kind != LIBRARY_SOURCE:
@@ -704,16 +723,18 @@ def _availability(
         reachable = mounted.get(library_of_locator(source.locator), False)
         return source_availability(SourceState(source.state), online=reachable)
 
-    rows = list(db.scalars(sources))
     album_of = {
-        row.id: parse_segment_locator(row.locator)[0] for row in rows if row.kind == SEGMENT_SOURCE
+        row.id: parse_segment_locator(row.locator)[0]
+        for row in sources
+        if row.kind == SEGMENT_SOURCE
     }
-    albums = {
-        row.id: row
-        for row in db.scalars(select(SourceRow).where(SourceRow.id.in_(set(album_of.values()))))
-    }
+    album_ids = set(album_of.values())
+    albums = {row.id: row for row in sources if row.id in album_ids}
+    missing = album_ids.difference(albums)
+    if missing:
+        albums.update((row.id, row) for row in _source_reads(db, SourceRow.id.in_(missing)))
     per_track: defaultdict[int, list[Availability]] = defaultdict(list)
-    for source in rows:
+    for source in sources:
         if source.kind == SEGMENT_SOURCE:
             album = albums.get(album_of[source.id])
             per_track[source.track_id].append(Availability.MISSING if album is None else of(album))
@@ -744,14 +765,22 @@ def _site_sources(db: Session, *where: ColumnElement[bool]) -> dict[int, SourceR
 
 def _video_pages(db: Session, *where: ColumnElement[bool]) -> dict[int, str]:
     """Return the page of the video each Track came from, among the Sources `where` keeps."""
-    sources: defaultdict[int, list[tuple[str, str]]] = defaultdict(list)
     named = select(SourceRow.track_id, SourceRow.kind, SourceRow.locator).where(
         SourceRow.kind.in_({*PART_LINKS, LIBRARY_SOURCE}), *where
     )
-    for track_id, kind, locator in db.execute(named.order_by(SourceRow.id)):
-        sources[track_id].append((kind, locator))
-    pages = {track_id: video_page_of(each) for track_id, each in sources.items()}
-    return {track_id: page for track_id, page in pages.items() if page is not None}
+    return _videos_of(db.execute(named.order_by(SourceRow.id)))
+
+
+def _videos_of(rows: Iterable[tuple[int, str, str]]) -> dict[int, str]:
+    sources: defaultdict[int, list[tuple[str, str]]] = defaultdict(list)
+    for track_id, kind, locator in rows:
+        if kind in PART_LINKS or kind == LIBRARY_SOURCE:
+            sources[track_id].append((kind, locator))
+    return {
+        track_id: page
+        for track_id, each in sources.items()
+        if (page := video_page_of(each)) is not None
+    }
 
 
 def _download_failed(db: Session, sites: Mapping[int, SourceRow], downloaded: set[int]) -> set[int]:

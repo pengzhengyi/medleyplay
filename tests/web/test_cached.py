@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
 from medleyplay.persistence.revision import DatabaseRevision
-from medleyplay.persistence.schema import DeviceRow, SessionRow
+from medleyplay.persistence.schema import DeviceRow, SessionRow, SourceRow
 from medleyplay.web.cached import (
     AnswerKey,
     CachedAnswer,
@@ -347,6 +347,26 @@ def test_a_signed_in_request_a_minute_later_writes_only_bookkeeping(
     written = _tables([statement for statement in ran if _WRITE.match(statement)])
     assert written
     assert written <= BOOKKEEPING_TABLES
+
+
+def test_a_cold_song_list_uses_fewer_source_reads_without_losing_video_links(
+    client: TestClient, units: sessionmaker[Session], catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    local = catalog.add_track(SourceKeyFactory.library_file(), TrackDetailsFactory.song("Intro"))
+    site = catalog.add_track(SourceKeyFactory.bilibili(part=2), TrackDetailsFactory.song("Encore"))
+
+    with _statements(units) as ran:
+        response = client.get("/api/tracks")
+
+    assert response.status_code == 200, response.text
+    tracks = {track["id"]: track for track in response.json()}
+    assert tracks[local]["video"] == "https://www.bilibili.com/video/BV1dm4y1s7ak"
+    assert tracks[site]["video"] == "https://www.bilibili.com/video/BV1Xx41117Tz?p=2"
+    source_reads = [
+        statement for statement in ran if SourceRow.__tablename__ in _tables([statement])
+    ]
+    assert len(source_reads) <= 3, source_reads
 
 
 @pytest.mark.parametrize("path", CACHED_PATHS)

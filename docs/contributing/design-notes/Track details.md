@@ -372,6 +372,8 @@ If an admin sets a Tavily key in **Settings → Image search**, a *Tavily* tab
 appears below *MusicBrainz*. Selecting it starts a search or follows the album's
 active search. Offline jobs wait for Online. Each result links to its source.
 Opening the editor or moving keyboard focus to the tab does not ask Tavily.
+The saved key is never displayed: **Change Key** opens an empty field for its
+replacement, and **Remove Key** clears it.
 
 ### Pictures an AI model names
 

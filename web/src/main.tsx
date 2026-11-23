@@ -8,6 +8,7 @@ import "@picocss/pico/css/pico.jade.min.css";
 
 import { applyAccent, savedAccent } from "./accent";
 import { App } from "./App";
+import { followDeviceLanguage } from "./locale";
 import "./index.css";
 import { applyTheme, savedTheme } from "./theme";
 import { LazyPart } from "./views/LazyPart";
@@ -15,6 +16,8 @@ import { LazyPart } from "./views/LazyPart";
 // Before the first render, so a chosen theme or accent never flashes the defaults.
 applyTheme(savedTheme());
 applyAccent(savedAccent());
+const stopFollowingLanguage = followDeviceLanguage();
+if (import.meta.hot) import.meta.hot.dispose(stopFollowingLanguage);
 
 const root = document.getElementById("root");
 if (root === null) {

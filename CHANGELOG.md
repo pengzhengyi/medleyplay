@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Choose English or Simplified Chinese on the sign-in screen or in
+  Settings → Appearance. The first translated screens include sign-in, device
+  approval, navigation and playback controls. Other screens still use English.
 - Search for album covers on Google Images beside Upload, or see pictures and
   their source pages in the editor with an optional household Tavily key.
 
@@ -706,6 +709,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The player prepares the album and artist pages for the current and next songs,
   including the pictures already in the Library.
 
+- Hovering over a Library row or focusing a control in it shows an empty heart
+  in the accent color. A filled heart still means the track is a favorite.
 - A saved Tavily key shows **Change Key** and **Remove Key** side by side in Settings.
 
 - **An artist's page is laid out like an album's** — its photo large on the left; its
@@ -875,6 +880,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A successful Job's finish time includes saving its result, so a lyrics search
+  no longer appears to finish before its songs were found.
 - Clicking a split album in the Library plays the whole file. Expand it and
   click a song to play just that song instead.
 

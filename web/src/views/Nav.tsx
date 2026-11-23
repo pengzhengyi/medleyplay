@@ -37,6 +37,7 @@ import type { ReactNode } from "react";
 import { type RailView, setRailOrder, useRailOrder } from "../railOrder";
 import { type RailEntry, type Top, railEntriesIn } from "./railViews";
 import { type Route, hrefOf } from "../routes";
+import { useWords } from "../locale";
 
 /** The top view a route belongs to: an artist's Tracks belong to Artists, and so on. */
 function topOf(route: Route): Top | undefined {
@@ -85,14 +86,13 @@ export function Nav({
   readonly onMinimize?: () => void;
   readonly account?: NavAccount;
 }) {
+  const t = useWords();
   const top = topOf(route);
-  const waiting = `${String(toDo)} to clean up`;
+  const waiting = t("{{count}} to clean up", { count: toDo });
   const countOf = (view: Top) =>
     view === "downloaded" ? downloading : view === "clean-up" || view === "insights" ? toDo : 0;
   const saying = (view: Top) =>
-    view === "downloaded"
-      ? `${String(downloading)} ${downloading === 1 ? "song" : "songs"} downloading`
-      : waiting;
+    view === "downloaded" ? t("downloading", { count: downloading }) : waiting;
   const order = useRailOrder();
   const entries = railEntriesIn(order);
   const sensors = useSensors(
@@ -109,7 +109,8 @@ export function Nav({
       setRailOrder(arrayMove([...order], from, to));
     }
   };
-  const linkOf = ({ view, label, icon: ViewIcon }: RailEntry) => {
+  const linkOf = ({ view, label: english, icon: ViewIcon }: RailEntry) => {
+    const label = t(english);
     const current = view === top;
     const count = countOf(view);
     const counted = count > 0;
@@ -136,7 +137,7 @@ export function Nav({
     .filter(Boolean)
     .join(" ");
   return (
-    <nav className={className} aria-label="Views" id="views">
+    <nav className={className} aria-label={t("Views")} id="views">
       {(onToggle !== undefined || onMinimize !== undefined) && (
         <div className="views-bar">
           {minimized && (
@@ -146,10 +147,10 @@ export function Nav({
             <button
               type="button"
               className="views-control"
-              aria-label="Show the views' names"
+              aria-label={t("Show the views' names")}
               aria-expanded={!collapsed}
               aria-controls="views"
-              title={collapsed ? "Show the views' names" : "Show only the icons"}
+              title={t(collapsed ? "Show the views' names" : "Show only the icons")}
               onClick={onToggle}
             >
               {collapsed ? (
@@ -163,8 +164,8 @@ export function Nav({
             <button
               type="button"
               className="views-control"
-              aria-label={minimized ? "Show the whole rail" : "Minimize the rail"}
-              title={minimized ? "Show the whole rail" : "Minimize the rail"}
+              aria-label={t(minimized ? "Show the whole rail" : "Minimize the rail")}
+              title={t(minimized ? "Show the whole rail" : "Minimize the rail")}
               onClick={onMinimize}
             >
               {minimized ? <CornersOutIcon aria-hidden /> : <CornersInIcon aria-hidden />}
@@ -215,14 +216,19 @@ function ViewMenu({
   readonly downloading: number;
   readonly account: NavAccount | undefined;
 }) {
+  const t = useWords();
   const entries = railEntriesIn(useRailOrder());
   const shown = entries.find(({ view }) => view === top);
   const ShownIcon = shown?.icon ?? MusicNotesSimpleIcon;
-  const label = shown?.label ?? "Search";
+  const label = t(shown?.label ?? "Search");
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger asChild>
-        <button type="button" className="views-shown" aria-label={`${label}: choose a view`}>
+        <button
+          type="button"
+          className="views-shown"
+          aria-label={t("{{view}}: choose a view", { view: label })}
+        >
           <ShownIcon className="views-shown-icon" weight="fill" aria-hidden />
           <span>{label}</span>
           {toDo > 0 && (
@@ -239,7 +245,7 @@ function ViewMenu({
             <Menu.Item key={view} className="track-menu-item" asChild>
               <a href={hrefOf({ view })} aria-current={view === top ? "page" : undefined}>
                 <ViewIcon className="track-menu-icon" aria-hidden />
-                {name}
+                {t(name)}
                 {view === "clean-up" && toDo > 0 && (
                   <span className="menu-count" aria-hidden>
                     {toDo}
@@ -259,7 +265,7 @@ function ViewMenu({
               <Menu.Label className="track-menu-label">{account.name}</Menu.Label>
               <Menu.Item className="track-menu-item" onSelect={account.onSignOut}>
                 <SignOutIcon className="track-menu-icon" aria-hidden />
-                Sign out
+                {t("Sign out")}
               </Menu.Item>
             </>
           )}
@@ -277,6 +283,7 @@ export function AccountMenu({
   readonly account: NavAccount;
   readonly collapsed?: boolean;
 }) {
+  const t = useWords();
   const first = account.name.trim().codePointAt(0);
   const initial = first === undefined ? "?" : String.fromCodePoint(first).toUpperCase();
   return (
@@ -285,7 +292,7 @@ export function AccountMenu({
         <button
           type="button"
           className="views-account"
-          aria-label={`${account.name}: account`}
+          aria-label={t("{{name}}: account", { name: account.name })}
           title={collapsed ? account.name : undefined}
         >
           <span className="views-avatar" aria-hidden>
@@ -305,7 +312,7 @@ export function AccountMenu({
           <Menu.Label className="track-menu-label">{account.name}</Menu.Label>
           <Menu.Item className="track-menu-item" onSelect={account.onSignOut}>
             <SignOutIcon className="track-menu-icon" aria-hidden />
-            Sign out
+            {t("Sign out")}
           </Menu.Item>
         </Menu.Content>
       </Menu.Portal>

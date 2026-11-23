@@ -49,6 +49,7 @@ class JobStart(_Message):
     ai: tuple[AiEndpoint, ...] = Field(default=(), repr=False)
     """The AI providers the Job is lent, in order, keys included, for the program to pass on;
     never on disk."""
+    tavily_key: str | None = Field(default=None, repr=False)
 
 
 class KeyOutcome(_Message):

@@ -823,6 +823,15 @@ class AlbumCoverDismissalRow(Base):
     cover: Mapped[str] = mapped_column(String(64), primary_key=True)
 
 
+class PictureSearchRow(Base):
+    """The last successful web picture search for a folded album and artist."""
+
+    __tablename__ = "picture_search"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    images: Mapped[list[dict[str, str]]] = mapped_column(JSON)
+
+
 class ImageLinksRow(Base):
     """The links to pictures of an album or an artist an AI model last suggested.
 

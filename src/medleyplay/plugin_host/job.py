@@ -90,6 +90,7 @@ class JobContext:
     """The household's proxy for the Job's site, or `None`; held in memory only."""
     ai: tuple[AiEndpoint, ...] = field(default=(), repr=False)
     """The AI providers the Job is lent, in order, keys included; held in memory only."""
+    tavily_key: str | None = field(default=None, repr=False)
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
 
     def safe_text(self, text: str) -> str:
@@ -187,6 +188,7 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
         login=Path(start.login) if start.login else None,
         proxy=start.proxy,
         ai=start.ai,
+        tavily_key=start.tavily_key,
     )
     try:
         program = _program(start.program)

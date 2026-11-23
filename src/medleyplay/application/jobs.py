@@ -90,6 +90,8 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     lanes: Mapping[str, Lane] = field(default_factory=dict)
     refuse_start: Callable[[Session, Any], str | None] | None = None
     on_failure: Callable[[Session, Job, str, str], Sequence[JobId]] | None = None
+    lends_tavily: bool = False
+    """Run with only the Tavily plugin and lend it the household's search key."""
     on_submit: Callable[[Session, Job], None] | None = None
 
 

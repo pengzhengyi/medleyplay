@@ -34,6 +34,7 @@ from medleyplay.application.downloads import DownloadService, download_source_ki
 from medleyplay.application.enrichment import EnrichKind, EnrichmentService, enrich_track_kind
 from medleyplay.application.events import Events
 from medleyplay.application.image_links import ImageLinkService, image_link_kinds
+from medleyplay.application.image_search import IMAGE_SEARCH, ImageSearchService, TavilyKeys
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
@@ -295,6 +296,7 @@ def jobs(  # noqa: PLR0913, PLR0917 -- one argument per Job kind
         find_kind.name: find_kind,
         find_names_kind.name: find_names_kind,
         silences_kind.name: silences_kind,
+        IMAGE_SEARCH.name: IMAGE_SEARCH,
     }
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
@@ -511,6 +513,13 @@ def ai(units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets) -
 
 
 @pytest.fixture
+def image_search(
+    units: sessionmaker[Session], plugins: PluginService, jobs: JobService, secrets: MemorySecrets
+) -> ImageSearchService:
+    return ImageSearchService(units, plugins, jobs, TavilyKeys(secrets))
+
+
+@pytest.fixture
 def finder() -> FakeFinder:
     """Finder, remembering each folder it was asked to show."""
     return FakeFinder()
@@ -554,6 +563,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     album_covers: AlbumCoverService,
     artist_pictures: ArtistPictureService,
     image_links: ImageLinkService,
+    image_search: ImageSearchService,
     lyrics: LyricsService,
     lyrics_search: LyricsSearchService,
     storage_folder: StorageFolder,
@@ -603,6 +613,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         cover_sweeper=EnrichmentSweeper(album_covers, what="album covers"),
         artist_pictures=artist_pictures,
         image_links=image_links,
+        image_search=image_search,
         lyrics=lyrics,
         lyrics_search=lyrics_search,
         storage_folder=storage_folder,

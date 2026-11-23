@@ -43,7 +43,9 @@ async function lookUp(page: Page, text: string) {
 const row = (page: Page, title: string) =>
   page.getByRole("row").filter({ has: page.getByRole("button", { name: title, exact: true }) });
 
-test("a video lookup resumes from Downloaded after reload and stays dismissed", async ({ page }) => {
+test("a video lookup resumes from Downloaded after reload and stays dismissed", async ({
+  page,
+}) => {
   const code = "BVresume";
   const dialog = await lookUp(page, `https://www.bilibili.com/video/${code}`);
   await expect(dialog.getByRole("textbox", { name: "Title of part 1" })).toHaveValue(code);

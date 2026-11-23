@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Search for album covers on Google Images beside Upload, or see pictures and
-  their source pages in the editor with an optional household Tavily key.
+- Find an album cover on Google Images and preview and use your saved image in
+  **External Search**. With a household key, select **Tavily** below MusicBrainz
+  to search and see pictures with their source pages.
 
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged

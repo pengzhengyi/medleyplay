@@ -46,6 +46,9 @@ jobs:
       - name: Type-check
         run: uv run mypy
 
+      - name: Check import boundaries
+        run: uv run lint-imports
+
       - name: Test with coverage
         run: uv run pytest --cov --cov-report=json --cov-report=term-missing
 

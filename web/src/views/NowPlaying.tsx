@@ -14,11 +14,13 @@ import { useEffect, useRef, useState } from "react";
 import { type Lyrics, type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
 import type { FavoriteGroups } from "../library/favoriteGroups";
+import { albumArtistOf } from "../library/views";
 import { setLyricsHidden, songTimeOf, useLyricsHidden } from "../lyrics";
 import { albumSteps, albumTimeline, playingOf } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
 import type { SleepTimer } from "../player/useSleepTimer";
 import { canSetVolume } from "../player/volume";
+import { hrefOf, navigate, routeOf } from "../routes";
 import { useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { NowPlayingNames } from "./NowPlayingNames";
@@ -111,6 +113,10 @@ export function NowPlaying({
     onToggleQueue();
   };
   const song = songTimeOf(track, nowPlaying, position);
+  const album = { view: "album", artist: albumArtistOf(track), name: track.album } as const;
+  const editCover = { ...album, editCover: true } as const;
+  const cover = <Cover size="original" cover={track.cover} />;
+  const coverLabel = `Edit album cover for ${track.album}`;
   return (
     <dialog
       ref={ref}
@@ -179,7 +185,26 @@ export function NowPlaying({
         >
           <div className="np-main">
             <div className={status.kind === "playing" ? "np-art" : "np-art resting"}>
-              <Cover size="original" cover={track.cover} />
+              {track.album.trim() === "" ? (
+                cover
+              ) : (
+                <a
+                  className="np-edit-cover"
+                  href={hrefOf(editCover)}
+                  aria-label={coverLabel}
+                  title={coverLabel}
+                  onClick={(event) => {
+                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    close();
+                    if (hrefOf(routeOf(location.hash)) === hrefOf(album)) {
+                      event.preventDefault();
+                      navigate(editCover, { replace: true });
+                    }
+                  }}
+                >
+                  {cover}
+                </a>
+              )}
             </div>
             <NowPlayingNames
               track={track}

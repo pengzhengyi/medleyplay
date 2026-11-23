@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Click the large cover in Now Playing to open that album's cover editor.
 - Choose English or Simplified Chinese on the sign-in screen or in
   Settings → Appearance. The first translated screens include sign-in, device
   approval, navigation and playback controls. Other screens still use English.

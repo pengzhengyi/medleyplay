@@ -27,11 +27,11 @@ for (const [reducedMotion, motion] of [
           drawn: true,
           rotating: reducedMotion === "no-preference",
         });
-      const preboot = await mark.elementHandle();
+      const originalMark = await mark.elementHandle();
       const beforeReact = await startingRing(mark);
 
       runScripts();
-      await expect.poll(() => preboot.evaluate((element) => element.isConnected)).toBe(false);
+      await expect.poll(() => originalMark.evaluate((element) => element.isConnected)).toBe(false);
 
       await expect(mark).toHaveAttribute("aria-busy", "true");
       expect(await startingRing(mark)).toEqual(beforeReact);

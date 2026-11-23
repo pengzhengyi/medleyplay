@@ -143,6 +143,8 @@ Track's kind is decided.
   under each file too; a filter keeps a file while it keeps any of its songs,
   showing only those. Grouped, the table lists every song in its file's place,
   as other tables do.
+- **Clicking the album row plays the whole file**, folded or expanded. Clicking
+  a song under it plays just that song in the album's place in the queue.
 - **The heading counts both:** *2 albums, 120 songs, 9 hr 5 min*, the songs of
   split files among the songs.
 - **`#/songs`**, the route the Library had when it was called Songs, opens it,

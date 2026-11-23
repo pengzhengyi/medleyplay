@@ -44,7 +44,8 @@ stateDiagram-v2
 - **A running Job has a process** in its own process group, a working folder
   `jobs/<id>` in the data folder, and progress the runner keeps in memory: a
   restart loses progress, never state.
-- **Finished Jobs stay** in the table with their outcome.
+- **Finished Jobs stay** in the table with their outcome. A successful Job's
+  finish time includes the time spent applying its result.
 - **The Mode doesn't exist yet,** so the server counts as Online; *waiting* holds
   only Jobs whose network failed, until their retry time.
 

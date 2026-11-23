@@ -867,6 +867,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A successful Job's finish time includes saving its result, so a lyrics search
+  no longer appears to finish before its songs were found.
+
 - **Using a suggested photo or cover shows it was received** — in Clean up, *Use*,
   *Dismiss*, and *Use all* on a suggested artist photo or album cover now fade it and tag
   it *Saving…* at once. It takes no more clicks until it is recorded and leaves; if saving

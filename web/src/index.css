@@ -1770,7 +1770,7 @@ button[aria-disabled="true"] {
 .settings-toc {
   position: sticky;
   top: var(--stick-top, var(--top-height, 0));
-  z-index: 2;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 0.5rem;

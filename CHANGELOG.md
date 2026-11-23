@@ -891,6 +891,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The search dropdown stays above the sticky section bar in Settings and Clean up.
+
 - A successful Job's finish time includes saving its result, so a lyrics search
   no longer appears to finish before its songs were found.
 - Clicking a split album in the Library plays the whole file. Expand it and

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Search for album covers on Google Images beside Upload, or see pictures and
+  their source pages in the editor with an optional household Tavily key.
+
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged
   *Found on the web* in Now Playing's big picture, with *Save* to keep them as yours and
@@ -703,6 +706,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The player prepares the album and artist pages for the current and next songs,
   including the pictures already in the Library.
 
+- A saved Tavily key shows **Change Key** and **Remove Key** side by side in Settings.
+
 - **An artist's page is laid out like an album's** — its photo large on the left; its
   name, who MusicBrainz says it is, its other names, and its links beside it; and Play,
   Shuffle, the heart, and a round pencil for *Edit details* on the photo's bottom line.
@@ -869,6 +874,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- Clicking a split album in the Library plays the whole file. Expand it and
+  click a song to play just that song instead.
 
 - **Using a suggested photo or cover shows it was received** — in Clean up, *Use*,
   *Dismiss*, and *Use all* on a suggested artist photo or album cover now fade it and tag

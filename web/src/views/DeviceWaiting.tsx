@@ -6,7 +6,7 @@
 import { WaveformIcon } from "@phosphor-icons/react";
 import { useEffect, useEffectEvent } from "react";
 
-import { type DeviceInfo, api } from "../api";
+import type { DeviceInfo } from "../api";
 import { useWords } from "../locale";
 import { LanguageSelect } from "./LanguageSelect";
 
@@ -15,21 +15,17 @@ export const ASK_AGAIN_MS = 3000;
 
 /**
  * Say this device waits, showing its code so the admin can tell it apart, and
- * ask again every few seconds; a refused one can ask again by hand. Tell
- * `onAnswered` each answer.
+ * call `onCheck` every few seconds; a refused one can ask again by hand.
  */
 export function DeviceWaiting({
   device,
-  onAnswered,
+  onCheck,
 }: {
   readonly device: DeviceInfo;
-  readonly onAnswered: (device: DeviceInfo) => void;
+  readonly onCheck: () => void;
 }) {
   const t = useWords();
-  const askNow = () => {
-    api.device().then(onAnswered, () => undefined);
-  };
-  const ask = useEffectEvent(askNow);
+  const ask = useEffectEvent(onCheck);
   const waiting = device.presence === "waiting";
   useEffect(() => {
     if (!waiting) {
@@ -69,7 +65,7 @@ export function DeviceWaiting({
         <>
           <h2>{t("This device can't connect")}</h2>
           <p>{t("The household hasn't let new devices in. Ask an admin to allow this one.")}</p>
-          <button type="button" onClick={askNow}>
+          <button type="button" onClick={onCheck}>
             {t("Ask again")}
           </button>
         </>

@@ -46,6 +46,7 @@ from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_match import LyricsMatchService, lyrics_match_kinds
 from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
@@ -224,6 +225,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     picture_jobs = artist_picture_kinds(clock, data_dir / COVERS_FOLDER)
     find_silences = find_silences_kind(clock)
     lyrics_jobs = lyrics_search_kinds(clock)
+    match_jobs = lyrics_match_kinds(clock, lyrics_jobs, plugins)
     make_thumbnails = make_thumbnails_kind(data_dir / THUMBNAILS_FOLDER, data_dir / JOBS_FOLDER)
     job_kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
@@ -246,6 +248,8 @@ def build_services(  # noqa: PLR0913, PLR0915
         make_thumbnails.name: make_thumbnails,
         lyrics_jobs.find.name: lyrics_jobs.find,
         lyrics_jobs.choose.name: lyrics_jobs.choose,
+        match_jobs.find.name: match_jobs.find,
+        match_jobs.choose.name: match_jobs.choose,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -372,8 +376,9 @@ def build_services(  # noqa: PLR0913, PLR0915
         artist_pictures=ArtistPictureService(units, plugins, jobs, picture_jobs),
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         image_search=ImageSearchService(units, plugins, jobs, tavily_keys),
-        lyrics=LyricsService(units, clock, changes.tell),
+        lyrics=LyricsService(units, clock, changes.tell, jobs=jobs),
         lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs, changes.tell),
+        lyrics_match=LyricsMatchService(units, plugins, jobs, match_jobs.find),
         storage_folder=StorageFolder(
             downloads.folder,
             show_in_finder if sys.platform == "darwin" else None,

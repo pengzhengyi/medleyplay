@@ -53,6 +53,7 @@ class FindLyricsJob(_Model):
     sites: tuple[LyricsProvider, ...] = ()
     finder: Annotated[str, StringConstraints(max_length=64)] = "lyrics"
     match: MatchSong | None = None
+    match_album: str | None = None
 
 
 class FoundLyricsResult(_Model):

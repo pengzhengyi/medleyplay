@@ -16,6 +16,7 @@ import {
   type AddedPart,
   api,
   ApiError,
+  lyricsMatchInProgress,
   type Credit,
   type Detail,
   type Details,
@@ -78,6 +79,13 @@ export interface Library {
    * a change made here; a heart or a rating leaves it alone.
    */
   readonly refreshes: number;
+  readonly lyricsMatchRevision: number;
+  readonly lyricsMatchEnds: ReadonlyMap<
+    number,
+    { readonly jobId: number; readonly saved: boolean }
+  >;
+  readonly lyricsStreamConnections: number;
+  readonly lyricsVersion: (trackId: number | undefined) => string;
   /** Why the last request failed, or `""`. */
   readonly error: string;
   /** Whether medleyplay may contact music sites now, once the server has said. */
@@ -222,6 +230,11 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "bas
 export function useLibrary(onSignedOut: () => void): Library {
   const [store, dispatch] = useReducer(reduce, EMPTY);
   const [refreshes, setRefreshes] = useState(0);
+  const [lyricsMatchRevision, setLyricsMatchRevision] = useState(0);
+  const [lyricsReconnects, setLyricsReconnects] = useState(0);
+  const [lyricsStreamConnections, setLyricsStreamConnections] = useState(0);
+  const [lyricsMatchEnds, setLyricsMatchEnds] = useState<Library["lyricsMatchEnds"]>(new Map());
+  const [lyricSaves, setLyricSaves] = useState<ReadonlyMap<number, number>>(new Map());
   const refresh = useCallback(() => {
     setRefreshes((count) => count + 1);
   }, []);
@@ -370,6 +383,28 @@ export function useLibrary(onSignedOut: () => void): Library {
   /** Follow a Download's or a lookup's Job as the event stream tells of it. */
   const onJob = useEffectEvent((job: JobEvent) => {
     if (job.kind === "lookup_video") loadVideoLookups();
+    if (job.kind === "auto_match_find" || job.kind === "auto_match_choose") {
+      setLyricsMatchRevision((count) => count + 1);
+      if (
+        FINISHED.has(job.state) &&
+        !(job.kind === "auto_match_find" && job.state === "succeeded")
+      ) {
+        const trackId = Number(job.target?.split(":")[1]);
+        if (Number.isSafeInteger(trackId) && trackId > 0) {
+          const saved = job.state === "succeeded";
+          setLyricsMatchEnds((prior) =>
+            (prior.get(trackId)?.jobId ?? 0) >= job.id
+              ? prior
+              : new Map(prior).set(trackId, { jobId: job.id, saved }),
+          );
+          if (saved) {
+            setLyricSaves((prior) =>
+              (prior.get(trackId) ?? 0) >= job.id ? prior : new Map(prior).set(trackId, job.id),
+            );
+          }
+        }
+      }
+    }
     if (downloadEnded(job)) {
       endedJobs.current.add(job.id);
     }
@@ -493,13 +528,26 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
+        readLyricsAgain();
         load();
       }
+    };
+    const readLyricsAgain = () => {
+      setLyricsReconnects((count) => count + 1);
+      setLyricsMatchRevision((count) => count + 1);
     };
     load();
     document.addEventListener("visibilitychange", onShown);
     const stopListening = listen(
-      { load, refresh, firstReady: loadVideoLookups },
+      {
+        load,
+        refresh,
+        firstReady: loadVideoLookups,
+        onReady: () => {
+          readLyricsAgain();
+          setLyricsStreamConnections((count) => count + 1);
+        },
+      },
       setMode,
       onJob,
       setWaitingDevices,
@@ -662,6 +710,11 @@ export function useLibrary(onSignedOut: () => void): Library {
     refreshFeatures: loadFeatures,
     loaded: store.loaded,
     refreshes,
+    lyricsMatchRevision,
+    lyricsMatchEnds,
+    lyricsStreamConnections,
+    lyricsVersion: (trackId) =>
+      `${String(lyricsReconnects)}:${String(trackId === undefined ? 0 : (lyricSaves.get(trackId) ?? 0))}`,
     error,
     mode,
     modeChecked: setMode,
@@ -688,8 +741,12 @@ export function useLibrary(onSignedOut: () => void): Library {
         if (failure instanceof ApiError && failure.status === 401) {
           onSignedOut();
         }
-        const message = failure instanceof Error ? failure.message : String(failure);
-        setLookup(id, { enricher, state: "failed", message });
+        if (lyricsMatchInProgress(failure)) {
+          setLookup(id, undefined);
+        } else {
+          const message = failure instanceof Error ? failure.message : String(failure);
+          setLookup(id, { enricher, state: "failed", message });
+        }
         throw failure;
       }
       asking.current.delete(id);
@@ -840,7 +897,13 @@ function listen(
     load,
     refresh,
     firstReady,
-  }: { readonly load: () => void; readonly refresh: () => void; readonly firstReady: () => void },
+    onReady,
+  }: {
+    readonly load: () => void;
+    readonly refresh: () => void;
+    readonly firstReady: () => void;
+    readonly onReady: () => void;
+  },
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
   onWaitingDevices: (waiting: readonly WaitingDevice[]) => void,
@@ -857,6 +920,7 @@ function listen(
   let connected = false;
   let online: boolean | undefined;
   events.addEventListener("ready", () => {
+    onReady();
     if (connected) {
       load();
     } else {

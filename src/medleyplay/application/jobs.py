@@ -56,6 +56,14 @@ class Lane:
 
 
 @dataclass(frozen=True)
+class JobCompletion:
+    """Other Jobs to announce, or an expected failure, once a completion commits."""
+
+    queued: tuple[JobId, ...] = ()
+    failure: tuple[str, str] | None = None
+
+
+@dataclass(frozen=True)
 class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks its request
     """A kind of Job: the program a Job process runs, and the completion the server runs.
 
@@ -79,7 +87,7 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     program: str
     request: type[I]
     result: type[R]
-    complete: Callable[[Session, Job, R], None]
+    complete: Callable[[Session, Job, R], JobCompletion | None]
     points: tuple[str, ...] = ()
     idle_timeout: timedelta = IDLE_TIMEOUT
     max_attempts: int = MAX_ATTEMPTS
@@ -93,6 +101,38 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     lends_tavily: bool = False
     """Run with only the Tavily plugin and lend it the household's search key."""
     on_submit: Callable[[Session, Job], None] | None = None
+    retry_refused: str | None = None
+
+
+def queue_job_in[I: BaseModel, R: BaseModel](
+    db: Session,
+    kind: JobKind[I, R],
+    target: str,
+    request: I,
+    requested_by: AccountId | None,
+    clock: Clock,
+    *,
+    login_account: AccountId | None = None,
+) -> Job:
+    """Insert a Job in the caller's write transaction after checking for conflicts."""
+    row = JobRow(
+        kind=kind.name,
+        target=target,
+        state=JobState.QUEUED,
+        request=request.model_dump(mode="json"),
+        requested_by=requested_by,
+        login_account_id=login_account if kind.login_site else None,
+        attempts=0,
+        interruptions=0,
+        failure_message="",
+        created_at=clock(),
+    )
+    db.add(row)
+    db.flush()
+    job = to_job(row)
+    if kind.on_submit is not None:
+        kind.on_submit(db, job)
+    return job
 
 
 # Any: each kind has its own request and result models.
@@ -176,32 +216,50 @@ class JobService:
             return existing
         try:
             with self._units.begin() as db:
-                row = JobRow(
-                    kind=kind.name,
-                    target=target,
-                    state=JobState.QUEUED,
-                    request=request.model_dump(mode="json"),
-                    requested_by=requested_by,
-                    login_account_id=login_account if kind.login_site else None,
-                    attempts=0,
-                    interruptions=0,
-                    failure_message="",
-                    created_at=self._clock(),
+                job = queue_job_in(
+                    db,
+                    kind,
+                    target,
+                    request,
+                    requested_by,
+                    self._clock,
+                    login_account=login_account,
                 )
-                db.add(row)
-                db.flush()
-                job = to_job(row)
-                if kind.on_submit is not None:
-                    kind.on_submit(db, job)
         except IntegrityError:
             # Another request queued the same Job between the lookup and the insert.
             raced = self.active(kind.name, target)
             if raced is None:
                 raise
             return raced
-        self.notify(job.id)
-        self._runner.wake()
+        self.announce_queued(job.id)
         return job
+
+    def announce_queued(self, *job_ids: JobId) -> None:
+        """Publish Jobs inserted by a committed transaction and wake the runner."""
+        for job_id in job_ids:
+            self.notify(job_id)
+        if job_ids:
+            self._runner.wake()
+
+    def submit_in(
+        self,
+        db: Session,
+        kind: JobKind[I, R],
+        target: str,
+        request: I,
+        requested_by: AccountId | None,
+    ) -> tuple[Job, bool]:
+        """Queue a Job or reuse an active one while the caller holds the writer lock."""
+        existing = db.scalar(
+            select(JobRow)
+            .where(
+                JobRow.kind == kind.name, JobRow.target == target, JobRow.state.in_(ACTIVE_STATES)
+            )
+            .limit(1)
+        )
+        if existing is not None:
+            return to_job(existing), False
+        return queue_job_in(db, kind, target, request, requested_by, self._clock), True
 
     def list_jobs(self, limit: int = LIST_LIMIT, *, viewer: Account | None = None) -> list[JobView]:
         """Return the newest Jobs first."""
@@ -239,17 +297,20 @@ class JobService:
             self.notify(job_id)
         return self.get_job(job_id)
 
-    def cancel_active_in(self, db: Session, kind: str, target: str) -> JobId | None:
+    def cancel_active_in(
+        self, db: Session, kind: str, target: str, *, reason: str | None = None
+    ) -> JobId | None:
         """Cancel the active Job of `kind` for `target` in the caller's transaction.
 
         Return its id, or `None` when none is active. The caller calls
         `announce_cancelled` once the transaction has committed, which stops a
         running Job's process.
         """
+        why = {} if reason is None else {"failure_kind": reason}
         cancelled = db.execute(
             update(JobRow)
             .where(JobRow.kind == kind, JobRow.target == target, JobRow.state.in_(ACTIVE_STATES))
-            .values(state=JobState.CANCELLED, finished_at=self._clock(), pid=None)
+            .values(state=JobState.CANCELLED, finished_at=self._clock(), pid=None, **why)
             .returning(JobRow.id)
         ).scalar_one_or_none()
         return None if cancelled is None else JobId(cancelled)
@@ -277,6 +338,8 @@ class JobService:
             if kind is None:
                 message = f"This server no longer runs Jobs of the kind {row.kind!r}."
                 raise ConflictError(message)
+            if kind.retry_refused is not None:
+                raise ConflictError(kind.retry_refused)
             target, request = row.target, kind.request.model_validate(row.request)
         # The runner lends the login only if it is valid when the Job starts.
         return self.submit(kind, target, request, caller.id, login_account=caller.id)

@@ -1,86 +1,103 @@
-/** @file Match saved album songs one at a time, keeping each outcome with its Track. */
+/** @file Start Auto-Match for saved songs and display the Jobs' outcomes. */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { api, type SplitSong } from "../api";
+import { api, type LyricsMatch, type SplitSong } from "../api";
 import { useWords } from "../locale";
-import { LYRICS_SITE_NAMES } from "../lyrics";
 
 export interface LyricsMatchStatus {
   readonly state: "working" | "saved" | "not-matched";
   readonly note: string;
 }
 
-const notMatched = (note: string): LyricsMatchStatus => ({ state: "not-matched", note });
-const pause = () => new Promise<void>((done) => setTimeout(done, 2000));
-
-async function matchSong(
-  song: SplitSong,
-  check: () => void,
-  show: (status: LyricsMatchStatus) => void,
-  t: ReturnType<typeof useWords>,
-): Promise<LyricsMatchStatus> {
-  check();
-  show({ state: "working", note: t("Searching lyrics sites…") });
-  const job = await api.startLyricsMatch(song);
-  for (;;) {
-    check();
-    const { state, failure_message: failure } = await api.job(job);
-    if (state === "succeeded") break;
-    if (state === "waiting") return notMatched(t("Search waiting; nothing saved."));
-    if (state === "failed" || state === "cancelled") {
-      return notMatched(failure || t("Search did not finish."));
-    }
-    await pause();
-  }
-  check();
-  const id = song.track_id;
-  const found = await api.lyricsFound(id);
-  if (found.options.length === 0) return notMatched(t("No candidates found."));
-  check();
-  show({ state: "working", note: t("Checking the AI pick…") });
-  await api.chooseLyricsMatch(id, job);
-  for (;;) {
-    check();
-    const result = await api.lyricsFound(id);
-    if (result.waiting) return notMatched(t("AI waiting; nothing saved."));
-    if (!result.choosing) {
-      const pick = result.pick;
-      const option = pick === null ? undefined : result.options[pick.option];
-      if (result.choice_failure !== null) return notMatched(result.choice_failure);
-      if (pick === null || option === undefined) return notMatched(t("No clear match."));
-      check();
-      show({ state: "working", note: t("Saving lyrics…") });
-      await api.applyLyricsMatch(id, job, pick.at);
-      return {
-        state: "saved",
-        note: t("Saved lyrics from {{site}}.", { site: LYRICS_SITE_NAMES[option.provider] }),
-      };
-    }
-    await pause();
+function feedback(match: LyricsMatch, t: ReturnType<typeof useWords>): LyricsMatchStatus {
+  switch (match.state) {
+    case "searching":
+      return { state: "working", note: t("Searching lyrics sites…") };
+    case "choosing":
+      return { state: "working", note: t("Checking the AI pick…") };
+    case "waiting":
+      return { state: "working", note: t("Auto-Match is waiting.") };
+    case "saved":
+      return { state: "saved", note: t("Saved lyrics.") };
+    case "skipped":
+      return { state: "not-matched", note: t(match.note || "No clear match.") };
+    case "failed":
+      return { state: "not-matched", note: match.note || t("Search did not finish.") };
   }
 }
 
-/** Match only on a press of Auto-Match or Start matching; closing Songs stops further requests. */
-export function useAlbumLyricsMatch(songs: readonly SplitSong[], unavailable: string) {
+function afterRead(
+  prior: ReadonlyMap<number, LyricsMatch>,
+  read: readonly LyricsMatch[],
+): ReadonlyMap<number, LyricsMatch> {
+  const next = new Map([...prior].filter(([, match]) => match.job_id === null));
+  for (const match of read) {
+    const known = prior.get(match.track_id);
+    const id = match.job_id ?? 0;
+    const older =
+      known !== undefined &&
+      (known.job_id === null ? id <= (known.previous_job_id ?? 0) : id < known.job_id);
+    next.set(match.track_id, older ? known : match);
+  }
+  return next;
+}
+
+function afterSubmission(
+  prior: ReadonlyMap<number, LyricsMatch>,
+  started: readonly LyricsMatch[],
+): ReadonlyMap<number, LyricsMatch> {
+  const next = new Map(prior);
+  for (const match of started) {
+    const known = next.get(match.track_id);
+    const id = match.job_id ?? match.previous_job_id ?? 0;
+    if ((known?.job_id ?? 0) <= id) next.set(match.track_id, match);
+  }
+  return next;
+}
+
+/** Reading outcomes never submits any work; only Auto-Match or Start matching does. */
+export function useAlbumLyricsMatch(
+  album: number,
+  songs: readonly SplitSong[],
+  unavailable: string,
+  version: string,
+) {
   const t = useWords();
   const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<ReadonlyMap<number, LyricsMatchStatus>>(new Map());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [matches, setMatches] = useState<ReadonlyMap<number, LyricsMatch>>(new Map());
+  const [reads, setReads] = useState(0);
   const active = useRef<AbortController | null>(null);
   const current = useRef(songs);
   useLayoutEffect(() => {
     current.current = unavailable ? [] : songs;
   }, [songs, unavailable]);
   useEffect(() => () => active.current?.abort(), []);
+  useEffect(() => {
+    let open = true;
+    api.lyricsMatches(album).then(
+      (read) => {
+        if (open) {
+          setMatches((prior) => afterRead(prior, read));
+        }
+      },
+      () => undefined,
+    );
+    return () => {
+      open = false;
+    };
+  }, [album, version, reads]);
 
   const request = async (confirmed: boolean) => {
     if (active.current !== null || current.current.length === 0) return;
     const selected = current.current;
     const run = new AbortController();
     active.current = run;
-    setBusy(true);
+    setSubmitting(true);
     setConfirm(false);
+    setError("");
     try {
       if (!confirmed) {
         const preferences = await api.preferences().catch(() => undefined);
@@ -90,43 +107,40 @@ export function useAlbumLyricsMatch(songs: readonly SplitSong[], unavailable: st
           return;
         }
       }
-      for (const song of selected) {
-        if (run.signal.aborted) break;
-        const show = (status: LyricsMatchStatus) => {
-          if (!run.signal.aborted) {
-            setResults((prior) => new Map(prior).set(song.track_id, status));
-          }
-        };
-        const check = () => {
-          run.signal.throwIfAborted();
-          if (!current.current.includes(song)) throw new Error(t("Skipped: song changed."));
-        };
-        try {
-          show(await matchSong(song, check, show, t));
-        } catch (failure) {
-          show(notMatched(failure instanceof Error ? failure.message : String(failure)));
-        }
+      const eligible = selected.filter((song) => current.current.includes(song));
+      if (eligible.length === 0) return;
+      const started = await api.startLyricsMatch(album, eligible);
+      if (!run.signal.aborted) {
+        setMatches((prior) => afterSubmission(prior, started));
+        setReads((count) => count + 1);
+      }
+    } catch (failure) {
+      if (!run.signal.aborted) {
+        setError(failure instanceof Error ? failure.message : String(failure));
+        setReads((count) => count + 1);
       }
     } finally {
-      if (!run.signal.aborted) setBusy(false);
+      if (!run.signal.aborted) setSubmitting(false);
       active.current = null;
     }
   };
-  const why = unavailable || (songs.length === 0 ? t("Save the songs first to match lyrics") : "");
-  const closeConfirmation = () => {
-    setConfirm(false);
-  };
+  const busy =
+    submitting ||
+    [...matches.values()].some(({ state }) => state === "searching" || state === "choosing");
   return {
     busy,
     confirm,
     count: songs.length,
-    why,
-    results,
+    error,
+    why: unavailable || (songs.length === 0 ? t("Save the songs first to match lyrics") : ""),
+    results: new Map([...matches].map(([id, match]) => [id, feedback(match, t)])),
     onPress: () => {
-      if (confirm) closeConfirmation();
+      if (confirm) setConfirm(false);
       else void request(false);
     },
     onConfirm: () => void request(true),
-    onCancel: closeConfirmation,
+    onCancel: () => {
+      setConfirm(false);
+    },
   };
 }

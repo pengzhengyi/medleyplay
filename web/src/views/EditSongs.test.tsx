@@ -13,7 +13,7 @@ import {
   type Songs,
 } from "../api";
 import { fakeMedia } from "../testing/media";
-import { detailsOf, lyricsFoundOf, serve, splitSongsOf, trackOf } from "../testing/server";
+import { detailsOf, serve, splitSongsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
 import { LyricsEditor } from "./LyricsEditor";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
@@ -96,7 +96,7 @@ async function renderEditor(
 ) {
   const onClose = vi.fn();
   const load = vi.fn<(trackId: number) => Promise<Songs>>(() => Promise.resolve(songs));
-  const dialogOf = (asked: AiAsk) => (
+  const dialogOf = (asked: AiAsk, matchRevision = 0) => (
     <EditDetails
       track={BREMEN}
       load={() => Promise.resolve(detailsOf(104))}
@@ -139,6 +139,7 @@ async function renderEditor(
               />
             )}
             matchOnline
+            matchRevision={matchRevision}
           />
         ),
       }}
@@ -169,6 +170,9 @@ async function renderEditor(
     onClose,
     unmount,
     answerAi,
+    readMatchesAgain: () => {
+      rerender(dialogOf(ai, 1));
+    },
   };
 }
 
@@ -207,99 +211,83 @@ const press = (dialog: HTMLElement, name: string | RegExp | HTMLElement) =>
 const lyricsButton = (dialog: HTMLElement, title: string) =>
   within(dialog).getByRole("button", { name: `Lyrics for “${title}”` });
 
+const MATCH_URL = "/api/tracks/104/songs/lyrics-match";
+
 describe("editing a file's songs", () => {
-  it("confirms before matching, skips saved lyrics and applies a pick by its search job", async () => {
-    const at = "2026-11-19T12:00:01Z";
-    const search = later<undefined>();
-    const choose = later<undefined>();
-    const apply = later<undefined>();
-    const saved = vi.fn(() => ({ status: 204, after: apply.promise }));
+  it("confirms only saved rows and reopens to show the background save without resubmitting", async () => {
+    let finished = false;
+    let started = false;
+    const searching = { track_id: 102, job_id: 27, state: "searching", note: "" };
+    const start = vi.fn(() => {
+      started = true;
+      return {
+        status: 202,
+        body: [
+          { track_id: 101, job_id: null, state: "skipped", note: "Already has lyrics" },
+          searching,
+        ],
+      };
+    });
     const { calls } = serve({
       "GET /api/me/preferences": { body: { shortcuts: null, history_length: 25, revision: 1 } },
-      "POST /api/tracks/101/lyrics/match/find": {
-        status: 409,
-        body: { detail: "Already has lyrics" },
-      },
-      "POST /api/tracks/102/lyrics/match/find": { status: 202, body: 27, after: search.promise },
-      "GET /api/jobs/27": { body: { id: 27, state: "succeeded" } },
-      "POST /api/tracks/102/lyrics/match/choose": {
-        status: 202,
-        body: null,
-        after: choose.promise,
-      },
-      "GET /api/tracks/102/lyrics/found": {
-        body: lyricsFoundOf(undefined, {
-          pick: { at, option: 0, why: "Same recording", host: "test", model: "test" },
-        }),
-      },
-      "POST /api/tracks/102/lyrics/match/apply": saved,
+      [`GET ${MATCH_URL}`]: () => ({
+        body: started ? [finished ? { ...searching, state: "saved" } : searching] : [],
+      }),
+      [`POST ${MATCH_URL}`]: start,
     });
-    const { dialog, onSave, answerAi } = await renderEditor();
+    const { dialog, onSave, unmount } = await renderEditor();
     const matched = lyricsButton(dialog, "ゴーゴー幽霊船");
     const existing = lyricsButton(dialog, "アイネクライネ");
     await userEvent.type(box(dialog, "Title of song 3"), " draft");
     await press(dialog, "Auto-Match lyrics");
     expect(await within(dialog).findByText(/may make.*AI calls/i)).toBeVisible();
-    expect(calls).not.toContain("POST /api/tracks/101/lyrics/match/find");
+    expect(calls).not.toContain(`POST ${MATCH_URL}`);
     await press(dialog, "Start matching");
-    expect(within(dialog).getByRole("button", { name: "Auto-Match lyrics" })).toBeDisabled();
     await waitFor(() => expect(matched).toHaveAccessibleDescription("Searching lyrics sites…"));
     expect(existing).toHaveAccessibleDescription("Already has lyrics");
     expect(matched).toHaveAttribute("title", expect.stringContaining("Searching lyrics sites…"));
+    unmount();
+    finished = true;
+    const { dialog: reopened } = await renderEditor();
 
-    search.give(undefined);
-    await waitFor(() => expect(matched).toHaveAccessibleDescription("Checking the AI pick…"));
-    await press(dialog, existing);
-    const lyrics = screen.getByRole("dialog", { name: "Lyrics" });
-    await within(lyrics).findByText("None yet");
-    await press(lyrics, "Songs");
-    expect(existing).toHaveFocus();
-
-    choose.give(undefined);
-    await waitFor(() => {
-      expect(saved).toHaveBeenCalledOnce();
-    });
-    expect(matched).toHaveAccessibleDescription("Saving lyrics…");
-    apply.give(undefined);
-
-    await waitFor(() => expect(matched).toHaveAccessibleDescription("Saved lyrics from LRCLIB."));
-    const announcement = within(dialog)
+    await waitFor(() =>
+      expect(lyricsButton(reopened, "ゴーゴー幽霊船")).toHaveAccessibleDescription("Saved lyrics."),
+    );
+    const announcement = within(reopened)
       .getAllByRole("status")
-      .find((status) => status.textContent.includes("Saved lyrics from LRCLIB."));
+      .find((status) => status.textContent.includes("Saved lyrics."));
     expect(announcement).toHaveClass("visually-hidden");
-    expect(within(dialog).queryByRole("list", { name: "Lyrics match results" })).toBeNull();
-    answerAi({ ...AI_UNASKED });
-    await press(dialog, "Move “ゴーゴー幽霊船” down");
-    expect(box(dialog, "Title of song 3")).toHaveValue("ゴーゴー幽霊船");
-    expect(lyricsButton(dialog, "ゴーゴー幽霊船")).toHaveAccessibleDescription(
-      "Saved lyrics from LRCLIB.",
+    expect(start).toHaveBeenCalledExactlyOnceWith(
+      SPLIT.songs.slice(0, 2).map(({ id, track_id, start_ms, title, artist }) => ({
+        segment_id: id,
+        track_id,
+        start_ms,
+        title,
+        artist,
+      })),
     );
-    expect(lyricsButton(dialog, "Last draft")).toHaveAccessibleDescription(
-      "Edit lyrics for “Last draft”",
-    );
-    expect(saved).toHaveBeenCalledExactlyOnceWith({ search_job: 27, chosen_at: at });
-    expect(calls.some((call) => call.includes("/103/"))).toBe(false);
     expect(onSave).not.toHaveBeenCalled();
   });
 
   it("searches only on an explicit click with direct matching, once despite repeat presses", async () => {
     const preference = later<undefined>();
     const find = later<undefined>();
+    const missed = { track_id: 101, job_id: 27, state: "skipped", note: "No candidates found." };
+    let finished = false;
     const { calls } = serve({
       "GET /api/me/preferences": {
         body: { lyrics_match_confirmation: "direct", revision: 1 },
         after: preference.promise,
       },
-      "POST /api/tracks/101/lyrics/match/find": { status: 202, body: 27, after: find.promise },
-      "GET /api/jobs/27": { body: { id: 27, state: "succeeded" } },
-      "GET /api/tracks/101/lyrics/found": { body: lyricsFoundOf([]) },
-      "POST /api/tracks/102/lyrics/match/find": {
-        status: 503,
-        body: { detail: "Search service is unavailable" },
+      [`GET ${MATCH_URL}`]: () => ({ body: finished ? [missed] : [] }),
+      [`POST ${MATCH_URL}`]: {
+        status: 202,
+        body: [missed],
+        after: find.promise,
       },
     });
     const { dialog } = await renderEditor();
-    const search = "POST /api/tracks/101/lyrics/match/find";
+    const search = `POST ${MATCH_URL}`;
     await userEvent.type(box(dialog, "Title of song 3"), " draft");
     expect(calls).not.toContain(search);
 
@@ -311,6 +299,7 @@ describe("editing a file's songs", () => {
       expect(calls).toContain(search);
     });
     await userEvent.click(autoMatch);
+    finished = true;
     find.give(undefined);
 
     await waitFor(() =>
@@ -318,46 +307,80 @@ describe("editing a file's songs", () => {
         "No candidates found.",
       ),
     );
-    expect(lyricsButton(dialog, "ゴーゴー幽霊船")).toHaveAccessibleDescription(
-      "Search service is unavailable",
-    );
     expect(within(dialog).queryByRole("button", { name: "Start matching" })).toBeNull();
     expect(calls.filter((call) => call === "GET /api/me/preferences")).toHaveLength(1);
     expect(calls.filter((call) => call === search)).toHaveLength(1);
     expect(calls.some((call) => call.endsWith("/match/apply"))).toBe(false);
   });
 
-  it("does not apply an AI pick after the song changes", async () => {
-    const choose = later<undefined>();
+  it("displays the server's skip when the saved song changed", async () => {
     const { calls } = serve({
       "GET /api/me/preferences": { body: { lyrics_match_confirmation: "direct", revision: 1 } },
-      "POST /api/tracks/101/lyrics/match/find": { status: 202, body: 27 },
-      "GET /api/jobs/27": { body: { id: 27, state: "succeeded" } },
-      "POST /api/tracks/101/lyrics/match/choose": {
+      [`GET ${MATCH_URL}`]: { body: [] },
+      [`POST ${MATCH_URL}`]: {
         status: 202,
-        body: null,
-        after: choose.promise,
-      },
-      "GET /api/tracks/101/lyrics/found": {
-        body: lyricsFoundOf(undefined, {
-          pick: { at: "2026-11-19T12:00:01Z", option: 0, why: "Same", host: "test", model: "test" },
-        }),
+        body: [{ track_id: 101, job_id: null, state: "skipped", note: "Skipped: song changed." }],
       },
     });
     const { dialog } = await renderEditor();
     await press(dialog, "Auto-Match lyrics");
-    await waitFor(() => {
-      expect(calls).toContain("POST /api/tracks/101/lyrics/match/choose");
-    });
-    await userEvent.type(box(dialog, "Title of song 1"), " draft");
-    choose.give(undefined);
 
     await waitFor(() =>
-      expect(lyricsButton(dialog, "アイネクライネ draft")).toHaveAccessibleDescription(
+      expect(lyricsButton(dialog, "アイネクライネ")).toHaveAccessibleDescription(
         "Skipped: song changed.",
       ),
     );
-    expect(calls).not.toContain("POST /api/tracks/101/lyrics/match/apply");
+    expect(calls.filter((call) => call.startsWith("POST "))).toEqual([`POST ${MATCH_URL}`]);
+  });
+
+  it("keeps a submission skip over an older save but shows a new run", async () => {
+    const saved = { track_id: 101, job_id: 27, state: "saved", note: "" };
+    let current = saved;
+    const { calls } = serve({
+      "GET /api/me/preferences": { body: { lyrics_match_confirmation: "direct", revision: 1 } },
+      [`GET ${MATCH_URL}`]: () => ({ body: [current] }),
+      [`POST ${MATCH_URL}`]: {
+        status: 202,
+        body: [
+          {
+            track_id: 101,
+            job_id: null,
+            previous_job_id: 27,
+            state: "skipped",
+            note: "Already has lyrics",
+          },
+        ],
+      },
+    });
+    const { dialog, readMatchesAgain } = await renderEditor();
+    const song = lyricsButton(dialog, "アイネクライネ");
+    await waitFor(() => expect(song).toHaveAccessibleDescription("Saved lyrics."));
+
+    await press(dialog, "Auto-Match lyrics");
+
+    await waitFor(() => {
+      expect(calls.filter((call) => call === `GET ${MATCH_URL}`)).toHaveLength(2);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(song).toHaveAccessibleDescription("Already has lyrics");
+    current = { ...saved, job_id: 28, state: "searching" };
+    readMatchesAgain();
+    await waitFor(() => expect(song).toHaveAccessibleDescription("Searching lyrics sites…"));
+  });
+
+  it("explains next to Auto-Match when the server refuses to start", async () => {
+    serve({
+      "GET /api/me/preferences": { body: { lyrics_match_confirmation: "direct", revision: 1 } },
+      [`GET ${MATCH_URL}`]: { body: [] },
+      [`POST ${MATCH_URL}`]: { status: 409, body: { detail: "Go Online to auto-match lyrics." } },
+    });
+    const { dialog } = await renderEditor();
+
+    await press(dialog, "Auto-Match lyrics");
+
+    expect(await within(dialog).findByText("Go Online to auto-match lyrics.")).toHaveRole("status");
   });
 
   it("opens the moved song's lyrics without saving or losing the list draft", async () => {

@@ -154,6 +154,7 @@ export function SongsEditor({
   onUnsplit,
   lyricsOf,
   matchOnline,
+  matchRevision = 0,
 }: {
   readonly album: Track;
   readonly load: (trackId: number) => Promise<Songs>;
@@ -170,6 +171,7 @@ export function SongsEditor({
   readonly onUnsplit: () => Promise<void>;
   readonly lyricsOf: (trackId: number) => ReactNode;
   readonly matchOnline: boolean;
+  readonly matchRevision?: number;
 }) {
   const t = useWords();
   const { headingId, onBack, onLock, onDone } = useContext(SongsControlsContext);
@@ -634,6 +636,7 @@ export function SongsEditor({
         ]);
 
   const { results: lyricResults, ...lyricsMatch } = useAlbumLyricsMatch(
+    album.id,
     songs?.songs.filter((song) =>
       rows.some(
         (row) =>
@@ -651,6 +654,7 @@ export function SongsEditor({
         : typing || busy || snapping || thinking
           ? t("Finish editing the song list first")
           : "",
+    `${String(matchRevision)}:${String(matchOnline)}`,
   );
   const childLyrics = lyricsTrack !== null && (
     <Modal

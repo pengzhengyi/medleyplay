@@ -231,7 +231,7 @@ export function Library({
   const [lyricsEdits, setLyricsEdits] = useState(0);
   const lyrics = useLyrics(
     song?.id,
-    `${lyricsLookup?.enricher === LYRICS_ENRICHER ? lyricsLookup.state : ""}:${String(lyricsEdits)}`,
+    `${lyricsLookup?.enricher === LYRICS_ENRICHER ? lyricsLookup.state : ""}:${String(lyricsEdits)}:${library.lyricsVersion(song?.id)}`,
   );
   /** The editor of `track`'s lyrics, syncing them to it as the player plays it. */
   const lyricsOf = (track: Track) => {
@@ -249,7 +249,9 @@ export function Library({
       editor: (
         <LazyPart doing="Opening the lyrics…">
           <LyricsEditor.Component
+            key={track.id}
             load={() => api.lyrics(track.id)}
+            refreshVersion={library.lyricsVersion(track.id)}
             save={(text, instrumental) => edited(api.setLyrics(track.id, text, instrumental))}
             forget={() => edited(api.forgetLyrics(track.id))}
             song={{ id: track.id, title: track.title, artist: track.artist }}
@@ -509,6 +511,7 @@ export function Library({
           <SongsEditor.Component
             album={file}
             matchOnline={library.mode?.online === true}
+            matchRevision={library.lyricsMatchRevision}
             lyricsOf={(id) => {
               const child = byId.get(id);
               return child?.segment_of === file.id ? lyricsOf(child)?.editor : undefined;

@@ -248,6 +248,13 @@ export function albumsOf(tracks: readonly Track[]): Album[] {
     .sort((a, b) => collator.compare(a.artist, b.artist) || collator.compare(a.name, b.name));
 }
 
+/** The four album covers shown on an artist's page in place of a photo. */
+export function artistMosaic(songs: readonly Track[]): string[] {
+  return albumsOf(songs)
+    .flatMap((album) => (album.cover === null ? [] : [album.cover]))
+    .slice(0, 4);
+}
+
 /** Return the Tracks of the album `name` by `artist`, compared folded, in the order given. */
 export function tracksOfAlbum(tracks: readonly Track[], artist: string, name: string): Track[] {
   const artistKey = fold(artist);

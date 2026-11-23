@@ -13,15 +13,13 @@ import { useState } from "react";
 
 import { type KnownArtist, type Track, coverUrl } from "../api";
 import { initialOf } from "../format";
-import { albumsOf, fold } from "../library/views";
+import { artistMosaic, fold } from "../library/views";
 import { hrefOf } from "../routes";
 import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { Cover } from "./Cover";
 import { PictureFrame } from "./PictureFrame";
 import { SuggestedPhoto } from "./SuggestedPhoto";
 
-/** How many album covers the mosaic shows. */
-const MOSAIC = 4;
 /** How many other names show before *and N more*. */
 const NAMES_SHOWN = 6;
 
@@ -90,9 +88,7 @@ export function ArtistPicture({
   readonly artist: KnownArtist | undefined;
   readonly onPhotoUsed?: (() => void) | undefined;
 }) {
-  const covers = albumsOf(songs)
-    .flatMap((album) => (album.cover === null ? [] : [album.cover]))
-    .slice(0, MOSAIC);
+  const covers = artistMosaic(songs);
   const [replacing, setReplacing] = useState(false);
   const photo = artist?.photo ?? null;
   const mosaic = (

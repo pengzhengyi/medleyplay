@@ -1770,7 +1770,7 @@ button[aria-disabled="true"] {
 .settings-toc {
   position: sticky;
   top: var(--stick-top, var(--top-height, 0));
-  z-index: 2;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -6409,6 +6409,36 @@ button.song-handle {
 /* The song playing, or being checked: its button stops it. */
 .song-row-buttons .icon.on {
   color: var(--accent);
+}
+
+.song-lyrics-match[aria-busy="true"]::before {
+  display: none;
+}
+
+.song-lyrics[data-match="not-matched"] {
+  border: 1px dashed currentcolor;
+}
+
+.song-lyrics[data-match="working"] {
+  border: 1px solid transparent;
+  border-right-color: currentcolor;
+  border-bottom-color: currentcolor;
+}
+
+.song-lyrics[data-match="working"] svg [opacity] {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .song-lyrics[data-match="working"] svg [opacity] {
+    animation: lyrics-match-fill 1.8s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes lyrics-match-fill {
+  to {
+    opacity: 0.75;
+  }
 }
 
 .songs-panel .songs-add {

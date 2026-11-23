@@ -180,10 +180,17 @@ the household looks for the lyrics itself, by a title and artist of its own.
   site, title, artist, album, length, and kind, never its lyrics. The model answers
   with one letter, or none, and why. The pick is marked *AI pick*, why in its tooltip,
   while those are the songs found; finding again drops it.
-- **Auto-Match lyrics in Songs** asks for confirmation before searching saved songs
-  one at a time. The same find and choose Jobs use the same enabled sites, model,
-  and rate limits. Each result appears beside the action. Closing Songs stops the
-  browser from starting another step; a Job already submitted can finish.
+- **Auto-Match lyrics in Songs** searches saved songs one at a time. In Settings →
+  Lyrics, each Account can choose **Ask before searching** (the default) or
+  **Search directly**. Either way, opening Songs never starts a search. The same
+  find and choose Jobs use the same enabled sites, model, and rate limits.
+  Closing Songs stops the browser from starting another step; a Job already
+  submitted can finish.
+- **Match feedback** stays with each saved song while Songs is open. Its Lyrics
+  icon fills partway while searching, choosing, or saving and turns solid only
+  after a save. If nothing is saved, a dashed border marks the outlined icon.
+  The tooltip and screen reader say what happened. With reduced motion the
+  partial fill holds still. The icon still opens the lyrics editor.
 - **Saving a pick** keeps the site's lyrics under the site's name, not as a
   household edit. In one write transaction the server checks the saved segment,
   Track details, search Job, choice and enabled site. Missing or ambiguous picks,

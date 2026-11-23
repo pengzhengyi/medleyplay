@@ -217,6 +217,7 @@ as one file.
   a row keeps its Track; a new row or one filled from a suggested list must be
   saved first. [Auto-Match lyrics](Lyrics.md#finding-lyrics-by-hand) is a
   separate action for saved songs whose title, artist, and start are unchanged.
+  The microphone shows each song's progress and outcome even when the row moves.
 
 ## Snapping starts to the gaps
 

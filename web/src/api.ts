@@ -934,8 +934,11 @@ export interface Preferences {
   readonly shortcuts: Readonly<Record<string, readonly string[]>> | null;
   /** How many songs History shows, or `null` for the default. */
   readonly history_length: HistoryLength | null;
+  readonly lyrics_match_confirmation: LyricsMatchConfirmation | null;
   readonly revision: number;
 }
+
+export type LyricsMatchConfirmation = "ask" | "direct";
 
 /** Preferences to save at the revision read; one left out keeps what was saved. */
 export type PreferencesChange = Partial<Omit<Preferences, "revision">> & {

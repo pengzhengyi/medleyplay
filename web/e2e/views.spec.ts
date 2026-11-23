@@ -69,6 +69,32 @@ test("a view's link opens it again after a reload", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Favorites" })).toBeVisible();
 });
 
+test("the search dropdown stays above the sticky Settings section bar", async ({ page }) => {
+  await page.goto("/#/settings");
+  await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
+
+  await page.getByRole("combobox", { name: "Search" }).press("ArrowDown");
+
+  const dropdown = page.getByRole("listbox", { name: "Search by" });
+  await expect(dropdown).toBeVisible();
+  await expect
+    .poll(() =>
+      dropdown.evaluate((panel) => {
+        const bar = document.querySelector(".settings-toc");
+        if (bar === null) return false;
+        const menu = panel.getBoundingClientRect();
+        const sections = bar.getBoundingClientRect();
+        const left = Math.max(menu.left, sections.left);
+        const top = Math.max(menu.top, sections.top);
+        const right = Math.min(menu.right, sections.right);
+        const bottom = Math.min(menu.bottom, sections.bottom);
+        if (left >= right || top >= bottom) return false;
+        return panel.contains(document.elementFromPoint((left + right) / 2, (top + bottom) / 2));
+      }),
+    )
+    .toBe(true);
+});
+
 test("searching finds songs as you type, and Back leaves the search in one step", async ({
   page,
 }) => {

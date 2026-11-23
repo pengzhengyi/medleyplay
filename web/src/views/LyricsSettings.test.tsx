@@ -1,12 +1,44 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { enricherOf, serve } from "../testing/server";
+import { enricherOf, preferencesOf, serve } from "../testing/server";
 import { LyricsSettings } from "./LyricsSettings";
+import { SettingsView } from "./SettingsView";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it("keeps the confirmation choice for a member when Settings is reopened", async () => {
+  const { calls } = serve(preferencesOf());
+  const settings = (
+    <SettingsView
+      admin={false}
+      mode={null}
+      onModeChecked={vi.fn()}
+      onEnrichersChanged={vi.fn()}
+      onKindsChanged={vi.fn()}
+    />
+  );
+  const opened = render(settings);
+  const choice = () => screen.getByRole("combobox", { name: "Auto-Match lyrics" });
+  const direct = () => within(choice()).getByRole("option", { name: "Search directly" });
+  expect(await screen.findByRole("combobox", { name: "Auto-Match lyrics" })).toHaveDisplayValue(
+    "Ask before searching",
+  );
+
+  await userEvent.selectOptions(choice(), direct());
+  await screen.findByText("Saved.", { exact: true });
+  opened.unmount();
+  render(settings);
+
+  expect(await screen.findByRole("combobox", { name: "Auto-Match lyrics" })).toHaveDisplayValue(
+    "Search directly",
+  );
+  expect(calls.filter((call) => call === "PUT /api/me/preferences")).toHaveLength(1);
+  expect(calls.some((call) => call.includes("/lyrics/match/"))).toBe(false);
 });
 
 describe("the lyrics lookup", () => {

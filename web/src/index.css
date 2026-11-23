@@ -9655,6 +9655,22 @@ small.ai-set-up-hint {
   gap: 0.5rem;
 }
 
+.key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.key-actions .dialog-button {
+  width: auto;
+}
+
+.key-actions .remove-key {
+  border-color: var(--no);
+  color: var(--no);
+}
+
 /* While the Library's songs are read: rows shaped like songs, shimmering unless motion is reduced. */
 .library-skeleton-rows {
   display: grid;

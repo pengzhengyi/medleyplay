@@ -1,6 +1,6 @@
 /** @file The household's optional Tavily key for image searches. Only an admin changes it. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
 import { classOf, useNote } from "../useNote";
@@ -8,8 +8,12 @@ import { classOf, useNote } from "../useNote";
 export function ImageSearchSettings() {
   const [configured, setConfigured] = useState<boolean>();
   const [key, setKey] = useState("");
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState<"save" | "remove">();
   const [error, setError] = useState("");
+  const keyInput = useRef<HTMLInputElement>(null);
+  const changeButton = useRef<HTMLButtonElement>(null);
+  const moveFocus = useRef(false);
   const notes = useNote();
   useEffect(() => {
     let active = true;
@@ -25,14 +29,21 @@ export function ImageSearchSettings() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    if (!moveFocus.current) return;
+    moveFocus.current = false;
+    (configured && !editing ? changeButton : keyInput).current?.focus();
+  }, [configured, editing]);
   const change = async (action: "save" | "remove") => {
     setSaving(action);
     setError("");
     try {
       if (action === "remove") await api.removeImageSearchKey();
       else await api.saveImageSearchKey(key.trim());
+      moveFocus.current = true;
       setConfigured(action === "save");
       setKey("");
+      setEditing(false);
       notes.confirm(action === "save" ? "Saved." : "Key removed.");
     } catch {
       setError("Could not change the key. Try again.");
@@ -44,47 +55,82 @@ export function ImageSearchSettings() {
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        void change("save");
+        if (key.trim() && saving === undefined && configured !== undefined) void change("save");
       }}
     >
       <p className="hint">
         Search for album covers inside the editor with a household key. Searching Google Images
         needs no key.
       </p>
-      <label>
-        Tavily API key
-        <input
-          type="password"
-          autoComplete="off"
-          value={key}
-          disabled={saving !== undefined}
-          placeholder={configured ? "Key saved" : undefined}
-          onChange={(event) => {
-            setKey(event.currentTarget.value);
-          }}
-        />
-      </label>
-      <a href="https://app.tavily.com/" target="_blank" rel="noreferrer">
-        Get a Tavily key
-      </a>
-      <div className="upload-drop-buttons">
-        <button
-          type="submit"
-          className="dialog-button"
-          aria-busy={saving === "save"}
-          disabled={saving !== undefined || key.trim() === "" || configured === undefined}
-        >
-          Save key
-        </button>
-        {configured && (
+      {(configured === false || editing) && (
+        <>
+          <label>
+            Tavily API key
+            <input
+              ref={keyInput}
+              type="password"
+              autoComplete="off"
+              value={key}
+              disabled={saving !== undefined}
+              onChange={(event) => {
+                setKey(event.currentTarget.value);
+              }}
+            />
+          </label>
+          <a href="https://app.tavily.com/" target="_blank" rel="noreferrer">
+            Get a Tavily key
+          </a>
+        </>
+      )}
+      <div className="key-actions">
+        {configured && !editing ? (
+          <button
+            ref={changeButton}
+            type="button"
+            className="dialog-button"
+            disabled={saving !== undefined}
+            onClick={() => {
+              moveFocus.current = true;
+              setError("");
+              setEditing(true);
+            }}
+          >
+            Change Key
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="dialog-button"
+            aria-busy={saving === "save"}
+            disabled={saving !== undefined || key.trim() === "" || configured === undefined}
+          >
+            Save key
+          </button>
+        )}
+        {editing && (
           <button
             type="button"
             className="secondary outline dialog-button"
+            disabled={saving !== undefined}
+            onClick={() => {
+              moveFocus.current = true;
+              setKey("");
+              setError("");
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+        )}
+        {configured && !editing && (
+          <button
+            type="button"
+            className="outline dialog-button remove-key"
             aria-busy={saving === "remove"}
             disabled={saving !== undefined}
             onClick={() => void change("remove")}
           >
-            Remove key
+            Remove Key
           </button>
         )}
       </div>

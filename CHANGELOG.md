@@ -703,6 +703,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A saved Tavily key shows **Change Key** and **Remove Key** side by side in Settings.
+
 - **An artist's page is laid out like an album's** — its photo large on the left; its
   name, who MusicBrainz says it is, its other names, and its links beside it; and Play,
   Shuffle, the heart, and a round pencil for *Edit details* on the photo's bottom line.

@@ -17,6 +17,30 @@ well-scoped changes are easiest to review and merge.
 2. Open an issue for larger behavior or design changes before writing code.
 3. Keep pull requests small and focused.
 
+## Local checks and PR verification
+
+Run the smallest check that exercises the behavior you changed and its direct
+callers. Build only what that check needs. Choose the relevant example, not
+every row:
+
+| Change | Local example |
+| --- | --- |
+| Python behavior | `uv run pytest -x -n 0 tests/application/test_lyrics_search.py::test_the_songs_found_are_kept_with_their_lyrics_and_what_was_asked` |
+| React component | From `web/`: `npm test -- src/views/PictureEditor.test.tsx` |
+| Browser-only behavior | From `web/`: `npx playwright test e2e/player.spec.ts --project=chromium -g "clicking the seek bar"` |
+| Documentation only | Check the edited Markdown and its links; do not build the app. For example: `lychee --config lychee.toml --offline CONTRIBUTING.md`. |
+
+Push focused changes with the exact local commands and results in the PR.
+GitHub Actions owns whole-tree formatting, type and import checks, security
+scans, builds, coverage, full Python and frontend suites, browser tests, and
+documentation checks. Before merging, confirm the required checks passed for
+the current PR revision, not an earlier commit or a different branch.
+
+Use the full commands below locally when explicitly requested. If CI is
+unavailable, a CI failure needs a large local run, or only the local platform
+can verify the change, explain the needed run and ask first. Release gates,
+UI preview and approval requirements still apply.
+
 ## Development setup
 
 Requirements:
@@ -30,10 +54,12 @@ Clone the repository and run:
 
 ```bash
 uv sync --locked
+# Optional: reproduce the Python CI job locally
 uv run ruff format --check
 uv run ruff check
 uv run bandit -q -c pyproject.toml -r src
 uv run mypy
+uv run lint-imports
 uv run pytest
 uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-project --quiet) --disable-pip --progress-spinner off   # needs network
 ```
@@ -174,7 +200,7 @@ Common tasks are wired up in `.vscode/tasks.json` (**Terminal → Run Task**), s
 can run them without memorizing commands: `sync`, `format: verify`, `format: fix`,
 `lint`, `security: bandit`, `security: audit`, `typecheck`, `test`, `test: file`,
 `coverage`, `web: install`, `web: build`, `web: check`, `web: e2e`, `verify: all`
-(everything CI runs), `docs: lint markdown`, `docs: check links`,
+(optional broad local verification), `docs: lint markdown`, `docs: check links`,
 `docs: check spelling`, and `clean`. The recommended extensions
 are in `.vscode/extensions.json`.
 
@@ -207,11 +233,7 @@ Before opening a pull request:
 
 - [ ] Add or update tests for behavior changes.
 - [ ] Update documentation and design notes for changed behavior or decisions.
-- [ ] Run `uv run ruff format --check`, `uv run ruff check`, and `uv run mypy`.
-- [ ] Run `uv run bandit` and `uv run pip-audit` as in [Security checks](#security-checks).
-- [ ] Run `uv run pytest --cov` and confirm coverage stays above the floors.
-- [ ] If you changed `web/`, run `npm run check`, `npm run build`, and `npm run e2e`.
-- [ ] If you changed Markdown, run `markdownlint-cli2` and the link check.
+- [ ] Record the focused local checks and results. Leave full verification to PR CI.
 - [ ] Keep the pull request focused on one topic.
 - [ ] Explain why the change is useful.
 

@@ -48,10 +48,6 @@ The `docs/` tree holds the project's written design:
 
 ## Checks
 
-Run from the repository root before pushing:
-
-```bash
-markdownlint-cli2
-lychee --config lychee.toml --offline --no-progress "**/*.md"
-npx --yes cspell@8 lint --no-progress --config cspell.json .
-```
+Check the changed documents locally. CI lints Markdown, checks local links,
+and checks spelling across the tree. See
+[Local checks and PR verification](../../CONTRIBUTING.md#local-checks-and-pr-verification).

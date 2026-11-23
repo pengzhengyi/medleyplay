@@ -3804,8 +3804,7 @@ button.icon.heart.on:hover,
   clip-path: inset(0 50% 0 0);
 }
 
-.tracks button.heart:not(.on),
-.tracks .stars:not(:has([aria-pressed="true"])) button.star {
+.tracks :where(button.heart:not(.on), .stars:not(:has([aria-pressed="true"])) button.star) {
   opacity: 0;
 }
 
@@ -3821,8 +3820,11 @@ button.icon.heart.on:hover,
   opacity: 1;
 }
 
-.tracks tr:hover button.heart,
-.tracks tr:focus-within button.heart,
+.tracks tr:is(:hover, :focus-within) button.heart {
+  color: var(--accent);
+  opacity: 1;
+}
+
 .tracks tr:hover .stars:not(:has([aria-pressed="true"])) button.star,
 .tracks tr:focus-within .stars:not(:has([aria-pressed="true"])) button.star {
   opacity: 1;
@@ -7351,6 +7353,17 @@ kbd {
 /* Paused, the cover settles back a little, as a record does when the music stops. */
 .np-art.resting {
   transform: scale(0.88);
+}
+
+.np-edit-cover {
+  display: block;
+  height: 100%;
+  border-radius: 1rem;
+}
+
+.np-edit-cover:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 4px;
 }
 
 .np-art .cover {

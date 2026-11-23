@@ -1770,7 +1770,7 @@ button[aria-disabled="true"] {
 .settings-toc {
   position: sticky;
   top: var(--stick-top, var(--top-height, 0));
-  z-index: 2;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -9640,6 +9640,11 @@ small.ai-set-up-hint {
 .picture-editor-panel {
   min-width: 0;
   border-radius: 0.5rem;
+}
+
+.picture-editor-google-steps {
+  margin-block: 0 1.25rem;
+  padding-inline-start: 1.5rem;
 }
 
 /* Inside its edge, so a source's ring never runs into the one beside it. */

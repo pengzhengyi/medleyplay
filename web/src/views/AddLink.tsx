@@ -15,9 +15,10 @@ import {
   useState,
 } from "react";
 
-import type { AddedPart, LinkLookup, PartChoice } from "../api";
+import type { AddedPart, LinkLookup, PartChoice, SavedVideoLookup } from "../api";
 import { partLink } from "../library/otherWays";
 import { suggestedArtist, suggestedTitle } from "../library/suggest";
+import { hrefOf } from "../routes";
 import { Modal } from "./Modal";
 import { OtherWays } from "./OtherWays";
 
@@ -33,27 +34,20 @@ const WHY: Record<string, string> = {
   fault: "Reading the video failed.",
 };
 
-/** The step the dialog is at: asking the site, refused, or the video read. */
-type Step =
-  | { readonly state: "looking" }
-  | { readonly state: "failed"; readonly message: string }
-  | { readonly state: "read"; readonly lookup: LinkLookup };
-
-/**
- * Add the video `link` names: `look` asks for its details, and `add` adds the parts
- * chosen, at the quality, as Tracks; `onAdded` hears how many were added.
- */
+/** Follow one selected lookup; closing the dialog leaves it in Downloads. */
 export function AddLink({
-  link,
-  look,
+  opening,
+  listed,
+  load,
   add,
   onAdded,
   onClose,
 }: {
-  readonly link: string;
-  readonly look: (link: string) => Promise<LinkLookup>;
+  readonly opening: Promise<SavedVideoLookup>;
+  readonly listed: readonly SavedVideoLookup[];
+  readonly load: (id: number) => Promise<SavedVideoLookup>;
   readonly add: (
-    link: string,
+    id: number,
     quality: string,
     parts: readonly PartChoice[],
   ) => Promise<readonly AddedPart[]>;
@@ -61,29 +55,54 @@ export function AddLink({
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [step, setStep] = useState<Step>({ state: "looking" });
-  const lookUp = useEffectEvent(look);
+  const [submitted, setSubmitted] = useState<SavedVideoLookup>();
+  const [loaded, setLoaded] = useState<SavedVideoLookup>();
+  const [error, setError] = useState("");
+  const loadResult = useEffectEvent(load);
+  const readyId =
+    submitted?.result === null &&
+    listed.some((row) => row.id === submitted.id && row.state === "succeeded")
+      ? submitted.id
+      : undefined;
   useEffect(() => {
     let current = true;
-    lookUp(link).then(
+    opening.then(
       (lookup) => {
-        if (current) {
-          setStep({ state: "read", lookup });
-        }
+        if (current) setSubmitted(lookup);
       },
       (failure: unknown) => {
-        if (current) {
-          setStep({
-            state: "failed",
-            message: failure instanceof Error ? failure.message : String(failure),
-          });
-        }
+        if (current) setError(failure instanceof Error ? failure.message : String(failure));
       },
     );
     return () => {
       current = false;
     };
-  }, [link]);
+  }, [opening]);
+  useEffect(() => {
+    if (readyId === undefined) return;
+    let current = true;
+    loadResult(readyId).then(
+      (lookup) => {
+        if (current) setLoaded(lookup);
+      },
+      (failure: unknown) => {
+        if (current) setError(failure instanceof Error ? failure.message : String(failure));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [readyId]);
+  const opened = loaded ?? submitted;
+  const status = listed.find((row) => row.id === opened?.id) ?? opened;
+  const failure =
+    error ||
+    (status?.state === "failed"
+      ? status.message || "The lookup failed."
+      : status?.state === "cancelled"
+        ? "The lookup was cancelled."
+        : "");
+  const lookup = opened?.result;
   const close = () => {
     dialog.current?.close();
   };
@@ -96,23 +115,30 @@ export function AddLink({
     <Modal ref={dialog} className="add-link" labelledBy="add-link-title" onClose={onClose}>
       <div className="card">
         <h2 id="add-link-title">Add from Bilibili</h2>
-        {step.state === "looking" && (
-          <p className="empty" aria-busy="true">
-            Looking the video up…
-          </p>
-        )}
-        {step.state === "failed" && (
+        {failure === "" && !lookup && (
           <>
-            <p className="error" role="alert">
-              {step.message}
+            <p className="empty" aria-busy="true">
+              Looking the video up…
+            </p>
+            <p>
+              Choose parts here or later in{" "}
+              <a href={hrefOf({ view: "downloaded" })} onClick={close}>
+                Downloaded
+              </a>
+              .
             </p>
           </>
         )}
-        {step.state === "read" &&
-          (step.lookup.readable ? (
-            <ReadVideo link={link} lookup={step.lookup} add={add} onAdded={finish} />
+        {failure !== "" && (
+          <p className="error" role="alert">
+            {failure}
+          </p>
+        )}
+        {lookup &&
+          (lookup.readable ? (
+            <ReadVideo id={opened.id} lookup={lookup} add={add} onAdded={finish} />
           ) : (
-            <UnreadableVideo link={link} lookup={step.lookup} add={add} onAdded={finish} />
+            <UnreadableVideo id={opened.id} lookup={lookup} add={add} onAdded={finish} />
           ))}
       </div>
     </Modal>
@@ -120,10 +146,10 @@ export function AddLink({
 }
 
 interface FormProps {
-  readonly link: string;
+  readonly id: number;
   readonly lookup: LinkLookup;
   readonly add: (
-    link: string,
+    id: number,
     quality: string,
     parts: readonly PartChoice[],
   ) => Promise<readonly AddedPart[]>;
@@ -155,7 +181,7 @@ interface Row {
   readonly taken: boolean;
 }
 
-function ReadVideo({ link, lookup, add, onAdded }: FormProps) {
+function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
   const [rows, setRows] = useState<readonly Row[]>(() => {
     let room = MAX_PARTS;
     return lookup.parts.map((part) => {
@@ -181,7 +207,7 @@ function ReadVideo({ link, lookup, add, onAdded }: FormProps) {
     event.preventDefault();
     void save(() =>
       add(
-        link,
+        id,
         quality,
         chosen.map(({ part, title, artist }) => ({ part, title: title.trim(), artist })),
       ),
@@ -286,7 +312,7 @@ interface Draft {
   readonly artist: string;
 }
 
-function UnreadableVideo({ link, lookup, add, onAdded }: FormProps) {
+function UnreadableVideo({ id, lookup, add, onAdded }: FormProps) {
   const first = lookup.parts[0]?.part ?? 1;
   const [drafts, setDrafts] = useState<readonly Draft[]>([
     { key: 0, part: String(first), title: "", artist: "" },
@@ -304,7 +330,7 @@ function UnreadableVideo({ link, lookup, add, onAdded }: FormProps) {
     event.preventDefault();
     void save(() =>
       add(
-        link,
+        id,
         BEST,
         drafts.map((draft) => ({
           part: Number(draft.part),

@@ -18,7 +18,7 @@ Python is managed by [uv](https://docs.astral.sh/uv/) (`pyproject.toml`, `uv.loc
 `.python-version`); the web client uses Node 24 and npm.
 
 ```bash
-# Python server
+# Full CI reproduction only; use focused checks for normal development
 uv sync --locked
 uv run ruff format --check
 uv run ruff check
@@ -37,8 +37,8 @@ VS Code tasks (**Terminal → Run Task**) mirror these: `sync`, `lint`, `securit
 
 `ruff format --check` is the formatting gate and CI runs it before the linter.
 `ruff check` does not report formatting, so a clean lint alone does not mean a green
-CI. Plain `uv run pytest` runs the tests in parallel without coverage; add `--cov`
-when you change tested behavior.
+CI. For the local development loop, see
+[Local checks and PR verification](../CONTRIBUTING.md#local-checks-and-pr-verification).
 
 ## Conventions
 

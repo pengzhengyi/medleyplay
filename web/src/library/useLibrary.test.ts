@@ -978,17 +978,36 @@ describe("finding a song's details online", () => {
 describe("adding music by link and by file", () => {
   const ADDED = [{ part: 1, track_id: 9, source_id: 90, job: null }];
 
+  it("submits only the video and its part, and never sends a URL with credentials", async () => {
+    const submitted = vi.fn(() => ({ body: { id: 8, state: "queued", result: null } }));
+    serve({ ...signedIn([]), "POST /api/links/lookups": submitted });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+
+    await result.current.lookUpLink(
+      "https://www.bilibili.com/video/BV1Xx41117Tz?share_token=fake&p=2#share",
+    );
+    await expect(result.current.lookUpLink("https://user:password@b23.tv/night")).rejects.toThrow(
+      "video link",
+    );
+
+    expect(submitted).toHaveBeenCalledExactlyOnceWith({
+      link: "https://www.bilibili.com/video/BV1Xx41117Tz?p=2",
+    });
+  });
   it("asks for the Tracks again once a link's parts are added", async () => {
     const { calls } = serve({
       ...signedIn([trackOf(1, "Intro")]),
-      "POST /api/links": { body: ADDED },
+      "POST /api/links/lookups/8": { body: ADDED },
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
     await waitFor(() => {
       expect(result.current.loaded).toBe(true);
     });
 
-    const added = await result.current.addLink("BV1Xx41117Tz", "best", [
+    const added = await result.current.addLink(8, "best", [
       { part: 1, title: "Night Drive", artist: "Blue Room" },
     ]);
 
@@ -1001,14 +1020,14 @@ describe("adding music by link and by file", () => {
   it("looks a link up, passing on why the server refused", async () => {
     serve({
       ...signedIn([]),
-      "POST /api/links/lookup": { status: 422, body: { detail: "medleyplay can't add music." } },
+      "POST /api/links/lookups": { status: 422, body: { detail: "medleyplay can't add music." } },
     });
     const { result } = renderHook(() => useLibrary(vi.fn()));
     await waitFor(() => {
       expect(result.current.loaded).toBe(true);
     });
 
-    await expect(result.current.lookUpLink("https://example.com/")).rejects.toThrow(
+    await expect(result.current.lookUpLink("BV1Xx41117Tz")).rejects.toThrow(
       "medleyplay can't add music.",
     );
   });
@@ -1016,7 +1035,7 @@ describe("adding music by link and by file", () => {
   it("signs out when the server says the session is over", async () => {
     serve({
       ...signedIn([]),
-      "POST /api/links/lookup": { status: 401, body: { detail: "Sign in first." } },
+      "POST /api/links/lookups": { status: 401, body: { detail: "Sign in first." } },
     });
     const onSignedOut = vi.fn();
     const { result } = renderHook(() => useLibrary(onSignedOut));

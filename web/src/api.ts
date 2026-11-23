@@ -1240,6 +1240,42 @@ export interface LinkLookup {
   readonly message: string;
 }
 
+/** The current Account's open choice in Downloads; parts are loaded on selection. */
+export interface SavedVideoLookup {
+  readonly id: number;
+  readonly label: string;
+  readonly state: Job["state"];
+  readonly message: string;
+  readonly result: LinkLookup | null;
+}
+
+/** Never send share parameters or credentials from the clipboard, even to the local server. */
+function publicVideoInput(text: string): string {
+  const input = text.trim();
+  if (/^(?:BV[a-z0-9]{10}|av[0-9]{1,19})$/iu.test(input)) return input;
+  const url = URL.canParse(input) ? new URL(input) : null;
+  const host = url?.host.toLowerCase().replace(/\.$/u, "");
+  const video =
+    host === "b23.tv"
+      ? /^\/[\w-]{1,64}\/?$/u
+      : /^\/video\/(?:BV[a-z0-9]{1,62}|av[0-9]{1,19})\/?$/iu;
+  if (
+    !url ||
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    !["bilibili.com", "www.bilibili.com", "m.bilibili.com", "b23.tv"].includes(host ?? "") ||
+    !video.test(url.pathname)
+  ) {
+    throw new Error("Enter a Bilibili video link, short link, or video code.");
+  }
+  const part = url.searchParams.get("p");
+  if (part && !/^[0-9]{1,4}$/u.test(part)) throw new Error("A part number is 1 to 9999.");
+  url.hash = "";
+  url.search = part ? `?p=${part}` : "";
+  return url.href;
+}
+
 /** A part to add, under the title and artist the household chose. */
 export interface PartChoice {
   readonly part: number;
@@ -1826,11 +1862,13 @@ export const api = {
   /** Choose when the enricher is asked; admins only. Finding all queues every Track at once. */
   setEnricherMode: (name: string, mode: EnricherMode) =>
     call<Enricher>("PUT", `/api/enrichers/${name}/mode`, { mode }),
-  /** Look up the video a link or a bare `BV` or `av` code names. */
-  lookUpLink: (link: string) => call<LinkLookup>("POST", "/api/links/lookup", { link }),
-  /** Add the chosen parts of a link's video as Tracks, and start downloading them. */
-  addLink: (link: string, quality: string, parts: readonly PartChoice[]) =>
-    call<AddedPart[]>("POST", "/api/links", { link, quality, parts }),
+  lookUpLink: async (link: string) =>
+    call<SavedVideoLookup>("POST", "/api/links/lookups", { link: publicVideoInput(link) }),
+  videoLookups: () => call<SavedVideoLookup[]>("GET", "/api/links/lookups"),
+  videoLookup: (id: number) => call<SavedVideoLookup>("GET", `/api/links/lookups/${String(id)}`),
+  dismissLookup: (id: number) => call<undefined>("DELETE", `/api/links/lookups/${String(id)}`),
+  addLink: (id: number, quality: string, parts: readonly PartChoice[]) =>
+    call<AddedPart[]>("POST", `/api/links/lookups/${String(id)}`, { quality, parts }),
   /** Where a site Track's Download stands. */
   download: (trackId: number) =>
     call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),

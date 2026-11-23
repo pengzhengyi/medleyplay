@@ -21,6 +21,7 @@ from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.fakes import FakeClock, FakeInternet, FakeNetwork
 from tests.support.jobs import Jobs, running_jobs
 from tests.support.programs import EchoJob
+from tests.support.sites import Site
 
 
 @pytest.fixture
@@ -71,6 +72,31 @@ def _ready(lines: Iterator[str]) -> None:
         if line == "event: ready":
             return
     raise AssertionError
+
+
+def test_only_the_owner_hears_a_video_lookup_even_when_the_other_listener_is_an_admin(
+    site_client: TestClient, site_services: tuple[Site, Services]
+) -> None:
+    site, services = site_services
+    add_bob(site_client)
+    sign_in(site_client, "bob")
+    saved = site_client.post("/api/links/lookups", json={"link": "BV1Xx41117Tz"}).json()
+    site.wait_for(saved["id"], JobState.SUCCEEDED)
+
+    for account in ("alice", "bob"):
+        sign_in(site_client, account)
+        with site_client.stream("GET", "/api/events") as stream:
+            lines = stream.iter_lines()
+            _ready(lines)
+            services.events.publish(saved["id"])
+            services.events.hear_change("settings")
+            heard_job = False
+            for line in lines:
+                if line == "event: tracks":
+                    break
+                if line == "event: job":
+                    heard_job = True
+            assert heard_job == (account == "bob")
 
 
 def _job_events(lines: Iterator[str], until_state: str) -> list[dict[str, object]]:

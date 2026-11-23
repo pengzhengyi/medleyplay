@@ -24,7 +24,7 @@ Python is managed by [uv](https://docs.astral.sh/uv/); the web client needs Node
 and npm.
 
 ```bash
-# Python server: install, then the same gates CI runs
+# Python: full CI reproduction, not the local development loop
 uv sync --locked
 uv run ruff format --check
 uv run ruff check
@@ -84,18 +84,11 @@ These hold for every change, whoever makes it.
 
 ### Gates
 
-Every one passes before a push:
-
-```bash
-uv run ruff format --check && uv run ruff check && uv run mypy
-uv run lint-imports && uv run bandit -q -c pyproject.toml -r src
-uv run pytest
-cd web && npx prettier --check src e2e && npm run check && npx stylelint src/index.css
-cd web && npx playwright test        # ports 4174 and 4175: one run at a time
-{ git diff --name-only -z origin/main; git ls-files --others --exclude-standard -z; } \
-  | xargs -0 npx --yes cspell@10.5.0 --no-progress    # spelling of changed files
-npx --yes markdownlint-cli2 <changed .md files>
-```
+Follow [Local checks and PR verification](CONTRIBUTING.md#local-checks-and-pr-verification):
+exercise the change and its direct callers locally, then let GitHub Actions run
+the full gates. Record local evidence separately from CI. Before merging,
+verify required checks on the current PR revision; a local-only commit has not
+passed CI. This does not change preview, release, or approval requirements.
 
 A test name has no contractions (the spelling check reads it). A test that fails
 once under load and passes on its own is a flake: run it again, and note it for a

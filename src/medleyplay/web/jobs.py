@@ -2,10 +2,11 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.jobs import JobId, JobState, JobView, failure_shown_to
 from medleyplay.web.deps import JobsDep, SignedInAccount
 from medleyplay.web.ids import RowId
@@ -60,15 +61,21 @@ class JobOut(BaseModel):
 
 
 @router.get("/jobs")
-def list_jobs(me: SignedInAccount, jobs: JobsDep) -> list[JobOut]:
+def list_jobs(me: SignedInAccount, jobs: JobsDep, response: Response) -> list[JobOut]:
     """Return the household's newest Jobs first; why one failed only to its Account or admins."""
-    return [JobOut.of(view, me) for view in jobs.list_jobs()]
+    response.headers["Cache-Control"] = "private, no-store"
+    return [JobOut.of(view, me) for view in jobs.list_jobs(viewer=me)]
 
 
 @router.get("/jobs/{job_id}")
-def get_job(job_id: RowId, me: SignedInAccount, jobs: JobsDep) -> JobOut:
+def get_job(job_id: RowId, me: SignedInAccount, jobs: JobsDep, response: Response) -> JobOut:
     """Return one Job; why it failed only to its Account or admins."""
-    return JobOut.of(jobs.get_job(JobId(job_id)), me)
+    view = jobs.get_job(JobId(job_id))
+    if not view.job.visible_to(me):
+        message = f"There is no Job {job_id}."
+        raise NotFoundError(message)
+    response.headers["Cache-Control"] = "private, no-store"
+    return JobOut.of(view, me)
 
 
 @router.post("/jobs/{job_id}/cancel")

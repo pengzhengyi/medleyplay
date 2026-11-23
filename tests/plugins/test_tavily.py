@@ -51,6 +51,15 @@ def test_images_keep_their_own_source_and_unattributed_images_are_not_offered() 
     assert "The Beatles" in transport.body()["query"]
 
 
+def test_an_artist_photo_search_uses_the_artist_name_without_an_album() -> None:
+    transport = FakeTransport().answer(ENDPOINT, Reply.json({"results": []}))
+    plugin = TavilyPictures(transport.session(), resolve=lambda _: [])
+
+    plugin.search(SearchPictures(album="", artist="St. Vincent", key=SecretStr(KEY)))
+
+    assert transport.body()["query"] == "artist photo St. Vincent"
+
+
 @pytest.mark.parametrize("reply", [Reply.redirect(PAGE), Reply.json({"error": KEY}, 401)])
 def test_a_refusal_does_not_repeat_the_body_or_forward_the_key(reply: Reply) -> None:
     transport = FakeTransport().answer(ENDPOINT, reply)

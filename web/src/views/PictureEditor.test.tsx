@@ -6,6 +6,7 @@ import { beatlesPictures, helpFound, serve } from "../testing/server";
 import { MAX_PICTURE_BYTES, PictureEditor, type PictureSources } from "./PictureEditor";
 
 const COVERS = `GET /api/album-covers?${new URLSearchParams({ album: "Help!", artist: "The Beatles" }).toString()}`;
+const PHOTO_SEARCH = "/api/image-search/artist/b10bbbfc";
 
 /** The cover of *Help!* by The Beatles, shown now as `cover-now`. */
 function helpCover(change: Partial<PictureSources> = {}): PictureSources {
@@ -252,21 +253,125 @@ describe("the picture editor", () => {
     }
   });
 
-  it("offers an artist's photo from this device, Deezer, or the AI, MusicBrainz having none", () => {
-    serve({});
-
-    render(<PictureEditor sources={beatlesPhoto()} onClose={vi.fn()} />);
-
-    const dialog = within(screen.getByRole("dialog", { name: "Add a photo" }));
-    expect(dialog.getAllByRole("tab").map((tab) => tab.textContent.trim())).toEqual([
+  it("searches for the artist only when Tavily is selected and does not apply the results", async () => {
+    const page = "https://label.example/artists/beatles";
+    const images = [{ url: "https://label.example/portrait.jpg", page, title: "Band photo" }];
+    const search = `POST ${PHOTO_SEARCH}/results`;
+    let asked = false;
+    const { calls } = serve({
+      [`GET ${PHOTO_SEARCH}`]: { body: { configured: true, name: "The Beatles" } },
+      [`GET ${PHOTO_SEARCH}/results`]: () => ({
+        body: { searching: false, waiting: false, failure: null, images: asked ? images : [] },
+      }),
+      [search]: (body) => {
+        expect(body).toBeUndefined();
+        asked = true;
+        return { status: 202, body: null };
+      },
+    });
+    const sources = beatlesPhoto();
+    const onClose = vi.fn();
+    const { rerender } = render(<PictureEditor sources={sources} onClose={onClose} />, {
+      reactStrictMode: true,
+    });
+    const dialog = within(screen.getByRole("dialog"));
+    const tab = await dialog.findByRole("tab", { name: "Tavily" });
+    expect(dialog.getAllByRole("tab").map((each) => each.textContent.trim())).toEqual([
       "Upload",
       "Deezer",
+      "Tavily",
+      "Google",
       "Ask AI",
     ]);
+    tab.focus();
+    expect(calls.filter((call) => call.endsWith("/results"))).toEqual([]);
+
+    await userEvent.keyboard("{Enter}");
+
+    expect(await dialog.findByRole("link", { name: "Band photo" })).toHaveAttribute("href", page);
+    rerender(<PictureEditor sources={beatlesPhoto()} onClose={onClose} />);
+    expect(calls.filter((call) => call.startsWith("POST "))).toEqual([search]);
+    expect(sources.use).not.toHaveBeenCalled();
+    expect(sources.upload).not.toHaveBeenCalled();
+  });
+
+  it("opens a keyless Google search and only uses the chosen photo when asked", async () => {
+    const { calls } = serve({
+      [`GET ${PHOTO_SEARCH}`]: { body: { configured: false, name: "The Beatles" } },
+    });
+    const sources = { ...beatlesPhoto(), of: "A library nickname" };
+    const user = userEvent.setup();
+    render(<PictureEditor sources={sources} onClose={vi.fn()} />);
+    const dialog = within(screen.getByRole("dialog"));
+    const google = await dialog.findByRole("tab", { name: "Google" });
+    expect(dialog.queryByRole("link", { name: "Search Google Images" })).toBeNull();
+    expect(dialog.queryByRole("tab", { name: "Tavily" })).toBeNull();
+
+    await user.click(google);
+
+    const panel = within(dialog.getByRole("tabpanel", { name: "Google" }));
+    const link = panel.getByRole<HTMLAnchorElement>("link", { name: "Search Google Images" });
+    const search = new URL(link.href);
+    expect(search.hostname).toBe("www.google.com");
+    expect(search.searchParams.get("q")).toBe("The Beatles artist photo");
+    expect(search.searchParams.get("udm")).toBe("2");
+    expect(panel.getByText(/source page.*permission/u)).toBeVisible();
+    const file = jpeg("portrait.jpg");
+    await user.upload(panel.getByLabelText("Choose a photo file"), file);
+    expect(await panel.findByRole("img", { name: "The photo chosen" })).toBeVisible();
+    expect(sources.upload).not.toHaveBeenCalled();
+    await user.click(panel.getByRole("button", { name: "Use this photo" }));
+    expect(sources.upload).toHaveBeenCalledWith(file);
+    expect(calls).toEqual([`GET ${PHOTO_SEARCH}`]);
+  });
+
+  it("returns to Upload when the profile changes even if the name is the same", async () => {
+    const other = "/api/image-search/artist/other-beatles";
+    const settings = { body: { configured: true, name: "The Beatles" } };
+    const { calls } = serve({
+      [`GET ${PHOTO_SEARCH}`]: settings,
+      [`GET ${PHOTO_SEARCH}/results`]: {
+        body: { searching: true, waiting: true, failure: null, images: [] },
+      },
+      [`GET ${other}`]: settings,
+    });
+    const onClose = vi.fn();
+    const { rerender } = render(<PictureEditor sources={beatlesPhoto()} onClose={onClose} />);
+    const dialog = within(screen.getByRole("dialog"));
+    await userEvent.click(await dialog.findByRole("tab", { name: "Tavily" }));
+    expect(await dialog.findByText("Waiting to search.")).toBeVisible();
+
+    rerender(
+      <PictureEditor
+        sources={{ ...beatlesPhoto(), artistId: "other-beatles" }}
+        onClose={onClose}
+      />,
+    );
+
+    expect(await dialog.findByRole("tab", { name: "Tavily" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(dialog.getByRole("tab", { name: "Upload" })).toHaveAttribute("aria-selected", "true");
+    expect(calls).toEqual([`GET ${PHOTO_SEARCH}`, `GET ${PHOTO_SEARCH}/results`, `GET ${other}`]);
+  });
+
+  it("does not offer web searches for a photo with no artist profile", () => {
+    const { calls } = serve({});
+    const sources = { ...beatlesPhoto(), artistId: undefined, pictured: undefined };
+
+    render(<PictureEditor sources={sources} onClose={vi.fn()} />);
+
+    expect(screen.queryByRole("tab", { name: "Google" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Tavily" })).toBeNull();
+    expect(calls).toEqual([]);
   });
 
   it("uses a picture found on Deezer as the artist's photo, and closes", async () => {
-    serve({ "GET /api/artists/b10bbbfc/pictures": { body: beatlesPictures() } });
+    serve({
+      [`GET ${PHOTO_SEARCH}`]: { body: { configured: false, name: "The Beatles" } },
+      "GET /api/artists/b10bbbfc/pictures": { body: beatlesPictures() },
+    });
     const sources = beatlesPhoto();
     const onClose = vi.fn();
     render(<PictureEditor sources={sources} onClose={onClose} />);

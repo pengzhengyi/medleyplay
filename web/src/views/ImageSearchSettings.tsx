@@ -59,8 +59,8 @@ export function ImageSearchSettings() {
       }}
     >
       <p className="hint">
-        Search for album covers inside the editor with a household key. Searching Google Images
-        needs no key.
+        Search for album covers and artist photos inside the editor with a household key. Searching
+        Google Images needs no key.
       </p>
       {(configured === false || editing) && (
         <>

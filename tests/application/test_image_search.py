@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.events import Events
+from medleyplay.application.image_links import AlbumPictured
 from medleyplay.application.image_search import IMAGE_SEARCH, ImageSearchService, TavilyKeys
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import JobService
@@ -74,9 +75,9 @@ def test_only_the_search_plugin_gets_the_key_available_when_its_job_starts(
     search = ImageSearchService(units, plugins, jobs, keys)
     runner.start()
     try:
-        search.search(caller, "Help!", "The Beatles")
-        search.search(caller, "help!", "the beatles")
-        queued = search.results(caller, "Help!", "The Beatles")
+        search.search(caller, AlbumPictured("Help!", "The Beatles"))
+        search.search(caller, AlbumPictured("help!", "the beatles"))
+        queued = search.results(caller, AlbumPictured("Help!", "The Beatles"))
         assert queued.waiting
         assert queued.searching
         with units() as db:
@@ -87,7 +88,7 @@ def test_only_the_search_plugin_gets_the_key_available_when_its_job_starts(
         online.online = True
         runner.wake()
         assert finished.wait(20)
-        completed = search.results(caller, "help!", "the beatles")
+        completed = search.results(caller, AlbumPictured("help!", "the beatles"))
         assert not completed.searching
         assert not completed.waiting
         if forget_key:
@@ -103,6 +104,6 @@ def test_only_the_search_plugin_gets_the_key_available_when_its_job_starts(
                     "title": "Help!",
                 }
             ]
-        assert not search.results(caller, "", "The Beatles").images
+        assert not search.results(caller, AlbumPictured("", "The Beatles")).images
     finally:
         runner.stop()

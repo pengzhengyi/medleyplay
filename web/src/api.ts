@@ -627,6 +627,16 @@ function pictureBody(pictured: Pictured): Record<string, string> {
   return pictured.kind === "album" ? { album: pictured.album, artist: pictured.artist } : {};
 }
 
+function artistImageSearchPath(artistId: string): string {
+  return `/api/image-search/artist/${encodeURIComponent(artistId)}`;
+}
+
+function imageSearchResultsPath(pictured: Pictured): string {
+  return pictured.kind === "album"
+    ? "/api/image-search/results"
+    : `${artistImageSearchPath(pictured.artistId)}/results`;
+}
+
 /** An artist's or album's name shown on Tracks with more than the name in it, tidied. */
 export interface NameToTidy {
   /** What the name names: an artist or album artist, or an album. */
@@ -1702,14 +1712,22 @@ export const api = {
   useAlbumCovers: (albums: readonly ChosenAlbumCover[]) =>
     call<{ used: number }>("POST", "/api/album-covers/use", { albums }),
   imageSearch: () => call<{ configured: boolean }>("GET", "/api/image-search"),
+  artistImageSearch: (artistId: string) =>
+    call<{ configured: boolean; name: string }>("GET", artistImageSearchPath(artistId)),
   saveImageSearchKey: (key: string) => call<unknown>("PUT", "/api/image-search/key", { key }),
   removeImageSearchKey: () => call<unknown>("DELETE", "/api/image-search/key"),
-  searchImages: (album: string, artist: string) =>
-    call<unknown>("POST", "/api/image-search/results", { album, artist }),
-  imageSearchResults: (album: string, artist: string) =>
+  searchImages: (pictured: Pictured) =>
+    call<unknown>(
+      "POST",
+      imageSearchResultsPath(pictured),
+      pictured.kind === "album" ? pictureBody(pictured) : undefined,
+    ),
+  imageSearchResults: (pictured: Pictured) =>
     call<ImageSearchResults>(
       "GET",
-      `/api/image-search/results?${new URLSearchParams({ album, artist }).toString()}`,
+      pictured.kind === "album"
+        ? `${imageSearchResultsPath(pictured)}?${new URLSearchParams(pictureBody(pictured)).toString()}`
+        : imageSearchResultsPath(pictured),
     ),
   /** The links an AI model last suggested for a picture, and what is asked. */
   imageLinks: (pictured: Pictured) =>

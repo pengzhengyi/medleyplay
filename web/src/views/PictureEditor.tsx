@@ -92,22 +92,37 @@ export function PictureEditor({
   const { kind, of, shown, album, artistId, pictured } = sources;
   const noun = kind === "cover" ? "cover" : "photo";
   const hasAlbum = kind === "cover" && album !== undefined;
-  const [tavily, setTavily] = useState(false);
+  const photoId = kind === "photo" ? artistId : undefined;
+  const [searchSettings, setSearchSettings] = useState<{
+    readonly photoId: string | undefined;
+    readonly configured: boolean;
+    readonly name?: string;
+  }>();
   useEffect(() => {
-    if (!hasAlbum) return;
+    if (!hasAlbum && photoId === undefined) return;
     let active = true;
-    api.imageSearch().then(
-      ({ configured }) => {
-        if (active) setTavily(configured);
+    const read = photoId === undefined ? api.imageSearch() : api.artistImageSearch(photoId);
+    read.then(
+      (settings) => {
+        if (active) setSearchSettings({ ...settings, photoId });
       },
       () => {
-        if (active) setTavily(false);
+        if (active) setSearchSettings(undefined);
       },
     );
     return () => {
       active = false;
     };
-  }, [hasAlbum]);
+  }, [hasAlbum, photoId]);
+  const settings = searchSettings?.photoId === photoId ? searchSettings : undefined;
+  const photoName = settings?.name?.trim();
+  const searchSubject: Pictured | undefined = hasAlbum
+    ? { kind: "album", ...album }
+    : photoId !== undefined && photoName
+      ? { kind: "artist", artistId: photoId }
+      : undefined;
+  const canSearchTavily = searchSubject !== undefined && settings?.configured === true;
+  const googleQuery = hasAlbum ? album : photoName ? { artist: photoName } : undefined;
 
   /** Make the change `change` makes, and close once it is made. */
   const change = async (made: () => Promise<void>) => {
@@ -146,25 +161,30 @@ export function PictureEditor({
             icon: <ImageSquareIcon weight="bold" aria-hidden />,
             why: album === undefined ? "Fill in the album to find its covers." : undefined,
           },
-          ...(hasAlbum && tavily
-            ? [
-                {
-                  value: "tavily",
-                  label: "Tavily",
-                  icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
-                },
-              ]
-            : []),
-          {
-            value: "search",
-            label: "Google",
-            icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
-            why: album === undefined ? "Fill in the album to search for its cover." : undefined,
-          },
         ]
       : []),
     ...(artistId !== undefined
       ? [{ value: "deezer", label: "Deezer", icon: <UserSquareIcon weight="bold" aria-hidden /> }]
+      : []),
+    ...(canSearchTavily
+      ? [
+          {
+            value: "tavily",
+            label: "Tavily",
+            icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
+          },
+        ]
+      : []),
+    ...(kind === "cover" || googleQuery !== undefined
+      ? [
+          {
+            value: "search",
+            label: "Google",
+            icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
+            why:
+              googleQuery === undefined ? "Fill in the album to search for its cover." : undefined,
+          },
+        ]
       : []),
     {
       value: "ai",
@@ -190,6 +210,7 @@ export function PictureEditor({
         {/* A tab is chosen, not merely focused: opening the dialog focuses its first tab, and
             some tabs ask a site or an AI model as soon as they show. */}
         <Tabs.Root
+          key={photoId}
           className="picture-editor-tabs"
           defaultValue={startOn}
           orientation="vertical"
@@ -211,24 +232,24 @@ export function PictureEditor({
           <Tabs.Content value="upload" className="picture-editor-panel">
             {upload}
           </Tabs.Content>
-          {album !== undefined && (
+          {googleQuery !== undefined && (
             <Tabs.Content value="search" className="picture-editor-panel">
               <ol className="picture-editor-google-steps">
                 <li>
-                  <GoogleImagesLink {...album} /> for this album.
+                  <GoogleImagesLink {...googleQuery} /> for this {hasAlbum ? "album" : "artist"}.
                 </li>
                 <li>Open the source page and save a picture you have permission to use.</li>
-                <li>Replace the cover below.</li>
+                <li>Replace the {noun} below.</li>
               </ol>
               {upload}
             </Tabs.Content>
           )}
-          {album !== undefined && tavily && (
+          {canSearchTavily && (
             <Tabs.Content value="tavily" className="picture-editor-panel">
-              <TavilySearch key={JSON.stringify([album.album, album.artist])} {...album} />
+              <TavilySearch key={JSON.stringify(searchSubject)} {...searchSubject} />
             </Tabs.Content>
           )}
-          {album !== undefined && (
+          {hasAlbum && (
             <Tabs.Content value="musicbrainz" className="picture-editor-panel">
               <CoverFinder
                 album={album.album}

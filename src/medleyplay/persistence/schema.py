@@ -824,7 +824,7 @@ class AlbumCoverDismissalRow(Base):
 
 
 class PictureSearchRow(Base):
-    """The last successful web picture search for a folded album and artist."""
+    """The last successful web picture search for an album or an artist profile."""
 
     __tablename__ = "picture_search"
 

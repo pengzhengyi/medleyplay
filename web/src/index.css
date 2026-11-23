@@ -126,6 +126,20 @@ body {
   letter-spacing: 0.02em;
 }
 
+.starting[aria-busy="true"]::before {
+  box-sizing: border-box;
+  border: 2px solid var(--line);
+  border-top-color: currentcolor;
+  border-radius: 50%;
+  background-image: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .starting[aria-busy="true"]::before {
+    animation: spin 1.2s linear infinite;
+  }
+}
+
 h1,
 h2 {
   color: var(--ink);

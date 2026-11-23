@@ -722,6 +722,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A small ring spins beside *medleyplay* while the app starts. It stays still when
+  reduced motion is enabled.
 - The player prepares the album and artist pages for the current and next songs,
   including the pictures already in the Library.
 

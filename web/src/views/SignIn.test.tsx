@@ -10,6 +10,21 @@ afterEach(() => {
 });
 
 describe("SignIn", () => {
+  it("changes the sign-in language on this device without losing a typed username", async () => {
+    serve({ "GET /api/setup": { body: { set_up: true } } });
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText("Username"), "alice");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+    expect(document.documentElement.lang).toBe("zh-Hans");
+    expect(screen.getByLabelText("用户名")).toHaveValue("alice");
+    expect(screen.getByRole("button", { name: "登录" })).toBeVisible();
+    await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
+  });
+
   it("creates the admin on a server with no Accounts yet", async () => {
     const created: unknown[] = [];
     serve({

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Choose English or Simplified Chinese on the sign-in screen or in
+  Settings → Appearance. The first translated screens include sign-in, device
+  approval, navigation and playback controls. Other screens still use English.
+
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged
   *Found on the web* in Now Playing's big picture, with *Save* to keep them as yours and

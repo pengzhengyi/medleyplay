@@ -43,6 +43,8 @@ import { RatingsSettings } from "./RatingsSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { SplitSettings } from "./SplitSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { LanguageSelect } from "./LanguageSelect";
+import { useWords } from "../locale";
 import { RailOrderSettings } from "./RailOrderSettings";
 import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
@@ -164,6 +166,7 @@ export function SettingsView({
   /** The devices waiting for an answer, as the event stream last said. */
   readonly waitingDevices?: readonly WaitingDevice[];
 }) {
+  const t = useWords();
   const [folded, setFolded] = useState(() => openedAt(loadFolded(), section));
   // The section a link last named, so naming another opens that one too.
   const [named, setNamed] = useState(section);
@@ -205,6 +208,7 @@ export function SettingsView({
   const contents: Record<SectionId, ReactNode> = {
     appearance: (
       <>
+        <LanguageSelect />
         <p className="hint">Follow this device's light or dark setting, or keep one.</p>
         <ThemeSwitch />
         <p className="hint">The color of buttons, links, and what's playing.</p>
@@ -265,22 +269,22 @@ export function SettingsView({
     <>
       <header className="view-heading">
         <h2 className="section" data-rail-named>
-          Settings
+          {t("Settings")}
         </h2>
       </header>
-      <nav className="settings-toc" aria-label="Settings sections">
+      <nav className="settings-toc" aria-label={t("Settings sections")}>
         <ul>
           {sections.map(({ id, title }) => (
             <li key={id}>
               <button
                 type="button"
                 className="secondary outline"
-                aria-label={`Go to ${title}`}
+                aria-label={t("Go to {{section}}", { section: t(title) })}
                 onClick={() => {
                   go(id);
                 }}
               >
-                {title}
+                {t(title)}
               </button>
             </li>
           ))}
@@ -292,14 +296,14 @@ export function SettingsView({
             fold(allFolded ? new Set() : new Set(sections.map(({ id }) => id)));
           }}
         >
-          {allFolded ? "Open all" : "Fold all"}
+          {t(allFolded ? "Open all" : "Fold all")}
         </button>
       </nav>
       {sections.map(({ id, title }) => (
         <SettingsSection
           key={id}
           id={id}
-          title={title}
+          title={t(title)}
           folded={folded.has(id)}
           onToggle={() => {
             toggle(id);

@@ -26,6 +26,13 @@
 
 ## Data
 
+**Interface language belongs to the device.** The page follows the browser's
+language preferences until someone chooses English or Simplified Chinese at
+sign-in or in Settings → Appearance. The choice updates the page without
+reloading the player. The HTML language matches the active translation.
+Interface messages use i18next; names, lyrics, and text entered by the
+household are not translation keys. Screens without a translation use English.
+
 - **The client loads the whole Library once:** `GET /api/tracks` when the page
   opens, keyed by id. Every view, sort, and search is worked out in the browser
   from that data, with pure functions, so moving between views asks the server

@@ -896,7 +896,7 @@ describe("the Library", () => {
     ).toEqual(["Songs and albums", "Songs (4)", "Albums (2)"]);
   });
 
-  it("plays a split file the Kind filter keeps as an album as all its songs", async () => {
+  it("plays the whole file when the Kind filter keeps the album", async () => {
     const { actions } = renderLibrary();
     await userEvent.click(screen.getByText("Filter"));
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Kind" }), "album");
@@ -904,34 +904,31 @@ describe("the Library", () => {
     await userEvent.click(screen.getByRole("button", { name: "生如夏花" }));
 
     const [shown, index] = vi.mocked(actions.onPlay).mock.calls[0] ?? [];
-    expect(idsOf(shown)).toEqual([11, 12, 13, 20]);
+    expect(idsOf(shown)).toEqual([9, 20]);
     expect(index).toBe(0);
   });
 
-  it("plays a split file from its first song, its songs one unit among the items", async () => {
+  it("plays a split album as one whole file in its Library position", async () => {
     const { actions } = renderLibrary();
 
     await userEvent.click(screen.getByRole("button", { name: "生如夏花" }));
 
     const [shown, index, unitOf] = vi.mocked(actions.onPlay).mock.calls[0] ?? [];
-    expect(idsOf(shown)).toEqual([1, 11, 12, 13, 20]);
+    expect(idsOf(shown)).toEqual([1, 9, 20]);
     expect(index).toBe(1);
-    expect(shown?.map((track) => unitOf?.(track))).toEqual([
-      undefined,
-      "file:9",
-      "file:9",
-      "file:9",
-      undefined,
-    ]);
+    expect(shown?.map((track) => unitOf?.(track))).toEqual([undefined, undefined, undefined]);
   });
 
-  it("plays a song of a split file from its place", async () => {
+  it("plays the selected child as a song without queuing the rest of its album", async () => {
     const { actions } = renderLibrary();
     await userEvent.click(screen.getByRole("button", { name: "Show the songs of 生如夏花" }));
 
     await userEvent.click(screen.getByRole("button", { name: "浮游" }));
 
-    expect(vi.mocked(actions.onPlay).mock.calls[0]?.[1]).toBe(2);
+    const [shown, index, unitOf] = vi.mocked(actions.onPlay).mock.calls[0] ?? [];
+    expect(idsOf(shown)).toEqual([1, 12, 20]);
+    expect(index).toBe(1);
+    expect(shown?.map((track) => unitOf?.(track))).toEqual([undefined, undefined, undefined]);
   });
 
   it("plays every item in its place, or shuffles them", async () => {

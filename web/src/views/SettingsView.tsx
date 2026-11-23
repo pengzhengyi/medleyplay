@@ -39,7 +39,7 @@ import { ImageSearchSettings } from "./ImageSearchSettings";
 import { BilibiliSettings } from "./BilibiliSettings";
 import { DeviceSettings } from "./DeviceSettings";
 import { KindSettings } from "./KindSettings";
-import { LyricsSettings } from "./LyricsSettings";
+import { LyricsMatchSettings, LyricsSettings } from "./LyricsSettings";
 import { LyricsSites } from "./LyricsSites";
 import { PictureSites } from "./PictureSites";
 import { CoverSearchSettings } from "./CoverSearchSettings";
@@ -236,6 +236,7 @@ export function SettingsView({
     "image-search": <ImageSearchSettings />,
     lyrics: (
       <>
+        <LyricsMatchSettings />
         <LyricsSettings onChanged={onEnrichersChanged} />
         <LyricsSites settings={household} onSettings={keepNewest} />
       </>

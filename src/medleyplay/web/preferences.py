@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from medleyplay.domain.history import HistoryLength
-from medleyplay.domain.preferences import Preferences
+from medleyplay.domain.preferences import LyricsMatchConfirmation, Preferences
 from medleyplay.web.deps import PreferencesDep, SignedInAccount
 
 router = APIRouter(prefix="/api/me/preferences", tags=["accounts"])
@@ -21,6 +21,7 @@ class PreferencesIn(BaseModel):
         default=None, examples=[{"toggle": ["space", "k"], "next": ["shift+right"]}]
     )
     history_length: HistoryLength | None = None
+    lyrics_match_confirmation: LyricsMatchConfirmation | None = None
     revision: int = Field(ge=0)
 
 
@@ -29,6 +30,7 @@ class PreferencesOut(BaseModel):
 
     shortcuts: dict[str, list[str]] | None
     history_length: int | None
+    lyrics_match_confirmation: LyricsMatchConfirmation | None
     revision: int
 
     @classmethod
@@ -40,6 +42,7 @@ class PreferencesOut(BaseModel):
             if shortcuts is None
             else {command: list(keys) for command, keys in shortcuts.items()},
             history_length=preferences.history_length,
+            lyrics_match_confirmation=preferences.lyrics_match_confirmation,
             revision=preferences.revision,
         )
 
@@ -67,6 +70,9 @@ def put_preferences(
         if "shortcuts" in given
         else saved.shortcuts,
         history_length=body.history_length if "history_length" in given else saved.history_length,
+        lyrics_match_confirmation=body.lyrics_match_confirmation
+        if "lyrics_match_confirmation" in given
+        else saved.lyrics_match_confirmation,
         revision=body.revision,
     )
     return PreferencesOut.of(preferences.put(me.id, changed))

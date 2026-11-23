@@ -451,7 +451,7 @@ export function modeSettingsOf(mode: Mode, metered: readonly MeteredNetwork[] = 
 }
 
 /**
- * The routes of a server keeping `shortcuts` and `historyLength` for the signed-in
+ * The routes of a server keeping preferences for the signed-in
  * Account, which keeps what the page saves, and what it leaves out, at the next revision.
  */
 export function preferencesOf(
@@ -461,6 +461,7 @@ export function preferencesOf(
   let kept: Preferences = {
     shortcuts,
     history_length: historyLength,
+    lyrics_match_confirmation: null,
     revision: shortcuts === null && historyLength === null ? 0 : 1,
   };
   return {
@@ -474,6 +475,10 @@ export function preferencesOf(
         shortcuts: sent.shortcuts === undefined ? kept.shortcuts : sent.shortcuts,
         history_length:
           sent.history_length === undefined ? kept.history_length : sent.history_length,
+        lyrics_match_confirmation:
+          sent.lyrics_match_confirmation === undefined
+            ? kept.lyrics_match_confirmation
+            : sent.lyrics_match_confirmation,
         revision: sent.revision + 1,
       };
       return { body: kept };

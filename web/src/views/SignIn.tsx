@@ -6,9 +6,12 @@ import { WaveformIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useEffect, useState } from "react";
 
 import { type Account, api } from "../api";
+import { useWords } from "../locale";
+import { LanguageSelect } from "./LanguageSelect";
 
 /** The sign-in form; on a server with no Accounts yet, the form that creates the admin. */
 export function SignIn({ onSignedIn }: { readonly onSignedIn: (account: Account) => void }) {
+  const t = useWords();
   const [setUp, setSetUp] = useState<boolean | undefined>(undefined);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,20 +56,21 @@ export function SignIn({ onSignedIn }: { readonly onSignedIn: (account: Account)
         <WaveformIcon weight="bold" aria-hidden />
         medleyplay
       </h1>
-      <form onSubmit={submit} aria-label={firstRun ? "Create the admin Account" : "Sign in"}>
-        {firstRun && <p>Create the first Account. It is the admin.</p>}
+      <LanguageSelect />
+      <form onSubmit={submit} aria-label={t(firstRun ? "Create the admin Account" : "Sign in")}>
+        {firstRun && <p>{t("Create the first Account. It is the admin.")}</p>}
         <label>
-          Username
+          {t("Username")}
           <input name="username" autoComplete="username" required />
         </label>
         {firstRun && (
           <label>
-            Display name
+            {t("Display name")}
             <input name="display_name" autoComplete="name" required />
           </label>
         )}
         <label>
-          Password
+          {t("Password")}
           <input
             name="password"
             type="password"
@@ -74,9 +78,16 @@ export function SignIn({ onSignedIn }: { readonly onSignedIn: (account: Account)
             required
           />
         </label>
-        {error !== "" && <p role="alert">{error}</p>}
+        {error !== "" && (
+          <p role="alert">
+            {error === "The username or password is wrong." ||
+            error === "The server can't be reached."
+              ? t(error)
+              : error}
+          </p>
+        )}
         <button type="submit" disabled={busy}>
-          {firstRun ? "Create Account" : "Sign in"}
+          {t(firstRun ? "Create Account" : "Sign in")}
         </button>
       </form>
     </main>

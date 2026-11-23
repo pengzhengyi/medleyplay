@@ -6783,8 +6783,8 @@ button.lyrics-sync-text:hover {
   }
 }
 
-@media (width < 22rem) {
-  /* Too narrow for the artist beside six buttons: the buttons take a line of their own. */
+@media (width < 26rem) {
+  /* Leave the artist field its own line when the row actions need the full width. */
   .song-row {
     grid-template-areas:
       "handle start title"

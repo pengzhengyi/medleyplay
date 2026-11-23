@@ -14,8 +14,10 @@ from pydantic import BaseModel, Field
 from medleyplay.application.lyrics import ShownLyrics
 from medleyplay.application.lyrics_search import LyricsFound, LyricsPick
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.jobs import JobId
 from medleyplay.domain.lyrics import MAX_LYRICS, LyricsOrigin
 from medleyplay.plugin_api import MAX_NAME, LyricsOption
+from medleyplay.programs.find_lyrics import MatchSong
 from medleyplay.web.deps import LyricsDep, LyricsSearchDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
@@ -190,3 +192,39 @@ def find_lyrics(
 def choose_lyrics(track_id: RowId, me: SignedInAccount, service: LyricsSearchDep) -> None:
     """Ask an AI model which of the songs found is the song."""
     service.choose(me, TrackId(track_id))
+
+
+class MatchSearchIn(BaseModel):
+    """The specific search started by Auto-Match."""
+
+    search_job: RowId
+
+
+class MatchPickIn(MatchSearchIn):
+    """The AI pick shown for this search."""
+
+    chosen_at: datetime
+
+
+@router.post("/{track_id}/lyrics/match/find", status_code=status.HTTP_202_ACCEPTED)
+def start_match(
+    track_id: RowId, body: MatchSong, me: SignedInAccount, service: LyricsSearchDep
+) -> int:
+    """Find candidates for an empty saved song and return the Job that found them."""
+    return service.start_match(me, TrackId(track_id), body)
+
+
+@router.post("/{track_id}/lyrics/match/choose", status_code=status.HTTP_202_ACCEPTED)
+def choose_match(
+    track_id: RowId, body: MatchSearchIn, me: SignedInAccount, service: LyricsSearchDep
+) -> None:
+    """Ask for a pick only while this is the saved song's current search."""
+    service.choose(me, TrackId(track_id), match_job=JobId(body.search_job))
+
+
+@router.post("/{track_id}/lyrics/match/apply", status_code=status.HTTP_204_NO_CONTENT)
+def apply_match(
+    track_id: RowId, body: MatchPickIn, _: SignedInAccount, service: LyricsSearchDep
+) -> None:
+    """Save the site's lyrics only for an unchanged song, search and pick."""
+    service.apply_match(TrackId(track_id), JobId(body.search_job), body.chosen_at)

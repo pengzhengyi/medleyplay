@@ -212,6 +212,11 @@ as one file.
   ***Start here*** then takes the row's start from where the file is playing, to
   the millisecond. The editor's player is its own, so the queue is untouched; a
   Download not yet here says it is being prepared.
+- **Lyrics:** the microphone before Remove opens the saved child Track's lyrics.
+  Closing it returns focus to the same row without saving the song list. Moving
+  a row keeps its Track; a new row or one filled from a suggested list must be
+  saved first. [Auto-Match lyrics](Lyrics.md#finding-lyrics-by-hand) is a
+  separate action for saved songs whose title, artist, and start are unchanged.
 
 ## Snapping starts to the gaps
 

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Open a saved song's lyrics directly from an album's Songs editor without saving
+  the list. **Auto-Match lyrics** can ask the configured AI to choose among lyrics
+  found for each saved song. It asks first and never replaces existing lyrics.
 - **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
   the server without losing the result. In *Downloaded*, select *Choose parts*
   to finish or *Dismiss* to discard it. Nothing is added until you confirm.

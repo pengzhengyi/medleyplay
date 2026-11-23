@@ -1612,6 +1612,20 @@ export const api = {
   /** Ask an AI model which of the songs found is the song. */
   chooseLyrics: (trackId: number) =>
     call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/choose`),
+  startLyricsMatch: (song: SplitSong) =>
+    call<number>("POST", `/api/tracks/${String(song.track_id)}/lyrics/match/find`, {
+      segment_id: song.id,
+      start_ms: song.start_ms,
+      title: song.title,
+      artist: song.artist,
+    }),
+  chooseLyricsMatch: (trackId: number, job: number) =>
+    call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/match/choose`, { search_job: job }),
+  applyLyricsMatch: (trackId: number, job: number, at: string) =>
+    call<undefined>("POST", `/api/tracks/${String(trackId)}/lyrics/match/apply`, {
+      search_job: job,
+      chosen_at: at,
+    }),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
   artistNames: () => heldReads.read<ArtistNames>("/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */

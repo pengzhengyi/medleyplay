@@ -373,7 +373,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         image_links=ImageLinkService(units, plugins, jobs, link_jobs, data_dir / COVERS_FOLDER),
         image_search=ImageSearchService(units, plugins, jobs, tavily_keys),
         lyrics=LyricsService(units, clock, changes.tell),
-        lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs),
+        lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs, changes.tell),
         storage_folder=StorageFolder(
             downloads.folder,
             show_in_finder if sys.platform == "darwin" else None,

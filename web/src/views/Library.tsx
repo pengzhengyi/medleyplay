@@ -508,6 +508,11 @@ export function Library({
         <LazyPart doing="Opening the songs…">
           <SongsEditor.Component
             album={file}
+            matchOnline={library.mode?.online === true}
+            lyricsOf={(id) => {
+              const child = byId.get(id);
+              return child?.segment_of === file.id ? lyricsOf(child)?.editor : undefined;
+            }}
             load={api.songs}
             check={api.checkSongList}
             artists={artists}

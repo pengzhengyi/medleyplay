@@ -21,9 +21,9 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { type FileRejection, useDropzone } from "react-dropzone";
 
-import type { Pictured } from "../api";
+import { api, type Pictured } from "../api";
 import { ArtistPictureFinder } from "./ArtistPictureFinder";
-import { AlbumImageSearch, GoogleImagesLink } from "./AlbumImageSearch";
+import { GoogleImagesLink, TavilySearch } from "./AlbumImageSearch";
 import { CoverFinder } from "./CoverFinder";
 import { ImageLinks } from "./ImageLinks";
 import { Modal } from "./Modal";
@@ -91,6 +91,23 @@ export function PictureEditor({
   const [error, setError] = useState("");
   const { kind, of, shown, album, artistId, pictured } = sources;
   const noun = kind === "cover" ? "cover" : "photo";
+  const hasAlbum = kind === "cover" && album !== undefined;
+  const [tavily, setTavily] = useState(false);
+  useEffect(() => {
+    if (!hasAlbum) return;
+    let active = true;
+    api.imageSearch().then(
+      ({ configured }) => {
+        if (active) setTavily(configured);
+      },
+      () => {
+        if (active) setTavily(false);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [hasAlbum]);
 
   /** Make the change `change` makes, and close once it is made. */
   const change = async (made: () => Promise<void>) => {
@@ -105,6 +122,14 @@ export function PictureEditor({
       setUsing(false);
     }
   };
+
+  const upload = (
+    <UploadPanel
+      noun={noun}
+      busy={using}
+      onUse={(image) => void change(() => sources.upload(image))}
+    />
+  );
 
   const tabs: readonly {
     readonly value: string;
@@ -121,9 +146,18 @@ export function PictureEditor({
             icon: <ImageSquareIcon weight="bold" aria-hidden />,
             why: album === undefined ? "Fill in the album to find its covers." : undefined,
           },
+          ...(hasAlbum && tavily
+            ? [
+                {
+                  value: "tavily",
+                  label: "Tavily",
+                  icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
+                },
+              ]
+            : []),
           {
             value: "search",
-            label: "Image search",
+            label: "External Search",
             icon: <MagnifyingGlassIcon weight="bold" aria-hidden />,
             why: album === undefined ? "Fill in the album to search for its cover." : undefined,
           },
@@ -175,16 +209,23 @@ export function PictureEditor({
             ))}
           </Tabs.List>
           <Tabs.Content value="upload" className="picture-editor-panel">
-            <UploadPanel
-              noun={noun}
-              busy={using}
-              onUse={(image) => void change(() => sources.upload(image))}
-            />
+            {upload}
             {album !== undefined && <GoogleImagesLink {...album} />}
           </Tabs.Content>
           {album !== undefined && (
             <Tabs.Content value="search" className="picture-editor-panel">
-              <AlbumImageSearch key={JSON.stringify([album.album, album.artist])} {...album} />
+              <ol>
+                <li>
+                  <GoogleImagesLink {...album} /> for this album.
+                </li>
+                <li>Open the source page and save a picture you have permission to use.</li>
+                <li>Replace the cover here: {upload}</li>
+              </ol>
+            </Tabs.Content>
+          )}
+          {album !== undefined && tavily && (
+            <Tabs.Content value="tavily" className="picture-editor-panel">
+              <TavilySearch key={JSON.stringify([album.album, album.artist])} {...album} />
             </Tabs.Content>
           )}
           {album !== undefined && (

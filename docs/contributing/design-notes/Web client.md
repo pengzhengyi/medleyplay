@@ -268,6 +268,9 @@ Track's kind is decided.
 - **It opens from the player's cover,** which shows on every width for that,
   or with F, and closes with Escape, its close button, F again, or by going to
   another view, as its artist and album links and its menu's *Go to* do.
+- **The large cover opens the album's cover editor** on the album page. Closing
+  the editor leaves that page open. The album name still opens the page without
+  the editor, and a song with no album has no cover link.
 - **Its own palette is light on dark,** whatever the theme: it sets the page's
   tokens inside itself, so the controls it shares with the player take white
   for the accent. Without a cover, the blur is a gradient of the theme's accent.
@@ -453,7 +456,9 @@ Track's kind is decided.
 
 ## Favorites and ratings
 
-- **A heart** marks a favorite, in a row and in the player.
+- **A filled heart** marks a favorite, in a row and in the player. Hovering over
+  a Library row or focusing a control in it shows an empty heart in the accent
+  color if the song is not a favorite. On touch screens the heart stays visible.
 - **Five stars** rate a Track in its row; choosing the rating already given
   clears it. A phone, which has no room for the rating column, rates from the
   player.

@@ -22,8 +22,9 @@ npm run e2e      # Playwright against the real server (needs: uv sync, npx playw
 
 ## Rules
 
-- **Run `npm run check` before committing.** It must pass — it is the same gate CI
-  runs. `npm run build` and `npm run e2e` run in CI too.
+- **Test the affected behavior locally.** Select one Vitest file or, for a
+  browser interaction, a Playwright spec and title. CI runs `npm run check`,
+  the production build and the full end-to-end suite.
 - Let the tooling format and lint: follow `eslint.config.js`, `.stylelintrc.json`,
   and `.prettierrc.json` rather than hand-formatting or overriding rules inline. A
   rule suppression gets a comment saying why.

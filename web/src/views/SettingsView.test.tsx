@@ -125,7 +125,7 @@ afterEach(() => {
 });
 
 describe("the image search section", () => {
-  it("lets an admin save and remove the key without showing it again", async () => {
+  it("lets an admin save, replace, and remove the key without showing it again", async () => {
     let saved: unknown;
     const { calls } = open(true, {
       "PUT /api/image-search/key": (body) => {
@@ -141,10 +141,40 @@ describe("the image search section", () => {
     await user.click(section.getByRole("button", { name: "Save key" }));
 
     expect(saved).toEqual({ key: "example-only" });
-    expect(key).toHaveValue("");
-    await user.click(await section.findByRole("button", { name: "Remove key" }));
+    expect(section.queryByLabelText("Tavily API key")).toBeNull();
+    const change = await section.findByRole("button", { name: "Change Key" });
+    expect(change).toHaveFocus();
+    await user.click(change);
+    const replacement = section.getByLabelText("Tavily API key");
+    expect(replacement).toHaveValue("");
+    await user.type(replacement, "replacement-example");
+    await user.click(section.getByRole("button", { name: "Save key" }));
+    expect(saved).toEqual({ key: "replacement-example" });
+    await user.click(await section.findByRole("button", { name: "Remove Key" }));
     expect(calls).toContain("DELETE /api/image-search/key");
-    expect(section.queryByRole("button", { name: "Remove key" })).toBeNull();
+    expect(section.queryByRole("button", { name: "Remove Key" })).toBeNull();
+    expect(section.getByLabelText("Tavily API key")).toHaveValue("");
+    expect(section.getByLabelText("Tavily API key")).toHaveFocus();
+  });
+
+  it("lets an admin cancel a replacement without changing the saved key", async () => {
+    const { calls } = open(true, { "GET /api/image-search": { body: { configured: true } } });
+    const section = within(screen.getByRole("region", { name: "Image search" }));
+    const user = userEvent.setup();
+    const change = await section.findByRole("button", { name: "Change Key" });
+    expect(section.getByRole("button", { name: "Remove Key" })).toBeEnabled();
+    expect(change).not.toHaveFocus();
+
+    await user.click(change);
+    expect(section.getByLabelText("Tavily API key")).toHaveFocus();
+    await user.keyboard("discard-this");
+    await user.click(section.getByRole("button", { name: "Cancel" }));
+
+    expect(section.getByRole("button", { name: "Change Key" })).toHaveFocus();
+    expect(calls).not.toContain("PUT /api/image-search/key");
+    expect(calls).not.toContain("DELETE /api/image-search/key");
+    await user.keyboard("{Enter}");
+    expect(section.getByLabelText("Tavily API key")).toHaveValue("");
   });
 
   it("does not show or read key settings for a member", () => {

@@ -11,11 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Type `settings: rating` in the search box and choose *Your ratings* to open
   that Settings section. Type `settings:` to see every section you can visit.
+- Open a saved song's lyrics directly from an album's Songs editor without saving
+  the list. **Auto-Match lyrics** can ask the configured AI to choose among lyrics
+  found for each saved song. It asks first and never replaces existing lyrics.
+- **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
+  the server without losing the result. In *Downloaded*, select *Choose parts*
+  to finish or *Dismiss* to discard it. Nothing is added until you confirm.
+- Click the large cover in Now Playing to open that album's cover editor.
 - Choose English or Simplified Chinese on the sign-in screen or in
   Settings → Appearance. The first translated screens include sign-in, device
   approval, navigation and playback controls. Other screens still use English.
-- Search for album covers on Google Images beside Upload, or see pictures and
-  their source pages in the editor with an optional household Tavily key.
+- Find an album cover on Google Images and preview and use your saved image in
+  **External Search**. With a household key, select **Tavily** below MusicBrainz
+  to search and see pictures with their source pages.
 
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged

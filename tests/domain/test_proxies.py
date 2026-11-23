@@ -12,8 +12,8 @@ from medleyplay.domain.proxies import (
     ProxyUrl,
     check_proxy_site,
     proxy_secret_name,
-    redact_proxy,
 )
+from medleyplay.proxy_redaction import redact_proxy
 
 PASSWORD = "hunter2"
 

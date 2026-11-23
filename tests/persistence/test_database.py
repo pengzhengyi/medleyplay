@@ -37,6 +37,27 @@ def test_the_migrations_build_exactly_the_schema_the_code_declares(tmp_path: Pat
     assert differences == []
 
 
+def test_adding_video_lookups_preserves_saved_picture_searches(tmp_path: Path) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0061")
+    images = [{"title": "Front cover", "url": "https://example.test/cover.jpg"}]
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO picture_search (key, images) VALUES ('album:1', :images)"),
+            {"images": json.dumps(images)},
+        )
+
+    _migrate_to(engine, "0062")
+
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0062"
+        saved = connection.execute(text("SELECT images FROM picture_search")).scalar_one()
+        assert json.loads(saved) == images
+        assert connection.scalar(text("SELECT count(*) FROM video_lookup")) == 0
+        assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
+    engine.dispose()
+
+
 def test_migrating_a_current_database_again_changes_nothing(
     units: sessionmaker[Session],
 ) -> None:

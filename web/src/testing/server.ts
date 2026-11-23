@@ -341,6 +341,7 @@ export function signedIn(
     "GET /api/features": { body: features },
     "GET /api/mode": { body: modeOf() },
     "GET /api/downloads": { body: [] },
+    "GET /api/links/lookups": { body: [] },
     ...preferencesOf(),
   };
 }

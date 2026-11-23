@@ -14,80 +14,54 @@ export function GoogleImagesLink({ album, artist }: CoverAlbum) {
   );
 }
 
-export function AlbumImageSearch({ album, artist }: CoverAlbum) {
-  const [configured, setConfigured] = useState<boolean>();
+export function TavilySearch({ album, artist }: CoverAlbum) {
   const [result, setResult] = useState<ImageSearchResults>();
   const [error, setError] = useState("");
-  const [sending, setSending] = useState(false);
   const [requested, setRequested] = useState(0);
   useEffect(() => {
     let active = true;
-    api.imageSearch().then(
-      ({ configured: enabled }) => {
-        if (active) setConfigured(enabled);
-      },
-      () => {
-        if (active) setError("Could not read the image search setting.");
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (!configured) return;
-    let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const read = () => {
-      api.imageSearchResults(album, artist).then(
-        (answer) => {
-          if (!active) return;
+    const read = async (start: boolean) => {
+      try {
+        const answer = await api.imageSearchResults(album, artist);
+        if (!isCurrent()) return;
+        if (start && !answer.searching && !answer.waiting) {
+          await api.searchImages(album, artist);
+          if (isCurrent()) void read(false);
+        } else {
           setResult(answer);
-          if (answer.searching || answer.waiting) timer = setTimeout(read, 2000);
-        },
-        () => {
-          if (active) setError("Could not read the search results. Try again.");
-        },
-      );
+          if (answer.searching || answer.waiting) timer = setTimeout(() => void read(false), 2000);
+        }
+      } catch (failure) {
+        if (isCurrent())
+          setError(failure instanceof Error ? failure.message : "Could not search. Try again.");
+      }
     };
-    read();
+    function isCurrent() {
+      return active;
+    }
+    void read(true);
     return () => {
       active = false;
       clearTimeout(timer);
     };
-  }, [album, artist, configured, requested]);
+  }, [album, artist, requested]);
 
-  const search = async () => {
-    setError("");
-    setSending(true);
-    try {
-      await api.searchImages(album, artist);
-      setResult({ searching: true, waiting: false, failure: null, images: [] });
-      setRequested((count) => count + 1);
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "The search could not start.");
-    } finally {
-      setSending(false);
-    }
-  };
-  const busy =
-    sending || ((result?.searching === true || result?.waiting === true) && error === "");
+  const busy = !error && (!result || result.searching || result.waiting);
   const failure = error || result?.failure;
   return (
     <div className="cover-finder">
-      <GoogleImagesLink album={album} artist={artist} />
-      {configured === false && (
-        <p className="hint">An admin can add a Tavily key in Settings → Image search.</p>
-      )}
-      {configured === true && (
+      {!busy && (
         <button
           type="button"
           className="secondary outline dialog-button"
-          disabled={busy}
-          aria-busy={busy}
-          onClick={() => void search()}
+          onClick={() => {
+            setResult(undefined);
+            setError("");
+            setRequested((count) => count + 1);
+          }}
         >
-          Search with Tavily
+          Search again
         </button>
       )}
       {failure && (
@@ -102,7 +76,7 @@ export function AlbumImageSearch({ album, artist }: CoverAlbum) {
             ? "Searching for pictures…"
             : result && result.images.length > 0
               ? "Check the source and its license before uploading a picture."
-              : requested > 0 && result && !failure
+              : result && !failure
                 ? "No pictures found."
                 : ""}
       </p>

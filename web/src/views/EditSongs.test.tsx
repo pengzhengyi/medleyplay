@@ -13,8 +13,9 @@ import {
   type Songs,
 } from "../api";
 import { fakeMedia } from "../testing/media";
-import { detailsOf, splitSongsOf, trackOf } from "../testing/server";
+import { detailsOf, lyricsFoundOf, serve, splitSongsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
+import { LyricsEditor } from "./LyricsEditor";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
 import { type AiSetUp, AiSetUpContext } from "./aiSetUp";
 
@@ -66,6 +67,7 @@ const SET_UP: AiSetUp = { missing: false, admin: true };
 // The details typed in the note to the AI are remembered in this browser, test to test too.
 afterEach(() => {
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 /**
@@ -89,6 +91,7 @@ async function renderEditor(
     ai = AI_UNASKED,
     silences = NO_GAPS_KNOWN,
     aiSetUp = SET_UP,
+    loadLyrics = vi.fn<(id: number) => Promise<null>>(() => Promise.resolve(null)),
   } = {},
 ) {
   const onClose = vi.fn();
@@ -120,6 +123,22 @@ async function renderEditor(
             onListen={onListen}
             onSave={onSave}
             onUnsplit={onUnsplit}
+            lyricsOf={(id) => (
+              <LyricsEditor
+                load={() => loadLyrics(id)}
+                save={() => Promise.resolve()}
+                forget={() => Promise.resolve()}
+                player={{
+                  current: false,
+                  playing: false,
+                  seconds: 0,
+                  start: vi.fn(),
+                  toggle: vi.fn(),
+                  seek: vi.fn(),
+                }}
+              />
+            )}
+            matchOnline
           />
         ),
       }}
@@ -141,6 +160,7 @@ async function renderEditor(
     dialog,
     media,
     load,
+    loadLyrics,
     onSave,
     onUnsplit,
     check,
@@ -186,6 +206,61 @@ const press = (dialog: HTMLElement, name: string | RegExp | HTMLElement) =>
   );
 
 describe("editing a file's songs", () => {
+  it("confirms before matching, skips saved lyrics and applies a pick by its search job", async () => {
+    const at = "2026-11-19T12:00:01Z";
+    const finish = later<undefined>();
+    const saved = vi.fn(() => ({ status: 204 }));
+    const { calls } = serve({
+      "POST /api/tracks/101/lyrics/match/find": {
+        status: 409,
+        body: { detail: "Already has lyrics" },
+      },
+      "POST /api/tracks/102/lyrics/match/find": { status: 202, body: 27, after: finish.promise },
+      "GET /api/jobs/27": { body: { id: 27, state: "succeeded" } },
+      "POST /api/tracks/102/lyrics/match/choose": { status: 202, body: null },
+      "GET /api/tracks/102/lyrics/found": {
+        body: lyricsFoundOf(undefined, {
+          pick: { at, option: 0, why: "Same recording", host: "test", model: "test" },
+        }),
+      },
+      "POST /api/tracks/102/lyrics/match/apply": saved,
+    });
+    const { dialog, onSave } = await renderEditor();
+    await userEvent.type(box(dialog, "Title of song 3"), " draft");
+    await press(dialog, "Auto-Match lyrics");
+    expect(calls).toEqual([]);
+    expect(within(dialog).getByText(/may make.*AI calls/i)).toBeVisible();
+    await press(dialog, "Start matching");
+    expect(within(dialog).getByRole("button", { name: "Auto-Match lyrics" })).toBeDisabled();
+    finish.give(undefined);
+
+    await within(dialog).findByText(/Saved lyrics from LRCLIB/i);
+    expect(within(dialog).getByText(/Already has lyrics/)).toBeVisible();
+    expect(saved).toHaveBeenCalledExactlyOnceWith({ search_job: 27, chosen_at: at });
+    expect(calls.some((call) => call.includes("/103/"))).toBe(false);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+  it("opens the moved song's lyrics without saving or losing the list draft", async () => {
+    const { dialog, loadLyrics, onSave } = await renderEditor();
+    await press(dialog, "Move “Last” up");
+    await userEvent.type(box(dialog, "Title of song 2"), " draft");
+    await press(dialog, "Add a song");
+    expect(within(dialog).getByRole("button", { name: "Lyrics for song 4" })).toBeDisabled();
+    expect(loadLyrics).not.toHaveBeenCalled();
+
+    const entry = within(dialog).getByRole("button", { name: "Lyrics for “Last draft”" });
+    await press(dialog, entry);
+    const lyrics = screen.getByRole("dialog", { name: "Lyrics" });
+    await within(lyrics).findByText("None yet");
+    expect(loadLyrics).toHaveBeenCalledExactlyOnceWith(103);
+    await press(lyrics, "Songs");
+
+    expect(entry).toHaveFocus();
+    expect(box(dialog, "Title of song 2")).toHaveValue("Last draft");
+    expect(box(dialog, "Title of song 4")).toHaveValue("");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("shows each song's start, title, and artist", async () => {
     const { dialog } = await renderEditor();
 

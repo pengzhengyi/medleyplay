@@ -550,6 +550,15 @@ class JobRow(Base):
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
 
+class VideoLookupRow(Base):
+    """An open choice of video parts, owned by the Account that submitted its Job."""
+
+    __tablename__ = "video_lookup"
+
+    job_id: Mapped[int] = mapped_column(ForeignKey("job.id", ondelete="CASCADE"), primary_key=True)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSON)
+
+
 class LibraryRow(Base):
     """A Library; `(kind, path)` is its natural key, and its ids are never reused."""
 

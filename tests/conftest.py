@@ -64,6 +64,7 @@ from medleyplay.application.storage_folder import StorageFolder
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.application.thumbnails import ThumbnailService, make_thumbnails_kind
+from medleyplay.application.video_lookups import LOOKUP_KIND, VideoLookups
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.web.app import create_app
@@ -290,6 +291,7 @@ def jobs(  # noqa: PLR0913, PLR0917 -- one argument per Job kind
         scan.name: scan,
         cache.name: cache,
         download.name: download,
+        LOOKUP_KIND.name: LOOKUP_KIND,
         enrich_kind.name: enrich_kind,
         find_kind.name: find_kind,
         find_names_kind.name: find_names_kind,
@@ -584,6 +586,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         linked=linked,
         proxies=proxies,
         links=links,
+        video_lookups=VideoLookups(units, links, jobs, plugins),
         manual_downloads=manual_downloads,
         events=events,
         settings=settings,

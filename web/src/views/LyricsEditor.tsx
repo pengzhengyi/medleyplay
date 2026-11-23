@@ -157,7 +157,7 @@ export function LyricsEditor({
       <header className="lyrics-editor-head">
         <button type="button" className="songs-back" disabled={busy} onClick={controls.onBack}>
           <CaretLeftIcon weight="bold" aria-hidden />
-          Details
+          {controls.backLabel ?? "Details"}
         </button>
         <h2 id={controls.headingId} className="songs-title" tabIndex={-1}>
           Lyrics

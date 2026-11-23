@@ -172,14 +172,24 @@ the household looks for the lyrics itself, by a title and artist of its own.
   was found before it is kept.
 - **Finding is a Job** in the lyrics enricher's lane, so it keeps the same pace with
   the lookups. What it finds is kept for the song, with what was asked, and finding
-  again replaces it. Nothing changes the song's lyrics until the household uses one
-  and saves.
+  again replaces it. In the lyrics editor, nothing changes the song's lyrics until
+  the household uses one and saves.
 - **An AI model's pick.** With an AI set up and the `ai-details` plugin on, the
   editor asks once the songs are found: a Job in the AI's lane shows a model the
   song's title, artist, album, and length, and each song found as a letter with its
   site, title, artist, album, length, and kind, never its lyrics. The model answers
   with one letter, or none, and why. The pick is marked *AI pick*, why in its tooltip,
   while those are the songs found; finding again drops it.
+- **Auto-Match lyrics in Songs** asks for confirmation before searching saved songs
+  one at a time. The same find and choose Jobs use the same enabled sites, model,
+  and rate limits. Each result appears beside the action. Closing Songs stops the
+  browser from starting another step; a Job already submitted can finish.
+- **Saving a pick** keeps the site's lyrics under the site's name, not as a
+  household edit. In one write transaction the server checks the saved segment,
+  Track details, search Job, choice and enabled site. Missing or ambiguous picks,
+  changed songs or searches, and songs with any lyrics (even a dismissed
+  suggestion) stay untouched. A second request for the same search reuses its
+  results rather than charging for another choice.
 
 ## What the API shows
 
@@ -192,6 +202,9 @@ the household looks for the lyrics itself, by a title and artist of its own.
 | `POST /api/tracks/{id}/lyrics/find` | Signed in | Finds the songs titled `{title, artist}` on the lyrics sites, for the song; 202, 409 while the lyrics plugin is off |
 | `GET /api/tracks/{id}/lyrics/found` | Signed in | What was last found: the title and artist asked, each song found with its site, album, length, and lyrics, an AI model's pick and why, whether either is being asked, why either failed, and whether a model may be asked |
 | `POST /api/tracks/{id}/lyrics/choose` | Signed in | Asks an AI model which song found is the song; 202, 409 with no songs found, no model set up, or the `ai-details` plugin off |
+| `POST /api/tracks/{id}/lyrics/match/find` | Signed in | Checks the saved row and returns the search Job ID, or 409 when ineligible |
+| `POST /api/tracks/{id}/lyrics/match/choose` | Signed in | Requests the AI pick for `{search_job}` only while that search still matches the song |
+| `POST /api/tracks/{id}/lyrics/match/apply` | Signed in | Saves the site's lyrics for `{search_job, chosen_at}` only while the song has no lyrics and the pick is current |
 | `PUT /api/settings` | Admin | `lyrics_sites`, the sites asked after LRCLIB: `[]` or `["netease"]`; left out, they stay as saved |
 
 ## Showing them

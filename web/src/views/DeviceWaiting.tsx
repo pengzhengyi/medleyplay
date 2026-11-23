@@ -7,6 +7,8 @@ import { WaveformIcon } from "@phosphor-icons/react";
 import { useEffect, useEffectEvent } from "react";
 
 import { type DeviceInfo, api } from "../api";
+import { useWords } from "../locale";
+import { LanguageSelect } from "./LanguageSelect";
 
 /** How often a waiting device asks again whether it was answered. */
 export const ASK_AGAIN_MS = 3000;
@@ -23,6 +25,7 @@ export function DeviceWaiting({
   readonly device: DeviceInfo;
   readonly onAnswered: (device: DeviceInfo) => void;
 }) {
+  const t = useWords();
   const askNow = () => {
     api.device().then(onAnswered, () => undefined);
   };
@@ -46,24 +49,28 @@ export function DeviceWaiting({
         <WaveformIcon weight="bold" aria-hidden />
         medleyplay
       </h1>
+      <LanguageSelect />
       {waiting ? (
         <>
-          <h2>Waiting for approval</h2>
+          <h2>{t("Waiting for approval")}</h2>
           <p>
-            An admin allows this device on the computer running medleyplay, or in Settings on a
-            device already allowed.
+            {t(
+              "An admin allows this device on the computer running medleyplay, or in Settings on a device already allowed.",
+            )}
           </p>
-          <p className="device-code" aria-label={`Code ${device.code ?? ""}`}>
+          <p className="device-code" aria-label={t("Code {{code}}", { code: device.code ?? "" })}>
             {device.code}
           </p>
-          <p className="hint">They will see this code next to {device.label}.</p>
+          <p className="hint">
+            {t("They will see this code next to {{device}}.", { device: device.label })}
+          </p>
         </>
       ) : (
         <>
-          <h2>This device can't connect</h2>
-          <p>The household hasn't let new devices in. Ask an admin to allow this one.</p>
+          <h2>{t("This device can't connect")}</h2>
+          <p>{t("The household hasn't let new devices in. Ask an admin to allow this one.")}</p>
           <button type="button" onClick={askNow}>
-            Ask again
+            {t("Ask again")}
           </button>
         </>
       )}

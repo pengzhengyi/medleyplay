@@ -16,6 +16,27 @@
         // Storage that can't be read leaves the system's theme.
       }
     </script>
+    <script>
+      {
+        const get = (path) => fetch(path, { credentials: "same-origin" });
+        const device = get("/api/device");
+        const account = device.then(
+          async (response) => {
+            if (!response.ok) return;
+            const info = await response
+              .clone()
+              .json()
+              .catch(() => undefined);
+            if (["host", "allowed", "admitted"].includes(info?.presence)) {
+              return get("/api/me");
+            }
+          },
+          () => undefined,
+        );
+        void account.catch(() => {});
+        window.medleyplayFirstReads = { device, account };
+      }
+    </script>
   </head>
   <body>
     <div id="root"><p class="starting" aria-busy="true">medleyplay</p></div>

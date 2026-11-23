@@ -178,11 +178,18 @@ function mostWritten(songs: readonly Track[]): string | undefined {
 
 function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
   // A Playlist names its Tracks by id among them all; every other view lists songs.
-  const props = { ...given, tracks: pages.songs };
+  const props = {
+    ...given,
+    tracks: pages.songs,
+    actions: {
+      ...given.actions,
+      hasAlbum: (artist: string, name: string) => pages.album(artist, name).songs.length > 0,
+    },
+  };
   const { route } = props;
   switch (route.view) {
     case "library":
-      return <LibraryItems {...given} />;
+      return <LibraryItems {...props} tracks={given.tracks} />;
     case "radio":
       return (
         <RadioView

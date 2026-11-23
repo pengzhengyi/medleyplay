@@ -63,7 +63,9 @@ import { heartTitleOf } from "../heart";
 import type { CoverStatus } from "../library/lookups";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
 import { ratingOf } from "../library/ratings";
+import { albumArtistOf } from "../library/views";
 import type { UnitOf } from "../player/usePlayer";
+import { type LibraryGroup, hrefOf } from "../routes";
 import { Cover } from "./Cover";
 import { WHY } from "./unplayable";
 import {
@@ -77,7 +79,6 @@ import {
 import { KindMark } from "./KindMark";
 import { DownloadFailed, MoreWays, TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { STATUS_ICONS } from "./statusIcons";
-import type { LibraryGroup } from "../routes";
 
 /** What every cell may need: the page's callbacks, which Track is playing, and the songs of files. */
 interface Meta {
@@ -191,8 +192,6 @@ const GROUP_BY: readonly { id: string; label: string }[] = [
   { id: "genre", label: "Genre" },
 ];
 
-const albumArtistOf = (track: Track): string => track.album_artist || track.artist;
-
 /** How a group's row names it, from its first song: `生如夏花 · 朴树`. */
 function groupName(by: string, track: Track): string {
   switch (by) {
@@ -231,6 +230,8 @@ export interface TrackActions extends TrackMenuActions {
   readonly statusOf: (track: Track) => CoverStatus | undefined;
   /** The Track's Download, while one is under way. */
   readonly downloadOf: (track: Track) => DownloadUnderWay | undefined;
+  /** Whether a split file's album has songs on its details page. */
+  readonly hasAlbum?: (artist: string, name: string) => boolean;
   /** Edit the album `songs`, songs of their own, make up; an album that is one file is edited as it. */
   readonly onEditAlbum?: (songs: readonly Track[]) => void;
   /** Make `cover`, a cover kept already, the cover of `songs`: an album's songs, or its one file. */
@@ -1054,6 +1055,18 @@ const COLUMNS: Column[] = [
     getGroupingValue: (track) => `${track.album}\u001f${albumArtistOf(track)}`,
     size: 200,
     minSize: 80,
+    cell: ({ row: { original: track }, table }) => {
+      const name = track.album;
+      const artist = albumArtistOf(track);
+      if (name.trim() === "" || (track.split && !meta(table).actions.hasAlbum?.(artist, name))) {
+        return name;
+      }
+      return (
+        <a className="album-link" href={hrefOf({ view: "album", artist, name })}>
+          {name}
+        </a>
+      );
+    },
   },
   {
     id: "album_artist",

@@ -193,6 +193,9 @@ Track's kind is decided.
   need a modifier key a touch screen lacks. Text sorts as people read it, by
   locale, with numbers in order and case ignored; time, rating, plays, and added
   sort as numbers and dates, smallest first.
+- **The Album column** links to the album's page by album artist (or song artist
+  when blank) and album name. A blank name or an album with no songs on its page
+  stays plain text.
 - **Columns can be hidden and resized,** from a menu in the header row; the
   choice is kept per browser, versioned, and ignored when it can't be read.
 - **The header stays in view:** it sticks under the top bar while the songs

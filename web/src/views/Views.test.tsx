@@ -127,6 +127,48 @@ describe("the views", () => {
     expect(screen.getByRole("link", { name: /空想.*Various, 1 song/ })).toBeInTheDocument();
   });
 
+  it("opens the row's album from the keyboard without playing the song", async () => {
+    open(
+      "#/library",
+      signedIn([
+        trackOf(1, "First Light", {
+          artist: "Guest",
+          album: "Goodbye & Hello",
+          album_artist: "North/South",
+        }),
+        trackOf(2, "Last Light", { artist: "West", album: "Goodbye & Hello" }),
+        trackOf(3, "Demo", { album: "" }),
+        trackOf(4, "Split recording", { album: "Old title", kind: "album", split: true }),
+        trackOf(5, "Part One", { album: "New title", segment_of: 4 }),
+      ]),
+    );
+    const user = userEvent.setup();
+    const first = await screen.findByRole("button", { name: "First Light" });
+    const album = within(screen.getByRole("row", { name: /First Light/u })).getByRole("link", {
+      name: "Goodbye & Hello",
+    });
+    const other = within(screen.getByRole("row", { name: /Last Light/u })).getByRole("link", {
+      name: "Goodbye & Hello",
+    });
+    expect(other).toHaveAttribute("href", "#/album?artist=West&name=Goodbye+%26+Hello");
+    expect(
+      within(screen.getByRole("row", { name: /Demo/u })).queryByRole("link"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("cell", { name: "Old title" })).queryByRole("link"),
+    ).not.toBeInTheDocument();
+
+    first.focus();
+    await user.tab();
+    expect(album).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByRole("heading", { name: "Goodbye & Hello" })).toBeVisible();
+    expect(location.hash).toBe("#/album?artist=North%2FSouth&name=Goodbye+%26+Hello");
+    expect(songs()).toEqual(["First Light"]);
+    expect(screen.getByText("Nothing playing")).toBeVisible();
+  });
+
   it("shows a song's cover in its row as a small thumbnail", async () => {
     open("", signedIn(withCovers(), [favoritesPlaylistOf([1])]));
 

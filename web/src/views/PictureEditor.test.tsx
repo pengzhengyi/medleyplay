@@ -53,24 +53,22 @@ afterEach(() => {
 });
 
 describe("the picture editor", () => {
-  it("opens on Upload with a keyless image search for this album without starting a job", () => {
+  it("opens on Upload without the Google Images link or starting a job", () => {
     const { calls } = serve({ "GET /api/image-search": { body: { configured: false } } });
 
     const { dialog } = editing(helpCover());
 
+    const panel = within(dialog.getByRole("tabpanel", { name: "Upload" }));
+    expect(panel.getByRole("button", { name: "Choose a file…" })).toBeVisible();
+    expect(dialog.queryByRole("link", { name: "Search Google Images" })).not.toBeInTheDocument();
     const sources = dialog.getByRole("tablist", { name: "Where the cover comes from" });
     expect(
       within(sources)
         .getAllByRole("tab")
         .map((tab) => tab.textContent.trim()),
-    ).toEqual(["Upload", "MusicBrainz", "External Search", "Ask AI"]);
+    ).toEqual(["Upload", "MusicBrainz", "Google", "Ask AI"]);
     expect(dialog.getByRole("tab", { name: "Upload" })).toHaveAttribute("aria-selected", "true");
     expect(dialog.getByText("Help!")).toBeVisible();
-    const link = dialog.getByRole("link", { name: "Search Google Images" });
-    const search = new URL((link as HTMLAnchorElement).href);
-    expect(search.hostname).toBe("www.google.com");
-    expect(search.searchParams.get("q")).toBe("The Beatles Help! album cover");
-    expect(search.searchParams.get("udm")).toBe("2");
     expect(calls).toEqual(["GET /api/image-search"]);
   });
 
@@ -102,7 +100,7 @@ describe("the picture editor", () => {
       "Upload",
       "MusicBrainz",
       "Tavily",
-      "External Search",
+      "Google",
       "Ask AI",
     ]);
     search.focus();
@@ -136,29 +134,34 @@ describe("the picture editor", () => {
     expect(calls).not.toContain("POST /api/image-search/results");
   });
 
-  it("offers a keyless external search and previews and uses the file in the same tab", async () => {
+  it("shows a prefilled Google Images link and uses a saved file from below the instructions", async () => {
     const { calls } = serve({ "GET /api/image-search": { body: { configured: false } } });
     const sources = helpCover();
     const { dialog, onClose } = editing(sources);
     const user = userEvent.setup();
 
-    await user.click(dialog.getByRole("tab", { name: "External Search" }));
+    await user.click(dialog.getByRole("tab", { name: "Google" }));
 
-    const steps = dialog.getAllByRole("listitem");
-    const link = dialog.getByRole<HTMLAnchorElement>("link", {
-      name: "Search Google Images",
-    });
+    const panel = within(dialog.getByRole("tabpanel", { name: "Google" }));
+    const instructions = panel.getByRole("list");
+    const steps = within(instructions).getAllByRole("listitem");
+    const link = panel.getByRole<HTMLAnchorElement>("link", { name: "Search Google Images" });
+    const search = new URL(link.href);
+    expect(steps).toHaveLength(3);
     expect(steps[0]).toContainElement(link);
-    expect(new URL(link.href).searchParams.get("q")).toBe("The Beatles Help! album cover");
+    expect(search.hostname).toBe("www.google.com");
+    expect(search.searchParams.get("q")).toBe("The Beatles Help! album cover");
+    expect(search.searchParams.get("udm")).toBe("2");
     expect(steps[1]).toHaveTextContent(/permission/u);
+    expect(steps[2]).toHaveTextContent("Replace the cover below.");
     expect(dialog.queryByRole("tab", { name: "Tavily" })).toBeNull();
     const file = jpeg("found.jpg");
-    const choose = dialog.getByLabelText("Choose a cover file");
-    expect(steps[2]).toContainElement(choose);
+    const choose = panel.getByLabelText("Choose a cover file");
+    expect(instructions).not.toContainElement(choose);
     await user.upload(choose, file);
-    expect(await dialog.findByRole("img", { name: "The cover chosen" })).toBeVisible();
+    expect(await panel.findByRole("img", { name: "The cover chosen" })).toBeVisible();
     expect(sources.upload).not.toHaveBeenCalled();
-    await user.click(dialog.getByRole("button", { name: "Use this cover" }));
+    await user.click(panel.getByRole("button", { name: "Use this cover" }));
     expect(sources.upload).toHaveBeenCalledWith(file);
     await waitFor(() => {
       expect(onClose).toHaveBeenCalledOnce();
@@ -242,7 +245,7 @@ describe("the picture editor", () => {
 
     const { dialog } = editing(helpCover({ album: undefined, pictured: undefined }));
 
-    for (const name of ["MusicBrainz", "External Search", "Ask AI"]) {
+    for (const name of ["MusicBrainz", "Google", "Ask AI"]) {
       const tab = dialog.getByRole("tab", { name });
       expect(tab).toBeDisabled();
       expect(tab).toHaveAttribute("title", expect.stringMatching(/^Fill in the album/u));

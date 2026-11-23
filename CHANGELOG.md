@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Choose English or Simplified Chinese on the sign-in screen or in
+  Settings → Appearance. The first translated screens include sign-in, device
+  approval, navigation and playback controls. Other screens still use English.
 - Find an album cover on Google Images and preview and use your saved image in
   **External Search**. With a household key, select **Tavily** below MusicBrainz
   to search and see pictures with their source pages.
@@ -873,6 +876,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A successful Job's finish time includes saving its result, so a lyrics search
+  no longer appears to finish before its songs were found.
 - Clicking a split album in the Library plays the whole file. Expand it and
   click a song to play just that song instead.
 

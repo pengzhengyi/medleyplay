@@ -10,6 +10,7 @@ import { QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
 import type { Lyrics, Track } from "../api";
+import { useWords } from "../locale";
 import { type FavoriteGroups, canFavorite, isFavoriteAlbum } from "../library/favoriteGroups";
 import { albumArtistOf } from "../library/views";
 import { songTimeOf, useLyricsHidden } from "../lyrics";
@@ -64,6 +65,7 @@ export function PlayerBar({
   /** Where the music plays, chosen beside the queue, on a page that isn't on the computer. */
   readonly playOn?: ReactNode;
 }) {
+  const t = useWords();
   const { status, position, duration } = player;
   const keys = useBindings();
   const lyricsHidden = useLyricsHidden();
@@ -76,7 +78,7 @@ export function PlayerBar({
   const shownPosition = timeline?.position ?? position;
   const shownDuration = timeline === undefined ? duration : timeline.length;
   return (
-    <section className="player" aria-label="Player">
+    <section className="player" aria-label={t("Player")}>
       <SeekBar
         position={shownPosition}
         duration={shownDuration}
@@ -103,11 +105,11 @@ export function PlayerBar({
         {track === undefined ? (
           <Cover size="small" cover={null} />
         ) : (
-          <Hint name={"Now Playing"} keys={keys.nowPlaying}>
+          <Hint name={t("Now Playing")} keys={keys.nowPlaying}>
             <button
               type="button"
               className="open-now-playing"
-              aria-label="Open Now Playing"
+              aria-label={t("Open Now Playing")}
               onClick={onOpenNowPlaying}
             >
               <Cover size="small" cover={track.cover} />
@@ -129,9 +131,9 @@ export function PlayerBar({
           />
         )}
         <div className="names">
-          <strong>{named?.title ?? "Nothing playing"}</strong>
+          <strong>{named?.title ?? t("Nothing playing")}</strong>
           {named === undefined ? (
-            <span>Choose a Track to play it</span>
+            <span>{t("Choose a Track to play it")}</span>
           ) : (
             <SongCredits track={named} />
           )}
@@ -153,11 +155,11 @@ export function PlayerBar({
         steps={albumSteps(player.queue, tracks, nowPlaying, position)}
       />
       <div className="status">
-        <Hint name={"Up next"} keys={keys.queue}>
+        <Hint name={t("Up next")} keys={keys.queue}>
           <button
             type="button"
             className={queueOpen ? "icon queue-toggle on" : "icon queue-toggle"}
-            aria-label="Up next"
+            aria-label={t("Up next")}
             aria-expanded={queueOpen}
             aria-controls="queue"
             onClick={onToggleQueue}
@@ -166,7 +168,7 @@ export function PlayerBar({
           </button>
         </Hint>
         {playOn}
-        {status.kind === "preparing" && <span className="note">Preparing…</span>}
+        {status.kind === "preparing" && <span className="note">{t("Preparing…")}</span>}
         {status.kind === "blocked" && <span className="note">{status.message}</span>}
         {status.kind === "failed" && (
           <span className="note failed" role="alert">

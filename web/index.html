@@ -6,6 +6,17 @@
     <meta name="color-scheme" content="light dark" />
     <title>medleyplay</title>
     <script>
+      // Before the first paint, the theme this browser chose, as theme.ts applies it.
+      try {
+        const theme = localStorage.getItem("medleyplay.theme");
+        if (theme === "light" || theme === "dark") {
+          document.documentElement.dataset.theme = theme;
+        }
+      } catch {
+        // Storage that can't be read leaves the system's theme.
+      }
+    </script>
+    <script>
       {
         const get = (path) => fetch(path, { credentials: "same-origin" });
         const device = get("/api/device");
@@ -24,17 +35,6 @@
         );
         void account.catch(() => {});
         window.medleyplayFirstReads = { device, account };
-      }
-    </script>
-    <script>
-      // Before the first paint, the theme this browser chose, as theme.ts applies it.
-      try {
-        const theme = localStorage.getItem("medleyplay.theme");
-        if (theme === "light" || theme === "dark") {
-          document.documentElement.dataset.theme = theme;
-        }
-      } catch {
-        // Storage that can't be read leaves the system's theme.
       }
     </script>
   </head>

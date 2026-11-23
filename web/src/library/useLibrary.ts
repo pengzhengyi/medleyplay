@@ -25,7 +25,7 @@ import {
   type Job,
   type DownloadUnderWay,
   type JobEvent,
-  type LinkLookup,
+  type SavedVideoLookup,
   type Mode,
   type PartChoice,
   type Playlist,
@@ -160,13 +160,16 @@ export interface Library {
     values: Partial<Record<Detail, string | number | null>>,
   ) => Promise<void>;
   /** Look up the video a link or bare code names; the promise rejects with why it can't. */
-  readonly lookUpLink: (link: string) => Promise<LinkLookup>;
+  readonly lookUpLink: (link: string) => Promise<SavedVideoLookup>;
+  readonly videoLookups: readonly SavedVideoLookup[];
+  readonly videoLookup: (id: number) => Promise<SavedVideoLookup>;
+  readonly dismissLookup: (id: number) => Promise<void>;
   /**
    * Add the chosen parts of a link's video as Tracks, which then show downloading. The
    * promise rejects with why when the server refuses.
    */
   readonly addLink: (
-    link: string,
+    id: number,
     quality: string,
     parts: readonly PartChoice[],
   ) => Promise<readonly AddedPart[]>;
@@ -199,7 +202,7 @@ export interface Library {
 /** The Jobs whose end can change the Tracks. */
 const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track"]);
 /** The Jobs whose end changes nothing the Library reads: thumbnails are found by URL. */
-const CHANGES_NOTHING = new Set(["make_thumbnails"]);
+const CHANGES_NOTHING = new Set(["make_thumbnails", "lookup_video"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
 /** How long after the last Job to end the Library is refreshed, so a busy scan does it once. */
 const SETTLE_MS = 1000;
@@ -247,6 +250,22 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [mode, setMode] = useState<Mode | null>(null);
   const [waitingDevices, setWaitingDevices] = useState<readonly WaitingDevice[]>([]);
   const [downloading, setDownloading] = useState<readonly DownloadUnderWay[]>([]);
+  const [videoLookups, setVideoLookups] = useState<readonly SavedVideoLookup[]>([]);
+  const videoReads = useRef(0);
+  const loadVideoLookups = useCallback(() => {
+    const read = ++videoReads.current;
+    api.videoLookups().then(
+      (saved) => {
+        if (videoReads.current === read) setVideoLookups(saved);
+      },
+      () => undefined,
+    );
+  }, []);
+  const forgetVideo = (id: number) => {
+    videoReads.current++;
+    setVideoLookups((saved) => saved.filter((row) => row.id !== id));
+    loadVideoLookups();
+  };
   const [speaker, setSpeaker] = useState<Speaker | null | undefined>(undefined);
   const commandListeners = useRef(new Set<(command: RemoteCommand) => void>());
   const onCommand = useCallback((listener: (command: RemoteCommand) => void) => {
@@ -350,6 +369,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   }, []);
   /** Follow a Download's or a lookup's Job as the event stream tells of it. */
   const onJob = useEffectEvent((job: JobEvent) => {
+    if (job.kind === "lookup_video") loadVideoLookups();
     if (downloadEnded(job)) {
       endedJobs.current.add(job.id);
     }
@@ -469,6 +489,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       loadFindable();
       loadDownloading();
       void loadFeatures();
+      loadVideoLookups();
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
@@ -478,7 +499,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     load();
     document.addEventListener("visibilitychange", onShown);
     const stopListening = listen(
-      { load, refresh },
+      { load, refresh, firstReady: loadVideoLookups },
       setMode,
       onJob,
       setWaitingDevices,
@@ -494,7 +515,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
     };
-  }, [loadFindable, loadFeatures, loadDownloading, refresh]);
+  }, [loadFindable, loadFeatures, loadDownloading, loadVideoLookups, refresh]);
 
   /** Ask for the Tracks again; one that can't be read now shows on the next load. */
   const reloadTracks = () => {
@@ -736,9 +757,20 @@ export function useLibrary(onSignedOut: () => void): Library {
     setDetailsOn: async (ids, values) => {
       await changeTracks(api.setDetails(ids, values));
     },
-    lookUpLink: (link) => signedOutOn401(api.lookUpLink(link)),
-    addLink: async (link, quality, parts) => {
-      const added = await signedOutOn401(api.addLink(link, quality, parts));
+    videoLookups,
+    videoLookup: (id) => signedOutOn401(api.videoLookup(id)),
+    lookUpLink: async (link) => {
+      const saved = await signedOutOn401(api.lookUpLink(link));
+      loadVideoLookups();
+      return saved;
+    },
+    dismissLookup: async (id) => {
+      await signedOutOn401(api.dismissLookup(id));
+      forgetVideo(id);
+    },
+    addLink: async (id, quality, parts) => {
+      const added = await signedOutOn401(api.addLink(id, quality, parts));
+      forgetVideo(id);
       reloadTracks();
       loadDownloading();
       return added;
@@ -804,7 +836,11 @@ function listed(playlists: readonly Playlist[]): Playlist[] {
  * that computer. Return what stops listening.
  */
 function listen(
-  { load, refresh }: { readonly load: () => void; readonly refresh: () => void },
+  {
+    load,
+    refresh,
+    firstReady,
+  }: { readonly load: () => void; readonly refresh: () => void; readonly firstReady: () => void },
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
   onWaitingDevices: (waiting: readonly WaitingDevice[]) => void,
@@ -821,9 +857,10 @@ function listen(
   let connected = false;
   let online: boolean | undefined;
   events.addEventListener("ready", () => {
-    // The page loaded on opening; only a reconnect may have missed something.
     if (connected) {
       load();
+    } else {
+      firstReady();
     }
     connected = true;
   });

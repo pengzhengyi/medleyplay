@@ -8,6 +8,7 @@ from typing import Final, NewType
 from medleyplay.domain.accounts import Account, AccountId
 
 JobId = NewType("JobId", int)
+VIDEO_LOOKUP: Final = "lookup_video"
 
 
 class JobState(StrEnum):
@@ -51,6 +52,10 @@ class Job:
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+    def visible_to(self, viewer: Account) -> bool:
+        """Keep a lookup private even from another Account's administrator."""
+        return self.kind != VIDEO_LOOKUP or self.requested_by == viewer.id
 
 
 def failure_shown_to(job: Job, viewer: Account) -> str:

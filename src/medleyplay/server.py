@@ -72,6 +72,7 @@ from medleyplay.application.thumbnails import (
     ThumbnailService,
     make_thumbnails_kind,
 )
+from medleyplay.application.video_lookups import LOOKUP_KIND, VideoLookups
 from medleyplay.config import CONFIG_FILE, Config, load_config
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.persistence.revision import DatabaseRevision
@@ -228,6 +229,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         scan.name: scan,
         cache.name: cache,
         download.name: download,
+        LOOKUP_KIND.name: LOOKUP_KIND,
         enrich.name: enrich,
         artist_jobs.find.name: artist_jobs.find,
         artist_jobs.names.name: artist_jobs.names,
@@ -334,6 +336,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         linked=linked,
         proxies=proxies,
         links=links,
+        video_lookups=VideoLookups(units, links, jobs, plugins),
         manual_downloads=manual_downloads,
         events=events,
         settings=SettingsService(units, clock, changes.tell),

@@ -1,17 +1,9 @@
-"""Adding music from a link: looking a video up, then adding the parts the household chose.
-
-The core recognizes the link by its host before any plugin sees it, and checks
-the link the plugin ended on again. Adding doesn't trust the client: it reads
-the video again, from a short memory of recent lookups, and checks every part and
-the quality against it. A video the site can't be asked about is looked up and
-added all the same, on the household's own details for its parts.
-"""
+"""Add only selected parts, validating them against saved or directly resolved video metadata."""
 
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import StrEnum
 from typing import Final, Protocol
 
 from sqlalchemy import select
@@ -25,7 +17,7 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDetails, TrackId
 from medleyplay.domain.errors import InvalidInputError, OfflineError, PluginCallError
 from medleyplay.domain.jobs import Job
-from medleyplay.domain.links import link_of, part_locator, recognize_link
+from medleyplay.domain.links import lookup_link, part_locator, recognize_link
 from medleyplay.persistence.schema import DownloadRow, SourceRow
 from medleyplay.plugin_api import (
     BEST_QUALITY,
@@ -35,8 +27,8 @@ from medleyplay.plugin_api import (
     Canonicalize,
     ReadVideo,
     VideoDetails,
-    VideoStatus,
 )
+from medleyplay.programs.lookup_video import Resolved, Unreadable, read_details, read_failure
 
 LOOKUP_MEMORY: Final = timedelta(minutes=10)
 MAX_PARTS_PER_ADD: Final = 50
@@ -50,39 +42,6 @@ class Proxies(Protocol):
     def current(self, site: str) -> str | None:
         """Return the URL calls for `site` go through, or `None` when no proxy is set."""
         ...
-
-
-class Reason(StrEnum):
-    """Why a video couldn't be read."""
-
-    GONE = "gone"
-    """The site no longer has it."""
-    NEEDS_LOGIN = "needs_login"
-    NETWORK = "network"
-    """The site couldn't be reached."""
-    REFUSED = "refused"
-    """The site refused the read."""
-    FAULT = "fault"
-    """The plugin failed."""
-
-
-@dataclass(frozen=True)
-class Unreadable:
-    """Why a video couldn't be read, in the site's or the plugin's words."""
-
-    reason: Reason
-    message: str
-
-
-_REASON_OF_FAILURE: Final[dict[str, Reason]] = {
-    "network": Reason.NETWORK,
-    "auth": Reason.REFUSED,
-    "plugin": Reason.FAULT,
-}
-_REASON_OF_STATUS: Final = {
-    VideoStatus.GONE: Reason.GONE,
-    VideoStatus.NEEDS_LOGIN: Reason.NEEDS_LOGIN,
-}
 
 
 @dataclass(frozen=True)
@@ -140,14 +99,6 @@ class _Remembered:
     read_at: datetime
 
 
-@dataclass(frozen=True)
-class _Resolved:
-    kind: str
-    video: str
-    part: int | None
-    read: _Read
-
-
 class LinkService:
     """Look links up, and add the parts the household chose as Tracks."""
 
@@ -191,8 +142,11 @@ class LinkService:
         `unreadable` saying why.
         """
         del caller  # Any signed-in Account may look a link up.
-        self._require_online()
-        resolved = self._resolve(link)
+        self.require_online()
+        return self.preview(self._resolve(link))
+
+    def preview(self, resolved: Resolved) -> Lookup:
+        """Show the saved metadata with parts that are already in the catalog marked."""
         kind, video, read = resolved.kind, resolved.video, resolved.read
         if isinstance(read, Unreadable):
             part = resolved.part or 1
@@ -229,8 +183,14 @@ class LinkService:
         A video that can't be read is added on the household's details alone, at the
         quality `best`, and its parts have no duration until a file comes.
         """
-        self._require_online()
-        resolved = self._resolve(link)
+        self.require_online()
+        return self.add_resolved(caller, self._resolve(link), quality, parts)
+
+    def add_resolved(
+        self, caller: Account, resolved: Resolved, quality: str, parts: Sequence[PartChoice]
+    ) -> list[Added]:
+        """Add only the parts chosen from server-held metadata, without another site call."""
+        self.require_online()
         kind, video, read = resolved.kind, resolved.video, resolved.read
         if isinstance(read, Unreadable):
             _check_unreadable_choice(quality, parts)
@@ -255,13 +215,14 @@ class LinkService:
             added.append(Added(choice.part, track_id, source_id, job))
         return added
 
-    def _require_online(self) -> None:
+    def require_online(self) -> None:
+        """Refuse a new lookup or add while Offline."""
         if not self._online():
             message = "medleyplay is Offline, so links wait until it is Online."
             raise OfflineError(message)
 
-    def _resolve(self, link: str) -> _Resolved:
-        link = link_of(link)
+    def _resolve(self, link: str) -> Resolved:
+        link = lookup_link(link)
         kind = recognize_link(link)
         # Read before any call, so a slow Keychain never holds up the plugin host.
         proxy = self._proxies.current(kind) if self._proxies is not None else None
@@ -275,7 +236,7 @@ class LinkService:
             message = "The link doesn't name a video."
             raise InvalidInputError(message)
         read = self._read(kind, canonical.video, proxy)
-        return _Resolved(kind, canonical.video, canonical.part, read)
+        return Resolved(kind=kind, video=canonical.video, part=canonical.part, read=read)
 
     def _read(self, kind: str, video: str, proxy: str | None) -> _Read:
         """Read the video, or say why it can't be read; either is remembered."""
@@ -287,9 +248,9 @@ class LinkService:
             try:
                 details = self._plugins.call(READ_VIDEO, kind, ReadVideo(video=video, proxy=proxy))
             except PluginCallError as error:
-                read: _Read = Unreadable(_REASON_OF_FAILURE[error.kind], str(error))
+                read: _Read = read_failure(error.kind, str(error))
             else:
-                read = details if details.status is VideoStatus.OK else _unreadable(details)
+                read = read_details(details)
             self._remembered = {
                 key: kept
                 for key, kept in self._remembered.items()
@@ -317,12 +278,6 @@ class LinkService:
             ).one()
             downloaded = db.get(DownloadRow, row.id) is not None
             return SourceId(row.id), not downloaded and row.state != SourceState.UNAVAILABLE
-
-
-def _unreadable(details: VideoDetails) -> Unreadable:
-    return Unreadable(
-        _REASON_OF_STATUS[details.status], details.message or f"The video is {details.status}."
-    )
 
 
 def _check_choice(details: VideoDetails, quality: str, parts: Sequence[PartChoice]) -> None:

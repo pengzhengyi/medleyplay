@@ -46,8 +46,8 @@ stateDiagram-v2
   restart loses progress, never state.
 - **Finished Jobs stay** in the table with their outcome. A successful Job's
   finish time includes the time spent applying its result.
-- **The Mode doesn't exist yet,** so the server counts as Online; *waiting* holds
-  only Jobs whose network failed, until their retry time.
+- **Offline holds network Jobs** until the Mode is Online. A new interactive
+  video lookup is refused Offline, but an already queued lookup is kept.
 
 ## Job kinds and programs
 
@@ -165,7 +165,12 @@ server that stopped.
 | `POST /api/jobs/{id}/retry` | The Account that asked, or an admin | Submits a failed or cancelled Job again |
 | `GET /api/events` | Signed in | A `job` event each time a Job changes, over SSE; see [Bilibili](Bilibili.md#progress-over-sse). A `tracks` event when a setting changes how Tracks show |
 
-Jobs are shared by the household, so every Account sees them. Each Job kind adds
+Most Jobs are shared by the household. **Interactive video lookups are private:**
+only the submitting Account sees the Job in the list or event stream, reads its
+result, or changes it. A failed lookup can be dismissed and a new one submitted;
+retrying a closed Job cannot recreate a choice. See
+[Manual downloads](Manual%20downloads.md#looking-up-a-code-or-a-link).
+Each Job kind adds
 its own route to submit one, such as scanning a Library. A kind that needs a
 site's login gets a copy of the submitting Account's; see
 [Bilibili](Bilibili.md#linked-accounts).

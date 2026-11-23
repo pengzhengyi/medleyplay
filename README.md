@@ -47,10 +47,12 @@ answer to, such as a router's DNS name, with
 To add music from Bilibili, turn its plugin on in `medleyplay.toml`, as below.
 It is off by default because yt-dlp
 can't read Bilibili until an upstream fix ships. Then save your Bilibili login
-from an exported cookies file with `PUT /api/me/linked-accounts/bilibili`, and
-add a video's parts with `POST /api/links/lookup` and `POST /api/links`; each
-part downloads in the background and plays like any other song. The login stays
-in the macOS Keychain.
+from an exported cookies file with `PUT /api/me/linked-accounts/bilibili`.
+Choose *Bilibili* in the search box and paste a video link or code. Choose
+which parts to add now, or resume the lookup from *Downloaded* after a restart.
+Only the parts you confirm start downloading. The login stays in the macOS
+Keychain. See [Manual downloads](docs/contributing/design-notes/Manual%20downloads.md)
+for the API and manual entry.
 
 Until the Libraries view arrives, register a folder or a zip archive of your
 music through the API at `http://<this machine>:8000/docs` with

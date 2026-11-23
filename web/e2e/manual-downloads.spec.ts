@@ -43,6 +43,29 @@ async function lookUp(page: Page, text: string) {
 const row = (page: Page, title: string) =>
   page.getByRole("row").filter({ has: page.getByRole("button", { name: title, exact: true }) });
 
+test("a video lookup resumes from Downloaded after reload and stays dismissed", async ({
+  page,
+}) => {
+  const code = "BVresume";
+  const dialog = await lookUp(page, `https://www.bilibili.com/video/${code}`);
+  await expect(dialog.getByRole("textbox", { name: "Title of part 1" })).toHaveValue(code);
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await page.goto("/#/downloaded");
+  await page.reload();
+
+  const lookups = page.getByRole("region", { name: "Video lookups" });
+  const saved = lookups.getByRole("listitem").filter({ hasText: code });
+  await saved.getByRole("button", { name: "Choose parts" }).click();
+  await expect(dialog.getByRole("textbox", { name: "Title of part 1" })).toHaveValue(code);
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await saved.getByRole("button", { name: "Dismiss" }).click();
+  await expect(saved).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Downloaded", exact: true })).toBeVisible();
+  await expect(saved).toHaveCount(0);
+  await expect(row(page, code)).toHaveCount(0);
+});
+
 test("a Bilibili code opens the add dialog, and adding it makes a Track that downloads", async ({
   page,
 }) => {

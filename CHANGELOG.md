@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
+  the server without losing the result. In *Downloaded*, select *Choose parts*
+  to finish or *Dismiss* to discard it. Nothing is added until you confirm.
 - Click the large cover in Now Playing to open that album's cover editor.
 - Choose English or Simplified Chinese on the sign-in screen or in
   Settings → Appearance. The first translated screens include sign-in, device

@@ -12,10 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type `settings: rating` in the search box and choose *Your ratings* to open
   that Settings section. Type `settings:` to see every section you can visit.
 - Open a saved song's lyrics directly from an album's Songs editor without saving
-  the list. **Auto-Match lyrics** can ask the configured AI to choose among lyrics
-  found for each saved song. Each song's Lyrics icon shows the result, and existing
-  lyrics are never replaced. In Settings → Lyrics, choose whether to confirm first
-  (the default) or search directly when you click **Auto-Match lyrics**.
+  the list. **Auto-Match lyrics** keeps running after you close Songs or the tab
+  and saves each clear match as it finishes, without replacing existing lyrics.
+  Reopen Songs to see each Job's result beside its song. In Settings → Lyrics,
+  choose whether to confirm first (the default) or search directly.
 - **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
   the server without losing the result. In *Downloaded*, select *Choose parts*
   to finish or *Dismiss* to discard it. Nothing is added until you confirm.

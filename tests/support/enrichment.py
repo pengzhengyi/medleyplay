@@ -28,6 +28,7 @@ from medleyplay.application.image_links import ImageLinkService, image_link_kind
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_match import LyricsMatchService, lyrics_match_kinds
 from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
@@ -58,6 +59,7 @@ class Enriching:
     artists: ArtistService
     album_covers: AlbumCoverService
     lyrics_search: LyricsSearchService
+    lyrics_match: LyricsMatchService
     artist_pictures: ArtistPictureService
     image_links: ImageLinkService
     jobs: JobService
@@ -192,6 +194,13 @@ def running_enrichment(
         image_links.fetch.name: image_links.fetch,
     }
     with started_plugins(units, clock, "reader") as plugins:
+        lyrics_match = lyrics_match_kinds(clock, lyrics_search, plugins)
+        kinds.update(
+            {
+                lyrics_match.find.name: lyrics_match.find,
+                lyrics_match.choose.name: lyrics_match.choose,
+            }
+        )
         secrets = MemorySecrets()
         proxies = ProxyService(units, clock, secrets)
         ai = AiService(units, clock, secrets)
@@ -223,6 +232,7 @@ def running_enrichment(
                 ),
                 album_covers=AlbumCoverService(units, plugins, jobs, album_covers, clock),
                 lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_search),
+                lyrics_match=LyricsMatchService(units, plugins, jobs, lyrics_match.find),
                 artist_pictures=ArtistPictureService(units, plugins, jobs, pictures),
                 image_links=ImageLinkService(
                     units, plugins, jobs, image_links, data_dir / COVERS_FOLDER
@@ -232,7 +242,7 @@ def running_enrichment(
                 plugins=plugins,
                 catalog=CatalogService(units, clock, online=online),
                 details=DetailsService(units, clock),
-                lyrics=LyricsService(units, clock),
+                lyrics=LyricsService(units, clock, jobs=jobs),
                 covers=CoverService(units, clock, data_dir / COVERS_FOLDER),
                 proxies=proxies,
                 ai=ai,

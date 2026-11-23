@@ -49,6 +49,7 @@ class EnrichJob(_Model):
     `hint` a note the listener added when asking the AI again. `lyrics_sites` are the
     sites the household turned on to be asked for lyrics after LRCLIB, and
     `suggest_lyrics` whether a song none has is given the nearest song's, suggested.
+    `lyrics_again` records an explicit request to look up lyrics again.
     """
 
     enricher: str
@@ -62,6 +63,7 @@ class EnrichJob(_Model):
     hint: str = ""
     lyrics_sites: tuple[LyricsProvider, ...] = ()
     suggest_lyrics: bool = False
+    lyrics_again: bool = False
 
 
 class EnrichedTrack(_Model):

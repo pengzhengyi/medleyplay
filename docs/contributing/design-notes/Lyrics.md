@@ -180,23 +180,38 @@ the household looks for the lyrics itself, by a title and artist of its own.
   site, title, artist, album, length, and kind, never its lyrics. The model answers
   with one letter, or none, and why. The pick is marked *AI pick*, why in its tooltip,
   while those are the songs found; finding again drops it.
-- **Auto-Match lyrics in Songs** searches saved songs one at a time. In Settings →
-  Lyrics, each Account can choose **Ask before searching** (the default) or
-  **Search directly**. Either way, opening Songs never starts a search. The same
-  find and choose Jobs use the same enabled sites, model, and rate limits.
-  Closing Songs stops the browser from starting another step; a Job already
-  submitted can finish.
-- **Match feedback** stays with each saved song while Songs is open. Its Lyrics
-  icon fills partway while searching, choosing, or saving and turns solid only
-  after a save. If nothing is saved, a dashed border marks the outlined icon.
-  The tooltip and screen reader say what happened. With reduced motion the
-  partial fill holds still. The icon still opens the lyrics editor.
-- **Saving a pick** keeps the site's lyrics under the site's name, not as a
-  household edit. In one write transaction the server checks the saved segment,
-  Track details, search Job, choice and enabled site. Missing or ambiguous picks,
-  changed songs or searches, and songs with any lyrics (even a dismissed
-  suggestion) stay untouched. A second request for the same search reuses its
-  results rather than charging for another choice.
+- **Auto-Match lyrics in Songs** submits the saved songs whose rows have not
+  changed. In Settings → Lyrics, each Account can choose **Ask before searching**
+  (the default) or **Search directly**. Opening Songs never starts a search.
+  Once submitted, Auto-Match runs even when Songs or the browser is closed.
+- **Each song saves on its own.** A clear pick from the configured AI keeps the
+  site's lyrics under the site's name, not as a household edit. The write
+  transaction checks the saved song's row and details, including its album, the
+  search Job, the choice, and the enabled site. No pick, an ambiguous pick, a
+  changed song, or any lyrics record (even a dismissed suggestion) leaves the
+  song untouched. Saving, removing, or dismissing lyrics, or starting a manual
+  search, also stops a pending match. A skip or failure does not undo another
+  song's save. A queued choice cannot save if either plugin is no longer
+  available or the AI is no longer set up.
+- **Jobs keep the work.** Auto-Match uses the same finder and chooser in their
+  existing [lanes](Jobs.md#job-kinds-and-programs). A second request reuses a
+  compatible active match for the song; it never takes over a manual lookup.
+  Finding commits the candidates and queues the choice together. Choosing
+  commits the lyrics and the saved outcome together. Network work waits while
+  Offline. A [restart](Jobs.md#recovery-after-a-restart) can repeat an interrupted
+  stage but does not repeat one that committed. To try a finished match again,
+  start Auto-Match from Songs so it checks the saved song again.
+- **Match feedback** stays with each saved song and returns when Songs reopens.
+  Its Lyrics icon fills partway during the work and turns solid only after a
+  save. A skipped or failed match has a dashed outline. The tooltip and screen
+  reader say what happened; the fill holds still under reduced motion. A skip
+  from the latest request stays visible in Songs until a newer Job replaces
+  it. Now Playing and the open lyrics editor read the song's lyrics again
+  after a save or reconnect. A refresh does not replace a draft in the editor.
+- **Playback lookups wait for Auto-Match.** If a song's usual lyrics lookup was
+  deferred, it can ask again once Auto-Match ends without saving, if the song
+  is still coming up and eligible. If Auto-Match saves lyrics, the lookup
+  does not ask again.
 
 ## What the API shows
 
@@ -209,9 +224,11 @@ the household looks for the lyrics itself, by a title and artist of its own.
 | `POST /api/tracks/{id}/lyrics/find` | Signed in | Finds the songs titled `{title, artist}` on the lyrics sites, for the song; 202, 409 while the lyrics plugin is off |
 | `GET /api/tracks/{id}/lyrics/found` | Signed in | What was last found: the title and artist asked, each song found with its site, album, length, and lyrics, an AI model's pick and why, whether either is being asked, why either failed, and whether a model may be asked |
 | `POST /api/tracks/{id}/lyrics/choose` | Signed in | Asks an AI model which song found is the song; 202, 409 with no songs found, no model set up, or the `ai-details` plugin off |
-| `POST /api/tracks/{id}/lyrics/match/find` | Signed in | Checks the saved row and returns the search Job ID, or 409 when ineligible |
-| `POST /api/tracks/{id}/lyrics/match/choose` | Signed in | Requests the AI pick for `{search_job}` only while that search still matches the song |
-| `POST /api/tracks/{id}/lyrics/match/apply` | Signed in | Saves the site's lyrics for `{search_job, chosen_at}` only while the song has no lyrics and the pick is current |
+| `POST /api/tracks/{id}/songs/lyrics-match` | Signed in | Starts Auto-Match for one or more saved rows of this album; 202 with a Job ID or a skip reason and the previous Job ID, if any, per song |
+| `GET /api/tracks/{id}/songs/lyrics-match` | Signed in | Reads the latest Auto-Match for each song still in this album; failure details show only to the requester or an admin |
+| `POST /api/tracks/{id}/lyrics/match/find` | Signed in | Starts only the search stage for a saved song, without automatic saving |
+| `POST /api/tracks/{id}/lyrics/match/choose` | Signed in | Requests a pick for that search if it is still current |
+| `POST /api/tracks/{id}/lyrics/match/apply` | Signed in | Saves that pick for an unchanged song with no lyrics |
 | `PUT /api/settings` | Admin | `lyrics_sites`, the sites asked after LRCLIB: `[]` or `["netease"]`; left out, they stay as saved |
 
 ## Showing them
@@ -279,6 +296,11 @@ the song shows, as their source gave them, and says where they came from.
 - **The AI's pick:** the chooser over a fake model (a letter, none, an unknown
   letter, a refusal), real Jobs that keep the pick and drop it on finding again, and
   the editor asking once, marking the pick, and saying why asking failed.
+- **Auto-Match:** fake providers and real Jobs save a match without a browser,
+  leave misses and ambiguous picks untouched, and keep a queued choice across
+  a restart. A manual edit or a changed song prevents a pending save. The web
+  client confirms only when asked to, reads outcomes again on reopening, and
+  refreshes the playing song's lyrics after a save or reconnect.
 - **Showing them:** the line at a time (before the first, at each start, past the
   last), how far into a song of a file playing whole; reading them for the song
   playing and again on a finished lookup; the panel's lines, translation, pause,

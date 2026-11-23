@@ -41,6 +41,7 @@ from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_match import LyricsMatchService, lyrics_match_kinds
 from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
@@ -368,8 +369,8 @@ def image_links(
 
 
 @pytest.fixture
-def lyrics(units: sessionmaker[Session], clock: FakeClock) -> LyricsService:
-    return LyricsService(units, clock)
+def lyrics(units: sessionmaker[Session], clock: FakeClock, jobs: JobService) -> LyricsService:
+    return LyricsService(units, clock, jobs=jobs)
 
 
 @pytest.fixture
@@ -377,6 +378,14 @@ def lyrics_search(
     units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, jobs: JobService
 ) -> LyricsSearchService:
     return LyricsSearchService(units, plugins, jobs, lyrics_search_kinds(clock))
+
+
+@pytest.fixture
+def lyrics_match(
+    units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, jobs: JobService
+) -> LyricsMatchService:
+    kinds = lyrics_match_kinds(clock, lyrics_search_kinds(clock), plugins)
+    return LyricsMatchService(units, plugins, jobs, kinds.find)
 
 
 @pytest.fixture
@@ -566,6 +575,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     image_search: ImageSearchService,
     lyrics: LyricsService,
     lyrics_search: LyricsSearchService,
+    lyrics_match: LyricsMatchService,
     storage_folder: StorageFolder,
     clock: FakeClock,
     units: sessionmaker[Session],
@@ -616,6 +626,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         image_search=image_search,
         lyrics=lyrics,
         lyrics_search=lyrics_search,
+        lyrics_match=lyrics_match,
         storage_folder=storage_folder,
         revision=revision,
         answers=CachedAnswers(revision),

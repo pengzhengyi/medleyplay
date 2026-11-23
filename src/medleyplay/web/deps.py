@@ -24,6 +24,7 @@ from medleyplay.application.libraries import LibraryService
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.lyrics import LyricsService
+from medleyplay.application.lyrics_match import LyricsMatchService
 from medleyplay.application.lyrics_search import LyricsSearchService
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.mode import ModeService
@@ -96,6 +97,7 @@ class Services:
     image_search: ImageSearchService
     lyrics: LyricsService
     lyrics_search: LyricsSearchService
+    lyrics_match: LyricsMatchService
     storage_folder: StorageFolder
     revision: DatabaseRevision
     answers: CachedAnswers
@@ -210,6 +212,10 @@ def _lyrics_search(services: Annotated[Services, Depends(_services)]) -> LyricsS
     return services.lyrics_search
 
 
+def _lyrics_match(services: Annotated[Services, Depends(_services)]) -> LyricsMatchService:
+    return services.lyrics_match
+
+
 def _artist_pictures(services: Annotated[Services, Depends(_services)]) -> ArtistPictureService:
     return services.artist_pictures
 
@@ -299,6 +305,7 @@ ImageLinksDep = Annotated[ImageLinkService, Depends(_image_links)]
 ImageSearchDep = Annotated[ImageSearchService, Depends(_image_search)]
 LyricsDep = Annotated[LyricsService, Depends(_lyrics)]
 LyricsSearchDep = Annotated[LyricsSearchService, Depends(_lyrics_search)]
+LyricsMatchDep = Annotated[LyricsMatchService, Depends(_lyrics_match)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
 SongsDep = Annotated[SongsService, Depends(_songs)]

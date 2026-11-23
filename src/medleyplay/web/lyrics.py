@@ -7,18 +7,21 @@ lyrics, for the household to choose from; choosing saves them as its own.
 """
 
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
 
 from medleyplay.application.lyrics import ShownLyrics
+from medleyplay.application.lyrics_match import MatchSongInput, MatchStatus
 from medleyplay.application.lyrics_search import LyricsFound, LyricsPick
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.jobs import JobId
 from medleyplay.domain.lyrics import MAX_LYRICS, LyricsOrigin
+from medleyplay.domain.video_text import MAX_SONGS
 from medleyplay.plugin_api import MAX_NAME, LyricsOption
 from medleyplay.programs.find_lyrics import MatchSong
-from medleyplay.web.deps import LyricsDep, LyricsSearchDep, SignedInAccount
+from medleyplay.web.deps import LyricsDep, LyricsMatchDep, LyricsSearchDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api/tracks", tags=["lyrics"])
@@ -228,3 +231,23 @@ def apply_match(
 ) -> None:
     """Save the site's lyrics only for an unchanged song, search and pick."""
     service.apply_match(TrackId(track_id), JobId(body.search_job), body.chosen_at)
+
+
+@router.post("/{track_id}/songs/lyrics-match", status_code=status.HTTP_202_ACCEPTED)
+def start_background_match(
+    track_id: RowId,
+    songs: Annotated[list[MatchSongInput], Field(min_length=1, max_length=MAX_SONGS)],
+    me: SignedInAccount,
+    service: LyricsMatchDep,
+) -> tuple[MatchStatus, ...]:
+    """Start Auto-Match for the given saved songs of this album."""
+    return service.start(me, TrackId(track_id), songs)
+
+
+@router.get("/{track_id}/songs/lyrics-match")
+def background_match_status(
+    track_id: RowId, me: SignedInAccount, service: LyricsMatchDep, response: Response
+) -> tuple[MatchStatus, ...]:
+    """Return the latest Auto-Match outcomes for the album's saved songs."""
+    response.headers["Cache-Control"] = "private, no-store"
+    return service.status(me, TrackId(track_id))

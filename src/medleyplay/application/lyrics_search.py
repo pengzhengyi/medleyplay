@@ -23,6 +23,14 @@ from medleyplay.application import Clock
 from medleyplay.application.ai import is_set_up, provider_named
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.lyrics import record_lyrics
+from medleyplay.application.lyrics_match_state import (
+    MATCH_CHOOSE,
+    MATCH_FIND,
+    active_match,
+    match_target,
+    require_no_active_match,
+    supersede_match,
+)
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.settings import read_settings
 from medleyplay.domain.accounts import Account
@@ -84,6 +92,7 @@ def find_lyrics_kind(clock: Clock) -> FindLyricsKind:
         needs_network=True,
         lane_field="finder",
         lanes={FINDER: Lane(spacing=LYRICS.spacing, shared=LYRICS.name)},
+        on_submit=_require_no_active_match,
     )
 
 
@@ -104,6 +113,7 @@ def choose_lyrics_kind(clock: Clock) -> ChooseLyricsKind:
         needs_network=True,
         lane_field="chooser",
         lanes={CHOOSER: Lane(spacing=AI_DETAILS.spacing, lends_ai=True, shared=AI_DETAILS.name)},
+        on_submit=_require_no_active_match,
     )
 
 
@@ -198,7 +208,9 @@ class LyricsSearchService:
         if FINDER not in self._plugins.available_keys().get(LYRICS_FINDER.name, []):
             message = "Turn on the lyrics plugin to find lyrics."
             raise ConflictError(message)
-        with self._units() as db:
+        target = find_lyrics_target(track_id)
+        with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             track = db.get(TrackRow, track_id)
             if track is None:
                 message = "There is no such Track."
@@ -214,46 +226,40 @@ class LyricsSearchService:
                 match=match,
             )
             if match is not None:
-                previous = _latest_job(db, FIND_LYRICS_KIND, find_lyrics_target(track_id))
+                require_no_active_match(db, track_id)
+                previous = _current_staged_search(db, track_id)
                 if (
                     previous is not None
                     and FindLyricsJob.model_validate(previous.request) == request
                 ):
                     return JobId(previous.id)
-        return self._jobs.submit(
-            self._kinds.find, find_lyrics_target(track_id), request, caller.id
-        ).id
-
-    def _require_matching(self, db: Session) -> None:
-        if not self._jobs.online():
-            message = "Go Online to auto-match lyrics."
-            raise ConflictError(message)
-        plugins = self._plugins.available_keys()
-        if FINDER not in plugins.get(LYRICS_FINDER.name, []):
-            message = "Turn on the lyrics plugin to auto-match lyrics."
-            raise ConflictError(message)
-        if CHOOSER not in plugins.get(LYRICS_CHOOSER.name, []) or not is_set_up(db):
-            message = "Set up an AI provider and turn on ai-details to auto-match lyrics."
-            raise ConflictError(message)
+            cancelled = supersede_match(db, self._jobs, track_id)
+            job, queued = self._jobs.submit_in(db, self._kinds.find, target, request, caller.id)
+        if cancelled is not None:
+            self._jobs.announce_cancelled(cancelled)
+        if queued:
+            self._jobs.announce_queued(job.id)
+        return job.id
 
     def start_match(self, caller: Account, track_id: TrackId, match: MatchSong) -> JobId:
         """Search by the saved child Track, only while the row still names that song."""
         with self._units() as db:
-            self._require_matching(db)
+            require_matching(db, self._jobs, self._plugins)
             track = db.get(TrackRow, track_id)
             if track is None or not _segment_matches(db, track_id, match):
                 raise ConflictError(_CHANGED)
-            _require_empty(db, track_id)
-            return self.find(caller, track_id, track.title, track.artist, match=match)
+            require_empty(db, track_id)
+            title, artist = track.title, track.artist
+        return self.find(caller, track_id, title, artist, match=match)
 
     def apply_match(self, track_id: TrackId, search_job: JobId, chosen_at: datetime) -> None:
         """Keep a site's pick only while this search, choice and empty saved song still agree."""
         with self._units.begin() as db:
-            self._require_matching(db)
+            require_matching(db, self._jobs, self._plugins)
             # Take SQLite's writer lock before checking for another household member's edit.
             db.connection().exec_driver_sql("BEGIN IMMEDIATE")
-            _require_empty(db, track_id)
-            find = _latest_job(db, FIND_LYRICS_KIND, find_lyrics_target(track_id))
+            require_empty(db, track_id)
+            find = _current_staged_search(db, track_id)
             choice = _latest_job(db, CHOOSE_LYRICS_KIND, choose_lyrics_target(track_id))
             if find is None or find.id != search_job or choice is None:
                 raise ConflictError(_CHANGED)
@@ -262,23 +268,7 @@ class LyricsSearchService:
             row = db.get(LyricsSearchRow, track_id)
             if asked.search_job != search_job or row is None or row.chosen_at != chosen_at:
                 raise ConflictError(_CHANGED)
-            _require_same_song(db, track_id, search, asked)
-            option = _matched_option(row, search, asked)
-            enabled = {
-                LyricsProvider.LRCLIB.value,
-                *(site.value for site in read_settings(db).lyrics_sites),
-            }
-            if option.provider.value not in enabled:
-                raise ConflictError(_CHANGED)
-            parse_lyrics(option.text)
-            record_lyrics(
-                db,
-                track_id,
-                LyricsOrigin(option.provider.value),
-                option.text,
-                chosen_at,
-                instrumental=option.instrumental,
-            )
+            save_match_in(db, search, asked, row, chosen_at)
         if self._on_change is not None:
             self._on_change("lyrics")
 
@@ -290,7 +280,9 @@ class LyricsSearchService:
         if CHOOSER not in self._plugins.available_keys().get(LYRICS_CHOOSER.name, []):
             message = "Turn on the ai-details plugin to ask an AI model."
             raise ConflictError(message)
-        with self._units() as db:
+        with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            require_no_active_match(db, track_id)
             if not is_set_up(db):
                 message = "Set up an AI provider in Settings to ask it."
                 raise ConflictError(message)
@@ -299,32 +291,26 @@ class LyricsSearchService:
                 message = "There is no such Track."
                 raise NotFoundError(message)
             row = db.get(LyricsSearchRow, track_id)
-            search = _latest_job(db, FIND_LYRICS_KIND, find_lyrics_target(track_id))
+            search = _current_staged_search(db, track_id)
             if match_job is not None:
-                self._require_matching(db)
-                _require_empty(db, track_id)
+                require_matching(db, self._jobs, self._plugins)
+                require_empty(db, track_id)
                 if search is None or search.id != match_job:
                     raise ConflictError(_CHANGED)
                 expected = FindLyricsJob.model_validate(search.request)
-                _require_same_search(db, track, expected)
+                require_same_search(db, track, expected)
             options = () if row is None else _options_of(row)
             if row is None or not options:
                 message = "Find the song's lyrics before asking which is the song."
                 raise ConflictError(message)
             if row.chosen_at is not None and _picked_among(row, options):
                 return
-            request = ChooseLyricsJob(
-                track_id=track_id,
-                title=(track.title or row.title)[:MAX_NAME],
-                artist=(track.artist or row.artist)[:MAX_NAME],
-                album=track.album[:MAX_NAME],
-                duration_ms=track.duration_ms,
-                options=tuple(_choice_of(each) for each in options),
-                offered=tuple(_key_of(each) for each in options),
-                chooser=CHOOSER,
-                search_job=search.id if search is not None else None,
+            request = choice_request(track, row, options, search.id if search is not None else None)
+            job, queued = self._jobs.submit_in(
+                db, self._kinds.choose, choose_lyrics_target(track_id), request, caller.id
             )
-        self._jobs.submit(self._kinds.choose, choose_lyrics_target(track_id), request, caller.id)
+        if queued:
+            self._jobs.announce_queued(job.id)
 
     def found(self, viewer: Account, track_id: TrackId) -> LyricsFound:
         """Return what was found when the song's lyrics were last looked for, and what is asked."""
@@ -336,6 +322,7 @@ class LyricsSearchService:
             pick = None if row is None else _pick_of(row, options)
             chosen = row is not None and row.chosen_at is not None and _picked_among(row, options)
             ai = is_set_up(db)
+            matching = active_match(db, track_id)
         finding = self._jobs.latest(FIND_LYRICS_KIND, find_lyrics_target(track_id))
         choosing = self._jobs.latest(CHOOSE_LYRICS_KIND, choose_lyrics_target(track_id))
         asking = [job for job in (finding, choosing) if job is not None and job.state.is_active]
@@ -346,13 +333,20 @@ class LyricsSearchService:
             options=options,
             found_at=found_at,
             pick=pick,
-            finding=finding is not None and finding.state.is_active,
-            choosing=choosing is not None and choosing.state.is_active,
+            finding=(matching is not None and matching.kind == MATCH_FIND)
+            or (finding is not None and finding.state.is_active),
+            choosing=(matching is not None and matching.kind == MATCH_CHOOSE)
+            or (choosing is not None and choosing.state.is_active),
             # Asking needs the network, so it waits while medleyplay is Offline.
-            waiting=any(job.state is JobState.WAITING or not self._jobs.online() for job in asking),
+            waiting=any(job.state is JobState.WAITING or not self._jobs.online() for job in asking)
+            or (
+                matching is not None
+                and (matching.state == JobState.WAITING or not self._jobs.online())
+            ),
             failure=_failure(finding, viewer),
             choice_failure=_failure(choosing, viewer),
             may_choose=ai
+            and matching is None
             and bool(options)
             and not chosen
             and not choice_failed
@@ -361,6 +355,72 @@ class LyricsSearchService:
 
 
 _CHANGED = "The song or its lyrics search changed. Nothing was saved."
+
+
+def _require_no_active_match(db: Session, job: Job) -> None:
+    track_id = TrackId(int(job.target.rsplit(":", maxsplit=1)[-1]))
+    require_no_active_match(db, track_id)
+
+
+def require_matching(db: Session, jobs: JobService, plugins: PluginService) -> None:
+    """Refuse an explicit Auto-Match start when the finder or chooser is unavailable."""
+    if not jobs.online():
+        message = "Go Online to auto-match lyrics."
+        raise ConflictError(message)
+    require_match_providers(db, plugins)
+
+
+def require_match_providers(db: Session, plugins: PluginService) -> None:
+    """Require the configured finder and chooser regardless of whether the server is Online."""
+    available = plugins.available_keys()
+    if FINDER not in available.get(LYRICS_FINDER.name, []):
+        message = "Turn on the lyrics plugin to auto-match lyrics."
+        raise ConflictError(message)
+    if CHOOSER not in available.get(LYRICS_CHOOSER.name, []) or not is_set_up(db):
+        message = "Set up an AI provider and turn on ai-details to auto-match lyrics."
+        raise ConflictError(message)
+
+
+def choice_request(
+    track: TrackRow, row: LyricsSearchRow, options: tuple[LyricsOption, ...], search_job: int | None
+) -> ChooseLyricsJob:
+    """Capture the exact candidates and song details shown to the chooser."""
+    return ChooseLyricsJob(
+        track_id=track.id,
+        title=(track.title or row.title)[:MAX_NAME],
+        artist=(track.artist or row.artist)[:MAX_NAME],
+        album=track.album[:MAX_NAME],
+        duration_ms=track.duration_ms,
+        options=tuple(_choice_of(each) for each in options),
+        offered=tuple(_key_of(each) for each in options),
+        chooser=CHOOSER,
+        search_job=search_job,
+    )
+
+
+def save_match_in(
+    db: Session, search: FindLyricsJob, asked: ChooseLyricsJob, row: LyricsSearchRow, at: datetime
+) -> None:
+    """Save a validated pick in the caller's write transaction without replacing lyrics."""
+    track_id = TrackId(search.track_id)
+    require_empty(db, track_id)
+    _require_same_song(db, track_id, search, asked)
+    option = _matched_option(row, search, asked)
+    enabled = {
+        LyricsProvider.LRCLIB.value,
+        *(site.value for site in read_settings(db).lyrics_sites),
+    }
+    if option.provider.value not in enabled:
+        raise ConflictError(_CHANGED)
+    parse_lyrics(option.text)
+    record_lyrics(
+        db,
+        track_id,
+        LyricsOrigin(option.provider.value),
+        option.text,
+        at,
+        instrumental=option.instrumental,
+    )
 
 
 def _latest_job(db: Session, kind: str, target: str) -> JobRow | None:
@@ -373,7 +433,24 @@ def _latest_job(db: Session, kind: str, target: str) -> JobRow | None:
     return row if row is not None and row.state == JobState.SUCCEEDED else None
 
 
-def _require_empty(db: Session, track_id: TrackId) -> None:
+def _current_staged_search(db: Session, track_id: TrackId) -> JobRow | None:
+    search = _latest_job(db, FIND_LYRICS_KIND, find_lyrics_target(track_id))
+    if search is None:
+        return None
+    has_newer_match = db.scalar(
+        select(JobRow.id)
+        .where(
+            JobRow.kind == MATCH_FIND,
+            JobRow.target == match_target(track_id),
+            JobRow.id > search.id,
+        )
+        .limit(1)
+    )
+    return search if has_newer_match is None else None
+
+
+def require_empty(db: Session, track_id: TrackId) -> None:
+    """Refuse Auto-Match when any lyrics are kept, even if not shown."""
     if (
         db.scalar(
             select(TrackLyricsRow.track_id).where(TrackLyricsRow.track_id == track_id).limit(1)
@@ -394,11 +471,14 @@ def _segment_matches(db: Session, track_id: TrackId, match: MatchSong) -> bool:
     ) == (track_id, match.start_ms, match.title, match.artist)
 
 
-def _require_same_search(db: Session, track: TrackRow, search: FindLyricsJob) -> None:
+def require_same_search(db: Session, track: TrackRow, search: FindLyricsJob) -> None:
+    """Refuse an Auto-Match whose saved segment or Track details have changed."""
     if search.match is None or not _segment_matches(db, TrackId(track.id), search.match):
         raise ConflictError(_CHANGED)
-    song = (track.title, track.artist, track.duration_ms)
+    song = (track.title.strip(), track.artist.strip(), track.duration_ms)
     if song != (search.title, search.artist, search.duration_ms):
+        raise ConflictError(_CHANGED)
+    if search.match_album is not None and track.album != search.match_album:
         raise ConflictError(_CHANGED)
 
 
@@ -413,7 +493,7 @@ def _require_same_song(
         asked.duration_ms,
     ):
         raise ConflictError(_CHANGED)
-    _require_same_search(db, track, search)
+    require_same_search(db, track, search)
 
 
 def _matched_option(
@@ -499,13 +579,19 @@ def _complete_find(db: Session, job: Job, result: FoundLyricsResult, *, clock: C
     A Track gone since the asking keeps nothing.
     """
     del job
+    store_search(db, result, clock)
+
+
+def store_search(db: Session, result: FoundLyricsResult, clock: Clock) -> LyricsSearchRow | None:
+    """Keep the new candidates and clear the pick from an older search."""
     if db.get(TrackRow, result.track_id) is None:
-        return
+        return None
     row = db.get(LyricsSearchRow, result.track_id) or LyricsSearchRow(track_id=result.track_id)
     row.title, row.artist, row.found_at = result.title, result.artist, clock()
     row.options = [each.model_dump(mode="json") for each in result.options]
     row.offered, row.pick, row.why, row.model, row.host, row.chosen_at = [], None, "", "", "", None
     db.add(row)
+    return row
 
 
 def _complete_choice(db: Session, job: Job, result: ChosenLyricsResult, *, clock: Clock) -> None:
@@ -520,9 +606,19 @@ def _complete_choice(db: Session, job: Job, result: ChosenLyricsResult, *, clock
         if latest is None or latest.id != expected:
             return
     row = db.get(LyricsSearchRow, result.track_id)
-    if row is None or list(result.offered) != [_key_of(each) for each in _options_of(row)]:
-        return
+    if row is not None:
+        store_choice(db, row, result, clock)
+
+
+def store_choice(
+    db: Session, row: LyricsSearchRow, result: ChosenLyricsResult, clock: Clock
+) -> datetime | None:
+    """Keep a pick for these candidates and return its timestamp."""
+    if list(result.offered) != [_key_of(each) for each in _options_of(row)]:
+        return None
     named = provider_named(db, result.ai_answered or None)
     model, host = named if named is not None else ("an AI model", "")
     row.offered, row.pick, row.why = list(result.offered), result.option, result.why
-    row.model, row.host, row.chosen_at = model, host, clock()
+    at = clock()
+    row.model, row.host, row.chosen_at = model, host, at
+    return at

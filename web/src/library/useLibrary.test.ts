@@ -82,6 +82,37 @@ describe("the Library", () => {
     });
   });
 
+  it("refreshes only the song whose Auto-Match saved, and rereads after reconnecting", async () => {
+    serve(signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    act(() => {
+      stream().send("ready");
+    });
+    const intro = result.current.lyricsVersion(1);
+    const outro = result.current.lyricsVersion(2);
+    const target = "lyrics-match:1";
+
+    act(() => {
+      stream().send("job", { id: 21, kind: "auto_match_find", target, state: "succeeded" });
+      stream().send("job", { id: 22, kind: "auto_match_choose", target, state: "failed" });
+    });
+    expect(result.current.lyricsVersion(1)).toBe(intro);
+
+    act(() => {
+      stream().send("job", { id: 23, kind: "auto_match_choose", target, state: "succeeded" });
+    });
+    expect(result.current.lyricsVersion(1)).not.toBe(intro);
+    expect(result.current.lyricsVersion(2)).toBe(outro);
+
+    act(() => {
+      stream().send("ready");
+    });
+    expect(result.current.lyricsVersion(2)).not.toBe(outro);
+  });
+
   it("asks for the Tracks once, a moment after the last scan or Download to finish", async () => {
     const { calls } = serve(signedIn([trackOf(1, "Intro")]));
     const { result } = renderHook(() => useLibrary(vi.fn()));

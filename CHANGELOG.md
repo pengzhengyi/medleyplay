@@ -722,6 +722,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A small ring spins beside *medleyplay* while the app starts. It stays still when
+  reduced motion is enabled.
+- The Library checks the device and account while loading the app, shortening
+  the wait for the first songs on slower connections.
+
 - The player prepares the album and artist pages for the current and next songs,
   including the pictures already in the Library.
 
@@ -896,6 +901,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Album column opens the song's album without starting playback.
 - The search dropdown stays above the sticky section bar in Settings and Clean up.
 
 - A successful Job's finish time includes saving its result, so a lyrics search

@@ -1024,6 +1024,11 @@ export interface DeviceInfo {
   readonly code: string | null;
 }
 
+export interface FirstReads {
+  readonly device: Promise<Response>;
+  readonly account?: Promise<Response | undefined>;
+}
+
 /** Return whether a device may use medleyplay now. */
 export function letIn(device: DeviceInfo): boolean {
   return device.presence !== "waiting" && device.presence !== "refused";
@@ -1342,6 +1347,10 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+
+  get deviceRefusal(): boolean {
+    return this.code !== null && DEVICE_REFUSALS.has(this.code);
+  }
 }
 
 /** Whether the lyrics lookup was deferred because Auto-Match is working on this song. */
@@ -1367,12 +1376,13 @@ export function onDeviceRefused(listener: () => void): () => void {
 /** Return the error a refused response stands for, telling who listens if it is the device. */
 async function refusalOf(response: Response): Promise<ApiError> {
   const { detail, code } = await reasonOf(response);
-  if (code !== null && DEVICE_REFUSALS.has(code)) {
+  const refusal = new ApiError(response.status, detail, code);
+  if (refusal.deviceRefusal) {
     for (const listener of deviceListeners) {
       listener();
     }
   }
-  return new ApiError(response.status, detail, code);
+  return refusal;
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -1381,11 +1391,23 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     init.headers = { "Content-Type": "application/json" };
     init.body = JSON.stringify(body);
   }
-  const response = await fetch(path, init);
+  return readResponse<T>(await fetch(path, init));
+}
+
+async function readResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw await refusalOf(response);
   }
   return (response.status === 204 ? undefined : await response.json()) as T;
+}
+
+function get<T>(path: string, first?: Promise<Response | undefined>): Promise<T> {
+  const load = () => call<T>("GET", path);
+  return first === undefined
+    ? load()
+    : first.then((response) =>
+        response === undefined ? load() : readResponse<T>(response.clone()),
+      );
 }
 
 /** The last answer read from a path, and the ETag it came with. */
@@ -1584,8 +1606,8 @@ export const api = {
   signIn: (username: string, password: string) =>
     call<Account>("POST", "/api/session", { username, password }),
   signOut: () => call<undefined>("DELETE", "/api/session"),
-  me: () => call<Account>("GET", "/api/me"),
-  device: () => call<DeviceInfo>("GET", "/api/device"),
+  me: (first?: FirstReads["account"]) => get<Account>("/api/me", first),
+  device: (first?: FirstReads["device"]) => get<DeviceInfo>("/api/device", first),
   devices: () => call<Devices>("GET", "/api/devices"),
   saveAdmission: (admission: Admission, revision: number) =>
     call<Devices>("PUT", "/api/devices/setting", { admission, revision }),

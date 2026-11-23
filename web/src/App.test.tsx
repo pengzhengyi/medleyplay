@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,10 +11,211 @@ import { ALICE, enricherOf, modeOf, serve, signedIn, trackOf } from "./testing/s
 const rail = () => within(screen.getByRole("navigation", { name: "Views" }));
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe("App", () => {
+  it("uses the early device request once in Strict Mode before signing an admitted device in", async () => {
+    let admit: () => void = () => undefined;
+    const admission = new Promise<void>((resolve) => {
+      admit = resolve;
+    });
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/device": {
+        body: { presence: "admitted", label: "Safari on iPhone", code: null },
+        after: admission,
+      },
+    });
+    const device = fetch("/api/device");
+
+    vi.stubGlobal("medleyplayFirstReads", { device });
+    render(<App />, { reactStrictMode: true });
+
+    expect(calls).toEqual(["GET /api/device"]);
+    admit();
+    expect(await screen.findByRole("button", { name: "Night Drive" })).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/device" || call === "GET /api/me")).toEqual([
+      "GET /api/device",
+      "GET /api/me",
+    ]);
+  });
+
+  it("does not read the account or tracks when the early device check refuses admission", async () => {
+    const { calls } = serve({
+      "GET /api/device": {
+        body: { presence: "refused", label: "Safari on iPhone", code: null },
+      },
+    });
+    const device = fetch("/api/device");
+
+    vi.stubGlobal("medleyplayFirstReads", { device });
+    render(<App />);
+
+    expect(await screen.findByText(/can't connect/u)).toBeVisible();
+    expect(calls.filter((call) => /^GET \/api\/(device|me|tracks)$/u.test(call))).toEqual([
+      "GET /api/device",
+    ]);
+  });
+
+  it("falls back to the account when the early device request fails", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/device": { status: 503 },
+    });
+    const device = fetch("/api/device");
+
+    vi.stubGlobal("medleyplayFirstReads", { device });
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "Night Drive" })).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/device")).toHaveLength(1);
+  });
+
+  it("uses an account response already received before the app mounted", async () => {
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/device": { body: { presence: "host", label: "Local browser", code: null } },
+    });
+    const device = Promise.resolve(await fetch("/api/device"));
+    const account = Promise.resolve(await fetch("/api/me"));
+
+    vi.stubGlobal("medleyplayFirstReads", { device, account });
+    render(<App />, { reactStrictMode: true });
+
+    expect(await screen.findByRole("button", { name: "Night Drive" })).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/me")).toHaveLength(1);
+  });
+
+  it("rechecks admission when an early account response says the device was removed", async () => {
+    let removed = false;
+    const { calls } = serve({
+      "GET /api/device": () => ({
+        body: removed
+          ? { presence: "waiting", label: "Safari on iPhone", code: "0042" }
+          : { presence: "allowed", label: "Safari on iPhone", code: null },
+      }),
+      "GET /api/me": {
+        status: 403,
+        body: { detail: "This device is waiting for approval.", code: "device_waiting" },
+      },
+    });
+    const device = Promise.resolve(await fetch("/api/device"));
+    removed = true;
+    const account = Promise.resolve(await fetch("/api/me"));
+
+    vi.stubGlobal("medleyplayFirstReads", { device, account });
+    render(<App />);
+
+    expect(await screen.findByLabelText("Code 0042")).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/device" || call === "GET /api/me")).toEqual([
+      "GET /api/device",
+      "GET /api/me",
+      "GET /api/device",
+    ]);
+    expect(calls).not.toContain("GET /api/tracks");
+    expect(calls).not.toContain("GET /api/setup");
+  });
+
+  it("does not restore the Library when an old account read finishes after device refusal", async () => {
+    let removed = false;
+    let answerAccount: (response: Response) => void = () => undefined;
+    const account = new Promise<Response>((resolve) => {
+      answerAccount = resolve;
+    });
+    const { calls } = serve({
+      "GET /api/device": () => ({
+        body: removed
+          ? { presence: "waiting", label: "Safari on iPhone", code: "0042" }
+          : { presence: "allowed", label: "Safari on iPhone", code: null },
+      }),
+      "GET /api/tracks": {
+        status: 403,
+        body: { detail: "This device is waiting for approval.", code: "device_waiting" },
+      },
+    });
+    const device = Promise.resolve(await fetch("/api/device"));
+    vi.stubGlobal("medleyplayFirstReads", { device, account });
+    render(<App />);
+    removed = true;
+
+    await api.tracks().catch(() => undefined);
+    expect(await screen.findByLabelText("Code 0042")).toBeVisible();
+    await act(async () => {
+      answerAccount(Response.json(ALICE));
+      await account;
+    });
+
+    expect(screen.getByLabelText("Code 0042")).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/tracks")).toHaveLength(1);
+  });
+
+  it("reads a fresh session after the root is remounted", async () => {
+    let signedInNow = false;
+    const { calls } = serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/device": { body: { presence: "host", label: "Local browser", code: null } },
+      "GET /api/me": () => (signedInNow ? { body: ALICE } : { status: 401 }),
+      "GET /api/setup": { body: { set_up: true, multiple_accounts: false } },
+    });
+    const device = Promise.resolve(await fetch("/api/device"));
+    const account = Promise.resolve(await fetch("/api/me"));
+    vi.stubGlobal("medleyplayFirstReads", { device, account });
+    const first = render(<App />);
+    expect(await screen.findByRole("form", { name: "Sign in" })).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/me")).toHaveLength(1);
+    first.unmount();
+
+    signedInNow = true;
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "Night Drive" })).toBeVisible();
+    expect(calls.filter((call) => call === "GET /api/me")).toHaveLength(2);
+  });
+
+  it("keeps a newer admission check when an earlier Ask again response arrives late", async () => {
+    let releaseEarlier: () => void = () => undefined;
+    let releaseLater: () => void = () => undefined;
+    const earlier = new Promise<void>((resolve) => {
+      releaseEarlier = resolve;
+    });
+    const later = new Promise<void>((resolve) => {
+      releaseLater = resolve;
+    });
+    let reads = 0;
+    const { calls } = serve({
+      "GET /api/device": () => {
+        reads += 1;
+        if (reads > 2) {
+          return {
+            body: { presence: "waiting", label: "Guest", code: "0042" },
+            after: later,
+          };
+        }
+        return {
+          body: { presence: "refused", label: "Guest", code: null },
+          ...(reads === 2 ? { after: earlier } : {}),
+        };
+      },
+      "GET /api/tracks": { status: 403, body: { code: "device_waiting" } },
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Ask again" }));
+    await api.tracks().catch(() => undefined);
+    await waitFor(() => {
+      expect(calls.filter((call) => call === "GET /api/device")).toHaveLength(3);
+    });
+
+    await act(async () => {
+      releaseEarlier();
+      await earlier;
+    });
+    releaseLater();
+
+    expect(await screen.findByLabelText("Code 0042")).toBeVisible();
+  });
+
   it("shows a waiting device its code, then the sign-in form once an admin allows it", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let allowed = false;
@@ -36,6 +237,39 @@ describe("App", () => {
     expect(code).toHaveTextContent("4821");
     expect(await screen.findByRole("form", { name: "Sign in" })).toBeInTheDocument();
     vi.useRealTimers();
+  });
+
+  it("accepts a slow approval poll while the next poll is still pending", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let approve: () => void = () => undefined;
+    const approval = new Promise<void>((resolve) => {
+      approve = resolve;
+    });
+    const nextPoll = new Promise<void>(() => undefined);
+    let reads = 0;
+    serve({
+      "GET /api/device": () => {
+        reads += 1;
+        if (reads === 1) {
+          return { body: { presence: "waiting", label: "Guest", code: "4821" } };
+        }
+        return {
+          body: { presence: "allowed", label: "Guest", code: null },
+          after: reads === 2 ? approval : nextPoll,
+        };
+      },
+      "GET /api/me": { status: 401 },
+      "GET /api/setup": { body: { set_up: true, multiple_accounts: false } },
+    });
+    render(<App />);
+    await screen.findByLabelText("Code 4821");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ASK_AGAIN_MS * 2);
+      expect(reads).toBe(3);
+      approve();
+    });
+
+    expect(await screen.findByRole("form", { name: "Sign in" })).toBeVisible();
   });
 
   it("shows the waiting screen when a request is refused for the device, as after it is removed", async () => {
@@ -429,5 +663,75 @@ describe("App", () => {
     await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
 
     expect(await screen.findByRole("form", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("handles device refusal during sign-out without opening the sign-in form", async () => {
+    let removed = false;
+    const { calls } = serve({
+      ...signedIn([]),
+      "GET /api/device": () => ({
+        body: removed
+          ? { presence: "waiting", label: "Guest", code: "0042" }
+          : { presence: "allowed", label: "Guest", code: null },
+      }),
+      "DELETE /api/session": { status: 403, body: { code: "device_waiting" } },
+      "GET /api/setup": { body: { set_up: true, multiple_accounts: false } },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await screen.findByRole("navigation", { name: "Views" });
+    await user.click(rail().getByRole("button", { name: "Alice: account" }));
+    removed = true;
+
+    await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
+
+    expect(await screen.findByLabelText("Code 0042")).toBeVisible();
+    expect(calls).not.toContain("GET /api/setup");
+  });
+
+  it("keeps a device recheck when an earlier sign-out succeeds", async () => {
+    let finishSignOut: () => void = () => undefined;
+    let answerDevice: () => void = () => undefined;
+    const signingOut = new Promise<void>((resolve) => {
+      finishSignOut = resolve;
+    });
+    const checkingDevice = new Promise<void>((resolve) => {
+      answerDevice = resolve;
+    });
+    let removed = false;
+    const { calls } = serve({
+      ...signedIn([]),
+      "GET /api/device": () =>
+        removed
+          ? {
+              body: { presence: "waiting", label: "Guest", code: "0042" },
+              after: checkingDevice,
+            }
+          : { body: { presence: "allowed", label: "Guest", code: null } },
+      "GET /api/playlists": () =>
+        removed ? { status: 403, body: { code: "device_waiting" } } : { body: [] },
+      "DELETE /api/session": { status: 204, after: signingOut },
+      "GET /api/setup": { body: { set_up: true, multiple_accounts: false } },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await screen.findByRole("navigation", { name: "Views" });
+    await user.click(rail().getByRole("button", { name: "Alice: account" }));
+    await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
+    expect(calls).toContain("DELETE /api/session");
+
+    removed = true;
+    await act(async () => {
+      await api.playlists().catch(() => undefined);
+    });
+    expect(calls.filter((call) => call === "GET /api/device")).toHaveLength(2);
+    await act(async () => {
+      finishSignOut();
+      await signingOut;
+    });
+    answerDevice();
+
+    expect(await screen.findByLabelText("Code 0042")).toBeVisible();
+    expect(calls).not.toContain("GET /api/setup");
   });
 });

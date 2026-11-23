@@ -38,7 +38,9 @@ household are not translation keys. Screens without a translation use English.
   from that data, with pure functions, so moving between views asks the server
   nothing. Until the first answer, the Library shows rows shaped like songs, still
   under reduced motion, and tells a screen reader it is loading.
-- **The first load comes in stages,** as the server answers one read faster than
+- **[First Library load](First%20Library%20load.md)** overlaps device and account
+  checks with script loading. Once signed in, the client loads data in stages,
+  as the server answers one read faster than
   many at once, and reads sent beside the songs' made them wait:
   1. the songs and the favorites, alone;
   2. once the songs are drawn, the Playlists, the Mode, the Downloads under way,
@@ -191,6 +193,9 @@ Track's kind is decided.
   need a modifier key a touch screen lacks. Text sorts as people read it, by
   locale, with numbers in order and case ignored; time, rating, plays, and added
   sort as numbers and dates, smallest first.
+- **The Album column** links to the album's page by album artist (or song artist
+  when blank) and album name. A blank name or an album with no songs on its page
+  stays plain text.
 - **Columns can be hidden and resized,** from a menu in the header row; the
   choice is kept per browser, versioned, and ignored when it can't be read.
 - **The header stays in view:** it sticks under the top bar while the songs

@@ -1,4 +1,65 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
+
+for (const [reducedMotion, motion] of [
+  ["no-preference", "spins"],
+  ["reduce", "stays still"],
+] as const) {
+  test(`the starting ring ${motion} in the same place before and after React`, async ({ page }) => {
+    let runScripts: () => void = () => undefined;
+    const scripts = new Promise<void>((resolve) => {
+      runScripts = resolve;
+    });
+    await page.emulateMedia({ reducedMotion });
+    await page.route("**/*", async (route) => {
+      if (route.request().resourceType() === "script") await scripts;
+      await route.fallback();
+    });
+    await page.route("**/api/device", () => undefined);
+
+    await page.goto("/", { waitUntil: "commit" });
+    const mark = page.getByText("medleyplay", { exact: true });
+
+    try {
+      await expect(mark).toHaveAttribute("aria-busy", "true");
+      await expect
+        .poll(() => startingRing(mark))
+        .toMatchObject({
+          drawn: true,
+          rotating: reducedMotion === "no-preference",
+        });
+      const originalMark = await mark.elementHandle();
+      const beforeReact = await startingRing(mark);
+
+      runScripts();
+      await expect.poll(() => originalMark.evaluate((element) => element.isConnected)).toBe(false);
+
+      await expect(mark).toHaveAttribute("aria-busy", "true");
+      expect(await startingRing(mark)).toEqual(beforeReact);
+    } finally {
+      runScripts();
+    }
+  });
+}
+
+function startingRing(mark: Locator) {
+  return mark.evaluate((element) => {
+    const ring = getComputedStyle(element, "::before");
+    const text = document.createRange();
+    text.selectNodeContents(element);
+    const { x, y } = text.getBoundingClientRect();
+    return {
+      drawn:
+        ring.backgroundImage === "none" &&
+        ring.borderTopWidth !== "0px" &&
+        ring.borderTopColor !== ring.borderRightColor,
+      rotating: ring.animationName !== "none" && ring.animationPlayState === "running",
+      width: ring.width,
+      height: ring.height,
+      x,
+      y,
+    };
+  });
+}
 
 test("the page's scripts and styles arrive gzipped, and kept for good", async ({
   page,

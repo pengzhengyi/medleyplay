@@ -3,6 +3,54 @@ import { type Page, expect, test } from "@playwright/test";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Views" });
 
+test("the device and account are read while the Library script loads", async ({ page }) => {
+  let releaseScript: () => void = () => undefined;
+  const scriptHeld = new Promise<void>((resolve) => {
+    releaseScript = resolve;
+  });
+  await page.route("**/assets/*.js", async (route) => {
+    await scriptHeld;
+    await route.continue();
+  });
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    requests.push(new URL(request.url()).pathname);
+  });
+
+  try {
+    await page.goto("/", { waitUntil: "commit" });
+    await expect.poll(() => requests).toContain("/api/me");
+    expect(requests).toContain("/api/device");
+    expect(requests).not.toContain("/api/tracks");
+  } finally {
+    releaseScript();
+  }
+
+  await expect(page.getByRole("button", { name: "Alpha", exact: true })).toBeVisible();
+  expect(requests.filter((path) => path === "/api/device" || path === "/api/me")).toEqual([
+    "/api/device",
+    "/api/me",
+  ]);
+});
+
+test("startup reads neither the account nor tracks on a device waiting for approval", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    requests.push(new URL(request.url()).pathname);
+  });
+  await page.route("**/api/device", (route) =>
+    route.fulfill({ json: { presence: "waiting", label: "Guest", code: "0042" } }),
+  );
+
+  await page.goto("/");
+
+  await expect(page.getByLabel("Code 0042")).toBeVisible();
+  expect(requests).not.toContain("/api/me");
+  expect(requests).not.toContain("/api/tracks");
+});
+
 test("a row previews its favorite action without marking the song as a favorite", async ({
   page,
 }) => {

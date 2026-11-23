@@ -106,6 +106,7 @@ export interface ViewProps {
   readonly waitingDevices: readonly WaitingDevice[];
   /** The Downloads under way, oldest first; none, unless given. */
   readonly downloading?: readonly DownloadUnderWay[];
+  readonly videoLookups?: ReactNode;
   /** The station playing, and a way to start one. */
   readonly station: Station;
   readonly accountId: number;
@@ -394,6 +395,7 @@ function viewOf(given: ViewProps) {
           about={
             <>
               <DownloadsFolder />
+              {given.videoLookups}
               <Downloading downloads={given.downloading ?? []} tracks={given.tracks} />
             </>
           }

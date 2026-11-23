@@ -9,7 +9,6 @@ a summary: its scheme, host, port, and whether it has a login. Nothing here
 reaches a network, and no error or `repr` shows the password.
 """
 
-import base64
 import ipaddress
 import re
 from dataclasses import dataclass, field
@@ -18,7 +17,7 @@ from typing import Final, NoReturn, Self
 from urllib.parse import SplitResult, quote, unquote, urlsplit
 
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
-from medleyplay.domain.linked_accounts import REDACTED, check_site
+from medleyplay.domain.linked_accounts import check_site
 from medleyplay.domain.links import BILIBILI_SOURCE
 
 PROXY_SITES: Final = frozenset({BILIBILI_SOURCE})
@@ -29,7 +28,6 @@ _LONGEST_WRITTEN: Final = 3 * MAX_PROXY_LENGTH
 """The longest a proxy may be as typed: each character of its URL written as `%XX` at most."""
 _HOST: Final = re.compile(r"[a-z0-9]([a-z0-9._-]{0,251}[a-z0-9])?")
 _LOOKS_UP_LOCALLY: Final = frozenset({"socks4", "socks4a", "socks5"})
-_SHORTEST_PASSWORD: Final = 4
 _SHAPE: Final = (
     "A proxy is written like socks5h://127.0.0.1:7890, or http://user:password@host:3128."
 )
@@ -124,38 +122,6 @@ def check_proxy_site(site: str) -> str:
 def proxy_secret_name(site: str) -> str:
     """Return the name a site's proxy is kept under in the Keychain: `proxy:bilibili`."""
     return f"proxy:{check_proxy_site(site)}"
-
-
-def redact_proxy(text: str, proxy: str | None) -> str:
-    """Return `text` with `proxy`'s login replaced, as written, URL-decoded, and as a header.
-
-    `user:password@` is always replaced, however short; the password alone only
-    from four characters on, since a shorter one would garble ordinary words.
-    """
-    if not proxy:
-        return text
-    parts = urlsplit(proxy)
-    if parts.username is None:
-        return text
-    for needle, replacement in _needles(parts.username, parts.password):
-        text = text.replace(needle, replacement)
-    return text
-
-
-def _needles(raw_user: str, raw_password: str | None) -> list[tuple[str, str]]:
-    users = {raw_user, unquote(raw_user)}
-    passwords = {raw_password, unquote(raw_password)} if raw_password else set()
-    logins = {f"{user}:{password}" for user in users for password in passwords} or users
-    needles = [(f"{login}@", f"{REDACTED}@") for login in logins]
-    if passwords:
-        needles += [(login, REDACTED) for login in logins]
-        needles.append((_basic(unquote(raw_user), unquote(raw_password or "")), REDACTED))
-        needles += [(each, REDACTED) for each in passwords if len(each) >= _SHORTEST_PASSWORD]
-    return sorted(needles, key=lambda each: len(each[0]), reverse=True)
-
-
-def _basic(user: str, password: str) -> str:
-    return base64.b64encode(f"{user}:{password}".encode()).decode("ascii")
 
 
 def _check_characters(text: str) -> None:

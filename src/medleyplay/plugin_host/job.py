@@ -37,6 +37,7 @@ from medleyplay.plugin_host.job_wire import (
 )
 from medleyplay.plugin_host.loader import Address, Endpoint, load_plugins
 from medleyplay.plugin_host.streams import take_standard_streams
+from medleyplay.proxy_redaction import redact_proxy
 
 I = TypeVar("I", bound=BaseModel)  # noqa: E741 -- the conventional name for an input
 R = TypeVar("R", bound=BaseModel)
@@ -90,6 +91,12 @@ class JobContext:
     ai: tuple[AiEndpoint, ...] = field(default=(), repr=False)
     """The AI providers the Job is lent, in order, keys included; held in memory only."""
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
+
+    def safe_text(self, text: str) -> str:
+        """Remove the borrowed proxy and its credentials from text a program keeps."""
+        if self.proxy:
+            text = text.replace(self.proxy, "<redacted>")
+        return redact_proxy(text, self.proxy)
 
     def report(self, fraction: float | None = None, message: str = "") -> None:
         """Tell the server how far the Job has got.

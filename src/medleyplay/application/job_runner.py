@@ -28,7 +28,6 @@ from medleyplay.domain.ai import redact_key
 from medleyplay.domain.errors import KeychainUnavailableError
 from medleyplay.domain.jobs import JobId, JobState, Progress
 from medleyplay.domain.linked_accounts import redact
-from medleyplay.domain.proxies import redact_proxy
 from medleyplay.persistence.schema import JobRow
 from medleyplay.plugin_api import AiEndpoint
 from medleyplay.plugin_api.progress import MAX_MESSAGE as MAX_PROGRESS_MESSAGE
@@ -49,6 +48,7 @@ from medleyplay.plugin_host.process import (
     HostCommand,
     kill_group,
 )
+from medleyplay.proxy_redaction import redact_proxy
 
 MAX_RUNNING: Final = 2
 POLL: Final = timedelta(seconds=1)

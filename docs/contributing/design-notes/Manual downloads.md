@@ -37,6 +37,12 @@
 
 ## Looking up a code or a link
 
+- **The interactive lookup is an Account's Job.** Submitting it keeps only the
+  video or short link and its part number. A refresh or server restart does not
+  lose the lookup. *Downloaded* lists the Account's unfinished choices, including
+  failures. *Choose parts* opens the saved result without asking the site again.
+  Closing the dialog keeps the result; adding the chosen parts or explicitly
+  dismissing the lookup removes it. Looking up a video never adds a Track.
 - **The lookup takes a code as well as a link:** a bare `BV` or `av` id, such as
   `BV1Xx41117Tz` or `av170001`, becomes `https://www.bilibili.com/video/<id>`
   before the allowlist sees it. Only that shape is turned into a link; any other
@@ -52,10 +58,11 @@
   `network`, `refused`, `gone`, or `needs_login`, and its `message` is the
   site's or the plugin's own words. It names the video and the part the link
   did, or part 1, and offers no title, uploader, or qualities. A link that names
-  no video is still refused with 422, and so is a link whose plugin is off or
-  busy, since nothing can try the Download either.
-- **The failure is remembered** with the lookup's ten-minute memory, so the add
-  that follows doesn't ask the site again.
+  no video fails its lookup. Invalid input or an unavailable plugin is refused
+  at submission.
+- **An unreadable result stays ready for manual entry.** Confirming its parts
+  does not retry the read. Only the direct, synchronous API uses a ten-minute
+  memory of reads.
 - **Adding then trusts the household's details:** each part's number (1 to
   9999), title, and artist, checked as before for length, with at most 50 parts,
   and the quality *best*; any other quality is refused. The duration is unknown
@@ -168,8 +175,13 @@
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `POST /api/links/lookup` | Signed in | Now takes a code too, and answers `readable: false` with a `reason` and a `message` when the read fails |
-| `POST /api/links` | Signed in | Now adds parts of a video that couldn't be read, with the household's details |
+| `POST /api/links/lookups` | Signed in | Submit a link or code; `202` returns the lookup id and state |
+| `GET /api/links/lookups` | Signed in | The Account's open choices, newest first |
+| `GET /api/links/lookups/{id}` | Lookup owner | The state and, when ready, the saved result with parts already added marked |
+| `POST /api/links/lookups/{id}` | Lookup owner | Confirm the quality and chosen parts; remove the choice after a successful add |
+| `DELETE /api/links/lookups/{id}` | Lookup owner | Dismiss without adding; stop a pending lookup |
+| `POST /api/links/lookup` | Signed in | Direct lookup without a saved choice; answers `readable: false` when the read fails |
+| `POST /api/links` | Signed in | Direct add by link, including a video that could not be read |
 | `GET /api/tracks/{id}/download` | Signed in | The Track's site Source: its link, whether it is downloaded, downloading, failed, or unavailable, and the failure's message; 409 without a site Source |
 | `PUT /api/tracks/{id}/download` | Signed in | Adds the file in the body as the Track's Download; 413 too large, 422 not audio, 409 no site Source |
 | `GET /api/downloads` | Signed in | The Downloads under way, oldest first: each Track and its Job, with the Job's state, progress, and whether it waits for Online |

@@ -22,17 +22,13 @@ from typing import Final
 from urllib.parse import urlsplit
 
 from medleyplay.domain.errors import InvalidInputError
+from medleyplay.video_urls import VIDEO_HOSTS, public_video_link
 
 BILIBILI_SOURCE: Final = "bilibili"
 """The Source kind of one part of a Bilibili video; its locator is `<BV id>/p<part>`."""
 
 MAX_LINK_LENGTH: Final = 2048
-LINK_HOSTS: Final = {
-    "bilibili.com": BILIBILI_SOURCE,
-    "www.bilibili.com": BILIBILI_SOURCE,
-    "m.bilibili.com": BILIBILI_SOURCE,
-    "b23.tv": BILIBILI_SOURCE,
-}
+LINK_HOSTS: Final = dict.fromkeys(VIDEO_HOSTS, BILIBILI_SOURCE)
 """Each host a link may name, and the Source kind it belongs to; any other is refused."""
 
 PART_LINKS: Final = {BILIBILI_SOURCE: "https://www.bilibili.com/video/{video}?p={part}"}
@@ -79,6 +75,15 @@ def recognize_link(link: str) -> str:
     if kind is None:
         raise _refused(link)
     return kind
+
+
+def lookup_link(text: str) -> str:
+    """Return the share link without credentials, tracking parameters, or fragments."""
+    try:
+        return public_video_link(link_of(text))
+    except ValueError:
+        message = "Enter a Bilibili video link, short link, or video code."
+        raise InvalidInputError(message) from None
 
 
 def part_locator(video: str, part: int) -> str:

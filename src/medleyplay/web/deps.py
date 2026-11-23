@@ -41,6 +41,7 @@ from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.storage_folder import StorageFolder
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.thumbnails import ThumbnailService
+from medleyplay.application.video_lookups import VideoLookups
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.devices import DeviceId
 from medleyplay.domain.errors import NotSignedInError
@@ -64,6 +65,7 @@ class Services:
     linked: LinkedAccountService
     proxies: ProxyService
     links: LinkService
+    video_lookups: VideoLookups
     manual_downloads: ManualDownloadService
     events: Events
     settings: SettingsService
@@ -148,6 +150,10 @@ def _proxies(services: Annotated[Services, Depends(_services)]) -> ProxyService:
 
 def _links(services: Annotated[Services, Depends(_services)]) -> LinkService:
     return services.links
+
+
+def _video_lookups(services: Annotated[Services, Depends(_services)]) -> VideoLookups:
+    return services.video_lookups
 
 
 def _manual_downloads(services: Annotated[Services, Depends(_services)]) -> ManualDownloadService:
@@ -269,6 +275,7 @@ PlaybackDep = Annotated[PlaybackService, Depends(_playback)]
 LinkedDep = Annotated[LinkedAccountService, Depends(_linked)]
 ProxiesDep = Annotated[ProxyService, Depends(_proxies)]
 LinksDep = Annotated[LinkService, Depends(_links)]
+VideoLookupsDep = Annotated[VideoLookups, Depends(_video_lookups)]
 ManualDownloadsDep = Annotated[ManualDownloadService, Depends(_manual_downloads)]
 EventsDep = Annotated[Events, Depends(_events)]
 SettingsDep = Annotated[SettingsService, Depends(_settings)]

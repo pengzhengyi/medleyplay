@@ -18,7 +18,15 @@ from medleyplay.application import Clock
 from medleyplay.application.events import Events
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
-from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState, JobView, Progress
+from medleyplay.domain.jobs import (
+    ACTIVE_STATES,
+    VIDEO_LOOKUP,
+    Job,
+    JobId,
+    JobState,
+    JobView,
+    Progress,
+)
 from medleyplay.persistence.schema import JobRow
 
 I = TypeVar("I", bound=BaseModel)  # noqa: E741 -- the conventional name for an input
@@ -82,6 +90,7 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     lanes: Mapping[str, Lane] = field(default_factory=dict)
     refuse_start: Callable[[Session, Any], str | None] | None = None
     on_failure: Callable[[Session, Job, str, str], Sequence[JobId]] | None = None
+    on_submit: Callable[[Session, Job], None] | None = None
 
 
 # Any: each kind has its own request and result models.
@@ -180,20 +189,27 @@ class JobService:
                 db.add(row)
                 db.flush()
                 job = to_job(row)
+                if kind.on_submit is not None:
+                    kind.on_submit(db, job)
         except IntegrityError:
             # Another request queued the same Job between the lookup and the insert.
             raced = self.active(kind.name, target)
             if raced is None:
                 raise
             return raced
-        self._publish(job.id)
+        self.notify(job.id)
         self._runner.wake()
         return job
 
-    def list_jobs(self, limit: int = LIST_LIMIT) -> list[JobView]:
+    def list_jobs(self, limit: int = LIST_LIMIT, *, viewer: Account | None = None) -> list[JobView]:
         """Return the newest Jobs first."""
         with self._units() as db:
-            rows = db.scalars(select(JobRow).order_by(JobRow.id.desc()).limit(limit))
+            listed = select(JobRow)
+            if viewer is not None:
+                listed = listed.where(
+                    or_(JobRow.kind != VIDEO_LOOKUP, JobRow.requested_by == viewer.id)
+                )
+            rows = db.scalars(listed.order_by(JobRow.id.desc()).limit(limit))
             return [self._view(to_job(row)) for row in rows]
 
     def get_job(self, job_id: JobId) -> JobView:
@@ -218,7 +234,7 @@ class JobService:
         if was_running and cancelled.rowcount == 1:
             self._runner.kill(job_id)
         if cancelled.rowcount == 1:
-            self._publish(job_id)
+            self.notify(job_id)
         return self.get_job(job_id)
 
     def cancel_active_in(self, db: Session, kind: str, target: str) -> JobId | None:
@@ -239,7 +255,7 @@ class JobService:
     def announce_cancelled(self, job_id: JobId) -> None:
         """Stop the process of a Job cancelled with `cancel_active_in`, and tell the browsers."""
         self._runner.kill(job_id)
-        self._publish(job_id)
+        self.notify(job_id)
 
     def retry(self, caller: Account, job_id: JobId) -> Job:
         """Submit a failed or cancelled Job again, as a new Job; return it.
@@ -249,6 +265,9 @@ class JobService:
         with self._units() as db:
             row = _row(db, job_id)
             _require_owner_or_admin(caller, row)
+            if row.kind == VIDEO_LOOKUP:
+                message = "Start a new video lookup instead."
+                raise ConflictError(message)
             if JobState(row.state) not in {JobState.FAILED, JobState.CANCELLED}:
                 message = "Only a failed or cancelled Job can be retried."
                 raise ConflictError(message)
@@ -318,7 +337,8 @@ class JobService:
             )
             return [self._view(to_job(row)) for row in rows]
 
-    def _publish(self, job_id: JobId) -> None:
+    def notify(self, job_id: JobId) -> None:
+        """Tell browsers that the Job or its saved result changed."""
         if self._events is not None:
             self._events.publish(job_id)
 
@@ -381,6 +401,9 @@ def _row(db: Session, job_id: JobId) -> JobRow:
 
 
 def _require_owner_or_admin(caller: Account, row: JobRow) -> None:
+    if row.kind == VIDEO_LOOKUP and row.requested_by != caller.id:
+        message = f"There is no Job {row.id}."
+        raise NotFoundError(message)
     if not caller.is_admin and row.requested_by != caller.id:
         message = "Only the Account that asked for a Job, or an admin, can change it."
         raise ForbiddenError(message)

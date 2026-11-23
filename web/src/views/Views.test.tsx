@@ -655,10 +655,57 @@ describe("search", () => {
     }
   });
 
+  it("resumes a saved result from Downloaded without asking the site or adding a song", async () => {
+    const saved = { id: 8, state: "succeeded", label: "Night Drive", message: "", result: null };
+    const { calls } = open("#/downloaded", {
+      ...signedIn([]),
+      "GET /api/links/lookups": { body: [saved] },
+      "GET /api/links/lookups/8": { body: { ...saved, result: lookupOf(1) } },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Choose parts" }));
+
+    expect(await screen.findByRole("textbox", { name: "Title of part 1" })).toHaveValue(
+      "Night Drive",
+    );
+    expect(calls).not.toContain("POST /api/links/lookups");
+    expect(calls).not.toContain("POST /api/links/lookups/8");
+  });
+
+  it("shows pending and failed video lookups inline and dismisses only the selected one", async () => {
+    const pending = { id: 7, state: "running", label: "Video A", message: "", result: null };
+    const failed = {
+      ...pending,
+      id: 8,
+      state: "failed",
+      label: "Video B",
+      message: "Not a video.",
+    };
+    let dismissed = false;
+    const { calls } = open("#/downloaded", {
+      ...signedIn([]),
+      "GET /api/links/lookups": () => ({ body: dismissed ? [pending] : [pending, failed] }),
+      "DELETE /api/links/lookups/8": () => {
+        dismissed = true;
+        return { status: 204 };
+      },
+    });
+
+    const row = (await screen.findByText("Video B")).closest("li");
+    if (!row) throw new Error("Expected the failed lookup in a list item.");
+    expect(within(row).getByText("Not a video.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Choose parts" })).not.toBeInTheDocument();
+    await userEvent.click(within(row).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(screen.queryByText("Video B")).not.toBeInTheDocument());
+    expect(screen.getByText("Video A")).toBeVisible();
+    expect(calls).toContain("DELETE /api/links/lookups/8");
+  });
+
   it("takes a link or a code with Bilibili chosen, and opens the add dialog on Enter", async () => {
     const { calls } = open("", {
       ...withBilibili(),
-      "POST /api/links/lookup": { body: lookupOf(1) },
+      "POST /api/links/lookups": { body: { id: 8, state: "queued", result: null } },
+      "GET /api/links/lookups": { body: [{ id: 8, state: "succeeded", result: null }] },
+      "GET /api/links/lookups/8": { body: { id: 8, state: "succeeded", result: lookupOf(1) } },
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
 
@@ -668,7 +715,7 @@ describe("search", () => {
     expect(screen.getByRole("dialog", { name: "Add from Bilibili" })).toContainElement(
       screen.getByText("【MV】Night Drive"),
     );
-    expect(calls).toContain("POST /api/links/lookup");
+    expect(calls.filter((call) => call === "POST /api/links/lookups")).toHaveLength(1);
     expect(location.hash).toBe("");
     expect(screen.getByRole("combobox", { name: "Search" })).toHaveValue("");
   });
@@ -677,7 +724,7 @@ describe("search", () => {
     // The site never answers, so all the dialog can show is that it asked.
     open("", {
       ...withBilibili(),
-      "POST /api/links/lookup": { body: lookupOf(1), after: new Promise(() => undefined) },
+      "POST /api/links/lookups": { after: new Promise(() => undefined) },
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
 
@@ -690,8 +737,8 @@ describe("search", () => {
   it("adds what is chosen, says so, and asks for the Tracks again", async () => {
     const { calls } = open("", {
       ...withBilibili(),
-      "POST /api/links/lookup": { body: lookupOf(1) },
-      "POST /api/links": { body: [{ part: 1, track_id: 9, source_id: 90, job: null }] },
+      "POST /api/links/lookups": { body: { id: 8, state: "succeeded", result: lookupOf(1) } },
+      "POST /api/links/lookups/8": { body: [{ part: 1, track_id: 9, source_id: 90, job: null }] },
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");

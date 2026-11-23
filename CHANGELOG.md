@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
+  the server without losing the result. In *Downloaded*, select *Choose parts*
+  to finish or *Dismiss* to discard it. Nothing is added until you confirm.
 - **Lyrics that nearly match, suggested** — a song no site has lyrics for now shows
   those of the nearest song LRCLIB has, of the same title and nearly as long, tagged
   *Found on the web* in Now Playing's big picture, with *Save* to keep them as yours and

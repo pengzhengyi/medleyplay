@@ -22,6 +22,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { initialOf } from "../format";
+import { useWords } from "../locale";
 import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
 import {
   FIELDS,
@@ -33,8 +34,9 @@ import {
   tagText,
 } from "../library/query";
 import { type Completion, completionsOf, suggestedArtists } from "../library/suggestions";
+import { visibleSettingsSections } from "../library/settingsSections";
 
-import { type Route, navigate } from "../routes";
+import { type Route, hrefOf, navigate } from "../routes";
 import { useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
 import { type PanelOption, SearchPanel } from "./SearchPanel";
@@ -49,6 +51,28 @@ const HELP_AFTER_MS = 700;
 
 const SITE_NAMES: Record<string, string> = { bilibili: "Bilibili" };
 const LIBRARY = "library";
+const SETTINGS_PREFIX = "settings:";
+
+function settingsWords(query: string): string | undefined {
+  const text = query.trimStart().toLowerCase();
+  return text.startsWith(SETTINGS_PREFIX) ? text.slice(SETTINGS_PREFIX.length).trim() : undefined;
+}
+
+function sectionOptions(
+  words: string,
+  admin: boolean,
+  t: (title: string) => string,
+): PanelOption[] {
+  return visibleSettingsSections(admin)
+    .map(({ id, title }) => ({ id, title: t(title) }))
+    .filter(({ id, title }) => id.includes(words) || title.toLowerCase().includes(words))
+    .map(({ id, title }) => ({
+      key: id,
+      className: "suggest-action",
+      content: title,
+      does: { go: { view: "settings", section: id } },
+    }));
+}
 
 /** What a tag's value is, said in the box while it is empty. */
 const VALUE_HINTS: Readonly<Record<Field, string>> = {
@@ -99,17 +123,20 @@ const songCount = (count: number) => (count === 1 ? "1 song" : `${String(count)}
  */
 export function SearchBox({
   route,
+  admin,
   providers,
   onLookUp,
   tracks = [],
   links,
 }: {
   readonly route: Route;
+  readonly admin: boolean;
   readonly providers: readonly string[];
   readonly onLookUp: (link: string) => void;
   readonly tracks?: readonly Track[];
   readonly links?: ArtistLinks | undefined;
 }) {
+  const t = useWords();
   const shown = route.view === "search" ? route.query : "";
   const [tokens, setTokens] = useState(() => tokensOf(shown).tokens);
   const [field, setField] = useState<Field>();
@@ -125,6 +152,9 @@ export function SearchBox({
   const [chosen, setChosen] = useState(LIBRARY);
   const scope = providers.includes(chosen) ? chosen : LIBRARY;
   const site = scope === LIBRARY ? undefined : (SITE_NAMES[scope] ?? scope);
+  const tagging = site === undefined;
+  const tagged = tagging && (tokens.length > 0 || field !== undefined);
+  const settings = tagging && !tagged ? settingsWords(query) : undefined;
   const tagsId = useId();
   const nameId = useId();
   const panelId = useId();
@@ -201,7 +231,12 @@ export function SearchBox({
 
   /** Empty the box, tags and all. */
   const clear = () => {
-    change({ tokens: [], field: undefined, query: "" });
+    if (settings !== undefined) {
+      setQuery("");
+      close();
+    } else {
+      change({ tokens: [], field: undefined, query: "" });
+    }
     setSaid("Search cleared.");
   };
 
@@ -233,13 +268,11 @@ export function SearchBox({
     }
   };
 
-  const tagging = site === undefined;
-  const tagged = tagging && (tokens.length > 0 || field !== undefined);
   const empty = tagging && !tagged && query === "";
   const text = textOf(tokens, field, query);
   const artists = useMemo(
-    () => (tagging ? suggestedArtists(tracks, text, links) : []),
-    [tagging, tracks, text, links],
+    () => (tagging && settings === undefined ? suggestedArtists(tracks, text, links) : []),
+    [tagging, settings, tracks, text, links],
   );
 
   /** The cover holding the photo of the artist whose songs write `name`, if it has one. */
@@ -265,7 +298,7 @@ export function SearchBox({
     setQuery("");
     setPicked(false);
     setSaid("");
-    navigate(to);
+    navigate(to, { replace: to.view === "settings" && hrefOf(to) === location.hash });
   };
 
   /** Search `place`, the Library or a site, with `typed` in the box and no tags. */
@@ -305,7 +338,10 @@ export function SearchBox({
   });
 
   // The tags and sites the word being typed begins, offered first; Tab takes the first.
-  const completing = tagging && field === undefined ? completionsOf(query, providers) : undefined;
+  const completing =
+    tagging && settings === undefined && field === undefined
+      ? completionsOf(query, providers)
+      : undefined;
   const completed: readonly PanelOption[] = (completing?.completions ?? []).map(
     (each: Completion, at) => ({
       ...("tag" in each
@@ -387,7 +423,9 @@ export function SearchBox({
     helping && empty
       ? [...FIELDS.map((each) => tagOption(each)), ...providers.map((each) => siteOption(each))]
       : suggesting
-        ? [...completed, ...suggested]
+        ? settings !== undefined
+          ? sectionOptions(settings, admin, t)
+          : [...completed, ...suggested]
         : [];
   const open = options.length > 0;
   // The option pointed at, while the options still hold it.
@@ -527,6 +565,18 @@ export function SearchBox({
                 setQuery(text);
                 return;
               }
+              if (!tagged && settingsWords(text) !== undefined) {
+                clearTimeout(settling.current);
+                setQuery(text);
+                setHelping(false);
+                setSuggesting(true);
+                setActive(0);
+                return;
+              }
+              if (settings !== undefined && text === "") {
+                clear();
+                return;
+              }
               const named = siteTyped(text, providers);
               if (named !== undefined) {
                 // A site's name and a colon searches that site, as its button does.
@@ -560,7 +610,14 @@ export function SearchBox({
               change({ tokens: [...tokens, ...before], field: typed.field, query: "" });
             }}
             onBlur={close}
+            onFocus={() => {
+              if (settings !== undefined) {
+                setSuggesting(true);
+                setActive(0);
+              }
+            }}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
               const at = event.currentTarget;
               if (tagging && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
                 event.preventDefault();
@@ -575,6 +632,10 @@ export function SearchBox({
                   return;
                 }
                 const step = event.key === "ArrowDown" ? 1 : -1;
+                if (settings !== undefined) {
+                  setActive((pointed + step + options.length) % options.length);
+                  return;
+                }
                 // From none to the first and on to the last, then back to none.
                 setActive((was) => {
                   const next = was + step;
@@ -674,6 +735,11 @@ export function SearchBox({
           rows={rows}
           onChoose={choose}
         />
+      )}
+      {settings !== undefined && suggesting && !open && (
+        <div className="search-panel" role="status">
+          {t("No matching settings.")}
+        </div>
       )}
       {providers.length > 0 && (
         <div className="scope" role="radiogroup" aria-label="Search in">

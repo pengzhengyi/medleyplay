@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Type `settings: rating` in the search box and choose *Your ratings* to open
+  that Settings section. Type `settings:` to see every section you can visit.
 - Choose English or Simplified Chinese on the sign-in screen or in
   Settings → Appearance. The first translated screens include sign-in, device
   approval, navigation and playback controls. Other screens still use English.

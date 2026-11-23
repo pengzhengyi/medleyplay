@@ -650,6 +650,7 @@ export function Library({
         </h1>
         <SearchBox
           route={route}
+          admin={admin}
           providers={library.providers}
           onLookUp={setLinking}
           tracks={tracks}

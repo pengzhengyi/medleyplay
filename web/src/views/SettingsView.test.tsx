@@ -59,7 +59,7 @@ function openAt(section: string) {
   render(
     <SettingsView
       admin
-      section={section}
+      route={{ view: "settings", section }}
       mode={modeOf()}
       onModeChecked={vi.fn()}
       onEnrichersChanged={vi.fn()}

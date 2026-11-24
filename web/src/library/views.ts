@@ -196,7 +196,7 @@ export function artistWrittenOf(tracks: readonly Track[], id: string): string | 
 }
 
 /** Return the route to the page of the Track's artist at `place`, by the Library's artist it is. */
-export function artistRouteOf(track: Track, place: number): Route {
+export function artistRouteOf(track: Track, place: number): Extract<Route, { view: "artist" }> {
   const name = artistNamesOf(track)[place] ?? "";
   const id = track.artist_ids[place];
   return id === undefined ? { view: "artist", name } : { view: "artist", name, id };
@@ -208,6 +208,19 @@ export function artistRouteOf(track: Track, place: number): Route {
  */
 export function artistNamesOf(track: Track): readonly string[] {
   return track.artists.length > 0 ? track.artists : [track.artist];
+}
+
+export function artistProfileGroup(
+  name: string,
+  id: string | undefined,
+  links: ArtistLinks | undefined,
+): string {
+  return links === undefined ? fold(name) : links.groupOfBound(name, id);
+}
+
+export function wholeArtistCredit(track: Track, names: readonly string[]): string | undefined {
+  const written = fold(track.artist.trim());
+  return names.some((name) => fold(name.trim()) === written) ? undefined : track.artist;
 }
 
 /**
@@ -222,15 +235,15 @@ export function tracksOfArtist(
   links?: ArtistLinks,
   id?: string,
 ): Track[] {
-  const keyOf = (each: string, bound?: string) =>
-    links === undefined ? fold(each) : links.groupOfBound(each, bound);
-  const key = keyOf(name, id);
+  const key = artistProfileGroup(name, id, links);
   return tracks.filter((track) => {
     const names = artistNamesOf(track);
-    const whole = !names.some((each) => fold(each.trim()) === fold(track.artist.trim()));
+    const whole = wholeArtistCredit(track, names);
     return (
-      names.some((each, place) => keyOf(each, track.artist_ids[place]) === key) ||
-      (whole && keyOf(track.artist) === key)
+      names.some(
+        (each, place) => artistProfileGroup(each, track.artist_ids[place], links) === key,
+      ) ||
+      (whole !== undefined && artistProfileGroup(whole, undefined, links) === key)
     );
   });
 }

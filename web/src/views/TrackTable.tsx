@@ -67,6 +67,7 @@ import { albumArtistOf } from "../library/views";
 import type { UnitOf } from "../player/usePlayer";
 import { type LibraryGroup, hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { TrackArtistCredit } from "./ArtistCreditLinks";
 import { type ChoiceField, genresOf } from "./filterChoices";
 import { WHY } from "./unplayable";
 import { type FilterField, type Filters, FiltersOn, SongFilters } from "./SongFilters";
@@ -100,6 +101,8 @@ const features = tableFeatures({
 });
 
 type Column = ColumnDef<typeof features, Track>;
+
+const columnClass = (id: string) => id.replaceAll("_", "-");
 
 const STARS = [1, 2, 3, 4, 5] as const;
 // A row with its cover, as measured; rows are measured once on screen.
@@ -722,7 +725,7 @@ export function TrackTable({
                   <th
                     key={header.id}
                     scope="col"
-                    className={column.id}
+                    className={columnClass(column.id)}
                     style={column.id in layout.sizing ? { width: header.getSize() } : undefined}
                     aria-sort={
                       sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined
@@ -767,7 +770,7 @@ export function TrackTable({
           {before > 0 && (
             <tr aria-hidden className="spacer">
               {columns.map((id) => (
-                <td key={id} className={id} style={{ height: before }} />
+                <td key={id} className={columnClass(id)} style={{ height: before }} />
               ))}
             </tr>
           )}
@@ -788,7 +791,7 @@ export function TrackTable({
                 >
                   {columns.map((id) =>
                     id === "title" ? (
-                      <th key={id} scope="rowgroup" className={`${id} group-cell`}>
+                      <th key={id} scope="rowgroup" className={`${columnClass(id)} group-cell`}>
                         <button
                           type="button"
                           className="group-toggle"
@@ -805,7 +808,7 @@ export function TrackTable({
                       </th>
                     ) : (
                       // A cell per column, as a spacer row has, so a column hidden by width goes too.
-                      <td key={id} className={`${id} group-cell`} />
+                      <td key={id} className={`${columnClass(id)} group-cell`} />
                     ),
                   )}
                 </tr>
@@ -849,7 +852,7 @@ export function TrackTable({
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className={cell.column.id}>
+                  <td key={cell.id} className={columnClass(cell.column.id)}>
                     <table.FlexRender cell={cell} />
                   </td>
                 ))}
@@ -859,7 +862,7 @@ export function TrackTable({
           {after > 0 && (
             <tr aria-hidden className="spacer">
               {columns.map((id) => (
-                <td key={id} className={id} style={{ height: after }} />
+                <td key={id} className={columnClass(id)} style={{ height: after }} />
               ))}
             </tr>
           )}
@@ -1033,14 +1036,22 @@ const COLUMNS: Column[] = [
               <DownloadNote download={download} />
             ))}
           {track.download_failed && <DownloadFailed track={track} onAddFile={actions.onAddFile} />}
-          <span className="subtitle" aria-hidden>
-            {track.artist}
+          <span className="subtitle">
+            <TrackArtistCredit track={track} />
           </span>
         </div>
       );
     },
   },
-  { id: "artist", accessorKey: "artist", sortFn: byText, filterFn: isText, size: 200, minSize: 80 },
+  {
+    id: "artist",
+    accessorKey: "artist",
+    sortFn: byText,
+    filterFn: isText,
+    size: 200,
+    minSize: 80,
+    cell: ({ row }) => <TrackArtistCredit track={row.original} />,
+  },
   {
     id: "album",
     accessorKey: "album",
@@ -1069,6 +1080,7 @@ const COLUMNS: Column[] = [
     sortFn: byText,
     size: 200,
     minSize: 80,
+    cell: ({ row }) => <TrackArtistCredit track={row.original} album />,
   },
   {
     id: "year",

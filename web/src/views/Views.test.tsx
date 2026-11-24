@@ -143,30 +143,122 @@ describe("the views", () => {
       ]),
     );
     const user = userEvent.setup();
-    const first = await screen.findByRole("button", { name: "First Light" });
-    const album = within(screen.getByRole("row", { name: /First Light/u })).getByRole("link", {
+    const first = await screen.findByRole("row", { name: /First Light/u });
+    const album = within(first).getByRole("link", {
       name: "Goodbye & Hello",
     });
     const other = within(screen.getByRole("row", { name: /Last Light/u })).getByRole("link", {
       name: "Goodbye & Hello",
     });
     expect(other).toHaveAttribute("href", "#/album?artist=West&name=Goodbye+%26+Hello");
-    expect(
-      within(screen.getByRole("row", { name: /Demo/u })).queryByRole("link"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Demo/u }).querySelector("td.album a")).toBeNull();
     expect(
       within(screen.getByRole("cell", { name: "Old title" })).queryByRole("link"),
     ).not.toBeInTheDocument();
 
-    first.focus();
-    await user.tab();
-    expect(album).toHaveFocus();
+    album.focus();
     await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("heading", { name: "Goodbye & Hello" })).toBeVisible();
     expect(location.hash).toBe("#/album?artist=North%2FSouth&name=Goodbye+%26+Hello");
     expect(songs()).toEqual(["First Light"]);
     expect(screen.getByText("Nothing playing")).toBeVisible();
+  });
+
+  it("links stored performers separately without waiting for artist metadata or splitting a name", async () => {
+    open("#/library", {
+      ...signedIn([
+        trackOf(1, "Duet", { artist: "AC/DC & Sia", artists: ["AC/DC", "Sia"] }),
+        trackOf(2, "Compilation", { artist: "群星" }),
+      ]),
+      "GET /api/artist-names": { after: new Promise(() => undefined) },
+    });
+
+    const duet = within(await screen.findByRole("row", { name: /Duet/u }));
+    const artist = duet.getByRole("cell", { name: "AC/DC, Sia" });
+    const links = within(artist).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual(["AC/DC", "Sia"]);
+    expect(links[0]).toHaveAttribute(
+      "href",
+      hrefOf({ view: "artist", name: "AC/DC", id: artistIdOf("AC/DC") }),
+    );
+    const compilation = within(screen.getByRole("row", { name: /Compilation/u }));
+    expect(within(compilation.getByRole("cell", { name: "群星" })).queryByRole("link")).toBeNull();
+
+    await userEvent.click(within(artist).getByRole("link", { name: "Sia" }));
+
+    expect(await screen.findByRole("heading", { name: "Sia" })).toBeVisible();
+    expect(songs()).toEqual(["Duet"]);
+    expect(screen.getByText("Nothing playing")).toBeVisible();
+  });
+
+  it("links an album credit to songs elsewhere in the Library but not to a search-only alias", async () => {
+    const artistId = "artist-known";
+    open("#/album?artist=The+Performer&name=Recording", {
+      ...signedIn([
+        trackOf(1, "Guest song", {
+          artist: "Guest",
+          album: "Recording",
+          album_artist: "The Performer",
+        }),
+        trackOf(2, "Another song", { artist: "The Performer", album: "Other recording" }),
+        trackOf(3, "Alias song", {
+          artist: "Guest",
+          album: "Second recording",
+          album_artist: "Search Alias",
+        }),
+      ]),
+      "GET /api/artist-names": {
+        body: {
+          names: [artistNameOf("The Performer", artistId)],
+          artists: [
+            knownArtistOf(artistId, "The Performer", {
+              aliases: [{ name: "Search Alias", locale: null, primary: false }],
+            }),
+          ],
+        },
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("link", { name: "The Performer" }));
+
+    expect(await screen.findByRole("heading", { name: "The Performer" })).toBeVisible();
+    expect(songs()).toEqual(["Another song"]);
+    act(() => {
+      location.hash = "#/album?artist=Search+Alias&name=Second+recording";
+    });
+    expect(await screen.findByRole("heading", { name: "Second recording" })).toBeVisible();
+    expect(screen.getByText("Search Alias", { exact: true })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Search Alias" })).toBeNull();
+  });
+
+  it("only links Album artist cells whose credits have a local profile", async () => {
+    open(
+      "#/library",
+      signedIn([
+        trackOf(1, "Compilation song", { artist: "Guest", album_artist: "Various Artists" }),
+        trackOf(2, "Tribute song", { artist: "Guest", album_artist: "Performer" }),
+        trackOf(3, "Solo song", { artist: "Performer" }),
+      ]),
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByText("Columns", { exact: true }));
+    const column = screen.getByRole("checkbox", { name: "Album artist" });
+    await user.click(column);
+    try {
+      const tribute = within(screen.getByRole("row", { name: /Tribute song/u }));
+      const albumArtist = within(tribute.getByRole("cell", { name: "Performer" }));
+      expect(albumArtist.getByRole("link", { name: "Performer" })).toHaveAttribute(
+        "href",
+        "#/artist?name=Performer",
+      );
+      const compilation = within(screen.getByRole("row", { name: /Compilation song/u }));
+      expect(
+        within(compilation.getByRole("cell", { name: "Various Artists" })).queryByRole("link"),
+      ).toBeNull();
+    } finally {
+      await user.click(column);
+    }
   });
 
   it("shows a song's cover in its row as a small thumbnail", async () => {
@@ -1095,6 +1187,37 @@ describe("two artists of one name", () => {
   const twoJays = (): Routes => ({
     ...signedIn(twoJaysSongs(), [favoritesPlaylistOf([])]),
     "GET /api/artist-names": { body: twoJaysNames() },
+  });
+
+  it("uses the bound artist in an inherited album heading and the chooser for an explicit credit", async () => {
+    open("#/album?artist=Jay&name=Blue+Night", {
+      ...twoJays(),
+      "GET /api/tracks": {
+        body: [
+          ...twoJaysSongs(),
+          trackOf(3, "Guest song", { artist: "Guest", album: "Tribute", album_artist: "Jay" }),
+        ],
+      },
+    });
+
+    const album = await screen.findByRole("heading", { name: "Blue Night" });
+    const heading = album.closest("header");
+    if (!heading) throw new Error("Expected the album heading in a header.");
+    await userEvent.click(within(heading).getByRole("link", { name: "Jay" }));
+
+    expect(await screen.findByRole("heading", { name: "Jay", level: 2 })).toBeVisible();
+    expect(location.hash).toBe(`#/artist?id=${OTHER_JAY}&name=Jay`);
+    await waitFor(() => {
+      expect(songs()).toEqual(["Blue Night"]);
+    });
+    act(() => {
+      location.hash = "#/album?artist=Jay&name=Tribute";
+    });
+    expect(await screen.findByRole("heading", { name: "Tribute" })).toBeVisible();
+
+    await userEvent.click(screen.getByRole("link", { name: "Jay" }));
+
+    expect(await screen.findByRole("heading", { name: "Which Jay?" })).toBeVisible();
   });
 
   it("are listed apart among the artists, each by the album its songs are on", async () => {

@@ -1618,11 +1618,17 @@ button[aria-disabled="true"] {
  */
 .song-credits a,
 .subtitle > a,
+.artist-link,
 .album-link {
   color: inherit;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentcolor 30%, transparent);
   text-underline-offset: 0.2em;
+}
+
+.artist-credits {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .found {
@@ -2760,6 +2766,8 @@ button[aria-disabled="true"] {
 .song-credits a:focus-visible,
 .subtitle > a:hover,
 .subtitle > a:focus-visible,
+.artist-link:hover,
+.artist-link:focus-visible,
 .album-link:hover,
 .album-link:focus-visible {
   color: var(--ink);
@@ -5036,6 +5044,7 @@ button.icon.heart.on:hover,
 
   .tracks .album,
   .tracks .artist,
+  .tracks .album-artist,
   .tracks .time,
   .tracks .rating,
   .tracks .plays,
@@ -5106,6 +5115,10 @@ button.icon.heart.on:hover,
     color: var(--muted);
     font-size: 0.8rem;
     text-overflow: ellipsis;
+  }
+
+  .tracks .subtitle .artist-link:focus-visible {
+    outline-offset: -1px;
   }
 
   .player {

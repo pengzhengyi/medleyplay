@@ -28,6 +28,7 @@ import type {
   WaitingDevice,
 } from "../api";
 import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
+import { type ArtistProfiles, artistProfiles } from "../library/artistProfileLinks";
 import { coverUrl } from "../api";
 import { playingPages } from "../library/playingPages";
 import { formatLength, formatLibraryLength, initialOf } from "../format";
@@ -62,6 +63,8 @@ import { AlbumHeading } from "./AlbumHeading";
 import { PictureHeading } from "./PictureHeading";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistFacts, ArtistPicture } from "./ArtistAbout";
+import { AlbumArtistCredit } from "./ArtistCreditLinks";
+import { LocalArtistProfiles } from "./artistProfilesContext";
 import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
 import { StorageFolderLocation } from "./StorageFolderLocation";
@@ -150,6 +153,11 @@ export function CurrentView(given: ViewProps) {
         ? hrefOf({ view: "album", artist: given.route.artist, name: given.route.name })
         : JSON.stringify(given.route);
   const { tracks, links, playingId, nextId } = given;
+  const artistNames = given.artistNames?.names;
+  const profiles = useMemo(
+    () => artistProfiles(tracks, links, artistNames),
+    [tracks, links, artistNames],
+  );
   const pages = useMemo(
     () => playingPages(tracks, links, playingId, nextId),
     [tracks, links, playingId, nextId],
@@ -159,7 +167,9 @@ export function CurrentView(given: ViewProps) {
       {[...pages.pictures].map((cover) => (
         <link key={cover} rel="prefetch" as="image" href={coverUrl(cover, "medium")} />
       ))}
-      <Fragment key={key}>{viewOf(given, pages)}</Fragment>
+      <LocalArtistProfiles value={profiles}>
+        <Fragment key={key}>{viewOf(given, pages, profiles)}</Fragment>
+      </LocalArtistProfiles>
     </>
   );
 }
@@ -176,7 +186,11 @@ function mostWritten(songs: readonly Track[]): string | undefined {
   )?.[0];
 }
 
-function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
+function viewOf(
+  given: ViewProps,
+  pages: ReturnType<typeof playingPages>,
+  profiles: ArtistProfiles,
+) {
   // A Playlist names its Tracks by id among them all; every other view lists songs.
   const props = {
     ...given,
@@ -215,11 +229,7 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
     case "artist": {
       // A link by a name alone that names several artists, as links once were, asks which.
       const called =
-        route.id === undefined
-          ? props.artistNames?.names.names.find(
-              (each) => fold(each.name.trim()) === fold(route.name.trim()),
-            )?.artist_ids
-          : undefined;
+        route.id === undefined ? profiles.namedByRoute(route.name)?.artist_ids : undefined;
       const choices =
         called !== undefined && called.length > 1 && props.links !== undefined
           ? artistsCalled(props.tracks, props.links, called)
@@ -253,7 +263,7 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
       const artist = group.startsWith("artist:")
         ? known?.artists.find((each) => `artist:${each.id}` === group)
         : undefined;
-      const named = known?.names.find((each) => fold(each.name.trim()) === fold(name.trim()));
+      const named = profiles.namedByRoute(name);
       const shown = artist?.shown_as ?? name;
       const reload = props.artistNames?.reload;
       const title = shown || UNKNOWN_ARTIST;
@@ -340,8 +350,13 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
           heading={(playPlace) => (
             <AlbumHeading
               title={route.name || UNKNOWN_ALBUM}
-              artist={route.artist || UNKNOWN_ARTIST}
-              artistTo={route.artist === "" ? undefined : { view: "artist", name: route.artist }}
+              artist={
+                route.artist.trim() === "" ? (
+                  UNKNOWN_ARTIST
+                ) : (
+                  <AlbumArtistCredit name={route.artist} songs={songs} />
+                )
+              }
               year={albumYearOf(songs)}
               back={{ view: "albums" }}
               backLabel="Albums"

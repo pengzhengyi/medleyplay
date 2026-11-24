@@ -31,6 +31,7 @@ import {
 } from "../library/settingsSections";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
 import { DownloadsFolder } from "./DownloadsFolder";
+import { ServerStorage } from "./ServerStorage";
 import { AccentPicker } from "./AccentPicker";
 import { DynamicsSwitch } from "./DynamicsSwitch";
 import { AiNotesSettings } from "./AiNotesSettings";
@@ -604,6 +605,7 @@ function StorageSettings({
           </p>
         </>
       )}
+      {admin && <ServerStorage />}
     </>
   );
 }

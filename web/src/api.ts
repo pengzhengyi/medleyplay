@@ -754,6 +754,20 @@ export interface StorageFolder {
   readonly can_show: boolean;
 }
 
+/** Measured file lengths and selected startup settings, visible only to an admin. */
+export interface StorageInspection {
+  readonly downloads: number;
+  readonly cache: number;
+  readonly covers: number;
+  readonly thumbnails: number;
+  readonly database: number;
+  readonly database_companions: number;
+  readonly configuration: number;
+  readonly multiple_accounts: boolean;
+  readonly safe_mode: boolean;
+  readonly wal_enabled: boolean;
+}
+
 /** The household's settings, and the revision they were read at; 0 if never saved. */
 /** What someone asks the AI from: a Track's details, or the songs of its file. */
 export type AiAsk = "details" | "songs";
@@ -1867,6 +1881,7 @@ export const api = {
   saveSettings: (settings: Settings) => call<Settings>("PUT", "/api/settings", settings),
   /** Where the Downloads folder is, and whether this request may have Finder show it. */
   storageFolder: () => call<StorageFolder>("GET", "/api/storage/folder"),
+  inspectStorage: () => call<StorageInspection>("GET", "/api/storage/inspection"),
   /** Have Finder show the Downloads folder: an admin's, on the Mac the server runs on. */
   showStorageFolder: () => call<undefined>("POST", "/api/storage/folder/show"),
   storage: (previewLimit?: number) =>

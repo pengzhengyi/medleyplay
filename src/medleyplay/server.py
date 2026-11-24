@@ -65,6 +65,7 @@ from medleyplay.application.shared_names import SharedNameService
 from medleyplay.application.silences import SilenceService, find_silences_kind
 from medleyplay.application.split_offers import LibrarySweep, SplitOfferService
 from medleyplay.application.storage_folder import StorageFolder, show_in_finder
+from medleyplay.application.storage_inspection import StorageInspection
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.application.thumbnails import (
@@ -330,6 +331,8 @@ def build_services(  # noqa: PLR0913, PLR0915
     # Every write after the migration changes the revision the cached answers stand on.
     revision = DatabaseRevision()
     revision.watch(engine)
+    with engine.connect() as connection:
+        wal_enabled = connection.exec_driver_sql("PRAGMA journal_mode").scalar_one() == "wal"
     return Services(
         accounts=accounts,
         catalog=catalog,
@@ -383,6 +386,13 @@ def build_services(  # noqa: PLR0913, PLR0915
             downloads.folder,
             show_in_finder if sys.platform == "darwin" else None,
             home=Path.home(),
+        ),
+        storage_inspection=StorageInspection(
+            data_dir,
+            CONFIG_FILE,
+            multiple_accounts=config.multiple_accounts,
+            safe_mode=safe_mode,
+            wal_enabled=wal_enabled,
         ),
         revision=revision,
         answers=CachedAnswers(revision),

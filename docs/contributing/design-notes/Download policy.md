@@ -177,6 +177,20 @@ the domain stays free of frameworks.
   beyond every reservation. The guard and the limit are both counted down
   candidate by candidate as a plan starts Downloads.
 
+An admin can separately inspect **managed file sizes**. This read does not
+evaluate the policy. It sums regular file lengths in the Downloads, prepared
+audio cache, and original artwork folders, and in each numeric thumbnail recipe
+folder (including its marker files). It also measures the SQLite database, its
+log, shared memory and rollback journal, and the server's TOML file. It does
+not open any of these files. Library originals, Job folders, unrelated files
+and reservations are outside this measurement.
+
+These are logical bytes, not allocated disk blocks. A missing file counts as
+zero, links are not followed, and a hard-linked file counts only in the first
+category above that contains it. Files may change during measurement. Requests
+share a scan and reuse its result for a minute; ordinary quota reads never
+start one.
+
 ## What may be removed
 
 A Download may be removed only when **all** of these hold:
@@ -327,6 +341,7 @@ first:
 | `PUT /api/settings` | An admin | Replaces the settings at a revision, and evaluates |
 | `GET /api/storage` | Signed in | Use by Downloads, cache copies, and reservations; the limit and the free space; the wanted size, in total and by Account; what the last evaluation couldn't do, and why; and its error, if it failed |
 | `GET /api/storage?limit=<bytes>` | An admin | What a plan at that limit would remove and start, without doing it |
+| `GET /api/storage/inspection` | An admin | Managed file sizes and selected startup settings, without paths, file contents or database rows |
 
 ## Testing
 

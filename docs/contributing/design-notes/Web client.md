@@ -547,6 +547,13 @@ One view, in sections, each saved on its own:
     limit would remove, and says so before saving. Saving sends the revision
     read; if someone saved first, the page shows the settings as they are now.
   - **A member sees the limit** and what it holds, with nothing to change.
+  - **Inspect server storage** lets an admin measure the files medleyplay keeps,
+    separately from the limit. At the end of the section, the report shows each
+    category's size and share of the total. After the first measurement,
+    a refresh icon sits beside the gear. The previous report stays visible
+    and marked *Outdated* during a refresh or after it fails. Hover, focus,
+    or tap the gear to see the startup settings. See
+    [what the measurement counts](Download%20policy.md#storage-use).
   - **The removal order** has one choice today, so it is said in a sentence
     rather than offered as a menu.
 - **Later sections** come with their features: linked accounts, Libraries,

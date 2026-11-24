@@ -67,15 +67,9 @@ import { albumArtistOf } from "../library/views";
 import type { UnitOf } from "../player/usePlayer";
 import { type LibraryGroup, hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { type ChoiceField, genresOf } from "./filterChoices";
 import { WHY } from "./unplayable";
-import {
-  type Choice,
-  type ChoiceField,
-  type FilterField,
-  type Filters,
-  FiltersOn,
-  SongFilters,
-} from "./SongFilters";
+import { type FilterField, type Filters, FiltersOn, SongFilters } from "./SongFilters";
 import { KindMark } from "./KindMark";
 import { DownloadFailed, MoreWays, TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { STATUS_ICONS } from "./statusIcons";
@@ -147,13 +141,6 @@ function partOf(rating: number, stars: number): "full" | "half" | "none" {
 }
 
 type TrackFilter = FilterFn<typeof features, Track>;
-
-/** A genre such as `alternative rock; britpop` is each of its parts. */
-const genresOf = (genre: string): string[] =>
-  genre
-    .split(/[;,/]/u)
-    .map((part) => part.trim())
-    .filter((part) => part !== "");
 
 /** The text is the value, or one of the values, as an artist's names. */
 const isText: TrackFilter = (row, id, value) => {
@@ -579,7 +566,10 @@ export function TrackTable({
     ];
   };
   const filters = filtersOf(columnFilters);
-  const choices = choicesOf(table);
+  const choiceRows = (field: ChoiceField) => {
+    const model = table.getColumn(FILTER_COLUMNS[field])?.getFacetedRowModel();
+    return field === "kind" ? model?.flatRows : model?.rows;
+  };
   const setFilter = (field: FilterField, value: Filters[FilterField]) => {
     table.getColumn(FILTER_COLUMNS[field])?.setFilterValue(value);
   };
@@ -658,7 +648,12 @@ export function TrackTable({
               ))}
           </ul>
         </details>
-        <SongFilters filters={filters} choices={choices} onChange={setFilter} />
+        <SongFilters
+          filters={filters}
+          choiceRows={choiceRows}
+          prepare={items.length > 0}
+          onChange={setFilter}
+        />
         <label className="group-by">
           Group by
           <select
@@ -1201,42 +1196,6 @@ function CoverBadge({
       <span className="bars" aria-hidden />
     </span>
   ) : null;
-}
-
-type Table = ReturnType<typeof useTable<typeof features, Track>>;
-
-/** Each filter's choices, from the songs the other filters keep, each with its count. */
-function choicesOf(table: Table): Record<ChoiceField, Choice[]> {
-  const count = (column: string, valuesOf: (track: Track) => readonly string[]) => {
-    const counts = new Map<string, number>();
-    for (const row of table.getColumn(column)?.getFacetedRowModel().rows ?? []) {
-      for (const value of valuesOf(row.original)) {
-        counts.set(value, (counts.get(value) ?? 0) + 1);
-      }
-    }
-    return [...counts].map(([value, n]) => ({ value, label: value, count: n }));
-  };
-  // The songs of a split file count too, as a filter keeps them under their file.
-  const countAll = (column: string, valueOf: (track: Track) => string) => {
-    const counts = new Map<string, number>();
-    for (const row of table.getColumn(column)?.getFacetedRowModel().flatRows ?? []) {
-      const value = valueOf(row.original);
-      counts.set(value, (counts.get(value) ?? 0) + 1);
-    }
-    return [...counts].map(([value, n]) => ({ value, label: value, count: n }));
-  };
-  const byLabel = (a: Choice, b: Choice) => collator.compare(a.label, b.label);
-  return {
-    kind: countAll("kind", (track) => track.kind)
-      .map((choice) => ({ ...choice, label: choice.value === "album" ? "Albums" : "Songs" }))
-      .sort((a, b) => Number(a.value === "album") - Number(b.value === "album")),
-    artist: count("artist", (track) => (track.artist ? [track.artist] : [])).sort(byLabel),
-    album: count("album", (track) => (track.album ? [track.album] : [])).sort(byLabel),
-    genre: count("genre", (track) => genresOf(track.genre)).sort(byLabel),
-    year: count("year", (track) => (track.year === null ? [] : [String(track.year)])).sort(
-      (a, b) => Number(b.value) - Number(a.value),
-    ),
-  };
 }
 
 /**

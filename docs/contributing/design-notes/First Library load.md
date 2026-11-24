@@ -65,10 +65,28 @@ ordering, waiting and refusal, fallback, stale responses, and sign-in. These
 benchmarks are not timing assertions in CI and do not represent every device or
 library.
 
-## What to measure next
+## Preparing Filter choices after the first rows
 
-Profile the downloads and evaluation of the scripts needed before the Library
-appears. Measure a separate server restart series before changing the catalog:
-one early loopback run spent 627 ms on the first track response, versus 18–19 ms
-on its next two cold-browser runs. Finally, separate JSON parsing, preparing the
-table, and rendering the first row before changing how the full list is loaded.
+The table still has the full catalog for sorting, grouping, filtering, and
+Play all. It draws only the rows near the viewport. Counting and building the
+choices for a closed Filter panel does not block those first rows.
+
+[Filter](../../../web/src/views/SongFilters.tsx) prepares one native picker
+after each paint opportunity once rows are available. Opening Filter prepares
+any remaining pickers. Prepared pickers stay mounted, use the current table
+data and filters, and keep their selected values. Scrolling or changing the
+playing song does not rebuild unchanged options.
+
+With a warm server, a simulated 60 ms connection at 1 MiB/s, and Chrome at
+4x CPU slowdown, seven alternating cold-browser pairs saved a paired median
+42 ms from navigation to the first enabled title for 1,738 synthetic tracks
+and 207 ms for 7,000. After the track response, the paired savings were
+54 ms and 174 ms. The browser test opened Filter as soon as it found the
+first title. At 1,738 tracks the median time from pressing Enter to album
+options being present was 7 ms with either build; at 7,000 it went from
+8 ms to 7 ms. These timings measure DOM readiness, not exact paint or audio
+playback.
+
+The [first catalog read](Cached%20reads.md#first-catalog-read-after-restart)
+after a server restart is a separate cost. The browser does not page the
+catalog or make whole-library actions depend on the rows it has drawn.

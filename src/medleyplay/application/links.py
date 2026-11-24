@@ -11,11 +11,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.details import set_household
 from medleyplay.application.downloads import QUALITY_DETAIL, DownloadService
 from medleyplay.application.plugins import PluginService
+from medleyplay.application.segments import keep_as_one
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDetails, TrackId
-from medleyplay.domain.errors import InvalidInputError, OfflineError, PluginCallError
+from medleyplay.domain.details import Field, Kind, Value, check_value
+from medleyplay.domain.errors import ConflictError, InvalidInputError, OfflineError, PluginCallError
 from medleyplay.domain.jobs import Job
 from medleyplay.domain.links import lookup_link, part_locator, recognize_link
 from medleyplay.persistence.schema import DownloadRow, SourceRow
@@ -77,6 +80,14 @@ class PartChoice:
 
     part: int
     title: str
+    artist: str
+
+
+@dataclass(frozen=True)
+class AlbumChoice:
+    """Shared details for one song per provider part."""
+
+    name: str
     artist: str
 
 
@@ -221,6 +232,76 @@ class LinkService:
             message = "medleyplay is Offline, so links wait until it is Online."
             raise OfflineError(message)
 
+    def import_in(
+        self,
+        db: Session,
+        caller: Account,
+        resolved: Resolved,
+        quality: str,
+        album: AlbumChoice | None,
+        numbers: Sequence[int] | None,
+    ) -> list[Added]:
+        """Add the selected new parts and their Jobs together, under the caller's write lock."""
+        self.require_online()
+        read = resolved.read
+        if isinstance(read, Unreadable):
+            message = "This video has no readable part list. Enter the parts yourself."
+            raise InvalidInputError(message)
+        if album is not None and (not album.name.strip() or len(read.parts) <= 1):
+            message = "An album needs a name and a video with several parts."
+            raise InvalidInputError(message)
+        parts = _import_choices(read, resolved.video, numbers)
+        _check_choice(read, quality, parts)
+        if album:
+            check_value(Field.ALBUM, album.name)
+            check_value(Field.ALBUM_ARTIST, album.artist)
+        durations = {part.part: part.duration_ms for part in read.parts}
+        added = []
+        for number, choice in enumerate(parts, 1):
+            key = SourceKey(resolved.kind, part_locator(resolved.video, choice.part))
+            if db.scalar(
+                select(SourceRow.id).where(
+                    SourceRow.kind == key.kind, SourceRow.locator == key.locator
+                )
+            ):
+                if album:
+                    message = f"Part {choice.part} is already in the Library. Deselect it."
+                    raise ConflictError(message)
+                continue
+            source = self._catalog.insert_in(
+                db,
+                key,
+                TrackDetails(choice.title, duration_ms=durations[choice.part]),
+                {QUALITY_DETAIL: quality},
+            )
+            track_id = TrackId(source.track_id)
+            if album:
+                values: dict[Field, Value | None] = {
+                    Field.KIND: Kind.SONG,
+                    Field.ALBUM: album.name.strip(),
+                    Field.TRACK_NUMBER: number,
+                    Field.TITLE: choice.title,
+                    Field.ALBUM_ARTIST: album.artist.strip(),
+                }
+                set_household(db, track_id, values, self._clock())
+            else:
+                keep_as_one(db, track_id, self._clock())
+            job = self._downloads.queue_new_in(
+                db, caller, source, resolved.video, choice.part, quality
+            )
+            if job is None:
+                message = "No downloader is available. Enable one before downloading."
+                raise ConflictError(message)
+            added.append(Added(choice.part, track_id, SourceId(source.id), job))
+        if not added:
+            message = "All parts are already in the Library."
+            raise ConflictError(message)
+        return added
+
+    def announce_import(self) -> None:
+        """Publish the catalog change after an import commits."""
+        self._catalog.announce_added()
+
     def _resolve(self, link: str) -> Resolved:
         link = lookup_link(link)
         kind = recognize_link(link)
@@ -278,6 +359,17 @@ class LinkService:
             ).one()
             downloaded = db.get(DownloadRow, row.id) is not None
             return SourceId(row.id), not downloaded and row.state != SourceState.UNAVAILABLE
+
+
+def _import_choices(
+    read: VideoDetails, video: str, numbers: Sequence[int] | None
+) -> list[PartChoice]:
+    known = {part.part: part.title if len(read.parts) > 1 else read.title for part in read.parts}
+    chosen = sorted(known if numbers is None else numbers)
+    if unknown := sorted(set(chosen) - known.keys()):
+        message = f"The video has no part {unknown[0]}."
+        raise InvalidInputError(message)
+    return [PartChoice(part, known[part].strip() or f"{video} P{part}", "") for part in chosen]
 
 
 def _check_choice(details: VideoDetails, quality: str, parts: Sequence[PartChoice]) -> None:

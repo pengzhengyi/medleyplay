@@ -1,11 +1,11 @@
 """The links API: looking a pasted link up, and adding the parts the household chose."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
-from medleyplay.application.links import Added, Lookup, PartChoice
+from medleyplay.application.links import Added, AlbumChoice, Lookup, PartChoice
 from medleyplay.application.video_lookups import SavedLookup
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.jobs import JobId, JobState, JobView
@@ -91,6 +91,7 @@ class PartIn(BaseModel):
 class ChoicesIn(BaseModel):
     """Chosen parts of one server-held result."""
 
+    model_config = ConfigDict(extra="forbid")
     quality: str = Field(default=BEST_QUALITY, max_length=32)
     parts: list[PartIn] = Field(max_length=50)
 
@@ -105,7 +106,28 @@ class AddIn(ChoicesIn):
     A video that couldn't be read is added on these titles and artists alone, at `best`.
     """
 
+    model_config = ConfigDict(extra="ignore")
     link: Link
+
+
+class DownloadIn(BaseModel):
+    """Download the selected new parts without editing them."""
+
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["download"]
+    quality: str = Field(default=BEST_QUALITY, max_length=32)
+    parts: list[PositiveInt] | None = Field(default=None, min_length=1, max_length=50)
+
+
+class AlbumIn(BaseModel):
+    """Import the selected parts as numbered songs."""
+
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["album"]
+    album: str = Field(min_length=1, max_length=512)
+    artist: str = Field(default="", max_length=512)
+    quality: str = Field(default=BEST_QUALITY, max_length=32)
+    parts: list[PositiveInt] | None = Field(default=None, min_length=1, max_length=50)
 
 
 class AddedOut(BaseModel):
@@ -179,13 +201,18 @@ def open_lookup(
 
 @router.post("/lookups/{job_id}")
 def confirm_lookup(
-    job_id: RowId, body: ChoicesIn, me: SignedInAccount, lookups: VideoLookupsDep
+    job_id: RowId,
+    body: ChoicesIn | DownloadIn | AlbumIn,
+    me: SignedInAccount,
+    lookups: VideoLookupsDep,
 ) -> list[AddedOut]:
     """Confirm the parts chosen from this Account's lookup."""
-    return [
-        _added(each, me)
-        for each in lookups.confirm(me, JobId(job_id), body.quality, body.choices())
-    ]
+    if isinstance(body, ChoicesIn):
+        added = lookups.confirm(me, JobId(job_id), body.quality, body.choices())
+    else:
+        album = AlbumChoice(body.album, body.artist) if isinstance(body, AlbumIn) else None
+        added = lookups.import_parts(me, JobId(job_id), body.quality, album, body.parts)
+    return [_added(each, me) for each in added]
 
 
 @router.delete("/lookups/{job_id}", status_code=204)

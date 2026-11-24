@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Choose which parts of a Bilibili video to download. Keep a file per part or
+  group the selected files as numbered songs in one album. Changing the
+  selection never starts a download.
 - In Settings → Downloads and storage, admins can see the space occupied by
   managed files above Download usage. Select the bar or **Inspect** for a
   breakdown by category and read-only server settings. The report does not

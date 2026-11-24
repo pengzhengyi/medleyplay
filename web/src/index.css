@@ -5453,6 +5453,111 @@ dialog.modal::backdrop {
   margin: 0;
 }
 
+.video-file-layout,
+.video-part-picker {
+  margin: 0 0 0.75rem;
+}
+
+.video-file-layout legend,
+.video-part-picker legend {
+  margin-bottom: 0.3rem;
+  font-weight: 650;
+}
+
+.video-layout-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.6rem;
+  padding: 0.4rem 0.65rem;
+  margin: 0.3rem 0 0;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.video-file-layout .video-layout-option {
+  width: 100%;
+}
+
+.video-layout-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.video-layout-radio {
+  margin: 0.2rem 0 0;
+}
+
+.video-file-layout small,
+.video-part-picker-heading,
+.video-part-duration {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.video-file-layout small {
+  display: block;
+}
+
+.video-part-picker-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.65rem;
+  margin-bottom: 0.45rem;
+}
+
+.video-part-toggle {
+  width: auto;
+  padding: 0.2rem 0.55rem;
+  margin: 0;
+  font-size: inherit;
+}
+
+.video-parts-list {
+  max-height: 12rem;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.video-parts-list .part {
+  padding: 0;
+}
+
+.video-parts-list .part + .part {
+  border-top: 1px solid var(--line);
+}
+
+.video-part-choice {
+  align-items: baseline;
+  padding: 0.3rem 0.5rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.video-parts-list .video-part-choice {
+  width: 100%;
+}
+
+.video-part-choice .part-box {
+  flex: none;
+}
+
+.video-part-duration {
+  flex: none;
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.video-download-option {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
 .part-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

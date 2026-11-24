@@ -15,9 +15,11 @@ import {
   useState,
 } from "react";
 
-import type { AddedPart, LinkLookup, PartChoice, SavedVideoLookup } from "../api";
+import type { AddedPart, LinkLookup, SavedVideoLookup, VideoChoices } from "../api";
+import { formatTime } from "../format";
 import { partLink } from "../library/otherWays";
-import { suggestedArtist, suggestedTitle } from "../library/suggest";
+import { suggestedArtist, suggestedTitle, withoutTags } from "../library/suggest";
+import { useWords } from "../locale";
 import { hrefOf } from "../routes";
 import { Modal } from "./Modal";
 import { OtherWays } from "./OtherWays";
@@ -46,11 +48,7 @@ export function AddLink({
   readonly opening: Promise<SavedVideoLookup>;
   readonly listed: readonly SavedVideoLookup[];
   readonly load: (id: number) => Promise<SavedVideoLookup>;
-  readonly add: (
-    id: number,
-    quality: string,
-    parts: readonly PartChoice[],
-  ) => Promise<readonly AddedPart[]>;
+  readonly add: (id: number, quality: string, parts: VideoChoices) => Promise<readonly AddedPart[]>;
   readonly onAdded: (count: number) => void;
   readonly onClose: () => void;
 }) {
@@ -148,11 +146,7 @@ export function AddLink({
 interface FormProps {
   readonly id: number;
   readonly lookup: LinkLookup;
-  readonly add: (
-    id: number,
-    quality: string,
-    parts: readonly PartChoice[],
-  ) => Promise<readonly AddedPart[]>;
+  readonly add: (id: number, quality: string, parts: VideoChoices) => Promise<readonly AddedPart[]>;
   readonly onAdded: (added: readonly AddedPart[]) => void;
 }
 
@@ -167,6 +161,7 @@ function useSaving(onAdded: (added: readonly AddedPart[]) => void) {
       onAdded(await send());
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
       setSaving(false);
     }
   };
@@ -175,26 +170,61 @@ function useSaving(onAdded: (added: readonly AddedPart[]) => void) {
 
 interface Row {
   readonly part: number;
+  readonly original: string;
+  readonly duration: number | null;
   readonly title: string;
   readonly artist: string;
   readonly chosen: boolean;
   readonly taken: boolean;
 }
 
-function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
+interface AlbumDetails {
+  readonly album: string;
+  readonly artist: string;
+}
+
+type JoinParts = (
+  id: number,
+  quality: string,
+  parts: readonly number[],
+  details: AlbumDetails,
+) => Promise<readonly AddedPart[]>;
+
+type FileLayout = "separate" | "joined";
+
+/** Choose which parts to download. A caller that can join parts offers both file layouts. */
+export function ReadVideo({
+  id,
+  lookup,
+  add,
+  onAdded,
+  join,
+}: FormProps & { readonly join?: JoinParts }) {
+  const t = useWords();
+  const [layout, setLayout] = useState<FileLayout>("separate");
+  const [group, setGroup] = useState(false);
+  const [edit, setEdit] = useState(false);
+  const [album, setAlbum] = useState(withoutTags(lookup.title).slice(0, 512));
+  const [artist, setArtist] = useState("");
   const [rows, setRows] = useState<readonly Row[]>(() => {
     let room = MAX_PARTS;
-    return lookup.parts.map((part) => {
-      const chosen = part.track_id === null && room > 0;
-      room -= chosen ? 1 : 0;
-      return {
-        part: part.part,
-        title: suggestedTitle(lookup, part),
-        artist: suggestedArtist(lookup),
-        chosen,
-        taken: part.track_id !== null,
-      };
-    });
+    return [...lookup.parts]
+      .sort((a, b) => a.part - b.part)
+      .map((part) => {
+        const chosen = part.track_id === null && room > 0;
+        room -= chosen ? 1 : 0;
+        return {
+          part: part.part,
+          original:
+            (lookup.parts.length > 1 ? part.title : lookup.title).trim() ||
+            `${lookup.video} P${String(part.part)}`,
+          duration: part.duration_ms,
+          title: suggestedTitle(lookup, part),
+          artist: suggestedArtist(lookup),
+          chosen,
+          taken: part.track_id !== null,
+        };
+      });
   });
   const [quality, setQuality] = useState(BEST);
   const { saving, error, save } = useSaving(onAdded);
@@ -202,90 +232,232 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
   const change = (part: number, changes: Partial<Row>) => {
     setRows((now) => now.map((row) => (row.part === part ? { ...row, ...changes } : row)));
   };
-  const complete = chosen.length > 0 && chosen.every((row) => row.title.trim() !== "");
+  const eligible = rows.filter((row) => !row.taken);
+  const multiple = rows.length > 1;
+  const canJoin = multiple && join !== undefined;
+  const joined = canJoin && layout === "joined";
+  const grouped = !joined && multiple && group;
+  const manual = !joined && !grouped && edit;
+  const albumDetails = joined || grouped;
+  const allChosen = chosen.length >= Math.min(eligible.length, MAX_PARTS);
+  const complete =
+    chosen.length > 0 &&
+    chosen.length <= MAX_PARTS &&
+    (!albumDetails || album.trim() !== "") &&
+    (!manual || chosen.every((row) => row.title.trim() !== ""));
+  const downloadLabel = joined
+    ? t("Download 1 album file")
+    : chosen.length === 1
+      ? t("Download 1 file")
+      : t("Download {{count}} files", { count: chosen.length });
+  const action = manual
+    ? chosen.length <= 1
+      ? "Add"
+      : `Add ${String(chosen.length)} songs`
+    : chosen.length === 0
+      ? t("Choose parts to download")
+      : downloadLabel;
+  const toggleAll = () => {
+    const next = new Set(allChosen ? [] : eligible.slice(0, MAX_PARTS).map((row) => row.part));
+    setRows((now) => now.map((row) => ({ ...row, chosen: next.has(row.part) })));
+  };
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void save(() =>
-      add(
-        id,
-        quality,
-        chosen.map(({ part, title, artist }) => ({ part, title: title.trim(), artist })),
-      ),
-    );
+    if (!complete || saving) return;
+    const parts = chosen.map((row) => row.part);
+    const details = { album: album.trim(), artist: artist.trim() };
+    if (joined) {
+      void save(() => join(id, quality, parts, details));
+    } else {
+      void save(() =>
+        add(
+          id,
+          quality,
+          manual
+            ? chosen.map(({ part, title, artist }) => ({ part, title: title.trim(), artist }))
+            : grouped
+              ? { mode: "album", ...details, parts }
+              : { mode: "download", parts },
+        ),
+      );
+    }
   };
 
-  // The fields are named above the first part that has them, one already added having none.
-  const labelled = rows.findIndex((row) => !row.taken);
+  const labelled = eligible[0]?.part;
 
   return (
     <form onSubmit={submit}>
       <p className="add-link-video">
         <strong>{lookup.title}</strong>
-        <span className="add-link-uploader">{lookup.uploader}</span>
+        {lookup.uploader && (
+          <span className="add-link-uploader">
+            {t("Uploaded by {{name}}", { name: lookup.uploader })}
+          </span>
+        )}
       </p>
-      <ul className="parts">
-        {rows.map((row, index) => (
-          <li key={row.part} className="part">
-            <label className="part-choice">
-              <input
-                type="checkbox"
-                className="part-box"
-                checked={row.chosen}
-                disabled={row.taken}
-                onChange={(event) => {
-                  change(row.part, { chosen: event.currentTarget.checked });
-                }}
-              />
-              <span>
-                Part {row.part}
-                {row.taken && <span className="choice-meta"> Already added</span>}
-              </span>
-            </label>
-            {!row.taken && (
-              <div className="part-fields">
-                <PartField label="Title" shown={index === labelled}>
-                  <input
-                    type="text"
-                    className="part-input"
-                    aria-label={`Title of part ${String(row.part)}`}
-                    placeholder="Title"
-                    value={row.title}
-                    maxLength={512}
-                    disabled={!row.chosen}
-                    onChange={(event) => {
-                      change(row.part, { title: event.currentTarget.value });
-                    }}
-                  />
-                </PartField>
-                <PartField label="Artist" shown={index === labelled}>
-                  <input
-                    type="text"
-                    className="part-input"
-                    aria-label={`Artist of part ${String(row.part)}`}
-                    placeholder="Artist"
-                    value={row.artist}
-                    maxLength={512}
-                    disabled={!row.chosen}
-                    onChange={(event) => {
-                      change(row.part, { artist: event.currentTarget.value });
-                    }}
-                  />
-                </PartField>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+      {canJoin ? (
+        <VideoFileLayout layout={layout} change={setLayout} saving={saving} />
+      ) : (
+        <p className="add-link-explain">
+          {multiple
+            ? t("Save one audio file per selected part.")
+            : t("Keep the whole file without splitting it into songs.")}
+        </p>
+      )}
+      <fieldset className="video-part-picker">
+        <legend>{t("Parts to download")}</legend>
+        <div className="video-part-picker-heading">
+          <span role="status">
+            {t("{{selected}} of {{available}} selected", {
+              selected: chosen.length,
+              available: eligible.length,
+            })}
+          </span>
+          {eligible.length > 0 && (
+            <button
+              type="button"
+              className="secondary outline video-part-toggle"
+              disabled={saving}
+              onClick={toggleAll}
+            >
+              {allChosen
+                ? t("Deselect all")
+                : eligible.length > MAX_PARTS
+                  ? t("Select first {{count}}", { count: MAX_PARTS })
+                  : t("Select all")}
+            </button>
+          )}
+        </div>
+        <ul className={manual ? "parts" : "parts video-parts-list"}>
+          {rows.map((row) => (
+            <li key={row.part} className="part">
+              <label className={manual ? "part-choice" : "part-choice video-part-choice"}>
+                <input
+                  type="checkbox"
+                  className="part-box"
+                  checked={row.chosen}
+                  disabled={row.taken || saving}
+                  aria-label={
+                    manual
+                      ? undefined
+                      : t("Part {{number}}: {{title}}", { number: row.part, title: row.original })
+                  }
+                  onChange={(event) => {
+                    change(row.part, { chosen: event.currentTarget.checked });
+                  }}
+                />
+                <span>
+                  {manual
+                    ? t("Part {{number}}", { number: row.part })
+                    : `${String(row.part)}. ${row.original}`}
+                  {row.taken && <span className="choice-meta"> {t("Already added")}</span>}
+                </span>
+                {!manual && !row.taken && row.duration !== null && (
+                  <span className="video-part-duration">{formatTime(row.duration / 1000)}</span>
+                )}
+              </label>
+              {manual && !row.taken && (
+                <div className="part-fields">
+                  <PartField label="Title" shown={row.part === labelled}>
+                    <input
+                      type="text"
+                      className="part-input"
+                      aria-label={`Title of part ${String(row.part)}`}
+                      placeholder="Title"
+                      value={row.title}
+                      maxLength={512}
+                      disabled={!row.chosen || saving}
+                      onChange={(event) => {
+                        change(row.part, { title: event.currentTarget.value });
+                      }}
+                    />
+                  </PartField>
+                  <PartField label="Artist" shown={row.part === labelled}>
+                    <input
+                      type="text"
+                      className="part-input"
+                      aria-label={`Artist of part ${String(row.part)}`}
+                      placeholder="Artist"
+                      value={row.artist}
+                      maxLength={512}
+                      disabled={!row.chosen || saving}
+                      onChange={(event) => {
+                        change(row.part, { artist: event.currentTarget.value });
+                      }}
+                    />
+                  </PartField>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+      {eligible.length === 0 && <p>{t("All parts are already in the Library.")}</p>}
+      {chosen.length > MAX_PARTS && <p>{t("Choose up to 50 parts at a time.")}</p>}
+      {!joined && multiple && eligible.length > 0 && (
+        <label className="video-download-option">
+          <input
+            type="checkbox"
+            checked={group}
+            disabled={saving}
+            onChange={(event) => {
+              setGroup(event.currentTarget.checked);
+            }}
+          />
+          {t("Group these files in one album")}
+        </label>
+      )}
+      {!albumDetails && eligible.length > 0 && (
+        <label className="video-download-option">
+          <input
+            type="checkbox"
+            checked={edit}
+            disabled={saving}
+            onChange={(event) => {
+              setEdit(event.currentTarget.checked);
+            }}
+          />
+          {t("Edit titles and artists")}
+        </label>
+      )}
+      {albumDetails && (
+        <>
+          <label>
+            {t("Album title")}
+            <input
+              value={album}
+              disabled={saving}
+              maxLength={512}
+              onChange={(event) => {
+                setAlbum(event.currentTarget.value);
+              }}
+            />
+          </label>
+          <label>
+            {t("Album artist")}
+            <input
+              value={artist}
+              disabled={saving}
+              maxLength={512}
+              placeholder={t("Optional")}
+              onChange={(event) => {
+                setArtist(event.currentTarget.value);
+              }}
+            />
+          </label>
+        </>
+      )}
       <label className="quality">
-        Quality
+        {t("Quality")}
         <select
           className="quality-select"
           value={quality}
+          disabled={saving}
           onChange={(event) => {
             setQuality(event.currentTarget.value);
           }}
         >
-          <option value={BEST}>Best available</option>
+          <option value={BEST}>{t("Best available")}</option>
           {lookup.qualities.map((each) => (
             <option key={each.id} value={each.id}>
               {each.label}
@@ -293,11 +465,52 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
           ))}
         </select>
       </label>
-      <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, firstOf(rows))} />
       <Footer error={error} saving={saving} disabled={!complete}>
-        {chosen.length <= 1 ? "Add" : `Add ${String(chosen.length)} songs`}
+        {action}
       </Footer>
+      <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, firstOf(rows))} />
     </form>
+  );
+}
+
+function VideoFileLayout({
+  layout,
+  change,
+  saving,
+}: {
+  readonly layout: FileLayout;
+  readonly change: (layout: FileLayout) => void;
+  readonly saving: boolean;
+}) {
+  const t = useWords();
+  const options = [
+    ["joined", "One album file", "Join the selected parts into one audio file, in video order."],
+    ["separate", "Separate files", "Save one audio file per selected part."],
+  ] as const;
+  return (
+    <fieldset className="video-file-layout">
+      <legend>{t("File layout")}</legend>
+      {options.map(([key, title, description]) => (
+        <label className="video-layout-option" key={key}>
+          <input
+            type="radio"
+            name="video-file-layout"
+            className="video-layout-radio"
+            checked={layout === key}
+            disabled={saving}
+            aria-label={t(title)}
+            aria-describedby={`video-layout-${key}`}
+            onChange={() => {
+              change(key);
+            }}
+          />
+          <span>
+            <strong>{t(title)}</strong>
+            <small id={`video-layout-${key}`}>{t(description)}</small>
+          </span>
+        </label>
+      ))}
+    </fieldset>
   );
 }
 

@@ -28,7 +28,7 @@ import {
   type JobEvent,
   type SavedVideoLookup,
   type Mode,
-  type PartChoice,
+  type VideoChoices,
   type Playlist,
   type RemoteCommand,
   type RemoteEvent,
@@ -179,7 +179,7 @@ export interface Library {
   readonly addLink: (
     id: number,
     quality: string,
-    parts: readonly PartChoice[],
+    parts: VideoChoices,
   ) => Promise<readonly AddedPart[]>;
   /** Where a site Track's Download stands. */
   readonly download: (id: number) => Promise<TrackDownload>;

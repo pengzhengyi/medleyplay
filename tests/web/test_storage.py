@@ -3,7 +3,11 @@
 Also the Downloads folder: where it is, and Finder showing it on the server's Mac.
 """
 
+import os
+import sqlite3
 from collections.abc import Iterator
+from contextlib import closing
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -63,6 +67,55 @@ def test_the_storage_is_for_signed_in_accounts(client: TestClient) -> None:
     response = client.get("/api/storage")
 
     assert response.status_code == 401
+
+
+def test_inspection_counts_managed_file_lengths_once_without_reading_contents(
+    client: TestClient, tmp_path: Path
+) -> None:
+    set_up_as_alice(client)
+    root = tmp_path / "data"
+    for folder in ("downloads", "cache/sources", "covers", "thumbnails/1", "jobs"):
+        (root / folder).mkdir(parents=True, exist_ok=True)
+    (root / "downloads/song").write_bytes(b"audio")
+    (root / "cache/sources/prepared").write_bytes(b"copy")
+    (root / "covers/image").write_bytes(b"picture")
+    (root / "thumbnails/1/small").write_bytes(b"pic")
+    (root / "jobs/private").write_bytes(b"not counted")
+    (root / "covers/link").symlink_to(root / "jobs", target_is_directory=True)
+    (root / "downloads/link").symlink_to(root / "jobs/private")
+    os.link(root / "downloads/song", root / "cache/sources/second-name")
+    (root / "medleyplay.toml").write_bytes(b"private")
+    db = root / "medleyplay.sqlite3"
+    with closing(sqlite3.connect(db)) as connection:
+        connection.execute("CREATE TABLE private(value TEXT)")
+    (root / "medleyplay.sqlite3-wal").write_bytes(b"log")
+    (root / "medleyplay.sqlite3-shm").write_bytes(b"index")
+
+    read = client.get("/api/storage/inspection")
+
+    assert read.status_code == 200
+    assert read.headers["cache-control"] == "private, no-store"
+    assert read.json() == {
+        "downloads": 5,
+        "cache": 4,
+        "covers": 7,
+        "thumbnails": 3,
+        "database": db.stat().st_size,
+        "database_companions": 8,
+        "configuration": 7,
+        "multiple_accounts": True,
+        "safe_mode": False,
+        "wal_enabled": False,
+    }
+
+
+def test_inspection_requires_an_admin(client: TestClient) -> None:
+    assert client.get("/api/storage/inspection").status_code == 401
+    set_up_as_alice(client)
+    add_bob(client)
+    sign_in(client, "bob")
+
+    assert client.get("/api/storage/inspection").status_code == 403
 
 
 def test_anyone_signed_in_reads_where_the_downloads_folder_is(client: TestClient) -> None:

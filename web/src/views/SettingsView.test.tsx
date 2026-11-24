@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { MeteredNetwork, Mode, Settings, Storage } from "../api";
+import type { MeteredNetwork, Mode, Settings, Storage, StorageInspection } from "../api";
 import {
   type Routes,
   enricherOf,
@@ -510,6 +510,113 @@ describe("the Deezer section", () => {
 });
 
 describe("storage settings", () => {
+  const measured: StorageInspection = {
+    downloads: 250,
+    cache: 0,
+    covers: 500,
+    thumbnails: 0,
+    database: 125,
+    database_companions: 0,
+    configuration: 125,
+    multiple_accounts: true,
+    safe_mode: false,
+    wal_enabled: true,
+  };
+
+  it("measures server files only when an admin asks, separately from the limit", async () => {
+    const read = vi.fn(() => ({ body: measured }));
+    open(true, { "GET /api/storage/inspection": read });
+
+    const inspect = await storage().findByRole("button", { name: "Inspect server storage" });
+    expect(read).not.toHaveBeenCalled();
+    await userEvent.click(inspect);
+
+    const composition = within(
+      await storage().findByRole("region", { name: "Storage composition" }),
+    );
+    expect(composition.getByRole("button", { name: "Refresh server storage" })).toBeVisible();
+    expect(storage().queryByRole("button", { name: "Inspect server storage" })).toBeNull();
+    expect(composition.getByText("1 KB")).toBeVisible();
+    expect(composition.getByText("Original artwork").closest("div")).toHaveTextContent(
+      /500 bytes.*50%/u,
+    );
+    expect(composition.getByText("SQLite database").closest("div")).toHaveTextContent(
+      /125 bytes.*12\.5%/u,
+    );
+    expect(composition.getByText("Prepared audio cache").closest("div")).toHaveTextContent(
+      /0 bytes.*0%/u,
+    );
+    expect(storage().getByText(/of 20 GB used/u)).toBeVisible();
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows startup settings at the gear on hover and hides them with Escape", async () => {
+    open(true, { "GET /api/storage/inspection": { body: measured } });
+    const user = userEvent.setup();
+    await user.click(await storage().findByRole("button", { name: "Inspect server storage" }));
+    const gear = await storage().findByRole("button", { name: "Server settings at startup" });
+
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    await user.hover(gear);
+
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent(/Multiple accounts: on.*SQLite write-ahead logging: on/u);
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the previous measurement marked outdated until a refresh finishes", async () => {
+    let finish: () => void = () => undefined;
+    const waiting = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const inspect = vi
+      .fn()
+      .mockReturnValueOnce({ body: measured })
+      .mockReturnValueOnce({ body: { ...measured, downloads: 1_250 }, after: waiting });
+    open(true, { "GET /api/storage/inspection": inspect });
+    const user = userEvent.setup();
+    await user.click(await storage().findByRole("button", { name: "Inspect server storage" }));
+    const composition = within(
+      await storage().findByRole("region", { name: "Storage composition" }),
+    );
+    const button = composition.getByRole("button", { name: "Refresh server storage" });
+
+    await user.click(button);
+
+    expect(storage().getByText("Measuring server storage…")).toHaveAttribute("role", "status");
+    expect(button).toBeDisabled();
+    expect(composition.getByText("1 KB")).toBeVisible();
+    expect(composition.getByText("Outdated")).toBeVisible();
+
+    finish();
+
+    expect(await composition.findByText("2 KB")).toBeVisible();
+    expect(composition.queryByText("Outdated")).not.toBeInTheDocument();
+    expect(button).toBeEnabled();
+  });
+
+  it("keeps an outdated measurement available when the refresh fails", async () => {
+    let fail = false;
+    open(true, {
+      "GET /api/storage/inspection": () => (fail ? { status: 409 } : { body: measured }),
+    });
+    const user = userEvent.setup();
+    await user.click(await storage().findByRole("button", { name: "Inspect server storage" }));
+    const button = await storage().findByRole("button", { name: "Refresh server storage" });
+    fail = true;
+
+    await user.click(button);
+
+    expect(await storage().findByRole("alert")).toHaveTextContent("Could not measure storage");
+    expect(storage().getByText("1 KB")).toBeVisible();
+    expect(storage().getByText("Outdated")).toBeVisible();
+    expect(button).toBeEnabled();
+  });
+
   it("shows what the Downloads and prepared copies use against the limit", async () => {
     open(false);
 
@@ -546,6 +653,7 @@ describe("storage settings", () => {
       await screen.findByText("The storage limit is 20 GB, set by an admin."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("spinbutton", { name: "Limit in GB" })).toBeNull();
+    expect(storage().queryByRole("button", { name: "Inspect server storage" })).toBeNull();
   });
 
   it("asks before saving a lower limit that removes Downloads, then saves it at the revision read", async () => {

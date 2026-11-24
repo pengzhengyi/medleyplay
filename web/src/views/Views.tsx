@@ -28,6 +28,7 @@ import type {
   WaitingDevice,
 } from "../api";
 import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
+import { artistProfiles } from "../library/artistProfileLinks";
 import { coverUrl } from "../api";
 import { playingPages } from "../library/playingPages";
 import { formatLength, formatLibraryLength, initialOf } from "../format";
@@ -62,6 +63,8 @@ import { AlbumHeading } from "./AlbumHeading";
 import { PictureHeading } from "./PictureHeading";
 import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistFacts, ArtistPicture } from "./ArtistAbout";
+import { AlbumArtistCredit } from "./ArtistCreditLinks";
+import { LocalArtistProfiles } from "./artistProfilesContext";
 import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
 import { StorageFolderLocation } from "./StorageFolderLocation";
@@ -150,6 +153,11 @@ export function CurrentView(given: ViewProps) {
         ? hrefOf({ view: "album", artist: given.route.artist, name: given.route.name })
         : JSON.stringify(given.route);
   const { tracks, links, playingId, nextId } = given;
+  const artistNames = given.artistNames?.names;
+  const profiles = useMemo(
+    () => artistProfiles(tracks, links, artistNames),
+    [tracks, links, artistNames],
+  );
   const pages = useMemo(
     () => playingPages(tracks, links, playingId, nextId),
     [tracks, links, playingId, nextId],
@@ -159,7 +167,9 @@ export function CurrentView(given: ViewProps) {
       {[...pages.pictures].map((cover) => (
         <link key={cover} rel="prefetch" as="image" href={coverUrl(cover, "medium")} />
       ))}
-      <Fragment key={key}>{viewOf(given, pages)}</Fragment>
+      <LocalArtistProfiles value={profiles}>
+        <Fragment key={key}>{viewOf(given, pages)}</Fragment>
+      </LocalArtistProfiles>
     </>
   );
 }
@@ -340,8 +350,13 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
           heading={(playPlace) => (
             <AlbumHeading
               title={route.name || UNKNOWN_ALBUM}
-              artist={route.artist || UNKNOWN_ARTIST}
-              artistTo={route.artist === "" ? undefined : { view: "artist", name: route.artist }}
+              artist={
+                route.artist.trim() === "" ? (
+                  UNKNOWN_ARTIST
+                ) : (
+                  <AlbumArtistCredit name={route.artist} songs={songs} />
+                )
+              }
               year={albumYearOf(songs)}
               back={{ view: "albums" }}
               backLabel="Albums"

@@ -1,7 +1,32 @@
 // cspell:ignore charl
 import { type Page, expect, test } from "@playwright/test";
 
+import type { Track } from "../src/api";
+
 const nav = (page: Page) => page.getByRole("navigation", { name: "Views" });
+
+/** Give Alpha two separate credits and an album on the test server's read-only track response. */
+async function giveAlphaCredits(page: Page) {
+  await page.route("**/api/tracks", async (route) => {
+    const response = await route.fetch();
+    const tracks = (await response.json()) as Track[];
+    await route.fulfill({
+      response,
+      json: tracks.map((track) =>
+        track.title === "Alpha"
+          ? {
+              ...track,
+              artist: "Adele, Sia",
+              artists: ["Adele", "Sia"],
+              artist_ids: [],
+              album: "Duet",
+              album_artist: "",
+            }
+          : track,
+      ),
+    });
+  });
+}
 
 test("the device and account are read while the Library script loads", async ({ page }) => {
   let releaseScript: () => void = () => undefined;
@@ -105,6 +130,33 @@ test("the views follow the links, Back, and Forward", async ({ page }) => {
   );
 });
 
+test("the keyboard reaches the artist and album links without playing the song", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await giveAlphaCredits(page);
+  await page.goto("/");
+
+  const row = page.getByRole("row", { name: /Alpha/u });
+  await row.getByRole("button", { name: "Alpha", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(row.getByRole("link", { name: "Adele" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Adele", exact: true })).toBeVisible();
+  await expect(page.getByText("Nothing playing")).toBeVisible();
+  await page.goBack();
+
+  await row.getByRole("button", { name: "Alpha", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(row.getByRole("link", { name: "Sia" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(row.getByRole("link", { name: "Duet" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Duet", exact: true })).toBeVisible();
+  await expect(page.getByText("Nothing playing")).toBeVisible();
+});
+
 test("a view's link opens it again after a reload", async ({ page }) => {
   await page.goto("/#/playlists");
   await page
@@ -160,6 +212,29 @@ test("searching finds songs as you type, and Back leaves the search in one step"
 
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("artist subtitles have one link per credit even with Album artist enabled", async ({
+    page,
+  }) => {
+    await giveAlphaCredits(page);
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "medleyplay.columns.v1",
+        JSON.stringify({ visibility: { album_artist: true }, sizing: {} }),
+      );
+    });
+    await page.goto("/");
+
+    const row = page.getByRole("row", { name: /Alpha/u });
+    await expect(row.getByRole("link")).toHaveText(["Adele", "Sia"]);
+
+    await row.getByRole("link", { name: "Sia" }).tap();
+
+    await expect(page.getByRole("heading", { name: "Sia", exact: true })).toBeVisible();
+    await expect(page.getByText("Nothing playing")).toBeVisible();
+    await page.goBack();
+    await expect(row.getByRole("link")).toHaveText(["Adele", "Sia"]);
+  });
 
   test("the views are a tab bar, and the queue opens from the player", async ({ page }) => {
     await page.goto("/");

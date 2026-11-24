@@ -5,14 +5,13 @@
 
 import type { ReactNode, Ref } from "react";
 
-import { type Route, hrefOf } from "../routes";
+import type { Route } from "../routes";
 import { PictureHeading } from "./PictureHeading";
 
-/** The heading of the album `title` by `artist`, `artistTo` its artist's page if it has one. */
+/** The heading of the album `title` and its artist credit. */
 export function AlbumHeading({
   title,
   artist,
-  artistTo,
   year,
   back,
   backLabel,
@@ -23,8 +22,7 @@ export function AlbumHeading({
   playPlace,
 }: {
   readonly title: string;
-  readonly artist: string;
-  readonly artistTo?: Route | undefined;
+  readonly artist: ReactNode;
   /** The year it came out, if known. */
   readonly year: number | null;
   readonly back: Route;
@@ -49,9 +47,7 @@ export function AlbumHeading({
       playPlace={playPlace}
       className="album-heading"
     >
-      <p className="subtitle">
-        {artistTo === undefined ? artist : <a href={hrefOf(artistTo)}>{artist}</a>}
-      </p>
+      <p className="subtitle">{artist}</p>
       {year !== null && <p className="album-year">{String(year)}</p>}
       {note}
     </PictureHeading>

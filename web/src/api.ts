@@ -1310,6 +1310,16 @@ export interface PartChoice {
   readonly artist: string;
 }
 
+export type VideoChoices =
+  | readonly PartChoice[]
+  | { readonly mode: "download"; readonly parts: readonly number[] }
+  | {
+      readonly mode: "album";
+      readonly parts: readonly number[];
+      readonly album: string;
+      readonly artist: string;
+    };
+
 /** A part that was added: its Track and Source, and the Job downloading it, if one is needed. */
 export interface AddedPart {
   readonly part: number;
@@ -1924,8 +1934,11 @@ export const api = {
   videoLookups: () => call<SavedVideoLookup[]>("GET", "/api/links/lookups"),
   videoLookup: (id: number) => call<SavedVideoLookup>("GET", `/api/links/lookups/${String(id)}`),
   dismissLookup: (id: number) => call<undefined>("DELETE", `/api/links/lookups/${String(id)}`),
-  addLink: (id: number, quality: string, parts: readonly PartChoice[]) =>
-    call<AddedPart[]>("POST", `/api/links/lookups/${String(id)}`, { quality, parts }),
+  addLink: (id: number, quality: string, choices: VideoChoices) =>
+    call<AddedPart[]>("POST", `/api/links/lookups/${String(id)}`, {
+      quality,
+      ...("mode" in choices ? choices : { parts: choices }),
+    }),
   /** Where a site Track's Download stands. */
   download: (trackId: number) =>
     call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),

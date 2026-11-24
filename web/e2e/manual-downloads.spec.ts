@@ -48,6 +48,7 @@ test("a video lookup resumes from Downloaded after reload and stays dismissed", 
 }) => {
   const code = "BVresume";
   const dialog = await lookUp(page, `https://www.bilibili.com/video/${code}`);
+  await dialog.getByRole("checkbox", { name: "Edit titles and artists" }).check();
   await expect(dialog.getByRole("textbox", { name: "Title of part 1" })).toHaveValue(code);
   await dialog.getByRole("button", { name: "Close" }).click();
   await page.goto("/#/downloaded");
@@ -56,6 +57,7 @@ test("a video lookup resumes from Downloaded after reload and stays dismissed", 
   const lookups = page.getByRole("region", { name: "Video lookups" });
   const saved = lookups.getByRole("listitem").filter({ hasText: code });
   await saved.getByRole("button", { name: "Choose parts" }).click();
+  await dialog.getByRole("checkbox", { name: "Edit titles and artists" }).check();
   await expect(dialog.getByRole("textbox", { name: "Title of part 1" })).toHaveValue(code);
   await dialog.getByRole("button", { name: "Close" }).click();
   await saved.getByRole("button", { name: "Dismiss" }).click();
@@ -70,6 +72,7 @@ test("a Bilibili code opens the add dialog, and adding it makes a Track that dow
   page,
 }) => {
   const dialog = await lookUp(page, "BV1Xx41117Tz");
+  await dialog.getByRole("checkbox", { name: "Edit titles and artists" }).check();
   await expect(dialog.getByText("【MV】Night Drive")).toBeVisible();
   await expect(dialog.getByRole("textbox", { name: "Title of part 1" })).toHaveValue("Night Drive");
 
@@ -86,6 +89,7 @@ test("a Bilibili code opens the add dialog, and adding it makes a Track that dow
 
 test("a failed Download says so, and the file added by hand plays", async ({ page }) => {
   const dialog = await lookUp(page, "https://www.bilibili.com/video/BVrefused");
+  await dialog.getByRole("checkbox", { name: "Edit titles and artists" }).check();
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await row(page, "BVrefused")
     .getByRole("button", { name: /^Download failed/ })
@@ -161,6 +165,7 @@ test("at phone, small phone, and laptop widths the add dialogs never scroll side
     await unreadable.getByRole("button", { name: "Close" }).click();
 
     const read = await lookUp(page, "https://www.bilibili.com/video/BV17x411w7KC");
+    await read.getByRole("checkbox", { name: "Edit titles and artists" }).check();
     await expect(read.getByRole("textbox", { name: "Title of part 3" })).toBeVisible();
     expect(await sideways(), `a video that was read, ${String(width)} wide`).toBe(false);
     expect(await dialogSideways("Add from Bilibili")).toBe(false);
@@ -168,6 +173,7 @@ test("at phone, small phone, and laptop widths the add dialogs never scroll side
   }
 
   const read = await lookUp(page, "https://www.bilibili.com/video/BV17x411w7KC");
+  await read.getByRole("checkbox", { name: "Edit titles and artists" }).check();
   await read.getByRole("button", { name: "Add 3 songs" }).click();
   await expect(page.getByText("Added 3 songs. They are downloading.")).toBeVisible();
   for (const width of WIDTHS) {

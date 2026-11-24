@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AddedPart, LinkLookup, PartChoice } from "../api";
+import type { AddedPart, LinkLookup, VideoChoices } from "../api";
 import { lookupOf, unreadableLookupOf } from "../testing/server";
 import { AddLink } from "./AddLink";
 
@@ -20,8 +20,10 @@ function renderDialog(lookup: LinkLookup | Error) {
           message: "",
           result: lookup,
         });
-  const add = vi.fn((_id: number, _quality: string, parts: readonly PartChoice[]) =>
-    Promise.resolve(parts.map((part) => ({ ...FIRST, part: part.part }))),
+  const add = vi.fn((_id: number, _quality: string, parts: VideoChoices) =>
+    Promise.resolve(
+      "mode" in parts ? [FIRST] : parts.map((part) => ({ ...FIRST, part: part.part })),
+    ),
   );
   const onAdded = vi.fn();
   const onClose = vi.fn();
@@ -44,9 +46,96 @@ function renderDialog(lookup: LinkLookup | Error) {
   };
 }
 
+async function manual(lookup: LinkLookup) {
+  const opened = renderDialog(lookup);
+  await userEvent.click(
+    await within(opened.dialog).findByRole("checkbox", { name: "Edit titles and artists" }),
+  );
+  return opened;
+}
+
 describe("adding a video that was read", () => {
+  it("clears every selection and downloads only the edited part selected again", async () => {
+    const { add, dialog } = await manual(lookupOf(3));
+    const form = within(dialog);
+    await userEvent.clear(form.getByLabelText("Title of part 2"));
+    await userEvent.type(form.getByLabelText("Title of part 2"), "Side B");
+    await userEvent.clear(form.getByLabelText("Artist of part 2"));
+    await userEvent.type(form.getByLabelText("Artist of part 2"), "Trio");
+    await userEvent.click(form.getByRole("button", { name: "Deselect all" }));
+    expect(form.getByRole("button", { name: "Add" })).toBeDisabled();
+    await userEvent.click(form.getByRole("checkbox", { name: "Part 2" }));
+    expect(add).not.toHaveBeenCalled();
+    await userEvent.click(form.getByRole("button", { name: "Add" }));
+
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", [
+      { part: 2, title: "Side B", artist: "Trio" },
+    ]);
+  });
+
+  it("selects all eligible parts from a partial selection without adding or selecting taken parts", async () => {
+    const lookup = lookupOf(3);
+    const { add, dialog } = await manual({
+      ...lookup,
+      parts: lookup.parts.map((p) => (p.part === 2 ? { ...p, track_id: 12 } : p)),
+    });
+    const form = within(dialog);
+    await userEvent.click(form.getByRole("checkbox", { name: "Part 3" }));
+    await userEvent.click(form.getByRole("button", { name: "Select all" }));
+
+    expect(form.getByRole("checkbox", { name: /Part 2/ })).not.toBeChecked();
+    expect(form.getByRole("checkbox", { name: /Part 2/ })).toBeDisabled();
+    expect(form.getByRole("checkbox", { name: "Part 1" })).toBeChecked();
+    expect(form.getByRole("checkbox", { name: "Part 3" })).toBeChecked();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("downloads a whole upload without editing parts or automatically adding it", async () => {
+    const { add, dialog } = renderDialog(lookupOf(1));
+    const download = await within(dialog).findByRole("button", { name: "Download 1 file" });
+
+    expect(add).not.toHaveBeenCalled();
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+    await userEvent.click(download);
+
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", { mode: "download", parts: [1] });
+  });
+
+  it("downloads only the selected files without needing song details", async () => {
+    const { add, dialog } = renderDialog(lookupOf(3));
+    const form = within(dialog);
+
+    await userEvent.click(await form.findByRole("checkbox", { name: "Part 1: Mixtape 1" }));
+    await userEvent.click(form.getByRole("button", { name: "Download 2 files" }));
+
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", { mode: "download", parts: [2, 3] });
+  });
+
+  it("keeps the selection when grouping the chosen files under an album title and artist", async () => {
+    const { add, dialog } = renderDialog(lookupOf(3));
+    const form = within(dialog);
+    await userEvent.click(await form.findByRole("checkbox", { name: "Part 1: Mixtape 1" }));
+    await userEvent.click(form.getByRole("checkbox", { name: "Group these files in one album" }));
+    expect(form.getByRole("checkbox", { name: "Part 1: Mixtape 1" })).not.toBeChecked();
+    const album = within(dialog).getByLabelText("Album title");
+    expect(album).toHaveValue("Mixtape");
+    expect(within(dialog).getByLabelText("Album artist")).toHaveValue("");
+    await userEvent.clear(album);
+    await userEvent.type(album, "Live");
+    await userEvent.type(within(dialog).getByLabelText("Album artist"), "The Trio");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Quality"), "30216");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Download 2 files" }));
+
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "30216", {
+      mode: "album",
+      album: "Live",
+      artist: "The Trio",
+      parts: [2, 3],
+    });
+  });
+
   it("suggests the saved video's title and uploader without requesting the parts again", async () => {
-    const { load, dialog } = renderDialog(lookupOf(1));
+    const { load, dialog } = await manual(lookupOf(1));
 
     expect(await within(dialog).findByText("【MV】Night Drive")).toBeVisible();
 
@@ -60,7 +149,7 @@ describe("adding a video that was read", () => {
   });
 
   it("adds the parts chosen under the titles and artists edited, at the quality chosen", async () => {
-    const { add, onAdded, onClose, dialog } = renderDialog(lookupOf(3));
+    const { add, onAdded, onClose, dialog } = await manual(lookupOf(3));
     await within(dialog).findByText("Mixtape");
 
     await userEvent.click(within(dialog).getByRole("checkbox", { name: "Part 2" }));
@@ -89,7 +178,7 @@ describe("adding a video that was read", () => {
       ...taken,
       parts: taken.parts.map((part) => (part.part === 1 ? { ...part, track_id: 4 } : part)),
     };
-    const { dialog } = renderDialog(lookup);
+    const { dialog } = await manual(lookup);
 
     await within(dialog).findByText("Mixtape");
 
@@ -104,7 +193,7 @@ describe("adding a video that was read", () => {
       ...taken,
       parts: taken.parts.map((part) => (part.part === 1 ? { ...part, track_id: 4 } : part)),
     };
-    const { dialog } = renderDialog(lookup);
+    const { dialog } = await manual(lookup);
     await within(dialog).findByText("Mixtape");
 
     const shown = (name: string) =>
@@ -117,7 +206,7 @@ describe("adding a video that was read", () => {
   });
 
   it("will not add a chosen part with no title", async () => {
-    const { dialog } = renderDialog(lookupOf(1));
+    const { dialog } = await manual(lookupOf(1));
     await within(dialog).findByText("【MV】Night Drive");
 
     await userEvent.clear(within(dialog).getByRole("textbox", { name: "Title of part 1" }));
@@ -126,7 +215,7 @@ describe("adding a video that was read", () => {
   });
 
   it("says why when the server refuses, and stays open", async () => {
-    const { add, onClose, dialog } = renderDialog(lookupOf(1));
+    const { add, onClose, dialog } = await manual(lookupOf(1));
     add.mockRejectedValueOnce(
       new Error("medleyplay is Offline, so links wait until it is Online."),
     );
@@ -142,8 +231,9 @@ describe("adding a video that was read", () => {
     const { dialog } = renderDialog(lookupOf(1));
     await within(dialog).findByText("【MV】Night Drive");
 
-    const ways = within(dialog).getByRole("group");
+    const ways = within(dialog).getByText("Other ways to get the file").closest("details");
 
+    expect(ways).not.toBeNull();
     expect(ways).not.toHaveAttribute("open");
     expect(ways).toHaveTextContent("https://www.bilibili.com/video/BV1Xx41117Tz?p=1");
   });

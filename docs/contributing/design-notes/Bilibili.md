@@ -270,17 +270,33 @@ sequenceDiagram
   `av` code as well as a link. A video that can't be read, because it is gone,
   needs a login, or the read failed, answers `readable: false` with why instead,
   and can still be added; see [Manual downloads](Manual%20downloads.md).
-- **The client suggests a title and an artist:** the part's title for a video
+- **Parts to download** lists the parts by title and shows their lengths when
+  known. Already-added parts cannot be selected. *Select all* includes new
+  parts only, and *Deselect all* clears the selection. Downloading without
+  edits saves one audio file per selected part. Single uploads stay whole even
+  when they have chapters and *Split albums* is set to *Auto*.
+- **Group these files in one album** gives the selected files a shared album
+  title and optional album artist. Track numbers follow video order. These
+  are separate files, not [segments of one file](Segments.md). If a selected
+  part was added after the list opened, the grouped import refuses the
+  selection rather than moving or renaming an existing song.
+- **Download and album grouping** use a readable saved selection of up to
+  50 parts. Catalog entries, download Jobs, and removal of the Account's
+  lookup commit together.
+  A refusal leaves the lookup available. Jobs run after commit and retry under
+  the normal download policy; a failed transfer does not undo the album.
+- **Edit titles and artists** suggests the part's title for a video
   with several parts, otherwise the video's, with bracketed tags such as
-  `【MV】` at either end removed; the uploader is the artist. The household edits
-  both before adding.
+  `【MV】` at either end removed. The uploader is an editable artist suggestion.
+  Checking or unchecking a part keeps its edits. Nothing is added until the
+  household confirms.
 - **Adding** checks each part and the quality against the saved metadata, not
   details supplied by the client. Confirming a lookup never reads the site
   again. At most 50 parts are added at
   once, a title is 1 to 512 characters, and an artist at most 512. A video that
   couldn't be read has no details to check against, so its parts are added on
   the household's own details, at the quality `best`.
-- **Each part is one transaction:** it creates a Track and a Source, or finds
+- **In the manual picker each part is one transaction:** it creates a Track and a Source, or finds
   the existing Source by its natural key and keeps its Track. Two adds racing for
   one part meet at the Source's unique key; the loser rolls back and reads the
   winner's Track, so no Track is left without a Source.
@@ -290,8 +306,8 @@ sequenceDiagram
   returns the same Tracks and Jobs.
 - **A part already in the catalog keeps its quality,** and an *unavailable* one
   starts no Job: adding returns it as it is. Choosing another quality is step 7.
-- **No Mode yet:** the server counts as Online until step 6, so a link is always
-  read at once.
+- **Offline** refuses a new lookup or confirmation without discarding an
+  existing result. A queued Job waits for Online.
 
 ## Downloads
 

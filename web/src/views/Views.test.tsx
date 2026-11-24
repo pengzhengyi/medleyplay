@@ -779,6 +779,7 @@ describe("search", () => {
     });
     await userEvent.click(await screen.findByRole("button", { name: "Choose parts" }));
 
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Edit titles and artists" }));
     expect(await screen.findByRole("textbox", { name: "Title of part 1" })).toHaveValue(
       "Night Drive",
     );
@@ -850,19 +851,25 @@ describe("search", () => {
   });
 
   it("adds what is chosen, says so, and asks for the Tracks again", async () => {
+    const confirm = vi.fn(() => ({ body: [{ part: 1, track_id: 9, source_id: 90, job: null }] }));
     const { calls } = open("", {
       ...withBilibili(),
       "POST /api/links/lookups": { body: { id: 8, state: "succeeded", result: lookupOf(1) } },
-      "POST /api/links/lookups/8": { body: [{ part: 1, track_id: 9, source_id: 90, job: null }] },
+      "POST /api/links/lookups/8": confirm,
     });
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
     await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
     await screen.findByText("【MV】Night Drive");
     const dialog = screen.getByRole("dialog", { name: "Add from Bilibili" });
 
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Download 1 file" }));
 
     expect(await screen.findByText("Added 1 song. They are downloading.")).toBeVisible();
+    expect(confirm).toHaveBeenCalledExactlyOnceWith({
+      mode: "download",
+      parts: [1],
+      quality: "best",
+    });
     expect(calls.filter((call) => call === "GET /api/tracks")).toHaveLength(2);
     // The Downloads are read again, so the songs added show downloading at once.
     expect(calls.filter((call) => call === "GET /api/downloads")).toHaveLength(2);

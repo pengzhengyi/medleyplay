@@ -14,7 +14,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.jobs import JobKind, JobService
+from medleyplay.application.jobs import JobKind, JobService, queue_job_in
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account, AccountId
@@ -171,20 +171,30 @@ class DownloadService:
             site = row.kind
         if site not in self._plugins.available_keys().get(SOURCE_DOWNLOADER.name, []):
             return None
-        request = DownloadSource(
-            site=site,
-            video=video,
-            part=part,
-            quality=quality,
-            extensions=DOWNLOAD_EXTENSIONS,
-            max_bytes=MAX_DOWNLOAD_BYTES,
-        )
+        request = _request(site, video, part, quality)
         target = download_target(source_id)
         latest = self._jobs.latest(DOWNLOAD_KIND, target)
         if not retry_failed and latest is not None and latest.state is JobState.FAILED:
             return latest
         login = account_id if self._linked.has_valid(account_id, site) else None
         return self._jobs.submit(self._kind, target, request, account_id, login_account=login)
+
+    def queue_new_in(
+        self, db: Session, caller: Account, source: SourceRow, video: str, part: int, quality: str
+    ) -> Job | None:
+        """Queue audio for a newly inserted Source before its import commits."""
+        if source.kind not in self._plugins.available_keys().get(SOURCE_DOWNLOADER.name, []):
+            return None
+        login = caller.id if self._linked.has_valid(caller.id, source.kind) else None
+        return queue_job_in(
+            db,
+            self._kind,
+            download_target(SourceId(source.id)),
+            _request(source.kind, video, part, quality),
+            caller.id,
+            self._clock,
+            login_account=login,
+        )
 
     def sweep(self) -> None:
         """Remove every file in `downloads/` that no Download names."""
@@ -195,3 +205,14 @@ class DownloadService:
         for file in self.folder.iterdir():
             if file.name not in named:
                 file.unlink(missing_ok=True)
+
+
+def _request(site: str, video: str, part: int, quality: str) -> DownloadSource:
+    return DownloadSource(
+        site=site,
+        video=video,
+        part=part,
+        quality=quality,
+        extensions=DOWNLOAD_EXTENSIONS,
+        max_bytes=MAX_DOWNLOAD_BYTES,
+    )

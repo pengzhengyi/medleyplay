@@ -119,31 +119,7 @@ class CatalogService:
             return existing
         try:
             with self._units.begin() as db:
-                now = self._clock()
-                track = TrackRow(title=details.title, duration_ms=details.duration_ms, added_at=now)
-                db.add(track)
-                db.flush()
-                given: dict[Field, Value | None] = {
-                    Field.TITLE: details.title,
-                    Field.ARTIST: details.artist,
-                    Field.ALBUM: details.album,
-                    Field.ALBUM_ARTIST: details.album_artist,
-                    Field.TRACK_NUMBER: details.track_number,
-                    Field.DISC_NUMBER: details.disc_number,
-                    Field.YEAR: details.year,
-                    Field.GENRE: details.genre,
-                }
-                values = {field: value for field, value in given.items() if value is not None}
-                record_details(db, TrackId(track.id), origin, values, now)
-                db.add(
-                    SourceRow(
-                        track_id=track.id,
-                        kind=key.kind,
-                        locator=key.locator,
-                        details=dict(source_details or {}),
-                    )
-                )
-                added = TrackId(track.id)
+                added = TrackId(self.insert_in(db, key, details, source_details, origin).track_id)
         except IntegrityError:
             # Another request added the same Source between the lookup and the insert.
             raced = self._track_of(key)
@@ -152,6 +128,46 @@ class CatalogService:
             return raced
         self._changed("catalog")
         return added
+
+    def insert_in(
+        self,
+        db: Session,
+        key: SourceKey,
+        details: TrackDetails,
+        source_details: Mapping[str, object] | None = None,
+        origin: Origin = Origin.VIDEO,
+    ) -> SourceRow:
+        """Insert a new Track and Source in the caller's transaction."""
+        now = self._clock()
+        track = TrackRow(title=details.title, duration_ms=details.duration_ms, added_at=now)
+        db.add(track)
+        db.flush()
+        given: dict[Field, Value | None] = {
+            Field.TITLE: details.title,
+            Field.ARTIST: details.artist,
+            Field.ALBUM: details.album,
+            Field.ALBUM_ARTIST: details.album_artist,
+            Field.TRACK_NUMBER: details.track_number,
+            Field.DISC_NUMBER: details.disc_number,
+            Field.YEAR: details.year,
+            Field.GENRE: details.genre,
+        }
+        record_details(
+            db, TrackId(track.id), origin, {k: v for k, v in given.items() if v is not None}, now
+        )
+        source = SourceRow(
+            track_id=track.id,
+            kind=key.kind,
+            locator=key.locator,
+            details=dict(source_details or {}),
+        )
+        db.add(source)
+        db.flush()
+        return source
+
+    def announce_added(self) -> None:
+        """Notify readers after a batch of new Tracks commits."""
+        self._changed("catalog")
 
     def online(self) -> bool:
         """Return whether the Mode is Online, which decides what can play."""

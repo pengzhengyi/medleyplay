@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.jobs import JobKind, JobService, Lane
-from medleyplay.application.links import Added, LinkService, Lookup, PartChoice
+from medleyplay.application.links import Added, AlbumChoice, LinkService, Lookup, PartChoice
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
@@ -138,6 +138,30 @@ class VideoLookups:
         """Remove this choice and stop the lookup if it is still active."""
         with self._choices:
             self._close(me, job_id)
+
+    def import_parts(
+        self,
+        me: Account,
+        job_id: JobId,
+        quality: str,
+        album: AlbumChoice | None,
+        numbers: Sequence[int] | None,
+    ) -> list[Added]:
+        """Consume this Account's saved result only if the entire import commits."""
+        with self._choices, self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            _, row = _owned(db, me, job_id)
+            if row.result is None:
+                message = "This video has no parts ready to choose."
+                raise ConflictError(message)
+            added = self._links.import_in(
+                db, me, Resolved.model_validate(row.result), quality, album, numbers
+            )
+            db.delete(row)
+        self._jobs.announce_queued(*(p.job.id for p in added if p.job is not None))
+        self._jobs.notify(job_id)
+        self._links.announce_import()
+        return added
 
     def _close(self, me: Account, job_id: JobId) -> None:
         with self._units.begin() as db:

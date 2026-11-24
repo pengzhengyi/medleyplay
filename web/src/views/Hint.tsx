@@ -67,29 +67,38 @@ export function Hint({
   name,
   keys,
   showOnFocus = true,
+  openOnPress = false,
   children,
 }: {
   readonly name: string;
   readonly keys: readonly string[];
   /** Whether it shows when the control is reached with the keyboard, not only on hover. */
   readonly showOnFocus?: boolean;
+  readonly openOnPress?: boolean;
   readonly children: ReactElement;
 }) {
   // Typed as Radix types its trigger; the search box's is an input, which `closest` reads alike.
   const trigger = useRef<HTMLButtonElement>(null);
   const [container, setContainer] = useState<HTMLElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const onOpenChange = (next: boolean) => {
+    if (next) setContainer(trigger.current?.closest("dialog") ?? null);
+    if (openOnPress) setOpen(next);
+  };
   const hint = (
-    <Tooltip.Root
-      onOpenChange={(open) => {
-        if (open) {
-          setContainer(trigger.current?.closest("dialog") ?? null);
-        }
-      }}
-    >
+    <Tooltip.Root open={openOnPress ? open : undefined} onOpenChange={onOpenChange}>
       <Tooltip.Trigger
         ref={trigger}
         asChild
         aria-keyshortcuts={keyshortcutsOf(keys)}
+        onClick={
+          openOnPress
+            ? (event) => {
+                event.preventDefault();
+                onOpenChange(true);
+              }
+            : undefined
+        }
         // Handled, a focus doesn't open the hint.
         onFocus={
           showOnFocus

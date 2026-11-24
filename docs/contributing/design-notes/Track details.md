@@ -753,7 +753,7 @@ the records the household changes.
 - **Use** saves one household override after checking that the field is
   still missing and the candidate still applies. Edits that would change
   other shown details or a split album's songs go through **Edit details**.
-  **Leave blank** records an intentional blank; **Remove blank override**
+  **Skip** records an intentional blank; **Remove blank override**
   in the editor makes that field eligible again.
 
 A saved suggestion applies only to the same version of the Track's details.

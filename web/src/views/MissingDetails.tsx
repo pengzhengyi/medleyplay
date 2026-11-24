@@ -1,6 +1,13 @@
 /** @file Review missing artists and album names, with optional per-track AI requests. */
 
-import { useEffect, useState } from "react";
+import {
+  MusicNotesIcon,
+  SparkleIcon,
+  UserIcon,
+  UsersIcon,
+  VinylRecordIcon,
+} from "@phosphor-icons/react";
+import { useEffect, useId, useState } from "react";
 
 import {
   type CreditCandidate,
@@ -10,12 +17,20 @@ import {
   api,
 } from "../api";
 import { useWords } from "../locale";
+import { Hint } from "./Hint";
 
 const LABELS: Record<MissingField, string> = {
   artist: "Artist",
   album: "Album",
   album_artist: "Album artist",
 };
+const FIELD_ICONS = {
+  artist: UserIcon,
+  album: VinylRecordIcon,
+  album_artist: UsersIcon,
+};
+const SKIP_HELP =
+  "Skip keeps this field blank. To undo, remove the blank override in Edit details.";
 const READ_EVERY_MS = 4000;
 
 /** Read the cleanup queue only while its section is open. */
@@ -65,9 +80,11 @@ export function MissingDetails({
   return (
     <section className="card tidy-names" aria-labelledby="missing-details-title">
       <h3 id="missing-details-title">{t("Missing artist or album")}</h3>
-      <p className="tidy-lead">
-        {t("Choose a suggestion, edit the details, or leave a field blank.")}
-      </p>
+      {!!page?.tracks.length && (
+        <p id="missing-details-skip-help" className="tidy-meta missing-details-skip-help">
+          {t(SKIP_HELP)}
+        </p>
+      )}
       {page?.tracks.some((track) =>
         ["ready", "working", "answered", "failed"].includes(track.ai),
       ) && (
@@ -164,65 +181,27 @@ function ReviewTrack({
   );
   return (
     <li className="missing-details-track">
-      <h4>{track.title || t("Untitled track")}</h4>
-      <p className="tidy-meta">
-        {[track.kind === "album" ? t("Album file") : t("Song"), track.artist, track.album]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
-      {track.fields.map(({ field, candidates }) => (
-        <div key={field} className="missing-details-field">
-          <strong>{t(LABELS[field])}</strong>
-          {candidates.map((candidate) => (
-            <div
-              className="missing-details-candidate"
-              key={`${candidate.origin}:${candidate.value}`}
-            >
-              <span>
-                {candidate.value}{" "}
-                <small className="tidy-meta">
-                  {candidate.origin === "ai" ? t("Suggested by AI") : t("From your Library")}
-                </small>
-              </span>
-              <button
-                type="button"
-                className="secondary outline"
-                disabled={busy !== ""}
-                aria-busy={busy === `${field}:${candidate.value}`}
-                aria-label={t("Use {{value}} for {{field}}", {
-                  value: candidate.value,
-                  field: t(LABELS[field]),
-                })}
-                onClick={() => void decide(field, candidate)}
-              >
-                {t("Use")}
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="link-button"
-            disabled={busy !== ""}
-            aria-busy={busy === `${field}:`}
-            aria-label={t("Leave {{field}} blank", { field: t(LABELS[field]) })}
-            onClick={() => void decide(field)}
-          >
-            {t("Leave blank")}
-          </button>
-        </div>
-      ))}
-      <div className="missing-details-actions">
-        <button
-          type="button"
-          className="secondary outline"
-          disabled={busy !== ""}
-          onClick={() => {
+      <div className="missing-details-heading">
+        <h4>{track.title || t("Untitled track")}</h4>
+        <em className="tidy-meta">
+          {[track.kind === "album" ? t("Album file") : t("Song"), track.artist, track.album]
+            .filter(Boolean)
+            .join(" · ")}
+        </em>
+      </div>
+      {track.fields.map((detail) => (
+        <ReviewField
+          key={detail.field}
+          detail={detail}
+          busy={busy}
+          onDecide={(candidate) => void decide(detail.field, candidate)}
+          onEdit={() => {
             onEdit(track.track_id);
           }}
-        >
-          {t("Edit details")}
-        </button>
-        {(askable || track.ai === "working" || busy === "ask") && (
+        />
+      ))}
+      {(askable || track.ai === "working" || busy === "ask") && (
+        <div className="missing-details-actions">
           <button
             type="button"
             className="secondary outline"
@@ -233,8 +212,8 @@ function ReviewTrack({
           >
             {track.ai === "failed" || track.ai === "answered" ? t("Ask again") : t("Ask AI")}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {track.ai === "failed" && <p className="tidy-meta">{t("AI could not suggest details.")}</p>}
       {track.ai === "answered" && !hasAi && (
         <p className="tidy-meta">{t("AI had no additional suggestions.")}</p>
@@ -249,6 +228,147 @@ function ReviewTrack({
       )}
     </li>
   );
+}
+
+function ReviewField({
+  detail: { field, candidates },
+  busy,
+  onDecide,
+  onEdit,
+}: {
+  readonly detail: MissingDetailsItem["fields"][number];
+  readonly busy: string;
+  readonly onDecide: (candidate?: CreditCandidate) => void;
+  readonly onEdit: () => void;
+}) {
+  const t = useWords();
+  const group = useId();
+  const [picked, setPicked] = useState<string>();
+  const only = candidates.length === 1 ? candidates[0] : undefined;
+  const candidate = only ?? candidates.find((item) => candidateKey(item) === picked);
+  const label = t(LABELS[field]);
+  const Mark = FIELD_ICONS[field];
+  const actions = (
+    <div className="missing-details-actions missing-details-field-actions">
+      {candidates.length > 0 && (
+        <button
+          type="button"
+          className="dialog-button missing-details-decision"
+          disabled={candidate === undefined}
+          aria-busy={candidate !== undefined && busy === `${field}:${candidate.value}`}
+          aria-label={
+            candidate === undefined
+              ? t("Use")
+              : t("Use {{value}} for {{field}}", {
+                  value: candidate.value,
+                  field: label,
+                })
+          }
+          onClick={() => {
+            if (candidate !== undefined) onDecide(candidate);
+          }}
+        >
+          {t("Use")}
+        </button>
+      )}
+      <button
+        type="button"
+        className="secondary outline dialog-button missing-details-decision"
+        aria-label={t("Edit details")}
+        onClick={onEdit}
+      >
+        {t("Edit")}
+      </button>
+      <Hint name={t(SKIP_HELP)} keys={[]}>
+        <button
+          type="button"
+          className="secondary outline dialog-button missing-details-decision"
+          aria-busy={busy === `${field}:`}
+          aria-label={t("Skip {{field}}", { field: label })}
+          aria-describedby="missing-details-skip-help"
+          onClick={() => {
+            onDecide();
+          }}
+        >
+          {t("Skip")}
+        </button>
+      </Hint>
+    </div>
+  );
+  return (
+    <fieldset className="missing-details-field" disabled={busy !== ""}>
+      <legend className={only === undefined ? undefined : "visually-hidden"}>{label}</legend>
+      <div className="missing-details-field-row">
+        {only !== undefined ? (
+          <span className="missing-details-suggestion">
+            <span className="missing-details-mark" title={label} aria-hidden>
+              <Mark size={16} />
+            </span>
+            <span className="missing-details-candidate">{only.value}</span>
+            <CandidateSource origin={only.origin} />
+          </span>
+        ) : candidates.length > 0 ? (
+          <div className="missing-details-options">
+            {candidates.map((item, index) => {
+              const key = candidateKey(item);
+              const source = `${group}-source-${String(index)}`;
+              return (
+                <div className="missing-details-option" key={key}>
+                  <label className="missing-details-choice">
+                    <input
+                      type="radio"
+                      className="missing-details-radio"
+                      name={group}
+                      aria-describedby={source}
+                      checked={picked === key}
+                      onChange={() => {
+                        setPicked(key);
+                      }}
+                    />
+                    <span className="missing-details-candidate">{item.value}</span>
+                  </label>
+                  <CandidateSource origin={item.origin} descriptionId={source} />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="tidy-meta">{t("No suggestion yet")}</p>
+        )}
+        {actions}
+      </div>
+    </fieldset>
+  );
+}
+
+function CandidateSource({
+  origin,
+  descriptionId,
+}: {
+  readonly origin: CreditCandidate["origin"];
+  readonly descriptionId?: string;
+}) {
+  const t = useWords();
+  const name = t(origin === "ai" ? "Suggested by AI" : "Already in Library");
+  const Icon = origin === "ai" ? SparkleIcon : MusicNotesIcon;
+  return (
+    <>
+      <Hint name={name} keys={[]} openOnPress>
+        <button type="button" className="missing-details-source" aria-label={name}>
+          <Icon size={16} aria-hidden />
+        </button>
+      </Hint>
+      {descriptionId !== undefined && (
+        <span id={descriptionId} hidden>
+          {name}
+        </span>
+      )}
+    </>
+  );
+}
+
+function candidateKey(candidate: CreditCandidate): string {
+  return `${candidate.origin}:${candidate.value}`;
 }
 
 function messageOf(failure: unknown): string {

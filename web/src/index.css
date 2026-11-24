@@ -1910,6 +1910,35 @@ button[aria-disabled="true"] {
   background: var(--muted);
 }
 
+.usage-meter {
+  position: relative;
+}
+
+.kept-estimate {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  height: 2px;
+}
+
+.kept-estimate:where([data-highlighted]) {
+  height: 4px;
+}
+
+.meter .kept-estimate,
+.swatch.kept {
+  background: #9570bd;
+}
+
+:where(.usage-meter, .storage-composition-meter)[data-highlighting]
+  :where(span:not([data-highlighted])) {
+  opacity: 0.3;
+}
+
+:where(.usage-meter, .storage-composition-meter)[data-highlighting] :where(span[data-highlighted]) {
+  min-inline-size: 2px;
+}
+
 .legend {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
@@ -1946,21 +1975,28 @@ button[aria-disabled="true"] {
   border-radius: 999px;
 }
 
+.legend .swatch {
+  flex: none;
+  align-self: flex-start;
+  margin-block-start: calc((1lh - 0.6rem) / 2);
+}
+
 .storage-inspection {
-  padding-top: 0.85rem;
-  margin-top: 1rem;
-  border-top: 1px solid var(--line);
+  padding-bottom: 0.85rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+  container-type: inline-size;
 }
 
 .storage-inspection [role="status"]:empty {
   margin: 0;
 }
 
-.storage-composition[data-outdated] {
+.storage-inspection[data-outdated] :where(.usage-total, .storage-panel) {
   color: var(--muted);
 }
 
-.storage-composition[data-outdated] :where(.storage-composition-meter, .swatch) {
+.storage-inspection[data-outdated] :where(.storage-composition-meter, .swatch) {
   opacity: 0.6;
 }
 
@@ -1981,17 +2017,12 @@ button[aria-disabled="true"] {
   gap: 0.5rem;
 }
 
-.storage-composition-heading h4 {
+.download-usage-heading,
+.storage-composition-heading :is(h4, h5),
+.storage-startup h6 {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 650;
-}
-
-.storage-composition-actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 0.15rem;
 }
 
 .storage-inspect {
@@ -2001,19 +2032,55 @@ button[aria-disabled="true"] {
   font-size: 0.85rem;
 }
 
+.storage-meter-button {
+  display: block;
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.storage-meter-button:is(:hover, :focus) {
+  background: transparent;
+}
+
+.storage-meter-button:hover .meter {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.storage-panel {
+  margin-top: 0.45rem;
+}
+
 .storage-composition-legend {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-  margin-bottom: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0.2rem 0 0.75rem;
+}
+
+@container (width >= 34rem) {
+  .storage-composition-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .storage-composition-legend > div {
   align-items: flex-start;
+  gap: 0.65rem;
 }
 
-.storage-composition-legend .swatch {
-  flex: none;
-  align-self: flex-start;
-  margin-block-start: calc((1lh - 0.6rem) / 2);
+.storage-composition-legend dt {
+  min-width: 0;
+}
+
+.storage-label-cut {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .storage-composition-meter span,
@@ -2051,6 +2118,49 @@ button[aria-disabled="true"] {
   margin-inline-start: 0.35rem;
   color: var(--muted);
   text-align: end;
+}
+
+.storage-startup {
+  padding-top: 0.85rem;
+  margin-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.storage-flags {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0;
+  margin: 0.65rem 0 0;
+}
+
+.storage-flags li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.7rem;
+  list-style: none;
+}
+
+.storage-flag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.storage-flag input[type="radio"] {
+  flex: none;
+  margin: 0;
+}
+
+.storage-flag-state {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.storage-flags .hint {
+  grid-column: 1 / -1;
+  margin: 0.1rem 0 0 1.6rem;
 }
 
 .limit {
@@ -7070,13 +7180,12 @@ button.enricher-reset {
   font-size: 0.8rem;
 }
 
-/* Where the Downloads are kept: a quiet line, its path to copy, and Finder on the server's Mac. */
-.downloads-folder,
+.storage-folder,
 .keep-downloaded {
   margin: 0 0 0.75rem;
 }
 
-.downloads-folder {
+.storage-folder {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -7085,18 +7194,18 @@ button.enricher-reset {
   font-size: 0.85rem;
 }
 
-.downloads-folder-path {
+.storage-folder-path {
   overflow-wrap: anywhere;
   color: var(--ink);
 }
 
-.downloads-folder-show {
+.storage-folder-show {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
 }
 
-.downloads-folder .error {
+.storage-folder .error {
   flex-basis: 100%;
   margin: 0;
 }
@@ -7192,23 +7301,6 @@ kbd {
   line-height: 1.3;
   gap: 0.55rem;
   animation: hint-in 120ms ease-out;
-}
-
-.control-hint.storage-settings-tip {
-  display: grid;
-  padding: 0.55rem 0.75rem;
-  gap: 0.4rem;
-}
-
-.storage-settings-tip dl,
-.storage-settings-tip dd {
-  margin: 0;
-}
-
-.storage-settings-tip :where(dl) > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.85rem;
 }
 
 .keys {

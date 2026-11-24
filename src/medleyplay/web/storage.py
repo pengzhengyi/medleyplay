@@ -1,6 +1,6 @@
 """The storage API: the space Downloads use, what the policy wants, and a plan at another limit.
 
-Also the folder the Downloads are kept in, which Finder shows on the server's own Mac.
+Also the Downloads and server data folders, which Finder shows on the server's own Mac.
 """
 
 from collections.abc import Mapping
@@ -11,6 +11,7 @@ from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import BaseModel
 
 from medleyplay.application.policy import Evaluation, Storage
+from medleyplay.application.storage_folder import FolderScope
 from medleyplay.application.storage_inspection import Inspection
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.policy import Plan, Remove, Shortfall
@@ -163,7 +164,7 @@ def inspect_storage(
 
 
 class FolderOut(BaseModel):
-    """Where the Downloads folder is, from `~` where it is in the home folder."""
+    """Where the selected folder is, from `~` when it is in the home folder."""
 
     path: str
     can_show: bool
@@ -174,13 +175,26 @@ def _on_this_machine(request: Request) -> bool:
 
 
 @router.get("/folder")
-def get_folder(request: Request, me: SignedInAccount, folder: StorageFolderDep) -> FolderOut:
-    """Return where the Downloads folder is, and whether you may have Finder show it."""
-    where = folder.where(me, local=_on_this_machine(request))
+def get_folder(
+    request: Request,
+    me: SignedInAccount,
+    folder: StorageFolderDep,
+    response: Response,
+    scope: FolderScope = "downloads",
+) -> FolderOut:
+    """Return where the selected folder is, and whether Finder can show it."""
+    where = folder.where(me, local=_on_this_machine(request), scope=scope)
+    if scope == "server":
+        response.headers["Cache-Control"] = "private, no-store"
     return FolderOut(path=where.path, can_show=where.can_show)
 
 
 @router.post("/folder/show", status_code=status.HTTP_204_NO_CONTENT)
-def show_folder(request: Request, me: SignedInAccount, folder: StorageFolderDep) -> None:
-    """Have Finder show the Downloads folder: an admin's, from the Mac the server runs on."""
-    folder.show(me, local=_on_this_machine(request))
+def show_folder(
+    request: Request,
+    me: SignedInAccount,
+    folder: StorageFolderDep,
+    scope: FolderScope = "downloads",
+) -> None:
+    """Have Finder show the selected folder for a local admin."""
+    folder.show(me, local=_on_this_machine(request), scope=scope)

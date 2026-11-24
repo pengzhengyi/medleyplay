@@ -30,8 +30,9 @@ import {
   visibleSettingsSections,
 } from "../library/settingsSections";
 import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
-import { DownloadsFolder } from "./DownloadsFolder";
+import { StorageFolderLocation } from "./StorageFolderLocation";
 import { ServerStorage } from "./ServerStorage";
+import { useStorageLegend } from "./useStorageLegend";
 import { AccentPicker } from "./AccentPicker";
 import { DynamicsSwitch } from "./DynamicsSwitch";
 import { AiNotesSettings } from "./AiNotesSettings";
@@ -220,7 +221,12 @@ export function SettingsView({
       </>
     ),
     ratings: <RatingsSettings onChanged={onRatingsChanged} />,
-    storage: <StorageSettings admin={admin} settings={household} onSettings={keepNewest} />,
+    storage: (
+      <>
+        {admin && !folded.has("storage") && <ServerStorage />}
+        <StorageSettings admin={admin} settings={household} onSettings={keepNewest} />
+      </>
+    ),
     bilibili: (
       <>
         <BilibiliSettings />
@@ -510,8 +516,9 @@ function StorageSettings({
         )
       ) : (
         <>
+          {admin && <h4 className="download-usage-heading">Download usage</h4>}
           <Usage storage={storage} />
-          <DownloadsFolder />
+          <StorageFolderLocation />
           {admin ? (
             <form
               className="limit"
@@ -605,13 +612,13 @@ function StorageSettings({
           </p>
         </>
       )}
-      {admin && <ServerStorage />}
     </>
   );
 }
 
 /** What the Downloads and cache use, against the limit or the disk. */
 function Usage({ storage }: { readonly storage: Storage }) {
+  const legend = useStorageLegend<"downloads" | "cache" | "reserved" | "kept">();
   if (storage.error !== null) {
     return <p role="alert">{storage.error}</p>;
   }
@@ -622,6 +629,8 @@ function Usage({ storage }: { readonly storage: Storage }) {
   const room = storage.limit ?? used + (storage.free ?? 0);
   const share = (bytes: number) => `${String(room > 0 ? Math.min((bytes / room) * 100, 100) : 0)}%`;
   const last = storage.last_evaluation;
+  const amounts = { downloads, cache, reserved, kept: storage.wanted ?? 0 };
+  const highlighting = legend.active !== undefined && amounts[legend.active] > 0;
   return (
     <div className="usage">
       <p className="usage-total">
@@ -630,13 +639,25 @@ function Usage({ storage }: { readonly storage: Storage }) {
           ? `used, ${formatBytes(storage.free ?? 0)} free on this disk`
           : `of ${formatBytes(storage.limit)} used`}
       </p>
-      <div className="meter" aria-hidden>
-        <span className="downloads" style={{ width: share(downloads) }} />
-        <span className="cache" style={{ width: share(cache) }} />
-        <span className="reserved" style={{ width: share(reserved) }} />
+      <div className="meter usage-meter" data-highlighting={highlighting || undefined} aria-hidden>
+        {(["downloads", "cache", "reserved"] as const).map((key) => (
+          <span
+            key={key}
+            className={key}
+            data-highlighted={legend.active === key || undefined}
+            style={{ width: share(amounts[key]) }}
+          />
+        ))}
+        {amounts.kept > 0 && (
+          <span
+            className="kept-estimate"
+            data-highlighted={legend.active === "kept" || undefined}
+            style={{ width: share(amounts.kept) }}
+          />
+        )}
       </div>
       <dl className="legend">
-        <div>
+        <div {...legend.entry("downloads")}>
           <dt>
             <span className="swatch downloads" aria-hidden />
             <a href={hrefOf({ view: "downloaded" })} title="Show the songs downloaded">
@@ -645,15 +666,15 @@ function Usage({ storage }: { readonly storage: Storage }) {
           </dt>
           <dd>{formatBytes(downloads)}</dd>
         </div>
-        <div>
+        <div {...legend.entry("cache")}>
           <dt>
             <span className="swatch cache" aria-hidden />
-            Prepared copies
+            <span tabIndex={0}>Prepared copies</span>
           </dt>
           <dd>{formatBytes(cache)}</dd>
         </div>
         {reserved > 0 && (
-          <div>
+          <div {...legend.entry("reserved")}>
             <dt>
               <span className="swatch reserved" aria-hidden />
               <a href={hrefOf({ view: "downloaded" })} title="Show the songs downloading">
@@ -664,9 +685,15 @@ function Usage({ storage }: { readonly storage: Storage }) {
           </div>
         )}
         {storage.wanted !== null && (
-          <div>
-            <dt title="The songs of the Playlists set to Keep downloaded: what their Downloads use, and an estimate for those not downloaded yet">
-              Playlists kept downloaded
+          <div {...legend.entry("kept")}>
+            <dt>
+              <span className="swatch kept" aria-hidden />
+              <span
+                tabIndex={0}
+                title="The songs of the Playlists set to Keep downloaded: what their Downloads use, and an estimate for those not downloaded yet"
+              >
+                Playlists kept downloaded
+              </span>
             </dt>
             <dd>{formatBytes(storage.wanted)}</dd>
           </div>

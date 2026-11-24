@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { serve } from "../testing/server";
-import { DownloadsFolder } from "./DownloadsFolder";
+import { StorageFolderLocation } from "./StorageFolderLocation";
 
 const FOLDER = "GET /api/storage/folder";
 const SHOW = "POST /api/storage/folder/show";
@@ -18,7 +18,7 @@ describe("the Downloads folder", () => {
     serve({ [FOLDER]: { body: { path: PATH, can_show: false } } });
     const writeText = vi.fn(() => Promise.resolve());
     vi.stubGlobal("navigator", { clipboard: { writeText } });
-    render(<DownloadsFolder />);
+    render(<StorageFolderLocation />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Copy the folder's path" }));
 
@@ -29,7 +29,7 @@ describe("the Downloads folder", () => {
 
   it("offers no Show in Finder where the server says it can't", async () => {
     serve({ [FOLDER]: { body: { path: PATH, can_show: false } } });
-    render(<DownloadsFolder />);
+    render(<StorageFolderLocation />);
 
     await screen.findByText(PATH);
 
@@ -45,7 +45,7 @@ describe("the Downloads folder", () => {
         return { status: 204 };
       },
     });
-    render(<DownloadsFolder />);
+    render(<StorageFolderLocation />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Show in Finder" }));
 
@@ -57,7 +57,7 @@ describe("the Downloads folder", () => {
       [FOLDER]: { body: { path: PATH, can_show: true } },
       [SHOW]: { status: 409, body: { detail: "Finder could not show the Downloads folder." } },
     });
-    render(<DownloadsFolder />);
+    render(<StorageFolderLocation />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Show in Finder" }));
 

@@ -1,18 +1,20 @@
-"""The folder Downloads are kept in: where it is, and showing it in Finder on the server's Mac.
+"""Where medleyplay keeps its files, and showing those folders on the server's Mac.
 
-Anyone signed in may read where the folder is. Only an admin whose request comes from
-the Mac medleyplay runs on may have Finder show it, since Finder opens on that Mac's
-screen; the folder shown is always this one, never a path a request names.
+Anyone signed in may read where Downloads are kept. Only admins see the server data
+folder, and only from the server's Mac can they have Finder show either folder.
 """
 
 import subprocess  # nosec B404 -- runs only macOS's `open`, never a shell
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.downloads import DOWNLOADS_FOLDER
 from medleyplay.domain.errors import ConflictError, ForbiddenError
 
+type FolderScope = Literal["downloads", "server"]
 type ShowFolder = Callable[[Path], None]
 """Shows a folder in Finder; raises `OSError` or `subprocess.SubprocessError` when it can't."""
 
@@ -23,7 +25,7 @@ SHOW_TIMEOUT = 10
 
 @dataclass(frozen=True)
 class FolderShown:
-    """Where the Downloads folder is, from the home folder where it is inside it."""
+    """Where the folder is, starting at `~` when it is in the home folder."""
 
     path: str
     can_show: bool
@@ -38,36 +40,47 @@ def show_in_finder(folder: Path) -> None:
 
 
 class StorageFolder:
-    """The Downloads folder, and Finder to show it in where the server runs on a Mac."""
+    """The server's fixed data and Downloads folders, with local Finder access."""
 
-    def __init__(self, folder: Path, show: ShowFolder | None, *, home: Path) -> None:
-        """Name `folder`, shown by `show`, or by nothing when `None`; paths in `home` start `~`."""
-        self._folder = folder
+    def __init__(self, data_dir: Path, show: ShowFolder | None, *, home: Path) -> None:
+        """Use `data_dir` and its Downloads folder, or no Finder when `show` is `None`."""
+        self._data_dir = data_dir
         self._show = show
         self._home = home
 
-    def where(self, caller: Account, *, local: bool) -> FolderShown:
+    def where(
+        self, caller: Account, *, local: bool, scope: FolderScope = "downloads"
+    ) -> FolderShown:
         """Return where the folder is, and whether `caller`, here if `local`, may show it."""
-        if self._folder.is_relative_to(self._home):
-            path = f"~/{self._folder.relative_to(self._home).as_posix()}"
-        else:
-            path = self._folder.as_posix()
+        if scope == "server" and not caller.is_admin:
+            message = "Only an admin may read the server storage folder."
+            raise ForbiddenError(message)
+        folder = self._path(scope)
+        path = folder.as_posix()
+        if folder.is_relative_to(self._home):
+            relative = folder.relative_to(self._home)
+            path = f"~/{relative.as_posix()}" if relative.parts else "~"
         return FolderShown(path, self._may_show(caller, local=local))
 
-    def show(self, caller: Account, *, local: bool) -> None:
-        """Have Finder show the folder, making it first if no Download has yet."""
+    def show(self, caller: Account, *, local: bool, scope: FolderScope = "downloads") -> None:
+        """Have Finder show the selected folder, making it first if missing."""
+        name = "server storage folder" if scope == "server" else "Downloads folder"
         if not caller.is_admin:
-            message = "Only an admin may show the Downloads folder."
+            message = f"Only an admin may show the {name}."
             raise ForbiddenError(message)
         if self._show is None or not local:
-            message = "The Downloads folder shows in Finder only on the Mac medleyplay runs on."
+            message = f"Show the {name} in Finder only on the Mac medleyplay runs on."
             raise ConflictError(message)
+        folder = self._path(scope)
         try:
-            self._folder.mkdir(parents=True, exist_ok=True)
-            self._show(self._folder)
+            folder.mkdir(parents=True, exist_ok=True)
+            self._show(folder)
         except (OSError, subprocess.SubprocessError) as error:
-            message = "Finder could not show the Downloads folder."
+            message = f"Finder could not show the {name}."
             raise ConflictError(message) from error
+
+    def _path(self, scope: FolderScope) -> Path:
+        return self._data_dir if scope == "server" else self._data_dir / DOWNLOADS_FOLDER
 
     def _may_show(self, caller: Account, *, local: bool) -> bool:
         return caller.is_admin and local and self._show is not None

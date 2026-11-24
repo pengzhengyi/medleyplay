@@ -383,7 +383,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs, changes.tell),
         lyrics_match=LyricsMatchService(units, plugins, jobs, match_jobs.find),
         storage_folder=StorageFolder(
-            downloads.folder,
+            data_dir,
             show_in_finder if sys.platform == "darwin" else None,
             home=Path.home(),
         ),

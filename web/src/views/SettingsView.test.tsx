@@ -32,6 +32,19 @@ const USING_2: Storage = {
   preview: null,
 };
 
+const MEASURED: StorageInspection = {
+  downloads: 250,
+  cache: 0,
+  covers: 500,
+  thumbnails: 0,
+  database: 125,
+  database_companions: 0,
+  configuration: 125,
+  multiple_accounts: true,
+  safe_mode: false,
+  wal_enabled: true,
+};
+
 function open(
   admin: boolean,
   routes: Routes = {},
@@ -78,6 +91,7 @@ function serveSettings(
     "GET /api/settings": { body: LIMIT_20 },
     "GET /api/image-search": { body: { configured: false } },
     "GET /api/storage": { body: USING_2 },
+    "GET /api/storage/inspection": { body: MEASURED },
     "GET /api/proxies/bilibili": { body: null },
     "GET /api/enrichers/bilibili-details": {
       body: enricherOf("bilibili-details", [1, 2]),
@@ -510,33 +524,22 @@ describe("the Deezer section", () => {
 });
 
 describe("storage settings", () => {
-  const measured: StorageInspection = {
-    downloads: 250,
-    cache: 0,
-    covers: 500,
-    thumbnails: 0,
-    database: 125,
-    database_companions: 0,
-    configuration: 125,
-    multiple_accounts: true,
-    safe_mode: false,
-    wal_enabled: true,
-  };
-
-  it("measures server files only when an admin asks, separately from the limit", async () => {
-    const read = vi.fn(() => ({ body: measured }));
+  it("shows all occupied managed files before the download limit and opens the breakdown from either control", async () => {
+    const read = vi.fn(() => ({ body: MEASURED }));
     open(true, { "GET /api/storage/inspection": read });
+    const user = userEvent.setup();
+    const overview = within(storage().getByRole("region", { name: "Server storage" }));
+    const meter = overview.getByRole("button", { name: "Occupied space" });
+    const inspect = overview.getByRole("button", { name: "Inspect server storage" });
 
-    const inspect = await storage().findByRole("button", { name: "Inspect server storage" });
-    expect(read).not.toHaveBeenCalled();
-    await userEvent.click(inspect);
+    expect(await overview.findByText("1 KB")).toBeVisible();
+    expect(meter).toHaveAttribute("aria-expanded", "false");
+    expect(overview.queryByRole("region", { name: "Storage composition" })).toBeNull();
+    expect(storage().getByText(/of 20 GB used/u)).toBeVisible();
+    await user.click(meter);
 
-    const composition = within(
-      await storage().findByRole("region", { name: "Storage composition" }),
-    );
+    const composition = within(overview.getByRole("region", { name: "Storage composition" }));
     expect(composition.getByRole("button", { name: "Refresh server storage" })).toBeVisible();
-    expect(storage().queryByRole("button", { name: "Inspect server storage" })).toBeNull();
-    expect(composition.getByText("1 KB")).toBeVisible();
     expect(composition.getByText("Original artwork").closest("div")).toHaveTextContent(
       /500 bytes.*50%/u,
     );
@@ -546,21 +549,53 @@ describe("storage settings", () => {
     expect(composition.getByText("Prepared audio cache").closest("div")).toHaveTextContent(
       /0 bytes.*0%/u,
     );
-    expect(storage().getByText(/of 20 GB used/u)).toBeVisible();
+    expect(inspect).toHaveAttribute("aria-expanded", "true");
+    await user.click(meter);
+    await user.click(overview.getByRole("button", { name: "Inspect server storage" }));
+
+    expect(overview.getByRole("region", { name: "Storage composition" })).toBeVisible();
     expect(read).toHaveBeenCalledTimes(1);
   });
 
-  it("shows startup settings at the gear on hover and hides them with Escape", async () => {
-    open(true, { "GET /api/storage/inspection": { body: measured } });
+  it("offers the server storage folder without opening the Downloads folder", async () => {
+    const { calls } = open(true, {
+      "GET /api/storage/folder?scope=server": {
+        body: { path: "~/Library/Application Support/medleyplay", can_show: true },
+      },
+      "POST /api/storage/folder/show?scope=server": { status: 204 },
+    });
+    const overview = within(storage().getByRole("region", { name: "Server storage" }));
+    const show = await overview.findByRole("button", { name: "Show server storage in Finder" });
+
+    await userEvent.click(show);
+
+    expect(overview.getByText("~/Library/Application Support/medleyplay")).toBeVisible();
+    expect(calls).toContain("POST /api/storage/folder/show?scope=server");
+    expect(calls).not.toContain("POST /api/storage/folder/show");
+  });
+
+  it("shows SQLite's full label on hover, and lists startup settings as read-only statuses", async () => {
+    open(true);
     const user = userEvent.setup();
     await user.click(await storage().findByRole("button", { name: "Inspect server storage" }));
-    const gear = await storage().findByRole("button", { name: "Server settings at startup" });
+    const sqlite = await storage().findByText("SQLite journals and shared memory");
+    const startup = within(storage().getByRole("list", { name: "Server settings at startup" }));
+    const accounts = startup.getByRole("radio", { name: "Multiple accounts" });
+    const safeMode = startup.getByRole("radio", { name: "Plugin safe mode" });
+    const wal = startup.getByRole("radio", { name: "SQLite write-ahead logging" });
 
+    expect(accounts).toBeChecked();
+    expect(safeMode).not.toBeChecked();
+    expect(wal).toBeChecked();
+    for (const indicator of [accounts, safeMode, wal]) {
+      expect(indicator).toBeDisabled();
+    }
+    expect(wal).toHaveAccessibleDescription(/journal and shared-memory files/u);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    await user.hover(gear);
+    await user.hover(sqlite);
 
     const tip = await screen.findByRole("tooltip");
-    expect(tip).toHaveTextContent(/Multiple accounts: on.*SQLite write-ahead logging: on/u);
+    expect(tip).toHaveAccessibleName("SQLite journals and shared memory");
 
     await user.keyboard("{Escape}");
     await waitFor(() => {
@@ -575,34 +610,32 @@ describe("storage settings", () => {
     });
     const inspect = vi
       .fn()
-      .mockReturnValueOnce({ body: measured })
-      .mockReturnValueOnce({ body: { ...measured, downloads: 1_250 }, after: waiting });
+      .mockReturnValueOnce({ body: MEASURED })
+      .mockReturnValueOnce({ body: { ...MEASURED, downloads: 1_250 }, after: waiting });
     open(true, { "GET /api/storage/inspection": inspect });
     const user = userEvent.setup();
     await user.click(await storage().findByRole("button", { name: "Inspect server storage" }));
-    const composition = within(
-      await storage().findByRole("region", { name: "Storage composition" }),
-    );
-    const button = composition.getByRole("button", { name: "Refresh server storage" });
+    const overview = within(storage().getByRole("region", { name: "Server storage" }));
+    const button = await overview.findByRole("button", { name: "Refresh server storage" });
 
     await user.click(button);
 
     expect(storage().getByText("Measuring server storage…")).toHaveAttribute("role", "status");
     expect(button).toBeDisabled();
-    expect(composition.getByText("1 KB")).toBeVisible();
-    expect(composition.getByText("Outdated")).toBeVisible();
+    expect(overview.getByText("1 KB")).toBeVisible();
+    expect(overview.getByText("Outdated")).toBeVisible();
 
     finish();
 
-    expect(await composition.findByText("2 KB")).toBeVisible();
-    expect(composition.queryByText("Outdated")).not.toBeInTheDocument();
+    expect(await overview.findByText("2 KB")).toBeVisible();
+    expect(overview.queryByText("Outdated")).not.toBeInTheDocument();
     expect(button).toBeEnabled();
   });
 
   it("keeps an outdated measurement available when the refresh fails", async () => {
     let fail = false;
     open(true, {
-      "GET /api/storage/inspection": () => (fail ? { status: 409 } : { body: measured }),
+      "GET /api/storage/inspection": () => (fail ? { status: 409 } : { body: MEASURED }),
     });
     const user = userEvent.setup();
     await user.click(await storage().findByRole("button", { name: "Inspect server storage" }));
@@ -615,6 +648,22 @@ describe("storage settings", () => {
     expect(storage().getByText("1 KB")).toBeVisible();
     expect(storage().getByText("Outdated")).toBeVisible();
     expect(button).toBeEnabled();
+  });
+
+  it("can retry when no occupied-space measurement is available", async () => {
+    const inspect = vi
+      .fn()
+      .mockReturnValueOnce({ status: 409 })
+      .mockReturnValueOnce({ body: MEASURED });
+    open(true, { "GET /api/storage/inspection": inspect });
+    const overview = within(storage().getByRole("region", { name: "Server storage" }));
+    const user = userEvent.setup();
+    expect(await overview.findByRole("alert")).toHaveTextContent("Could not measure storage");
+
+    await user.click(overview.getByRole("button", { name: "Retry" }));
+
+    expect(await overview.findByText("1 KB")).toBeVisible();
+    expect(overview.queryByRole("alert")).toBeNull();
   });
 
   it("shows what the Downloads and prepared copies use against the limit", async () => {
@@ -636,6 +685,7 @@ describe("storage settings", () => {
       "The songs of the Playlists set to Keep downloaded: what their Downloads use, and an estimate for those not downloaded yet",
     );
     expect(kept.closest("div")).toHaveTextContent("1.2 GB");
+    expect(storage().getByText(/of 20 GB used/)).toHaveTextContent("2 GB of 20 GB used");
   });
 
   it("links the Downloads to the Downloaded view, which lists them", async () => {
@@ -647,13 +697,14 @@ describe("storage settings", () => {
   });
 
   it("tells a member the limit an admin set, with nothing to change", async () => {
-    open(false);
+    const { calls } = open(false);
 
     expect(
       await screen.findByText("The storage limit is 20 GB, set by an admin."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("spinbutton", { name: "Limit in GB" })).toBeNull();
-    expect(storage().queryByRole("button", { name: "Inspect server storage" })).toBeNull();
+    expect(storage().queryByRole("region", { name: "Server storage" })).toBeNull();
+    expect(calls).not.toContain("GET /api/storage/inspection");
   });
 
   it("asks before saving a lower limit that removes Downloads, then saves it at the revision read", async () => {
@@ -912,9 +963,10 @@ describe("the Settings sections", () => {
 
   it("open from their names at the top, which go to them", async () => {
     localStorage.setItem("medleyplay.settings.folded.v1", JSON.stringify(["storage"]));
-    open(true);
+    const { calls } = open(true);
     const sections = screen.getByRole("navigation", { name: "Settings sections" });
 
+    expect(calls).not.toContain("GET /api/storage/inspection");
     await userEvent.click(
       within(sections).getByRole("button", { name: "Go to Downloads and storage" }),
     );
@@ -923,6 +975,7 @@ describe("the Settings sections", () => {
     expect(heading).toHaveAttribute("aria-expanded", "true");
     expect(heading).toHaveFocus();
     expect(await screen.findByText(/of 20 GB used/)).toBeVisible();
+    expect(await storage().findByText("1 KB")).toBeVisible();
   });
 
   it("open at the one a link names, even when it was folded", () => {

@@ -12,8 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Open artist profiles directly from the Library's artist credits and from
   albums. On phones, tap the artist beneath the song title.
 - Choose which parts of a Bilibili video to download. Keep a file per part or
-  group the selected files as numbered songs in one album. Changing the
-  selection never starts a download.
+  group the selected files as numbered songs in one album. **Select all**
+  includes every eligible part; downloads start only after confirmation.
+- Choose **One album file** to download selected Bilibili parts as a single
+  album in video order. Joining several parts requires FFmpeg and ffprobe on
+  the server; a single part keeps its original audio.
 - In Settings → Downloads and storage, admins can see the space occupied by
   managed files above Download usage. Select the bar or **Inspect** for a
   breakdown by category and read-only server settings. The report does not

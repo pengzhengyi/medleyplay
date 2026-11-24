@@ -247,7 +247,7 @@ export function TrackMenu({
           >
             {track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…"}
           </Item>
-          {track.site !== null && (
+          {track.site !== null && !track.joined && (
             <Item
               icon={<UploadSimpleIcon />}
               onSelect={() => {
@@ -484,14 +484,16 @@ export function DownloadFailed({
           >
             {retrying ? "Retrying…" : "Retry download"}
           </Item>
-          <Item
-            icon={<UploadSimpleIcon />}
-            onSelect={() => {
-              onAddFile(track);
-            }}
-          >
-            Add the file…
-          </Item>
+          {!track.joined && (
+            <Item
+              icon={<UploadSimpleIcon />}
+              onSelect={() => {
+                onAddFile(track);
+              }}
+            >
+              Add the file…
+            </Item>
+          )}
         </Menu.Content>
       </Menu.Portal>
     </Menu.Root>

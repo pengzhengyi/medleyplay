@@ -96,6 +96,10 @@ def test_text_is_trimmed() -> None:
     assert check_value(Field.TITLE, "  Intro \n") == "Intro"
 
 
+def test_a_song_in_a_large_album_keeps_its_four_digit_track_number() -> None:
+    assert check_value(Field.TRACK_NUMBER, 1000) == 1000
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

@@ -133,6 +133,8 @@ class DownloadPart(_Model):
     folder: str
     login: str | None = None
     proxy: ProxyUrl | None = Field(default=None, repr=False)
+    bounded_http: bool = False
+    """Use a single direct HTTP transfer without auxiliary files."""
 
 
 class Downloaded(_Model):

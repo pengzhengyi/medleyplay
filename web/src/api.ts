@@ -32,6 +32,7 @@ export interface Track {
   readonly download_failed: boolean;
   /** The kind of site its audio is downloaded from, such as `bilibili`, if any. */
   readonly site: string | null;
+  readonly joined?: boolean;
   /** The page of the video its audio came from, such as a Bilibili video's, if known. */
   readonly video: string | null;
   /** The album file this Track is a song of, if it is one. */
@@ -1330,7 +1331,7 @@ export type VideoChoices =
   | readonly PartChoice[]
   | { readonly mode: "download"; readonly parts: readonly number[] }
   | {
-      readonly mode: "album";
+      readonly mode: "album" | "joined";
       readonly parts: readonly number[];
       readonly album: string;
       readonly artist: string;
@@ -1352,7 +1353,7 @@ export interface TrackDownload {
   readonly track_id: number;
   readonly source_id: number;
   readonly kind: string;
-  /** The link to the part, such as `https://www.bilibili.com/video/BV1Xx41117Tz?p=2`. */
+  /** The link to the standalone part or the joined album's whole video. */
   readonly link: string;
   readonly status: DownloadStatus;
   /** Why a Download failed or is unavailable, or `""`. */

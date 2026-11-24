@@ -12,15 +12,28 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.details import set_household
-from medleyplay.application.downloads import QUALITY_DETAIL, DownloadService
+from medleyplay.application.downloads import DownloadService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.segments import keep_as_one
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDetails, TrackId
 from medleyplay.domain.details import Field, Kind, Value, check_value
+from medleyplay.domain.downloads import (
+    JOIN_ESTIMATE_DETAIL,
+    QUALITY_DETAIL,
+    quality_kbps,
+)
 from medleyplay.domain.errors import ConflictError, InvalidInputError, OfflineError, PluginCallError
 from medleyplay.domain.jobs import Job
-from medleyplay.domain.links import lookup_link, part_locator, recognize_link
+from medleyplay.domain.links import (
+    MAX_PART_NUMBER,
+    joined_locator,
+    lookup_link,
+    part_locator,
+    recognize_link,
+)
+from medleyplay.domain.policy import reservation
+from medleyplay.download_limits import JOIN_OUTPUT_KBPS, MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import DownloadRow, SourceRow
 from medleyplay.plugin_api import (
     BEST_QUALITY,
@@ -34,9 +47,7 @@ from medleyplay.plugin_api import (
 from medleyplay.programs.lookup_video import Resolved, Unreadable, read_details, read_failure
 
 LOOKUP_MEMORY: Final = timedelta(minutes=10)
-MAX_PARTS_PER_ADD: Final = 50
 MAX_TEXT: Final = 512
-MAX_PART_NUMBER: Final = 9999
 
 
 class Proxies(Protocol):
@@ -85,10 +96,11 @@ class PartChoice:
 
 @dataclass(frozen=True)
 class AlbumChoice:
-    """Shared details for one song per provider part."""
+    """Album credits and whether the parts are joined into one file."""
 
     name: str
     artist: str
+    joined: bool = False
 
 
 @dataclass(frozen=True)
@@ -243,10 +255,20 @@ class LinkService:
     ) -> list[Added]:
         """Add the selected new parts and their Jobs together, under the caller's write lock."""
         self.require_online()
-        read = resolved.read
-        if isinstance(read, Unreadable):
-            message = "This video has no readable part list. Enter the parts yourself."
-            raise InvalidInputError(message)
+        if album is not None and album.joined:
+            return [self._join_in(db, caller, resolved, quality, album, numbers)]
+        return self._separate_in(db, caller, resolved, quality, album, numbers)
+
+    def _separate_in(
+        self,
+        db: Session,
+        caller: Account,
+        resolved: Resolved,
+        quality: str,
+        album: AlbumChoice | None,
+        numbers: Sequence[int] | None,
+    ) -> list[Added]:
+        read = _readable(resolved)
         if album is not None and (not album.name.strip() or len(read.parts) <= 1):
             message = "An album needs a name and a video with several parts."
             raise InvalidInputError(message)
@@ -286,9 +308,7 @@ class LinkService:
                 set_household(db, track_id, values, self._clock())
             else:
                 keep_as_one(db, track_id, self._clock())
-            job = self._downloads.queue_new_in(
-                db, caller, source, resolved.video, choice.part, quality
-            )
+            job = self._downloads.queue_new_in(db, caller, source)
             if job is None:
                 message = "No downloader is available. Enable one before downloading."
                 raise ConflictError(message)
@@ -297,6 +317,70 @@ class LinkService:
             message = "All parts are already in the Library."
             raise ConflictError(message)
         return added
+
+    def _join_in(
+        self,
+        db: Session,
+        caller: Account,
+        resolved: Resolved,
+        quality: str,
+        album: AlbumChoice,
+        numbers: Sequence[int] | None,
+    ) -> Added:
+        read = _readable(resolved)
+        selected = tuple(sorted(numbers or ()))
+        _check_selection(read, quality, selected)
+        name, artist = album.name.strip(), album.artist.strip()
+        if not name:
+            message = "An album needs a name."
+            raise InvalidInputError(message)
+        check_value(Field.ALBUM, name)
+        check_value(Field.ALBUM_ARTIST, artist)
+        key = SourceKey(resolved.kind, joined_locator(resolved.video, selected))
+        existing = db.scalar(
+            select(SourceRow).where(SourceRow.kind == key.kind, SourceRow.locator == key.locator)
+        )
+        if existing is not None:
+            source_id = SourceId(existing.id)
+            return Added(
+                selected[0],
+                TrackId(existing.track_id),
+                source_id,
+                self._downloads.active_in(db, source_id),
+            )
+        durations = {part.part: part.duration_ms for part in read.parts}
+        lengths = [durations[part] for part in selected]
+        known = [length for length in lengths if length is not None and length > 0]
+        duration = sum(known) if len(known) == len(lengths) else None
+        kbps = JOIN_OUTPUT_KBPS if len(selected) > 1 else quality_kbps(quality)
+        estimate = min(MAX_DOWNLOAD_BYTES, sum(reservation(n, kbps) for n in lengths))
+        source = self._catalog.insert_in(
+            db,
+            key,
+            TrackDetails(name, duration_ms=duration),
+            {
+                QUALITY_DETAIL: quality,
+                JOIN_ESTIMATE_DETAIL: estimate,
+            },
+        )
+        track_id = TrackId(source.track_id)
+        set_household(
+            db,
+            track_id,
+            {
+                Field.KIND: Kind.ALBUM,
+                Field.TITLE: name,
+                Field.ALBUM: name,
+                Field.ALBUM_ARTIST: artist,
+            },
+            self._clock(),
+        )
+        keep_as_one(db, track_id, self._clock())
+        job = self._downloads.queue_new_in(db, caller, source)
+        if job is None:
+            message = "No downloader is available. Enable one before downloading."
+            raise ConflictError(message)
+        return Added(selected[0], track_id, SourceId(source.id), job)
 
     def announce_import(self) -> None:
         """Publish the catalog change after an import commits."""
@@ -372,8 +456,20 @@ def _import_choices(
     return [PartChoice(part, known[part].strip() or f"{video} P{part}", "") for part in chosen]
 
 
+def _readable(resolved: Resolved) -> VideoDetails:
+    if isinstance(resolved.read, Unreadable):
+        message = "This video has no readable part list. Enter the parts yourself."
+        raise InvalidInputError(message)
+    return resolved.read
+
+
 def _check_choice(details: VideoDetails, quality: str, parts: Sequence[PartChoice]) -> None:
-    numbers = _check_numbers(parts)
+    _check_selection(details, quality, [part.part for part in parts])
+    _check_texts(parts)
+
+
+def _check_selection(details: VideoDetails, quality: str, numbers: Sequence[int]) -> None:
+    _check_numbers(numbers)
     known = {part.part for part in details.parts}
     if unknown := sorted(set(numbers) - known):
         message = f"The video has no part {unknown[0]}."
@@ -381,12 +477,12 @@ def _check_choice(details: VideoDetails, quality: str, parts: Sequence[PartChoic
     if quality != BEST_QUALITY and quality not in {each.id for each in details.qualities}:
         message = f"The video can't be added at the quality {quality!r}."
         raise InvalidInputError(message)
-    _check_texts(parts)
 
 
 def _check_unreadable_choice(quality: str, parts: Sequence[PartChoice]) -> None:
     """Check the household's details for a video the site can't be asked about."""
-    numbers = _check_numbers(parts)
+    numbers = [part.part for part in parts]
+    _check_numbers(numbers)
     if not all(1 <= number <= MAX_PART_NUMBER for number in numbers):
         message = f"A part number is 1 to {MAX_PART_NUMBER}."
         raise InvalidInputError(message)
@@ -396,12 +492,10 @@ def _check_unreadable_choice(quality: str, parts: Sequence[PartChoice]) -> None:
     _check_texts(parts)
 
 
-def _check_numbers(parts: Sequence[PartChoice]) -> list[int]:
-    numbers = [choice.part for choice in parts]
-    if not 1 <= len(numbers) <= MAX_PARTS_PER_ADD or len(set(numbers)) != len(numbers):
-        message = f"Choose 1 to {MAX_PARTS_PER_ADD} different parts."
+def _check_numbers(numbers: Sequence[int]) -> None:
+    if not numbers or len(set(numbers)) != len(numbers):
+        message = "Choose one or more different parts."
         raise InvalidInputError(message)
-    return numbers
 
 
 def _check_texts(parts: Sequence[PartChoice]) -> None:

@@ -3,13 +3,14 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Response
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import BaseModel, ConfigDict, Field
 
 from medleyplay.application.links import Added, AlbumChoice, Lookup, PartChoice
 from medleyplay.application.video_lookups import SavedLookup
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.jobs import JobId, JobState, JobView
-from medleyplay.plugin_api import BEST_QUALITY
+from medleyplay.domain.links import MAX_PART_NUMBER
+from medleyplay.plugin_api import BEST_QUALITY, PartNumber
 from medleyplay.programs.lookup_video import Reason
 from medleyplay.web.deps import LinksDep, SignedInAccount, VideoLookupsDep
 from medleyplay.web.ids import RowId
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/api/links", tags=["links"])
 type Link = Annotated[
     str, Field(max_length=2048, examples=["https://b23.tv/abc123", "BV1Xx41117Tz"])
 ]
+type SelectedParts = Annotated[list[PartNumber], Field(min_length=1, max_length=MAX_PART_NUMBER)]
 
 
 class LinkIn(BaseModel):
@@ -83,7 +85,7 @@ class LookupOut(BaseModel):
 class PartIn(BaseModel):
     """A part to add, under the title and artist the household chose."""
 
-    part: int = Field(ge=1)
+    part: PartNumber
     title: str = Field(max_length=512, examples=["Night Drive"])
     artist: str = Field(default="", max_length=512, examples=["Blue Room"])
 
@@ -93,7 +95,7 @@ class ChoicesIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     quality: str = Field(default=BEST_QUALITY, max_length=32)
-    parts: list[PartIn] = Field(max_length=50)
+    parts: list[PartIn] = Field(max_length=MAX_PART_NUMBER)
 
     def choices(self) -> list[PartChoice]:
         """Return the choices for the application."""
@@ -116,18 +118,30 @@ class DownloadIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Literal["download"]
     quality: str = Field(default=BEST_QUALITY, max_length=32)
-    parts: list[PositiveInt] | None = Field(default=None, min_length=1, max_length=50)
+    parts: SelectedParts | None = None
 
 
-class AlbumIn(BaseModel):
-    """Import the selected parts as numbered songs."""
+class _AlbumIn(BaseModel):
+    """The credits and source quality shared by both album layouts."""
 
     model_config = ConfigDict(extra="forbid")
-    mode: Literal["album"]
     album: str = Field(min_length=1, max_length=512)
     artist: str = Field(default="", max_length=512)
     quality: str = Field(default=BEST_QUALITY, max_length=32)
-    parts: list[PositiveInt] | None = Field(default=None, min_length=1, max_length=50)
+
+
+class AlbumIn(_AlbumIn):
+    """Import the selected parts as numbered songs."""
+
+    mode: Literal["album"]
+    parts: SelectedParts | None = None
+
+
+class JoinedIn(_AlbumIn):
+    """Import only the explicitly selected parts as one album file."""
+
+    mode: Literal["joined"]
+    parts: SelectedParts
 
 
 class AddedOut(BaseModel):
@@ -202,7 +216,7 @@ def open_lookup(
 @router.post("/lookups/{job_id}")
 def confirm_lookup(
     job_id: RowId,
-    body: ChoicesIn | DownloadIn | AlbumIn,
+    body: ChoicesIn | DownloadIn | AlbumIn | JoinedIn,
     me: SignedInAccount,
     lookups: VideoLookupsDep,
 ) -> list[AddedOut]:
@@ -210,7 +224,11 @@ def confirm_lookup(
     if isinstance(body, ChoicesIn):
         added = lookups.confirm(me, JobId(job_id), body.quality, body.choices())
     else:
-        album = AlbumChoice(body.album, body.artist) if isinstance(body, AlbumIn) else None
+        album = (
+            AlbumChoice(body.album, body.artist, joined=isinstance(body, JoinedIn))
+            if isinstance(body, _AlbumIn)
+            else None
+        )
         added = lookups.import_parts(me, JobId(job_id), body.quality, album, body.parts)
     return [_added(each, me) for each in added]
 

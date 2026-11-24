@@ -12,16 +12,17 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import policy as policy_module
+from medleyplay.application import policy_snapshot
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.downloads import DOWNLOAD_KIND
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.catalog import PlaylistId, SourceId, SourceState, TrackId
-from medleyplay.domain.downloads import download_target
+from medleyplay.domain.catalog import PlaylistId, SourceId, SourceKey, SourceState, TrackId
+from medleyplay.domain.downloads import DOWNLOAD_KIND, download_target
 from medleyplay.domain.errors import ForbiddenError
 from medleyplay.domain.jobs import JobState
+from medleyplay.domain.links import BILIBILI_SOURCE, joined_locator
 from medleyplay.domain.playback import CACHE_FOLDER
 from medleyplay.domain.policy import (
     REST,
@@ -289,6 +290,44 @@ def test_a_limit_only_a_manual_download_exceeds_removes_nothing(
     evaluation = policy.evaluate()
 
     assert (evaluation.removed, len(_stored(units))) == (0, 2)
+
+
+def test_a_joined_download_is_not_evicted_if_the_server_cannot_recreate_it(
+    site: Site,
+    policy: PolicyService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    settings: SettingsService,
+    alice: Account,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    album = site.catalog.add_track(
+        SourceKey(BILIBILI_SOURCE, joined_locator(MIXTAPE, (1, 3))), TrackDetailsFactory.song()
+    )
+    source = _source(units, album)
+    file = _file(site, source)
+    file.parent.mkdir()
+    file.write_bytes(b"joined audio")
+    with units.begin() as db:
+        db.add(
+            DownloadRow(
+                source_id=source,
+                file_name=file.name,
+                quality="aac-256k",
+                backend="ffmpeg",
+                size=file.stat().st_size,
+                downloaded_at=clock.now,
+            )
+        )
+    clock.advance(REST + timedelta(hours=1))
+    _limit(settings, alice, 0)
+    monkeypatch.setattr(policy_snapshot, "join_tools", lambda: None)
+
+    evaluation = policy.evaluate()
+
+    assert evaluation.removed == 0
+    assert _stored(units) == {source}
+    assert file.read_bytes() == b"joined audio"
 
 
 def test_rules_this_server_cant_read_on_a_kept_playlist_stop_every_removal(

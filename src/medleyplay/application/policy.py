@@ -16,7 +16,7 @@ import contextlib
 import threading
 import time
 import uuid
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -220,7 +220,7 @@ class PolicyService:
         return replace(snapshot, state=replace(snapshot.state, online=self._online()))
 
     def _apply(self, planned: Plan, now: datetime, heard: int) -> Evaluation:
-        removed = self._remove(planned.removals, now, heard) if planned.removals else 0
+        removed = self._remove(planned, now, heard) if planned.removals else 0
         if removed is None:
             # The next evaluation plans from what changed.
             self.request()
@@ -249,9 +249,7 @@ class PolicyService:
             failed_actions=tuple(failed),
         )
 
-    def _remove(
-        self, removals: Sequence[Remove | RemoveCache], now: datetime, heard: int
-    ) -> int | None:
+    def _remove(self, planned: Plan, now: datetime, heard: int) -> int | None:
         """Remove every planned file, or none of them; return how many, or `None` if none.
 
         The plan's Downloads were sized to fit once its removals happen, so its
@@ -261,6 +259,7 @@ class PolicyService:
         commits. A request heard since the snapshot also drops them.
         """
         folder, cache = self._downloads.folder, self._data_dir / CACHE_FOLDER
+        removals = planned.removals
         downloads = [each.source_id for each in removals if isinstance(each, Remove)]
         copies = [each.name for each in removals if isinstance(each, RemoveCache)]
         renamed: list[tuple[Path, Path]] = []
@@ -275,6 +274,8 @@ class PolicyService:
                     return None
             fresh = self._snapshot(db, now, read_settings(db).storage_limit)
             if not set(removals) <= set(removable(fresh.state)):
+                return None
+            if any(start.joined for start in planned.starts) and plan(fresh.state) != planned:
                 return None
             db.execute(delete(DownloadRow).where(DownloadRow.source_id.in_(downloads)))
             try:

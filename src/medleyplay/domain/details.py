@@ -31,7 +31,8 @@ from medleyplay.domain.covers import is_cover_id
 from medleyplay.domain.errors import InvalidInputError
 
 MAX_TEXT: Final = 512
-MAX_NUMBER: Final = 999
+MAX_TRACK_NUMBER: Final = 9999
+MAX_DISC_NUMBER: Final = 999
 MIN_YEAR: Final = 1000
 MAX_YEAR: Final = 2999
 LONGEST_SONG_MS: Final = 20 * 60_000
@@ -193,7 +194,9 @@ def found_value(field: Field, value: Value) -> Value | None:
 
 
 def _range_of(field: Field) -> tuple[int, int]:
-    return (MIN_YEAR, MAX_YEAR) if field is Field.YEAR else (1, MAX_NUMBER)
+    if field is Field.YEAR:
+        return MIN_YEAR, MAX_YEAR
+    return 1, MAX_TRACK_NUMBER if field is Field.TRACK_NUMBER else MAX_DISC_NUMBER
 
 
 def check_values(values: Mapping[str, object]) -> dict[Field, Value]:

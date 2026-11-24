@@ -6,7 +6,9 @@ Job. A crash between the two leaves a file no row names, which the sweep at
 startup removes, and the Job runs again.
 """
 
+import stat
 from datetime import timedelta
+from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Final
 
@@ -14,34 +16,49 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.jobs import JobKind, JobService, queue_job_in
+from medleyplay.application.download_budgets import (
+    DownloadBudget,
+    disk_refusal,
+    estimate_of,
+    limit_refusal,
+)
+from medleyplay.application.jobs import (
+    JobCompletion,
+    JobKind,
+    JobService,
+    Lane,
+    queue_job_in,
+    to_job,
+)
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.catalog import SourceId, SourceState
 from medleyplay.domain.downloads import (
     DOWNLOAD_EXTENSIONS,
+    DOWNLOAD_KIND,
     DOWNLOADS_FOLDER,
-    MAX_DOWNLOAD_BYTES,
+    JOIN_ESTIMATE_DETAIL,
+    JOIN_LANE,
+    QUALITY_DETAIL,
     download_name,
     download_target,
 )
-from medleyplay.domain.errors import NotFoundError
-from medleyplay.domain.jobs import Job, JobState
-from medleyplay.domain.links import BILIBILI_SOURCE, parse_part_locator
-from medleyplay.persistence.schema import DownloadRow, SourceRow
+from medleyplay.domain.errors import ConflictError, NotFoundError
+from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobState
+from medleyplay.domain.links import BILIBILI_SOURCE, joined_locator, video_selection
+from medleyplay.download_limits import JOIN_SCRATCH_BYTES, MAX_DOWNLOAD_BYTES
+from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
 from medleyplay.plugin_api import BEST_QUALITY, SOURCE_DOWNLOADER
 from medleyplay.programs.download_source import (
     DOWNLOAD_FOLDER,
     DownloadedSource,
     DownloadSource,
 )
+from medleyplay.programs.joined_audio import join_tools
 
-DOWNLOAD_KIND: Final = "download_source"
 SERVED_EVERY: Final = timedelta(minutes=1)
 """How often a Download's last served time is written, since a player asks for many ranges."""
-QUALITY_DETAIL: Final = "quality"
-"""Where a site's Source keeps the quality its Downloads ask for, in its details."""
 
 type DownloadKind = JobKind[DownloadSource, DownloadedSource]
 
@@ -51,43 +68,97 @@ def download_source_kind(data_dir: Path, jobs_dir: Path, clock: Clock) -> Downlo
 
     The Job uses the submitting Account's Bilibili login, when it has a valid one.
     """
-    folder = data_dir / DOWNLOADS_FOLDER
-
-    def complete(db: Session, job: Job, downloaded: DownloadedSource) -> None:
-        source_id = SourceId(int(job.target.removeprefix("source:")))
-        if downloaded.gone or downloaded.file is None:
-            db.execute(
-                update(SourceRow)
-                .where(SourceRow.id == source_id)
-                .values(state=SourceState.UNAVAILABLE)
-            )
-            return
-        # The program checked the name; a completion trusts nothing a plugin said.
-        if PurePosixPath(downloaded.file).name != downloaded.file:  # pragma: no cover
-            raise ValueError(downloaded.file)
-        name = download_name(source_id, downloaded.file)
-        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-        made = jobs_dir / str(job.id) / DOWNLOAD_FOLDER / downloaded.file
-        made.replace(folder / name)
-        row = db.get(DownloadRow, source_id) or DownloadRow(source_id=source_id)
-        row.file_name = name
-        row.quality = downloaded.quality
-        row.backend = downloaded.backend
-        row.size = downloaded.size
-        row.downloaded_at = clock()
-        db.add(row)
-
     return JobKind(
         name=DOWNLOAD_KIND,
         program="medleyplay.programs.download_source:DOWNLOAD_SOURCE",
         request=DownloadSource,
         result=DownloadedSource,
-        complete=complete,
+        complete=partial(_complete, data_dir=data_dir, jobs_dir=jobs_dir, clock=clock),
         points=(SOURCE_DOWNLOADER.name,),
         login_site=BILIBILI_SOURCE,
         proxy_site=BILIBILI_SOURCE,
         needs_network=True,
+        lane_field="lane",
+        lanes={JOIN_LANE: Lane(proxy_site=BILIBILI_SOURCE)},
+        lane_optional=True,
+        on_submit=partial(_admit, data_dir=data_dir),
+        refuse_start=partial(_refuse_start, data_dir=data_dir),
     )
+
+
+def _complete(
+    db: Session,
+    job: Job,
+    downloaded: DownloadedSource,
+    *,
+    data_dir: Path,
+    jobs_dir: Path,
+    clock: Clock,
+) -> JobCompletion | None:
+    source_id = SourceId(int(job.target.removeprefix("source:")))
+    source = db.get(SourceRow, source_id)
+    if source is None:
+        return JobCompletion(failure=("refused", "The Source is no longer in the Library."))
+    joined = video_selection(source.locator).joined
+    existing = db.get(DownloadRow, source_id)
+    if joined and existing is not None:
+        return None
+    if downloaded.gone or downloaded.file is None:
+        source.state = SourceState.UNAVAILABLE
+        return None
+    if joined and (refusal := limit_refusal(db, data_dir, source_id, downloaded.size)):
+        return JobCompletion(failure=("refused", refusal))
+    if PurePosixPath(downloaded.file).name != downloaded.file:  # pragma: no cover
+        raise ValueError(downloaded.file)
+    name = download_name(source_id, downloaded.file)
+    folder = data_dir / DOWNLOADS_FOLDER
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    made = jobs_dir / str(job.id) / DOWNLOAD_FOLDER / downloaded.file
+    made.replace(folder / name)
+    row = existing or DownloadRow(source_id=source_id)
+    row.file_name = name
+    row.quality = downloaded.quality
+    row.backend = downloaded.backend
+    row.size = downloaded.size
+    row.downloaded_at = clock()
+    db.add(row)
+    if joined:
+        source.details = {**(source.details or {}), JOIN_ESTIMATE_DETAIL: downloaded.size}
+        if downloaded.duration_ms is not None:
+            db.get_one(TrackRow, source.track_id).duration_ms = downloaded.duration_ms
+    return None
+
+
+def _admit(db: Session, job: Job, *, data_dir: Path) -> None:
+    source = db.get(SourceRow, int(job.target.removeprefix("source:")))
+    if source is None:
+        message = "The Source is no longer in the Library."
+        raise NotFoundError(message)
+    if not video_selection(source.locator).joined:
+        return
+    existing = db.get(DownloadRow, source.id)
+    if existing is not None and not _saved_on_disk(existing, data_dir / DOWNLOADS_FOLDER):
+        db.delete(existing)
+        db.flush()
+    if refusal := _join_refusal(db, source, data_dir, starting=False):
+        raise ConflictError(refusal)
+
+
+def _refuse_start(db: Session, raw: object, *, data_dir: Path) -> str | None:
+    if not isinstance(raw, dict) or raw.get("parts") is None:
+        return None
+    request = DownloadSource.model_validate(raw)
+    if request.parts is None:
+        return None
+    source = db.scalar(
+        select(SourceRow).where(
+            SourceRow.kind == request.site,
+            SourceRow.locator == joined_locator(request.video, request.parts),
+        )
+    )
+    if source is None:
+        return "The joined album is no longer in the Library."
+    return _join_refusal(db, source, data_dir, starting=True)
 
 
 class DownloadService:
@@ -164,14 +235,16 @@ class DownloadService:
                 raise NotFoundError(message)
             if row.state == SourceState.UNAVAILABLE:
                 return None
-            if skip_downloaded and db.get(DownloadRow, source_id) is not None:
+            selection = video_selection(row.locator)
+            existing = (
+                db.get(DownloadRow, source_id) if skip_downloaded or selection.joined else None
+            )
+            if existing is not None and (skip_downloaded or _saved_on_disk(existing, self.folder)):
                 return None
-            video, part = parse_part_locator(row.locator)
-            quality = str((row.details or {}).get(QUALITY_DETAIL, BEST_QUALITY))
             site = row.kind
+            request = _request(row)
         if site not in self._plugins.available_keys().get(SOURCE_DOWNLOADER.name, []):
             return None
-        request = _request(site, video, part, quality)
         target = download_target(source_id)
         latest = self._jobs.latest(DOWNLOAD_KIND, target)
         if not retry_failed and latest is not None and latest.state is JobState.FAILED:
@@ -179,9 +252,7 @@ class DownloadService:
         login = account_id if self._linked.has_valid(account_id, site) else None
         return self._jobs.submit(self._kind, target, request, account_id, login_account=login)
 
-    def queue_new_in(
-        self, db: Session, caller: Account, source: SourceRow, video: str, part: int, quality: str
-    ) -> Job | None:
+    def queue_new_in(self, db: Session, caller: Account, source: SourceRow) -> Job | None:
         """Queue audio for a newly inserted Source before its import commits."""
         if source.kind not in self._plugins.available_keys().get(SOURCE_DOWNLOADER.name, []):
             return None
@@ -190,11 +261,22 @@ class DownloadService:
             db,
             self._kind,
             download_target(SourceId(source.id)),
-            _request(source.kind, video, part, quality),
+            _request(source),
             caller.id,
             self._clock,
             login_account=login,
         )
+
+    def active_in(self, db: Session, source: SourceId) -> Job | None:
+        """Return the active Download Job without leaving the caller's transaction."""
+        row = db.scalar(
+            select(JobRow).where(
+                JobRow.kind == DOWNLOAD_KIND,
+                JobRow.target == download_target(source),
+                JobRow.state.in_(ACTIVE_STATES),
+            )
+        )
+        return None if row is None else to_job(row)
 
     def sweep(self) -> None:
         """Remove every file in `downloads/` that no Download names."""
@@ -207,12 +289,39 @@ class DownloadService:
                 file.unlink(missing_ok=True)
 
 
-def _request(site: str, video: str, part: int, quality: str) -> DownloadSource:
+def _request(source: SourceRow) -> DownloadSource:
+    selection = video_selection(source.locator)
     return DownloadSource(
-        site=site,
-        video=video,
-        part=part,
-        quality=quality,
+        site=source.kind,
+        video=selection.video,
+        part=None if selection.joined else selection.parts[0],
+        parts=selection.parts if selection.joined else None,
+        lane=JOIN_LANE if selection.joined and len(selection.parts) > 1 else None,
+        quality=str((source.details or {}).get(QUALITY_DETAIL, BEST_QUALITY)),
         extensions=DOWNLOAD_EXTENSIONS,
         max_bytes=MAX_DOWNLOAD_BYTES,
+    )
+
+
+def _saved_on_disk(download: DownloadRow, folder: Path) -> bool:
+    try:
+        return stat.S_ISREG((folder / download.file_name).lstat().st_mode)
+    except FileNotFoundError:
+        return False
+
+
+def _join_refusal(db: Session, source: SourceRow, data_dir: Path, *, starting: bool) -> str | None:
+    source_id = SourceId(source.id)
+    selection = video_selection(source.locator)
+    multiple = len(selection.parts) > 1
+    if db.get(DownloadRow, source_id) is not None:
+        return "This joined album is already downloaded."
+    if multiple and join_tools() is None:
+        return "Joining several parts requires FFmpeg and ffprobe. Use Separate files instead."
+    duration = db.get_one(TrackRow, source.track_id).duration_ms
+    budget = DownloadBudget(
+        estimate_of(source.details, duration), JOIN_SCRATCH_BYTES if multiple else 0
+    )
+    return limit_refusal(db, data_dir, source_id, budget.estimate) or disk_refusal(
+        db, data_dir, source_id, budget, starting=starting
     )

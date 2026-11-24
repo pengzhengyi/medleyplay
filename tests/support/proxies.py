@@ -26,6 +26,7 @@ class Answer:
     status: int
     headers: Mapping[str, str] = field(default_factory=dict)
     body: bytes = b""
+    send_length: bool = True
 
 
 PRECONDITION_FAILED: Final = Answer(412)
@@ -77,7 +78,8 @@ class _HttpHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(answer.status)
         for name, value in answer.headers.items():
             self.send_header(name, value)
-        self.send_header("Content-Length", str(len(answer.body)))
+        if answer.send_length:
+            self.send_header("Content-Length", str(len(answer.body)))
         self.end_headers()
         if self.command == "GET":
             self.wfile.write(answer.body)

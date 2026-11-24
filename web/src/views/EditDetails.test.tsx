@@ -149,6 +149,15 @@ const useSuggested = (dialog: HTMLElement, value: string) =>
   );
 
 describe("editing a song's details", () => {
+  it("saves a track number beyond 999 for a song in a large album", async () => {
+    const { dialog, onSave } = await renderDialog();
+
+    await userEvent.type(box(dialog, "Track"), "1000");
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ track_number: 1000 });
+  });
+
   it("tags where each value came from in a word or two, saying it in full on hover", async () => {
     const { dialog } = await renderDialog();
 

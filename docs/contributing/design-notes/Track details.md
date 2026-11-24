@@ -37,7 +37,8 @@ and lets the household's word win.
 | `artist` | text, as written | GUMI/MAYU |
 | `album` | text | ケビョウニンゲン |
 | `album_artist` | text | MAYU |
-| `track_number`, `disc_number` | whole numbers from 1 | 3, 1 |
+| `track_number` | whole number from 1 to 9999 | 3 |
+| `disc_number` | whole number from 1 to 999 | 1 |
 | `year` | a year | 2014 |
 | `genre` | text | Vocaloid |
 | `cover` | a cover's id; see [Covers](#covers) | `9f2c…` |

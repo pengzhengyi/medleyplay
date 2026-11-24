@@ -89,7 +89,8 @@ class BilibiliDownloader:
         """Download the part at its quality, or the best below it, into the folder."""
 
         def on_progress(done: int, total: int | None) -> None:
-            report_progress(done / total if total else None, "Downloading")
+            stage = f"Downloading part {request.part}" if request.bounded_http else "Downloading"
+            report_progress(done / total if total else None, stage)
 
         try:
             info = self.download_with(
@@ -99,7 +100,10 @@ class BilibiliDownloader:
                 cookie_file=request.login,
                 on_progress=on_progress,
                 proxy=request.proxy,
+                **({"bounded_http": True} if request.bounded_http else {}),
             )
+        except _ytdlp.BoundedDownloadError as error:
+            return Downloaded(file=None, message=str(error))
         except _ytdlp.GoneError as error:
             return Downloaded(file=None, gone=True, message=str(error)[:512])
         except _ytdlp.NeedsLoginError as error:

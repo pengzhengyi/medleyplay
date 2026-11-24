@@ -1,7 +1,8 @@
 # Bilibili
 
 > [!NOTE]
-> **Status: implemented up to the tools (step 5a); the tools wait on yt-dlp.**
+> **Status: standalone parts and joined albums are implemented with yt-dlp.**
+> The yutto fallback is not implemented.
 > This note describes how medleyplay adds music from
 > Bilibili: linking an Account's login, turning a link into Tracks, downloading
 > their audio, playing the Downloads, and reporting progress to every browser.
@@ -16,6 +17,7 @@
 - [A proxy](#a-proxy)
 - [Links](#links)
 - [Adding from a link](#adding-from-a-link)
+  - [One album file](#one-album-file)
 - [Downloads](#downloads)
 - [Playing a Download](#playing-a-download)
 - [Video details](#video-details)
@@ -241,9 +243,9 @@ standard `proxy` option, and does nothing more.
   checks that link with its full rules again.
 - **yt-dlp is handed a URL the plugin builds** from the `BV` id and the part,
   with only Bilibili's extractors allowed, so its generic extractor never runs.
-- **A Source's locator is `<BV id>/p<part>`,** such as `BV1Xx41117Tz/p1`; a video
-  with one part has `p1`. So every link to a part, short or long, `av` or `BV`,
-  is one Source.
+- **A standalone Source's locator is `<BV id>/p<part>`,** such as
+  `BV1Xx41117Tz/p1`. Every link to that part, short or long, `av` or `BV`, names
+  the same Source. Joined albums use a separate locator.
 
 ## Adding from a link
 
@@ -260,7 +262,7 @@ sequenceDiagram
   B->>C: Open the saved result
   C-->>B: Parts, existing Tracks, qualities
   B->>C: Confirm the chosen parts and quality
-  C->>C: a Track and a Source per new part, a Download Job each
+  C->>C: Queue each new file, separate or joined
   C-->>B: the Tracks, and their Jobs
 ```
 
@@ -271,18 +273,17 @@ sequenceDiagram
   needs a login, or the read failed, answers `readable: false` with why instead,
   and can still be added; see [Manual downloads](Manual%20downloads.md).
 - **Parts to download** lists the parts by title and shows their lengths when
-  known. Already-added parts cannot be selected. *Select all* includes new
-  parts only, and *Deselect all* clears the selection. Downloading without
-  edits saves one audio file per selected part. Single uploads stay whole even
-  when they have chapters and *Split albums* is set to *Auto*.
+  known. **Select all** includes every eligible part. In **Separate files**,
+  only new parts can be selected. Each selected part gets its own file and
+  Download Job; the runner limits concurrent transfers. Single uploads stay
+  whole even when they have chapters and *Split albums* is set to *Auto*.
 - **Group these files in one album** gives the selected files a shared album
   title and optional album artist. Track numbers follow video order. These
   are separate files, not [segments of one file](Segments.md). If a selected
   part was added after the list opened, the grouped import refuses the
   selection rather than moving or renaming an existing song.
-- **Download and album grouping** use a readable saved selection of up to
-  50 parts. Catalog entries, download Jobs, and removal of the Account's
-  lookup commit together.
+- **Download and album grouping** use a readable saved selection. Catalog
+  entries, Download Jobs, and removal of the Account's lookup commit together.
   A refusal leaves the lookup available. Jobs run after commit and retry under
   the normal download policy; a failed transfer does not undo the album.
 - **Edit titles and artists** suggests the part's title for a video
@@ -292,8 +293,7 @@ sequenceDiagram
   household confirms.
 - **Adding** checks each part and the quality against the saved metadata, not
   details supplied by the client. Confirming a lookup never reads the site
-  again. At most 50 parts are added at
-  once, a title is 1 to 512 characters, and an artist at most 512. A video that
+  again. A title is 1 to 512 characters, and an artist at most 512. A video that
   couldn't be read has no details to check against, so its parts are added on
   the household's own details, at the quality `best`.
 - **In the manual picker each part is one transaction:** it creates a Track and a Source, or finds
@@ -308,6 +308,38 @@ sequenceDiagram
   starts no Job: adding returns it as it is. Choosing another quality is step 7.
 - **Offline** refuses a new lookup or confirmation without discarding an
   existing result. A queued Job waits for Online.
+
+### One album file
+
+**One album file** creates one album Track and no song Tracks. Selecting parts
+4 and 2 produces audio from part 2 followed by part 4. Already-added parts can
+be selected without changing their Tracks or reusing their files. Switching
+layouts preserves the selections for parts eligible in both.
+
+- A joined Source names the video and sorted selection, for example
+  `BV1Xx41117Tz/joined/2,4`. The numbers identify positions, not immutable
+  media. The album links to the whole video and does not accept a manual
+  replacement.
+- Confirmation validates the saved lookup and queues the album in one
+  transaction. Repeating the selection keeps the existing Track, credits,
+  quality, and active Job. Repeating a failed download requires an explicit
+  retry; a stale retry cannot replace a completed Download.
+- A single selected part uses the normal transfer and preserves its bytes.
+  For several parts, the source quality controls the transfer. The Job
+  downloads each part with yt-dlp's native HTTP downloader. FFmpeg decodes
+  the local parts one at a time into a single AAC encoder, without writing
+  decoded audio to disk. The M4A contains stereo AAC-LC at 48 kHz with a
+  256 kbps target. ffprobe checks the result and supplies its duration.
+- Only multipart joins run one at a time. Each enforces a 1 GiB cumulative
+  input budget and a 1 GiB output limit during writes. If a part fails or a
+  transfer needs fragmentation, no partial album is published. Cancellation
+  stops the Job and its encoder; a retry uses a fresh working folder.
+- The server checks tools and temporary disk space before accepting a join,
+  at launch, and before the policy evicts files to make room for a wanted
+  join. Missing tools also protect existing multipart joins from eviction.
+  Temporary space is separate from the Download limit. The limit counts
+  the sum of per-part estimates, capped at the maximum output size, until
+  the file's actual size is known.
 
 ## Downloads
 
@@ -333,9 +365,10 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   yt-dlp's errors by their types first: a connection error, a timeout, a 429,
   or a 5xx is a `NetworkError`, which waits; a refused login is an `AuthError`;
   and a 404, a 410, or a geo-restriction is the reply *gone*, which makes its
-  Source *unavailable* for good. Anything else is a fault, which retries,
-  including an error whose message the plugin doesn't recognize: a fault shows
-  and can be reset, while *gone* can't be undone.
+  standalone Source *unavailable* for good. A missing part of a joined album
+  fails its Job without marking the album unavailable. Other site errors,
+  including ones the plugin doesn't recognize, are faults. A fault retries
+  and can be reset; *gone* can't be undone.
 - **A video for members** needs a login when none was sent. With a login it is
   a fault, not an `AuthError`, since the account may simply not be a member, and
   a working login shouldn't need signing in again.
@@ -343,8 +376,9 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   usually to a client it suspects. So it is never retried every minute: it uses
   the Job's three attempts, and five in a row fault the plugin until an admin
   resets it.
-- **Disk space** isn't reserved yet; a full disk fails the Job, and its working
-  folder is removed. The storage limit is step 6.
+- The [download policy](Download%20policy.md) tracks final Download reservations.
+  Temporary space for joins is checked separately, not allocated in advance.
+  A full disk fails the Job and its working folder is removed.
 
 ## Playing a Download
 

@@ -13,7 +13,6 @@ from medleyplay.domain.catalog import SourceId, TrackId
 from medleyplay.domain.policy import (
     MAX_ACTIVE,
     MAX_FAILURES,
-    MIN_FREE,
     REST,
     RETRY_AFTER,
     CacheCopy,
@@ -31,6 +30,7 @@ from medleyplay.domain.policy import (
     removable,
     reservation,
 )
+from medleyplay.download_limits import JOIN_SCRATCH_BYTES, MIN_FREE
 
 NOW = datetime(2026, 10, 26, 12, tzinfo=UTC)
 MB = 1_000_000
@@ -121,6 +121,31 @@ def test_room_is_made_for_a_wanted_track_cache_copies_first() -> None:
 
     assert planned.removals == (RemoveCache("1-v1.flac", 4 * MB), Remove(SourceId(1), 3 * MB))
     assert [each.track_id for each in planned.starts] == [TrackId(9)]
+
+
+@pytest.mark.parametrize(
+    ("tools", "headroom", "why"),
+    [(False, JOIN_SCRATCH_BYTES, Shortfall.NO_JOIN_TOOLS), (True, MB, Shortfall.DISK_FULL)],
+)
+def test_a_join_without_tools_or_scratch_space_does_not_evict_a_download(
+    *,
+    tools: bool,
+    headroom: int,
+    why: Shortfall,
+) -> None:
+    state = _state(
+        limit=10 * MB,
+        disk_size=MIN_FREE,
+        free=MIN_FREE + headroom,
+        downloads=(_old_download(1, 8 * MB),),
+        wanted=(_wanted(9, 5 * MB, joined=True, scratch=JOIN_SCRATCH_BYTES),),
+        join_tools_available=tools,
+    )
+
+    planned = plan(state)
+
+    assert planned.is_empty()
+    assert planned.shortfalls == {TrackId(9): why}
 
 
 def test_a_download_that_cant_fit_even_after_removing_is_skipped_and_nothing_goes_for_it() -> None:

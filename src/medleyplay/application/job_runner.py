@@ -361,13 +361,18 @@ class JobRunner:
             lanes = sorted(lane for lane in kind.lanes if _lane_key(kind, lane) in closed)
             if kind.lane_field is not None and lanes:
                 request = JobRow.__table__.c.request[kind.lane_field].as_string()
-                clauses.append(and_(JobRow.kind == name, request.in_(lanes)))
+                clauses.append(and_(JobRow.kind == name, request.is_not(None), request.in_(lanes)))
         return or_(*clauses) if clauses else None
 
     def _turned_away(self, db: Session, kind: AnyJobKind, request: object) -> str | None:
         """Return why the Job can't start, or `None`: its kind's reason, or a lane it lacks."""
-        if kind.lane_field is not None and _lane_name(kind, request) not in kind.lanes:
-            return f"This server no longer runs {_lane_name(kind, request)!r} for {kind.name}."
+        lane = _lane_name(kind, request)
+        if (
+            kind.lane_field is not None
+            and lane not in kind.lanes
+            and (lane is not None or not kind.lane_optional)
+        ):
+            return f"This server no longer runs {lane!r} for {kind.name}."
         return None if kind.refuse_start is None else kind.refuse_start(db, request)
 
     def _launch(

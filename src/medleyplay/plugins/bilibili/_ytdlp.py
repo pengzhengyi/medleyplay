@@ -13,7 +13,10 @@ Unverified until yt-dlp can read Bilibili again: the options and the errors
 follow yt-dlp's documentation and source, not a run against the site.
 """
 
+# cspell:ignore EFBIG
+
 import base64
+import errno
 import re
 import urllib.error
 import urllib.request
@@ -22,6 +25,8 @@ from typing import Any, Final
 from urllib.parse import unquote, urlsplit
 
 import yt_dlp  # type: ignore[import-untyped] # yt-dlp ships no type hints
+from yt_dlp.downloader import get_suitable_downloader  # type: ignore[import-untyped]
+from yt_dlp.downloader.http import HttpFD  # type: ignore[import-untyped]
 from yt_dlp.networking import (  # type: ignore[import-untyped]
     Request,
     RequestDirector,
@@ -37,6 +42,7 @@ from yt_dlp.utils import (  # type: ignore[import-untyped]
     DownloadError,
     ExtractorError,
     GeoRestrictedError,
+    UnavailableVideoError,
 )
 
 from medleyplay.plugin_api import AuthError, NetworkError
@@ -72,6 +78,10 @@ class NeedsLoginError(Exception):
 
 class RefusedError(RuntimeError):
     """The site refused the request: a 403, a 412, a rate limit, or its risk control."""
+
+
+class BoundedDownloadError(Exception):
+    """A transfer cannot complete within the joined Job's download contract."""
 
 
 def extract(
@@ -138,6 +148,7 @@ def download(
     cookie_file: str | None,
     on_progress: OnProgress,
     proxy: str | None = None,
+    bounded_http: bool = False,
 ) -> Info:
     """Download the first of `formats` the site offers into `folder`, as `audio.<ext>`.
 
@@ -159,6 +170,8 @@ def download(
         "progress_hooks": [hook],
         "postprocessors": [],
     }
+    if bounded_http:
+        options.update({"medleyplay_bounded_http": True, "fixup": "never"})
     return _run(options, lambda ydl: _extract(ydl, url, download=True), cookie_file)
 
 
@@ -399,6 +412,38 @@ class _OneHopRH(_ProxiedRH):
 
 class _YoutubeDL(yt_dlp.YoutubeDL):  # type: ignore[misc] # yt-dlp ships no type hints
     """yt-dlp that sends its requests with `_ProxiedRH` before any other handler."""
+
+    _bounded_transfer_started = False
+
+    def save_cookies(self) -> None:
+        """Do not write a cookie jar during a bounded audio transfer."""
+        if not self.params.get("medleyplay_bounded_http"):
+            super().save_cookies()
+
+    def process_info(self, info_dict: Any) -> None:  # noqa: ANN401 -- untyped yt-dlp override
+        """Bound joined downloads to the downloader that writes one partial file."""
+        if not self.params.get("medleyplay_bounded_http"):
+            super().process_info(info_dict)
+            return
+        if (
+            self._bounded_transfer_started
+            or info_dict.get("requested_formats")
+            or get_suitable_downloader(info_dict, self.params) is not HttpFD
+        ):
+            message = "This part cannot be joined using a direct transfer. Use Separate files."
+            raise BoundedDownloadError(message)
+        self._bounded_transfer_started = True
+        try:
+            super().process_info(info_dict)
+        except (DownloadError, OSError, UnavailableVideoError) as error:
+            reported = (
+                error.exc_info[1] if isinstance(error, DownloadError) and error.exc_info else None
+            )
+            causes = (error, error.__context__, reported)
+            if any(isinstance(cause, OSError) and cause.errno == errno.EFBIG for cause in causes):
+                message = "The selected album parts exceed the temporary download limit."
+                raise BoundedDownloadError(message) from error
+            raise
 
     def build_request_director(
         self, handlers: object, preferences: object = None

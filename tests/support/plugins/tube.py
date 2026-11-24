@@ -31,7 +31,10 @@ names `BVproxied` when the call carried a proxy and `BVdirect` when it did not, 
 both read as `BVProxyEcho` does.
 """
 
+# cspell:ignore alac
+
 import re
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -58,15 +61,24 @@ from medleyplay.plugin_api import (
     VideoStatus,
     report_progress,
 )
+from tests.support.audio import m4a_tone
 
 NIGHT_DRIVE: Final = "BV1Xx41117Tz"
 MIXTAPE: Final = "BV17x411w7KC"
+JOIN_RETRY: Final = "BV1ab411c7DE"
+LONG_VIDEO: Final = "BV1cd411e7FG"
+LONG_PARTS: Final = 72
 QUALITIES: Final = (
     AudioQuality(id="30280", label="192 kbps", kbps=192),
     AudioQuality(id="30232", label="132 kbps", kbps=132),
     AudioQuality(id="30216", label="64 kbps", kbps=64),
 )
-_TITLES: Final = {NIGHT_DRIVE: ("Night Drive", 1), MIXTAPE: ("Mixtape", 3)}
+_TITLES: Final = {
+    NIGHT_DRIVE: ("Night Drive", 1),
+    MIXTAPE: ("Mixtape", 3),
+    JOIN_RETRY: ("Mixtape", 3),
+    LONG_VIDEO: ("Long Mixtape", LONG_PARTS),
+}
 _VIDEO: Final = re.compile(r"/video/(?P<video>BV\w+)/?")
 _PART: Final = re.compile(r"[?&]p=(?P<part>\d+)")
 _SHORT: Final = {
@@ -121,7 +133,11 @@ class Resolver:
             title=f"【MV】{title}",
             uploader="Blue Room",
             parts=tuple(
-                PartDetails(part=n, title=title if parts == 1 else f"{title} {n}", duration_ms=1000)
+                PartDetails(
+                    part=n,
+                    title=title if parts == 1 else f"{title} {n}",
+                    duration_ms=1000 if video != LONG_VIDEO or n == 1 else None,
+                )
                 for n in range(1, parts + 1)
             ),
             qualities=QUALITIES,
@@ -151,6 +167,8 @@ class Downloader:
         if video == "BVProxyProgress":
             time.sleep(2)
         quality = "30280" if request.quality == "best" else request.quality
+        if request.bounded_http:
+            return _joined_part(request, folder, quality)
         name = _misbehave(video, folder)
         if name is None:
             name = "audio.m4a"
@@ -161,6 +179,32 @@ class Downloader:
             )
             (folder / name).write_text(said, encoding="utf-8")
         return Downloaded(file=name, quality=quality, backend="tube")
+
+
+def _joined_part(request: DownloadPart, folder: Path, quality: str) -> Downloaded:
+    """Give each part a different tone; for the retry video, part 3 waits for a test marker."""
+    if request.video == JOIN_RETRY and request.part == 3:
+        controls = folder.parents[3]
+        if (controls / "hold-part").exists():
+            report_progress(0.5, "Part 3 is waiting")
+        while (controls / "hold-part").exists():
+            time.sleep(0.05)
+        if not (controls / "part-restored").exists():
+            return Downloaded(file=None, gone=True, message="The part was removed.")
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        message = "Synthetic audio needs FFmpeg."
+        raise RuntimeError(message)
+    odd = request.part % 2 == 1
+    m4a_tone(
+        ffmpeg,
+        folder / "audio.m4a",
+        frequency=request.part * 220,
+        sample_rate=44100 if odd else 32000,
+        channels=1 if odd else 2,
+        codec="aac" if odd else "alac",
+    )
+    return Downloaded(file="audio.m4a", quality=quality, backend="tube")
 
 
 class Login:

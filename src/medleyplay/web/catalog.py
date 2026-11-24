@@ -81,6 +81,7 @@ class TrackOut(BaseModel):
     site: str | None = Field(
         description="The kind of site its audio is downloaded from, such as `bilibili`, if any."
     )
+    joined: bool = Field(default=False, description="Whether this is a joined video selection.")
     video: str | None = Field(
         default=None,
         description="The page of the video the Track's audio came from, if known.",
@@ -129,6 +130,7 @@ class TrackOut(BaseModel):
             downloaded=track.downloaded,
             download_failed=track.download_failed,
             site=track.site,
+            joined=track.joined,
             video=track.video,
             segment_of=track.segment_of,
             split=track.split,

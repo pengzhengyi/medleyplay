@@ -6,7 +6,6 @@ wanted removes nothing.
 """
 
 import shutil
-import stat
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -17,29 +16,32 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from medleyplay.application.album_ratings import album_ratings_by_account, library_album_of
-from medleyplay.application.downloads import DOWNLOAD_KIND, QUALITY_DETAIL
+from medleyplay.application.download_budgets import active_budgets, cache_copies, estimate_of
 from medleyplay.application.rule_schema import read_rules
 from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.album_ratings import AlbumRatings, effective_rating
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
-from medleyplay.domain.downloads import MANUAL_BACKEND, download_target, quality_kbps
+from medleyplay.domain.downloads import (
+    DOWNLOAD_KIND,
+    MANUAL_BACKEND,
+    download_target,
+)
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.domain.jobs import ACTIVE_STATES, JobState
+from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE
 from medleyplay.domain.linked_accounts import LinkState
-from medleyplay.domain.playback import CACHE_FOLDER
+from medleyplay.domain.links import BILIBILI_SOURCE, video_selection
 from medleyplay.domain.policy import (
-    CacheCopy,
     Failure,
     PolicyState,
     Standing,
     StoredDownload,
     Wanted,
-    reservation,
 )
 from medleyplay.domain.rules import TrackFacts, matches
+from medleyplay.download_limits import JOIN_SCRATCH_BYTES
 from medleyplay.persistence.schema import (
     DownloadRow,
     JobRow,
@@ -50,6 +52,7 @@ from medleyplay.persistence.schema import (
     TrackRow,
     TrackStateRow,
 )
+from medleyplay.programs.joined_audio import join_tools
 
 
 class UnreadableRulesError(InvalidInputError):
@@ -72,7 +75,27 @@ class _Source:
     track_id: TrackId
     kind: str
     state: str
-    quality: str
+    details: dict[str, object] | None
+    joined: bool = False
+    scratch: int = 0
+
+    @classmethod
+    def of(cls, row: SourceRow) -> "_Source":
+        if row.kind == BILIBILI_SOURCE:
+            selection = video_selection(row.locator)
+            joined = selection.joined
+            scratch = JOIN_SCRATCH_BYTES if joined and len(selection.parts) > 1 else 0
+        else:
+            joined, scratch = False, 0
+        return cls(
+            SourceId(row.id),
+            TrackId(row.track_id),
+            row.kind,
+            row.state,
+            row.details,
+            joined,
+            scratch,
+        )
 
 
 def read_snapshot(
@@ -85,32 +108,18 @@ def read_snapshot(
     """Return the policy's state as the database and the data folder hold it now."""
     sites = frozenset(downloadable_sites)
     wanted_by = _wanted_by(db, now)
-    sources = [
-        _Source(
-            SourceId(row.id),
-            TrackId(row.track_id),
-            row.kind,
-            row.state,
-            str((row.details or {}).get(QUALITY_DETAIL, "best")),
-        )
-        for row in db.scalars(select(SourceRow).order_by(SourceRow.id))
-    ]
+    sources = [_Source.of(row) for row in db.scalars(select(SourceRow).order_by(SourceRow.id))]
     by_track: defaultdict[TrackId, list[_Source]] = defaultdict(list)
     for source in sources:
         by_track[source.track_id].append(source)
     standings, durations = _standings(db)
     downloads = {SourceId(row.source_id): row for row in db.scalars(select(DownloadRow))}
-    active = set(
-        db.scalars(
-            select(JobRow.target).where(
-                JobRow.kind == DOWNLOAD_KIND, JobRow.state.in_(ACTIVE_STATES)
-            )
-        )
-    )
+    active = active_budgets(db)
     source_of = {source.id: source for source in sources}
+    tools = join_tools() is not None
 
     def estimate(source: _Source) -> int:
-        return reservation(durations.get(source.track_id), quality_kbps(source.quality))
+        return estimate_of(source.details, durations.get(source.track_id))
 
     stored = tuple(
         StoredDownload(
@@ -123,8 +132,9 @@ def read_snapshot(
             wanted=source_of[source_id].track_id in wanted_by,
             replaceable=source_of[source_id].state == SourceState.OK
             and source_of[source_id].kind in sites
+            and (tools or not source_of[source_id].scratch)
             and row.backend != MANUAL_BACKEND,
-            active_job=download_target(source_id) in active,
+            active_job=source_id in active,
         )
         for source_id, row in downloads.items()
         if source_id in source_of
@@ -160,7 +170,9 @@ def read_snapshot(
                 standing=standings[track_id],
                 wanted_by=tuple(sorted(accounts)),
                 source_ok=chosen.state == SourceState.OK,
-                active_job=download_target(chosen.id) in active,
+                active_job=chosen.id in active,
+                joined=chosen.joined,
+                scratch=chosen.scratch,
                 failure=_failure(
                     history.get(download_target(chosen.id), []),
                     chosen.kind,
@@ -177,13 +189,13 @@ def read_snapshot(
         free=disk.free,
         disk_size=disk.total,
         downloads=stored,
-        cache=_cache_copies(data_dir),
+        cache=cache_copies(data_dir),
         wanted=tuple(wanted),
-        reserved=sum(
-            estimate(source_of[_source_of_target(t)])
-            for t in active
-            if _source_of_target(t) in source_of
+        reserved=sum(each.estimate for each in active.values()),
+        scratch_reserved=max(
+            (each.disk_bytes - each.estimate for each in active.values()), default=0
         ),
+        join_tools_available=tools,
         active_policy_jobs=len(active),
         downloadable_sites=sites,
         valid_logins=frozenset(logins),
@@ -316,29 +328,3 @@ def _failure(
         for account_id in accounts
     )
     return Failure(failed_at, in_a_row, cleared=cleared)
-
-
-def _cache_copies(data_dir: Path) -> tuple[CacheCopy, ...]:
-    folder = data_dir / CACHE_FOLDER
-    if not folder.is_dir():
-        return ()
-    copies = []
-    for path in folder.iterdir():
-        try:
-            info = path.lstat()
-        except FileNotFoundError:  # a newer copy replaced it
-            continue
-        if stat.S_ISREG(info.st_mode):
-            copies.append(
-                CacheCopy(path.name, info.st_size, _touched_at(info.st_atime, info.st_mtime))
-            )
-    return tuple(copies)
-
-
-def _touched_at(accessed: float, modified: float) -> datetime:
-    """Return when a cache copy was last written or served, which sets its access time."""
-    return datetime.fromtimestamp(max(accessed, modified), UTC)
-
-
-def _source_of_target(target: str) -> SourceId:
-    return SourceId(int(target.removeprefix("source:")))

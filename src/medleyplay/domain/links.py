@@ -18,6 +18,8 @@ av170001       https://www.bilibili.com/video/av170001
 """
 
 import re
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -25,9 +27,10 @@ from medleyplay.domain.errors import InvalidInputError
 from medleyplay.video_urls import VIDEO_HOSTS, public_video_link
 
 BILIBILI_SOURCE: Final = "bilibili"
-"""The Source kind of one part of a Bilibili video; its locator is `<BV id>/p<part>`."""
+"""The Source kind of a standalone part or joined selection from Bilibili."""
 
 MAX_LINK_LENGTH: Final = 2048
+MAX_PART_NUMBER: Final = 9999
 LINK_HOSTS: Final = dict.fromkeys(VIDEO_HOSTS, BILIBILI_SOURCE)
 """Each host a link may name, and the Source kind it belongs to; any other is refused."""
 
@@ -103,13 +106,51 @@ def parse_part_locator(locator: str) -> tuple[str, int]:
     return video, int(part)
 
 
+def joined_locator(video: str, parts: Sequence[int]) -> str:
+    """Name one joined selection, as `BV1Xx41117Tz/joined/2,4`."""
+    if not VIDEO_ID.fullmatch(video) or not (
+        parts
+        and len(parts) == len(set(parts))
+        and all(1 <= part <= MAX_PART_NUMBER for part in parts)
+    ):
+        message = "A joined album needs one or more distinct parts of a video."
+        raise InvalidInputError(message)
+    return f"{video}/joined/{','.join(map(str, sorted(parts)))}"
+
+
+@dataclass(frozen=True)
+class VideoSelection:
+    """The parts of a video kept as one Source, joined or standalone."""
+
+    video: str
+    parts: tuple[int, ...]
+    joined: bool = False
+
+
+def video_selection(locator: str) -> VideoSelection:
+    """Read either a standalone part locator or a canonical joined locator."""
+    if "/joined/" not in locator:
+        video, part = parse_part_locator(locator)
+        return VideoSelection(video, (part,))
+    video, _, text = locator.partition("/joined/")
+    numbers = text.split(",")
+    if all(re.fullmatch(r"[1-9][0-9]{0,3}", part) for part in numbers):
+        parts = tuple(map(int, numbers))
+        if joined_locator(video, parts) == locator:
+            return VideoSelection(video, parts, joined=True)
+    message = "The joined album selection is invalid."
+    raise InvalidInputError(message)
+
+
 def part_link(kind: str, locator: str) -> str:
-    """Return the link to the part a site Source's locator names.
+    """Return the link to a standalone part or the whole video of a joined selection.
 
     The Source `bilibili` `BV1Xx41117Tz/p2` is `https://www.bilibili.com/video/BV1Xx41117Tz?p=2`.
     """
-    video, part = parse_part_locator(locator)
-    return PART_LINKS[kind].format(video=video, part=part)
+    selection = video_selection(locator)
+    if selection.joined:
+        return CODE_LINK.format(code=selection.video)
+    return PART_LINKS[kind].format(video=selection.video, part=selection.parts[0])
 
 
 def _refused(link: str) -> InvalidInputError:

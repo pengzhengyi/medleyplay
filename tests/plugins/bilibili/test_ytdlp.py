@@ -2,9 +2,9 @@
 
 import gc
 import io
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from typing import Self
+from typing import Protocol, Self
 from urllib.error import URLError
 
 import pytest
@@ -20,6 +20,7 @@ from yt_dlp.utils import ExtractorError, GeoRestrictedError  # type: ignore[impo
 from medleyplay.plugin_api import AuthError, NetworkError
 from medleyplay.plugins.bilibili import _ytdlp
 from medleyplay.plugins.bilibili._ytdlp import (
+    BoundedDownloadError,
     GoneError,
     NeedsLoginError,
     RefusedError,
@@ -29,6 +30,7 @@ from medleyplay.plugins.bilibili._ytdlp import (
     refusal_of,
     sort_failure,
 )
+from medleyplay.programs.joined_audio import file_limit
 from tests.support.images import jpeg_image, oversized_jpeg
 from tests.support.proxies import Answer, running_http_proxy, running_socks_proxy
 from tests.support.recordings import recorded_info
@@ -276,6 +278,87 @@ def test_a_download_goes_through_the_proxy_it_is_given(
         )
 
     assert len(proxy.requests) == 1
+
+
+class _ProcessVideo(Protocol):
+    def process_ie_result(self, info: dict[str, object], *, download: bool) -> object: ...
+
+
+_MEDIA = "http://www.bilibili.com/test-audio"
+_PART_CAP = 64 * 1024
+
+
+def _synthetic_stream(monkeypatch: pytest.MonkeyPatch, protocol: str) -> None:
+    def extract_stream(ydl: _ProcessVideo, _url: str, *, download: bool) -> _ytdlp.Info:
+        info = ydl.process_ie_result(
+            {
+                "id": "test",
+                "title": "Test audio",
+                "url": _MEDIA,
+                "ext": "m4a",
+                "protocol": protocol,
+                "format_id": "30280",
+                "vcodec": "none",
+                "acodec": "aac",
+            },
+            download=download,
+        )
+        assert isinstance(info, Mapping)
+        return info
+
+    monkeypatch.setattr(_ytdlp, "_extract", extract_stream)
+
+
+@pytest.mark.parametrize("size", [32 * 1024, 256 * 1024])
+def test_native_http_enforces_the_write_limit_without_a_content_length(
+    no_outside_network: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, size: int
+) -> None:
+    _synthetic_stream(monkeypatch, "http")
+    body = b"\x01" * size
+    with running_http_proxy({_MEDIA: Answer(200, body=body, send_length=False)}) as proxy:
+
+        def transfer() -> None:
+            with file_limit(_PART_CAP):
+                download(
+                    f"http://{VIDEO_PAGE}",
+                    formats="30280",
+                    folder=str(tmp_path),
+                    cookie_file=None,
+                    on_progress=lambda *_: None,
+                    proxy=proxy.url,
+                    bounded_http=True,
+                )
+
+        if size <= _PART_CAP:
+            transfer()
+            assert (tmp_path / "audio.m4a").read_bytes() == body
+        else:
+            with pytest.raises(BoundedDownloadError, match="temporary download limit"):
+                transfer()
+            assert not (tmp_path / "audio.m4a").exists()
+            assert (tmp_path / "audio.m4a.part").stat().st_size == _PART_CAP
+
+
+def test_joined_download_refuses_fragmented_audio_before_downloading(
+    no_outside_network: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _synthetic_stream(monkeypatch, "m3u8_native")
+    with (
+        running_http_proxy() as proxy,
+        pytest.raises(BoundedDownloadError, match="Use Separate files"),
+    ):
+        download(
+            f"http://{VIDEO_PAGE}",
+            formats="30280",
+            folder=str(tmp_path),
+            cookie_file=None,
+            on_progress=lambda *_: None,
+            proxy=proxy.url,
+            bounded_http=True,
+        )
+
+    assert proxy.requests == []
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize("status", [403, 412])

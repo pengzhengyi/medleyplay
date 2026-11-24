@@ -824,7 +824,11 @@ export function Library({
           listed={library.videoLookups}
           load={library.videoLookup}
           add={library.addLink}
-          onAdded={(count) => {
+          onAdded={(count, notice) => {
+            if (notice !== undefined) {
+              setNotice(notice);
+              return;
+            }
             const songs = count === 1 ? "1 song" : `${String(count)} songs`;
             const wait =
               library.mode?.online === false ? " They wait until medleyplay is Online." : "";

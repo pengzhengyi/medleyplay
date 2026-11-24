@@ -63,10 +63,9 @@
 - **An unreadable result stays ready for manual entry.** Confirming its parts
   does not retry the read. Only the direct, synchronous API uses a ten-minute
   memory of reads.
-- **Adding then trusts the household's details:** each part's number (1 to
-  9999), title, and artist, checked as before for length, with at most 50 parts,
-  and the quality *best*; any other quality is refused. The duration is unknown
-  until a file comes.
+- **Adding then trusts the household's details:** distinct part numbers from
+  1 to 9999, titles, and artists. Quality must be *best*. The duration is
+  unknown until a file arrives.
 - **Each part still gets a Track, a Source, and a Download Job,** so the
   downloader gets its try; a video the site says is *gone* gets one attempt, and
   its Source becomes *unavailable* as before.

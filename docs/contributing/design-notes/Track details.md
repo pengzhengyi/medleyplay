@@ -16,6 +16,7 @@
 - [What medleyplay reads](#what-medleyplay-reads)
 - [Covers](#covers)
 - [Enrichers](#enrichers)
+- [Missing artist or album](#missing-artist-or-album)
 - [What the API shows](#what-the-api-shows)
 - [Build order](#build-order)
 - [Testing](#testing)
@@ -728,6 +729,37 @@ songs editor.
   against the same cases.
 - **Its own lane.** Jobs of `ai-details` run one at a time, at least 2 seconds
   apart. They wait while the Mode is Offline, a local provider included.
+
+## Missing artist or album
+
+**Clean up → Missing artist or album** lists songs and whole album files
+with missing details. Songs need an artist or album title; a whole album
+file needs an album title or credit. An artist already credited on a whole
+file satisfies the credit. Individual songs, not album groupings, are
+the records the household changes.
+
+- **From your Library:** a whole album file's title can suggest its album
+  title. A song can borrow an album name from another song with the same
+  title and the same bound performers and credit roles. A title alone
+  or a placeholder artist is not enough to match two songs.
+- **Suggested by AI:** an admin can enable **Suggest missing details with
+  AI** in **Settings → AI**. It is off by default. Opening Clean up or
+  enabling the switch does not contact a provider. **Ask AI** sends known
+  music metadata and the requested fields to enabled providers, which may
+  be tried in turn. Filename-origin and inherited album-file values are
+  excluded. A Track without an independently named song or album is not
+  sent. These Jobs use the existing AI lane and do not replace the ordinary
+  Enricher's suggestions or song list.
+- **Use** saves one household override after checking that the field is
+  still missing and the candidate still applies. Edits that would change
+  other shown details or a split album's songs go through **Edit details**.
+  **Leave blank** records an intentional blank; **Remove blank override**
+  in the editor makes that field eligible again.
+
+A saved suggestion applies only to the same version of the Track's details.
+Turning off AI hides its suggestions and prevents new requests; it cannot
+recall a request already sent. A stale or disabled Job cannot publish an
+answer. The household can still review local candidates with AI off.
 
 ## What the API shows
 

@@ -46,6 +46,7 @@ import { LyricsSites } from "./LyricsSites";
 import { PictureSites } from "./PictureSites";
 import { CoverSearchSettings } from "./CoverSearchSettings";
 import { MusicBrainzSettings } from "./MusicBrainzSettings";
+import { MissingDetailsSettings } from "./MissingDetailsSettings";
 import { NetworkSettings } from "./NetworkSettings";
 import { RatingsSettings } from "./RatingsSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
@@ -251,6 +252,9 @@ export function SettingsView({
     ai: (
       <>
         <AiSettings onChanged={onEnrichersChanged} />
+        {admin && household !== undefined && (
+          <MissingDetailsSettings settings={household} onSettings={keepNewest} />
+        )}
         <AiNotesSettings settings={household} onSettings={keepNewest} />
       </>
     ),

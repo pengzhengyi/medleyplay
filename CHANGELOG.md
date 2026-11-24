@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clean up → Missing artist or album** offers Library matches for missing
+  details. An admin can enable per-track AI suggestions in Settings. Nothing
+  changes until a listener accepts a suggestion or edits the details.
 - Open artist profiles directly from the Library's artist credits and from
   albums. On phones, tap the artist beneath the song title.
 - Choose which parts of a Bilibili video to download. Keep a file per part or

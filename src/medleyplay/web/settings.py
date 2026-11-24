@@ -107,6 +107,7 @@ class SettingsIn(BaseModel):
             " when none plainly does. Left out, it stays as saved."
         ),
     )
+    suggest_missing_details_by_ai: bool = False
     ai_notes: tuple[AiNoteIn, ...] = Field(
         default=tuple(AiNoteIn.of(note) for note in DEFAULT_AI_NOTES),
         description=(
@@ -131,6 +132,7 @@ class SettingsOut(BaseModel):
     find_artist_photos: PhotoSearch
     find_album_covers: CoverSearch
     pick_album_covers_by_ai: bool
+    suggest_missing_details_by_ai: bool
     ai_notes: tuple[AiNoteIn, ...]
     revision: int
 
@@ -149,6 +151,7 @@ class SettingsOut(BaseModel):
             find_artist_photos=settings.find_artist_photos,
             find_album_covers=settings.find_album_covers,
             pick_album_covers_by_ai=settings.pick_album_covers_by_ai,
+            suggest_missing_details_by_ai=settings.suggest_missing_details_by_ai,
             ai_notes=tuple(AiNoteIn.of(note) for note in settings.ai_notes),
             revision=settings.revision,
         )
@@ -213,6 +216,11 @@ def put_settings(body: SettingsIn, me: SignedInAccount, settings: SettingsDep) -
                 body.pick_album_covers_by_ai
                 if "pick_album_covers_by_ai" in body.model_fields_set
                 else saved_before.pick_album_covers_by_ai
+            ),
+            suggest_missing_details_by_ai=(
+                body.suggest_missing_details_by_ai
+                if "suggest_missing_details_by_ai" in body.model_fields_set
+                else saved_before.suggest_missing_details_by_ai
             ),
             ai_notes=(
                 tuple(note.note() for note in body.ai_notes)

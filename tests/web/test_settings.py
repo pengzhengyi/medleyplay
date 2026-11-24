@@ -25,9 +25,25 @@ def test_settings_never_saved_read_as_no_limit_at_revision_0(client: TestClient)
         "find_artist_photos": "up_next",
         "find_album_covers": "up_next",
         "pick_album_covers_by_ai": False,
+        "suggest_missing_details_by_ai": False,
         "ai_notes": [{"ask": note.ask, "text": note.text} for note in DEFAULT_AI_NOTES],
         "revision": 0,
     }
+
+
+def test_an_older_client_saves_other_settings_without_disabling_missing_details_ai(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    client.put(
+        "/api/settings",
+        json={"storage_limit": None, "revision": 0, "suggest_missing_details_by_ai": True},
+    )
+
+    saved = client.put("/api/settings", json={"storage_limit": TWENTY_GIB, "revision": 1})
+
+    assert saved.status_code == 200
+    assert saved.json()["suggest_missing_details_by_ai"] is True
 
 
 def test_an_admin_turns_lyrics_suggestions_off_keeping_the_rest(client: TestClient) -> None:

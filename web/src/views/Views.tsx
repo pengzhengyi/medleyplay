@@ -138,6 +138,7 @@ export interface ViewProps {
     /** Read the songs again once covers found were used, so their albums show them. */
     readonly onUsed?: () => void;
   };
+  readonly missingDetailsRevision?: string;
   /** How many names wait to be cleaned up. */
   readonly toDo?: number;
 }
@@ -484,6 +485,17 @@ function viewOf(
             {...(props.sharedNames === undefined ? {} : { sharedNames: props.sharedNames })}
             {...(props.missingPhotos === undefined ? {} : { missingPhotos: props.missingPhotos })}
             {...(props.missingCovers === undefined ? {} : { missingCovers: props.missingCovers })}
+            {...(props.missingDetailsRevision === undefined
+              ? {}
+              : {
+                  missingDetails: {
+                    revision: props.missingDetailsRevision,
+                    onEdit: (trackId: number) => {
+                      const track = props.tracks.find((each) => each.id === trackId);
+                      if (track !== undefined) props.actions.onEditDetails(track);
+                    },
+                  },
+                })}
             {...(props.actions.onUseAlbumCover === undefined ||
             props.actions.onUploadAlbumCover === undefined
               ? {}

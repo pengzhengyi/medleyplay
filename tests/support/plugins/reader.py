@@ -170,6 +170,11 @@ from medleyplay.plugin_api import (
     SuggestImages,
     VideoText,
 )
+from medleyplay.plugin_api.missing_details import (
+    MISSING_DETAILS_SUGGESTER,
+    SuggestedMissingDetails,
+    SuggestMissingDetails,
+)
 from tests.support.images import jpeg_image, oversized_jpeg
 
 RECORDED_TITLE: Final = "【HR 24/48】朴树2003《生如夏花》专辑歌词版"
@@ -767,6 +772,19 @@ class Lyricist:
         return FoundLyricsOptions(options=(song, live, *on_netease))
 
 
+class MissingDetails:
+    """Suggest invented credits for tests, without asking a provider."""
+
+    def suggest(self, request: SuggestMissingDetails) -> SuggestedMissingDetails:
+        """Return a suggestion for each requested field."""
+        return SuggestedMissingDetails(
+            values={
+                field: "Synthetic Album" if field == "album" else "Synthetic Artist"
+                for field in request.clues.missing
+            }
+        )
+
+
 def register(registry: Registry) -> None:
     """Add the enrichers `bilibili-details`, `musicbrainz`, and `ai-details`, and the rest.
 
@@ -788,6 +806,7 @@ def register(registry: Registry) -> None:
     registry.add(PICTURE_CHOOSER, "ai-details", PictureChoices())
     registry.add(COVER_CHOOSER, "ai-details", CoverChoices())
     registry.add(LYRICS_CHOOSER, "ai-details", LyricsChoices())
+    registry.add(MISSING_DETAILS_SUGGESTER, "ai-details", MissingDetails())
     registry.add(IMAGE_SUGGESTER, "ai-details", ImageLinks())
     registry.add(IMAGE_FETCHER, "ai-details", Images())
 

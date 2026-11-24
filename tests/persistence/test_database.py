@@ -670,6 +670,30 @@ def _migrate_to(engine: Engine, revision: str, *, down: bool = False) -> None:
             (command.downgrade if down else command.upgrade)(config, revision)
 
 
+def test_missing_details_upgrade_keeps_tracks_and_cascades_suggestions_on_delete(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0062")
+    with engine.begin() as connection:
+        track = _add_track(connection, "Intro")
+
+    migrate(engine)
+
+    with engine.begin() as connection:
+        assert (
+            connection.scalar(text("SELECT title FROM track WHERE id = :id"), {"id": track})
+            == "Intro"
+        )
+        connection.exec_driver_sql(
+            'INSERT INTO missing_details (track_id, key, "values") VALUES (?, ?, ?)',
+            (track, "a" * 64, '{"album":"Live"}'),
+        )
+        connection.execute(text("DELETE FROM track WHERE id = :id"), {"id": track})
+        assert connection.scalar(text("SELECT count(*) FROM missing_details")) == 0
+    engine.dispose()
+
+
 def test_migrating_forgets_when_musicbrainz_was_asked_so_it_is_asked_again_for_ratings(
     tmp_path: Path,
 ) -> None:

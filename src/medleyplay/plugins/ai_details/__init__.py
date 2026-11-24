@@ -20,11 +20,13 @@ from medleyplay.plugin_api import (
     Plugin,
     Registry,
 )
+from medleyplay.plugin_api.missing_details import MISSING_DETAILS_SUGGESTER
 from medleyplay.plugins.ai_details.artists import AiArtistChooser
 from medleyplay.plugins.ai_details.covers import AiCoverChooser
 from medleyplay.plugins.ai_details.describe import AiArtistDescriber
 from medleyplay.plugins.ai_details.images import AiImageSuggester, WebImageFetcher
 from medleyplay.plugins.ai_details.lyrics import AiLyricsChooser
+from medleyplay.plugins.ai_details.missing_details import AiMissingDetails
 from medleyplay.plugins.ai_details.pictures import AiPictureChooser
 from medleyplay.plugins.ai_details.provider import AiDetails
 
@@ -37,6 +39,7 @@ def register(registry: Registry) -> None:
     registry.add(COVER_CHOOSER, "ai-details", AiCoverChooser())
     registry.add(PICTURE_CHOOSER, "ai-details", AiPictureChooser())
     registry.add(LYRICS_CHOOSER, "ai-details", AiLyricsChooser())
+    registry.add(MISSING_DETAILS_SUGGESTER, "ai-details", AiMissingDetails())
     registry.add(IMAGE_SUGGESTER, "ai-details", AiImageSuggester())
     registry.add(IMAGE_FETCHER, "ai-details", WebImageFetcher())
 

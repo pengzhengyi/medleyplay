@@ -44,6 +44,7 @@ from medleyplay.application.lyrics import LyricsService
 from medleyplay.application.lyrics_match import LyricsMatchService, lyrics_match_kinds
 from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.manual_downloads import ManualDownloadService
+from medleyplay.application.missing_details import MissingDetailsService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
@@ -630,6 +631,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         lyrics=lyrics,
         lyrics_search=lyrics_search,
         lyrics_match=lyrics_match,
+        missing_details=MissingDetailsService(units, clock, jobs, plugins),
         storage_folder=storage_folder,
         storage_inspection=StorageInspection(
             tmp_path / "data",

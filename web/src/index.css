@@ -8954,6 +8954,46 @@ button.playing-kind[aria-expanded="true"] {
   list-style: none;
 }
 
+.missing-details-list {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.missing-details-track {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.missing-details-track :is(h4, p) {
+  margin: 0;
+}
+
+.missing-details-field,
+.missing-details-actions,
+.missing-details-candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.7rem;
+}
+
+.missing-details-field {
+  padding: 0.35rem 0;
+}
+
+.missing-details-candidate {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.55rem;
+  background: var(--accent-soft);
+}
+
 .tidy-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -771,6 +771,7 @@ export function settingsOf(change: Partial<Settings> = {}): Settings {
     find_artist_photos: "up_next",
     find_album_covers: "up_next",
     pick_album_covers_by_ai: false,
+    suggest_missing_details_by_ai: false,
     ai_notes: [
       { ask: "details", text: "Name the album the song first came out on." },
       { ask: "songs", text: "One song per track of the album's standard edition." },

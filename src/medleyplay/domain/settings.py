@@ -116,6 +116,7 @@ class Settings:
     find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
     find_album_covers: CoverSearch = CoverSearch.UP_NEXT
     pick_album_covers_by_ai: bool = False
+    suggest_missing_details_by_ai: bool = False
     ai_notes: tuple[AiNote, ...] = DEFAULT_AI_NOTES
     revision: int = 0
 

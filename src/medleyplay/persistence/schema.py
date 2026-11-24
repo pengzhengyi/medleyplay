@@ -155,6 +155,18 @@ class TrackValueRow(Base):
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class MissingDetailsRow(Base):
+    """The AI's candidates for one version of a Track's shown details."""
+
+    __tablename__ = "missing_details"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    key: Mapped[str] = mapped_column(String(64))
+    values: Mapped[dict[str, str]] = mapped_column(JSON)
+
+
 class SegmentRow(Base):
     """One song inside an album file: a stretch of that file's Source, played as its own Track.
 

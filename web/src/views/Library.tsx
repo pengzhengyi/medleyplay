@@ -784,6 +784,7 @@ export function Library({
             sharedNames={sharedNames}
             missingPhotos={missingPhotos}
             missingCovers={{ ...missingCovers, onUsed: library.reloadTracks }}
+            missingDetailsRevision={String(library.refreshes)}
             toDo={toDo}
           />
         ) : (

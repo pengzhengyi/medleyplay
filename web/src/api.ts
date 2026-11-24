@@ -809,6 +809,7 @@ export interface Settings {
   readonly find_album_covers: CoverSearch;
   /** Whether an AI model is asked, in the background, which cover fits an album none plainly fits. */
   readonly pick_album_covers_by_ai: boolean;
+  readonly suggest_missing_details_by_ai: boolean;
   /** The notes offered to whoever asks the AI, beside the button for each ask. */
   readonly ai_notes: readonly AiNote[];
   readonly revision: number;
@@ -816,6 +817,32 @@ export interface Settings {
 
 /** The albums with no cover searched on their own: of the songs up next, every one, or none. */
 export type CoverSearch = "off" | "up_next" | "missing";
+
+export type MissingField = "artist" | "album" | "album_artist";
+
+export interface CreditCandidate {
+  readonly value: string;
+  readonly origin: "library" | "ai";
+}
+
+export interface MissingDetailsItem {
+  readonly track_id: number;
+  readonly title: string;
+  readonly artist: string;
+  readonly album: string;
+  readonly kind: Kind;
+  readonly key: string;
+  readonly fields: readonly {
+    readonly field: MissingField;
+    readonly candidates: readonly CreditCandidate[];
+  }[];
+  readonly ai: "off" | "unavailable" | "no_metadata" | "ready" | "working" | "failed" | "answered";
+}
+
+export interface MissingDetailsPage {
+  readonly tracks: readonly MissingDetailsItem[];
+  readonly next_after: number | null;
+}
 
 /** An album with no cover, as written, and the cover suggested for it. */
 export interface MissingCover {
@@ -1768,6 +1795,21 @@ export const api = {
     call<undefined>("POST", "/api/album-covers/dismiss", { album, artist, cover }),
   /** Every album with no cover, those with a cover suggested first, then most songs. */
   missingCovers: () => heldReads.read<{ albums: MissingCover[] }>("/api/album-covers/missing"),
+  missingDetails: (after: number) =>
+    call<MissingDetailsPage>("GET", `/api/missing-details?after=${String(after)}`),
+  askMissingDetails: (track: number, key: string) =>
+    call<Job>("POST", `/api/missing-details/${String(track)}/ask`, { key }),
+  decideMissingDetail: (
+    track: number,
+    key: string,
+    field: MissingField,
+    candidate?: CreditCandidate,
+  ) =>
+    call<undefined>("POST", `/api/missing-details/${String(track)}/decision`, {
+      key,
+      field,
+      ...candidate,
+    }),
   /** Send the songs coming up, the one playing first; their albums with no cover are searched. */
   findMissingCovers: (trackIds: readonly number[]) =>
     call<{ asked: number }>("POST", "/api/album-covers/missing/find", { track_ids: trackIds }),

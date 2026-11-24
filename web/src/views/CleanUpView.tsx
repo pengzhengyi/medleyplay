@@ -30,6 +30,8 @@ import {
 } from "../library/cleanUp";
 import { type AlbumCoverActions, FindAlbumCovers } from "./FindAlbumCovers";
 import { FindPhotos } from "./FindPhotos";
+import { MissingDetails } from "./MissingDetails";
+import { useWords } from "../locale";
 import { LinkArtists } from "./LinkArtists";
 import { SharedNames } from "./SharedNames";
 import { SplitArtistNames } from "./SplitArtistNames";
@@ -53,6 +55,7 @@ export function CleanUpView({
   missingPhotos,
   missingCovers,
   albumCovers,
+  missingDetails,
   onEditSongs,
 }: {
   readonly tidy: Read<readonly NameToTidy[]>;
@@ -81,8 +84,10 @@ export function CleanUpView({
   };
   /** How a cover chosen in the cover editor is set on an album. */
   readonly albumCovers?: AlbumCoverActions | undefined;
+  readonly missingDetails?: { readonly revision: string; readonly onEdit: (track: number) => void };
   readonly onEditSongs?: (trackId: number) => void;
 }) {
+  const t = useWords();
   const toSplitNames = artistSplits?.names.offers.length ?? 0;
   const splittingNames =
     artistSplits !== undefined && (toSplitNames > 0 || artistSplits.names.decided.length > 0);
@@ -204,6 +209,18 @@ export function CleanUpView({
         ]
       : []),
   ]);
+  const allSections =
+    missingDetails === undefined
+      ? sections
+      : [
+          {
+            id: "clean-up-missing-details",
+            title: t("Missing artist or album"),
+            waiting: null,
+            body: <MissingDetails {...missingDetails} />,
+          },
+          ...sections,
+        ];
   return (
     <>
       <header className="view-heading">
@@ -220,16 +237,17 @@ export function CleanUpView({
       !splittingNames &&
       !sharing &&
       !missingAnyPhoto &&
-      !missingAnyCover ? (
+      !missingAnyCover &&
+      missingDetails === undefined ? (
         <p className="empty">
           Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
           split into songs, show here.
         </p>
       ) : (
         <>
-          <SectionBar sections={sections} />
+          <SectionBar sections={allSections} />
           <div className="clean-up">
-            {sections.map(({ id, body }) => (
+            {allSections.map(({ id, body }) => (
               <div key={id} id={id} className="clean-up-anchor">
                 {body}
               </div>
@@ -250,7 +268,12 @@ interface Section {
 }
 
 /** A pill for each section, in the order they show, saying how many wait or that it is done. */
-function SectionBar({ sections }: { readonly sections: readonly Section[] }) {
+function SectionBar({
+  sections,
+}: {
+  readonly sections: readonly (Omit<Section, "waiting"> & { readonly waiting: number | null })[];
+}) {
+  const t = useWords();
   return (
     <nav className="settings-toc clean-up-toc" aria-label="Clean up sections">
       <ul>
@@ -259,13 +282,17 @@ function SectionBar({ sections }: { readonly sections: readonly Section[] }) {
             <button
               type="button"
               className="secondary outline"
-              aria-label={`Go to ${title}, ${waiting > 0 ? `${String(waiting)} waiting` : "done"}`}
+              aria-label={
+                waiting === null
+                  ? t("Go to {{section}}", { section: title })
+                  : `Go to ${title}, ${waiting > 0 ? `${String(waiting)} waiting` : "done"}`
+              }
               onClick={() => {
                 document.getElementById(id)?.scrollIntoView({ block: "start" });
               }}
             >
               {title}
-              {waiting > 0 ? (
+              {waiting === null ? null : waiting > 0 ? (
                 <span className="clean-up-toc-count" aria-hidden>
                   {waiting}
                 </span>

@@ -149,6 +149,17 @@ const useSuggested = (dialog: HTMLElement, value: string) =>
   );
 
 describe("editing a song's details", () => {
+  it("can remove a saved blank artist even when no other origin gives the artist", async () => {
+    const { dialog, onSave } = await renderDialog(
+      detailsOf(7, { artist: "" }, { files: { title: "Uncredited song" } }),
+    );
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove blank override" }));
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ artist: null });
+  });
+
   it("saves a track number beyond 999 for a song in a large album", async () => {
     const { dialog, onSave } = await renderDialog();
 

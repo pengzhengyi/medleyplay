@@ -69,6 +69,7 @@ import {
   suggestionOf,
 } from "../library/details";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
+import { useWords } from "../locale";
 import { AiNotePanel } from "./AiNotePanel";
 import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
@@ -1036,6 +1037,7 @@ function DetailBox({
   readonly chips?: ArtistChipsProps | undefined;
   readonly chipsChanged?: boolean;
 }) {
+  const t = useWords();
   const { name, label, kind } = field;
   const id = `detail-${name}`;
   const typed = boxText(details, own, name);
@@ -1048,6 +1050,10 @@ function DetailBox({
   const suggestion = suggestionOf(details, name);
   const credits = chips?.credits;
   const use = chips === undefined ? onChange : chips.onUse;
+  const canRemoveBlank =
+    (name === "artist" || name === "album" || name === "album_artist") &&
+    details.origins.household?.[name] === "" &&
+    own[name] === "";
   // The one artist saved, shown as a tag until clicked to edit; typed, it is a box again.
   const [editing, setEditing] = useState(false);
   const tagged =
@@ -1170,6 +1176,17 @@ function DetailBox({
           <OriginTag id={described} origin={origin.from} full={origin.text} />
         ))}
       <div className="detail-alternatives" role="group" aria-label={`Other values for ${label}`}>
+        {canRemoveBlank && (
+          <button
+            type="button"
+            className="detail-alternative"
+            onClick={() => {
+              use(Object.fromEntries(Object.entries(own).filter(([field]) => field !== name)));
+            }}
+          >
+            {t("Remove blank override")}
+          </button>
+        )}
         {alternativesOf(details, name, typed).map(({ value, origin: from }) => {
           const Mark = ORIGIN_TAGS[from].icon;
           return (

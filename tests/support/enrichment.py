@@ -30,6 +30,7 @@ from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.lyrics import LyricsService
 from medleyplay.application.lyrics_match import LyricsMatchService, lyrics_match_kinds
 from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
+from medleyplay.application.missing_details import MISSING_DETAILS_JOB
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
@@ -192,6 +193,7 @@ def running_enrichment(
         album_covers.choose.name: album_covers.choose,
         image_links.suggest.name: image_links.suggest,
         image_links.fetch.name: image_links.fetch,
+        MISSING_DETAILS_JOB.name: MISSING_DETAILS_JOB,
     }
     with started_plugins(units, clock, "reader") as plugins:
         lyrics_match = lyrics_match_kinds(clock, lyrics_search, plugins)

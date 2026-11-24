@@ -64,6 +64,7 @@ class SettingsDocument(BaseModel):
     find_artist_photos: PhotoSearch = PhotoSearch.UP_NEXT
     find_album_covers: CoverSearch = CoverSearch.UP_NEXT
     pick_album_covers_by_ai: bool = False
+    suggest_missing_details_by_ai: bool = False
     ai_notes: tuple[AiNoteDocument, ...] = Field(
         default=tuple(AiNoteDocument(ask=n.ask, text=n.text) for n in DEFAULT_AI_NOTES),
         max_length=MAX_AI_NOTES,
@@ -175,6 +176,7 @@ def read_settings(db: Session) -> Settings:
         find_artist_photos=document.find_artist_photos,
         find_album_covers=document.find_album_covers,
         pick_album_covers_by_ai=document.pick_album_covers_by_ai,
+        suggest_missing_details_by_ai=document.suggest_missing_details_by_ai,
         ai_notes=tuple(AiNote(note.ask, note.text) for note in document.ai_notes),
         revision=row.revision,
     )

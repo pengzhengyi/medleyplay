@@ -49,6 +49,7 @@ from medleyplay.application.lyrics import LyricsService
 from medleyplay.application.lyrics_match import LyricsMatchService, lyrics_match_kinds
 from medleyplay.application.lyrics_search import LyricsSearchService, lyrics_search_kinds
 from medleyplay.application.manual_downloads import ManualDownloadService
+from medleyplay.application.missing_details import MISSING_DETAILS_JOB, MissingDetailsService
 from medleyplay.application.mode import ModeService
 from medleyplay.application.network import probe_network
 from medleyplay.application.playback import PlaybackService, cache_source_kind
@@ -251,6 +252,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         lyrics_jobs.choose.name: lyrics_jobs.choose,
         match_jobs.find.name: match_jobs.find,
         match_jobs.choose.name: match_jobs.choose,
+        MISSING_DETAILS_JOB.name: MISSING_DETAILS_JOB,
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
@@ -382,6 +384,7 @@ def build_services(  # noqa: PLR0913, PLR0915
         lyrics=LyricsService(units, clock, changes.tell, jobs=jobs),
         lyrics_search=LyricsSearchService(units, plugins, jobs, lyrics_jobs, changes.tell),
         lyrics_match=LyricsMatchService(units, plugins, jobs, match_jobs.find),
+        missing_details=MissingDetailsService(units, clock, jobs, plugins, changes.tell),
         storage_folder=StorageFolder(
             data_dir,
             show_in_finder if sys.platform == "darwin" else None,

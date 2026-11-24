@@ -482,8 +482,8 @@ not.
 
 ### Artist profile links
 
-> [!IMPORTANT]
-> Approved design. Implementation in progress.
+> [!NOTE]
+> Implemented.
 
 - The Artist column links each stored performer credit to its Library profile,
   using the Track's artist IDs when available. It does not split a written
@@ -492,12 +492,17 @@ not.
 - The album heading and Album artist column link only to a local profile or
   the namesake chooser. An explicit album credit has no bound ID. Inherited
   credits use the song's artist links; the heading uses them only when all
-  songs inherit the credit and agree on its destinations.
+  songs inherit the credit and agree on its destinations. Otherwise, the
+  heading links by name if that name opens a profile or chooser.
 - Blank and no-person credits stay plain text even before artist metadata
-  arrives. A search-only alias or an album credit without a local destination
-  is not a link. Check exceptional destinations against a lazy Library-wide
-  index of profile songs, excluding split parent files.
-- The links use the song table's album-link style and do not start playback.
+  arrives. This classification keeps hiragana distinct from katakana; route
+  matching uses the same first matching name as the profile. A search-only
+  alias or an album credit without a local destination is not a link. The
+  client builds its Library-wide index of profile songs when needed and
+  excludes split parent files.
+- The links follow the same keyboard and pointer behavior as album links.
+  Performer lists wrap when space is tight. Opening a link does not start
+  playback or ask a music site for metadata.
 
 ### Artist tools
 

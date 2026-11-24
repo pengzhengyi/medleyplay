@@ -27,7 +27,6 @@ from medleyplay.domain.catalog import SourceId, SourceState, TrackId
 from medleyplay.domain.downloads import (
     DOWNLOAD_KIND,
     MANUAL_BACKEND,
-    MAX_DOWNLOAD_BYTES,
     download_target,
     manual_download_name,
     source_of_target,
@@ -35,6 +34,7 @@ from medleyplay.domain.downloads import (
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError, TooLargeError
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.links import PART_LINKS, part_link, video_selection
+from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import DownloadRow, SourceRow, TrackRow
 
 _UPLOAD_PREFIX: Final = ".upload-"

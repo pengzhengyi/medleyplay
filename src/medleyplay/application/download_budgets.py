@@ -15,14 +15,14 @@ from medleyplay.domain.downloads import (
     DOWNLOAD_KIND,
     JOIN_ESTIMATE_DETAIL,
     JOIN_LANE,
-    JOIN_SCRATCH_BYTES,
     QUALITY_DETAIL,
     quality_kbps,
     source_of_target,
 )
 from medleyplay.domain.jobs import ACTIVE_STATES
 from medleyplay.domain.playback import CACHE_FOLDER
-from medleyplay.domain.policy import MIN_FREE, MIN_FREE_SHARE, CacheCopy, reservation
+from medleyplay.domain.policy import CacheCopy, reservation
+from medleyplay.download_limits import JOIN_SCRATCH_BYTES, disk_floor
 from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
 
 
@@ -104,7 +104,7 @@ def disk_refusal(
 ) -> str | None:
     """Check the disk floor beyond pending downloads and the album's working files."""
     disk = shutil.disk_usage(data_dir)
-    floor = max(MIN_FREE, int(disk.total * MIN_FREE_SHARE))
+    floor = disk_floor(disk.total)
     others = [each for key, each in active_budgets(db).items() if key != source]
     reserved = sum(each.estimate for each in others)
     scratch = (

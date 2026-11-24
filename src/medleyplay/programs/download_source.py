@@ -13,9 +13,7 @@ from typing import Annotated, Final, Literal, NoReturn, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from medleyplay.domain.downloads import JOIN_LANE, MAX_JOIN_INPUT_BYTES
-from medleyplay.domain.links import MAX_PART_NUMBER
-from medleyplay.domain.policy import MIN_FREE, MIN_FREE_SHARE
+from medleyplay.download_limits import MAX_JOIN_INPUT_BYTES, disk_floor
 from medleyplay.plugin_api import DOWNLOAD_PART, DownloadPart, PartNumber, QualityId, VideoId
 from medleyplay.plugin_host.job import (
     AnswerFailedError,
@@ -39,9 +37,9 @@ class DownloadSource(_Model):
     site: str
     video: VideoId
     part: PartNumber | None = Field(default=None, exclude_if=lambda value: value is None)
-    parts: (
-        Annotated[tuple[PartNumber, ...], Field(min_length=1, max_length=MAX_PART_NUMBER)] | None
-    ) = Field(default=None, exclude_if=lambda value: value is None)
+    parts: Annotated[tuple[PartNumber, ...], Field(min_length=1)] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     lane: Literal["join"] | None = Field(default=None, exclude_if=lambda value: value is None)
     quality: QualityId
     extensions: frozenset[str]
@@ -54,7 +52,7 @@ class DownloadSource(_Model):
         if (
             (self.part is None) == (self.parts is None)
             or (self.parts is not None and self.parts != tuple(sorted(set(self.parts))))
-            or self.lane != (JOIN_LANE if multiple else None)
+            or multiple != (self.lane is not None)
         ):
             message = "A download must name one part or a distinct, ordered selection."
             raise ValueError(message)
@@ -162,7 +160,7 @@ def _join(
 
 def _disk_room(folder: Path, needed: int) -> None:
     disk = shutil.disk_usage(folder)
-    if disk.free - needed < max(MIN_FREE, int(disk.total * MIN_FREE_SHARE)):
+    if disk.free - needed < disk_floor(disk.total):
         message = "There is not enough temporary disk space to join this album."
         raise AnswerFailedError(message, kind="refused")
 

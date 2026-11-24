@@ -1,5 +1,7 @@
 """An Account resumes an interactive video lookup without looking the video up again."""
 
+# cspell:ignore byteswap execv getpid
+
 import os
 import shutil
 import subprocess
@@ -16,8 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import downloads as download_app
-from medleyplay.domain.downloads import MAX_DOWNLOAD_BYTES
 from medleyplay.domain.jobs import JobId, JobState
+from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import (
     DownloadRow,
     JobRow,
@@ -360,12 +362,14 @@ def test_cancelling_a_join_during_encoding_stops_both_audio_processes(
         JobState.RUNNING,
         until=lambda _: all(path.is_file() and path.stat().st_size for path in markers),
     )
-    pids = [int(path.read_text(encoding="utf-8")) for path in markers]
+    process_ids = [int(path.read_text(encoding="utf-8")) for path in markers]
 
     cancelled = site_client.post(f"/api/jobs/{job}/cancel")
 
     assert cancelled.status_code == 200, cancelled.text
-    site.wait_for(job, JobState.CANCELLED, until=lambda _: not any(map(_running_process, pids)))
+    site.wait_for(
+        job, JobState.CANCELLED, until=lambda _: not any(map(_running_process, process_ids))
+    )
     assert not (site.downloads.folder / f"{album['source_id']}.m4a").exists()
 
 

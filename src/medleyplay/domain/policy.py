@@ -21,6 +21,7 @@ from typing import Final
 
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import SourceId, TrackId
+from medleyplay.download_limits import disk_floor
 
 REST: Final = timedelta(hours=24)
 """How long a file must go untouched, not downloaded, served, or wanted, before it may go."""
@@ -29,8 +30,6 @@ MAX_FAILURES: Final = 3
 """A wanted Source the policy has seen fail this many times in a row waits for the household."""
 MAX_ACTIVE: Final = 2
 """The most download Jobs active at once that the policy starts more beside."""
-MIN_FREE: Final = 2 * 1024**3
-MIN_FREE_SHARE: Final = 0.05
 BEST_KBPS: Final = 192
 UNKNOWN_SIZE: Final = 16 * 1024**2
 
@@ -154,7 +153,7 @@ class PolicyState:
 
     def min_free(self) -> int:
         """Return the free space a Download must leave on the disk."""
-        return max(MIN_FREE, int(self.disk_size * MIN_FREE_SHARE))
+        return disk_floor(self.disk_size)
 
 
 @dataclass(frozen=True)

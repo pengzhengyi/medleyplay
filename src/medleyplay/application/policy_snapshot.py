@@ -25,7 +25,6 @@ from medleyplay.domain.album_ratings import AlbumRatings, effective_rating
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
 from medleyplay.domain.downloads import (
     DOWNLOAD_KIND,
-    JOIN_SCRATCH_BYTES,
     MANUAL_BACKEND,
     download_target,
 )
@@ -42,6 +41,7 @@ from medleyplay.domain.policy import (
     Wanted,
 )
 from medleyplay.domain.rules import TrackFacts, matches
+from medleyplay.download_limits import JOIN_SCRATCH_BYTES
 from medleyplay.persistence.schema import (
     DownloadRow,
     JobRow,

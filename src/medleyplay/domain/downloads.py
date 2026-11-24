@@ -27,10 +27,6 @@ MANUAL_EXTENSIONS: Final = frozenset(
 """The types a file the household adds may have: audio the player serves."""
 MANUAL_BACKEND: Final = "manual"
 """The backend of a Download the household added by hand."""
-MAX_DOWNLOAD_BYTES: Final = 1024**3
-MAX_JOIN_INPUT_BYTES: Final = MAX_DOWNLOAD_BYTES
-JOIN_SCRATCH_BYTES: Final = MAX_JOIN_INPUT_BYTES + MAX_DOWNLOAD_BYTES
-JOIN_OUTPUT_KBPS: Final = 256
 DOWNLOAD_KIND: Final = "download_source"
 QUALITY_DETAIL: Final = "quality"
 JOIN_ESTIMATE_DETAIL: Final = "joined_estimate"

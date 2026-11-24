@@ -16,11 +16,12 @@ from medleyplay.application.links import Added, PartChoice
 from medleyplay.application.playback import Preparing, Ready, Unplayable
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, SourceState
-from medleyplay.domain.downloads import DOWNLOAD_EXTENSIONS, MAX_DOWNLOAD_BYTES, download_target
+from medleyplay.domain.downloads import DOWNLOAD_EXTENSIONS, download_target
 from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.linked_accounts import LinkState
 from medleyplay.domain.plugins import PluginState
+from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import DownloadRow, SourceRow
 from medleyplay.programs.download_source import DownloadSource
 from tests.support.factories import NewAccountFactory

@@ -1,5 +1,7 @@
 """Join checked local audio in a Download Job."""
 
+# cspell:ignore EFBIG FSIZE getrlimit RLIM RLIMIT setrlimit SIGXFSZ faststart xerror
+
 import errno
 import json
 import math
@@ -12,7 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import IO, Final
 
-from medleyplay.domain.downloads import JOIN_OUTPUT_KBPS
+from medleyplay.download_limits import JOIN_OUTPUT_KBPS
 from medleyplay.plugin_host.job import AnswerFailedError
 
 _CHANNELS: Final = 2

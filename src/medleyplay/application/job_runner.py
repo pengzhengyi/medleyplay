@@ -370,7 +370,7 @@ class JobRunner:
         if (
             kind.lane_field is not None
             and lane not in kind.lanes
-            and (lane is not None or not kind.allows_unlaned)
+            and (lane is not None or not kind.lane_optional)
         ):
             return f"This server no longer runs {lane!r} for {kind.name}."
         return None if kind.refuse_start is None else kind.refuse_start(db, request)

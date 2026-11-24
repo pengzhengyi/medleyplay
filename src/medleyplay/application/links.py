@@ -20,8 +20,6 @@ from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDet
 from medleyplay.domain.details import Field, Kind, Value, check_value
 from medleyplay.domain.downloads import (
     JOIN_ESTIMATE_DETAIL,
-    JOIN_OUTPUT_KBPS,
-    MAX_DOWNLOAD_BYTES,
     QUALITY_DETAIL,
     quality_kbps,
 )
@@ -35,6 +33,7 @@ from medleyplay.domain.links import (
     recognize_link,
 )
 from medleyplay.domain.policy import reservation
+from medleyplay.download_limits import JOIN_OUTPUT_KBPS, MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import DownloadRow, SourceRow
 from medleyplay.plugin_api import (
     BEST_QUALITY,

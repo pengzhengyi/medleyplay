@@ -40,8 +40,6 @@ from medleyplay.domain.downloads import (
     DOWNLOADS_FOLDER,
     JOIN_ESTIMATE_DETAIL,
     JOIN_LANE,
-    JOIN_SCRATCH_BYTES,
-    MAX_DOWNLOAD_BYTES,
     QUALITY_DETAIL,
     download_name,
     download_target,
@@ -49,6 +47,7 @@ from medleyplay.domain.downloads import (
 from medleyplay.domain.errors import ConflictError, NotFoundError
 from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobState
 from medleyplay.domain.links import BILIBILI_SOURCE, joined_locator, video_selection
+from medleyplay.download_limits import JOIN_SCRATCH_BYTES, MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
 from medleyplay.plugin_api import BEST_QUALITY, SOURCE_DOWNLOADER
 from medleyplay.programs.download_source import (
@@ -81,7 +80,7 @@ def download_source_kind(data_dir: Path, jobs_dir: Path, clock: Clock) -> Downlo
         needs_network=True,
         lane_field="lane",
         lanes={JOIN_LANE: Lane(proxy_site=BILIBILI_SOURCE)},
-        allows_unlaned=True,
+        lane_optional=True,
         on_submit=partial(_admit, data_dir=data_dir),
         refuse_start=partial(_refuse_start, data_dir=data_dir),
     )

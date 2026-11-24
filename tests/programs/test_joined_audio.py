@@ -1,5 +1,7 @@
 """The local album encoder joins inputs without exceeding its resource limits."""
 
+# cspell:ignore alac getrlimit NOFILE RLIMIT setrlimit
+
 import resource
 import shutil
 from pathlib import Path

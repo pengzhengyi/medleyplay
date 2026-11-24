@@ -10,11 +10,9 @@ from hypothesis import strategies as st
 
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import SourceId, TrackId
-from medleyplay.domain.downloads import JOIN_SCRATCH_BYTES
 from medleyplay.domain.policy import (
     MAX_ACTIVE,
     MAX_FAILURES,
-    MIN_FREE,
     REST,
     RETRY_AFTER,
     CacheCopy,
@@ -32,6 +30,7 @@ from medleyplay.domain.policy import (
     removable,
     reservation,
 )
+from medleyplay.download_limits import JOIN_SCRATCH_BYTES, MIN_FREE
 
 NOW = datetime(2026, 10, 26, 12, tzinfo=UTC)
 MB = 1_000_000

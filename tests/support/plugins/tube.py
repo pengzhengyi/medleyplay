@@ -31,6 +31,8 @@ names `BVproxied` when the call carried a proxy and `BVdirect` when it did not, 
 both read as `BVProxyEcho` does.
 """
 
+# cspell:ignore alac
+
 import re
 import shutil
 import time

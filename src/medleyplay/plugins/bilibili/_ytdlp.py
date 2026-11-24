@@ -13,6 +13,8 @@ Unverified until yt-dlp can read Bilibili again: the options and the errors
 follow yt-dlp's documentation and source, not a run against the site.
 """
 
+# cspell:ignore EFBIG
+
 import base64
 import errno
 import re

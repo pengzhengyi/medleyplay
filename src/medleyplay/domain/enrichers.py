@@ -36,7 +36,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin, Values, shown
 from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, path_of_locator
-from medleyplay.domain.links import BILIBILI_SOURCE, CODE_LINK, parse_part_locator, part_link
+from medleyplay.domain.links import BILIBILI_SOURCE, CODE_LINK, part_link, video_selection
 from medleyplay.domain.lyrics import LyricsSite
 from medleyplay.domain.video_text import VideoText
 
@@ -171,7 +171,7 @@ def video_id_of(sources: Iterable[tuple[str, str]]) -> str | None:
     found = list(sources)
     for kind, locator in found:
         if kind == BILIBILI_SOURCE:
-            return parse_part_locator(locator)[0]
+            return video_selection(locator).video
     for kind, locator in found:
         stem = PurePosixPath(path_of_locator(locator)).stem if kind == LIBRARY_SOURCE else ""
         if BILIBILI_FILE_NAME.fullmatch(stem):

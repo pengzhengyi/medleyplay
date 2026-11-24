@@ -102,6 +102,7 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     """Run with only the Tavily plugin and lend it the household's search key."""
     on_submit: Callable[[Session, Job], None] | None = None
     retry_refused: str | None = None
+    allows_unlaned: bool = False
 
 
 def queue_job_in[I: BaseModel, R: BaseModel](

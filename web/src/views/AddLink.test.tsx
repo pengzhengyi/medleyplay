@@ -111,6 +111,59 @@ describe("adding a video that was read", () => {
     expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", { mode: "download", parts: [2, 3] });
   });
 
+  it("selects and submits every eligible part of a sixty-part video at once", async () => {
+    const parts = 60;
+    const { add, dialog } = renderDialog(lookupOf(parts));
+    const form = within(dialog);
+
+    await userEvent.click(await form.findByRole("button", { name: "Deselect all" }));
+    await userEvent.click(form.getByRole("button", { name: "Select all" }));
+    expect(form.getByRole("status")).toHaveTextContent("60 of 60 selected");
+    await userEvent.click(form.getByRole("button", { name: "Download 60 files" }));
+
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", {
+      mode: "download",
+      parts: Array.from({ length: parts }, (_, index) => index + 1),
+    });
+  });
+
+  it("joins only the chosen parts, keeping selections when switching file layouts", async () => {
+    const lookup = lookupOf(3);
+    const { add, dialog, onAdded } = renderDialog({
+      ...lookup,
+      parts: lookup.parts.map((part) => (part.part === 2 ? { ...part, track_id: 12 } : part)),
+    });
+    const form = within(dialog);
+    const first = await form.findByRole("checkbox", { name: "Part 1: Mixtape 1" });
+    const second = form.getByRole("checkbox", { name: "Part 2: Mixtape 2" });
+    await userEvent.click(first);
+    expect(second).toBeDisabled();
+    await userEvent.click(form.getByRole("radio", { name: "One album file" }));
+    expect(first).not.toBeChecked();
+    expect(second).not.toBeChecked();
+    await userEvent.click(second);
+    await userEvent.click(form.getByRole("radio", { name: "Separate files" }));
+    expect(second).not.toBeChecked();
+    expect(second).toBeDisabled();
+    await userEvent.click(form.getByRole("radio", { name: "One album file" }));
+    expect(second).toBeChecked();
+    expect(form.queryByText("Other ways to get the file")).not.toBeInTheDocument();
+    await userEvent.click(form.getByRole("button", { name: "Download 1 album file" }));
+
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", {
+      mode: "joined",
+      album: "Mixtape",
+      artist: "",
+      parts: [2, 3],
+    });
+    await waitFor(() => {
+      expect(onAdded).toHaveBeenCalledExactlyOnceWith(
+        1,
+        "The album is in the Library. Check Downloaded for its status.",
+      );
+    });
+  });
+
   it("keeps the selection when grouping the chosen files under an album title and artist", async () => {
     const { add, dialog } = renderDialog(lookupOf(3));
     const form = within(dialog);

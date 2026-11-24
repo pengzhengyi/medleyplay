@@ -22,10 +22,10 @@ from tinytag import TinyTag, TinyTagException
 
 from medleyplay.application import Clock
 from medleyplay.application.changes import OnChange
-from medleyplay.application.downloads import DOWNLOAD_KIND
 from medleyplay.application.jobs import JobService
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
 from medleyplay.domain.downloads import (
+    DOWNLOAD_KIND,
     MANUAL_BACKEND,
     MAX_DOWNLOAD_BYTES,
     download_target,
@@ -34,7 +34,7 @@ from medleyplay.domain.downloads import (
 )
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError, TooLargeError
 from medleyplay.domain.jobs import JobId, JobState, JobView
-from medleyplay.domain.links import PART_LINKS, part_link
+from medleyplay.domain.links import PART_LINKS, part_link, video_selection
 from medleyplay.persistence.schema import DownloadRow, SourceRow, TrackRow
 
 _UPLOAD_PREFIX: Final = ".upload-"
@@ -181,7 +181,11 @@ class ManualDownloadService:
         `ConflictError`, and a name without an accepted extension `InvalidInputError`.
         """
         with self._units() as db:
-            source_id = SourceId(_site_source(db, track_id).id)
+            source = _site_source(db, track_id)
+            if video_selection(source.locator).joined:
+                message = "Retry the joined album download instead of uploading one part."
+                raise ConflictError(message)
+            source_id = SourceId(source.id)
         file_name = manual_download_name(source_id, name)
 
         def keep(received: Path, length_ms: int) -> TrackDownload:

@@ -281,9 +281,8 @@ def test_a_video_the_site_says_is_gone_gets_one_attempt_and_its_source_becomes_u
         ("best", [PartChoice(1, "Side A", ""), PartChoice(1, "Again", "")]),
         ("best", []),
         ("best", [PartChoice(1, "  ", "")]),
-        ("best", [PartChoice(n, f"Side {n}", "") for n in range(1, 52)]),
     ],
-    ids=["a quality", "no such part number", "a part twice", "no parts", "no title", "51 parts"],
+    ids=["a quality", "no such part number", "a part twice", "no parts", "no title"],
 )
 def test_a_choice_for_an_unreadable_video_breaks_a_rule_and_adds_nothing(
     site: Site,

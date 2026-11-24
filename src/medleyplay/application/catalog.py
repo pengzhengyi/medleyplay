@@ -18,7 +18,6 @@ from medleyplay.application.album_ratings import album_ratings_of, library_album
 from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
 from medleyplay.application.details import record as record_details
-from medleyplay.application.downloads import DOWNLOAD_KIND
 from medleyplay.application.rule_schema import read_rules, rules_document
 from medleyplay.application.segments import album_file_of
 from medleyplay.application.settings import read_settings
@@ -47,7 +46,7 @@ from medleyplay.domain.catalog import (
 )
 from medleyplay.domain.community import CommunityRating, RatedAs, shown_rating
 from medleyplay.domain.details import LONGEST_SONG_MS, Field, Kind, Origin, Value, kind_of
-from medleyplay.domain.downloads import download_target
+from medleyplay.domain.downloads import DOWNLOAD_KIND, download_target
 from medleyplay.domain.enrichers import video_page_of
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.history import (
@@ -60,7 +59,7 @@ from medleyplay.domain.history import (
 )
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
-from medleyplay.domain.links import PART_LINKS
+from medleyplay.domain.links import BILIBILI_SOURCE, PART_LINKS, video_selection
 from medleyplay.domain.playback import PlayId
 from medleyplay.domain.rules import Rules, matches
 from medleyplay.domain.segments import SEGMENT_SOURCE, parse_segment_locator
@@ -207,6 +206,7 @@ class CatalogService:
                     downloaded=track.id in downloaded,
                     download_failed=track.id in failed,
                     site=sites[track.id].kind if track.id in sites else None,
+                    joined=_is_joined(sites.get(track.id)),
                     # A song came from the video its album file did.
                     video=videos.get(segment_of.get(TrackId(track.id), track.id)),
                     segment_of=segment_of.get(TrackId(track.id)),
@@ -250,6 +250,7 @@ class CatalogService:
             downloaded=looked_at in downloaded,
             download_failed=looked_at in failed,
             site=sites[track_id].kind if track_id in sites else None,
+            joined=_is_joined(sites.get(track_id)),
             video=videos.get(looked_at),
             segment_of=segment_of.get(track_id),
             split=track_id in segment_of.values(),
@@ -816,6 +817,14 @@ def _download_failed(db: Session, sites: Mapping[int, SourceRow], downloaded: se
     }
 
 
+def _is_joined(source: SourceRow | None) -> bool:
+    return (
+        source is not None
+        and source.kind == BILIBILI_SOURCE
+        and video_selection(source.locator).joined
+    )
+
+
 def _community_ratings(
     db: Session, rated: Select[CommunityRatingRow], segment_of: Mapping[TrackId, TrackId]
 ) -> dict[TrackId, CommunityRating]:
@@ -846,6 +855,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     downloaded: bool,
     download_failed: bool = False,
     site: str | None = None,
+    joined: bool = False,
     video: str | None = None,
     segment_of: int | None = None,
     split: bool = False,
@@ -885,6 +895,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         downloaded=downloaded,
         download_failed=download_failed,
         site=site,
+        joined=joined,
         video=video,
         segment_of=None if segment_of is None else TrackId(segment_of),
         split=split,

@@ -1,13 +1,34 @@
 """An Account resumes an interactive video lookup without looking the video up again."""
 
+import os
+import shutil
+import subprocess
+import sys
+from array import array
+from concurrent.futures import ThreadPoolExecutor
+from itertools import pairwise
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application import downloads as download_app
+from medleyplay.domain.downloads import MAX_DOWNLOAD_BYTES
 from medleyplay.domain.jobs import JobId, JobState
-from medleyplay.persistence.schema import JobRow, SplitOfferStateRow, TrackRow
+from medleyplay.persistence.schema import (
+    DownloadRow,
+    JobRow,
+    SourceRow,
+    SplitOfferStateRow,
+    TrackRow,
+)
+from medleyplay.programs.joined_audio import join_tools
 from medleyplay.web.deps import Services
 from tests.support.api import add_bob, sign_in
+from tests.support.plugins.tube import JOIN_RETRY, LONG_PARTS, LONG_VIDEO
 from tests.support.sites import Site
 
 LOOKUPS = "/api/links/lookups"
@@ -18,6 +39,334 @@ def _ready(client: TestClient, site: Site, code: str) -> str:
     job = JobId(client.post(LOOKUPS, json={"link": code}).json()["id"])
     site.wait_for(job, JobState.SUCCEEDED)
     return f"{LOOKUPS}/{job}"
+
+
+@pytest.mark.parametrize("layout", ["download", "album", "joined", "edited", "manual"])
+def test_one_confirmation_accepts_more_than_fifty_parts_and_queues_the_selected_layout(
+    site_client: TestClient,
+    site_services: tuple[Site, Services],
+    units: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+    layout: str,
+) -> None:
+    site, _ = site_services
+    link = "https://www.bilibili.com/video/BVmembers" if layout == "manual" else LONG_VIDEO
+    path = _ready(site_client, site, link)
+    site.jobs.stop()
+    monkeypatch.setattr(download_app, "join_tools", lambda: ("ffmpeg", "ffprobe"))
+    gib = 1024**3
+    monkeypatch.setattr(
+        shutil, "disk_usage", lambda _: SimpleNamespace(total=20 * gib, free=10 * gib)
+    )
+    parts = list(range(1, LONG_PARTS + 1))
+    request: dict[str, object] = {"mode": layout, "parts": parts[::-1]}
+    if layout in {"album", "joined"}:
+        request["album"] = "Long Mixtape"
+    if layout == "joined":
+        saved = site_client.put(
+            "/api/settings", json={"storage_limit": MAX_DOWNLOAD_BYTES, "revision": 0}
+        )
+        assert saved.status_code == 200, saved.text
+    if layout in {"edited", "manual"}:
+        request = {"parts": [{"part": part, "title": f"Part {part}"} for part in parts]}
+
+    response = site_client.post(path, json=request)
+
+    assert response.status_code == 200, response.text
+    added = response.json()
+    with units() as db:
+        jobs = [db.get_one(JobRow, item["job"]["id"]) for item in added]
+        if layout == "joined":
+            (job,) = jobs
+            assert job.request["parts"] == parts
+        else:
+            assert [item["part"] for item in added] == parts
+            assert [job.request["part"] for job in jobs] == parts
+    assert site_client.get(path).status_code == 404
+
+
+def test_one_part_as_an_album_keeps_the_bytes_and_does_not_replace_the_song(
+    site_client: TestClient, site_services: tuple[Site, Services], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(download_app, "join_tools", lambda: None)
+    site, _ = site_services
+    video = "BV17x411w7KC"
+    song = site_client.post(_ready(site_client, site, video), json=CHOICE).json()[0]
+    selection = {"mode": "joined", "album": "Side B alone", "parts": [2]}
+
+    response = site_client.post(_ready(site_client, site, video), json=selection)
+
+    assert response.status_code == 200, response.text
+    (album,) = response.json()
+    assert album["track_id"] != song["track_id"]
+    site.wait_for(JobId(album["job"]["id"]), JobState.SUCCEEDED)
+    site.wait_for(JobId(song["job"]["id"]), JobState.SUCCEEDED)
+    audio = site_client.get(f"/api/sources/{album['source_id']}/audio")
+    assert audio.status_code == 200
+    assert audio.content == site_client.get(f"/api/sources/{song['source_id']}/audio").content
+    tracks = {track["id"]: track for track in site_client.get("/api/tracks").json()}
+    assert (tracks[album["track_id"]]["kind"], tracks[album["track_id"]]["album"]) == (
+        "album",
+        "Side B alone",
+    )
+    assert tracks[song["track_id"]]["title"] == "Side B"
+    duplicate = site_client.post(_ready(site_client, site, video), json=selection)
+    assert duplicate.json() == [{**album, "job": None}]
+
+
+def test_playing_a_joined_album_recreates_its_missing_download(
+    site_client: TestClient, site_services: tuple[Site, Services]
+) -> None:
+    site, _ = site_services
+    result = site_client.post(
+        _ready(site_client, site, "BV17x411w7KC"),
+        json={"mode": "joined", "album": "Side B", "parts": [2]},
+    )
+    assert result.status_code == 200
+    (album,) = result.json()
+    site.wait_for(JobId(album["job"]["id"]), JobState.SUCCEEDED)
+    file = site.downloads.folder / f"{album['source_id']}.m4a"
+    original = file.read_bytes()
+    file.unlink()
+
+    play = site_client.post(f"/api/tracks/{album['track_id']}/playback")
+
+    assert play.status_code == 200, play.text
+    assert play.json()["state"] == "preparing"
+    site.wait_for(JobId(play.json()["job_id"]), JobState.SUCCEEDED)
+    assert file.read_bytes() == original
+
+
+@pytest.mark.parametrize("reason", ["tools", "disk"])
+def test_an_unstartable_join_keeps_the_lookup_and_creates_nothing(
+    site_client: TestClient,
+    site_services: tuple[Site, Services],
+    units: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+    reason: str,
+) -> None:
+    site, _ = site_services
+    path = _ready(site_client, site, "BV17x411w7KC")
+    monkeypatch.setattr(
+        download_app, "join_tools", lambda: ("ffmpeg", "ffprobe") if reason == "disk" else None
+    )
+    if reason == "disk":
+        monkeypatch.setattr(shutil, "disk_usage", lambda _: SimpleNamespace(total=1024**3, free=0))
+
+    response = site_client.post(path, json={"mode": "joined", "album": "Live", "parts": [1, 3]})
+
+    assert response.status_code == 409, response.text
+    assert ("space" if reason == "disk" else "FFmpeg") in response.json()["detail"]
+    assert site_client.get(path).status_code == 200
+    with units() as db:
+        assert db.scalars(select(TrackRow)).all() == []
+        assert db.scalars(select(JobRow).where(JobRow.kind == "download_source")).all() == []
+
+
+def _tone_at(ffmpeg: str, file: Path, second: float) -> int:
+    result = subprocess.run(  # noqa: S603 -- FFmpeg decodes audio generated by this test.
+        [
+            ffmpeg,
+            "-v",
+            "error",
+            "-ss",
+            str(second),
+            "-i",
+            str(file),
+            "-t",
+            "0.5",
+            "-ac",
+            "1",
+            "-f",
+            "s16le",
+            "-",
+        ],
+        capture_output=True,
+        check=True,
+        timeout=15,
+    )
+    samples = array("h", result.stdout)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    return sum(a <= 0 < b for a, b in pairwise(samples)) * 2
+
+
+def test_joined_album_plays_only_the_selected_parts_in_video_order(
+    site_client: TestClient, site_services: tuple[Site, Services], units: sessionmaker[Session]
+) -> None:
+    if (tools := join_tools()) is None:
+        pytest.skip("Synthetic concatenation requires FFmpeg and ffprobe.")
+    site, _ = site_services
+    path = _ready(site_client, site, "BV17x411w7KC")
+    selection = {"mode": "joined", "album": "Sessions", "artist": "Trio", "parts": [3, 2]}
+
+    result = site_client.post(path, json=selection)
+
+    assert result.status_code == 200, result.text
+    (added,) = result.json()
+    site.wait_for(JobId(added["job"]["id"]), JobState.SUCCEEDED)
+    with units() as db:
+        source = db.get_one(SourceRow, added["source_id"])
+        assert source.locator == "BV17x411w7KC/joined/2,3"
+        download = db.get_one(DownloadRow, source.id)
+        assert download.backend == "ffmpeg"
+        album = db.scalars(select(TrackRow)).one()
+        assert (album.title, album.album_artist, album.kind) == ("Sessions", "Trio", "album")
+        assert album.duration_ms == pytest.approx(2000, abs=75)
+        file = site.downloads.folder / download.file_name
+    sound = site_client.get(f"/api/sources/{added['source_id']}/audio")
+    assert sound.content == file.read_bytes()
+    assert _tone_at(tools[0], file, 0.2) == pytest.approx(440, abs=15)
+    assert _tone_at(tools[0], file, 1.2) == pytest.approx(660, abs=15)
+    assert site_client.get(f"/api/tracks/{added['track_id']}/download").json()["link"] == (
+        "https://www.bilibili.com/video/BV17x411w7KC"
+    )
+    assert (
+        site_client.put(
+            f"/api/tracks/{added['track_id']}/download?name=separate.m4a", content=sound.content
+        ).status_code
+        == 409
+    )
+
+
+def test_concurrent_confirmations_of_one_selection_reuse_one_album_and_download(
+    site_client: TestClient, site_services: tuple[Site, Services], units: sessionmaker[Session]
+) -> None:
+    site, _ = site_services
+    first, second = (
+        _ready(site_client, site, f"https://www.bilibili.com/video/BV17x411w7KC?p={part}")
+        for part in (1, 2)
+    )
+    selection = {"mode": "joined", "album": "Side B", "parts": [2]}
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(
+            pool.map(lambda path: site_client.post(path, json=selection), (first, second))
+        )
+
+    assert [each.status_code for each in results] == [200, 200]
+    assert results[0].json()[0]["track_id"] == results[1].json()[0]["track_id"]
+    with units() as db:
+        assert len(db.scalars(select(TrackRow)).all()) == 1
+        assert len(db.scalars(select(JobRow).where(JobRow.kind == "download_source")).all()) == 1
+
+
+def test_cancelled_and_failed_joins_leave_no_file_and_a_stale_retry_cannot_replace_success(
+    site_client: TestClient, site_services: tuple[Site, Services]
+) -> None:
+    if join_tools() is None:
+        pytest.skip("Synthetic concatenation requires FFmpeg and ffprobe.")
+    site, _ = site_services
+    held = site.data_dir / "hold-part"
+    held.touch()
+    response = site_client.post(
+        _ready(site_client, site, JOIN_RETRY),
+        json={"mode": "joined", "album": "Live", "parts": [2, 3]},
+    )
+    assert response.status_code == 200, response.text
+    (album,) = response.json()
+    first = album["job"]["id"]
+    source = site.downloads.folder / f"{album['source_id']}.m4a"
+    site.wait_for(
+        JobId(first),
+        JobState.RUNNING,
+        until=lambda view: (
+            view.progress is not None and view.progress.message == "Part 3 is waiting"
+        ),
+    )
+    other = site_client.post(
+        _ready(site_client, site, JOIN_RETRY),
+        json={"mode": "joined", "album": "Another session", "parts": [1, 2]},
+    )
+    assert other.status_code == 200, other.text
+    legacy = site_client.post(_ready(site_client, site, JOIN_RETRY), json=CHOICE)
+    assert legacy.status_code == 200, legacy.text
+    site.wait_for(JobId(legacy.json()[0]["job"]["id"]), JobState.SUCCEEDED)
+    assert site.jobs.get_job(JobId(other.json()[0]["job"]["id"])).job.state == JobState.QUEUED
+    assert site_client.post(f"/api/jobs/{first}/cancel").status_code == 200
+    assert not source.exists()
+    held.unlink()
+
+    def retry(job: int) -> int:
+        result = site_client.post(f"/api/jobs/{job}/retry")
+        assert result.status_code == 200, result.text
+        return int(result.json()["id"])
+
+    second = retry(first)
+    failed = site.wait_for(JobId(second), JobState.FAILED)
+    assert "Part 3" in failed.job.failure_message
+    assert not source.exists()
+    (site.data_dir / "part-restored").touch()
+    site.wait_for(JobId(retry(second)), JobState.SUCCEEDED)
+    album_bytes = source.read_bytes()
+
+    refusal = site_client.post(f"/api/jobs/{first}/retry")
+
+    assert refusal.status_code == 409, refusal.text
+    assert source.read_bytes() == album_bytes
+
+
+def _hold_audio_processes(tmp_path: Path, ffmpeg: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the encoder and decoder alive after they open the album's audio pipe."""
+    wrapper = tmp_path / "ffmpeg"
+    wrapper.write_text(
+        f"""#!{sys.executable}
+import os
+import sys
+import time
+from pathlib import Path
+
+for pipe, name in (("pipe:0", "encoder.pid"), ("pipe:1", "decoder.pid")):
+    if pipe in sys.argv:
+        Path({str(tmp_path)!r}, name).write_text(str(os.getpid()))
+        time.sleep(60)
+        sys.exit(1)
+os.execv({ffmpeg!r}, [{ffmpeg!r}, *sys.argv[1:]])
+""",
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o700)
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=os.pathsep)
+
+
+def _running_process(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def test_cancelling_a_join_during_encoding_stops_both_audio_processes(
+    site_client: TestClient,
+    site_services: tuple[Site, Services],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if (tools := join_tools()) is None:
+        pytest.skip("Synthetic concatenation requires FFmpeg and ffprobe.")
+    _hold_audio_processes(tmp_path, tools[0], monkeypatch)
+    site, _ = site_services
+    result = site_client.post(
+        _ready(site_client, site, "BV17x411w7KC"),
+        json={"mode": "joined", "album": "Cancelled album", "parts": [1, 2]},
+    )
+    assert result.status_code == 200, result.text
+    (album,) = result.json()
+    job = JobId(album["job"]["id"])
+    markers = tuple(tmp_path / name for name in ("encoder.pid", "decoder.pid"))
+    site.wait_for(
+        job,
+        JobState.RUNNING,
+        until=lambda _: all(path.is_file() and path.stat().st_size for path in markers),
+    )
+    pids = [int(path.read_text(encoding="utf-8")) for path in markers]
+
+    cancelled = site_client.post(f"/api/jobs/{job}/cancel")
+
+    assert cancelled.status_code == 200, cancelled.text
+    site.wait_for(job, JobState.CANCELLED, until=lambda _: not any(map(_running_process, pids)))
+    assert not (site.downloads.folder / f"{album['source_id']}.m4a").exists()
 
 
 def test_album_queues_each_source_in_order_with_household_album_details(

@@ -28,6 +28,13 @@ MANUAL_EXTENSIONS: Final = frozenset(
 MANUAL_BACKEND: Final = "manual"
 """The backend of a Download the household added by hand."""
 MAX_DOWNLOAD_BYTES: Final = 1024**3
+MAX_JOIN_INPUT_BYTES: Final = MAX_DOWNLOAD_BYTES
+JOIN_SCRATCH_BYTES: Final = MAX_JOIN_INPUT_BYTES + MAX_DOWNLOAD_BYTES
+JOIN_OUTPUT_KBPS: Final = 256
+DOWNLOAD_KIND: Final = "download_source"
+QUALITY_DETAIL: Final = "quality"
+JOIN_ESTIMATE_DETAIL: Final = "joined_estimate"
+JOIN_LANE: Final = "join"
 BEST_QUALITY_KBPS: Final = 192
 QUALITY_KBPS: Final = {"30280": 192, "30232": 132, "30216": 64}
 """The bitrate of each of Bilibili's AAC qualities; `best` counts as the highest."""

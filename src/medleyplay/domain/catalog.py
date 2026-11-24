@@ -134,6 +134,7 @@ class Track:
     """Whether the Track has no Download, and the last Job downloading it failed."""
     site: str | None = None
     """The kind of the site Source the Track is downloaded from, such as `bilibili`."""
+    joined: bool = False
     video: str | None = None
     """The page of the video the Track's audio came from, such as a Bilibili video's, if known."""
     segment_of: TrackId | None = None

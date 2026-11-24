@@ -91,7 +91,7 @@ const MAX_TEXT = 512;
 
 /** The ranges the server keeps a number in. */
 const RANGES: Partial<Record<Detail, readonly [number, number]>> = {
-  track_number: [1, 999],
+  track_number: [1, 9999],
   disc_number: [1, 999],
   year: [1000, 2999],
 };

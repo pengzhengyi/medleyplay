@@ -44,6 +44,7 @@ class Shortfall(StrEnum):
     DISK_FULL = "disk_full"
     FAILING = "failing"
     NO_PLUGIN = "no_plugin"
+    NO_JOIN_TOOLS = "no_join_tools"
     UNAVAILABLE = "unavailable"
 
 
@@ -92,6 +93,8 @@ class Wanted:
     source_ok: bool = True
     active_job: bool = False
     failure: Failure | None = None
+    joined: bool = False
+    scratch: int = 0
 
 
 @dataclass(frozen=True)
@@ -141,6 +144,8 @@ class PolicyState:
     valid_logins: frozenset[tuple[AccountId, str]] = frozenset()
     online: bool = True
     """Whether the Mode is Online; Offline, no Download is removed, since it couldn't come back."""
+    scratch_reserved: int = 0
+    join_tools_available: bool = True
 
     def use(self) -> int:
         """Return the bytes the limit counts: Downloads, cache copies, and reservations."""
@@ -160,6 +165,7 @@ class Start:
     source_id: SourceId
     requester: AccountId
     estimate: int
+    joined: bool = False
 
 
 @dataclass(frozen=True)
@@ -230,16 +236,18 @@ def plan(state: PolicyState) -> Plan:
     taken = 0
     use, free = state.use(), state.free - state.reserved
     slots = MAX_ACTIVE - state.active_policy_jobs
+    scratch = state.scratch_reserved
     starts: list[Start] = []
     shortfalls: dict[TrackId, Shortfall] = {}
     for wanted in _favored_first(state.wanted):
-        why = _unstartable(wanted, state)
+        why = _unstartable(wanted, state) or _join_shortfall(wanted, state, starts, scratch)
         if why is None and slots <= 0:
             why = Shortfall.WAITING_TURN
         if why is not None:
             shortfalls[wanted.track_id] = why
             continue
-        need = _room_needed(state, use, free, wanted.estimate)
+        next_scratch = max(scratch, wanted.scratch - wanted.estimate)
+        need = _room_needed(state, use, free - next_scratch, wanted.estimate)
         count = _prefix_freeing(pool[taken:], need)
         if count is None:
             limited = state.limit is not None and use + wanted.estimate > state.limit
@@ -248,9 +256,12 @@ def plan(state: PolicyState) -> Plan:
         freed = sum(each.size for each in pool[taken : taken + count])
         taken += count
         use, free = use - freed + wanted.estimate, free + freed - wanted.estimate
+        scratch = next_scratch
         slots -= 1
         requester = _requester(wanted, state)
-        starts.append(Start(wanted.track_id, wanted.source_id, requester, wanted.estimate))
+        starts.append(
+            Start(wanted.track_id, wanted.source_id, requester, wanted.estimate, wanted.joined)
+        )
     # A lowered limit is met by removing; a limit nothing removable can meet leaves all in place.
     if state.limit is not None and use > state.limit:
         taken += _prefix_freeing(pool[taken:], use - state.limit) or 0
@@ -284,6 +295,22 @@ def _unstartable(wanted: Wanted, state: PolicyState) -> Shortfall | None:
         return Shortfall.NO_PLUGIN
     if wanted.failure is not None and not _due(wanted.failure, state.now):
         return Shortfall.FAILING
+    return None
+
+
+def _join_shortfall(
+    wanted: Wanted, state: PolicyState, starts: Sequence[Start], scratch: int
+) -> Shortfall | None:
+    if not wanted.joined:
+        return None
+    if wanted.scratch and not state.join_tools_available:
+        return Shortfall.NO_JOIN_TOOLS
+    needed = max(wanted.scratch, wanted.estimate + scratch)
+    if (
+        state.free - state.reserved - sum(start.estimate for start in starts)
+        < state.min_free() + needed
+    ):
+        return Shortfall.DISK_FULL
     return None
 
 

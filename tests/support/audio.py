@@ -3,6 +3,7 @@
 import io
 import math
 import struct
+import subprocess
 import wave
 import zipfile
 from collections.abc import Mapping
@@ -10,6 +11,32 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RATE = 8000
+
+
+def m4a_tone(
+    ffmpeg: str, file: Path, *, frequency: int, sample_rate: int, channels: int, codec: str
+) -> None:
+    """Write a one-second tone with known format and frequency."""
+    subprocess.run(  # noqa: S603 -- FFmpeg generates a local tone from test constants.
+        [
+            ffmpeg,
+            "-v",
+            "error",
+            "-nostdin",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency={frequency}:sample_rate={sample_rate}:duration=1",
+            "-ac",
+            str(channels),
+            "-c:a",
+            codec,
+            str(file),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=15,
+    )
 
 
 @dataclass(frozen=True)

@@ -56,6 +56,14 @@ describe("a song's menu", () => {
     expect(actions.onSetKind).toHaveBeenCalledWith(album, "song");
   });
 
+  it("does not offer manual replacement for a joined Bilibili album", async () => {
+    renderMenu(true, { ...MELT, site: "bilibili", kind: "album", joined: true });
+
+    await open();
+
+    expect(screen.queryByRole("menuitem", { name: "Add the file yourself…" })).toBeNull();
+  });
+
   it.each([
     [
       "a file split into songs",

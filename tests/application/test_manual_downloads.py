@@ -15,7 +15,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.downloads import DOWNLOAD_KIND
 from medleyplay.application.links import PartChoice
 from medleyplay.application.manual_downloads import (
     DownloadStatus,
@@ -26,7 +25,12 @@ from medleyplay.application.manual_downloads import (
 from medleyplay.application.playback import Ready
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDetails, TrackId
-from medleyplay.domain.downloads import MANUAL_BACKEND, MANUAL_EXTENSIONS, download_target
+from medleyplay.domain.downloads import (
+    DOWNLOAD_KIND,
+    MANUAL_BACKEND,
+    MANUAL_EXTENSIONS,
+    download_target,
+)
 from medleyplay.domain.errors import (
     ConflictError,
     InvalidInputError,

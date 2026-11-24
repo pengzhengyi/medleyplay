@@ -7,13 +7,14 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import BaseModel
 
 from medleyplay.application.policy import Evaluation, Storage
+from medleyplay.application.storage_inspection import Inspection
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.policy import Plan, Remove, Shortfall
-from medleyplay.web.deps import PolicyDep, SignedInAccount, StorageFolderDep
+from medleyplay.web.deps import PolicyDep, SignedInAccount, StorageFolderDep, StorageInspectionDep
 
 router = APIRouter(prefix="/api/storage", tags=["storage"])
 
@@ -150,6 +151,15 @@ def get_storage(
 
 LOOPBACK = frozenset({"127.0.0.1", "::1"})
 """The addresses a request from the server's own machine comes from."""
+
+
+@router.get("/inspection")
+def inspect_storage(
+    me: SignedInAccount, inspection: StorageInspectionDep, response: Response
+) -> Inspection:
+    """Measure managed files for an admin, without evaluating the Download policy."""
+    response.headers["Cache-Control"] = "private, no-store"
+    return inspection.inspect(me)
 
 
 class FolderOut(BaseModel):

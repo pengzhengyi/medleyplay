@@ -62,10 +62,12 @@ from medleyplay.application.silences import (
 )
 from medleyplay.application.split_offers import SplitOfferService
 from medleyplay.application.storage_folder import StorageFolder
+from medleyplay.application.storage_inspection import StorageInspection
 from medleyplay.application.sweeper import EnrichmentSweeper
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.application.thumbnails import ThumbnailService, make_thumbnails_kind
 from medleyplay.application.video_lookups import LOOKUP_KIND, VideoLookups
+from medleyplay.config import CONFIG_FILE
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.persistence.revision import DatabaseRevision
 from medleyplay.web.app import create_app
@@ -577,6 +579,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     lyrics_search: LyricsSearchService,
     lyrics_match: LyricsMatchService,
     storage_folder: StorageFolder,
+    tmp_path: Path,
     clock: FakeClock,
     units: sessionmaker[Session],
 ) -> Services:
@@ -628,6 +631,13 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         lyrics_search=lyrics_search,
         lyrics_match=lyrics_match,
         storage_folder=storage_folder,
+        storage_inspection=StorageInspection(
+            tmp_path / "data",
+            CONFIG_FILE,
+            multiple_accounts=True,
+            safe_mode=False,
+            wal_enabled=False,
+        ),
         revision=revision,
         answers=CachedAnswers(revision),
     )

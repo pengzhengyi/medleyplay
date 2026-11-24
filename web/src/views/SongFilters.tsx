@@ -1,21 +1,14 @@
 /**
  * @file The song table's filters: native controls, so a phone offers its own pickers.
  *
- * It knows nothing of the table: it is given the choices each filter offers, with how
- * many songs each keeps, and the filters on, and says what changed.
+ * Each picker counts the choices from its own set of rows.
  */
 
 import { FunnelSimpleIcon, XIcon } from "@phosphor-icons/react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-/** A value a filter can keep, how it reads, and how many songs it keeps. */
-export interface Choice {
-  readonly value: string;
-  readonly label: string;
-  readonly count: number;
-}
-
-/** The fields a filter keeps one value of. */
-export type ChoiceField = "kind" | "artist" | "album" | "genre" | "year";
+import { afterNextPaint } from "../library/stages";
+import { type ChoiceField, type ChoiceRows, choicesFor } from "./filterChoices";
 
 /** A rating filter: at least so many stars, or no rating. */
 export type RatingFilter = 1 | 2 | 3 | 4 | 5 | "unrated";
@@ -93,16 +86,30 @@ function filtersOn(filters: Filters): FilterField[] {
 /** The Filter button and its panel of controls. */
 export function SongFilters({
   filters,
-  choices,
+  choiceRows,
+  prepare,
   onChange,
 }: {
   readonly filters: Filters;
-  readonly choices: Readonly<Record<ChoiceField, readonly Choice[]>>;
+  readonly choiceRows: (field: ChoiceField) => ChoiceRows | undefined;
+  readonly prepare: boolean;
   readonly onChange: (field: FilterField, value: Filters[FilterField]) => void;
 }) {
   const on = filtersOn(filters).length;
+  const [prepared, setPrepared] = useState(0);
+  useEffect(() => {
+    if (!prepare || prepared === CHOICE_FIELDS.length) return undefined;
+    return afterNextPaint(() => {
+      setPrepared((count) => Math.min(count + 1, CHOICE_FIELDS.length));
+    });
+  }, [prepare, prepared]);
   return (
-    <details className="dropdown filter-menu">
+    <details
+      className="dropdown filter-menu"
+      onToggle={(event) => {
+        if (event.currentTarget.open) setPrepared(CHOICE_FIELDS.length);
+      }}
+    >
       <summary
         className="filter-summary"
         aria-label={on > 0 ? `Filter, ${String(on)} on` : undefined}
@@ -116,24 +123,18 @@ export function SongFilters({
         )}
       </summary>
       <div className="filter-panel" role="group" aria-label="Filters">
-        {CHOICE_FIELDS.map(({ field, label, any }) => (
-          <label key={field} className="filter-field">
-            {label}
-            <select
-              className="filter-select"
-              value={shownChoice(filters[field])}
-              onChange={(event) => {
-                onChange(field, event.target.value === "" ? undefined : event.target.value);
-              }}
-            >
-              <option value="">{any}</option>
-              {choices[field].map((choice) => (
-                <option key={choice.value} value={choice.value}>
-                  {`${choice.label} (${String(choice.count)})`}
-                </option>
-              ))}
-            </select>
-          </label>
+        {CHOICE_FIELDS.slice(0, prepared).map(({ field, label, any }) => (
+          <ChoicePicker
+            key={field}
+            field={field}
+            label={label}
+            any={any}
+            rows={choiceRows(field)}
+            value={shownChoice(filters[field])}
+            onChange={(value) => {
+              onChange(field, value === "" ? undefined : value);
+            }}
+          />
         ))}
         <label className="filter-field">
           Rating
@@ -184,6 +185,49 @@ export function SongFilters({
         </label>
       </div>
     </details>
+  );
+}
+
+function ChoicePicker({
+  field,
+  label,
+  any,
+  rows,
+  value,
+  onChange,
+}: {
+  readonly field: ChoiceField;
+  readonly label: string;
+  readonly any: string;
+  readonly rows: ChoiceRows | undefined;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}) {
+  const choices = useMemo(() => choicesFor(field, rows), [field, rows]);
+  const select = useRef<HTMLSelectElement>(null);
+  useLayoutEffect(() => {
+    const picker = select.current;
+    if (picker === null) return;
+    const options = picker.ownerDocument.createDocumentFragment();
+    options.append(new Option(any, ""));
+    for (const choice of choices) {
+      options.append(new Option(`${choice.label} (${String(choice.count)})`, choice.value));
+    }
+    picker.replaceChildren(options);
+    picker.value = value;
+    if (picker.selectedIndex < 0) picker.selectedIndex = 0;
+  }, [any, choices, value]);
+  return (
+    <label className="filter-field">
+      {label}
+      <select
+        ref={select}
+        className="filter-select"
+        onChange={(event) => {
+          onChange(event.currentTarget.value);
+        }}
+      />
+    </label>
   );
 }
 

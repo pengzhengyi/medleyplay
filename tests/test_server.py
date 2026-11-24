@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from medleyplay.config import ConfigError
+from medleyplay.config import Config, ConfigError
 from medleyplay.domain.ai import key_secret
 from medleyplay.plugin_host.loader import plugin_names
 from medleyplay.server import (
@@ -123,6 +123,31 @@ TEST_SOURCE = PluginSource(TEST_PLUGINS, TEST_COMMAND)
 ONLY_PARROT = "\n".join(
     f"[plugins.{name}]\nenabled = false" for name in plugin_names(TEST_PLUGINS) if name != "parrot"
 )
+
+
+def test_inspection_reports_the_running_settings_and_database_without_reloading_config(
+    tmp_path: Path,
+) -> None:
+    engine = open_database(tmp_path)
+    try:
+        services = build_services(
+            engine,
+            tmp_path,
+            config=Config(multiple_accounts=True),
+            safe_mode=True,
+            source=TEST_SOURCE,
+            secrets=MemorySecrets(),
+        )
+        (tmp_path / "medleyplay.toml").write_text("not valid TOML", encoding="utf-8")
+
+        measured = services.storage_inspection.inspect(AccountFactory.admin())
+
+        assert measured.multiple_accounts
+        assert measured.safe_mode
+        assert measured.wal_enabled
+        assert measured.database > 0
+    finally:
+        engine.dispose()
 
 
 def test_one_account_is_the_default(tmp_path: Path) -> None:

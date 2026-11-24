@@ -1946,6 +1946,113 @@ button[aria-disabled="true"] {
   border-radius: 999px;
 }
 
+.storage-inspection {
+  padding-top: 0.85rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.storage-inspection [role="status"]:empty {
+  margin: 0;
+}
+
+.storage-composition[data-outdated] {
+  color: var(--muted);
+}
+
+.storage-composition[data-outdated] :where(.storage-composition-meter, .swatch) {
+  opacity: 0.6;
+}
+
+.storage-outdated {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  margin-inline-start: 0.35rem;
+  border-radius: 0.3rem;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.storage-composition-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.storage-composition-heading h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.storage-composition-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.storage-inspect {
+  width: auto;
+  padding: 0.3rem 0.65rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.storage-composition-legend {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  margin-bottom: 0.75rem;
+}
+
+.storage-composition-legend > div {
+  align-items: flex-start;
+}
+
+.storage-composition-legend .swatch {
+  flex: none;
+  align-self: flex-start;
+  margin-block-start: calc((1lh - 0.6rem) / 2);
+}
+
+.storage-composition-meter span,
+.storage-composition-legend .swatch {
+  background: var(--storage-slice, var(--accent));
+}
+
+.storage-inspection [data-storage="cache"] {
+  --storage-slice: #5086b8;
+}
+
+.storage-inspection [data-storage="covers"] {
+  --storage-slice: #9570bd;
+}
+
+.storage-inspection [data-storage="thumbnails"] {
+  --storage-slice: #c5789d;
+}
+
+.storage-inspection [data-storage="database"] {
+  --storage-slice: #b9853a;
+}
+
+.storage-inspection [data-storage="database_companions"] {
+  --storage-slice: #a86e5e;
+}
+
+.storage-inspection [data-storage="configuration"] {
+  --storage-slice: var(--muted);
+}
+
+.storage-share {
+  display: inline-block;
+  min-width: 4.5ch;
+  margin-inline-start: 0.35rem;
+  color: var(--muted);
+  text-align: end;
+}
+
 .limit {
   margin-top: 1rem;
 }
@@ -7190,6 +7297,23 @@ kbd {
   line-height: 1.3;
   gap: 0.55rem;
   animation: hint-in 120ms ease-out;
+}
+
+.control-hint.storage-settings-tip {
+  display: grid;
+  padding: 0.55rem 0.75rem;
+  gap: 0.4rem;
+}
+
+.storage-settings-tip dl,
+.storage-settings-tip dd {
+  margin: 0;
+}
+
+.storage-settings-tip :where(dl) > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
 }
 
 .keys {

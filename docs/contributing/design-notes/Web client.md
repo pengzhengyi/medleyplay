@@ -542,17 +542,22 @@ One view, in sections, each saved on its own:
   under way use, against the limit or the free disk, and what kept Playlists
   want, from `GET /api/storage`; and the storage limit, from `GET` and `PUT
   /api/settings`. Sizes are in decimal units, as Finder shows them.
+  - **Playlists kept downloaded** is a colored line along the bottom of the
+  Download usage bar. It thickens when its legend entry is hovered or
+  focused. It includes an estimate for songs not yet downloaded and is not
+  added to used space.
   - **An admin changes the limit:** no limit, or a size in GB. A moment after
     the size stops changing, the page asks `GET /api/storage?limit=` what that
     limit would remove, and says so before saving. Saving sends the revision
     read; if someone saved first, the page shows the settings as they are now.
   - **A member sees the limit** and what it holds, with nothing to change.
-  - **Inspect server storage** lets an admin measure the files medleyplay keeps,
-    separately from the limit. At the end of the section, the report shows each
-    category's size and share of the total. After the first measurement,
-    a refresh icon sits beside the gear. The previous report stays visible
-    and marked *Outdated* during a refresh or after it fails. Hover, focus,
-    or tap the gear to see the startup settings. See
+  - **Server storage** shows admins the total occupied by managed files and
+    each category's share in a bar above Download usage. Open the bar or
+    **Inspect** for sizes, percentages, and read-only startup settings. Hover or
+    focus a legend entry to emphasize its part of either bar. Admins can copy
+    the server storage path, or show it in Finder on the server's own Mac.
+    Refreshing keeps the previous measurement visible and marks it *Outdated*
+    until a new measurement succeeds. See
     [what the measurement counts](Download%20policy.md#storage-use).
   - **The removal order** has one choice today, so it is said in a sentence
     rather than offered as a menu.

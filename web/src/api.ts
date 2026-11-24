@@ -748,7 +748,9 @@ export interface AiSetting {
   readonly max_description: number;
 }
 
-/** Where the Downloads folder is, from `~` when in the home folder, and if Finder may show it. */
+export type StorageFolderScope = "downloads" | "server";
+
+/** Where the selected folder is, from `~` when in the home folder, and if Finder may show it. */
 export interface StorageFolder {
   readonly path: string;
   readonly can_show: boolean;
@@ -1890,10 +1892,12 @@ export const api = {
   settings: () => call<Settings>("GET", "/api/settings"),
   saveSettings: (settings: Settings) => call<Settings>("PUT", "/api/settings", settings),
   /** Where the Downloads folder is, and whether this request may have Finder show it. */
-  storageFolder: () => call<StorageFolder>("GET", "/api/storage/folder"),
+  storageFolder: (scope?: StorageFolderScope) =>
+    call<StorageFolder>("GET", `/api/storage/folder${scope === "server" ? "?scope=server" : ""}`),
   inspectStorage: () => call<StorageInspection>("GET", "/api/storage/inspection"),
   /** Have Finder show the Downloads folder: an admin's, on the Mac the server runs on. */
-  showStorageFolder: () => call<undefined>("POST", "/api/storage/folder/show"),
+  showStorageFolder: (scope?: StorageFolderScope) =>
+    call<undefined>("POST", `/api/storage/folder/show${scope === "server" ? "?scope=server" : ""}`),
   storage: (previewLimit?: number) =>
     call<Storage>(
       "GET",

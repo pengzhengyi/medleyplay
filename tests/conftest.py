@@ -539,7 +539,7 @@ def finder() -> FakeFinder:
 @pytest.fixture
 def storage_folder(downloads: DownloadService, finder: FakeFinder) -> StorageFolder:
     """The Downloads folder, shown by `finder`, as on a Mac."""
-    return StorageFolder(downloads.folder, finder, home=downloads.folder.parent)
+    return StorageFolder(downloads.folder.parent, finder, home=downloads.folder.parent)
 
 
 @pytest.fixture

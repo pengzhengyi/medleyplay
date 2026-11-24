@@ -10,11 +10,11 @@ from tests.support.factories import AccountFactory
 from tests.support.fakes import FakeFinder
 
 HOME = Path("/Users/alice")
-DOWNLOADS = HOME / "Library/Application Support/medleyplay/downloads"
+DATA = HOME / "Library/Application Support/medleyplay"
 
 
 def test_names_the_folder_from_the_home_folder() -> None:
-    folder = StorageFolder(DOWNLOADS, FakeFinder(), home=HOME)
+    folder = StorageFolder(DATA, FakeFinder(), home=HOME)
 
     where = folder.where(AccountFactory.member(), local=True)
 
@@ -22,7 +22,7 @@ def test_names_the_folder_from_the_home_folder() -> None:
 
 
 def test_names_a_folder_outside_the_home_folder_in_full() -> None:
-    folder = StorageFolder(Path("/Volumes/Music/downloads"), FakeFinder(), home=HOME)
+    folder = StorageFolder(Path("/Volumes/Music"), FakeFinder(), home=HOME)
 
     where = folder.where(AccountFactory.admin(), local=True)
 
@@ -37,7 +37,7 @@ def test_names_a_folder_outside_the_home_folder_in_full() -> None:
 def test_offers_finder_only_to_an_admin_on_the_servers_mac(
     *, admin: bool, local: bool, can_show: bool
 ) -> None:
-    folder = StorageFolder(DOWNLOADS, FakeFinder(), home=HOME)
+    folder = StorageFolder(DATA, FakeFinder(), home=HOME)
     caller = AccountFactory.admin() if admin else AccountFactory.member()
 
     where = folder.where(caller, local=local)
@@ -46,7 +46,7 @@ def test_offers_finder_only_to_an_admin_on_the_servers_mac(
 
 
 def test_offers_no_finder_where_nothing_can_show_a_folder() -> None:
-    folder = StorageFolder(DOWNLOADS, None, home=HOME)
+    folder = StorageFolder(DATA, None, home=HOME)
 
     where = folder.where(AccountFactory.admin(), local=True)
 
@@ -56,7 +56,7 @@ def test_offers_no_finder_where_nothing_can_show_a_folder() -> None:
 def test_shows_the_folder_in_finder_for_an_admin_on_the_servers_mac(tmp_path: Path) -> None:
     finder = FakeFinder()
     downloads = tmp_path / "downloads"
-    folder = StorageFolder(downloads, finder, home=HOME)
+    folder = StorageFolder(tmp_path, finder, home=HOME)
 
     folder.show(AccountFactory.admin(), local=True)
 

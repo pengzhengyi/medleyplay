@@ -12,10 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Choose which parts of a Bilibili video to download. Keep a file per part or
   group the selected files as numbered songs in one album. Changing the
   selection never starts a download.
-- In Settings → Downloads and storage, admins can inspect the sizes of Download
-  files, prepared audio, original artwork, thumbnails, the database and
-  configuration. This read-only report does not change the Download limit or
-  remove files.
+- In Settings → Downloads and storage, admins can see the space occupied by
+  managed files above Download usage. Select the bar or **Inspect** for a
+  breakdown by category and read-only server settings. The report does not
+  change the Download limit or remove files.
 
 - Type `settings: rating` in the search box and choose *Your ratings* to open
   that Settings section. Type `settings:` to see every section you can visit.

@@ -309,6 +309,25 @@ sequenceDiagram
 - **Offline** refuses a new lookup or confirmation without discarding an
   existing result. A queued Job waits for Online.
 
+### One album file
+
+> [!IMPORTANT]
+> Approved design. Implementation in progress.
+
+- Use the same picker as **Separate files**. **One album file** keeps only the
+  checked parts, in video order, without changing existing song Tracks. One
+  selected part keeps its original bytes.
+- The joined Source names the video and the sorted selection. A confirmation
+  for the same selection reuses that Source and does not change its credits.
+  The existing Download Job keeps its single-part request format and gains a
+  joined variant. A stale retry cannot replace a completed joined file.
+- For several parts, the Job uses bounded direct transfers and joins local
+  inputs with FFmpeg to stereo AAC at 48 kHz and 256 kbps in an M4A file.
+  It publishes only a validated, complete result. Joined Jobs run one at a
+  time, with input and output limits enforced during writes. Admission checks
+  temporary disk space separately from the estimate counted against the
+  Download limit.
+
 ## Downloads
 
 A *Download* is the one copy of a Bilibili Source on the server's disk.

@@ -480,6 +480,27 @@ not.
 
 ## The web client
 
+### Artist profile links
+
+> [!IMPORTANT]
+> Approved design. Implementation in progress.
+
+- The Artist column links each stored performer credit to its Library profile,
+  using the Track's artist IDs when available. It does not split a written
+  credit on punctuation. On phones the same links appear below the song title
+  instead of in the Artist and Album artist columns.
+- The album heading and Album artist column link only to a local profile or
+  the namesake chooser. An explicit album credit has no bound ID. Inherited
+  credits use the song's artist links; the heading uses them only when all
+  songs inherit the credit and agree on its destinations.
+- Blank and no-person credits stay plain text even before artist metadata
+  arrives. A search-only alias or an album credit without a local destination
+  is not a link. Check exceptional destinations against a lazy Library-wide
+  index of profile songs, excluding split parent files.
+- The links use the song table's album-link style and do not start playback.
+
+### Artist tools
+
 - **A section of Clean up,** *Split artist names*: each name written as several
   artists, with its songs and the artists it lists as capsules, the featured ones
   marked *feat.*, to *Keep* or *Split*; *Split all* splits every name not linked

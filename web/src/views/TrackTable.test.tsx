@@ -649,6 +649,69 @@ async function openFilters() {
 }
 
 describe("filtering", () => {
+  it("shows the rows before building the choices for the closed Filter", async () => {
+    renderTable(LIBRARY);
+    const filter = screen.getByText("Filter");
+
+    expect(shownTitles()).toHaveLength(5);
+    expect(screen.queryByText("Radiohead (2)")).not.toBeInTheDocument();
+
+    await userEvent.click(filter);
+
+    const filters = await screen.findByRole("group", { name: "Filters" });
+    expect(within(filters).getByRole("option", { name: "Radiohead (2)" })).toBeInTheDocument();
+  });
+
+  it("keeps the selected artist and updates album counts when Filter reopens", async () => {
+    const { actions, rerender } = renderTable(LIBRARY);
+    const filters = await openFilters();
+    await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "Radiohead");
+    await userEvent.click(screen.getByLabelText("Filter, 1 on"));
+
+    rerender(
+      <TrackTable
+        tracks={[
+          ...LIBRARY,
+          trackOf(6, "Climbing Up the Walls", {
+            artist: "Radiohead",
+            album: "OK Computer",
+          }),
+        ]}
+        playingId={undefined}
+        actions={actions}
+        empty={<p>No music yet.</p>}
+      />,
+    );
+    await userEvent.click(screen.getByLabelText("Filter, 1 on"));
+
+    const reopened = await screen.findByRole("group", { name: "Filters" });
+    expect(within(reopened).getByLabelText("Artist")).toHaveValue("Radiohead");
+    expect(within(reopened).getByRole("option", { name: "OK Computer (3)" })).toBeInTheDocument();
+  });
+
+  it.each([false, true])(
+    "keeps album options when playback changes (filtered: %s)",
+    async (filtered) => {
+      const { actions, rerender } = renderTable(LIBRARY);
+      const filters = await openFilters();
+      if (filtered) {
+        await userEvent.selectOptions(within(filters).getByLabelText("Artist"), "Radiohead");
+      }
+      const album = within(filters).getByRole("option", { name: "OK Computer (2)" });
+
+      rerender(
+        <TrackTable
+          tracks={LIBRARY}
+          playingId={3}
+          actions={actions}
+          empty={<p>No music yet.</p>}
+        />,
+      );
+
+      expect(within(filters).getByRole("option", { name: "OK Computer (2)" })).toBe(album);
+    },
+  );
+
   it("keeps one artist's songs, and says how many of all are shown", async () => {
     renderTable(LIBRARY);
     const filters = await openFilters();

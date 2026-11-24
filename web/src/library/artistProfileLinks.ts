@@ -1,6 +1,6 @@
 /** @file The local profile destinations of written artist credits. */
 
-import type { ArtistNames, Track } from "../api";
+import type { ArtistName, ArtistNames, Track } from "../api";
 import type { Route } from "../routes";
 import type { ArtistLinks } from "./artistLinks";
 import { artistNamesOf, artistProfileGroup, artistRouteOf, fold, wholeArtistCredit } from "./views";
@@ -11,6 +11,8 @@ export interface ArtistCredit {
   readonly name: string;
   readonly to?: ArtistRoute | undefined;
 }
+
+const creditKey = (name: string) => name.trim().normalize("NFKC").toLowerCase();
 
 // Keep in step with the names the server marks as representing no one artist.
 const NO_PERSON = new Set(
@@ -28,8 +30,20 @@ const NO_PERSON = new Set(
     "未知艺术家",
     "未知歌手",
     "オムニバス",
-  ].map(fold),
+  ].map(creditKey),
 );
+
+function indexNames(metadata: ArtistNames | undefined) {
+  const byCredit = new Map<string, ArtistName>();
+  const byRoute = new Map<string, ArtistName>();
+  for (const entry of metadata?.names ?? []) {
+    const written = creditKey(entry.name);
+    const route = fold(entry.name.trim());
+    if (!byCredit.has(written)) byCredit.set(written, entry);
+    if (!byRoute.has(route)) byRoute.set(route, entry);
+  }
+  return { byCredit, byRoute };
+}
 
 function profileMembership(tracks: readonly Track[], links: ArtistLinks | undefined) {
   const groups = new Set<string>();
@@ -54,24 +68,29 @@ export function artistProfiles(
   links: ArtistLinks | undefined,
   metadata: ArtistNames | undefined,
 ) {
-  let names: Map<string, ArtistNames["names"][number]> | undefined;
+  let names: ReturnType<typeof indexNames> | undefined;
   let membership: ReturnType<typeof profileMembership> | undefined;
 
-  function named(name: string) {
-    names ??= new Map(metadata?.names.map((entry) => [fold(entry.name.trim()), entry]));
-    return names.get(fold(name.trim()));
+  function namedByRoute(name: string) {
+    names ??= indexNames(metadata);
+    return names.byRoute.get(fold(name.trim()));
   }
 
   return {
+    namedByRoute,
     namesNobody(name: string) {
-      return NO_PERSON.has(fold(name.trim())) || named(name)?.look_up === "never";
+      names ??= indexNames(metadata);
+      const key = creditKey(name);
+      const known = names.byCredit.get(key);
+      return key === "" || (known === undefined ? NO_PERSON.has(key) : known.look_up === "never");
     },
     has({ name, id }: ArtistRoute) {
       membership ??= profileMembership(tracks, links);
       const { groups, groupOfId } = membership;
       if (id !== undefined && groupOfId.has(id)) return true;
       if (groups.has(artistProfileGroup(name, id, links))) return true;
-      const called = id === undefined && links !== undefined ? named(name)?.artist_ids : undefined;
+      const called =
+        id === undefined && links !== undefined ? namedByRoute(name)?.artist_ids : undefined;
       if (called === undefined) return false;
       const choices = new Set(
         called.map((each) => groupOfId.get(each)).filter((group) => group !== undefined),
@@ -94,7 +113,7 @@ export function songArtistCredits(
 ): readonly ArtistCredit[] {
   return artistNamesOf(track).map((name, place) => {
     const to = artistRouteOf(track, place);
-    const noArtist = profiles?.namesNobody(name) ?? NO_PERSON.has(fold(name.trim()));
+    const noArtist = profiles?.namesNobody(name) ?? NO_PERSON.has(creditKey(name));
     return {
       name,
       to: noArtist || (track.split && !profiles?.has(to)) ? undefined : to,

@@ -28,7 +28,7 @@ import type {
   WaitingDevice,
 } from "../api";
 import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
-import { artistProfiles } from "../library/artistProfileLinks";
+import { type ArtistProfiles, artistProfiles } from "../library/artistProfileLinks";
 import { coverUrl } from "../api";
 import { playingPages } from "../library/playingPages";
 import { formatLength, formatLibraryLength, initialOf } from "../format";
@@ -168,7 +168,7 @@ export function CurrentView(given: ViewProps) {
         <link key={cover} rel="prefetch" as="image" href={coverUrl(cover, "medium")} />
       ))}
       <LocalArtistProfiles value={profiles}>
-        <Fragment key={key}>{viewOf(given, pages)}</Fragment>
+        <Fragment key={key}>{viewOf(given, pages, profiles)}</Fragment>
       </LocalArtistProfiles>
     </>
   );
@@ -186,7 +186,11 @@ function mostWritten(songs: readonly Track[]): string | undefined {
   )?.[0];
 }
 
-function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
+function viewOf(
+  given: ViewProps,
+  pages: ReturnType<typeof playingPages>,
+  profiles: ArtistProfiles,
+) {
   // A Playlist names its Tracks by id among them all; every other view lists songs.
   const props = {
     ...given,
@@ -225,11 +229,7 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
     case "artist": {
       // A link by a name alone that names several artists, as links once were, asks which.
       const called =
-        route.id === undefined
-          ? props.artistNames?.names.names.find(
-              (each) => fold(each.name.trim()) === fold(route.name.trim()),
-            )?.artist_ids
-          : undefined;
+        route.id === undefined ? profiles.namedByRoute(route.name)?.artist_ids : undefined;
       const choices =
         called !== undefined && called.length > 1 && props.links !== undefined
           ? artistsCalled(props.tracks, props.links, called)
@@ -263,7 +263,7 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
       const artist = group.startsWith("artist:")
         ? known?.artists.find((each) => `artist:${each.id}` === group)
         : undefined;
-      const named = known?.names.find((each) => fold(each.name.trim()) === fold(name.trim()));
+      const named = profiles.namedByRoute(name);
       const shown = artist?.shown_as ?? name;
       const reload = props.artistNames?.reload;
       const title = shown || UNKNOWN_ARTIST;

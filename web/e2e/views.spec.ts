@@ -6,7 +6,7 @@ import type { Track } from "../src/api";
 const nav = (page: Page) => page.getByRole("navigation", { name: "Views" });
 
 /** Give Alpha two separate credits and an album on the test server's read-only track response. */
-async function giveAlphaCredits(page: Page) {
+async function giveAlphaCredits(page: Page, artists: readonly string[] = ["Adele", "Sia"]) {
   await page.route("**/api/tracks", async (route) => {
     const response = await route.fetch();
     const tracks = (await response.json()) as Track[];
@@ -16,8 +16,8 @@ async function giveAlphaCredits(page: Page) {
         track.title === "Alpha"
           ? {
               ...track,
-              artist: "Adele, Sia",
-              artists: ["Adele", "Sia"],
+              artist: artists.join(", "),
+              artists,
               artist_ids: [],
               album: "Duet",
               album_artist: "",
@@ -216,7 +216,8 @@ test.describe("on a phone", () => {
   test("artist subtitles have one link per credit even with Album artist enabled", async ({
     page,
   }) => {
-    await giveAlphaCredits(page);
+    const first = "The Long Orchestra with Every Instrument Performing Live Across the Entire City";
+    await giveAlphaCredits(page, [first, "Sia"]);
     await page.addInitScript(() => {
       localStorage.setItem(
         "medleyplay.columns.v1",
@@ -226,14 +227,24 @@ test.describe("on a phone", () => {
     await page.goto("/");
 
     const row = page.getByRole("row", { name: /Alpha/u });
-    await expect(row.getByRole("link")).toHaveText(["Adele", "Sia"]);
+    await expect(row.getByRole("link")).toHaveText([first, "Sia"]);
+    const guest = row.getByRole("link", { name: "Sia" });
+    expect(
+      await guest.evaluate((anchor) => {
+        const subtitle = anchor.closest(".subtitle");
+        return (
+          subtitle !== null &&
+          anchor.getBoundingClientRect().right <= subtitle.getBoundingClientRect().right
+        );
+      }),
+    ).toBe(true);
 
-    await row.getByRole("link", { name: "Sia" }).tap();
+    await guest.tap();
 
     await expect(page.getByRole("heading", { name: "Sia", exact: true })).toBeVisible();
     await expect(page.getByText("Nothing playing")).toBeVisible();
     await page.goBack();
-    await expect(row.getByRole("link")).toHaveText(["Adele", "Sia"]);
+    await expect(row.getByRole("link")).toHaveText([first, "Sia"]);
   });
 
   test("the views are a tab bar, and the queue opens from the player", async ({ page }) => {

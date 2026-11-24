@@ -1626,6 +1626,11 @@ button[aria-disabled="true"] {
   text-underline-offset: 0.2em;
 }
 
+.artist-credits {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .found {
   margin: 1.25rem 0 0.5rem 0.75rem;
   color: var(--muted);

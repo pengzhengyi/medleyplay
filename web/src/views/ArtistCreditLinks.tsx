@@ -13,7 +13,7 @@ import { hrefOf } from "../routes";
 import { LocalArtistProfiles } from "./artistProfilesContext";
 
 function Credits({ credits }: { readonly credits: readonly ArtistCredit[] }) {
-  return credits.map(({ name, to }, place) => (
+  const names = credits.map(({ name, to }, place) => (
     <Fragment key={`${String(place)}:${name}`}>
       {place > 0 && ", "}
       {to === undefined ? (
@@ -25,6 +25,7 @@ function Credits({ credits }: { readonly credits: readonly ArtistCredit[] }) {
       )}
     </Fragment>
   ));
+  return names.length > 1 ? <span className="artist-credits">{names}</span> : names;
 }
 
 export function TrackArtistCredit({

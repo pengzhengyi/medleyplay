@@ -55,6 +55,89 @@ describe("missing details in Clean up", () => {
     expect(calls).not.toContain(ASK);
   });
 
+  it("uses only the chosen album when more than one candidate is offered", async () => {
+    const accept = vi.fn(() => ({ status: 204 }));
+    serve({
+      [LIST]: {
+        body: {
+          tracks: [
+            intro({
+              fields: [
+                {
+                  field: "album",
+                  candidates: [
+                    { value: "Live", origin: "library" },
+                    { value: "Sessions", origin: "ai" },
+                  ],
+                },
+              ],
+            }),
+          ],
+          next_after: null,
+        },
+      },
+      [DECIDE]: accept,
+    });
+    render(<MissingDetails revision="0" onEdit={vi.fn()} />);
+    const album = within(await screen.findByRole("group", { name: "Album" }));
+    const sessions = album.getByRole("radio", { name: "Sessions" });
+    expect(album.getByRole("radio", { name: "Live" })).toHaveAccessibleDescription(
+      "Already in Library",
+    );
+    expect(sessions).toHaveAccessibleDescription("Suggested by AI");
+
+    await userEvent.click(album.getByRole("button", { name: "Suggested by AI" }));
+
+    expect(await screen.findByRole("tooltip", { name: "Suggested by AI" })).toBeVisible();
+    expect(sessions).not.toBeChecked();
+    expect(album.getByRole("button", { name: "Use" })).toBeDisabled();
+
+    await userEvent.click(sessions);
+    expect(accept).not.toHaveBeenCalled();
+    await userEvent.click(album.getByRole("button", { name: "Use Sessions for Album" }));
+
+    expect(accept).toHaveBeenCalledExactlyOnceWith({
+      key: "reviewed-intro",
+      field: "album",
+      value: "Sessions",
+      origin: "ai",
+    });
+  });
+
+  it("offers Edit and Skip for a field without a suggestion and skips only that field", async () => {
+    const accept = vi.fn(() => ({ status: 204 }));
+    const edit = vi.fn();
+    serve({
+      [LIST]: {
+        body: {
+          tracks: [
+            intro({
+              artist: "",
+              fields: [
+                { field: "artist", candidates: [] },
+                { field: "album", candidates: [{ value: "Live", origin: "library" }] },
+              ],
+            }),
+          ],
+          next_after: null,
+        },
+      },
+      [DECIDE]: accept,
+    });
+    render(<MissingDetails revision="0" onEdit={edit} />);
+    const artist = within(await screen.findByRole("group", { name: "Artist" }));
+    expect(artist.queryByRole("button", { name: /use/iu })).not.toBeInTheDocument();
+
+    await userEvent.click(artist.getByRole("button", { name: "Edit details" }));
+    expect(edit).toHaveBeenCalledExactlyOnceWith(7);
+    expect(accept).not.toHaveBeenCalled();
+    const skip = artist.getByRole("button", { name: "Skip Artist" });
+    expect(skip).toHaveAccessibleDescription(/keeps this field blank/u);
+    await userEvent.click(skip);
+
+    expect(accept).toHaveBeenCalledExactlyOnceWith({ key: "reviewed-intro", field: "artist" });
+  });
+
   it("discloses which providers are tried and only asks after the listener clicks", async () => {
     const ask = vi.fn(() => ({ status: 202, body: { id: 8 } }));
     const { calls } = serve({

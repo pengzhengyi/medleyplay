@@ -148,6 +148,32 @@ def test_finder_shows_the_downloads_folder_for_an_admin_on_the_servers_mac(
     assert finder.shown == [downloads.folder]
 
 
+def test_an_admin_on_the_servers_mac_can_read_and_show_the_server_storage_folder(
+    on_this_mac: TestClient, finder: FakeFinder, downloads: DownloadService
+) -> None:
+    set_up_as_alice(on_this_mac)
+
+    read = on_this_mac.get("/api/storage/folder?scope=server")
+    shown = on_this_mac.post("/api/storage/folder/show?scope=server")
+
+    assert read.json() == {"path": "~", "can_show": True}
+    assert read.headers["cache-control"] == "private, no-store"
+    assert shown.status_code == 204
+    assert finder.shown == [downloads.folder.parent]
+
+
+def test_a_member_cannot_read_or_show_the_server_storage_folder(
+    on_this_mac: TestClient, finder: FakeFinder
+) -> None:
+    set_up_as_alice(on_this_mac)
+    add_bob(on_this_mac)
+    sign_in(on_this_mac, "bob")
+
+    assert on_this_mac.get("/api/storage/folder?scope=server").status_code == 403
+    assert on_this_mac.post("/api/storage/folder/show?scope=server").status_code == 403
+    assert finder.shown == []
+
+
 def test_finder_shows_nothing_for_a_request_from_another_device(
     client: TestClient, finder: FakeFinder
 ) -> None:
@@ -155,5 +181,18 @@ def test_finder_shows_nothing_for_a_request_from_another_device(
 
     shown = client.post("/api/storage/folder/show")
 
+    assert shown.status_code == 409
+    assert finder.shown == []
+
+
+def test_an_admin_on_another_device_can_read_but_not_show_the_server_storage_folder(
+    client: TestClient, finder: FakeFinder
+) -> None:
+    set_up_as_alice(client)
+
+    read = client.get("/api/storage/folder?scope=server")
+    shown = client.post("/api/storage/folder/show?scope=server")
+
+    assert read.json() == {"path": "~", "can_show": False}
     assert shown.status_code == 409
     assert finder.shown == []

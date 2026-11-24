@@ -64,7 +64,7 @@ import { AlbumRatingNote } from "./AlbumRatingNote";
 import { ArtistFacts, ArtistPicture } from "./ArtistAbout";
 import { Cover } from "./Cover";
 import { Downloading } from "./Downloading";
-import { DownloadsFolder } from "./DownloadsFolder";
+import { StorageFolderLocation } from "./StorageFolderLocation";
 import { FavoriteHeart } from "./FavoriteHeart";
 import { Hint } from "./Hint";
 import { LazyPart } from "./LazyPart";
@@ -420,7 +420,7 @@ function viewOf(given: ViewProps, pages: ReturnType<typeof playingPages>) {
           {...props}
           about={
             <>
-              <DownloadsFolder />
+              <StorageFolderLocation />
               {given.videoLookups}
               <Downloading downloads={given.downloading ?? []} tracks={given.tracks} />
             </>

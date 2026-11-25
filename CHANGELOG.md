@@ -739,6 +739,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Settings uses a wider, centered column on desktop that stays in place when
+  the navigation rail collapses or expands. Phones keep the single-column layout.
 - The Library shows its first songs before preparing Filter choices. Filters
   and Play all still use the whole Library.
 - The Library loads its first songs faster after a server restart by reading

@@ -281,6 +281,9 @@ and the full views are in [Web client](Web%20client.md).
   *3 of 11*. It folds them away, and its *Remove* removes them all; each song
   still moves and goes on its own. The row is worked out from the queue, which
   holds only its entries.
+- **In the floating Up next panel,** one icon expands or collapses every
+  album group without changing playback. It appears only when the queue has
+  an album group. If any group is collapsed, the icon expands all groups.
 - **Play modes** are two controls, as in most players: *Shuffle*, on or off,
   and *Repeat*, which cycles through off, all, and one. In order is both off.
   - **Turning shuffle on** puts what plays next in random order. What played and

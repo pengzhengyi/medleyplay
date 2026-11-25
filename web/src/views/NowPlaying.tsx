@@ -299,6 +299,7 @@ export function NowPlaying({
                     sleep={sleep}
                     tracks={tracks}
                     announceIn={inside}
+                    showFoldAll
                   />
                 </div>
               )}

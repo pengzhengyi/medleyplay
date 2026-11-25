@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Final, Literal
 
 from medleyplay.application.remote import CommandsWaiting, RemoteEvent
+from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.jobs import JobId
 
 MODE: Final = "mode"
@@ -34,7 +35,14 @@ PROGRESS_INTERVAL: Final = 0.25
 """At most four progress events a second for one Job."""
 
 
-type Event = JobId | Literal["mode", "devices", "tracks"] | RemoteEvent
+@dataclass(frozen=True)
+class LyricsSaved:
+    """Songs Save committed lyrics for these tracks."""
+
+    track_ids: tuple[TrackId, ...]
+
+
+type Event = JobId | Literal["mode", "devices", "tracks"] | RemoteEvent | LyricsSaved
 """A Job that changed, `MODE`, `DEVICES`, `TRACKS`, or a change to an account's remote play."""
 
 
@@ -134,6 +142,12 @@ class Events:
         with self._lock:
             subscriptions = tuple(self._subscriptions)
         self._offer(subscriptions, TRACKS, progress=False)
+
+    def publish_lyrics_saved(self, track_ids: tuple[TrackId, ...]) -> None:
+        """Tell browsers which songs' lyrics to read again after Songs Save."""
+        with self._lock:
+            subscriptions = tuple(self._subscriptions)
+        self._offer(subscriptions, LyricsSaved(track_ids), progress=False)
 
     def publish_remote(self, event: RemoteEvent) -> None:
         """Tell every subscriber of a change to remote play; callable from any thread.

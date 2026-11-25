@@ -1,4 +1,4 @@
-"""Auto-Match Jobs find, choose, and save lyrics for unchanged saved songs."""
+"""Auto-Match jobs find and stage lyrics picks for unchanged saved songs."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -13,12 +13,14 @@ from medleyplay.application import Clock
 from medleyplay.application.details import songs_of
 from medleyplay.application.enrichment import ENRICH_KIND, enrich_target
 from medleyplay.application.jobs import JobCompletion, JobService, queue_job_in, to_job
+from medleyplay.application.lyrics_match_picks import PICK_CHANGED, ready_picks
 from medleyplay.application.lyrics_match_state import (
     LYRICS_CHANGED,
     MATCH_CHOOSE,
     MATCH_FIND,
     MATCH_KINDS,
     active_match,
+    discard_pending_pick,
     match_target,
 )
 from medleyplay.application.lyrics_search import (
@@ -34,9 +36,9 @@ from medleyplay.application.lyrics_search import (
     require_match_providers,
     require_matching,
     require_same_search,
-    save_match_in,
     store_choice,
     store_search,
+    validate_match_in,
 )
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.settings import read_settings
@@ -59,7 +61,7 @@ SKIPPED: Final = "match_skipped"
 CHANGED: Final = "The saved song changed. Nothing was saved."
 TRY_AGAIN: Final = "Start Auto-Match again from Songs."
 
-type MatchState = Literal["searching", "choosing", "waiting", "saved", "skipped", "failed"]
+type MatchState = Literal["searching", "choosing", "waiting", "ready", "saved", "skipped", "failed"]
 
 
 class MatchSongInput(MatchSong):
@@ -78,6 +80,8 @@ class MatchStatus:
     note: str = ""
     previous_job_id: JobId | None = None
     """For a submission skip, the newest run that already existed when it was returned."""
+    choice_job_id: JobId | None = None
+    """The exact ready pick Songs Save may confirm."""
 
 
 def lyrics_match_kinds(
@@ -167,6 +171,7 @@ class LyricsMatchService:
             db, self._kind, match_target(track_id), request, caller.id
         )
         if inserted:
+            discard_pending_pick(db, track_id)
             queued.append(job.id)
         return MatchStatus(track_id, job.id, "searching")
 
@@ -194,7 +199,10 @@ class LyricsMatchService:
                 track_id = TrackId(song.track_id)
                 row = latest.get(match_target(track_id))
                 if row is not None and _is_for_segment(db, row, song.id):
-                    shown.append(_status(viewer, track_id, row, online=online))
+                    status = _status(viewer, track_id, row, online=online)
+                    shown.append(
+                        _pick_status(db, album, row, status) if status.state == "ready" else status
+                    )
             return tuple(shown)
 
 
@@ -287,7 +295,7 @@ def _status(viewer: Account, track_id: TrackId, row: JobRow, *, online: bool) ->
             return MatchStatus(track_id, job_id, "waiting")
         return MatchStatus(track_id, job_id, "searching" if job.kind == MATCH_FIND else "choosing")
     if job.kind == MATCH_CHOOSE and job.state is JobState.SUCCEEDED:
-        return MatchStatus(track_id, job_id, "saved")
+        return MatchStatus(track_id, job_id, "ready")
     if job.failure_kind == SKIPPED:
         return MatchStatus(track_id, job_id, "skipped", job.failure_message)
     if job.state is JobState.CANCELLED:
@@ -298,6 +306,19 @@ def _status(viewer: Account, track_id: TrackId, row: JobRow, *, online: bool) ->
         )
         return MatchStatus(track_id, job_id, "skipped", note)
     return MatchStatus(track_id, job_id, "failed", failure_shown_to(job, viewer))
+
+
+def _pick_status(db: Session, album: TrackId, choice: JobRow, status: MatchStatus) -> MatchStatus:
+    search = db.get(LyricsSearchRow, status.track_id)
+    if search is None or search.match_choice_job_id != choice.id:
+        return replace(status, state="skipped", note="No pending lyric pick.")
+    if search.match_confirmed:
+        return replace(status, state="saved")
+    try:
+        ready_picks(db, album, (JobId(choice.id),))
+    except ConflictError:
+        return replace(status, state="skipped", note=PICK_CHANGED)
+    return replace(status, choice_job_id=JobId(choice.id))
 
 
 def _eligible(db: Session, request: FindLyricsJob) -> TrackRow:
@@ -370,7 +391,9 @@ def _choose(
             return _skipped(CHANGED)
         if chosen.option is None:
             return _skipped("No clear match.")
-        save_match_in(db, request, asked, row, at)
+        validate_match_in(db, request, asked, row)
+        row.match_choice_job_id = job.id
+        row.match_confirmed = False
     except (ConflictError, InvalidInputError) as error:
         return _skipped(str(error))
     return None

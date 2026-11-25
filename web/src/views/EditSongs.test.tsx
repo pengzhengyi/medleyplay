@@ -214,7 +214,7 @@ const lyricsButton = (dialog: HTMLElement, title: string) =>
 const MATCH_URL = "/api/tracks/104/songs/lyrics-match";
 
 describe("editing a file's songs", () => {
-  it("confirms only saved rows and reopens to show the background save without resubmitting", async () => {
+  it("confirms only saved rows and reopens to show an unsaved pick without resubmitting", async () => {
     let finished = false;
     let started = false;
     const searching = { track_id: 102, job_id: 27, state: "searching", note: "" };
@@ -231,7 +231,9 @@ describe("editing a file's songs", () => {
     const { calls } = serve({
       "GET /api/me/preferences": { body: { shortcuts: null, history_length: 25, revision: 1 } },
       [`GET ${MATCH_URL}`]: () => ({
-        body: started ? [finished ? { ...searching, state: "saved" } : searching] : [],
+        body: started
+          ? [finished ? { ...searching, state: "ready", choice_job_id: 28 } : searching]
+          : [],
       }),
       [`POST ${MATCH_URL}`]: start,
     });
@@ -254,11 +256,13 @@ describe("editing a file's songs", () => {
     const { dialog: reopened } = await renderEditor();
 
     await waitFor(() =>
-      expect(lyricsButton(reopened, "ゴーゴー幽霊船")).toHaveAccessibleDescription("Saved lyrics."),
+      expect(lyricsButton(reopened, "ゴーゴー幽霊船")).toHaveAccessibleDescription(
+        "Lyrics ready to save.",
+      ),
     );
     const announcement = within(reopened)
       .getAllByRole("status")
-      .find((status) => status.textContent.includes("Saved lyrics."));
+      .find((status) => status.textContent.includes("Lyrics ready to save."));
     expect(announcement).toHaveClass("visually-hidden");
     expect(start).toHaveBeenCalledExactlyOnceWith(
       SPLIT.songs.slice(0, 2).map(({ id, track_id, start_ms, title, artist }) => ({
@@ -270,6 +274,62 @@ describe("editing a file's songs", () => {
       })),
     );
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("sends both ready picks on Songs Save and excludes an unfinished match", async () => {
+    serve({
+      [`GET ${MATCH_URL}`]: {
+        body: [
+          { track_id: 101, job_id: 21, state: "ready", choice_job_id: 25, note: "" },
+          { track_id: 102, job_id: 22, state: "ready", choice_job_id: 26, note: "" },
+          { track_id: 103, job_id: 23, state: "searching", note: "" },
+        ],
+      },
+    });
+    const { dialog, onSave } = await renderEditor();
+    expect(await within(dialog).findByText("2 lyric picks ready to save.")).toBeVisible();
+    expect(onSave).not.toHaveBeenCalled();
+
+    await press(dialog, "Save");
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      SPLIT.songs.map(({ id, start_ms, title, artist }) => ({ id, start_ms, title, artist })),
+      SPLIT.songs.map(({ id }) => id),
+      [25, 26],
+    );
+  });
+
+  it("confirms only picks whose start and end still match the typed list", async () => {
+    const typed = SPLIT.songs.map(({ start_ms, title, artist }, index) => ({
+      start_ms: index === 1 ? 253_000 : start_ms,
+      title,
+      artist,
+    }));
+    serve({
+      [`GET ${MATCH_URL}`]: {
+        body: SPLIT.songs.map(({ track_id }, index) => ({
+          track_id,
+          job_id: index + 21,
+          state: "ready",
+          choice_job_id: index + 25,
+          note: "",
+        })),
+      },
+    });
+    const { dialog, onSave } = await renderEditor(SPLIT, {
+      check: vi.fn(() => Promise.resolve({ songs: typed, problems: [] })),
+    });
+    expect(await within(dialog).findByText("3 lyric picks ready to save.")).toBeVisible();
+
+    await press(dialog, "Fill from a list");
+    expect(await within(dialog).findByText("1 lyric pick ready to save.")).toBeVisible();
+    await press(dialog, "Save");
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      typed.map((song, index) => ({ ...song, id: SPLIT.songs[index]?.id })),
+      SPLIT.songs.map(({ id }) => id),
+      [27],
+    );
   });
 
   it("stops showing the search indicator as the match moves to the AI pick", async () => {

@@ -9,7 +9,7 @@ from medleyplay.application.jobs import JobService
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import ConflictError
 from medleyplay.domain.jobs import ACTIVE_STATES, JobId
-from medleyplay.persistence.schema import JobRow
+from medleyplay.persistence.schema import JobRow, LyricsSearchRow
 
 MATCH_FIND: Final = "auto_match_find"
 MATCH_CHOOSE: Final = "auto_match_choose"
@@ -48,8 +48,16 @@ def require_no_active_match(db: Session, track_id: TrackId) -> None:
         raise ConflictError(MATCH_BUSY)
 
 
+def discard_pending_pick(db: Session, track_id: TrackId) -> None:
+    """Make a pending pick unavailable to Songs Save."""
+    search = db.get(LyricsSearchRow, track_id)
+    if search is not None and not search.match_confirmed:
+        search.match_choice_job_id = None
+
+
 def supersede_match(db: Session, jobs: JobService | None, track_id: TrackId) -> JobId | None:
-    """Cancel a match in the transaction that changes the song's lyrics or search."""
+    """Discard a pending pick and cancel active matching when lyrics or their search change."""
+    discard_pending_pick(db, track_id)
     if jobs is None or (row := active_match(db, track_id)) is None:
         return None
     return jobs.cancel_active_in(db, row.kind, row.target, reason=LYRICS_CHANGED)

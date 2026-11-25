@@ -7,7 +7,7 @@ album file's Source, so a song plays, and is available, as its file is.
 """
 
 from collections.abc import Callable, Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from sqlalchemy import Select, delete, select
@@ -22,9 +22,11 @@ from medleyplay.application.details import (
     suggested_songs_of,
     video_text_of,
 )
+from medleyplay.application.lyrics_match_picks import ready_picks
 from medleyplay.domain.ai import AnsweredBy
 from medleyplay.domain.catalog import SourceId, TrackId
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
+from medleyplay.domain.jobs import JobId
 from medleyplay.domain.segments import (
     SEGMENT_SOURCE,
     SegmentId,
@@ -71,6 +73,7 @@ class SongsView:
     """The song list an AI model suggested for the file, or `()`."""
     suggested_by: AnsweredBy | None
     """The AI model that last answered for the file, if one has."""
+    lyrics_saved: tuple[TrackId, ...] = ()
 
 
 class SongsService:
@@ -127,6 +130,7 @@ class SongsService:
         known: Collection[SegmentId] | None = None,
         *,
         announce: bool = True,
+        lyric_picks: Collection[JobId] = (),
     ) -> SongsView:
         """Make `rows` the file's songs: keep each by its id, add new ones, remove the rest.
 
@@ -135,6 +139,9 @@ class SongsService:
         change is left for the caller to `announce` with others.
         """
         with self._units.begin() as db:
+            if lyric_picks:
+                db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                ready_picks(db, track_id, lyric_picks)
             album = _album_file(db, track_id)
             existing = {SegmentId(song.id): song for song in songs_of(db, track_id)}
             if known is not None and set(known) != set(existing):
@@ -158,9 +165,12 @@ class SongsService:
                 _add_song(db, album, SourceId(source_id), place, song)
             db.flush()
             self._settle(db, album)
+            confirmed = tuple(
+                pick.confirm(db, self._clock()) for pick in ready_picks(db, track_id, lyric_picks)
+            )
         if announce:
             self._changed()
-        return self.songs(track_id)
+        return replace(self.songs(track_id), lyrics_saved=confirmed)
 
     def read_list(self, track_id: TrackId, text: str) -> tuple[Song, ...]:
         """Return the songs a list pasted for the file names, one a line, or raise.

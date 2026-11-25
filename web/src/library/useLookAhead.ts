@@ -35,14 +35,14 @@ export function useLookAhead(
         const forSong = LOOKUPS.some((lookup) => lookup.enricher === enricher && lookup.forSong);
         const target = forSong ? id : (tracks.get(id)?.segment_of ?? id);
         const key = `${enricher}\n${String(target)}`;
-        const end = library.lyricsMatchEnds.get(target);
+        const end = library.lyricsMatchEnds.get(target) ?? 0;
         if (enricher === LYRICS_ENRICHER) {
           const held = deferred.current.get(target);
           if (held !== undefined) {
-            const ended = end !== undefined && end.jobId > held.jobId;
+            const ended = end > held.jobId;
             if (!ended && library.lyricsStreamConnections === held.reconnects) continue;
             deferred.current.delete(target);
-            if (!ended || !end.saved) asked.current.delete(key);
+            asked.current.delete(key);
           }
         }
         if (mode !== "next" || asked.current.has(key)) {
@@ -53,7 +53,7 @@ export function useLookAhead(
           const reconnects = library.lyricsStreamConnections;
           library.find(enricher, target).catch((failure: unknown) => {
             if (enricher === LYRICS_ENRICHER && lyricsMatchInProgress(failure)) {
-              deferred.current.set(target, { jobId: end?.jobId ?? 0, reconnects });
+              deferred.current.set(target, { jobId: end, reconnects });
               setRefusals((count) => count + 1);
             }
           });

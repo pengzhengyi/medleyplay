@@ -16,7 +16,7 @@ function libraryOf(
     modes: new Map(Object.entries(modes)),
     findable: new Map(Object.entries(findable).map(([name, ids]) => [name, new Set(ids)])),
     find: vi.fn(() => Promise.resolve()),
-    lyricsMatchEnds: new Map<number, { jobId: number; saved: boolean }>(),
+    lyricsMatchEnds: new Map<number, number>(),
     lyricsStreamConnections: 0,
   };
 }
@@ -29,60 +29,63 @@ describe("asking about the songs coming up", () => {
     FakeEventSource.last = undefined;
   });
 
-  it("retries only the deferred lyrics lookup after that song's Auto-Match ends", async () => {
-    vi.stubGlobal("EventSource", FakeEventSource);
-    let refuse: () => void = () => undefined;
-    const deferred = new Promise<void>((resolve) => {
-      refuse = resolve;
-    });
-    const post = vi
-      .fn()
-      .mockReturnValueOnce({
-        status: 409,
-        body: { detail: "Auto-Match is working on this song.", code: "lyrics_match_in_progress" },
-        after: deferred,
-      })
-      .mockReturnValue({ status: 202, body: { id: 9, state: "queued", failure_message: "" } });
-    const tracks = [trackOf(1, "Melt"), trackOf(2, "Shiver")];
-    serve({
-      ...signedIn(tracks),
-      "GET /api/enrichers/lyrics": { body: { ...enricherOf("lyrics", [1, 2]), mode: "next" } },
-      "POST /api/enrichers/lyrics/tracks/1": post,
-    });
-
-    const known = byId(tracks);
-    const { result } = renderHook(() => {
-      const library = useLibrary(vi.fn());
-      useLookAhead([1], known, library);
-      return library;
-    });
-    const notify = (kind: string, state: string, track: number, id: number) => {
-      act(() => {
-        stream().send("job", { id, kind, state, target: `lyrics-match:${String(track)}` });
+  it.each(["succeeded", "failed"] as const)(
+    "retries only the deferred lyrics lookup after that song's Auto-Match choice %s",
+    async (state) => {
+      vi.stubGlobal("EventSource", FakeEventSource);
+      let refuse: () => void = () => undefined;
+      const deferred = new Promise<void>((resolve) => {
+        refuse = resolve;
       });
-    };
-    await waitFor(() => {
+      const post = vi
+        .fn()
+        .mockReturnValueOnce({
+          status: 409,
+          body: { detail: "Auto-Match is working on this song.", code: "lyrics_match_in_progress" },
+          after: deferred,
+        })
+        .mockReturnValue({ status: 202, body: { id: 9, state: "queued", failure_message: "" } });
+      const tracks = [trackOf(1, "Melt"), trackOf(2, "Shiver")];
+      serve({
+        ...signedIn(tracks),
+        "GET /api/enrichers/lyrics": { body: { ...enricherOf("lyrics", [1, 2]), mode: "next" } },
+        "POST /api/enrichers/lyrics/tracks/1": post,
+      });
+
+      const known = byId(tracks);
+      const { result } = renderHook(() => {
+        const library = useLibrary(vi.fn());
+        useLookAhead([1], known, library);
+        return library;
+      });
+      const notify = (kind: string, state: string, track: number, id: number) => {
+        act(() => {
+          stream().send("job", { id, kind, state, target: `lyrics-match:${String(track)}` });
+        });
+      };
+      await waitFor(() => {
+        expect(post).toHaveBeenCalledOnce();
+      });
+
+      notify("auto_match_find", "succeeded", 1, 30);
+      notify("auto_match_choose", "failed", 2, 32);
       expect(post).toHaveBeenCalledOnce();
-    });
 
-    notify("auto_match_find", "succeeded", 1, 30);
-    notify("auto_match_choose", "failed", 2, 32);
-    expect(post).toHaveBeenCalledOnce();
-
-    notify("auto_match_choose", "failed", 1, 31);
-    await act(async () => {
-      refuse();
-      await deferred;
-    });
-    await waitFor(() => {
+      notify("auto_match_choose", state, 1, 31);
+      await act(async () => {
+        refuse();
+        await deferred;
+      });
+      await waitFor(() => {
+        expect(post).toHaveBeenCalledTimes(2);
+        expect(result.current.lookups.get(1)?.state).toBe("queued");
+      });
+      notify("auto_match_choose", state, 1, 31);
       expect(post).toHaveBeenCalledTimes(2);
-      expect(result.current.lookups.get(1)?.state).toBe("queued");
-    });
-    notify("auto_match_choose", "failed", 1, 31);
-    expect(post).toHaveBeenCalledTimes(2);
-  });
+    },
+  );
 
-  it("does not repeat a deferred request on ordinary updates or after Auto-Match saved", async () => {
+  it("does not repeat a deferred request on ordinary updates while Auto-Match is working", async () => {
     const library = libraryOf({ lyrics: "next" }, { lyrics: [1] });
     library.find.mockRejectedValueOnce(
       new ApiError(409, "Auto-Match is working on this song.", "lyrics_match_in_progress"),
@@ -98,11 +101,6 @@ describe("asking about the songs coming up", () => {
       await Promise.resolve();
     });
     rerender({ current: { ...library, findable: new Map(library.findable) } });
-    expect(library.find).toHaveBeenCalledOnce();
-
-    rerender({
-      current: { ...library, lyricsMatchEnds: new Map([[1, { jobId: 30, saved: true }]]) },
-    });
     expect(library.find).toHaveBeenCalledOnce();
   });
 

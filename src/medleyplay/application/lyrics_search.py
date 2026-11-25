@@ -27,6 +27,7 @@ from medleyplay.application.lyrics_match_state import (
     MATCH_CHOOSE,
     MATCH_FIND,
     active_match,
+    discard_pending_pick,
     match_target,
     require_no_active_match,
     supersede_match,
@@ -92,7 +93,7 @@ def find_lyrics_kind(clock: Clock) -> FindLyricsKind:
         needs_network=True,
         lane_field="finder",
         lanes={FINDER: Lane(spacing=LYRICS.spacing, shared=LYRICS.name)},
-        on_submit=_require_no_active_match,
+        on_submit=_before_manual_lyrics_job,
     )
 
 
@@ -113,7 +114,7 @@ def choose_lyrics_kind(clock: Clock) -> ChooseLyricsKind:
         needs_network=True,
         lane_field="chooser",
         lanes={CHOOSER: Lane(spacing=AI_DETAILS.spacing, lends_ai=True, shared=AI_DETAILS.name)},
-        on_submit=_require_no_active_match,
+        on_submit=_before_manual_lyrics_job,
     )
 
 
@@ -357,9 +358,10 @@ class LyricsSearchService:
 _CHANGED = "The song or its lyrics search changed. Nothing was saved."
 
 
-def _require_no_active_match(db: Session, job: Job) -> None:
+def _before_manual_lyrics_job(db: Session, job: Job) -> None:
     track_id = TrackId(int(job.target.rsplit(":", maxsplit=1)[-1]))
     require_no_active_match(db, track_id)
+    discard_pending_pick(db, track_id)
 
 
 def require_matching(db: Session, jobs: JobService, plugins: PluginService) -> None:
@@ -402,6 +404,21 @@ def save_match_in(
     db: Session, search: FindLyricsJob, asked: ChooseLyricsJob, row: LyricsSearchRow, at: datetime
 ) -> None:
     """Save a validated pick in the caller's write transaction without replacing lyrics."""
+    option = validate_match_in(db, search, asked, row)
+    record_lyrics(
+        db,
+        TrackId(search.track_id),
+        LyricsOrigin(option.provider.value),
+        option.text,
+        at,
+        instrumental=option.instrumental,
+    )
+
+
+def validate_match_in(
+    db: Session, search: FindLyricsJob, asked: ChooseLyricsJob, row: LyricsSearchRow
+) -> LyricsOption:
+    """Return the unique, enabled site's pick for a still empty, unchanged song."""
     track_id = TrackId(search.track_id)
     require_empty(db, track_id)
     _require_same_song(db, track_id, search, asked)
@@ -413,14 +430,7 @@ def save_match_in(
     if option.provider.value not in enabled:
         raise ConflictError(_CHANGED)
     parse_lyrics(option.text)
-    record_lyrics(
-        db,
-        track_id,
-        LyricsOrigin(option.provider.value),
-        option.text,
-        at,
-        instrumental=option.instrumental,
-    )
+    return option
 
 
 def _latest_job(db: Session, kind: str, target: str) -> JobRow | None:
@@ -590,6 +600,7 @@ def store_search(db: Session, result: FoundLyricsResult, clock: Clock) -> Lyrics
     row.title, row.artist, row.found_at = result.title, result.artist, clock()
     row.options = [each.model_dump(mode="json") for each in result.options]
     row.offered, row.pick, row.why, row.model, row.host, row.chosen_at = [], None, "", "", "", None
+    row.match_choice_job_id, row.match_confirmed = None, False
     db.add(row)
     return row
 
@@ -621,4 +632,5 @@ def store_choice(
     row.offered, row.pick, row.why = list(result.offered), result.option, result.why
     at = clock()
     row.model, row.host, row.chosen_at = model, host, at
+    row.match_choice_job_id, row.match_confirmed = None, False
     return at

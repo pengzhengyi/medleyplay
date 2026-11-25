@@ -325,11 +325,12 @@ and the full views are in [Web client](Web%20client.md).
   `Intl.DurationFormat` is the one to take once the client speaks more
   languages than English.
 - **A sleep timer** sits in the *Up next* header, a moon offering *15 minutes*,
-  *30 minutes*, *45 minutes*, *1 hour*, or *2 hours*. Once set, it shows the time
-  left, as *28 min*, its tooltip saying when it pauses, and its menu offers
-  *Turn off the timer*. When the time is up it pauses whatever plays; nothing
-  playing, nothing changes. It lives in the page, so reloading turns it off, and
-  a browser may run a hidden page's timer up to a minute late.
+  *30 minutes*, *45 minutes*, *1 hour*, or *2 hours*. Once set, the moon is filled.
+  Its tooltip and menu show the time left against the chosen duration, as
+  *28 min left of 30 min*. The menu offers *Turn off the timer*. When the time
+  is up it pauses whatever plays; nothing playing, nothing changes. It lives
+  in the page, so reloading turns it off, and a browser may run a hidden page's
+  timer up to a minute late.
 - **The look** is Pico's jade theme under the client's own palette, with
   Phosphor's icons in the weight each control's prominence calls for: filled for
   play and pause, regular for the rest, light for a row's actions. The page

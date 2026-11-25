@@ -4202,16 +4202,13 @@ button.icon.heart.on:hover,
   padding: 0 0.5rem 0.5rem;
 }
 
-/* The sleep timer sits beside Clear; once set, its moon and the time left are in jade. */
 .queue header .sleep-timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
+  flex: none;
+  margin-inline-start: auto;
 }
 
 .queue header .sleep-timer.on {
+  background: var(--accent-soft);
   color: var(--accent);
 }
 

@@ -8,12 +8,11 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import { formatMinutes, formatTimeLeft } from "../format";
 import { SLEEP_MINUTES, type SleepTimer } from "../player/useSleepTimer";
 import { useNow } from "../useNow";
-
-const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
+import { Hint } from "./Hint";
 
 /**
- * A moon that offers times to pause after; while set, it shows the time left and
- * offers to turn the timer off. `container` holds the menu, as inside a modal dialog.
+ * A moon that opens the timer menu and shows the remaining duration on hover or focus.
+ * `container` holds the menu, as inside a modal dialog.
  */
 export function SleepTimerMenu({
   timer,
@@ -24,27 +23,32 @@ export function SleepTimerMenu({
 }) {
   const now = useNow();
   const { endsAt, setAt } = timer;
-  // The clock is read every few seconds, so it may be behind the moment the timer was set.
-  const left = endsAt === null ? undefined : formatTimeLeft(endsAt - Math.max(now, setAt ?? now));
-  const label =
-    endsAt === null
-      ? "Sleep timer"
-      : `Sleep timer, ${left ?? ""} left: pauses at ${clock.format(endsAt)}`;
+  const status = endsAt === null ? null : timeLeft(endsAt, setAt, now);
   return (
     <Menu.Root modal={false}>
-      <Menu.Trigger asChild>
-        <button
-          type="button"
-          className={endsAt === null ? "text sleep-timer" : "text sleep-timer on"}
-          aria-label={label}
-          title={label}
-        >
-          <MoonIcon weight={endsAt === null ? "regular" : "fill"} aria-hidden />
-          {left !== undefined && <span>{left}</span>}
-        </button>
-      </Menu.Trigger>
+      <Hint name={status ?? "Sleep timer"} keys={[]}>
+        <Menu.Trigger asChild>
+          <button
+            type="button"
+            className={status === null ? "icon sleep-timer" : "icon sleep-timer on"}
+            aria-label={status === null ? "Sleep timer" : "Sleep timer, on"}
+          >
+            <MoonIcon weight={status === null ? "regular" : "fill"} aria-hidden />
+          </button>
+        </Menu.Trigger>
+      </Hint>
       <Menu.Portal container={container}>
-        <Menu.Content className="track-menu" align="end" sideOffset={4} collisionPadding={8}>
+        <Menu.Content
+          className="track-menu"
+          align="end"
+          sideOffset={4}
+          collisionPadding={8}
+          onPointerDown={(event) => {
+            // The menu is outside Up next in the DOM, but clicks in it are not outside clicks.
+            event.stopPropagation();
+          }}
+        >
+          {status !== null && <Menu.Label className="track-menu-label">{status}</Menu.Label>}
           <Menu.Label className="track-menu-label">Pause after</Menu.Label>
           {SLEEP_MINUTES.map((minutes) => (
             <Menu.Item
@@ -69,4 +73,9 @@ export function SleepTimerMenu({
       </Menu.Portal>
     </Menu.Root>
   );
+}
+
+function timeLeft(endsAt: number, setAt: number | null, now: number): string {
+  const left = `${formatTimeLeft(endsAt - Math.max(now, setAt ?? now))} left`;
+  return setAt === null ? left : `${left} of ${formatTimeLeft(endsAt - setAt)}`;
 }

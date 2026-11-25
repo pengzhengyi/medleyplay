@@ -1666,7 +1666,7 @@ button[aria-disabled="true"] {
 
 .downloading-row {
   display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.75rem minmax(0, 1fr) minmax(0, max-content);
   align-items: center;
   column-gap: 0.75rem;
   padding: 0.5rem 0.75rem;
@@ -1703,7 +1703,9 @@ button[aria-disabled="true"] {
 
 .downloading-state {
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  max-inline-size: min(36vw, 19rem);
+  overflow-wrap: anywhere;
+  text-align: end;
 }
 
 .downloading-row progress {
@@ -3973,7 +3975,6 @@ details.dropdown[open] > summary.filter-summary {
   font-size: 0.75rem;
 }
 
-/* A Download under way: a download mark and how far it has got, in a word or two. */
 .tracks .why.downloading {
   display: inline-flex;
   align-items: center;
@@ -3981,6 +3982,12 @@ details.dropdown[open] > summary.filter-summary {
   margin: 0;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+  max-inline-size: min(39vw, 14rem);
+}
+
+.download-note-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A failed download: a warning mark opening why, and what to do, so the title keeps its room. */

@@ -482,22 +482,22 @@ describe("a Track downloading", () => {
     expect(within(row).getByRole("img", { name: "Downloading 42%" })).toHaveClass("looking");
   });
 
-  it("says it is downloading before it knows how far", () => {
+  it("says it is preparing before transfer progress arrives", () => {
     downloading({ state: "running" });
 
     const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
-    expect(said(row)).toEqual({ heard: "Downloading", hover: "Downloading" });
+    expect(said(row)).toEqual({ heard: "Preparing download", hover: "Preparing download" });
   });
 
-  it("says it waits its turn to download, its cover spinning", () => {
+  it("says it is queued to download, with a clock on its cover", () => {
     downloading({ state: "queued" });
 
     const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
     expect(said(row)).toEqual({
-      heard: "Downloading: Waiting",
-      hover: "Waiting to download",
+      heard: "Queued",
+      hover: "Queued to download",
     });
-    expect(within(row).getByRole("img", { name: "Waiting to download" })).toHaveClass("looking");
+    expect(within(row).getByRole("img", { name: "Queued to download" })).toHaveClass("waiting");
   });
 
   it("says it waits for Online while medleyplay is Offline", () => {
@@ -505,7 +505,7 @@ describe("a Track downloading", () => {
 
     const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
     expect(said(row)).toEqual({
-      heard: "Downloading: When online",
+      heard: "Waiting for Online",
       hover: "Downloading once medleyplay is Online",
     });
     expect(

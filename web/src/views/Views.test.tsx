@@ -1680,7 +1680,7 @@ describe("showing a song in the Library", () => {
 describe("the Downloaded view", () => {
   /**
    * `LIBRARY` with Night Drive downloading, 42% done, Mixtape waiting for Online, and
-   * Long Road downloading with no word yet of how far.
+   * Long Road preparing, and Slow Train waiting for its next attempt.
    */
   function downloading(): Routes {
     return {
@@ -1689,12 +1689,17 @@ describe("the Downloaded view", () => {
         trackOf(4, "Night Drive", { artist: "Blue Room" }),
         trackOf(5, "Mixtape", { artist: "Blue Room" }),
         trackOf(6, "Long Road", { artist: "Blue Room" }),
+        trackOf(7, "Slow Train", { artist: "Blue Room" }),
       ]),
       "GET /api/downloads": {
         body: [
           downloadUnderWayOf(4, { state: "running", progress: { fraction: 0.42, message: "" } }),
           downloadUnderWayOf(5, { waits_for_online: true }),
           downloadUnderWayOf(6, { state: "running" }),
+          downloadUnderWayOf(7, {
+            retry_at: "2026-11-25T06:00:00Z",
+            failure_message: "Bilibili refused the request (403).",
+          }),
         ],
       },
     };
@@ -1709,7 +1714,8 @@ describe("the Downloaded view", () => {
     expect(rows.map((row) => row.textContent)).toEqual([
       "Night DriveBlue Room42%",
       "MixtapeBlue RoomWaiting for Online",
-      "Long RoadBlue RoomDownloading",
+      "Long RoadBlue RoomPreparing download",
+      "Slow TrainBlue RoomRetry scheduled",
     ]);
     expect(within(under).getByRole("progressbar", { name: "Night Drive" })).toHaveAttribute(
       "value",
@@ -1722,6 +1728,14 @@ describe("the Downloaded view", () => {
     expect(within(under).getByRole("progressbar", { name: "Long Road" })).not.toHaveAttribute(
       "value",
     );
+    expect(within(under).getByRole("progressbar", { name: "Slow Train" })).toHaveAttribute(
+      "value",
+      "0",
+    );
+    expect(within(under).getByText("Retry scheduled")).toHaveAttribute(
+      "title",
+      expect.stringContaining("Bilibili refused the request (403)."),
+    );
     expect(songs()).toEqual(["Shiver"]);
   });
 
@@ -1730,7 +1744,7 @@ describe("the Downloaded view", () => {
       ...downloading(),
       ...signedIn([
         ...LIBRARY,
-        trackOf(7, "Lost Signal", { download_failed: true, download_failure_job_id: 17 }),
+        trackOf(8, "Lost Signal", { download_failed: true, download_failure_job_id: 17 }),
       ]),
     });
 

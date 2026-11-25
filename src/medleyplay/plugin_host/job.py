@@ -25,7 +25,7 @@ from typing import IO, Generic, Literal, TypeVar
 from pydantic import BaseModel
 
 from medleyplay.plugin_api import AiEndpoint, AuthError, NetworkError, Operation
-from medleyplay.plugin_api.progress import reporting_to
+from medleyplay.plugin_api.progress import ProgressSink, reporting_to
 from medleyplay.plugin_host.host import peak_memory
 from medleyplay.plugin_host.job_wire import (
     RESULT_FILE,
@@ -108,7 +108,12 @@ class JobContext:
         self._send(JobProgress(fraction=fraction, message=message, peak_memory=peak_memory()))
 
     def call[P, In: BaseModel, Out: BaseModel](
-        self, operation: Operation[P, In, Out], key: str, request: In
+        self,
+        operation: Operation[P, In, Out],
+        key: str,
+        request: In,
+        *,
+        progress: ProgressSink | None = None,
     ) -> Out:
         """Call `operation` on the provider for `key`; raise `PluginCallFailedError` on failure."""
         endpoint = self._endpoints.get((operation.point.name, key, operation.name))
@@ -117,7 +122,7 @@ class JobContext:
             raise PluginCallFailedError(kind="plugin", message=message, plugin=None, key=key)
         record = self._keys.setdefault(key, _KeyRecord(endpoint.plugin))
         try:
-            with reporting_to(self.report):
+            with reporting_to(self.report if progress is None else progress):
                 reply = endpoint.invoke(request)
         except NetworkError as error:
             raise PluginCallFailedError(

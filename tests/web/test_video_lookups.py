@@ -273,9 +273,16 @@ def test_cancelled_and_failed_joins_leave_no_file_and_a_stale_retry_cannot_repla
         JobId(first),
         JobState.RUNNING,
         until=lambda view: (
-            view.progress is not None and view.progress.message == "Part 3 is waiting"
+            view.progress is not None
+            and view.progress.fraction is not None
+            and view.progress.fraction > 0.25
         ),
     )
+    (download,) = site_client.get("/api/downloads").json()
+    assert download["job"]["progress"] == {
+        "fraction": 0.375,
+        "message": "Downloading part 3 (2/2)",
+    }
     other = site_client.post(
         _ready(site_client, site, JOIN_RETRY),
         json={"mode": "joined", "album": "Another session", "parts": [1, 2]},

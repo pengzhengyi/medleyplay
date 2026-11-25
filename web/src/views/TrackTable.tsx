@@ -61,6 +61,7 @@ import type { CommunityRating, DownloadUnderWay, Playlist, Track } from "../api"
 import { formatTime } from "../format";
 import { heartTitleOf } from "../heart";
 import type { CoverStatus } from "../library/lookups";
+import { downloadDetailOf, downloadStateOf } from "../library/downloading";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
 import { ratingOf } from "../library/ratings";
 import { albumArtistOf } from "../library/views";
@@ -289,48 +290,21 @@ function saveLayout(layout: Layout): void {
   }
 }
 
-/**
- * What a row says of its Download: `seen` in a word or two beside the title, after
- * `unseen` words a screen reader hears too, and `hover`, said in full.
- */
-function downloadSaidOf({ job }: DownloadUnderWay): {
-  readonly unseen: string;
-  readonly seen: string;
-  readonly hover: string;
-} {
-  if (job.state !== "running") {
-    return job.waits_for_online
-      ? {
-          unseen: "Downloading: ",
-          seen: "When online",
-          hover: "Downloading once medleyplay is Online",
-        }
-      : { unseen: "Downloading: ", seen: "Waiting", hover: "Waiting to download" };
-  }
-  const fraction = job.progress?.fraction ?? null;
-  if (fraction === null) {
-    return { unseen: "", seen: "Downloading", hover: "Downloading" };
-  }
-  const percent = `${String(Math.round(fraction * 100))}%`;
-  return { unseen: "Downloading ", seen: percent, hover: `Downloading ${percent}` };
-}
-
-/** What a Track's cover shows of its Download: a spinner, or a clock while it waits for Online. */
+/** What a Track's cover shows of its Download: a spinner while it runs, or a clock while it waits. */
 function downloadStatusOf(download: DownloadUnderWay): CoverStatus {
-  const { hover } = downloadSaidOf(download);
-  return download.job.state !== "running" && download.job.waits_for_online
-    ? { kind: "waiting", label: hover }
-    : { kind: "looking", label: hover };
+  const label = downloadDetailOf(download, downloadStateOf(download));
+  return { kind: download.job.state === "running" ? "looking" : "waiting", label };
 }
 
 /** How far a row's Download has got, beside its title: a download mark and a word or two. */
 function DownloadNote({ download }: { readonly download: DownloadUnderWay }) {
-  const { unseen, seen, hover } = downloadSaidOf(download);
+  const status = downloadStateOf(download);
+  const detail = downloadDetailOf(download, status);
   return (
-    <span className="why downloading" title={hover}>
+    <span className="why downloading" title={detail}>
       <DownloadSimpleIcon weight="bold" aria-hidden />
-      {unseen !== "" && <span className="visually-hidden">{unseen}</span>}
-      {seen}
+      {detail === `Downloading ${status}` && <span className="visually-hidden">Downloading </span>}
+      <span className="download-note-label">{status}</span>
     </span>
   );
 }

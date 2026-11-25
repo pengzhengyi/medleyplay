@@ -37,29 +37,47 @@ export function followDownload(
     return { next: now, reread: true };
   }
   return {
-    next: now.map((each) =>
-      each.job.id === job.id
-        ? {
-            ...each,
-            job: {
-              ...each.job,
-              state: job.state,
-              progress: job.progress ?? null,
-              waits_for_online: job.waits_for_online ?? each.job.waits_for_online,
-            },
-          }
-        : each,
-    ),
+    next: now.map((each) => (each.job.id === job.id ? withDownloadEvent(each, job) : each)),
     reread: false,
   };
 }
 
-/** Say how far a Download has got, in a word or two: *Waiting for Online*, *42%*. */
+/** Apply the latest event to the Download for that Job. */
+export function withDownloadEvent(download: DownloadUnderWay, event: JobEvent): DownloadUnderWay {
+  return {
+    ...download,
+    job: {
+      ...download.job,
+      state: event.state,
+      progress: event.progress ?? null,
+      waits_for_online: event.waits_for_online ?? download.job.waits_for_online,
+      retry_at: event.retry_at ?? null,
+      failure_message: event.failure_message ?? "",
+    },
+  };
+}
+
+/** Say what the Download is doing, with a percentage when known. */
 export function downloadStateOf(download: DownloadUnderWay): string {
-  const { state, progress, waits_for_online } = download.job;
+  const { state, progress, waits_for_online, retry_at: retryAt } = download.job;
   if (state !== "running") {
-    return waits_for_online ? "Waiting for Online" : "Waiting";
+    if (waits_for_online) return "Waiting for Online";
+    return retryAt != null ? "Retry scheduled" : "Queued";
   }
-  const fraction = progress?.fraction ?? null;
-  return fraction === null ? "Downloading" : `${String(Math.round(fraction * 100))}%`;
+  if (progress === null) return "Preparing download";
+  const stage = progress.message.trim() || "Downloading";
+  if (progress.fraction === null || stage === "Checking audio") return stage;
+  const percent = `${String(Math.round(progress.fraction * 100))}%`;
+  return stage === "Downloading" ? percent : `${stage} · ${percent}`;
+}
+
+/** Say the status in full and include any failure message the server lets this Account read. */
+export function downloadDetailOf(download: DownloadUnderWay, status: string): string {
+  const { state, failure_message: failure, retry_at: retryAt, waits_for_online } = download.job;
+  if (state === "running") return /^\d+%$/u.test(status) ? `Downloading ${status}` : status;
+  if (waits_for_online) return "Downloading once medleyplay is Online";
+  if (retryAt == null) return "Queued to download";
+  const time = new Date(retryAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const retry = `Retry scheduled at ${time}`;
+  return failure ? `${retry}. ${failure}` : retry;
 }

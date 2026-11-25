@@ -9070,7 +9070,7 @@ button.playing-kind[aria-expanded="true"] {
 }
 
 @media (width <= 40rem) {
-  .missing-details-field-row:has(.missing-details-options) {
+  .missing-details-field-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -9092,6 +9092,14 @@ button.playing-kind[aria-expanded="true"] {
   justify-self: end;
   flex-wrap: nowrap;
   column-gap: 0.35rem;
+}
+
+@media (width <= 40rem) {
+  .missing-details-field-actions {
+    max-inline-size: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 .missing-details-field {

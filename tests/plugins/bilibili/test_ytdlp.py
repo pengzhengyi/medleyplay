@@ -309,6 +309,35 @@ def _synthetic_stream(monkeypatch: pytest.MonkeyPatch, protocol: str) -> None:
     monkeypatch.setattr(_ytdlp, "_extract", extract_stream)
 
 
+@refused_answers_are_left_to_the_collector
+@pytest.mark.parametrize("bounded_http", [False, True], ids=["separate", "joined"])
+def test_an_http_567_during_audio_transfer_is_not_a_plugin_fault(
+    no_outside_network: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    bounded_http: bool,
+) -> None:
+    _synthetic_stream(monkeypatch, "http")
+
+    with (
+        running_http_proxy({_MEDIA: Answer(567)}) as proxy,
+        pytest.raises(NetworkError, match="567"),
+    ):
+        download(
+            f"http://{VIDEO_PAGE}",
+            formats="30280",
+            folder=str(tmp_path),
+            cookie_file=None,
+            on_progress=lambda *_: None,
+            proxy=proxy.url,
+            bounded_http=bounded_http,
+        )
+
+    assert proxy.requests
+    assert not (tmp_path / "audio.m4a").exists()
+
+
 @pytest.mark.parametrize("size", [32 * 1024, 256 * 1024])
 def test_native_http_enforces_the_write_limit_without_a_content_length(
     no_outside_network: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, size: int

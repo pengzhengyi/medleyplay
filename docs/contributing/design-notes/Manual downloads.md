@@ -150,13 +150,16 @@
 - **After adding,** the dialog closes and says how many Tracks were added and
   that they are downloading, or waiting for Online when the Mode is Offline.
 - ***Downloaded* shows the songs downloading** above those downloaded: each
-  one's cover, title, artist, and state (*Waiting*, *Waiting for Online*,
-  *Downloading*, or how far, such as *42%*) over a bar. A waiting song's bar is
-  still and empty; a running one moves until its Job says how far it has got.
+  one's cover, title, artist, and state over a bar. *Queued*, *Waiting for
+  Online*, and *Retry scheduled* are distinct. A retry's tooltip gives its
+  earliest start time and any failure the Account may read. The bar stays empty
+  while a Job waits; while running it shows stages such as *Preparing download*,
+  a percentage when known, and the part being fetched or joined for a joined file.
   The list is read once, then follows each `download_source` Job on the event
   stream: its progress moves the bar, its end drops the song, and a Job the list
   doesn't hold reads the list again, once for each such Job. Only the latest read
-  shows, and never with a Download whose Job has already ended.
+  shows, with progress events received during that read applied over it. Jobs
+  that have already ended do not reappear.
 - **A failed Track** shows a warning mark where its availability shows, named
   *Download failed* in its tooltip and to a screen reader, small so the title
   keeps its room. It opens a menu that reads, when opened, why the Download

@@ -12,12 +12,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application.job_runner import FIRST_RETRY, NETWORK_RETRY
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.jobs import JobState
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
 from tests.support.api import add_bob, set_up_as_alice, sign_in
+from tests.support.echo import Say
 from tests.support.fakes import FakeClock
 from tests.support.jobs import Jobs, running_jobs
 from tests.support.programs import EchoJob
@@ -61,6 +63,30 @@ def test_a_running_job_shows_its_progress(jobs_client: TestClient, running: Jobs
     progress = jobs_client.get(f"/api/jobs/{job.id}").json()["progress"]
 
     assert progress == {"fraction": 0.5, "message": "Step 1"}
+
+
+def test_scheduled_retries_expose_their_start_time_in_the_jobs_api(
+    jobs_client: TestClient, running: Jobs, clock: FakeClock
+) -> None:
+    set_up_as_alice(jobs_client)
+    fault = running.submit(EchoJob(text="fault", say=Say(text="refused", raises="value")))
+    network = running.submit(
+        EchoJob(text="network", say=Say(text="offline", raises="network")), target="echo:2"
+    )
+    running.wait_for(
+        fault.id, JobState.QUEUED, until=lambda view: view.job.failure_kind == "plugin"
+    )
+    running.wait_for(network.id, JobState.WAITING)
+
+    listed = {job["id"]: job for job in jobs_client.get("/api/jobs").json()}
+
+    assert listed[fault.id]["retry_at"] == (clock() + FIRST_RETRY).isoformat().replace(
+        "+00:00", "Z"
+    )
+    assert listed[network.id]["retry_at"] == (clock() + NETWORK_RETRY).isoformat().replace(
+        "+00:00", "Z"
+    )
+    assert jobs_client.post(f"/api/jobs/{fault.id}/cancel").json()["retry_at"] is None
 
 
 def test_the_jobs_need_a_sign_in(jobs_client: TestClient) -> None:

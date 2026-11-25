@@ -38,6 +38,8 @@ class JobOut(BaseModel):
     progress: ProgressOut | None
     waits_for_online: bool
     """It needs the network, and waits while the Mode is Offline."""
+    retry_at: datetime | None
+    """The earliest a scheduled retry can start, if it is still in the future."""
 
     @classmethod
     def of(cls, view: JobView, viewer: Account) -> "JobOut":
@@ -57,6 +59,7 @@ class JobOut(BaseModel):
             finished_at=job.finished_at,
             progress=None if progress is None else ProgressOut(**vars(progress)),
             waits_for_online=view.waits_for_online,
+            retry_at=view.retry_at,
         )
 
 

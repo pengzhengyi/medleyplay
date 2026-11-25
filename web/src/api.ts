@@ -386,6 +386,8 @@ export interface JobEvent {
   readonly progress?: JobProgress | null;
   /** Whether it needs the network, and waits while the Mode is Offline. */
   readonly waits_for_online?: boolean;
+  readonly retry_at?: string | null;
+  readonly failure_message?: string;
 }
 
 /** A saved song's outcome from Auto-Match, or why no Job was started. */
@@ -405,6 +407,8 @@ export interface DownloadUnderWay {
     readonly state: Job["state"];
     readonly progress: JobProgress | null;
     readonly waits_for_online: boolean;
+    readonly retry_at?: string | null;
+    readonly failure_message?: string;
   };
 }
 

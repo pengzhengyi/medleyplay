@@ -6,7 +6,7 @@
 import { useId, useMemo } from "react";
 
 import type { DownloadUnderWay, Track } from "../api";
-import { downloadStateOf } from "../library/downloading";
+import { downloadDetailOf, downloadStateOf } from "../library/downloading";
 import { Cover } from "./Cover";
 
 /** List the songs of `tracks` that `downloads` get, or nothing while none is under way. */
@@ -37,6 +37,7 @@ export function Downloading({
           // Job says how far it has got.
           const fraction =
             download.job.state === "running" ? (download.job.progress?.fraction ?? null) : 0;
+          const status = downloadStateOf(download);
           return (
             <li key={download.job.id} className="downloading-row">
               <Cover size="small" cover={track.cover} className="downloading-cover" />
@@ -44,9 +45,12 @@ export function Downloading({
                 <span className="downloading-title">{track.title}</span>
                 <span className="downloading-artist">{track.artist}</span>
               </span>
-              <span className="downloading-state">{downloadStateOf(download)}</span>
+              <span className="downloading-state" title={downloadDetailOf(download, status)}>
+                {status}
+              </span>
               <progress
                 aria-label={track.title}
+                aria-valuetext={status}
                 max={1}
                 {...(fraction === null ? {} : { value: fraction })}
               />

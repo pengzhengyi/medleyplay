@@ -260,7 +260,7 @@ export function SettingsView({
     ),
   };
   return (
-    <>
+    <div className="settings-view">
       <header className="view-heading">
         <h2 className="section" data-rail-named>
           {t("Settings")}
@@ -306,7 +306,7 @@ export function SettingsView({
           {contents[id]}
         </SettingsSection>
       ))}
-    </>
+    </div>
   );
 }
 

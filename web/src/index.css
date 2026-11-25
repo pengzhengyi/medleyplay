@@ -302,7 +302,8 @@ button[aria-disabled="true"] {
 
 .library {
   /* The rail's width: its names, or only its icons once collapsed. */
-  --rail: 13.25rem;
+  --rail-expanded: 13.25rem;
+  --rail: var(--rail-expanded);
 
   display: grid;
   grid-template:
@@ -319,7 +320,7 @@ button[aria-disabled="true"] {
 @media (width > 64rem) {
   .library.rail-minimized {
     /* The header's wordmark keeps the rail's full width. */
-    --rail: 13.25rem;
+    --rail: var(--rail-expanded);
 
     /* How tall the minimized rail's band is, which the view leaves free at its top. */
     --band: 3.75rem;
@@ -1733,14 +1734,26 @@ button[aria-disabled="true"] {
   font-size: 0.85rem;
 }
 
-/* Settings: a raised card for each section. */
-.settings-section {
-  max-width: 42rem;
+.settings-view {
+  max-inline-size: 60rem;
+  margin-inline: auto;
+}
 
+.settings-view > .view-heading {
+  margin-inline-start: 0;
+}
+
+@media (width > 64rem) {
+  .library.rail-collapsed main:has(> .settings-view) {
+    padding-inline-start: calc(1.5rem + var(--rail-expanded) - var(--rail));
+  }
+}
+
+.settings-section {
   /* Clear of the header and the sections' names, which stay at the top. */
   scroll-margin-top: calc(var(--stick-top, var(--top-height, 0px)) + 4.5rem);
   margin: 0 0 1.25rem;
-  padding: 1.25rem 1.5rem;
+  padding: 1.25rem clamp(1rem, 3vw, 1.5rem);
   border-radius: 1.25rem;
   background: var(--surface);
   box-shadow: var(--lift);
@@ -1785,6 +1798,14 @@ button[aria-disabled="true"] {
   margin-top: 0.35rem;
 }
 
+.settings-section select {
+  max-inline-size: 24rem;
+}
+
+.settings-section p:where(.hint) {
+  max-inline-size: 65ch;
+}
+
 /* The sections' names, staying in view, each going to its section. */
 .settings-toc {
   position: sticky;
@@ -1793,7 +1814,6 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  max-width: 42rem;
   margin: 0 0 1rem;
   padding: 0.5rem 0;
   background: var(--page);
@@ -1824,10 +1844,6 @@ button[aria-disabled="true"] {
 }
 
 /* Clean up's bar: each section's pill with how many wait, or a check once done. */
-.clean-up-toc {
-  max-width: none;
-}
-
 .clean-up-toc button {
   display: inline-flex;
   align-items: center;

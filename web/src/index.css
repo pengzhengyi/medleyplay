@@ -6825,6 +6825,24 @@ button.song-handle {
   border: 1px dashed currentcolor;
 }
 
+.song-lyrics[data-match="searching"] {
+  position: relative;
+}
+
+.song-lyrics[data-match="searching"]::after {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline: 0;
+  aspect-ratio: 1;
+  border: 2px solid transparent;
+  border-top-color: currentcolor;
+  border-right-color: currentcolor;
+  border-radius: 50%;
+  pointer-events: none;
+  translate: 0 -50%;
+  content: "";
+}
+
 .song-lyrics[data-match="working"] {
   border: 1px solid transparent;
   border-right-color: currentcolor;
@@ -6836,6 +6854,10 @@ button.song-handle {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .song-lyrics[data-match="searching"]::after {
+    animation: spin 1.2s linear infinite;
+  }
+
   .song-lyrics[data-match="working"] svg [opacity] {
     animation: lyrics-match-fill 1.8s ease-in-out infinite alternate;
   }

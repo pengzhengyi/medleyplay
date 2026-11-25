@@ -10,13 +10,14 @@ import os
 import struct
 import types
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from itertools import batched
 from pathlib import Path
 from typing import Final, Self
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 from tinytag import TinyTag, TinyTagException
 
@@ -35,7 +36,7 @@ from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundE
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.links import PART_LINKS, part_link, video_selection
 from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
-from medleyplay.persistence.schema import DownloadRow, SourceRow, TrackRow
+from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
 
 _UPLOAD_PREFIX: Final = ".upload-"
 _UNAVAILABLE: Final = "The site no longer has this video."
@@ -172,6 +173,26 @@ class ManualDownloadService:
             for job in jobs
             if (source := sources[job.job.target]) is not None and source in tracks
         ]
+
+    def dismiss_failures(self, job_ids: Iterable[JobId]) -> None:
+        """Hide the specified failed Downloads from Downloaded, keeping their Jobs and Tracks."""
+        changed = 0
+        with self._units.begin() as db:
+            connection = db.connection()
+            for batch in batched(job_ids, 500, strict=False):
+                result = connection.execute(
+                    update(JobRow)
+                    .where(
+                        JobRow.id.in_(batch),
+                        JobRow.kind == DOWNLOAD_KIND,
+                        JobRow.state == JobState.FAILED,
+                        JobRow.failure_dismissed.is_(False),
+                    )
+                    .values(failure_dismissed=True)
+                )
+                changed += result.rowcount
+        if changed and self._on_change is not None:
+            self._on_change("catalog")
 
     def upload(self, track_id: TrackId, name: str) -> "Upload":
         """Return an upload of the Track's file, which `name` is the name of.

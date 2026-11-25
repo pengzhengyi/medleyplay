@@ -12,6 +12,7 @@ from medleyplay.application.manual_downloads import DownloadStatus, DownloadUnde
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import InvalidInputError, TooLargeError
+from medleyplay.domain.jobs import JobId
 from medleyplay.web.deps import ManualDownloadsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 from medleyplay.web.jobs import JobOut
@@ -117,3 +118,17 @@ class DownloadUnderWayOut(BaseModel):
 def list_downloads(me: SignedInAccount, manual: ManualDownloadsDep) -> list[DownloadUnderWayOut]:
     """Return each Download a Job is getting, the first asked for first, with its Track."""
     return [DownloadUnderWayOut.of(each, me) for each in manual.downloading()]
+
+
+class FailedDownloadsIn(BaseModel):
+    """Dismiss the failures of these Jobs from Downloaded."""
+
+    job_ids: list[RowId]
+
+
+@under_way_router.post("/failed/dismiss", status_code=204)
+def dismiss_failed_downloads(
+    body: FailedDownloadsIn, _: SignedInAccount, manual: ManualDownloadsDep
+) -> None:
+    """Dismiss only the specified failed Download Jobs, without deleting data."""
+    manual.dismiss_failures(JobId(job_id) for job_id in body.job_ids)

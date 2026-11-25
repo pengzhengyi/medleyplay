@@ -110,6 +110,7 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     availability: "ok",
     downloaded: false,
     download_failed: false,
+    download_failure_job_id: null,
     site: null,
     video: null,
     segment_of: null,

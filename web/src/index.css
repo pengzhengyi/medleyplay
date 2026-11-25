@@ -1643,6 +1643,15 @@ button[aria-disabled="true"] {
   font-weight: 600;
 }
 
+.failed-download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: end;
+  gap: 0.5rem;
+  margin-block-end: 0.5rem;
+}
+
 /* The songs downloading, above those downloaded: a row each, its bar under its names. */
 .downloading {
   margin-bottom: 1.5rem;

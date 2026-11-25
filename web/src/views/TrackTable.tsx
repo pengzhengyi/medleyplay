@@ -220,6 +220,7 @@ export interface TrackActions extends TrackMenuActions {
   readonly statusOf: (track: Track) => CoverStatus | undefined;
   /** The Track's Download, while one is under way. */
   readonly downloadOf: (track: Track) => DownloadUnderWay | undefined;
+  readonly dismissFailedDownloads?: ((ids: readonly number[]) => Promise<void>) | undefined;
   /** Whether a split file's album has songs on its details page. */
   readonly hasAlbum?: (artist: string, name: string) => boolean;
   /** Edit the album `songs`, songs of their own, make up; an album that is one file is edited as it. */
@@ -1035,7 +1036,13 @@ const COLUMNS: Column[] = [
             ) : (
               <DownloadNote download={download} />
             ))}
-          {track.download_failed && <DownloadFailed track={track} onAddFile={actions.onAddFile} />}
+          {track.download_failed && (
+            <DownloadFailed
+              track={track}
+              onAddFile={actions.onAddFile}
+              dismiss={actions.dismissFailedDownloads}
+            />
+          )}
           <span className="subtitle">
             <TrackArtistCredit track={track} />
           </span>

@@ -55,14 +55,21 @@ def _waiting_download(
     return track_id, job.id
 
 
-def _failed_download(client: TestClient) -> tuple[int, int]:
+def _failed_download(client: TestClient, *, video: str = "BVrefused") -> tuple[int, int]:
     """Add a part whose Download fails at once, wait for that; return its Track's and Job's ids."""
-    added = client.post("/api/links", json=ADD_REFUSED).json()[0]
+    added = client.post(
+        "/api/links",
+        json=ADD_REFUSED | {"link": f"https://www.bilibili.com/video/{video}"},
+    ).json()[0]
+    _wait_for_failure(client, int(added["job"]["id"]))
+    return int(added["track_id"]), int(added["job"]["id"])
+
+
+def _wait_for_failure(client: TestClient, job_id: int) -> None:
     ends = time.monotonic() + 20
-    while client.get(f"/api/jobs/{added['job']['id']}").json()["state"] != "failed":
+    while client.get(f"/api/jobs/{job_id}").json()["state"] != "failed":
         assert time.monotonic() < ends, "The Download never failed."
         time.sleep(0.05)
-    return int(added["track_id"]), int(added["job"]["id"])
 
 
 def _failed_track(client: TestClient) -> int:
@@ -105,8 +112,54 @@ def test_a_failed_download_is_retried_through_the_job_it_names(site_client: Test
     assert now["job_id"] == retried.json()["id"]
 
 
+def test_dismissing_one_failure_keeps_its_track_and_leaves_other_failures_visible(
+    site_client: TestClient,
+) -> None:
+    track_id, job_id = _failed_download(site_client)
+    other_track, other_job = _failed_download(site_client, video="BVSignedIn")
+
+    response = site_client.post("/api/downloads/failed/dismiss", json={"job_ids": [job_id]})
+
+    assert response.status_code == 204
+    tracks = {track["id"]: track for track in site_client.get("/api/tracks").json()}
+    assert tracks[track_id]["download_failed"] is True
+    assert tracks[track_id]["download_failure_job_id"] is None
+    assert tracks[other_track]["download_failure_job_id"] == other_job
+    assert site_client.get(f"/api/tracks/{track_id}/download").json()["job_id"] == job_id
+
+
+def test_dismissing_several_failures_leaves_waiting_jobs_alone(
+    site_client: TestClient,
+    site_services: tuple[Site, Services],
+    units: sessionmaker[Session],
+) -> None:
+    first, first_job = _failed_download(site_client)
+    second, second_job = _failed_download(site_client, video="BVSignedIn")
+    _, waiting = _waiting_download(site_client, site_services[0], units)
+
+    response = site_client.post(
+        "/api/downloads/failed/dismiss", json={"job_ids": [first_job, second_job, waiting]}
+    )
+
+    assert response.status_code == 204
+    for track_id in (first, second):
+        assert site_client.get(f"/api/tracks/{track_id}").json()["download_failure_job_id"] is None
+    assert site_client.get(f"/api/jobs/{waiting}").json()["state"] in {"queued", "waiting"}
+
+
+def test_dismissing_an_earlier_attempt_does_not_hide_a_new_failure(site_client: TestClient) -> None:
+    track_id, earlier = _failed_download(site_client)
+    new = site_client.post(f"/api/jobs/{earlier}/retry").json()["id"]
+    _wait_for_failure(site_client, new)
+
+    response = site_client.post("/api/downloads/failed/dismiss", json={"job_ids": [earlier]})
+
+    assert response.status_code == 204
+    assert site_client.get(f"/api/tracks/{track_id}").json()["download_failure_job_id"] == new
+
+
 def test_the_track_list_marks_a_failed_download_and_names_the_site(site_client: TestClient) -> None:
-    track_id = _failed_track(site_client)
+    track_id, job_id = _failed_download(site_client)
 
     track = site_client.get(f"/api/tracks/{track_id}").json()
 
@@ -115,6 +168,7 @@ def test_the_track_list_marks_a_failed_download_and_names_the_site(site_client: 
         True,
         "bilibili",
     )
+    assert track["download_failure_job_id"] == job_id
     listed = next(each for each in site_client.get("/api/tracks").json() if each["id"] == track_id)
     assert listed == track
 

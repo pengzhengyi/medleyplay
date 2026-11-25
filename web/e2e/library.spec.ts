@@ -119,6 +119,7 @@ function manySongs(count: number): Track[] {
     availability: "ok",
     downloaded: false,
     download_failed: false,
+    download_failure_job_id: null,
     track_number: null,
     disc_number: null,
     site: null,

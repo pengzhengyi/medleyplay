@@ -57,6 +57,7 @@ import {
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
 import { querySaid } from "../library/query";
+import { useWords } from "../locale";
 import { isRailNamed } from "../rail";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumAbout } from "./AlbumAbout";
@@ -109,6 +110,7 @@ export interface ViewProps {
   readonly waitingDevices: readonly WaitingDevice[];
   /** The Downloads under way, oldest first; none, unless given. */
   readonly downloading?: readonly DownloadUnderWay[];
+  readonly dismissFailedDownloads?: (ids: readonly number[]) => Promise<void>;
   readonly videoLookups?: ReactNode;
   /** The station playing, and a way to start one. */
   readonly station: Station;
@@ -430,16 +432,20 @@ function viewOf(
         />
       );
     }
-    case "downloaded":
+    case "downloaded": {
+      const shown = downloadedOf(props.tracks);
+      const dismiss = props.dismissFailedDownloads;
       return (
         <Songs
           title="Downloaded"
           {...props}
+          actions={{ ...props.actions, dismissFailedDownloads: dismiss }}
           about={
             <>
               <StorageFolderLocation />
               {given.videoLookups}
               <Downloading downloads={given.downloading ?? []} tracks={given.tracks} />
+              {dismiss !== undefined && <DismissFailedDownloads tracks={shown} dismiss={dismiss} />}
             </>
           }
           empty={
@@ -449,9 +455,10 @@ function viewOf(
             </p>
           }
         >
-          {downloadedOf(props.tracks)}
+          {shown}
         </Songs>
       );
+    }
     case "playlists":
       return <Playlists tracks={given.tracks} playlists={props.playlists} />;
     case "playlist":
@@ -562,6 +569,47 @@ function LibraryItems({ tracks, playingId, actions, route, links }: ViewProps) {
 const showFocused = () => {
   navigate({ view: "library" }, { replace: true });
 };
+
+function DismissFailedDownloads({
+  tracks,
+  dismiss,
+}: {
+  readonly tracks: readonly Track[];
+  readonly dismiss: (ids: readonly number[]) => Promise<void>;
+}) {
+  const words = useWords();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const jobs = [
+    ...new Set(tracks.flatMap(({ download_failure_job_id: id }) => (id === null ? [] : [id]))),
+  ];
+  if (jobs.length === 0) return null;
+  return (
+    <div className="failed-download-actions">
+      {error !== "" && <span role="alert">{error}</span>}
+      <button
+        type="button"
+        className="text"
+        title={words("Songs stay in your Library.")}
+        aria-busy={busy}
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setError("");
+          dismiss(jobs)
+            .catch((failure: unknown) => {
+              setError(failure instanceof Error ? failure.message : String(failure));
+            })
+            .finally(() => {
+              setBusy(false);
+            });
+        }}
+      >
+        {words("Dismiss all failed downloads")}
+      </button>
+    </div>
+  );
+}
 
 /** A heading, and Tracks in the song table. */
 function Songs({

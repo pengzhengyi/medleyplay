@@ -10,6 +10,7 @@ from typing import Final, NewType
 from medleyplay.domain.community import CommunityRating
 from medleyplay.domain.details import Kind, KindReason
 from medleyplay.domain.errors import InvalidInputError
+from medleyplay.domain.jobs import JobId
 from medleyplay.domain.rules import Favorite, Match, Rules, fold
 
 TrackId = NewType("TrackId", int)
@@ -132,6 +133,8 @@ class Track:
     """Whether a Source of the Track has a Download kept on the server."""
     download_failed: bool = False
     """Whether the Track has no Download, and the last Job downloading it failed."""
+    download_failure_job_id: JobId | None = None
+    """The failed download Job, if its failure has not been dismissed from Downloaded."""
     site: str | None = None
     """The kind of the site Source the Track is downloaded from, such as `bilibili`."""
     joined: bool = False

@@ -557,6 +557,7 @@ class JobRow(Base):
     """Whose login the Job uses; not a foreign key, so a removed Account just has none."""
     failure_kind: Mapped[str | None] = mapped_column(String(16))
     failure_message: Mapped[str] = mapped_column(String(2048), default="")
+    failure_dismissed: Mapped[bool] = mapped_column(Boolean, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)

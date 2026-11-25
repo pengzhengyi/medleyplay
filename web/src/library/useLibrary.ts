@@ -183,6 +183,7 @@ export interface Library {
   ) => Promise<readonly AddedPart[]>;
   /** Where a site Track's Download stands. */
   readonly download: (id: number) => Promise<TrackDownload>;
+  readonly dismissFailedDownloads: (ids: readonly number[]) => Promise<void>;
   /**
    * Send `file` as the Track's Download, reporting how many bytes went as they do; the
    * Tracks then show it downloaded. Aborting `signal` stops it.
@@ -833,6 +834,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       return added;
     },
     download: (id) => signedOutOn401(api.download(id)),
+    dismissFailedDownloads: (ids) => changeTracks(api.dismissFailedDownloads(ids)),
     addFile: async (id, file, onProgress, signal) => {
       await signedOutOn401(uploadFile(id, file, onProgress, signal));
       reloadTracks();

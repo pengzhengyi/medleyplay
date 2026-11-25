@@ -13,6 +13,7 @@ import {
   artistIdOf,
   artistNameOf,
   detailsOf,
+  downloadOf,
   downloadUnderWayOf,
   favoritesPlaylistOf,
   knownArtistOf,
@@ -1727,11 +1728,75 @@ describe("the Downloaded view", () => {
   it("keeps a song whose download failed among the songs, to try again", async () => {
     open(hrefOf({ view: "downloaded" }), {
       ...downloading(),
-      ...signedIn([...LIBRARY, trackOf(7, "Lost Signal", { download_failed: true })]),
+      ...signedIn([
+        ...LIBRARY,
+        trackOf(7, "Lost Signal", { download_failed: true, download_failure_job_id: 17 }),
+      ]),
     });
 
     expect(await screen.findByRole("button", { name: "Lost Signal" })).toBeVisible();
     expect(songs()).toEqual(["Shiver", "Lost Signal"]);
+  });
+
+  it("dismisses one failed download without removing the song from the Library", async () => {
+    const lost = trackOf(7, "Lost Signal", { download_failed: true, download_failure_job_id: 17 });
+    const sent: unknown[] = [];
+    open(hrefOf({ view: "downloaded" }), {
+      ...signedIn([...LIBRARY, lost]),
+      "GET /api/tracks": () => ({
+        body: [...LIBRARY, { ...lost, download_failure_job_id: sent.length === 0 ? 17 : null }],
+      }),
+      "GET /api/tracks/7/download": {
+        body: { ...downloadOf(7, "failed", "The download failed."), job_id: 17 },
+      },
+      "POST /api/downloads/failed/dismiss": (request) => {
+        sent.push(request);
+        return { status: 204 };
+      },
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Download failed/ }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Dismiss failed download" }));
+
+    await waitFor(() => {
+      expect(songs()).toEqual(["Shiver"]);
+    });
+    expect(sent).toEqual([{ job_ids: [17] }]);
+    await userEvent.click(screen.getByRole("link", { name: "Library" }));
+    expect(await screen.findByRole("button", { name: "Lost Signal" })).toBeInTheDocument();
+  });
+
+  it("dismisses all failed downloads without removing a saved file", async () => {
+    const failures = [
+      trackOf(7, "Lost Signal", { download_failed: true, download_failure_job_id: 17 }),
+      trackOf(8, "Night Drive", { download_failed: true, download_failure_job_id: 19 }),
+    ];
+    const sent: unknown[] = [];
+    open(hrefOf({ view: "downloaded" }), {
+      ...signedIn([...LIBRARY, ...failures]),
+      "GET /api/tracks": () => ({
+        body: [
+          ...LIBRARY,
+          ...(sent.length === 0
+            ? failures
+            : failures.map((track) => ({ ...track, download_failure_job_id: null }))),
+        ],
+      }),
+      "POST /api/downloads/failed/dismiss": (request) => {
+        sent.push(request);
+        return { status: 204 };
+      },
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Dismiss all failed downloads" }),
+    );
+
+    await waitFor(() => {
+      expect(songs()).toEqual(["Shiver"]);
+    });
+    expect(sent).toEqual([{ job_ids: [17, 19] }]);
+    expect(screen.queryByRole("button", { name: "Dismiss all failed downloads" })).toBeNull();
   });
 
   it("shows no Downloading section while nothing downloads", async () => {

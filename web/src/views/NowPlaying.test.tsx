@@ -261,6 +261,57 @@ describe("Now Playing", () => {
 
     const queue = within(nowPlaying).getByRole("region", { name: "Up next" });
     expect(within(queue).getByText("Long Road")).toBeInTheDocument();
+    expect(within(queue).queryByRole("button", { name: /^(Expand|Collapse) all$/u })).toBeNull();
+  });
+
+  it("folds or expands every album in the floating queue without hiding individual songs", async () => {
+    const tracks = [
+      trackOf(1, "Intro"),
+      trackOf(10, "Blue", { kind: "album", split: true }),
+      trackOf(11, "First song", { segment_of: 10, track_number: 1 }),
+      trackOf(12, "Second song", { segment_of: 10, track_number: 2 }),
+      trackOf(20, "Red", { kind: "album", split: true }),
+      trackOf(21, "Third song", { segment_of: 20, track_number: 1 }),
+      trackOf(22, "Fourth song", { segment_of: 20, track_number: 2 }),
+      trackOf(30, "Outro"),
+    ];
+    serve({
+      ...signedIn(tracks),
+      "POST /api/tracks/1/playback": {
+        body: {
+          state: "ready",
+          source_id: 1,
+          audio_url: "/api/sources/1/audio",
+          media_type: "audio/wav",
+        },
+      },
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Intro" }));
+    const sidebar = within(screen.getByRole("region", { name: "Up next" }));
+    const nowPlaying = await openNowPlaying();
+    await userEvent.click(within(nowPlaying).getByRole("button", { name: "Up next" }));
+    const queue = within(within(nowPlaying).getByRole("region", { name: "Up next" }));
+
+    const collapse = queue.getByRole("button", { name: "Collapse all" });
+    expect(collapse).toHaveTextContent(/^$/u);
+    expect(sidebar.queryByRole("button", { name: "Collapse all" })).toBeNull();
+    await userEvent.click(collapse);
+
+    expect(queue.queryByRole("button", { name: "Play First song now" })).toBeNull();
+    expect(queue.queryByRole("button", { name: "Play Third song now" })).toBeNull();
+    expect(queue.getByRole("button", { name: "Play Outro now" })).toBeVisible();
+    expect(queue.getByRole("button", { name: "Expand all" })).toBe(collapse);
+
+    await userEvent.click(queue.getByRole("button", { name: "Show the songs of Blue" }));
+    await userEvent.click(queue.getByRole("button", { name: "Expand all" }));
+
+    expect(queue.getByRole("button", { name: "Play First song now" })).toBeVisible();
+    expect(queue.getByRole("button", { name: "Play Third song now" })).toBeVisible();
+    expect(queue.getByRole("button", { name: "Collapse all" })).toBe(collapse);
+
+    await userEvent.click(queue.getByRole("tab", { name: "History" }));
+    expect(queue.queryByRole("button", { name: "Collapse all" })).toBeNull();
   });
 
   it("closes Up next with Escape, leaving Now Playing open", async () => {

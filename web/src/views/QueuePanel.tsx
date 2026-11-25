@@ -28,12 +28,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CaretRightIcon, DotsSixVerticalIcon, XIcon } from "@phosphor-icons/react";
+import {
+  ArrowsInLineVerticalIcon,
+  ArrowsOutLineVerticalIcon,
+  CaretRightIcon,
+  DotsSixVerticalIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { type KeyboardEvent, useMemo, useState } from "react";
 
 import type { Track } from "../api";
 import { formatQueueLength } from "../format";
 import { songsByFile } from "../library/playOrder";
+import { useWords } from "../locale";
 import { type Entry, upNext } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { useHistory } from "../player/useHistory";
@@ -41,6 +48,7 @@ import type { SleepTimer } from "../player/useSleepTimer";
 import { useNow } from "../useNow";
 import { Cover } from "./Cover";
 import { ClearQuestion, HistoryClear, HistoryList } from "./HistoryPanel";
+import { Hint } from "./Hint";
 import { KindMark } from "./KindMark";
 import { SleepTimerMenu } from "./SleepTimerMenu";
 
@@ -63,6 +71,7 @@ export function QueuePanel({
   tracks,
   id = "queue",
   announceIn,
+  showFoldAll = false,
 }: {
   readonly player: Player;
   /** The sleep timer, set from the panel's header. */
@@ -72,7 +81,9 @@ export function QueuePanel({
   readonly id?: string;
   /** Where dragging is announced: inside a modal dialog, which leaves the page behind inert. */
   readonly announceIn?: HTMLElement | null;
+  readonly showFoldAll?: boolean;
 }) {
+  const words = useWords();
   const [tab, setTab] = useState<Tab>("queue");
   const history = useHistory(tab === "history");
   // Whether History's Clear is asking once more.
@@ -83,6 +94,9 @@ export function QueuePanel({
   // The split files whose songs are folded away, by the file's id.
   const [folded, setFolded] = useState<ReadonlySet<number>>(new Set());
   const rows = rowsOf(entries, tracks);
+  const albums = rows.flatMap((row) => (row.kind === "album" ? [row.fileId] : []));
+  const allExpanded = albums.every((file) => !folded.has(file));
+  const foldAllLabel = allExpanded ? words("Collapse all") : words("Expand all");
   const shown = rows.flatMap((row) =>
     row.kind === "album" && folded.has(row.fileId) ? [] : row.entries,
   );
@@ -158,6 +172,25 @@ export function QueuePanel({
         {tab === "queue" ? (
           <>
             <SleepTimerMenu timer={sleep} container={announceIn} />
+            {showFoldAll && albums.length > 0 && (
+              <Hint name={foldAllLabel} keys={[]}>
+                <button
+                  type="button"
+                  className="icon"
+                  aria-label={foldAllLabel}
+                  aria-controls={`${id}-queue`}
+                  onClick={() => {
+                    setFolded(allExpanded ? new Set(albums) : new Set());
+                  }}
+                >
+                  {allExpanded ? (
+                    <ArrowsInLineVerticalIcon aria-hidden />
+                  ) : (
+                    <ArrowsOutLineVerticalIcon aria-hidden />
+                  )}
+                </button>
+              </Hint>
+            )}
             <button
               type="button"
               className="text"

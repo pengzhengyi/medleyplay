@@ -825,6 +825,23 @@ export interface CreditCandidate {
   readonly origin: "library" | "ai";
 }
 
+export interface DetailImpact {
+  readonly details: readonly {
+    readonly field: Detail;
+    readonly before: string | number;
+    readonly after: string | number;
+  }[];
+  readonly split_songs: number;
+  readonly affected_songs: number;
+  readonly song_fields: readonly Detail[];
+}
+
+export interface MissingDetailReview {
+  readonly field: MissingField;
+  readonly value: string;
+  readonly impact: DetailImpact;
+}
+
 export interface MissingDetailsItem {
   readonly track_id: number;
   readonly title: string;
@@ -1407,6 +1424,16 @@ export class ApiError extends Error {
   }
 }
 
+/** A Cleanup save that needs the listener to review its side effects. */
+export class MissingDetailReviewError extends ApiError {
+  constructor(
+    message: string,
+    readonly impact: DetailImpact,
+  ) {
+    super(409, message, "missing_detail_review_required");
+  }
+}
+
 /** Whether the lyrics lookup was deferred because Auto-Match is working on this song. */
 export function lyricsMatchInProgress(failure: unknown): boolean {
   return failure instanceof ApiError && failure.code === "lyrics_match_in_progress";
@@ -1429,7 +1456,14 @@ export function onDeviceRefused(listener: () => void): () => void {
 
 /** Return the error a refused response stands for, telling who listens if it is the device. */
 async function refusalOf(response: Response): Promise<ApiError> {
-  const { detail, code } = await reasonOf(response);
+  const { detail, code, impact } = await reasonOf(response);
+  if (
+    response.status === 409 &&
+    code === "missing_detail_review_required" &&
+    impact !== undefined
+  ) {
+    return new MissingDetailReviewError(detail, impact);
+  }
   const refusal = new ApiError(response.status, detail, code);
   if (refusal.deviceRefusal) {
     for (const listener of deviceListeners) {
@@ -1582,15 +1616,21 @@ async function send<T>(method: string, path: string, file: Blob): Promise<T> {
 }
 
 /** Say why the server refused: its own words, each check a request failed, or its status. */
-async function reasonOf(
-  response: Response,
-): Promise<{ readonly detail: string; readonly code: string | null }> {
+async function reasonOf(response: Response): Promise<{
+  readonly detail: string;
+  readonly code: string | null;
+  readonly impact?: DetailImpact;
+}> {
   const status = response.statusText || `The server refused this (${String(response.status)}).`;
   try {
-    const body = (await response.json()) as { detail?: unknown; code?: unknown };
+    const body = (await response.json()) as {
+      detail?: unknown;
+      code?: unknown;
+      impact?: DetailImpact;
+    };
     const code = typeof body.code === "string" ? body.code : null;
     if (typeof body.detail === "string") {
-      return { detail: body.detail, code };
+      return { detail: body.detail, code, ...(body.impact && { impact: body.impact }) };
     }
     if (Array.isArray(body.detail)) {
       const checks = body.detail.flatMap((check: unknown) =>

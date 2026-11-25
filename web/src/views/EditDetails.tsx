@@ -46,6 +46,7 @@ import {
   type Details,
   type Kind,
   type KindReason,
+  type MissingDetailReview,
   type Origin,
   type Pictured,
   type Track,
@@ -60,6 +61,7 @@ import {
   type Own,
   alternativesOf,
   boxText,
+  canPrefillMissingDetail,
   changesOf,
   foundOf,
   ownOf,
@@ -75,6 +77,7 @@ import type { TrackLookup } from "../library/useLibrary";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
 import { onlyArtist, sameCredits, toggled, withCredit, withoutCredit } from "../library/credits";
 import { ArtistChips } from "./ArtistChips";
+import { DetailReviewNote } from "./DetailReviewNote";
 import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { type CoverAlbum, PictureEditor } from "./PictureEditor";
@@ -114,6 +117,7 @@ const LYRICS_TITLE = "edit-lyrics-title";
  */
 export function EditDetails({
   track,
+  review,
   load,
   onSave,
   onReadVideo,
@@ -132,6 +136,7 @@ export function EditDetails({
   onClose,
 }: {
   readonly track: Track;
+  readonly review?: MissingDetailReview | undefined;
   readonly load: (trackId: number) => Promise<Details>;
   /** Save the household's values changed, and the song's artists if chosen one by one. */
   readonly onSave: (
@@ -159,6 +164,7 @@ export function EditDetails({
   readonly startOnSongs?: boolean;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const [details, setDetails] = useState<Details | undefined>(undefined);
   const [own, setOwn] = useState<Own>({});
@@ -181,6 +187,7 @@ export function EditDetails({
   const [choosingArtist, setChoosingArtist] = useState(false);
   const [replacingCover, setReplacingCover] = useState(false);
   const [error, setError] = useState("");
+  const [reviewState, setReviewState] = useState<"prefilled" | "stale">();
   const [saved, setSaved] = useState(false);
   // Saying it saved is enough for a moment; the details shown are what was kept.
   useEffect(() => {
@@ -257,8 +264,11 @@ export function EditDetails({
       (loaded) => {
         if (open) {
           setDetails(loaded);
-          setOwn(ownOf(loaded));
+          const canPrefill = review !== undefined && canPrefillMissingDetail(loaded, review.field);
+          setOwn(canPrefill ? { ...ownOf(loaded), [review.field]: review.value } : ownOf(loaded));
           setCredits(chipsOf(loaded));
+          setReviewState(review === undefined ? undefined : canPrefill ? "prefilled" : "stale");
+          if (canPrefill && review.field !== "artist") setAlbumOpen(true);
         }
       },
       (failure: unknown) => {
@@ -270,7 +280,7 @@ export function EditDetails({
     return () => {
       open = false;
     };
-  }, [track.id, load]);
+  }, [track.id, load, review]);
 
   // A lookup done has new details: read them again, keeping what was typed.
   const done = lookup?.state === "succeeded";
@@ -327,6 +337,7 @@ export function EditDetails({
         setKind(undefined);
       }
       setSaving(false);
+      setReviewState(undefined);
       setSaved(true);
     } catch (failure) {
       setSaving(false);
@@ -475,6 +486,20 @@ export function EditDetails({
         <p id="edit-details-song" className="edit-details-song">
           {track.title}
         </p>
+        {reviewState === "stale" && (
+          <p className="error" role="alert">
+            {t("The field changed before Edit details opened. The suggestion was not used.")}
+          </p>
+        )}
+        {reviewState === "prefilled" && review !== undefined && details !== undefined && (
+          <DetailReviewNote
+            review={review}
+            details={details}
+            own={own}
+            changes={changes}
+            artistsChanged={artists !== undefined}
+          />
+        )}
         {details === undefined && error === "" && (
           <p className="empty" role="status">
             Reading the details…

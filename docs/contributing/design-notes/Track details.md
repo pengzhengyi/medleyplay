@@ -738,7 +738,7 @@ file needs an album title or credit. An artist already credited on a whole
 file satisfies the credit. Individual songs, not album groupings, are
 the records the household changes.
 
-- **From your Library:** a whole album file's title can suggest its album
+- **Already in Library:** a whole album file's title can suggest its album
   title. A song can borrow an album name from another song with the same
   title and the same bound performers and credit roles. A title alone
   or a placeholder artist is not enough to match two songs.
@@ -750,11 +750,13 @@ the records the household changes.
   excluded. A Track without an independently named song or album is not
   sent. These Jobs use the existing AI lane and do not replace the ordinary
   Enricher's suggestions or song list.
-- **Use** saves one household override after checking that the field is
-  still missing and the candidate still applies. Edits that would change
-  other shown details or a split album's songs go through **Edit details**.
-  **Skip** records an intentional blank; **Remove blank override**
-  in the editor makes that field eligible again.
+- **Use** saves one household override when the field is still missing, the
+  candidate still applies, and the change affects only that field. If the
+  suggestion changes other details or is for a file split into songs, **Use**
+  opens **Edit details** with the suggestion filled in. The editor shows what
+  would change, such as a release year becoming blank, before anyone saves.
+- **Skip** records an intentional blank when only that field changes.
+  **Remove blank override** in the editor makes that field eligible again.
 
 A saved suggestion applies only to the same version of the Track's details.
 Turning off AI hides its suggestions and prevents new requests; it cannot

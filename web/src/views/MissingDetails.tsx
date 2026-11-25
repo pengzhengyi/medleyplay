@@ -13,7 +13,9 @@ import {
   type CreditCandidate,
   type MissingDetailsItem,
   type MissingDetailsPage,
+  type MissingDetailReview,
   type MissingField,
+  MissingDetailReviewError,
   api,
 } from "../api";
 import { useWords } from "../locale";
@@ -39,7 +41,7 @@ export function MissingDetails({
   onEdit,
 }: {
   readonly revision: string;
-  readonly onEdit: (track: number) => void;
+  readonly onEdit: (track: number, review?: MissingDetailReview) => void;
 }) {
   const t = useWords();
   const [page, setPage] = useState<MissingDetailsPage>();
@@ -151,7 +153,7 @@ function ReviewTrack({
 }: {
   readonly track: MissingDetailsItem;
   readonly reload: () => void;
-  readonly onEdit: (track: number) => void;
+  readonly onEdit: (track: number, review?: MissingDetailReview) => void;
 }) {
   const t = useWords();
   const [saving, setSaving] = useState("");
@@ -159,22 +161,32 @@ function ReviewTrack({
   const [error, setError] = useState("");
   const busy = saving || (sent?.track === track ? sent.action : "");
   const askable = track.ai === "ready" || track.ai === "failed" || track.ai === "answered";
-  const act = async (action: string, call: () => Promise<unknown>) => {
+  const act = async (
+    action: string,
+    call: () => Promise<unknown>,
+    suggestion?: Pick<MissingDetailReview, "field" | "value">,
+  ) => {
     setSaving(action);
     setError("");
     try {
       await call();
       setSent({ track, action });
     } catch (failure) {
-      setError(messageOf(failure));
+      if (suggestion !== undefined && failure instanceof MissingDetailReviewError) {
+        onEdit(track.track_id, { ...suggestion, impact: failure.impact });
+      } else {
+        setError(messageOf(failure));
+      }
     } finally {
       reload();
       setSaving("");
     }
   };
   const decide = (field: MissingField, candidate?: CreditCandidate) =>
-    act(`${field}:${candidate?.value ?? ""}`, () =>
-      api.decideMissingDetail(track.track_id, track.key, field, candidate),
+    act(
+      `${field}:${candidate?.value ?? ""}`,
+      () => api.decideMissingDetail(track.track_id, track.key, field, candidate),
+      candidate === undefined ? undefined : { field, value: candidate.value },
     );
   const hasAi = track.fields.some((detail) =>
     detail.candidates.some((item) => item.origin === "ai"),

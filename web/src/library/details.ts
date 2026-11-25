@@ -9,7 +9,7 @@
  * would, though the cover of the album it corrects stays.
  */
 
-import type { Detail, Details, Found, Origin } from "../api";
+import type { Detail, Details, Found, MissingField, Origin } from "../api";
 
 /** A detail as the dialog lays it out. */
 export interface DetailField {
@@ -122,6 +122,18 @@ export function ownOf(details: Details): Own {
   return Object.fromEntries(
     Object.entries(details.origins.household ?? {}).map(([field, value]) => [field, String(value)]),
   );
+}
+
+/** Whether a suggestion can still prefill its missing field without replacing an edit. */
+export function canPrefillMissingDetail(details: Details, field: MissingField): boolean {
+  if (details.origins.household?.[field] !== undefined || details.shown[field]?.value) {
+    return false;
+  }
+  if (field === "artist") return details.kind.value === "song";
+  if (field === "album_artist") {
+    return details.kind.value === "album" && !details.shown.artist?.value;
+  }
+  return true;
 }
 
 /**

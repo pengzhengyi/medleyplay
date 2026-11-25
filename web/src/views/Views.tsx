@@ -21,6 +21,7 @@ import type {
   Playlist,
   ArtistSplits,
   MissingCover,
+  MissingDetailReview,
   MissingPhoto,
   SharedName,
   SplitOffers,
@@ -490,9 +491,11 @@ function viewOf(
               : {
                   missingDetails: {
                     revision: props.missingDetailsRevision,
-                    onEdit: (trackId: number) => {
-                      const track = props.tracks.find((each) => each.id === trackId);
-                      if (track !== undefined) props.actions.onEditDetails(track);
+                    onEdit: (trackId: number, review?: MissingDetailReview) => {
+                      const track = given.tracks.find((each) => each.id === trackId);
+                      if (track === undefined) return;
+                      if (review === undefined) props.actions.onEditDetails(track);
+                      else props.actions.onEditDetails(track, review);
                     },
                   },
                 })}

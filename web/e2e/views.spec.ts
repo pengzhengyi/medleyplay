@@ -169,7 +169,7 @@ test("a view's link opens it again after a reload", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Favorites" })).toBeVisible();
 });
 
-test("closing a linked cover editor leaves the artwork unoutlined and the cover controls reachable", async ({
+test("closing a linked cover editor leaves the artwork without an outline and the cover controls reachable", async ({
   page,
 }) => {
   await giveAlphaCredits(page);

@@ -314,6 +314,23 @@ describe("Now Playing", () => {
     expect(queue.queryByRole("button", { name: "Collapse all" })).toBeNull();
   });
 
+  it("sets and clears the sleep timer by clicking in the floating queue menu", async () => {
+    await playingIntro();
+    const nowPlaying = await openNowPlaying();
+    const view = within(nowPlaying);
+    await userEvent.click(view.getByRole("button", { name: "Up next" }));
+    const queue = within(view.getByRole("region", { name: "Up next" }));
+
+    await userEvent.click(queue.getByRole("button", { name: "Sleep timer" }));
+    await userEvent.click(view.getByRole("menuitem", { name: "30 minutes" }));
+
+    const active = queue.getByRole("button", { name: "Sleep timer, on" });
+    expect(active).toBeVisible();
+    await userEvent.click(active);
+    await userEvent.click(view.getByRole("menuitem", { name: "Turn off the timer" }));
+    expect(queue.getByRole("button", { name: "Sleep timer" })).toBeVisible();
+  });
+
   it("closes Up next with Escape, leaving Now Playing open", async () => {
     await playingIntro();
     const nowPlaying = await openNowPlaying();

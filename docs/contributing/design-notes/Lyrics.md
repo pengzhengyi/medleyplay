@@ -202,9 +202,10 @@ the household looks for the lyrics itself, by a title and artist of its own.
   stage but does not repeat one that committed. To try a finished match again,
   start Auto-Match from Songs so it checks the saved song again.
 - **Match feedback** stays with each saved song and returns when Songs reopens.
-  Its Lyrics icon fills partway during the work and turns solid only after a
-  save. A skipped or failed match has a dashed outline. The tooltip and screen
-  reader say what happened; the fill holds still under reduced motion. A skip
+  An arc rotates around its Lyrics icon while searching and stays still under
+  reduced motion. The icon fills partway while checking the AI pick or waiting,
+  and turns solid only after a save. A skipped or failed match has a dashed
+  outline. The tooltip and screen reader report the state. A skip
   from the latest request stays visible in Songs until a newer Job replaces
   it. Now Playing and the open lyrics editor read the song's lyrics again
   after a save or reconnect. A refresh does not replace a draft in the editor.

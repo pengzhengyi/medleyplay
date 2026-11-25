@@ -244,7 +244,10 @@ describe("editing a file's songs", () => {
     expect(calls).not.toContain(`POST ${MATCH_URL}`);
     await press(dialog, "Start matching");
     await waitFor(() => expect(matched).toHaveAccessibleDescription("Searching lyrics sites…"));
+    expect(matched).toHaveAttribute("data-match", "searching");
+    expect(matched).toBeEnabled();
     expect(existing).toHaveAccessibleDescription("Already has lyrics");
+    expect(existing).toHaveAttribute("data-match", "not-matched");
     expect(matched).toHaveAttribute("title", expect.stringContaining("Searching lyrics sites…"));
     unmount();
     finished = true;
@@ -267,6 +270,21 @@ describe("editing a file's songs", () => {
       })),
     );
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("stops showing the search indicator as the match moves to the AI pick", async () => {
+    const searching = { track_id: 101, job_id: 27, state: "searching", note: "" };
+    let current = searching;
+    serve({ [`GET ${MATCH_URL}`]: () => ({ body: [current] }) });
+    const { dialog, readMatchesAgain } = await renderEditor();
+    const song = lyricsButton(dialog, "アイネクライネ");
+    await waitFor(() => expect(song).toHaveAttribute("data-match", "searching"));
+
+    current = { ...searching, job_id: 28, state: "choosing" };
+    readMatchesAgain();
+
+    await waitFor(() => expect(song).toHaveAccessibleDescription("Checking the AI pick…"));
+    expect(song).not.toHaveAttribute("data-match", "searching");
   });
 
   it("searches only on an explicit click with direct matching, once despite repeat presses", async () => {

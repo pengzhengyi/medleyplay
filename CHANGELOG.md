@@ -939,6 +939,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The active sleep timer stays a moon icon in **Up next**. Its tooltip and menu
   compare the time remaining with the duration you set. Selecting a preset in
   the floating queue leaves the queue open.
+- In the Songs editor, a rotating arc shows which songs are searching for
+  lyrics. The arc stays still with reduced motion.
 - Downloaded distinguishes queued work, offline waits, and scheduled retries.
   It shows preparation, transfer progress, and the part being joined when known.
 - A Bilibili audio transfer that receives HTTP 567 waits to retry instead of

@@ -7,7 +7,7 @@ import {
   UsersIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useId, useState } from "react";
+import { type ReactElement, useEffect, useId, useState } from "react";
 
 import {
   type CreditCandidate,
@@ -92,7 +92,7 @@ export function MissingDetails({
       ) && (
         <p id="missing-details-disclosure" className="tidy-meta">
           {t(
-            "Ask AI sends known music details to your enabled providers, which may be tried in turn.",
+            "Ask AI asks about all missing fields on this track. It sends known music details to your enabled providers, which may be tried in turn.",
           )}
         </p>
       )}
@@ -191,6 +191,21 @@ function ReviewTrack({
   const hasAi = track.fields.some((detail) =>
     detail.candidates.some((item) => item.origin === "ai"),
   );
+  const ask =
+    askable || track.ai === "working" || busy === "ask" ? (
+      <Hint name={t("Ask about all missing fields on this track")} keys={[]}>
+        <button
+          type="button"
+          className="secondary outline dialog-button missing-details-decision"
+          disabled={busy !== "" || track.ai === "working"}
+          aria-busy={busy === "ask" || track.ai === "working"}
+          aria-describedby="missing-details-disclosure"
+          onClick={() => void act("ask", () => api.askMissingDetails(track.track_id, track.key))}
+        >
+          {track.ai === "failed" || track.ai === "answered" ? t("Ask again") : t("Ask AI")}
+        </button>
+      </Hint>
+    ) : null;
   return (
     <li className="missing-details-track">
       <div className="missing-details-heading">
@@ -201,31 +216,18 @@ function ReviewTrack({
             .join(" · ")}
         </em>
       </div>
-      {track.fields.map((detail) => (
+      {track.fields.map((detail, index) => (
         <ReviewField
           key={detail.field}
           detail={detail}
           busy={busy}
+          ask={index === 0 ? ask : null}
           onDecide={(candidate) => void decide(detail.field, candidate)}
           onEdit={() => {
             onEdit(track.track_id);
           }}
         />
       ))}
-      {(askable || track.ai === "working" || busy === "ask") && (
-        <div className="missing-details-actions">
-          <button
-            type="button"
-            className="secondary outline"
-            disabled={busy !== "" || track.ai === "working"}
-            aria-busy={busy === "ask" || track.ai === "working"}
-            aria-describedby="missing-details-disclosure"
-            onClick={() => void act("ask", () => api.askMissingDetails(track.track_id, track.key))}
-          >
-            {track.ai === "failed" || track.ai === "answered" ? t("Ask again") : t("Ask AI")}
-          </button>
-        </div>
-      )}
       {track.ai === "failed" && <p className="tidy-meta">{t("AI could not suggest details.")}</p>}
       {track.ai === "answered" && !hasAi && (
         <p className="tidy-meta">{t("AI had no additional suggestions.")}</p>
@@ -245,11 +247,13 @@ function ReviewTrack({
 function ReviewField({
   detail: { field, candidates },
   busy,
+  ask,
   onDecide,
   onEdit,
 }: {
   readonly detail: MissingDetailsItem["fields"][number];
   readonly busy: string;
+  readonly ask: ReactElement | null;
   readonly onDecide: (candidate?: CreditCandidate) => void;
   readonly onEdit: () => void;
 }) {
@@ -262,6 +266,7 @@ function ReviewField({
   const Mark = FIELD_ICONS[field];
   const actions = (
     <div className="missing-details-actions missing-details-field-actions">
+      {ask}
       {candidates.length > 0 && (
         <button
           type="button"

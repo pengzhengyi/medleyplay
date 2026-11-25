@@ -744,9 +744,11 @@ the records the household changes.
   or a placeholder artist is not enough to match two songs.
 - **Suggested by AI:** an admin can enable **Suggest missing details with
   AI** in **Settings → AI**. It is off by default. Opening Clean up or
-  enabling the switch does not contact a provider. **Ask AI** sends known
-  music metadata and the requested fields to enabled providers, which may
-  be tried in turn. Filename-origin and inherited album-file values are
+  enabling the switch does not contact a provider. **Ask AI** is the first
+  button in the first missing field's action group and asks about all missing
+  fields on the track. **Ask again** stays in the same place. Known music
+  metadata and those fields go to enabled providers, which may be tried in
+  turn. Filename-origin and inherited album-file values are
   excluded. A Track without an independently named song or album is not
   sent. These Jobs use the existing AI lane and do not replace the ordinary
   Enricher's suggestions or song list.

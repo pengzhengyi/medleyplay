@@ -743,6 +743,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- In **Clean up → Missing artist or album**, **Ask AI** and **Ask again**
+  now sit alongside **Use**, **Edit**, and **Skip**.
 - Open the album page after adding grouped Bilibili songs. When joining parts
   into one file instead, highlight the joined album in the Library. The picker
   explains the difference between the two layouts.

@@ -182,7 +182,7 @@ describe("missing details in Clean up", () => {
     expect(accept).toHaveBeenCalledExactlyOnceWith({ key: "reviewed-intro", field: "artist" });
   });
 
-  it("discloses which providers are tried and only asks after the listener clicks", async () => {
+  it("puts Ask AI first in the compact actions and asks only after the listener clicks", async () => {
     const ask = vi.fn(() => ({ status: 202, body: { id: 8 } }));
     const { calls } = serve({
       [LIST]: () => ({
@@ -194,8 +194,16 @@ describe("missing details in Clean up", () => {
       [ASK]: ask,
     });
     render(<MissingDetails revision="0" onEdit={vi.fn()} />);
-    const button = await screen.findByRole("button", { name: "Ask AI" });
+    const album = within(await screen.findByRole("group", { name: "Album" }));
+    const button = album.getByRole("button", { name: "Ask AI" });
 
+    expect(
+      album
+        .getAllByRole("button")
+        .map((each) => each.textContent)
+        .filter(Boolean),
+    ).toEqual(["Ask AI", "Use", "Edit", "Skip"]);
+    expect(button).toHaveAccessibleDescription(/all missing fields on this track/u);
     expect(button).toHaveAccessibleDescription(/enabled providers, which may be tried in turn/u);
     expect(calls).not.toContain(ASK);
     await userEvent.click(button);
@@ -203,7 +211,38 @@ describe("missing details in Clean up", () => {
     expect(ask).toHaveBeenCalledExactlyOnceWith({ key: "reviewed-intro" });
     await waitFor(() => {
       expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("aria-busy", "true");
     });
+  });
+
+  it("offers Ask again once for the track, even if the first field has no candidate", async () => {
+    serve({
+      [LIST]: {
+        body: {
+          tracks: [
+            intro({
+              ai: "answered",
+              artist: "",
+              fields: [
+                { field: "artist", candidates: [] },
+                { field: "album", candidates: [{ value: "Live", origin: "library" }] },
+              ],
+            }),
+          ],
+          next_after: null,
+        },
+      },
+    });
+    render(<MissingDetails revision="0" onEdit={vi.fn()} />);
+    const artist = within(await screen.findByRole("group", { name: "Artist" }));
+
+    expect(artist.getAllByRole("button").map((each) => each.textContent)).toEqual([
+      "Ask again",
+      "Edit",
+      "Skip",
+    ]);
+    expect(screen.getByRole("button", { name: "Ask again" })).toBeEnabled();
+    expect(screen.getByText("AI had no additional suggestions.")).toBeVisible();
   });
 
   it("preserves the current settings when an admin enables manual AI requests", async () => {

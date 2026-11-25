@@ -12,11 +12,14 @@
 import { CircleNotchIcon, SparkleIcon } from "@phosphor-icons/react";
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
-import { type LyricsFound, type LyricsOption, api } from "../api";
+import { type LyricsFound, type LyricsOption, type Track, api } from "../api";
 import { formatTime } from "../format";
+import { useWords } from "../locale";
 import { LYRICS_SITE_NAMES, firstLinesOf } from "../lyrics";
 
 const READ_EVERY_MS = 2000;
+
+export type LyricsSearchSong = Pick<Track, "id" | "title" | "artist" | "album" | "duration_ms">;
 
 /** Say why a request failed, in the server's words when it gave some. */
 function messageOf(failure: unknown): string {
@@ -37,22 +40,20 @@ function aboutOf(option: LyricsOption): string {
 }
 
 /**
- * The songs found for the song `trackId`, titled `title` by `artist` in the Library;
- * `onUse` takes the one chosen.
+ * The lyrics found for `song` in the Library; `onUse` takes the one chosen.
  */
 export function LyricsFinder({
-  trackId,
-  title,
-  artist,
+  song,
   busy = false,
   onUse,
 }: {
-  readonly trackId: number;
-  readonly title: string;
-  readonly artist: string;
+  readonly song: LyricsSearchSong;
   readonly busy?: boolean;
   readonly onUse: (option: LyricsOption) => void;
 }) {
+  const { id: trackId, title, artist, duration_ms: duration } = song;
+  const album = song.album.trim();
+  const t = useWords();
   const titleId = useId();
   const artistId = useId();
   const [state, setState] = useState<LyricsFound>();
@@ -174,6 +175,15 @@ export function LyricsFinder({
           Find
         </button>
       </form>
+      {(album !== "" || duration !== null) && (
+        <p className="lyrics-finder-song">
+          <strong>{t("Your song")}</strong>
+          {album !== "" && <span>{t("Album: {{album}}", { album })}</span>}
+          {duration !== null && (
+            <span>{t("Length: {{length}}", { length: formatTime(duration / 1000) })}</span>
+          )}
+        </p>
+      )}
       {finding && state !== undefined && (
         <p className="lyrics-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
@@ -225,7 +235,7 @@ export function LyricsFinder({
                       <span className="lyrics-found-artist"> {option.artist}</span>
                     )}
                   </span>
-                  <small className="lyrics-found-meta lyrics-found-line">{aboutOf(option)}</small>
+                  <small className="lyrics-found-meta">{aboutOf(option)}</small>
                   {!option.instrumental && (
                     <span className="lyrics-found-lines lyrics-found-line">
                       {firstLinesOf(option.text).join(" ")}

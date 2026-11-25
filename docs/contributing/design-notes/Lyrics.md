@@ -174,6 +174,8 @@ the household looks for the lyrics itself, by a title and artist of its own.
   the lookups. What it finds is kept for the song, with what was asked, and finding
   again replaces it. In the lyrics editor, nothing changes the song's lyrics until
   the household uses one and saves.
+- **The song in the Library** shows its album and length, when known, above the
+  results for comparison. Changing the search words does not change this reference.
 - **An AI model's pick.** With an AI set up and the `ai-details` plugin on, the
   editor asks once the songs are found: a Job in the AI's lane shows a model the
   song's title, artist, album, and length, and each song found as a letter with its

@@ -629,7 +629,9 @@ export function Library({
       } else if (window.matchMedia(NARROW).matches) {
         setQueueOpen((open) => !open);
       } else {
-        document.getElementById("queue")?.focus();
+        document
+          .querySelector<HTMLButtonElement>('#queue [role="tab"][aria-selected="true"]')
+          ?.focus();
       }
     },
     nowPlaying: () => {

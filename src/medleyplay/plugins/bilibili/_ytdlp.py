@@ -62,7 +62,8 @@ _REFUSED: Final = re.compile(r"rate limit|blocked by server|rejected by server",
 _RISK_CONTROL: Final = re.compile(r"Unable to download video info: (?:352|401|412)\b")
 _REFUSED_STATUSES: Final = frozenset({403, 412})
 _REMOVED: Final = re.compile(r"deleted or geo-restricted", re.IGNORECASE)
-_RETRY_LATER: Final = frozenset({429, 500, 502, 503, 504})
+_TRANSFER_HTTP_ERROR: Final = re.compile(r"^ERROR:\s*\[download\] Got error: HTTP Error (\d{3}):")
+_RETRY_LATER: Final = frozenset({429, 500, 502, 503, 504, 567})
 _GONE: Final = frozenset({404, 410})
 _REDIRECTS: Final = frozenset({301, 302, 303, 307, 308})
 _SOCKS: Final = "socks5h"
@@ -215,8 +216,8 @@ def _run[T](options: dict[str, object], call: Callable[[Any], T], cookie_file: s
 def sort_failure(error: BaseException, *, signed_in: bool) -> Exception:
     """Return the failure the plugin raises for one of yt-dlp's errors.
 
-    By type first: a connection failure or a timeout, a 429, or a 5xx is a
-    `NetworkError`; a 404, a 410, or a geo-restriction is gone; a 403 or a 412 is
+    By type first: a connection failure, a timeout, or a retryable HTTP status
+    is a `NetworkError`; a 404, a 410, or a geo-restriction is gone; a 403 or a 412 is
     Bilibili refusing the client, a fault, so it isn't retried every minute. An
     error yt-dlp marks *expected* is sorted by yt-dlp's own fixed messages: a
     login refused, a video for members, a rate limit, or a removal.
@@ -233,6 +234,11 @@ def sort_failure(error: BaseException, *, signed_in: bool) -> Exception:
             return _sort_status(cause.status)
         if isinstance(cause, TransportError):
             return NetworkError(f"Bilibili couldn't be reached: {cause}")
+    # When transfer retries run out, yt-dlp reports the HTTP status as text.
+    if isinstance(error, DownloadError) and (status := _TRANSFER_HTTP_ERROR.match(str(error))):
+        code = int(status[1])
+        if code in _RETRY_LATER:
+            return _sort_status(code)
     if isinstance(error, GeoRestrictedError):
         return GoneError(f"Bilibili doesn't offer the video here: {error}")
     if isinstance(error, ExtractorError) and error.expected:

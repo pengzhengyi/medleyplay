@@ -157,10 +157,10 @@ describe("adding a video that was read", () => {
       parts: [2, 3],
     });
     await waitFor(() => {
-      expect(onAdded).toHaveBeenCalledExactlyOnceWith(
-        1,
-        "The album is in the Library. Check Downloaded for its status.",
-      );
+      expect(onAdded).toHaveBeenCalledExactlyOnceWith(1, {
+        view: "library",
+        focus: FIRST.track_id,
+      });
     });
   });
 
@@ -168,7 +168,9 @@ describe("adding a video that was read", () => {
     const { add, dialog } = renderDialog(lookupOf(3));
     const form = within(dialog);
     await userEvent.click(await form.findByRole("checkbox", { name: "Part 1: Mixtape 1" }));
-    await userEvent.click(form.getByRole("checkbox", { name: "Group these files in one album" }));
+    await userEvent.click(
+      form.getByRole("checkbox", { name: "Group these separate files in one album" }),
+    );
     expect(form.getByRole("checkbox", { name: "Part 1: Mixtape 1" })).not.toBeChecked();
     const album = within(dialog).getByLabelText("Album title");
     expect(album).toHaveValue("Mixtape");

@@ -20,12 +20,14 @@ import { formatTime } from "../format";
 import { partLink } from "../library/otherWays";
 import { suggestedArtist, suggestedTitle, withoutTags } from "../library/suggest";
 import { useWords } from "../locale";
-import { hrefOf } from "../routes";
+import { type Route, hrefOf } from "../routes";
 import { Modal } from "./Modal";
 import { OtherWays } from "./OtherWays";
 
 const MAX_PART_NUMBER = 9999;
 const BEST = "best";
+type AlbumDestination =
+  Extract<Route, { view: "album" }> | { readonly view: "library"; readonly focus: number };
 const WHY: Record<string, string> = {
   gone: "The site no longer has this video.",
   needs_login: "Only a signed-in account can see this video.",
@@ -47,7 +49,7 @@ export function AddLink({
   readonly listed: readonly SavedVideoLookup[];
   readonly load: (id: number) => Promise<SavedVideoLookup>;
   readonly add: (id: number, quality: string, parts: VideoChoices) => Promise<readonly AddedPart[]>;
-  readonly onAdded: (count: number, notice?: string) => void;
+  readonly onAdded: (count: number, destination?: AlbumDestination) => void;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -102,8 +104,8 @@ export function AddLink({
   const close = () => {
     dialog.current?.close();
   };
-  const finish = (added: readonly AddedPart[], notice?: string) => {
-    if (notice !== undefined) onAdded(added.length, notice);
+  const finish = (added: readonly AddedPart[], destination?: AlbumDestination) => {
+    if (destination !== undefined) onAdded(added.length, destination);
     else onAdded(added.length);
     close();
   };
@@ -146,7 +148,7 @@ interface FormProps {
   readonly id: number;
   readonly lookup: LinkLookup;
   readonly add: (id: number, quality: string, parts: VideoChoices) => Promise<readonly AddedPart[]>;
-  readonly onAdded: (added: readonly AddedPart[], notice?: string) => void;
+  readonly onAdded: (added: readonly AddedPart[], destination?: AlbumDestination) => void;
 }
 
 /** What the household is told while a form saves, or why it didn't. */
@@ -208,15 +210,21 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
   const multiple = rows.length > 1;
   const canJoin = multiple && lookup.kind === "bilibili";
   const joined = canJoin && layout === "joined";
-  const { saving, error, save } = useSaving((added) => {
-    if (joined) onAdded(added, t("The album is in the Library. Check Downloaded for its status."));
-    else onAdded(added);
-  });
   const eligible = rows.filter((row) => joined || !row.taken);
   const chosen = eligible.filter((row) => row.chosen);
   const grouped = !joined && multiple && group;
   const manual = !joined && !grouped && edit;
   const albumDetails = joined || grouped;
+  const { saving, error, save } = useSaving((added) => {
+    const [first] = added;
+    if (joined && first !== undefined) {
+      onAdded(added, { view: "library", focus: first.track_id });
+    } else if (grouped) {
+      onAdded(added, { view: "album", name: album.trim(), artist: artist.trim() });
+    } else {
+      onAdded(added);
+    }
+  });
   const allChosen = chosen.length === eligible.length;
   const complete =
     chosen.length > 0 &&
@@ -373,8 +381,17 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
               setGroup(event.currentTarget.checked);
             }}
           />
-          {t("Group these files in one album")}
+          {t("Group these separate files in one album")}
         </label>
+      )}
+      {grouped && (
+        <p className="add-link-explain">
+          {t(
+            canJoin
+              ? "Each part stays a separate song. Choose One album file to join the parts."
+              : "Each part stays a separate song.",
+          )}
+        </p>
       )}
       {!albumDetails && eligible.length > 0 && (
         <label className="video-download-option">

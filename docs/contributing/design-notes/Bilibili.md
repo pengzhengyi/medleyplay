@@ -277,11 +277,13 @@ sequenceDiagram
   only new parts can be selected. Each selected part gets its own file and
   Download Job; the runner limits concurrent transfers. Single uploads stay
   whole even when they have chapters and *Split albums* is set to *Auto*.
-- **Group these files in one album** gives the selected files a shared album
+- **Group these separate files in one album** gives the selected files a shared album
   title and optional album artist. Track numbers follow video order. These
   are separate files, not [segments of one file](Segments.md). If a selected
   part was added after the list opened, the grouped import refuses the
-  selection rather than moving or renaming an existing song.
+  selection rather than moving or renaming an existing song. The app opens
+  the album page after adding the grouped songs. When adding a single joined
+  file, it highlights that file in the Library instead.
 - **Download and album grouping** use a readable saved selection. Catalog
   entries, Download Jobs, and removal of the Account's lookup commit together.
   A refusal leaves the lookup available. Jobs run after commit and retry under

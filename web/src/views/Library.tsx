@@ -51,6 +51,7 @@ import { useSleepTimer } from "../player/useSleepTimer";
 import { useSpeaker } from "../player/useSpeaker";
 import { stepVolume } from "../player/volume";
 import { hrefOf, navigate, useRoute } from "../routes";
+import { useWords } from "../locale";
 import { learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { AskAiAgain } from "./AskAiAgain";
@@ -106,6 +107,7 @@ export function Library({
   readonly onSignedOut: () => void;
 }) {
   const route = useRoute();
+  const t = useWords();
   const library = useLibrary(onSignedOut);
   const byId = library.tracks;
   const tracks = useMemo(() => [...byId.values()], [byId]);
@@ -629,7 +631,9 @@ export function Library({
       } else if (window.matchMedia(NARROW).matches) {
         setQueueOpen((open) => !open);
       } else {
-        document.getElementById("queue")?.focus();
+        document
+          .querySelector<HTMLButtonElement>('#queue [role="tab"][aria-selected="true"]')
+          ?.focus();
       }
     },
     nowPlaying: () => {
@@ -828,9 +832,10 @@ export function Library({
           listed={library.videoLookups}
           load={library.videoLookup}
           add={library.addLink}
-          onAdded={(count, notice) => {
-            if (notice !== undefined) {
-              setNotice(notice);
+          onAdded={(count, destination) => {
+            if (destination !== undefined) {
+              setNotice(t("The album is in the Library. Check Downloaded for its status."));
+              navigate(destination);
               return;
             }
             const songs = count === 1 ? "1 song" : `${String(count)} songs`;

@@ -741,6 +741,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Open the album page after adding grouped Bilibili songs. When joining parts
+  into one file instead, highlight the joined album in the Library. The picker
+  explains the difference between the two layouts.
 - In **Clean up → Missing artist or album**, **Use** opens a prefilled
   **Edit details** when a suggestion needs review. See changes to other
   details and split songs before saving.
@@ -929,6 +932,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A Bilibili audio transfer that receives HTTP 567 waits to retry instead of
+  counting toward the downloader's plugin fault limit.
+- Closing the cover editor no longer outlines the album artwork. The queue
+  shortcut focuses the selected tab instead of the whole panel.
 - The Album column opens the song's album without starting playback.
 - The search dropdown stays above the sticky section bar in Settings and Clean up.
 

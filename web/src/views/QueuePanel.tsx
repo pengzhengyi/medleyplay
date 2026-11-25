@@ -127,7 +127,7 @@ export function QueuePanel({
   };
 
   return (
-    <section id={id} className="queue" aria-label="Up next" tabIndex={-1}>
+    <section id={id} className="queue" aria-label="Up next">
       <header>
         <div className="queue-tabs" role="tablist" aria-label="Up next or History">
           {TABS.map(([each, name]) => (

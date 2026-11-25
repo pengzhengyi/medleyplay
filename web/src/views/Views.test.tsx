@@ -1025,6 +1025,49 @@ describe("search", () => {
     expect(calls.filter((call) => call === "GET /api/downloads")).toHaveLength(2);
   });
 
+  it("opens the album page when separate downloads are grouped as an album", async () => {
+    const confirm = vi.fn(() => ({
+      body: [
+        { part: 1, track_id: 9, source_id: 90, job: null },
+        { part: 2, track_id: 10, source_id: 91, job: null },
+      ],
+    }));
+    open("", {
+      ...withBilibili(),
+      "GET /api/tracks": () => ({
+        body: confirm.mock.calls.length
+          ? [
+              ...LIBRARY,
+              trackOf(9, "First part", { artist: "", album: "Mixtape", track_number: 1 }),
+              trackOf(10, "Second part", { artist: "", album: "Mixtape", track_number: 2 }),
+            ]
+          : LIBRARY,
+      }),
+      "POST /api/links/lookups": { body: { id: 8, state: "succeeded", result: lookupOf(2) } },
+      "POST /api/links/lookups/8": confirm,
+    });
+    await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));
+    await userEvent.type(screen.getByRole("combobox", { name: "Search" }), "BV1Xx41117Tz{Enter}");
+    const form = within(screen.getByRole("dialog", { name: "Add from Bilibili" }));
+    await userEvent.click(
+      await form.findByRole("checkbox", { name: "Group these separate files in one album" }),
+    );
+
+    await userEvent.click(form.getByRole("button", { name: "Download 2 files" }));
+
+    expect(await screen.findByRole("heading", { name: "Mixtape" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "First part" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Second part" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Melt" })).not.toBeInTheDocument();
+    expect(confirm).toHaveBeenCalledExactlyOnceWith({
+      mode: "album",
+      parts: [1, 2],
+      quality: "best",
+      album: "Mixtape",
+      artist: "",
+    });
+  });
+
   it("does not search the Library as you type with Bilibili chosen", async () => {
     open("", withBilibili());
     await userEvent.click(await screen.findByRole("radio", { name: "Bilibili" }));

@@ -1159,6 +1159,10 @@ button[aria-disabled="true"] {
   margin: 0 0 1.25rem;
 }
 
+.album-about:focus {
+  outline: none;
+}
+
 .album-art {
   display: grid;
   flex: none;

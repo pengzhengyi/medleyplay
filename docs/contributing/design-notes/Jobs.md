@@ -129,6 +129,7 @@ ECHO = JobKind(
 | The site no longer has what was asked for (*gone*), or refused the request (*refused*), as a program reports | *failed* | — |
 
 - **Retry delays** double from 30 seconds.
+- **A pending delay** has a `retry_at` time in the Jobs API and job events.
 - **A Job's plugin calls count toward the plugin's circuit breaker** as calls in
   the plugin host do, key by key. The Job process reports, for each key it used,
   how many calls failed in a row at the end, and whether any call before them

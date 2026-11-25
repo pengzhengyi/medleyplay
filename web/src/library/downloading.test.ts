@@ -16,6 +16,8 @@ function downloadOf(
       state,
       progress: state === "running" ? { fraction, message: "Downloading" } : null,
       waits_for_online: waits,
+      retry_at: null,
+      failure_message: "",
     },
   };
 }
@@ -83,10 +85,34 @@ describe("downloadEnded", () => {
 describe("how far a Download has got", () => {
   it.each([
     [downloadOf("queued", null, true), "Waiting for Online"],
-    [downloadOf("queued"), "Waiting"],
+    [downloadOf("queued"), "Queued"],
     [downloadOf("running", null), "Downloading"],
     [downloadOf("running", 0.426), "43%"],
   ])("is said in a word or two: %#", (download, said) => {
     expect(downloadStateOf(download)).toBe(said);
+  });
+
+  it("distinguishes scheduled retries from queued downloads and clears the retry on start", () => {
+    const retry = followDownload([downloadOf()], {
+      ...eventOf(70, "queued"),
+      retry_at: "2026-11-25T06:00:00Z",
+    }).next;
+    const running = followDownload(retry, {
+      ...eventOf(70, "running"),
+      progress: null,
+      retry_at: null,
+    }).next;
+
+    expect(retry.map(downloadStateOf)).toEqual(["Retry scheduled"]);
+    expect(running.map(downloadStateOf)).toEqual(["Preparing download"]);
+  });
+
+  it("shows the part being joined beside overall progress", () => {
+    const { next } = followDownload([downloadOf()], {
+      ...eventOf(70, "running"),
+      progress: { fraction: 0.625, message: "Joining part 3 (2/4)" },
+    });
+
+    expect(next.map(downloadStateOf)).toEqual(["Joining part 3 (2/4) · 63%"]);
   });
 });

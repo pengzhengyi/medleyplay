@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from medleyplay.download_limits import MAX_JOIN_INPUT_BYTES, disk_floor
 from medleyplay.plugin_api import DOWNLOAD_PART, DownloadPart, PartNumber, QualityId, VideoId
+from medleyplay.plugin_api.progress import ProgressSink
 from medleyplay.plugin_host.job import (
     AnswerFailedError,
     JobContext,
@@ -89,7 +90,12 @@ def run(request: DownloadSource, context: JobContext) -> DownloadedSource:
 
 
 def _download_part(
-    request: DownloadSource, context: JobContext, folder: Path, part: int, *, bounded: bool = False
+    request: DownloadSource,
+    context: JobContext,
+    folder: Path,
+    part: int,
+    *,
+    part_progress: ProgressSink | None = None,
 ) -> DownloadedSource:
     downloaded = context.call(
         DOWNLOAD_PART,
@@ -101,12 +107,15 @@ def _download_part(
             folder=str(folder),
             login=str(context.login) if context.login else None,
             proxy=context.proxy,
-            bounded_http=bounded,
+            bounded_http=request.lane == "join",
         ),
+        progress=part_progress,
     )
     if downloaded.file is None:
         message = downloaded.message or "The site no longer has it."
         return DownloadedSource(file=None, gone=True, message=message)
+    if part_progress is None:
+        context.report(1, "Checking audio")
     size = _check(folder, downloaded.file, request, part)
     return DownloadedSource(
         file=downloaded.file,
@@ -127,13 +136,12 @@ def _join(
     inputs = []
     for index, part in enumerate(parts):
         _disk_room(folder, left + request.max_bytes)
-        context.report(
-            index / (2 * len(parts)), f"Downloading part {part} ({index + 1}/{len(parts)})"
-        )
+        report = _part_progress(context, part, index, len(parts))
+        report(None, "")
         part_dir = folder / str(index)
         part_dir.mkdir()
         with file_limit(left):
-            fetched = _download_part(request, context, part_dir, part, bounded=True)
+            fetched = _download_part(request, context, part_dir, part, part_progress=report)
         if fetched.file is None:
             message = f"Part {part}: {fetched.message}"
             raise AnswerFailedError(message, kind="invalid")
@@ -152,10 +160,24 @@ def _join(
 
     output = folder / "album.m4a"
     duration_ms = join_audio(tools, inputs, output, request.max_bytes, on_part=joining)
+    context.report(1, "Checking audio")
     size = _check(folder, output.name, request, parts[-1])
     return DownloadedSource(
         file=output.name, size=size, quality="aac-256k", backend="ffmpeg", duration_ms=duration_ms
     )
+
+
+def _part_progress(context: JobContext, part: int, index: int, count: int) -> ProgressSink:
+    stage = f"Downloading part {part} ({index + 1}/{count})"
+    reached = 0.0
+
+    def report(fraction: float | None, _: str) -> None:
+        nonlocal reached
+        if fraction is not None:
+            reached = max(reached, fraction)
+        context.report((index + reached) / (2 * count), stage)
+
+    return report
 
 
 def _disk_room(folder: Path, needed: int) -> None:

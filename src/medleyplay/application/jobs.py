@@ -432,13 +432,14 @@ class JobService:
     def _view(self, job: Job) -> JobView:
         progress = self._runner.progress(job.id) if job.state == JobState.RUNNING else None
         kind = self._kinds.get(job.kind)
-        waits = (
-            job.state in {JobState.QUEUED, JobState.WAITING}
-            and kind is not None
-            and kind.needs_network
-            and not self._online()
+        pending = job.state in {JobState.QUEUED, JobState.WAITING}
+        waits = pending and kind is not None and kind.needs_network and not self._online()
+        retry_at = (
+            job.not_before
+            if pending and job.not_before is not None and job.not_before > self._clock()
+            else None
         )
-        return JobView(job, progress, waits_for_online=waits)
+        return JobView(job, progress, waits_for_online=waits, retry_at=retry_at)
 
 
 def to_job(row: JobRow) -> Job:
@@ -455,6 +456,7 @@ def to_job(row: JobRow) -> Job:
         created_at=row.created_at,
         started_at=row.started_at,
         finished_at=row.finished_at,
+        not_before=row.not_before,
     )
 
 

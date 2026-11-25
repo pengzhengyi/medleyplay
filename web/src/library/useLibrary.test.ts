@@ -1281,6 +1281,38 @@ describe("the Downloads under way", () => {
     expect(result.current.downloading).toEqual([]);
   });
 
+  it("keeps transfer progress received while the download list is loading", async () => {
+    let answer = (): void => undefined;
+    const late = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { calls } = serve({
+      ...signedIn([trackOf(9, "Night Drive")]),
+      "GET /api/downloads": { body: [downloadUnderWayOf(9)], after: late },
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(calls).toContain("GET /api/downloads");
+    });
+
+    act(() => {
+      stream().send("job", {
+        id: 509,
+        kind: "download_source",
+        state: "running",
+        progress: { fraction: 0.42, message: "Downloading" },
+      });
+    });
+    await act(async () => {
+      answer();
+      await late;
+    });
+
+    expect(
+      result.current.downloading.map(({ job }) => [job.state, job.progress?.fraction]),
+    ).toEqual([["running", 0.42]]);
+  });
+
   it("asks once about a Download it can't find, however often its Job is told of", async () => {
     const { calls } = serve(signedIn([trackOf(9, "Night Drive")]));
     const { result } = renderHook(() => useLibrary(vi.fn()));

@@ -932,6 +932,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Downloaded distinguishes queued work, offline waits, and scheduled retries.
+  It shows preparation, transfer progress, and the part being joined when known.
 - A Bilibili audio transfer that receives HTTP 567 waits to retry instead of
   counting toward the downloader's plugin fault limit.
 - Closing the cover editor no longer outlines the album artwork. The queue

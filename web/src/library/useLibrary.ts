@@ -44,7 +44,7 @@ import { newId } from "../ids";
 import { PAGE_ID } from "../page";
 import type { Speaker } from "../player/remote";
 import { type Asking, askingAt } from "./asking";
-import { downloadEnded, followDownload } from "./downloading";
+import { DOWNLOAD_KIND, downloadEnded, followDownload, withDownloadEvent } from "./downloading";
 import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from "./favoriteGroups";
 import { afterNextPaint } from "./stages";
 import { LOOKUPS } from "./lookups";
@@ -357,27 +357,34 @@ export function useLibrary(onSignedOut: () => void): Library {
       return next;
     });
   };
-  // The list as last told of, the Jobs that ended, the Jobs already asked about, and the
-  // latest read: so events told at once each count, an older list can't bring back a
-  // Download that ended, and a Job the list never holds is asked about once.
+  // Keep the newest event per Job while a list read is pending, so the older list
+  // cannot undo its progress.
   const underWay = useRef<readonly DownloadUnderWay[]>([]);
   const endedJobs = useRef(new Set<number>());
   const askedJobs = useRef(new Set<number>());
-  const downloadReads = useRef(0);
+  const downloadRead = useRef<Map<number, JobEvent> | null>(null);
   const showDownloading = (next: readonly DownloadUnderWay[]) => {
     underWay.current = next;
     setDownloading(next);
   };
   const loadDownloading = useCallback(() => {
-    const read = ++downloadReads.current;
+    const events = new Map<number, JobEvent>();
+    downloadRead.current = events;
     api.downloads().then(
       (listed) => {
-        if (read === downloadReads.current) {
-          showDownloading(listed.filter(({ job }) => !endedJobs.current.has(job.id)));
+        if (downloadRead.current === events) {
+          downloadRead.current = null;
+          const active = listed.filter(({ job }) => !endedJobs.current.has(job.id));
+          showDownloading(
+            active.map((download) => {
+              const event = events.get(download.job.id);
+              return event === undefined ? download : withDownloadEvent(download, event);
+            }),
+          );
         }
       },
       () => {
-        // Without the list, the Downloaded view shows only what is downloaded.
+        if (downloadRead.current === events) downloadRead.current = null;
       },
     );
   }, []);
@@ -417,6 +424,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       askedJobs.current.add(job.id);
       loadDownloading();
     }
+    if (job.kind === DOWNLOAD_KIND) downloadRead.current?.set(job.id, job);
     const id = trackOfJob.current.get(job.id);
     const lookup = id === undefined ? undefined : lookups.get(id);
     if (id === undefined || lookup === undefined || jobOfTrack.current.get(id) !== job.id) {

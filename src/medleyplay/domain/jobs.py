@@ -52,6 +52,7 @@ class Job:
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    not_before: datetime | None = None
 
     def visible_to(self, viewer: Account) -> bool:
         """Keep a lookup private even from another Account's administrator."""
@@ -86,3 +87,4 @@ class JobView:
     job: Job
     progress: Progress | None = field(default=None)
     waits_for_online: bool = False
+    retry_at: datetime | None = None

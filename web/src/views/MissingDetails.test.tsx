@@ -30,6 +30,50 @@ afterEach(() => {
 });
 
 describe("missing details in Clean up", () => {
+  it("opens Edit with the reviewed suggestion and its impact when Use cannot save it alone", async () => {
+    const impact = {
+      details: [{ field: "year", before: 1974, after: "" }],
+      split_songs: 11,
+      affected_songs: 11,
+      song_fields: ["year"],
+    };
+    const edit = vi.fn();
+    serve({
+      [LIST]: { body: { tracks: [intro()], next_after: null } },
+      [DECIDE]: {
+        status: 409,
+        body: {
+          code: "missing_detail_review_required",
+          detail: "This change also affects other details or songs. Use Edit details.",
+          impact,
+        },
+      },
+    });
+    render(<MissingDetails revision="0" onEdit={edit} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Use Live for Album" }));
+
+    expect(edit).toHaveBeenCalledExactlyOnceWith(7, { field: "album", value: "Live", impact });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("reports a stale suggestion without opening Edit or using the stale value", async () => {
+    const edit = vi.fn();
+    serve({
+      [LIST]: { body: { tracks: [intro()], next_after: null } },
+      [DECIDE]: {
+        status: 409,
+        body: { detail: "The Track or suggestion changed. Review the current details." },
+      },
+    });
+    render(<MissingDetails revision="0" onEdit={edit} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Use Live for Album" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The Track or suggestion changed.");
+    expect(edit).not.toHaveBeenCalled();
+  });
+
   it("uses a reviewed Library candidate without asking AI", async () => {
     const accept = vi.fn(() => ({ status: 204 }));
     const { calls } = serve({

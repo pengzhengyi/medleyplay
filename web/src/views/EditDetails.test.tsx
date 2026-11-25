@@ -11,7 +11,13 @@ import userEvent from "@testing-library/user-event";
 import { type ReactNode, useContext } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, type Details, type VideoRead, type VideoText } from "../api";
+import {
+  ApiError,
+  type Details,
+  type MissingDetailReview,
+  type VideoRead,
+  type VideoText,
+} from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import type { TrackLookup } from "../library/useLibrary";
 import {
@@ -46,6 +52,7 @@ async function renderDialog(
     lookup?: TrackLookup;
     /** The details read again once a lookup is done. */
     reloaded?: Details;
+    review?: MissingDetailReview;
     /** The way to the songs of the song's file. */
     songs?: { readonly label: string; readonly editor: ReactNode };
     /** Whether the dialog opens on the songs, as *Split into songs* opens it. */
@@ -61,6 +68,7 @@ async function renderDialog(
   const dialogOf = (lookup: TrackLookup | undefined) => (
     <EditDetails
       track={ALBUM_FILE}
+      review={more.review}
       load={load}
       onSave={onSave}
       onReadVideo={onReadVideo}
@@ -149,6 +157,60 @@ const useSuggested = (dialog: HTMLElement, value: string) =>
   );
 
 describe("editing a song's details", () => {
+  it("prefills a Cleanup suggestion, explains the impact, and keeps the year only if entered", async () => {
+    const details: Details = {
+      ...detailsOf(7, {}, { video: { title: "Live at Home", year: 1974 } }),
+      kind: { value: "album", reason: "split" },
+    };
+    const { dialog, onSave } = await renderDialog(details, undefined, undefined, {
+      review: {
+        field: "album",
+        value: "Live at Home",
+        impact: {
+          details: [{ field: "year", before: 1974, after: "" }],
+          split_songs: 11,
+          affected_songs: 11,
+          song_fields: ["year"],
+        },
+      },
+    });
+
+    expect(box(dialog, "Album")).toHaveValue("Live at Home");
+    expect(box(dialog, "Year")).toHaveValue(null);
+    const warning = within(dialog).getByRole("region", { name: "Review before saving" });
+    expect(warning).toHaveTextContent("Year: 1974 → blank");
+    expect(warning).toHaveTextContent("11 split songs would also change: Year.");
+    expect(onSave).not.toHaveBeenCalled();
+
+    await userEvent.type(box(dialog, "Year"), "1974");
+
+    expect(warning).not.toHaveTextContent("1974 → blank");
+    expect(warning).not.toHaveTextContent("11 split songs would also change");
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "Live at Home", year: 1974 });
+  });
+
+  it("does not prefill a Cleanup suggestion after someone else fills that field", async () => {
+    const { dialog, onSave } = await renderDialog(
+      detailsOf(7, { album: "Newer title" }, { video: { title: "Live at Home", year: 1974 } }),
+      undefined,
+      undefined,
+      {
+        review: {
+          field: "album",
+          value: "Live at Home",
+          impact: { details: [], split_songs: 1, affected_songs: 1, song_fields: ["album"] },
+        },
+      },
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "The field changed before Edit details opened.",
+    );
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("can remove a saved blank artist even when no other origin gives the artist", async () => {
     const { dialog, onSave } = await renderDialog(
       detailsOf(7, { artist: "" }, { files: { title: "Uncredited song" } }),

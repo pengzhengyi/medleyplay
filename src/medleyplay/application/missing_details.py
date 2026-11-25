@@ -1,7 +1,7 @@
 """List, request, and accept missing music details under the catalog's write lock."""
 
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import ClassVar, Final, Literal
 
 from sqlalchemy import ColumnElement, Select, and_, or_, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,6 +13,7 @@ from medleyplay.application.details import set_household
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.missing_detail_candidates import (
     CreditCandidate,
+    DetailImpact,
     MissingTrack,
     library_candidates,
     missing_track,
@@ -80,6 +81,17 @@ class DetailDecision:
     key: str
     field: MissingField
     candidate: CreditCandidate | None = None
+
+
+class DetailReviewRequiredError(ConflictError):
+    """Stop a one-field save and return the impact for review in Edit details."""
+
+    code: ClassVar[str] = "missing_detail_review_required"
+
+    def __init__(self, impact: DetailImpact) -> None:
+        """Keep the effects of the refused save."""
+        super().__init__("This change also affects other details or songs. Use Edit details.")
+        self.impact = impact
 
 
 class MissingDetailsService:
@@ -153,9 +165,8 @@ class MissingDetailsService:
                     raise ConflictError(_CHANGED)
                 value = decision.candidate.value
             field = Field(decision.field)
-            if track.changes_other_details(db, field, value):
-                message = "This change also affects other details or songs. Use Edit details."
-                raise ConflictError(message)
+            if (impact := track.review_impact(db, field, value)) is not None:
+                raise DetailReviewRequiredError(impact)
             set_household(db, track_id, {field: value}, self._clock())
         if self._on_change is not None:
             self._on_change("catalog")

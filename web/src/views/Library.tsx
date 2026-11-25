@@ -15,6 +15,7 @@ import {
   type Account,
   ApiError,
   type Kind,
+  type MissingDetailReview,
   type SavedVideoLookup,
   LYRICS_ENRICHER,
   type Track,
@@ -287,7 +288,8 @@ export function Library({
   // The song whose details are being edited, while its dialog is open.
   // The Track whose details are edited, and whether the dialog opens on its file's songs.
   const [editing, setEditing] = useState<
-    { readonly track: Track; readonly songs: boolean } | undefined
+    | { readonly track: Track; readonly songs: boolean; readonly review?: MissingDetailReview }
+    | undefined
   >(undefined);
   // The songs of their own whose album is being edited, while its dialog is open.
   const [editingAlbum, setEditingAlbum] = useState<readonly Track[] | undefined>(undefined);
@@ -431,8 +433,8 @@ export function Library({
       library.setRating(track.id, rating);
     },
     onAddToPlaylist: setAdding,
-    onEditDetails: (track: Track) => {
-      setEditing({ track, songs: false });
+    onEditDetails: (track, review) => {
+      setEditing({ track, songs: false, ...(review === undefined ? {} : { review }) });
     },
     onEditAlbum: setEditingAlbum,
     onUseAlbumCover: setAlbumCover,
@@ -939,6 +941,7 @@ export function Library({
       {editing !== undefined && (
         <EditDetails
           track={editing.track}
+          review={editing.review}
           load={api.details}
           onSave={async (values, artists) => {
             await library.saveDetails(editing.track.id, values, artists);

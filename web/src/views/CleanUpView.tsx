@@ -14,6 +14,7 @@ import type {
   ArtistNames,
   ArtistSplits,
   MissingCover,
+  MissingDetailReview,
   MissingPhoto,
   NameToTidy,
   SharedName,
@@ -84,7 +85,10 @@ export function CleanUpView({
   };
   /** How a cover chosen in the cover editor is set on an album. */
   readonly albumCovers?: AlbumCoverActions | undefined;
-  readonly missingDetails?: { readonly revision: string; readonly onEdit: (track: number) => void };
+  readonly missingDetails?: {
+    readonly revision: string;
+    readonly onEdit: (track: number, review?: MissingDetailReview) => void;
+  };
   readonly onEditSongs?: (trackId: number) => void;
 }) {
   const t = useWords();

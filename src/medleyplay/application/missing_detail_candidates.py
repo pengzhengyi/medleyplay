@@ -10,11 +10,17 @@ from typing import Final, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from medleyplay.application.details import OriginValues, kind_shown_of, songs_of, values_of
+from medleyplay.application.details import (
+    OriginValues,
+    album_file_values,
+    kind_shown_of,
+    songs_of,
+    values_of,
+)
 from medleyplay.application.track_artists import artists_of
 from medleyplay.domain.artists import NO_ONE, artist_key
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.details import Field, Kind, Origin, Shown, shown
+from medleyplay.domain.details import Field, Kind, Origin, Shown, Value, shown
 from medleyplay.persistence.schema import TrackRow
 from medleyplay.plugin_api.missing_details import ClueField, CreditClues, MissingField
 
@@ -31,6 +37,25 @@ class CreditCandidate:
 
     value: str
     origin: CandidateOrigin
+
+
+@dataclass(frozen=True)
+class DetailChange:
+    """Describe a shown field change, such as year 2005 to blank."""
+
+    field: Field
+    before: Value
+    after: Value
+
+
+@dataclass(frozen=True)
+class DetailImpact:
+    """Describe other fields and split songs to review before saving a suggestion."""
+
+    details: tuple[DetailChange, ...]
+    split_songs: int
+    affected_songs: int
+    song_fields: tuple[Field, ...]
 
 
 @dataclass(frozen=True)
@@ -63,20 +88,28 @@ class MissingTrack:
             kind="album" if self.kind is Kind.ALBUM else "song", known=known, missing=self.fields
         )
 
-    def changes_other_details(self, db: Session, field: Field, value: str) -> bool:
-        """Tell whether a shortcut would also change another shown detail or a split song."""
-        if value and songs_of(db, TrackId(self.track.id)):
-            return True
+    def review_impact(self, db: Session, field: Field, value: str) -> DetailImpact | None:
+        """Return what to review when setting the field cannot use the one-field shortcut."""
         after = shown(
             {
                 **self.origins,
                 Origin.HOUSEHOLD: {**self.origins.get(Origin.HOUSEHOLD, {}), field: value},
             }
         )
-        return any(
-            _shown_value(self.shown, other) != _shown_value(after, other)
-            for other in (self.shown.keys() | after.keys()) - {field}
-        )
+        details = tuple(change for change in _changes(self.shown, after) if change.field != field)
+        songs = songs_of(db, TrackId(self.track.id)) if value else []
+        if not details and not songs:
+            return None
+        affected = 0
+        song_fields: set[Field] = set()
+        for song in songs:
+            origins = values_of(db, TrackId(song.track_id))
+            inherited = album_file_values(song, after)
+            changes = _changes(shown(origins), shown({**origins, Origin.ALBUM_FILE: inherited}))
+            if changes:
+                affected += 1
+                song_fields.update(change.field for change in changes)
+        return DetailImpact(details, len(songs), affected, tuple(sorted(song_fields)))
 
 
 def missing_track(db: Session, track: TrackRow) -> MissingTrack | None:
@@ -146,6 +179,16 @@ def _performers(db: Session, track: TrackRow) -> CreditIdentity:
     )
 
 
-def _shown_value(details: Mapping[Field, Shown], field: Field) -> str | int:
+def _changes(
+    before: Mapping[Field, Shown], after: Mapping[Field, Shown]
+) -> tuple[DetailChange, ...]:
+    return tuple(
+        DetailChange(field, old, new)
+        for field in Field
+        if (old := _shown_value(before, field)) != (new := _shown_value(after, field))
+    )
+
+
+def _shown_value(details: Mapping[Field, Shown], field: Field) -> Value:
     found = details.get(field)
     return "" if found is None else found.value

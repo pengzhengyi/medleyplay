@@ -1,12 +1,21 @@
 """The Clean up API for suggesting or intentionally leaving missing details."""
 
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from fastapi import APIRouter, Query, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
-from medleyplay.application.missing_detail_candidates import CandidateOrigin, CreditCandidate
-from medleyplay.application.missing_details import DetailDecision, MissingDetailsPage
+from medleyplay.application.missing_detail_candidates import (
+    CandidateOrigin,
+    CreditCandidate,
+    DetailImpact,
+)
+from medleyplay.application.missing_details import (
+    DetailDecision,
+    DetailReviewRequiredError,
+    MissingDetailsPage,
+)
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.jobs import JobView
 from medleyplay.plugin_api.missing_details import CreditText, MissingField
@@ -41,6 +50,20 @@ class DecisionIn(ReviewedIn):
         return self
 
 
+class ReviewRequiredOut(BaseModel):
+    """The one-field save was refused; show its impact in Edit details."""
+
+    detail: str
+    code: Literal["missing_detail_review_required"] = "missing_detail_review_required"
+    impact: DetailImpact
+
+
+class StaleDecisionOut(BaseModel):
+    """The field or suggestion changed before the one-field save."""
+
+    detail: str
+
+
 @router.get("")
 def missing(
     _: SignedInAccount,
@@ -61,14 +84,30 @@ def ask(
     return JobOut.of(JobView(service.ask(me, TrackId(track_id), body.key)), me)
 
 
-@router.post("/{track_id}/decision", status_code=204)
+@router.post(
+    "/{track_id}/decision",
+    status_code=204,
+    responses={
+        409: {
+            "model": ReviewRequiredOut | StaleDecisionOut,
+            "description": "Review required or stale choice",
+        }
+    },
+)
 def decide(
     track_id: RowId, body: DecisionIn, _: SignedInAccount, service: MissingDetailsDep
-) -> None:
+) -> Response:
     """Save one still-current candidate or intentional blank."""
     candidate = (
         None
         if body.origin is None or body.value is None
         else CreditCandidate(body.value, body.origin)
     )
-    service.decide(TrackId(track_id), DetailDecision(body.key, body.field, candidate))
+    try:
+        service.decide(TrackId(track_id), DetailDecision(body.key, body.field, candidate))
+    except DetailReviewRequiredError as error:
+        return JSONResponse(
+            ReviewRequiredOut(detail=str(error), impact=error.impact).model_dump(mode="json"),
+            status_code=409,
+        )
+    return Response(status_code=204)

@@ -95,6 +95,63 @@ afterEach(() => {
 });
 
 describe("the views", () => {
+  it("opens a split file's editor from its Cleanup suggestion without saving", async () => {
+    open("#/clean-up", {
+      ...signedIn([
+        trackOf(7, "Live at Home", { kind: "album", split: true }),
+        trackOf(8, "Opening", { album: "Live at Home", segment_of: 7 }),
+      ]),
+      "GET /api/missing-details?after=0": {
+        body: {
+          tracks: [
+            {
+              track_id: 7,
+              title: "Live at Home",
+              artist: "",
+              album: "",
+              kind: "album",
+              key: "reviewed-album",
+              fields: [
+                { field: "album", candidates: [{ value: "Live at Home", origin: "library" }] },
+              ],
+              ai: "off",
+            },
+          ],
+          next_after: null,
+        },
+      },
+      "POST /api/missing-details/7/decision": {
+        status: 409,
+        body: {
+          detail: "Use Edit details.",
+          code: "missing_detail_review_required",
+          impact: {
+            details: [{ field: "year", before: 1974, after: "" }],
+            split_songs: 1,
+            affected_songs: 1,
+            song_fields: ["year"],
+          },
+        },
+      },
+      "GET /api/tracks/7/details": {
+        body: {
+          ...detailsOf(7, {}, { video: { title: "Live at Home", year: 1974 } }),
+          kind: { value: "album", reason: "split" },
+        },
+      },
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Use Live at Home for Album" }),
+    );
+
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit details" }));
+    expect(await dialog.findByRole("textbox", { name: "Album" })).toHaveValue("Live at Home");
+    expect(dialog.getByRole("region", { name: "Review before saving" })).toHaveTextContent(
+      "1 split song would also change: Year.",
+    );
+  });
+
   it("opens on the Library, marked in the navigation", async () => {
     open("");
 

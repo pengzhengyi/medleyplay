@@ -31,7 +31,7 @@ import {
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { type ReactNode, useState } from "react";
 
-import { type Kind, type Track, api } from "../api";
+import { type Kind, type MissingDetailReview, type Track, api } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf, artistNamesOf, artistRouteOf } from "../library/views";
@@ -55,7 +55,7 @@ export interface TrackMenuActions {
   readonly onPlayNext: (track: Track) => void;
   readonly onAdd: (track: Track) => void;
   readonly onAddToPlaylist: (track: Track) => void;
-  readonly onEditDetails: (track: Track) => void;
+  readonly onEditDetails: (track: Track, review?: MissingDetailReview) => void;
   /** Whether `track` can be looked up with `lookup` now. */
   readonly canFind: (lookup: Lookup, track: Track) => boolean;
   /** Look `track` up online with `lookup`, for its details and cover. */

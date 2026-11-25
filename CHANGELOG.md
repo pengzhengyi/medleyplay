@@ -739,6 +739,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- In **Clean up → Missing artist or album**, **Use** opens a prefilled
+  **Edit details** when a suggestion needs review. See changes to other
+  details and split songs before saving.
 - Settings uses a wider, centered column on desktop that stays in place when
   the navigation rail collapses or expands. Phones keep the single-column layout.
 - The Library shows its first songs before preparing Filter choices. Filters

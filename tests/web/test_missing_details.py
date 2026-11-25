@@ -166,7 +166,7 @@ def test_naming_a_whole_album_uses_the_library_title_and_keeps_its_existing_arti
     assert (track["album"], track["artist"]) == ("Live at Home", "Trio")
 
 
-def test_accepting_an_album_that_would_hide_a_known_year_redirects_to_edit_details(
+def test_accepting_an_album_that_would_hide_a_known_year_returns_its_impact_without_saving(
     client: TestClient, catalog: CatalogService, units: sessionmaker[Session], clock: FakeClock
 ) -> None:
     set_up_as_alice(client)
@@ -184,8 +184,54 @@ def test_accepting_an_album_that_would_hide_a_known_year_redirects_to_edit_detai
 
     assert saved.status_code == 409
     assert "Edit details" in saved.json()["detail"]
+    assert saved.json()["code"] == "missing_detail_review_required"
+    assert saved.json()["impact"] == {
+        "details": [{"field": "year", "before": 2005, "after": ""}],
+        "split_songs": 0,
+        "affected_songs": 0,
+        "song_fields": [],
+    }
     details = client.get(f"/api/tracks/{album}").json()
     assert (details["album"], details["year"]) == ("", 2005)
+
+
+def test_album_review_counts_only_split_songs_whose_shown_values_would_change(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = catalog.add_track(
+        SourceKeyFactory.bilibili(),
+        TrackDetails("Live at Home", "Trio", year=2005, duration_ms=1_800_000),
+    )
+    split = client.put(
+        f"/api/tracks/{album}/songs",
+        json={
+            "rows": [
+                {"title": "Opening", "start_ms": 0, "artist": ""},
+                {"title": "Finale", "start_ms": 1000, "artist": ""},
+            ]
+        },
+    )
+    assert split.status_code == 200, split.text
+    first, second = (song["track_id"] for song in split.json()["songs"])
+    assert client.put(f"/api/tracks/{second}/details", json={"values": {"year": 2006}}).is_success
+    row = _item(client, album)
+
+    refused = client.post(
+        f"{MISSING}/{album}/decision",
+        json={"key": row["key"], "field": "album", "value": "Live at Home", "origin": "library"},
+    )
+
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["impact"] == {
+        "details": [{"field": "year", "before": 2005, "after": ""}],
+        "split_songs": 2,
+        "affected_songs": 1,
+        "song_fields": ["year"],
+    }
+    assert client.get(f"/api/tracks/{album}").json()["album"] == ""
+    assert client.get(f"/api/tracks/{first}").json()["year"] == 2005
+    assert client.get(f"/api/tracks/{second}").json()["year"] == 2006
 
 
 def test_ai_is_opt_in_and_does_not_replace_the_existing_split_suggestions(

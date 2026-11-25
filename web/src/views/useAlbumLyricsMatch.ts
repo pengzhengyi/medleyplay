@@ -6,14 +6,14 @@ import { api, type LyricsMatch, type SplitSong } from "../api";
 import { useWords } from "../locale";
 
 export interface LyricsMatchStatus {
-  readonly state: "working" | "saved" | "not-matched";
+  readonly state: "searching" | "working" | "saved" | "not-matched";
   readonly note: string;
 }
 
 function feedback(match: LyricsMatch, t: ReturnType<typeof useWords>): LyricsMatchStatus {
   switch (match.state) {
     case "searching":
-      return { state: "working", note: t("Searching lyrics sites…") };
+      return { state: "searching", note: t("Searching lyrics sites…") };
     case "choosing":
       return { state: "working", note: t("Checking the AI pick…") };
     case "waiting":

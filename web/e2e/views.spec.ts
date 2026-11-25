@@ -169,6 +169,46 @@ test("a view's link opens it again after a reload", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Favorites" })).toBeVisible();
 });
 
+test("closing a linked cover editor leaves the artwork without an outline and the cover controls reachable", async ({
+  page,
+}) => {
+  await giveAlphaCredits(page);
+  await page.goto("/#/album?artist=Adele%2C+Sia&name=Duet&edit=cover");
+  const editor = page.getByRole("dialog", { name: /^(Add a|Replace the) cover$/u });
+  await expect(editor).toBeVisible();
+  const artwork = page.getByRole("region", { name: "About the album" });
+
+  await page.keyboard.press("Escape");
+
+  await expect(editor).toBeHidden();
+  await expect(artwork).toBeFocused();
+  await expect(artwork).toHaveCSS("outline-style", "none");
+  await page.keyboard.press("Tab");
+  const coverControl = artwork
+    .getByRole("link", { name: "Save the image" })
+    .or(artwork.getByRole("button", { name: "Add a cover…" }));
+  await expect(coverControl).toBeFocused();
+  await expect(coverControl).toHaveCSS("outline-style", "solid");
+});
+
+test("the queue shortcut focuses its selected tab rather than outlining the whole panel", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const queue = page.getByRole("region", { name: "Up next" });
+  const history = queue.getByRole("tab", { name: "History" });
+  await expect(queue.getByRole("tab", { name: "Up next" })).toBeVisible();
+  await history.click();
+  await page.getByRole("heading", { name: "Library", exact: true }).click();
+
+  await page.keyboard.press("q");
+
+  await expect(history).toBeFocused();
+  await expect(history).toHaveCSS("outline-style", "solid");
+  await expect(queue).not.toBeFocused();
+});
+
 test("the search dropdown stays above the sticky Settings section bar", async ({ page }) => {
   await page.goto("/#/settings");
   await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- When finding lyrics, compare the Library song's album and length with the
+  results.
 - In the floating **Up next** panel, one button expands or collapses all album
   groups without changing what plays.
 - Dismiss a failed download from its warning menu in *Downloaded*, or dismiss

@@ -80,10 +80,7 @@ export interface Library {
    */
   readonly refreshes: number;
   readonly lyricsMatchRevision: number;
-  readonly lyricsMatchEnds: ReadonlyMap<
-    number,
-    { readonly jobId: number; readonly saved: boolean }
-  >;
+  readonly lyricsMatchEnds: ReadonlyMap<number, number>;
   readonly lyricsStreamConnections: number;
   readonly lyricsVersion: (trackId: number | undefined) => string;
   /** Why the last request failed, or `""`. */
@@ -156,6 +153,7 @@ export interface Library {
     id: number,
     rows: readonly SongRowIn[],
     known: readonly number[],
+    lyricPicks?: readonly number[],
   ) => Promise<void>;
   /** Remove every song of the file `id`; the Tracks then show the file whole again. */
   readonly unsplit: (id: number) => Promise<void>;
@@ -399,17 +397,9 @@ export function useLibrary(onSignedOut: () => void): Library {
       ) {
         const trackId = Number(job.target?.split(":")[1]);
         if (Number.isSafeInteger(trackId) && trackId > 0) {
-          const saved = job.state === "succeeded";
           setLyricsMatchEnds((prior) =>
-            (prior.get(trackId)?.jobId ?? 0) >= job.id
-              ? prior
-              : new Map(prior).set(trackId, { jobId: job.id, saved }),
+            (prior.get(trackId) ?? 0) >= job.id ? prior : new Map(prior).set(trackId, job.id),
           );
-          if (saved) {
-            setLyricSaves((prior) =>
-              (prior.get(trackId) ?? 0) >= job.id ? prior : new Map(prior).set(trackId, job.id),
-            );
-          }
         }
       }
     }
@@ -555,6 +545,14 @@ export function useLibrary(onSignedOut: () => void): Library {
         onReady: () => {
           readLyricsAgain();
           setLyricsStreamConnections((count) => count + 1);
+        },
+        onLyricsSaved: (trackIds) => {
+          setLyricsMatchRevision((count) => count + 1);
+          setLyricSaves((prior) => {
+            const next = new Map(prior);
+            for (const id of trackIds) next.set(id, (prior.get(id) ?? 0) + 1);
+            return next;
+          });
         },
       },
       setMode,
@@ -814,8 +812,8 @@ export function useLibrary(onSignedOut: () => void): Library {
     readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
     setCover: (id, image) => changeDetails(id, api.setCover(id, image)),
     removeCover: (id) => changeDetails(id, api.removeCover(id)),
-    saveSongs: async (id, rows, known) => {
-      await changeTracks(api.saveSongs(id, rows, known));
+    saveSongs: async (id, rows, known, lyricPicks) => {
+      await changeTracks(api.saveSongs(id, rows, known, lyricPicks));
     },
     unsplit: async (id) => {
       await changeTracks(api.unsplit(id));
@@ -908,11 +906,13 @@ function listen(
     refresh,
     firstReady,
     onReady,
+    onLyricsSaved,
   }: {
     readonly load: () => void;
     readonly refresh: () => void;
     readonly firstReady: () => void;
     readonly onReady: () => void;
+    readonly onLyricsSaved: (trackIds: readonly number[]) => void;
   },
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
@@ -949,6 +949,10 @@ function listen(
   events.addEventListener("tracks", () => {
     // A setting changed how Tracks show, such as which are albums.
     load();
+  });
+  events.addEventListener("lyrics-saved", (event: MessageEvent<string>) => {
+    const { track_ids: trackIds } = JSON.parse(event.data) as { track_ids: readonly number[] };
+    onLyricsSaved(trackIds);
   });
   events.addEventListener("devices", (event: MessageEvent<string>) => {
     const { waiting } = JSON.parse(event.data) as { waiting: readonly WaitingDevice[] };

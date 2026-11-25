@@ -65,6 +65,20 @@ def test_track_lists_say_which_file_is_split_and_which_file_a_song_is_of(
     )
 
 
+def test_songs_save_rejects_an_unknown_pick_without_changing_the_list(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+    route = f"/api/tracks/{album}/songs"
+
+    refused = client.put(route, json={"rows": TWO_SONGS, "lyric_picks": [42]})
+
+    assert refused.status_code == 409
+    assert "lyric pick" in refused.json()["detail"]
+    assert client.get(route).json()["songs"] == []
+
+
 def test_a_song_named_by_its_id_keeps_its_track(
     client: TestClient, catalog: CatalogService
 ) -> None:

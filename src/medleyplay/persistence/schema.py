@@ -1102,6 +1102,8 @@ class LyricsSearchRow(Base):
     model: Mapped[str] = mapped_column(String(128), default="", server_default="")
     host: Mapped[str] = mapped_column(String(255), default="", server_default="")
     chosen_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    match_choice_job_id: Mapped[int | None] = mapped_column()
+    match_confirmed: Mapped[bool] = mapped_column(server_default="0")
 
 
 class NameSplitRow(Base):

@@ -7,10 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from medleyplay.application.segments import SongsView
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.jobs import JobId
 from medleyplay.domain.segments import SegmentId, SongRow
 from medleyplay.domain.silences import Silences, SilenceState
 from medleyplay.domain.video_text import MAX_SONGS, Song
-from medleyplay.web.deps import SignedInAccount, SilencesDep, SongsDep
+from medleyplay.web.deps import EventsDep, SignedInAccount, SilencesDep, SongsDep
 from medleyplay.web.details import AnsweredByOut
 from medleyplay.web.ids import RowId
 
@@ -41,6 +42,7 @@ class RowsIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     known: Annotated[list[SongId], Field(max_length=MAX_SONGS)] | None = None
+    lyric_picks: Annotated[list[SongId], Field(max_length=MAX_SONGS)] = Field(default_factory=list)
 
     rows: Annotated[list[SongIn], Field(max_length=MAX_SONGS)] = Field(
         examples=[
@@ -152,8 +154,10 @@ def songs(track_id: RowId, _: SignedInAccount, service: SongsDep) -> SongsOut:
 
 
 @router.put("/{track_id}/songs")
-def save_songs(track_id: RowId, body: RowsIn, _: SignedInAccount, service: SongsDep) -> SongsOut:
-    """Make `rows` the file's songs: keep each by its id, add new ones, remove the rest."""
+def save_songs(
+    track_id: RowId, body: RowsIn, _: SignedInAccount, service: SongsDep, events: EventsDep
+) -> SongsOut:
+    """Save the file's song list together with the named pending lyrics picks."""
     rows = [
         SongRow(
             None if row.id is None else SegmentId(row.id),
@@ -162,7 +166,12 @@ def save_songs(track_id: RowId, body: RowsIn, _: SignedInAccount, service: Songs
         for row in body.rows
     ]
     known = None if body.known is None else [SegmentId(song) for song in body.known]
-    return SongsOut.of(service.save(TrackId(track_id), rows, known))
+    saved = service.save(
+        TrackId(track_id), rows, known, lyric_picks=tuple(map(JobId, body.lyric_picks))
+    )
+    if saved.lyrics_saved:
+        events.publish_lyrics_saved(saved.lyrics_saved)
+    return SongsOut.of(saved)
 
 
 @router.post("/{track_id}/songs/read")

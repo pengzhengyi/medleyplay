@@ -2,12 +2,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { api, type LyricsMatch, type SplitSong } from "../api";
+import { api, type LyricsMatch, type SongRowIn, type Songs, type SplitSong } from "../api";
 import { useWords } from "../locale";
 
 export interface LyricsMatchStatus {
-  readonly state: "searching" | "working" | "saved" | "not-matched";
+  readonly state: "searching" | "working" | "ready" | "saved" | "not-matched";
   readonly note: string;
+  readonly choiceJobId?: number | null;
 }
 
 function feedback(match: LyricsMatch, t: ReturnType<typeof useWords>): LyricsMatchStatus {
@@ -18,6 +19,12 @@ function feedback(match: LyricsMatch, t: ReturnType<typeof useWords>): LyricsMat
       return { state: "working", note: t("Checking the AI pick…") };
     case "waiting":
       return { state: "working", note: t("Auto-Match is waiting.") };
+    case "ready":
+      return {
+        state: "ready",
+        note: t("Lyrics ready to save."),
+        choiceJobId: match.choice_job_id ?? null,
+      };
     case "saved":
       return { state: "saved", note: t("Saved lyrics.") };
     case "skipped":
@@ -25,6 +32,30 @@ function feedback(match: LyricsMatch, t: ReturnType<typeof useWords>): LyricsMat
     case "failed":
       return { state: "not-matched", note: match.note || t("Search did not finish.") };
   }
+}
+
+/** Select only ready picks whose saved recordings are untouched by the submitted list. */
+export function readyLyricPicks(
+  songs: Songs | undefined,
+  rows: readonly SongRowIn[],
+  matches: ReadonlyMap<number, LyricsMatchStatus>,
+): number[] {
+  if (songs === undefined) return [];
+  const saved = new Map(songs.songs.map((song) => [song.id, song]));
+  return rows.flatMap((row, index) => {
+    const song = row.id === null ? undefined : saved.get(row.id);
+    const end = rows[index + 1]?.start_ms ?? songs.length_ms;
+    if (
+      song?.start_ms !== row.start_ms ||
+      song.end_ms !== end ||
+      song.title !== row.title ||
+      song.artist !== row.artist
+    ) {
+      return [];
+    }
+    const pick = matches.get(song.track_id);
+    return pick?.state === "ready" && pick.choiceJobId != null ? [pick.choiceJobId] : [];
+  });
 }
 
 function afterRead(
@@ -134,6 +165,9 @@ export function useAlbumLyricsMatch(
     error,
     why: unavailable || (songs.length === 0 ? t("Save the songs first to match lyrics") : ""),
     results: new Map([...matches].map(([id, match]) => [id, feedback(match, t)])),
+    reread: () => {
+      setReads((count) => count + 1);
+    },
     onPress: () => {
       if (confirm) setConfirm(false);
       else void request(false);

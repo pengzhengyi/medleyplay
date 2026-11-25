@@ -15,7 +15,7 @@ export function AlbumLyricsMatch({
   onPress,
   onConfirm,
   onCancel,
-}: Omit<ReturnType<typeof useAlbumLyricsMatch>, "results">) {
+}: Omit<ReturnType<typeof useAlbumLyricsMatch>, "results" | "reread">) {
   const t = useWords();
   return (
     <>
@@ -42,7 +42,7 @@ export function AlbumLyricsMatch({
             ? t("Search for lyrics for one saved song?")
             : t("Search for lyrics for {{count}} saved songs?", { count })}{" "}
           {t(
-            "This may make paid AI calls. Matching lyrics are saved in the background. Existing lyrics are kept; new or changed rows are skipped.",
+            "This may make paid AI calls. Clear picks are ready to review and save in Songs. Existing lyrics are kept; new or changed rows are skipped.",
           )}
           <button type="button" className="fill-button" disabled={Boolean(why)} onClick={onConfirm}>
             {t("Start matching")}
@@ -98,7 +98,11 @@ export function SongLyricsButton({
       >
         <MicrophoneStageIcon
           weight={
-            match?.state === "saved" ? "fill" : match?.state === "working" ? "duotone" : "regular"
+            match?.state === "saved"
+              ? "fill"
+              : match?.state === "working" || match?.state === "ready"
+                ? "duotone"
+                : "regular"
           }
           aria-hidden
         />

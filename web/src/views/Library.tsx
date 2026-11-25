@@ -527,8 +527,9 @@ export function Library({
             loadAudio={api.playback}
             silences={SILENCES}
             onListen={player.pause}
-            onSave={async (rows, known) => {
-              await library.saveSongs(file.id, rows, known);
+            onSave={async (rows, known, lyricPicks) => {
+              await library.saveSongs(file.id, rows, known, lyricPicks);
+              if (lyricPicks?.length) setLyricsEdits((count) => count + 1);
               setNotice(`Saved the songs of “${file.title}”.`);
             }}
             onUnsplit={async () => {

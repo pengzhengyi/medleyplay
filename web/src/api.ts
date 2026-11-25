@@ -395,7 +395,8 @@ export interface LyricsMatch {
   readonly track_id: number;
   readonly job_id: number | null;
   readonly previous_job_id?: number | null;
-  readonly state: "searching" | "choosing" | "waiting" | "saved" | "skipped" | "failed";
+  readonly state: "searching" | "choosing" | "waiting" | "ready" | "saved" | "skipped" | "failed";
+  readonly choice_job_id?: number | null;
   readonly note: string;
 }
 
@@ -1959,8 +1960,17 @@ export const api = {
   findSilences: (trackId: number) =>
     call<Silences>("POST", `/api/tracks/${String(trackId)}/silences/find`),
   /** Make `rows` the file's songs: each kept by its id, the others new, the rest removed. */
-  saveSongs: (trackId: number, rows: readonly SongRowIn[], known: readonly number[]) =>
-    call<Songs>("PUT", `/api/tracks/${String(trackId)}/songs`, { rows, known }),
+  saveSongs: (
+    trackId: number,
+    rows: readonly SongRowIn[],
+    known: readonly number[],
+    lyricPicks?: readonly number[],
+  ) =>
+    call<Songs>("PUT", `/api/tracks/${String(trackId)}/songs`, {
+      rows,
+      known,
+      ...(lyricPicks?.length ? { lyric_picks: lyricPicks } : {}),
+    }),
   /** Check a song list as it is typed, each problem on its line. */
   checkSongList: (trackId: number, text: string) =>
     call<ListCheck>("POST", `/api/tracks/${String(trackId)}/songs/check`, { text }),

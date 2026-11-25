@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that Settings section. Type `settings:` to see every section you can visit.
 - Open a saved song's lyrics directly from an album's Songs editor without saving
   the list. **Auto-Match lyrics** keeps running after you close Songs or the tab
-  and saves each clear match as it finishes, without replacing existing lyrics.
+  and prepares clear picks to review and save, without replacing existing lyrics.
   Reopen Songs to see each Job's result beside its song. In Settings → Lyrics,
   choose whether to confirm first (the default) or search directly.
 - **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
@@ -936,6 +936,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Auto-Match lyrics** leaves picks unsaved until you select **Save** in the
+  Songs editor, which keeps the ready matches for unchanged songs together.
 - The active sleep timer stays a moon icon in **Up next**. Its tooltip and menu
   compare the time remaining with the duration you set. Selecting a preset in
   the floating queue leaves the queue open.

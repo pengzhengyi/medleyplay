@@ -82,7 +82,7 @@ describe("the Library", () => {
     });
   });
 
-  it("refreshes only the song whose Auto-Match saved, and rereads after reconnecting", async () => {
+  it("refreshes only the confirmed song after Songs Save and rereads after reconnecting", async () => {
     serve(signedIn([trackOf(1, "Intro"), trackOf(2, "Outro")]));
     const { result } = renderHook(() => useLibrary(vi.fn()));
     await waitFor(() => {
@@ -103,6 +103,11 @@ describe("the Library", () => {
 
     act(() => {
       stream().send("job", { id: 23, kind: "auto_match_choose", target, state: "succeeded" });
+    });
+    expect(result.current.lyricsVersion(1)).toBe(intro);
+
+    act(() => {
+      stream().send("lyrics-saved", { track_ids: [1] });
     });
     expect(result.current.lyricsVersion(1)).not.toBe(intro);
     expect(result.current.lyricsVersion(2)).toBe(outro);

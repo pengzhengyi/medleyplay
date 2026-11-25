@@ -80,7 +80,11 @@ import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { ListEditor } from "./parts";
 import { SongsControlsContext } from "./songsControls";
-import { type LyricsMatchStatus, useAlbumLyricsMatch } from "./useAlbumLyricsMatch";
+import {
+  type LyricsMatchStatus,
+  readyLyricPicks,
+  useAlbumLyricsMatch,
+} from "./useAlbumLyricsMatch";
 
 /** A row as the editor holds it: the start as typed, and the song it keeps, if any. */
 interface Row {
@@ -167,7 +171,11 @@ export function SongsEditor({
   readonly silences: SilenceFinder;
   readonly onListen: () => void;
   /** Save `rows`, refused when the file's songs are no longer the `known` ones the editor saw. */
-  readonly onSave: (rows: readonly SongRowIn[], known: readonly number[]) => Promise<void>;
+  readonly onSave: (
+    rows: readonly SongRowIn[],
+    known: readonly number[],
+    lyricPicks?: readonly number[],
+  ) => Promise<void>;
   readonly onUnsplit: () => Promise<void>;
   readonly lyricsOf: (trackId: number) => ReactNode;
   readonly matchOnline: boolean;
@@ -299,13 +307,19 @@ export function SongsEditor({
    * from; `byAi` says the list is the AI's answer.
    */
   /** The rows `list` comes to, each keeping the song it most likely is of those now. */
-  const rowsOfList = (list: readonly Song[]) => {
+  const namedRows = (list: readonly Song[]): SongRowIn[] => {
     const ids = keptIds(
       rows.map((row) => ({ id: row.id, title: row.title, startMs: startOf(row) })),
       list,
     );
-    return list.map((song, index) => rowOf(song, ids[index] ?? null));
+    return list.map((song, index) => ({
+      id: ids[index] ?? null,
+      start_ms: song.start_ms,
+      title: song.title.trim(),
+      artist: song.artist.trim(),
+    }));
   };
+  const rowsOfList = (list: readonly Song[]) => namedRows(list).map((song) => rowOf(song, song.id));
   const fill = (list: readonly Song[], from: string, byAi = false) => {
     edit(rowsOfList(list));
     setFillNote(`${songCount(list.length)} ${from}${byAi ? ", starts estimated" : ""}`);
@@ -587,7 +601,18 @@ export function SongsEditor({
       return;
     }
     void run(async () => {
-      await onSave(sent, songs?.songs.map((song) => song.id) ?? []);
+      const known = songs?.songs.map((song) => song.id) ?? [];
+      const picks = readyLyricPicks(songs, sent, lyricResults);
+      if (picks.length === 0) {
+        await onSave(sent, known);
+      } else {
+        try {
+          await onSave(sent, known, picks);
+        } catch (failure) {
+          rereadLyricMatches();
+          throw failure;
+        }
+      }
       onDone();
     });
   };
@@ -635,7 +660,11 @@ export function SongsEditor({
             : []),
         ]);
 
-  const { results: lyricResults, ...lyricsMatch } = useAlbumLyricsMatch(
+  const {
+    results: lyricResults,
+    reread: rereadLyricMatches,
+    ...lyricsMatch
+  } = useAlbumLyricsMatch(
     album.id,
     songs?.songs.filter((song) =>
       rows.some(
@@ -656,6 +685,13 @@ export function SongsEditor({
           : "",
     `${String(matchRevision)}:${String(matchOnline)}`,
   );
+  const proposed = typing
+    ? listed === undefined
+      ? []
+      : namedRows(listed)
+    : rowsIn(rows, songs?.length_ms ?? null);
+  const pickCount =
+    typeof proposed === "string" ? 0 : readyLyricPicks(songs, proposed, lyricResults).length;
   const childLyrics = lyricsTrack !== null && (
     <Modal
       ref={lyricsDialog}
@@ -665,6 +701,7 @@ export function SongsEditor({
       locked={lyricsLocked}
       onClose={() => {
         setLyricsTrack(null);
+        rereadLyricMatches();
         lyricsEntry.current?.focus();
       }}
     >
@@ -1020,6 +1057,13 @@ export function SongsEditor({
       {error !== "" && (
         <p className="error" role="alert">
           {error}
+        </p>
+      )}
+      {pickCount > 0 && (
+        <p className="songs-note" role="status">
+          {pickCount === 1
+            ? t("1 lyric pick ready to save.")
+            : t("{{count}} lyric picks ready to save.", { count: pickCount })}
         </p>
       )}
       <footer className="dialog-buttons">

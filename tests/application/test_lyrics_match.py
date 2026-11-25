@@ -1,4 +1,4 @@
-"""Auto-Match Jobs save each eligible song without a browser."""
+"""Auto-Match jobs prepare lyric picks for Songs Save."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -11,7 +11,11 @@ from medleyplay.application.enrichment import ENRICH_KIND, enrich_target
 from medleyplay.application.jobs import JobKind
 from medleyplay.application.lyrics_match import MatchSongInput
 from medleyplay.application.lyrics_match_state import MATCH_CHOOSE, MATCH_FIND, match_target
-from medleyplay.application.lyrics_search import CHOOSE_LYRICS_KIND, choose_lyrics_target
+from medleyplay.application.lyrics_search import (
+    CHOOSE_LYRICS_KIND,
+    choose_lyrics_target,
+    store_choice,
+)
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
@@ -26,11 +30,13 @@ from medleyplay.domain.errors import (
 )
 from medleyplay.domain.jobs import Job, JobId, JobState
 from medleyplay.domain.lyrics import LyricsSite
-from medleyplay.domain.segments import SongRow
+from medleyplay.domain.segments import SegmentId, SongRow
 from medleyplay.domain.settings import Settings
 from medleyplay.domain.video_text import Song
+from medleyplay.persistence.schema import LyricsSearchRow
 from medleyplay.plugin_api import LYRICS_CHOOSER, LYRICS_FINDER
 from medleyplay.programs.enrich_track import EnrichedTrack, EnrichJob
+from medleyplay.programs.find_lyrics import ChosenLyricsResult
 from tests.support.ai import DEEPSEEK
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import NewAccountFactory
@@ -76,7 +82,14 @@ def _album(
     )
 
 
-def test_auto_match_saves_a_pick_and_keeps_misses_and_failures_separate(
+def _rows(inputs: tuple[MatchSongInput, ...]) -> list[SongRow]:
+    return [
+        SongRow(SegmentId(row.segment_id), Song(row.start_ms, row.title, row.artist))
+        for row in inputs
+    ]
+
+
+def test_auto_match_stages_a_pick_until_songs_save_and_keeps_other_outcomes_separate(
     enriching: Enriching, alice: Account, songs: SongsService
 ) -> None:
     album, rows = _album(enriching, alice, songs)
@@ -84,16 +97,156 @@ def test_auto_match_saves_a_pick_and_keeps_misses_and_failures_separate(
     started, *_rest = enriching.lyrics_match.start(alice, album, rows)
     enriching.finish_every_job()
 
-    saved, missed, failed = enriching.lyrics_match.status(alice, album)
-    assert [saved.state, missed.state, failed.state] == ["saved", "skipped", "failed"]
-    kept = enriching.lyrics.lyrics(saved.track_id)
+    ready, missed, failed = enriching.lyrics_match.status(alice, album)
+    assert [ready.state, missed.state, failed.state] == ["ready", "skipped", "failed"]
+    assert ready.choice_job_id is not None
+    assert enriching.lyrics.lyrics(ready.track_id) is None
+    songs.save(album, _rows(rows))
+    assert enriching.lyrics.lyrics(ready.track_id) is None
+
+    songs.save(album, _rows(rows), lyric_picks=[ready.choice_job_id])
+
+    kept = enriching.lyrics.lyrics(ready.track_id)
     assert kept is not None
     assert (kept.origin.value, kept.text) == ("lrclib", lyrics_of("Melt"))
     assert enriching.lyrics.lyrics(missed.track_id) is None
     assert enriching.lyrics.lyrics(failed.track_id) is None
+    assert enriching.lyrics_match.status(alice, album)[0].state == "saved"
 
     (again,) = enriching.lyrics_match.start(alice, album, [rows[0]])
     assert (again.state, again.job_id, again.previous_job_id) == ("skipped", None, started.job_id)
+
+
+def test_songs_save_confirms_two_ready_picks_even_without_available_providers(
+    enriching: Enriching, alice: Account, songs: SongsService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    album, rows = _album(enriching, alice, songs)
+    first, middle, last = _rows(rows)
+    saved = songs.save(album, [first, middle, SongRow(None, Song(270_000, "Encore")), last])
+    encore = saved.songs[2]
+    second = MatchSongInput(
+        track_id=encore.track_id,
+        segment_id=encore.id,
+        start_ms=encore.start_ms,
+        title=encore.title,
+        artist=encore.artist,
+    )
+    enriching.lyrics_match.start(alice, album, [rows[0], second])
+    enriching.finish_every_job()
+    first_pick, second_pick = enriching.lyrics_match.status(alice, album)
+    assert first_pick.choice_job_id is not None
+    assert second_pick.choice_job_id is not None
+    assert [enriching.lyrics.lyrics(pick.track_id) for pick in (first_pick, second_pick)] == [
+        None,
+        None,
+    ]
+    monkeypatch.setattr(PluginService, "available_keys", lambda _: {})
+    enriching.online.online = False
+
+    songs.save(
+        album,
+        _rows((*rows[:2], second, rows[2])),
+        lyric_picks=[first_pick.choice_job_id, second_pick.choice_job_id],
+    )
+
+    assert [match.state for match in enriching.lyrics_match.status(alice, album)] == [
+        "saved",
+        "saved",
+    ]
+    for pick, title in ((first_pick, "Melt"), (second_pick, "Encore")):
+        kept = enriching.lyrics.lyrics(pick.track_id)
+        assert kept is not None
+        assert (kept.origin.value, kept.text) == ("lrclib", lyrics_of(title))
+
+
+def test_songs_save_does_not_erase_a_concurrent_retime_to_confirm_a_pick(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    album, rows = _album(enriching, alice, songs)
+    enriching.lyrics_match.start(alice, album, [rows[0]])
+    enriching.finish_every_job()
+    (ready,) = enriching.lyrics_match.status(alice, album)
+    assert ready.choice_job_id is not None
+    moved = _rows(rows)
+    moved[1] = SongRow(moved[1].id, Song(250_000, "Nowhere"))
+    songs.save(album, moved)
+
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(album, _rows(rows), lyric_picks=[ready.choice_job_id])
+
+    assert songs.songs(album).songs[1].start_ms == 250_000
+    assert enriching.lyrics.lyrics(ready.track_id) is None
+
+
+def test_songs_save_rolls_back_a_row_edit_that_changes_a_confirmed_recording(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    album, rows = _album(enriching, alice, songs)
+    enriching.lyrics_match.start(alice, album, [rows[0]])
+    enriching.finish_every_job()
+    (ready,) = enriching.lyrics_match.status(alice, album)
+    assert ready.choice_job_id is not None
+    retimed = _rows(rows)
+    retimed[1] = SongRow(retimed[1].id, Song(250_000, "Nowhere"))
+
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(album, retimed, lyric_picks=[ready.choice_job_id])
+
+    assert songs.songs(album).songs[1].start_ms == 260_000
+    assert enriching.lyrics.lyrics(ready.track_id) is None
+    assert enriching.lyrics_match.status(alice, album)[0].state == "ready"
+
+
+def test_manually_saving_and_removing_lyrics_invalidates_an_unsaved_pick(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    album, rows = _album(enriching, alice, songs)
+    enriching.lyrics_match.start(alice, album, [rows[0]])
+    enriching.finish_every_job()
+    (ready,) = enriching.lyrics_match.status(alice, album)
+    assert ready.choice_job_id is not None
+
+    enriching.lyrics.set_own(ready.track_id, "Our lyrics")
+    enriching.lyrics.forget_own(ready.track_id)
+
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(album, _rows(rows), lyric_picks=[ready.choice_job_id])
+    assert enriching.lyrics.lyrics(ready.track_id) is None
+
+
+@pytest.mark.parametrize("choose", [False, True], ids=["search", "choice"])
+def test_retrying_an_older_manual_lyrics_job_invalidates_the_ready_pick_at_submission(
+    enriching: Enriching, alice: Account, songs: SongsService, *, choose: bool
+) -> None:
+    album, rows = _album(enriching, alice, songs)
+    melt = rows[0]
+    track_id = TrackId(melt.track_id)
+    lyrics = enriching.lyrics_search
+    if choose:
+        first = lyrics.find(alice, track_id, melt.title, melt.artist)
+        enriching.wait_for(first, JobState.SUCCEEDED)
+    enriching.online.online = False
+    if choose:
+        lyrics.choose(alice, track_id)
+        choice = enriching.jobs.latest(CHOOSE_LYRICS_KIND, choose_lyrics_target(track_id))
+        assert choice is not None
+        old = choice.id
+    else:
+        old = lyrics.find(alice, track_id, melt.title, melt.artist)
+    enriching.jobs.cancel(alice, old)
+    enriching.online.online = True
+    enriching.lyrics_match.start(alice, album, [melt])
+    enriching.finish_every_job()
+    (ready,) = enriching.lyrics_match.status(alice, album)
+    assert ready.choice_job_id is not None
+
+    enriching.online.online = False
+    retried = enriching.jobs.retry(alice, old)
+
+    assert retried.state == JobState.QUEUED
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(album, _rows(rows), lyric_picks=[ready.choice_job_id])
+    assert enriching.lyrics.lyrics(track_id) is None
 
 
 def test_submission_normalizes_repeated_rows_and_reuses_the_active_match(
@@ -113,6 +266,27 @@ def test_submission_normalizes_repeated_rows_and_reuses_the_active_match(
     assert enriching.jobs.get_job(first.job_id).job.requested_by == alice.id
     with pytest.raises(ForbiddenError):
         enriching.jobs.cancel(bob, first.job_id)
+
+
+def test_a_replacement_choice_cannot_be_confirmed_by_the_earlier_pick_id(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    album, rows = _album(enriching, alice, songs)
+    enriching.lyrics_match.start(alice, album, [rows[0]])
+    enriching.finish_every_job()
+    (ready,) = enriching.lyrics_match.status(alice, album)
+    assert ready.choice_job_id is not None
+    with enriching.units.begin() as db:
+        search = db.get_one(LyricsSearchRow, ready.track_id)
+        replacement = ChosenLyricsResult(
+            track_id=ready.track_id, offered=tuple(search.offered), option=1, why="The live take."
+        )
+        assert store_choice(db, search, replacement, enriching.clock) is not None
+
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(album, _rows(rows), lyric_picks=[ready.choice_job_id])
+
+    assert enriching.lyrics.lyrics(ready.track_id) is None
 
 
 def test_saving_then_removing_lyrics_while_auto_match_waits_does_not_restore_them(
@@ -173,12 +347,12 @@ def test_restarting_after_the_search_keeps_the_queued_pick_and_does_not_search_a
     with running_enrichment(enriching.units, enriching.clock, enriching.data_dir) as restarted:
         restarted.finish_every_job()
         (reopened,) = restarted.lyrics_match.status(alice, album)
-        assert (reopened.job_id, reopened.state) == (root, "saved")
+        assert (reopened.job_id, reopened.state) == (root, "ready")
         searches = [
             view.job.id for view in restarted.jobs.list_jobs() if view.job.kind == MATCH_FIND
         ]
         assert searches == [root]
-        assert restarted.lyrics.lyrics(track_id) is not None
+        assert restarted.lyrics.lyrics(track_id) is None
 
 
 def test_a_queued_choice_does_not_save_after_restart_without_the_lyrics_finder(
@@ -246,7 +420,9 @@ def test_lookup_rechecks_lyrics_saved_by_auto_match_before_it_queues(
     ) -> Job:
         enriching.finish_every_job()
         (finished,) = enriching.lyrics_match.status(alice, album)
-        assert finished.state == "saved"
+        assert finished.state == "ready"
+        assert finished.choice_job_id is not None
+        songs.save(album, _rows((melt, *_rest)), lyric_picks=[finished.choice_job_id])
         return submit(kind, target, request, requested_by)
 
     monkeypatch.setattr(enriching.jobs, "submit", finish_match_before_submit)

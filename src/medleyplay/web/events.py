@@ -16,6 +16,7 @@ from medleyplay.application.events import (
     MODE,
     TRACKS,
     Event,
+    LyricsSaved,
     SubscriptionEndedError,
 )
 from medleyplay.application.remote import CommandsWaiting, PageId, ReportChanged
@@ -135,6 +136,8 @@ async def _sent_for(  # noqa: PLR0911 -- one answer per kind of event
     """
     if event is None or isinstance(event, CommandsWaiting):
         return None
+    if isinstance(event, LyricsSaved):
+        return ServerSentEvent(data={"track_ids": event.track_ids}, event="lyrics-saved")
     if isinstance(event, ReportChanged):
         if event.account != me.id:
             return None

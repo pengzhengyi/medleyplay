@@ -345,11 +345,10 @@ export function favoritesOf(tracks: readonly Track[]): Track[] {
 }
 
 /**
- * Return the Tracks with a Download kept on the server, and those whose download failed,
- * to try again, in the order given.
+ * Return the Tracks with a saved Download or a failure that has not been dismissed.
  */
 export function downloadedOf(tracks: readonly Track[]): Track[] {
-  return tracks.filter((track) => track.downloaded || track.download_failed);
+  return tracks.filter((track) => track.downloaded || track.download_failure_job_id !== null);
 }
 
 const haystacks = new WeakMap<Track, string>();

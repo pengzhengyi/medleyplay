@@ -30,6 +30,8 @@ export interface Track {
   readonly downloaded: boolean;
   /** Whether the Track has no Download, and the last Job downloading it failed. */
   readonly download_failed: boolean;
+  /** The failed download Job if it has not been dismissed from Downloaded. */
+  readonly download_failure_job_id: number | null;
   /** The kind of site its audio is downloaded from, such as `bilibili`, if any. */
   readonly site: string | null;
   readonly joined?: boolean;
@@ -2046,6 +2048,8 @@ export const api = {
     call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),
   /** Each Download a Job is getting, the first asked for first, with its Track. */
   downloads: () => call<DownloadUnderWay[]>("GET", "/api/downloads"),
+  dismissFailedDownloads: (ids: readonly number[]) =>
+    call<undefined>("POST", "/api/downloads/failed/dismiss", { job_ids: ids }),
   /** Run a failed or cancelled Job again, as a new Job. */
   retryJob: (jobId: number) => call<Job>("POST", `/api/jobs/${String(jobId)}/retry`),
   /** Cancel a Job the Account asked for; cancelling one that ended changes nothing. */

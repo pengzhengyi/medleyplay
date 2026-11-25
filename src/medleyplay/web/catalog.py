@@ -78,6 +78,9 @@ class TrackOut(BaseModel):
     download_failed: bool = Field(
         description="Whether the Track has no Download, and the last Job downloading it failed."
     )
+    download_failure_job_id: int | None = Field(
+        description="The failed download Job if it has not been dismissed from Downloaded."
+    )
     site: str | None = Field(
         description="The kind of site its audio is downloaded from, such as `bilibili`, if any."
     )
@@ -129,6 +132,7 @@ class TrackOut(BaseModel):
             availability=track.availability,
             downloaded=track.downloaded,
             download_failed=track.download_failed,
+            download_failure_job_id=track.download_failure_job_id,
             site=track.site,
             joined=track.joined,
             video=track.video,

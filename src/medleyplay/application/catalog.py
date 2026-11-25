@@ -57,7 +57,7 @@ from medleyplay.domain.history import (
     Played,
     check_listened,
 )
-from medleyplay.domain.jobs import JobState
+from medleyplay.domain.jobs import JobId, JobState
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.links import BILIBILI_SOURCE, PART_LINKS, video_selection
 from medleyplay.domain.playback import PlayId
@@ -185,7 +185,7 @@ class CatalogService:
             available = _availability(db, sources, held, online=online)
             downloaded = {source.track_id for source in sources if source.id in held}
             sites = _site_sources(db)
-            failed = _download_failed(db, sites, downloaded)
+            failed = _download_failures(db, sites, downloaded)
             segment_of = album_file_of(db)
             split = set(segment_of.values())
             videos = _videos_of(
@@ -197,7 +197,9 @@ class CatalogService:
             artists = artist_names_of(db)
             # A song is downloaded, or failed to download, as its album file is.
             downloaded |= {song for song, album in segment_of.items() if album in downloaded}
-            failed |= {song for song, album in segment_of.items() if album in failed}
+            failed.update(
+                {song: failed[album] for song, album in segment_of.items() if album in failed}
+            )
             return [
                 _to_track(
                     track,
@@ -205,6 +207,7 @@ class CatalogService:
                     available[track.id],
                     downloaded=track.id in downloaded,
                     download_failed=track.id in failed,
+                    download_failure_job_id=failed.get(track.id),
                     site=sites[track.id].kind if track.id in sites else None,
                     joined=_is_joined(sites.get(track.id)),
                     # A song came from the video its album file did.
@@ -235,7 +238,7 @@ class CatalogService:
                 db, select(SourceRow.track_id).where(SourceRow.track_id == looked_at)
             )
             sites = _site_sources(db, SourceRow.track_id == looked_at)
-            failed = _download_failed(db, sites, downloaded)
+            failed = _download_failures(db, sites, downloaded)
             videos = _video_pages(db, SourceRow.track_id == looked_at)
             album_from_ms = read_settings(db).album_from_ms
             rated = select(CommunityRatingRow).where(
@@ -249,6 +252,7 @@ class CatalogService:
             available[track_id],
             downloaded=looked_at in downloaded,
             download_failed=looked_at in failed,
+            download_failure_job_id=failed.get(looked_at),
             site=sites[track_id].kind if track_id in sites else None,
             joined=_is_joined(sites.get(track_id)),
             video=videos.get(looked_at),
@@ -800,20 +804,23 @@ def _videos_of(rows: Iterable[tuple[int, str, str]]) -> dict[int, str]:
     }
 
 
-def _download_failed(db: Session, sites: Mapping[int, SourceRow], downloaded: set[int]) -> set[int]:
-    """Return the Tracks with a site Source but no Download whose last download Job failed."""
+def _download_failures(
+    db: Session, sites: Mapping[int, SourceRow], downloaded: set[int]
+) -> dict[int, JobId | None]:
+    """Map Tracks whose latest Download failed to the failed Job, or None if dismissed."""
     if not sites:
-        return set()
+        return {}
     latest = select(func.max(JobRow.id)).where(JobRow.kind == DOWNLOAD_KIND).group_by(JobRow.target)
-    failed = set(
-        db.scalars(
-            select(JobRow.target).where(JobRow.id.in_(latest), JobRow.state == JobState.FAILED)
+    rows = db.execute(
+        select(JobRow.target, JobRow.id, JobRow.failure_dismissed).where(
+            JobRow.id.in_(latest), JobRow.state == JobState.FAILED
         )
     )
+    failed = {target: None if dismissed else JobId(job_id) for target, job_id, dismissed in rows}
     return {
-        track_id
+        track_id: failed[target]
         for track_id, source in sites.items()
-        if track_id not in downloaded and download_target(SourceId(source.id)) in failed
+        if track_id not in downloaded and (target := download_target(SourceId(source.id))) in failed
     }
 
 
@@ -854,6 +861,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     *,
     downloaded: bool,
     download_failed: bool = False,
+    download_failure_job_id: JobId | None = None,
     site: str | None = None,
     joined: bool = False,
     video: str | None = None,
@@ -894,6 +902,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         availability=availability,
         downloaded=downloaded,
         download_failed=download_failed,
+        download_failure_job_id=download_failure_job_id,
         site=site,
         joined=joined,
         video=video,

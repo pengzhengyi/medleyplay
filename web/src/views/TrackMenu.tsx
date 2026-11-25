@@ -27,6 +27,7 @@ import {
   UploadSimpleIcon,
   VinylRecordIcon,
   WarningCircleIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { type ReactNode, useState } from "react";
@@ -35,6 +36,7 @@ import { type Kind, type MissingDetailReview, type Track, api } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf, artistNamesOf, artistRouteOf } from "../library/views";
+import { useWords } from "../locale";
 import { navigate } from "../routes";
 
 /** Rate Your Music's search, which the household's own browser opens; medleyplay never reads the site. */
@@ -395,20 +397,23 @@ function Item({
 
 /**
  * *Download failed* on a song's row, opening why it failed, read when opened, with
- * *Retry download* and *Add the file…*. Retrying runs the failed Job again; the menu
- * stays open until the server answers, saying why if it refuses.
+ * *Retry download*, *Add the file…*, and a way to dismiss the failure in Downloaded.
  */
 export function DownloadFailed({
   track,
   onAddFile,
+  dismiss,
 }: {
   readonly track: Track;
   readonly onAddFile: (track: Track) => void;
+  readonly dismiss: ((ids: readonly number[]) => Promise<void>) | undefined;
 }) {
+  const words = useWords();
   const [open, setOpen] = useState(false);
   const [why, setWhy] = useState<{ readonly message: string; readonly job: number | null }>();
-  const [retrying, setRetrying] = useState(false);
+  const [busy, setBusy] = useState<"retry" | "dismiss">();
   const [error, setError] = useState("");
+  const failedJob = track.download_failure_job_id;
   const read = () => {
     setError("");
     api.download(track.id).then(
@@ -420,16 +425,16 @@ export function DownloadFailed({
       },
     );
   };
-  const retry = (job: number) => {
-    setRetrying(true);
+  const act = (action: "retry" | "dismiss", request: Promise<unknown>) => {
+    setBusy(action);
     setError("");
-    api.retryJob(job).then(
+    request.then(
       () => {
-        setRetrying(false);
+        setBusy(undefined);
         setOpen(false);
       },
       (failure: unknown) => {
-        setRetrying(false);
+        setBusy(undefined);
         setError(failure instanceof Error ? failure.message : String(failure));
       },
     );
@@ -472,26 +477,39 @@ export function DownloadFailed({
             </p>
           )}
           <Item
-            icon={<ArrowClockwiseIcon className={retrying ? "spin" : undefined} />}
-            disabled={why?.job == null || retrying}
+            icon={<ArrowClockwiseIcon className={busy === "retry" ? "spin" : undefined} />}
+            disabled={why?.job == null || busy !== undefined}
             onSelect={(event) => {
               // Open until the server answers, so a refusal shows here.
               event.preventDefault();
               if (why?.job != null) {
-                retry(why.job);
+                act("retry", api.retryJob(why.job));
               }
             }}
           >
-            {retrying ? "Retrying…" : "Retry download"}
+            {busy === "retry" ? "Retrying…" : "Retry download"}
           </Item>
           {!track.joined && (
             <Item
               icon={<UploadSimpleIcon />}
+              disabled={busy !== undefined}
               onSelect={() => {
                 onAddFile(track);
               }}
             >
               Add the file…
+            </Item>
+          )}
+          {dismiss !== undefined && failedJob !== null && (
+            <Item
+              icon={<XIcon className={busy === "dismiss" ? "spin" : undefined} />}
+              disabled={busy !== undefined}
+              onSelect={(event) => {
+                event.preventDefault();
+                act("dismiss", dismiss([failedJob]));
+              }}
+            >
+              {busy === "dismiss" ? words("Dismissing…") : words("Dismiss failed download")}
             </Item>
           )}
         </Menu.Content>

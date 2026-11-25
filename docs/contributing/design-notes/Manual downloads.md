@@ -165,6 +165,11 @@
   Job again; the menu stays open until the server answers, and says why if it
   refuses, such as to an Account that didn't ask for the Download. The Track's
   menu has *Add the file yourself…* for any site Track, failed or not.
+- **In *Downloaded*,** *Dismiss failed download* in the warning menu hides that
+  failed attempt for the household. *Dismiss all failed downloads* hides those
+  shown in the view. Neither action removes songs, files, or Job history. The
+  warning remains in the Library for retrying or adding a file, and a new failure
+  appears in *Downloaded* again.
 - **The add-the-file dialog:** the failure's message, the other ways, a file
   picker, and *Add*, with the upload's progress; *Stop* beside it stops an upload
   under way. When it finishes, the dialog closes and the Track shows as downloaded and
@@ -184,8 +189,10 @@
 | `GET /api/tracks/{id}/download` | Signed in | The Track's site Source: its link, whether it is downloaded, downloading, failed, or unavailable, and the failure's message; 409 without a site Source |
 | `PUT /api/tracks/{id}/download` | Signed in | Adds the file in the body as the Track's Download; 413 too large, 422 not audio, 409 no site Source |
 | `GET /api/downloads` | Signed in | The Downloads under way, oldest first: each Track and its Job, with the Job's state, progress, and whether it waits for Online |
+| `POST /api/downloads/failed/dismiss` | Signed in | Hide the failed download Jobs named by `job_ids`; other Jobs and saved files are unchanged |
 
-Tracks in every list gain `download_failed` and `site`.
+Tracks in every list include `download_failed`, `site`, and `download_failure_job_id`
+for a failed attempt still shown in *Downloaded*.
 
 ## Testing
 

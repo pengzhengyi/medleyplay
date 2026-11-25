@@ -763,6 +763,7 @@ export function Library({
             onRatingsChanged={library.reloadTracks}
             waitingDevices={library.waitingDevices}
             downloading={library.downloading}
+            dismissFailedDownloads={library.dismissFailedDownloads}
             videoLookups={
               <VideoLookups
                 rows={library.videoLookups}

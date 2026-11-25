@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dismiss a failed download from its warning menu in *Downloaded*, or dismiss
+  them all at once. Songs and audio files stay in your Library.
 - **Clean up → Missing artist or album** offers Library matches for missing
   details, with **Use**, **Edit**, and **Skip** alongside a single candidate.
   An admin can enable per-track AI suggestions in Settings. Suggestions are

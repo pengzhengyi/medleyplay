@@ -420,7 +420,10 @@ describe("Settings search", () => {
     await userEvent.keyboard("{Enter}");
     const toggle = await screen.findByRole("button", { name: "Your ratings" });
     expect(location.hash).toBe("#/settings?section=ratings");
-    expect(toggle).toHaveFocus();
+    // Settings focuses the section once it has drawn it, so focus may arrive a moment later.
+    await waitFor(() => {
+      expect(toggle).toHaveFocus();
+    });
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
 

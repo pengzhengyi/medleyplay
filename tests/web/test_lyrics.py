@@ -247,6 +247,27 @@ def test_background_auto_match_requires_sign_in_and_does_not_queue_with_the_plug
     assert client.get("/api/jobs").json() == []
 
 
+def test_the_songs_view_marks_manually_saved_lyrics_selected_without_an_auto_match_job(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _song(catalog)
+    songs = f"/api/tracks/{album}/songs"
+    split = client.put(
+        songs,
+        json={"rows": [{"start_ms": 0, "title": "Intro"}, {"start_ms": 1000, "title": "Outro"}]},
+    )
+    assert split.status_code == 200, split.text
+    song = split.json()["songs"][0]["track_id"]
+
+    assert client.put(f"/api/tracks/{song}/lyrics", json={"text": MELT}).status_code == 200
+
+    (selected,) = client.get(f"{songs}/lyrics-match").json()
+    assert (selected["track_id"], selected["state"], selected["job_id"]) == (song, "selected", None)
+    assert client.delete(f"/api/tracks/{song}/lyrics").status_code == 200
+    assert client.get(f"{songs}/lyrics-match").json() == []
+
+
 def test_no_model_is_asked_while_the_ai_plugin_is_off(
     client: TestClient, catalog: CatalogService
 ) -> None:

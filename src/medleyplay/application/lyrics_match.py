@@ -47,7 +47,14 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.enrichers import LYRICS
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState, failure_shown_to
-from medleyplay.persistence.schema import JobRow, LyricsSearchRow, SegmentRow, TrackRow
+from medleyplay.domain.lyrics import LyricsOrigin
+from medleyplay.persistence.schema import (
+    JobRow,
+    LyricsSearchRow,
+    SegmentRow,
+    TrackLyricsRow,
+    TrackRow,
+)
 from medleyplay.plugin_api import MAX_NAME, LyricsProvider
 from medleyplay.programs.find_lyrics import (
     ChooseLyricsJob,
@@ -61,7 +68,9 @@ SKIPPED: Final = "match_skipped"
 CHANGED: Final = "The saved song changed. Nothing was saved."
 TRY_AGAIN: Final = "Start Auto-Match again from Songs."
 
-type MatchState = Literal["searching", "choosing", "waiting", "ready", "saved", "skipped", "failed"]
+type MatchState = Literal[
+    "searching", "choosing", "waiting", "ready", "saved", "selected", "skipped", "failed"
+]
 
 
 class MatchSongInput(MatchSong):
@@ -176,12 +185,21 @@ class LyricsMatchService:
         return MatchStatus(track_id, job.id, "searching")
 
     def status(self, viewer: Account, album: TrackId) -> tuple[MatchStatus, ...]:
-        """Read the latest Auto-Match for each song still in this album."""
+        """Read manual lyrics selections and the remaining songs' Auto-Match outcomes."""
         with self._units() as db:
             if db.get(TrackRow, album) is None:
                 message = "There is no such album."
                 raise NotFoundError(message)
             songs = songs_of(db, album)
+            selected = set(
+                db.scalars(
+                    select(TrackLyricsRow.track_id).where(
+                        TrackLyricsRow.track_id.in_(song.track_id for song in songs),
+                        TrackLyricsRow.origin == LyricsOrigin.HOUSEHOLD,
+                        ~TrackLyricsRow.dismissed,
+                    )
+                )
+            )
             ids = (
                 select(func.max(JobRow.id))
                 .where(
@@ -197,6 +215,9 @@ class LyricsMatchService:
             online = self._jobs.online()
             for song in songs:
                 track_id = TrackId(song.track_id)
+                if track_id in selected:
+                    shown.append(MatchStatus(track_id, None, "selected"))
+                    continue
                 row = latest.get(match_target(track_id))
                 if row is not None and _is_for_segment(db, row, song.id):
                     status = _status(viewer, track_id, row, online=online)

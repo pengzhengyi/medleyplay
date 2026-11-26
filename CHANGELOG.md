@@ -936,6 +936,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In Songs, manually saved lyrics show a solid border instead of the previous
+  Auto-Match result.
 - **Auto-Match lyrics** leaves picks unsaved until you select **Save** in the
   Songs editor, which keeps the ready matches for unchanged songs together.
 - The active sleep timer stays a moon icon in **Up next**. Its tooltip and menu

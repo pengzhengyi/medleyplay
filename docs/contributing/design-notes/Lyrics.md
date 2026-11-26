@@ -206,9 +206,11 @@ the household looks for the lyrics itself, by a title and artist of its own.
 - **Match feedback** stays with each saved song and returns when Songs reopens.
   An arc rotates around its Lyrics icon while searching and stays still under
   reduced motion. The icon fills partway while checking the AI pick or waiting.
-  A ready pick has a solid outline and a saved pick has a filled icon. A skipped
-  or failed match has a dashed outline. The tooltip and screen reader report
-  the state. A skip from the latest request stays visible in Songs until a
+  A ready pick has a colored outline and a saved pick has a filled icon.
+  Manually saved lyrics show a solid border around the regular icon, replacing
+  any older match status. A skipped or failed match has a dashed outline.
+  The tooltip and screen reader report the state. A skip from the latest
+  request stays visible in Songs until a
   newer Job replaces it. Now Playing and the open lyrics editor read the song's lyrics again
   after a save or reconnect. A refresh does not replace a draft in the editor.
 - **Playback lookups wait for active Auto-Match.** When it ends, a deferred
@@ -227,7 +229,7 @@ the household looks for the lyrics itself, by a title and artist of its own.
 | `GET /api/tracks/{id}/lyrics/found` | Signed in | What was last found: the title and artist asked, each song found with its site, album, length, and lyrics, an AI model's pick and why, whether either is being asked, why either failed, and whether a model may be asked |
 | `POST /api/tracks/{id}/lyrics/choose` | Signed in | Asks an AI model which song found is the song; 202, 409 with no songs found, no model set up, or the `ai-details` plugin off |
 | `POST /api/tracks/{id}/songs/lyrics-match` | Signed in | Starts Auto-Match for one or more saved rows of this album; 202 with a Job ID or a skip reason and the previous Job ID, if any, per song |
-| `GET /api/tracks/{id}/songs/lyrics-match` | Signed in | Reads the latest Auto-Match for each song still in this album; failure details show only to the requester or an admin |
+| `GET /api/tracks/{id}/songs/lyrics-match` | Signed in | Reads manual lyrics selections and the latest Auto-Match for other songs in this album; failure details show only to the requester or an admin |
 | `PUT /api/tracks/{id}/songs` | Signed in | Saves the song list and any exact ready picks named by `lyric_picks`, in one transaction; 409 if a named pick is stale |
 | `POST /api/tracks/{id}/lyrics/match/find` | Signed in | Starts only the search stage for a saved song, without automatic saving |
 | `POST /api/tracks/{id}/lyrics/match/choose` | Signed in | Requests a pick for that search if it is still current |

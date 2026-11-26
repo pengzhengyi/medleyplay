@@ -6822,6 +6822,10 @@ button.song-handle {
   border: 1px dashed currentcolor;
 }
 
+.song-lyrics[data-match="selected"] {
+  border: 1px solid currentcolor;
+}
+
 .song-lyrics[data-match="ready"] {
   border: 1px solid var(--accent);
   color: var(--accent);

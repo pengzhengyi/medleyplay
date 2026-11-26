@@ -92,6 +92,9 @@ async function renderEditor(
     silences = NO_GAPS_KNOWN,
     aiSetUp = SET_UP,
     loadLyrics = vi.fn<(id: number) => Promise<null>>(() => Promise.resolve(null)),
+    saveLyrics = vi.fn<(text: string, instrumental: boolean) => Promise<void>>(() =>
+      Promise.resolve(),
+    ),
   } = {},
 ) {
   const onClose = vi.fn();
@@ -126,7 +129,7 @@ async function renderEditor(
             lyricsOf={(id) => (
               <LyricsEditor
                 load={() => loadLyrics(id)}
-                save={() => Promise.resolve()}
+                save={saveLyrics}
                 forget={() => Promise.resolve()}
                 player={{
                   current: false,
@@ -459,6 +462,37 @@ describe("editing a file's songs", () => {
     await press(dialog, "Auto-Match lyrics");
 
     expect(await within(dialog).findByText("Go Online to auto-match lyrics.")).toHaveRole("status");
+  });
+
+  it("marks manually saved lyrics as selected instead of showing the old Auto-Match miss", async () => {
+    let saved = false;
+    serve({
+      [`GET ${MATCH_URL}`]: () => ({
+        body: [
+          saved
+            ? { track_id: 101, job_id: null, state: "selected", note: "" }
+            : { track_id: 101, job_id: 27, state: "skipped", note: "No candidates found." },
+        ],
+      }),
+    });
+    const { dialog } = await renderEditor(SPLIT, {
+      saveLyrics: vi.fn(() => {
+        saved = true;
+        return Promise.resolve();
+      }),
+    });
+    const entry = lyricsButton(dialog, "アイネクライネ");
+    await waitFor(() => expect(entry).toHaveAccessibleDescription("No candidates found."));
+
+    await press(dialog, entry);
+    const lyrics = screen.getByRole("dialog", { name: "Lyrics" });
+    await within(lyrics).findByText("None yet");
+    await userEvent.type(box(lyrics, "Lyrics, as LRC or plain text"), "Our choice");
+    await press(lyrics, "Save lyrics");
+
+    await waitFor(() => expect(entry).toHaveAccessibleDescription("Lyrics selected."));
+    expect(entry).toHaveAttribute("data-match", "selected");
+    expect(within(dialog).queryByText(/lyric picks? ready to save/u)).toBeNull();
   });
 
   it("opens the moved song's lyrics without saving or losing the list draft", async () => {

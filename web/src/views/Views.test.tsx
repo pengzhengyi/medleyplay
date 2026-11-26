@@ -447,7 +447,9 @@ describe("Settings search", () => {
       await userEvent.click(screen.getByRole("combobox", { name: "Search" }));
       await userEvent.paste("settings: 评分");
       await userEvent.click(screen.getByRole("option", { name: "我的评分" }));
-      await waitFor(() => expect(screen.getByRole("button", { name: "我的评分" })).toHaveFocus());
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "我的评分" })).toHaveFocus();
+      });
       expect(location.hash).toBe("#/settings?section=ratings");
     } finally {
       await userEvent.selectOptions(await screen.findByLabelText("语言"), "auto");
@@ -964,7 +966,9 @@ describe("search", () => {
     expect(within(row).getByText("Not a video.")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Choose parts" })).not.toBeInTheDocument();
     await userEvent.click(within(row).getByRole("button", { name: "Dismiss" }));
-    await waitFor(() => expect(screen.queryByText("Video B")).not.toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.queryByText("Video B")).not.toBeInTheDocument();
+    });
     expect(screen.getByText("Video A")).toBeVisible();
     expect(calls).toContain("DELETE /api/links/lookups/8");
   });

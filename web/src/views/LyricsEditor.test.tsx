@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Lyrics } from "../api";
 import type { ComponentProps } from "react";
-import { lyricsFoundOf, lyricsOf, lyricsOptionOf, serve } from "../testing/server";
+import { lyricsFoundOf, lyricsOf, lyricsOptionOf, serve, trackOf } from "../testing/server";
 import { LyricsEditor, type SyncPlayer } from "./LyricsEditor";
 import { SongsControlsContext } from "./songsControls";
 
@@ -32,7 +32,7 @@ function playingAt(seconds: number, change: Partial<SyncPlayer> = {}): SyncPlaye
 function editing(
   lyrics: Lyrics | null,
   player: SyncPlayer = playingAt(0),
-  song?: { readonly id: number; readonly title: string; readonly artist: string },
+  song?: ComponentProps<typeof LyricsEditor>["song"],
 ) {
   const save = vi.fn<(text: string, instrumental: boolean) => Promise<unknown>>(() =>
     Promise.resolve(undefined),
@@ -238,7 +238,7 @@ describe("finding lyrics", () => {
 
   it("takes the lyrics of a song found into the text, saying where from, to save", async () => {
     serve({ "GET /api/tracks/7/lyrics/found": { body: lyricsFoundOf() } });
-    const { save, region } = editing(null, playingAt(0), { id: 7, title: "Melt", artist: "ryo" });
+    const { save, region } = editing(null, playingAt(0), trackOf(7, "Melt", { artist: "ryo" }));
 
     await userEvent.click(await within(region()).findByRole("button", { name: "Find" }));
     const found = await screen.findByRole("listitem", { name: /^Melt/ });

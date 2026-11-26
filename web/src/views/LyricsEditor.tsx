@@ -24,7 +24,7 @@ import type { Lyrics, LyricsOption, LyricsOrigin } from "../api";
 import { formatTime } from "../format";
 import { LYRICS_SITE_NAMES } from "../lyrics";
 import { type SyncLine, linesOf, lrcOf, lrcTime, nudged, shifted, stamped } from "../lrc";
-import { LyricsFinder } from "./LyricsFinder";
+import { LyricsFinder, type LyricsSearchSong } from "./LyricsFinder";
 import { SongsControlsContext } from "./songsControls";
 
 /** How far a line, or every line, moves at a press, in milliseconds. */
@@ -75,8 +75,7 @@ export function LyricsEditor({
   readonly save: (text: string, instrumental: boolean) => Promise<unknown>;
   readonly forget: () => Promise<unknown>;
   readonly player: SyncPlayer;
-  readonly song?:
-    { readonly id: number; readonly title: string; readonly artist: string } | undefined;
+  readonly song?: LyricsSearchSong | undefined;
   readonly refreshVersion?: string;
 }) {
   const controls = useContext(SongsControlsContext);
@@ -232,9 +231,7 @@ export function LyricsEditor({
       </div>
       {mode === "find" && song !== undefined ? (
         <LyricsFinder
-          trackId={song.id}
-          title={song.title}
-          artist={song.artist}
+          song={song}
           busy={busy}
           onUse={(option) => {
             edited.current = true;

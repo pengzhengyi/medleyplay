@@ -257,7 +257,7 @@ export function Library({
             refreshVersion={library.lyricsVersion(track.id)}
             save={(text, instrumental) => edited(api.setLyrics(track.id, text, instrumental))}
             forget={() => edited(api.forgetLyrics(track.id))}
-            song={{ id: track.id, title: track.title, artist: track.artist }}
+            song={track}
             player={{
               current,
               playing: current && player.status.kind === "playing",

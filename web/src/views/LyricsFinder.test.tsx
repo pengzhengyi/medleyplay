@@ -2,8 +2,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { LyricsFound } from "../api";
-import { lyricsFoundOf, lyricsOptionOf, serve } from "../testing/server";
+import type { LyricsFound, Track } from "../api";
+import { lyricsFoundOf, lyricsOptionOf, serve, trackOf } from "../testing/server";
 import { LyricsFinder } from "./LyricsFinder";
 
 afterEach(() => {
@@ -28,7 +28,11 @@ const PICKED_LIVE = {
 };
 
 /** The finder of song 7's lyrics, *Melt* by ryo, the server answering `found` and `asked`. */
-function finding(found: LyricsFound | (() => LyricsFound), asked: unknown[] = []) {
+function finding(
+  found: LyricsFound | (() => LyricsFound),
+  asked: unknown[] = [],
+  details: Partial<Track> = {},
+) {
   const served = serve({
     "GET /api/tracks/7/lyrics/found": () => ({
       body: typeof found === "function" ? found() : found,
@@ -40,7 +44,8 @@ function finding(found: LyricsFound | (() => LyricsFound), asked: unknown[] = []
     "POST /api/tracks/7/lyrics/choose": { status: 202, body: null },
   });
   const onUse = vi.fn();
-  render(<LyricsFinder trackId={7} title="【MV】Melt" artist="初音ミク" onUse={onUse} />);
+  const song = trackOf(7, "【MV】Melt", { artist: "初音ミク", ...details });
+  render(<LyricsFinder song={song} onUse={onUse} />);
   return { ...served, onUse };
 }
 
@@ -97,6 +102,40 @@ describe("finding a song's lyrics", () => {
     expect(melt).toHaveTextContent("朝目が覚めて 真っ先に思い浮かぶ");
     expect(melt).not.toHaveTextContent("君の顔");
     expect(live).toHaveTextContent(/NetEase Cloud Music.*Instrumental/u);
+  });
+
+  it("keeps the library song's album and length as a reference when the search changes", async () => {
+    const asked: unknown[] = [];
+    finding(lyricsFoundOf(), asked, { album: "Library Edition", duration_ms: 277_000 });
+    const title = screen.getByRole("textbox", { name: "Title" });
+    const candidate = await screen.findByRole("listitem", { name: /^Melt/ });
+
+    await userEvent.clear(title);
+    await userEvent.type(title, "Melt live");
+    await userEvent.click(screen.getByRole("button", { name: "Find" }));
+
+    expect(asked).toEqual([{ title: "Melt live", artist: "ryo" }]);
+    expect(screen.getByText("Your song")).toBeVisible();
+    expect(screen.getByText("Album: Library Edition")).toBeVisible();
+    expect(screen.getByText("Length: 4:37")).toBeVisible();
+    expect(candidate).toHaveTextContent(/Re:Start.*4:20/u);
+  });
+
+  it("shows the known library detail without a placeholder for the missing one", async () => {
+    finding(lyricsFoundOf(), [], { album: "", duration_ms: 277_000 });
+
+    await screen.findByRole("listitem", { name: /^Melt/ });
+
+    expect(screen.getByText("Length: 4:37")).toBeVisible();
+    expect(screen.queryByText(/^Album:/u)).not.toBeInTheDocument();
+  });
+
+  it("leaves out the library reference when neither detail is known", async () => {
+    finding(lyricsFoundOf(), [], { album: "", duration_ms: null });
+
+    await screen.findByRole("listitem", { name: /^Melt/ });
+
+    expect(screen.queryByText("Your song")).not.toBeInTheDocument();
   });
 
   it("looks again by the words typed", async () => {

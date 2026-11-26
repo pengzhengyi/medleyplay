@@ -6,7 +6,7 @@ import { api, type LyricsMatch, type SongRowIn, type Songs, type SplitSong } fro
 import { useWords } from "../locale";
 
 export interface LyricsMatchStatus {
-  readonly state: "searching" | "working" | "ready" | "saved" | "not-matched";
+  readonly state: "searching" | "working" | "ready" | "saved" | "selected" | "not-matched";
   readonly note: string;
   readonly choiceJobId?: number | null;
 }
@@ -27,6 +27,8 @@ function feedback(match: LyricsMatch, t: ReturnType<typeof useWords>): LyricsMat
       };
     case "saved":
       return { state: "saved", note: t("Saved lyrics.") };
+    case "selected":
+      return { state: "selected", note: t("Lyrics selected.") };
     case "skipped":
       return { state: "not-matched", note: t(match.note || "No clear match.") };
     case "failed":
@@ -62,12 +64,16 @@ function afterRead(
   prior: ReadonlyMap<number, LyricsMatch>,
   read: readonly LyricsMatch[],
 ): ReadonlyMap<number, LyricsMatch> {
-  const next = new Map([...prior].filter(([, match]) => match.job_id === null));
+  const next = new Map(
+    [...prior].filter(([, match]) => match.job_id === null && match.state !== "selected"),
+  );
   for (const match of read) {
     const known = prior.get(match.track_id);
     const id = match.job_id ?? 0;
     const older =
+      match.state !== "selected" &&
       known !== undefined &&
+      known.state !== "selected" &&
       (known.job_id === null ? id <= (known.previous_job_id ?? 0) : id < known.job_id);
     next.set(match.track_id, older ? known : match);
   }
@@ -81,6 +87,7 @@ function afterSubmission(
   const next = new Map(prior);
   for (const match of started) {
     const known = next.get(match.track_id);
+    if (known?.state === "selected" && match.state === "skipped") continue;
     const id = match.job_id ?? match.previous_job_id ?? 0;
     if ((known?.job_id ?? 0) <= id) next.set(match.track_id, match);
   }

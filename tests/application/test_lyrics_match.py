@@ -159,6 +159,21 @@ def test_songs_save_confirms_two_ready_picks_even_without_available_providers(
         assert (kept.origin.value, kept.text) == ("lrclib", lyrics_of(title))
 
 
+def test_manually_saved_lyrics_take_precedence_over_an_old_no_match(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    album, (_, nowhere, _) = _album(enriching, alice, songs)
+    enriching.lyrics_match.start(alice, album, [nowhere])
+    enriching.finish_every_job()
+    (missed,) = enriching.lyrics_match.status(alice, album)
+    assert missed.state == "skipped"
+
+    enriching.lyrics.set_own(missed.track_id, "The household's pick")
+
+    (shown,) = enriching.lyrics_match.status(alice, album)
+    assert (shown.state, shown.job_id, shown.choice_job_id) == ("selected", None, None)
+
+
 def test_songs_save_does_not_erase_a_concurrent_retime_to_confirm_a_pick(
     enriching: Enriching, alice: Account, songs: SongsService
 ) -> None:

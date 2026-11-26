@@ -248,6 +248,6 @@ def start_background_match(
 def background_match_status(
     track_id: RowId, me: SignedInAccount, service: LyricsMatchDep, response: Response
 ) -> tuple[MatchStatus, ...]:
-    """Return the latest Auto-Match outcomes for the album's saved songs."""
+    """Return the album's manual lyrics selections and Auto-Match outcomes."""
     response.headers["Cache-Control"] = "private, no-store"
     return service.status(me, TrackId(track_id))

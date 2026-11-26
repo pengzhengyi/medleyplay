@@ -390,12 +390,13 @@ export interface JobEvent {
   readonly failure_message?: string;
 }
 
-/** A saved song's outcome from Auto-Match, or why no Job was started. */
+/** A saved song's manual lyrics selection or Auto-Match outcome. */
 export interface LyricsMatch {
   readonly track_id: number;
   readonly job_id: number | null;
   readonly previous_job_id?: number | null;
-  readonly state: "searching" | "choosing" | "waiting" | "ready" | "saved" | "skipped" | "failed";
+  readonly state:
+    "searching" | "choosing" | "waiting" | "ready" | "saved" | "selected" | "skipped" | "failed";
   readonly choice_job_id?: number | null;
   readonly note: string;
 }

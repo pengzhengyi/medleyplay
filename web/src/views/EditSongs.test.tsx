@@ -245,7 +245,9 @@ describe("editing a file's songs", () => {
     expect(await within(dialog).findByText(/may make.*AI calls/i)).toBeVisible();
     expect(calls).not.toContain(`POST ${MATCH_URL}`);
     await press(dialog, "Start matching");
-    await waitFor(() => expect(matched).toHaveAccessibleDescription("Searching lyrics sites…"));
+    await waitFor(() => {
+      expect(matched).toHaveAccessibleDescription("Searching lyrics sites…");
+    });
     expect(matched).toHaveAttribute("data-match", "searching");
     expect(matched).toBeEnabled();
     expect(existing).toHaveAccessibleDescription("Already has lyrics");
@@ -255,11 +257,11 @@ describe("editing a file's songs", () => {
     finished = true;
     const { dialog: reopened } = await renderEditor();
 
-    await waitFor(() =>
+    await waitFor(() => {
       expect(lyricsButton(reopened, "ゴーゴー幽霊船")).toHaveAccessibleDescription(
         "Lyrics ready to save.",
-      ),
-    );
+      );
+    });
     const announcement = within(reopened)
       .getAllByRole("status")
       .find((status) => status.textContent.includes("Lyrics ready to save."));
@@ -338,12 +340,16 @@ describe("editing a file's songs", () => {
     serve({ [`GET ${MATCH_URL}`]: () => ({ body: [current] }) });
     const { dialog, readMatchesAgain } = await renderEditor();
     const song = lyricsButton(dialog, "アイネクライネ");
-    await waitFor(() => expect(song).toHaveAttribute("data-match", "searching"));
+    await waitFor(() => {
+      expect(song).toHaveAttribute("data-match", "searching");
+    });
 
     current = { ...searching, job_id: 28, state: "choosing" };
     readMatchesAgain();
 
-    await waitFor(() => expect(song).toHaveAccessibleDescription("Checking the AI pick…"));
+    await waitFor(() => {
+      expect(song).toHaveAccessibleDescription("Checking the AI pick…");
+    });
     expect(song).not.toHaveAttribute("data-match", "searching");
   });
 
@@ -380,11 +386,11 @@ describe("editing a file's songs", () => {
     finished = true;
     find.give(undefined);
 
-    await waitFor(() =>
+    await waitFor(() => {
       expect(lyricsButton(dialog, "アイネクライネ")).toHaveAccessibleDescription(
         "No candidates found.",
-      ),
-    );
+      );
+    });
     expect(within(dialog).queryByRole("button", { name: "Start matching" })).toBeNull();
     expect(calls.filter((call) => call === "GET /api/me/preferences")).toHaveLength(1);
     expect(calls.filter((call) => call === search)).toHaveLength(1);
@@ -403,11 +409,11 @@ describe("editing a file's songs", () => {
     const { dialog } = await renderEditor();
     await press(dialog, "Auto-Match lyrics");
 
-    await waitFor(() =>
+    await waitFor(() => {
       expect(lyricsButton(dialog, "アイネクライネ")).toHaveAccessibleDescription(
         "Skipped: song changed.",
-      ),
-    );
+      );
+    });
     expect(calls.filter((call) => call.startsWith("POST "))).toEqual([`POST ${MATCH_URL}`]);
   });
 
@@ -432,7 +438,9 @@ describe("editing a file's songs", () => {
     });
     const { dialog, readMatchesAgain } = await renderEditor();
     const song = lyricsButton(dialog, "アイネクライネ");
-    await waitFor(() => expect(song).toHaveAccessibleDescription("Saved lyrics."));
+    await waitFor(() => {
+      expect(song).toHaveAccessibleDescription("Saved lyrics.");
+    });
 
     await press(dialog, "Auto-Match lyrics");
 
@@ -445,7 +453,9 @@ describe("editing a file's songs", () => {
     expect(song).toHaveAccessibleDescription("Already has lyrics");
     current = { ...saved, job_id: 28, state: "searching" };
     readMatchesAgain();
-    await waitFor(() => expect(song).toHaveAccessibleDescription("Searching lyrics sites…"));
+    await waitFor(() => {
+      expect(song).toHaveAccessibleDescription("Searching lyrics sites…");
+    });
   });
 
   it("explains next to Auto-Match when the server refuses to start", async () => {

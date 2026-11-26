@@ -1,5 +1,5 @@
 import { EditorView } from "@codemirror/view";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -59,10 +59,13 @@ describe("typing a song list", () => {
     });
     await screen.findByText("2 songs");
 
-    expect(onListed).toHaveBeenLastCalledWith([
-      { start_ms: 0, title: "Intro", artist: "" },
-      { start_ms: 192_000, title: "Night Drive", artist: "" },
-    ]);
+    // The editor tells its parent after it shows the count, so the call may come a moment later.
+    await waitFor(() => {
+      expect(onListed).toHaveBeenLastCalledWith([
+        { start_ms: 0, title: "Intro", artist: "" },
+        { start_ms: 192_000, title: "Night Drive", artist: "" },
+      ]);
+    });
   });
 
   it("moves to a problem's line when it is chosen", async () => {

@@ -143,12 +143,13 @@ test("with no lyrics, Now Playing says so level with the player, mirroring the c
 
 /** Return where `element` is once it stops moving, as Now Playing does while it opens. */
 async function stillBox(element: Locator) {
-  let last = await element.boundingBox();
+  // The first read has nothing to compare with, so two reads in one frame can't pass as still.
+  let last: Awaited<ReturnType<Locator["boundingBox"]>> | undefined;
   await expect
     .poll(
       async () => {
         const now = await element.boundingBox();
-        const still = now?.x === last?.x && now?.y === last?.y;
+        const still = last !== undefined && now?.x === last?.x && now?.y === last?.y;
         last = now;
         return still;
       },

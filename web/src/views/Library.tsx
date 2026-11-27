@@ -813,7 +813,7 @@ export function Library({
           <LibrarySkeleton />
         )}
       </main>
-      <QueuePanel player={player} sleep={sleep} tracks={byId} />
+      <QueuePanel player={player} sleep={sleep} tracks={byId} showFoldAll />
       <PlayerBar
         player={player}
         track={playing}

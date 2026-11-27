@@ -4242,9 +4242,18 @@ button.icon.heart.on:hover,
 
 .queue header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.25rem;
   padding: 0 0.5rem 0.5rem;
+}
+
+.queue-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-inline-start: auto;
 }
 
 .queue header .sleep-timer {
@@ -4413,6 +4422,7 @@ button.icon.heart.on:hover,
 /* Up next and History head the panel as two tabs; the one shown is raised. */
 .queue-tabs {
   display: flex;
+  flex: none;
   gap: 0.15rem;
 }
 
@@ -4425,6 +4435,7 @@ button.icon.heart.on:hover,
   color: var(--muted);
   font-size: 1rem;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .queue-tabs [role="tab"][aria-selected="true"] {

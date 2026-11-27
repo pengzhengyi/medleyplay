@@ -7953,6 +7953,26 @@ kbd {
   height: 100%;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .np-backdrop:where(:has(> .np-dynamics-slow)) > img {
+    animation: np-cover-drift 18s ease-in-out infinite alternate;
+  }
+}
+
+.np-backdrop:where(:has(> .np-dynamics-slow[data-paused="true"])) > img {
+  animation-play-state: paused;
+}
+
+@keyframes np-cover-drift {
+  from {
+    transform: rotate(-3deg) scale(1.1);
+  }
+
+  to {
+    transform: rotate(3deg) scale(1.18);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .np-dynamics {
     transition: none;

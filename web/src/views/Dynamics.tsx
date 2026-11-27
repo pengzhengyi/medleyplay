@@ -13,6 +13,13 @@ import type { Running } from "./dynamics/renderer";
 
 const LESS_MOTION = "(prefers-reduced-motion: reduce)";
 
+function watchVisibility(changed: () => void): () => void {
+  document.addEventListener("visibilitychange", changed);
+  return () => {
+    document.removeEventListener("visibilitychange", changed);
+  };
+}
+
 /** The query for less motion, or `undefined` where a browser can't be asked. */
 const lessMotion = () =>
   typeof window.matchMedia === "function" ? window.matchMedia(LESS_MOTION) : undefined;
@@ -35,9 +42,13 @@ function useLessMotion(): boolean {
 export function Dynamics({ cover }: { readonly cover: string | null }) {
   const [effect] = useDynamics();
   const still = useLessMotion();
+  const hidden = useSyncExternalStore(watchVisibility, () => document.hidden);
   const host = useRef<HTMLDivElement>(null);
   const running = useRef<Running | undefined>(undefined);
   const [drawn, setDrawn] = useState(false);
+  const [slowEffect, setSlowEffect] = useState<typeof effect>();
+  const fallback = slowEffect === effect;
+  if (slowEffect !== undefined && !fallback) setSlowEffect(undefined);
   const showCurrent = useEffectEvent((started: Running) => {
     started.show(cover);
   });
@@ -45,7 +56,12 @@ export function Dynamics({ cover }: { readonly cover: string | null }) {
   useEffect(() => {
     const where = host.current;
     // A browser without WebGL 2 never loads the renderer; the still blur shows.
-    if (effect === "off" || where === null || typeof WebGL2RenderingContext === "undefined") {
+    if (
+      effect === "off" ||
+      where === null ||
+      fallback ||
+      typeof WebGL2RenderingContext === "undefined"
+    ) {
       return;
     }
     let stopped = false;
@@ -54,7 +70,19 @@ export function Dynamics({ cover }: { readonly cover: string | null }) {
         return;
       }
       try {
-        running.current = run(where, effect, { still, onDrawn: setDrawn });
+        running.current = run(where, effect, {
+          still,
+          onDrawn: (drawn) => {
+            if (!stopped) setDrawn(drawn);
+          },
+          onSlow: () => {
+            if (stopped) return;
+            stopped = true;
+            running.current?.stop();
+            running.current = undefined;
+            setSlowEffect(effect);
+          },
+        });
         showCurrent(running.current);
       } catch {
         // Without WebGL 2 the still blur of the cover shows, as with no effect chosen.
@@ -66,7 +94,7 @@ export function Dynamics({ cover }: { readonly cover: string | null }) {
       running.current = undefined;
       setDrawn(false);
     };
-  }, [effect, still]);
+  }, [effect, still, fallback]);
 
   useEffect(() => {
     running.current?.show(cover);
@@ -75,7 +103,14 @@ export function Dynamics({ cover }: { readonly cover: string | null }) {
   return (
     <div
       ref={host}
-      className={drawn ? "np-dynamics np-dynamics-drawn" : "np-dynamics"}
+      className={
+        fallback && !still && cover !== null
+          ? "np-dynamics np-dynamics-slow"
+          : drawn && !fallback
+            ? "np-dynamics np-dynamics-drawn"
+            : "np-dynamics"
+      }
+      data-paused={fallback && hidden ? "true" : undefined}
       data-effect={effect}
       aria-hidden
     />

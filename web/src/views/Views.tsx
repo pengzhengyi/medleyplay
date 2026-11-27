@@ -111,6 +111,7 @@ export interface ViewProps {
   readonly waitingDevices: readonly WaitingDevice[];
   /** The Downloads under way, oldest first; none, unless given. */
   readonly downloading?: readonly DownloadUnderWay[];
+  readonly cancelDownload: (jobId: number) => Promise<void>;
   readonly dismissFailedDownloads?: (ids: readonly number[]) => Promise<void>;
   readonly videoLookups?: ReactNode;
   /** The station playing, and a way to start one. */
@@ -449,7 +450,13 @@ function viewOf(
             <>
               <StorageFolderLocation />
               {given.videoLookups}
-              <Downloading downloads={given.downloading ?? []} tracks={given.tracks} />
+              <Downloading
+                downloads={given.downloading ?? []}
+                tracks={given.tracks}
+                admin={given.admin}
+                accountId={given.accountId}
+                cancelDownload={given.cancelDownload}
+              />
               {dismiss !== undefined && <DismissFailedDownloads tracks={shown} dismiss={dismiss} />}
             </>
           }

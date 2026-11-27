@@ -120,7 +120,7 @@ export function useHistory(shown: boolean): History {
       },
       (error: unknown) => {
         setShownLength(was);
-        setLengthFailure(`The length wasn't saved: ${messageOf(error)}`);
+        setLengthFailure(messageOf(error));
       },
     );
   };

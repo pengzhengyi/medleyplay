@@ -102,17 +102,13 @@ function shortMinutes(minutes: number, t?: Words): string {
 }
 
 const dayOptions = { month: "short", day: "numeric" } as const;
-const day = new Intl.DateTimeFormat(undefined, dayOptions);
+const day = dateFormatOf(dayOptions);
 
 /**
  * Write how long ago something was seen, `now` being the time to count from:
  * `Just now`, `5 min ago`, `3 hr ago`, or its day, such as `Nov 7`.
  */
-export function formatSeen(
-  at: number,
-  now: number,
-  presentation?: { readonly locale: string; readonly t: Words },
-): string {
+export function formatSeen(at: number, now: number, presentation?: Presentation): string {
   const minutes = Math.floor((now - at) / 60_000);
   if (minutes < 1) {
     return presentation?.t("Just now") ?? "Just now";
@@ -124,18 +120,33 @@ export function formatSeen(
   if (hours < 24) {
     return presentation?.t("{{hours}} hr ago", { hours }) ?? `${String(hours)} hr ago`;
   }
-  const formatter =
-    presentation === undefined ? day : new Intl.DateTimeFormat(presentation.locale, dayOptions);
-  return formatter.format(at);
+  return day(presentation?.locale).format(at);
 }
 
-const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
-const dayAndClock = new Intl.DateTimeFormat(undefined, {
+const clockOptions = { timeStyle: "short" } as const;
+const dayAndClockOptions = {
   weekday: "short",
   hour: "numeric",
   minute: "2-digit",
-});
+} as const;
+const clock = dateFormatOf(clockOptions);
+const dayAndClock = dateFormatOf(dayAndClockOptions);
 const WEEK_MS = 7 * 24 * 3_600_000;
+interface Presentation {
+  readonly locale: string;
+  readonly t: Words;
+}
+
+function dateFormatOf(options: Intl.DateTimeFormatOptions) {
+  const byLocale = new Map<string | undefined, Intl.DateTimeFormat>();
+  return (locale: string | undefined): Intl.DateTimeFormat => {
+    const existing = byLocale.get(locale);
+    if (existing !== undefined) return existing;
+    const format = new Intl.DateTimeFormat(locale, options);
+    byLocale.set(locale, format);
+    return format;
+  };
+}
 
 /**
  * Write what is queued and, given `ending`, when it ends: the time on the clock,
@@ -144,16 +155,23 @@ const WEEK_MS = 7 * 24 * 3_600_000;
  */
 export function formatQueueLength(
   count: number,
-  durationMs: number,
+  durationMs: number | undefined,
   ending?: { readonly now: Date; readonly at: Date },
+  presentation?: Presentation,
 ): string {
-  const length = formatLength(count, durationMs);
+  const t = presentation?.t;
+  if (durationMs === undefined) return formatLength(count, 0, t);
+  const length = formatLength(count, durationMs, t);
   if (ending === undefined || ending.at.getTime() - ending.now.getTime() >= WEEK_MS) {
     return length;
   }
   const { now, at } = ending;
   const today = at.toDateString() === now.toDateString();
-  return `${length}, ending around ${(today ? clock : dayAndClock).format(at)}`;
+  const time = (today ? clock : dayAndClock)(presentation?.locale).format(at);
+  return (
+    t?.("{{length}}, ending around {{time}}", { length, time }) ??
+    `${length}, ending around ${time}`
+  );
 }
 
 /**
@@ -161,25 +179,31 @@ export function formatQueueLength(
  * `12 min ago`, the time today, `Yesterday 9:14 PM`, `Mon 9:14 PM` within the
  * week, then the day, such as `Oct 25`.
  */
-export function formatPlayed(at: number, now: number): string {
+export function formatPlayed(at: number, now: number, presentation?: Presentation): string {
+  const t = presentation?.t;
   const minutes = Math.floor((now - at) / 60_000);
   if (minutes < 1) {
-    return "Just now";
+    return t?.("Just now") ?? "Just now";
   }
   if (minutes < 60) {
-    return `${String(minutes)} min ago`;
+    return t?.("{{minutes}} min ago", { minutes }) ?? `${String(minutes)} min ago`;
   }
   const played = new Date(at);
   const today = new Date(now);
   const yesterday = new Date(now);
   yesterday.setDate(today.getDate() - 1);
-  if (played.toDateString() === today.toDateString()) {
-    return clock.format(at);
+  if (
+    played.toDateString() === today.toDateString() ||
+    played.toDateString() === yesterday.toDateString()
+  ) {
+    const time = clock(presentation?.locale).format(at);
+    return played.toDateString() === today.toDateString()
+      ? time
+      : (t?.("Yesterday {{time}}", { time }) ?? `Yesterday ${time}`);
   }
-  if (played.toDateString() === yesterday.toDateString()) {
-    return `Yesterday ${clock.format(at)}`;
-  }
-  return now - at < WEEK_MS - 24 * 3_600_000 ? dayAndClock.format(at) : day.format(at);
+  const thisWeek = now - at < WEEK_MS - 24 * 3_600_000;
+  const format = (thisWeek ? dayAndClock : day)(presentation?.locale);
+  return format.format(at);
 }
 
 const UNITS = ["bytes", "KB", "MB", "GB", "TB"] as const;

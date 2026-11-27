@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { type Routes, serve, signedIn, trackOf } from "../testing/server";
+import { type Routes, lyricsOf, serve, signedIn, trackOf } from "../testing/server";
 import { LanguageSelect } from "./LanguageSelect";
 
 afterEach(() => {
@@ -55,6 +55,48 @@ async function runOutTheQueue(nowPlaying: HTMLElement) {
 }
 
 describe("Now Playing", () => {
+  it("keeps a dismissed suggestion gone when the follow-up lyrics read fails", async () => {
+    const suggestion = lyricsOf({ origin: "suggested" });
+    let dismissed = false;
+    const { calls } = await playingIntro({
+      "GET /api/tracks/1/lyrics": () =>
+        dismissed ? { status: 503, body: { detail: "Try again later." } } : { body: suggestion },
+      "DELETE /api/tracks/1/lyrics/suggestion": () => {
+        dismissed = true;
+        return { body: null };
+      },
+    });
+    const dialog = within(await openNowPlaying());
+    const bar = within(await dialog.findByRole("group", { name: "Lyrics suggested" }));
+
+    await userEvent.click(bar.getByRole("button", { name: "Dismiss" }));
+
+    await waitFor(() => {
+      expect(calls.filter((call) => call === "GET /api/tracks/1/lyrics")).toHaveLength(2);
+    });
+    expect(await dialog.findByText("No lyrics for this song.")).toBeVisible();
+    expect(dialog.queryByRole("group", { name: "Lyrics suggested" })).not.toBeInTheDocument();
+  });
+
+  it("says lyrics could not load instead of saying the song has none", async () => {
+    await playingIntro({
+      "GET /api/tracks/1/lyrics": { status: 503, body: { detail: "Try again later." } },
+    });
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const dialog = within(await openNowPlaying());
+    expect(await dialog.findByText("Could not load lyrics.")).toBeVisible();
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(dialog.getByText("无法加载歌词。")).toBeVisible();
+      expect(dialog.queryByText("这首歌暂无歌词。")).not.toBeInTheDocument();
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
   it("uses the same song for the favorite heart and shortcut when a split album plays whole", async () => {
     const album = trackOf(10, "Whole album", { kind: "album", split: true });
     const first = trackOf(11, "First song", {

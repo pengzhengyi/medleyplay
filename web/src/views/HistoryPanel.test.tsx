@@ -179,7 +179,7 @@ describe("History", () => {
 
     const panel = await openHistory();
 
-    expect(within(panel).getByRole("combobox", { name: /Keeps the last/u })).toHaveValue("100");
+    expect(within(panel).getByRole("combobox", { name: /Show the latest/u })).toHaveValue("100");
     expect(calls).toContain("GET /api/plays?limit=100");
   });
 
@@ -188,7 +188,7 @@ describe("History", () => {
     const panel = await openHistory();
 
     await userEvent.selectOptions(
-      within(panel).getByRole("combobox", { name: /Keeps the last/u }),
+      within(panel).getByRole("combobox", { name: /Show the latest/u }),
       "25",
     );
 

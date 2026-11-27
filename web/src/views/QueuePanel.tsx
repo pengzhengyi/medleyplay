@@ -40,7 +40,7 @@ import { type KeyboardEvent, useMemo, useState } from "react";
 import type { Track } from "../api";
 import { formatQueueLength } from "../format";
 import { songsByFile } from "../library/playOrder";
-import { useWords } from "../locale";
+import { type Words, useFormattingLocale, useWords } from "../locale";
 import { type Entry, upNext } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { useHistory } from "../player/useHistory";
@@ -53,10 +53,6 @@ import { KindMark } from "./KindMark";
 import { SleepTimerMenu } from "./SleepTimerMenu";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
-const INSTRUCTIONS = {
-  draggable:
-    "To reorder, press Space to pick the Track up, the arrow keys to move it, and Space again to drop it. Escape puts it back.",
-};
 
 type Tab = "queue" | "history";
 const TABS: readonly (readonly [Tab, string])[] = [
@@ -84,6 +80,7 @@ export function QueuePanel({
   readonly showFoldAll?: boolean;
 }) {
   const words = useWords();
+  const locale = useFormattingLocale();
   const [tab, setTab] = useState<Tab>("queue");
   const history = useHistory(tab === "history");
   // Whether History's Clear is asking once more.
@@ -107,31 +104,44 @@ export function QueuePanel({
   );
   const titleOf = (entry: Entry | undefined) =>
     entry === undefined
-      ? "A Track"
-      : (tracks.get(entry.trackId)?.title ?? "A Track no longer here");
+      ? words("A Track")
+      : (tracks.get(entry.trackId)?.title ?? words("A Track no longer here"));
   const placeOf = (id: UniqueIdentifier | undefined) =>
     entries.findIndex((entry) => entry.key === id);
   const announcements: Announcements = {
-    onDragStart: ({ active }) => `Picked up ${titleOf(entries[placeOf(active.id)])}.`,
+    onDragStart: ({ active }) =>
+      words("Picked up {{title}}.", { title: titleOf(entries[placeOf(active.id)]) }),
     // Over its own place, it hasn't moved yet: "Picked up" stays the last word.
     onDragOver: ({ active, over }) =>
       over === null || over.id === active.id
         ? undefined
-        : `${titleOf(entries[placeOf(active.id)])} would play ${ordinal(placeOf(over.id))}.`,
+        : words("{{title}} would play {{place}}.", {
+            title: titleOf(entries[placeOf(active.id)]),
+            place: ordinal(placeOf(over.id), words),
+          }),
     onDragEnd: ({ active, over }) =>
-      `${titleOf(entries[placeOf(active.id)])} plays ${ordinal(placeOf(over?.id ?? active.id))}.`,
-    onDragCancel: ({ active }) => `${titleOf(entries[placeOf(active.id)])} stays where it was.`,
+      words("{{title}} plays {{place}}.", {
+        title: titleOf(entries[placeOf(active.id)]),
+        place: ordinal(placeOf(over?.id ?? active.id), words),
+      }),
+    onDragCancel: ({ active }) =>
+      words("{{title}} stays where it was.", { title: titleOf(entries[placeOf(active.id)]) }),
   };
 
-  const lengthMs = entries.reduce(
-    (sum, entry) => sum + (tracks.get(entry.trackId)?.duration_ms ?? 0),
-    0,
-  );
+  const durations = entries.map((entry) => tracks.get(entry.trackId)?.duration_ms);
+  const lengthMs = durations.every((duration) => typeof duration === "number")
+    ? durations.reduce((sum, duration) => sum + duration, 0)
+    : undefined;
   // Only a queue playing on to its end ends at a time on the clock.
-  const leftMs = lengthMs + Math.max(0, (player.duration ?? 0) - player.position) * 1000;
   const ending =
-    player.status.kind === "playing" && player.repeat === "off"
-      ? { now: new Date(now), at: new Date(now + leftMs) }
+    player.status.kind === "playing" &&
+    player.repeat === "off" &&
+    lengthMs !== undefined &&
+    player.duration !== undefined
+      ? {
+          now: new Date(now),
+          at: new Date(now + lengthMs + Math.max(0, player.duration - player.position) * 1000),
+        }
       : undefined;
 
   const drop = ({ active, over }: DragEndEvent) => {
@@ -141,9 +151,9 @@ export function QueuePanel({
   };
 
   return (
-    <section id={id} className="queue" aria-label="Up next">
+    <section id={id} className="queue" aria-label={words("Up next")}>
       <header>
-        <div className="queue-tabs" role="tablist" aria-label="Up next or History">
+        <div className="queue-tabs" role="tablist" aria-label={words("Up next or History")}>
           {TABS.map(([each, name]) => (
             <button
               key={each}
@@ -165,7 +175,7 @@ export function QueuePanel({
                 }
               }}
             >
-              {name}
+              {words(name)}
             </button>
           ))}
         </div>
@@ -197,7 +207,7 @@ export function QueuePanel({
               onClick={player.clear}
               disabled={entries.length === 0}
             >
-              Clear
+              {words("Clear")}
             </button>
           </>
         ) : (
@@ -224,10 +234,14 @@ export function QueuePanel({
       ) : (
         <div role="tabpanel" id={`${id}-queue`} aria-labelledby={`${id}-queue-tab`}>
           {entries.length > 0 && (
-            <p className="queue-length">{formatQueueLength(entries.length, lengthMs, ending)}</p>
+            <p className="queue-length">
+              {formatQueueLength(entries.length, lengthMs, ending, { locale, t: words })}
+            </p>
           )}
           {entries.length === 0 ? (
-            <p className="empty">Nothing queued. Add a Track from the list to play it later.</p>
+            <p className="empty">
+              {words("Nothing queued. Add a Track from the list to play it later.")}
+            </p>
           ) : (
             <DndContext
               sensors={sensors}
@@ -235,7 +249,11 @@ export function QueuePanel({
               modifiers={MODIFIERS}
               accessibility={{
                 announcements,
-                screenReaderInstructions: INSTRUCTIONS,
+                screenReaderInstructions: {
+                  draggable: words(
+                    "To reorder, press Space to pick the Track up, the arrow keys to move it, and Space again to drop it. Escape puts it back.",
+                  ),
+                },
                 ...(announceIn ? { container: announceIn } : {}),
               }}
               onDragEnd={drop}
@@ -358,16 +376,19 @@ function AlbumRow({
   readonly onPlay: () => void;
   readonly onRemove: () => void;
 }) {
-  const title = file?.title ?? "An album no longer here";
-  const where = `${String(place)} of ${String(count)}`;
+  const t = useWords();
+  const title = file?.title ?? t("An album no longer here");
+  const where = t("{{place}} of {{total}}", { place, total: count });
   return (
-    <li className="queue-album" aria-label={`${title}, ${where}`}>
+    <li className="queue-album" aria-label={t("{{title}}, {{where}}", { title, where })}>
       <button
         type="button"
         className="icon fold"
         aria-expanded={!folded}
-        aria-label={`${folded ? "Show" : "Hide"} the songs of ${title}`}
-        title={folded ? "Show its songs" : "Hide its songs"}
+        aria-label={t(folded ? "Show the songs of {{title}}" : "Hide the songs of {{title}}", {
+          title,
+        })}
+        title={folded ? t("Show its songs") : t("Hide its songs")}
         onClick={onFold}
       >
         <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
@@ -376,20 +397,20 @@ function AlbumRow({
       <button
         type="button"
         className="album-title"
-        aria-label={`Play ${title} from song ${String(place)}`}
-        title="Play now"
+        aria-label={t("Play {{title}} from song {{place}}", { title, place })}
+        title={t("Play now")}
         onClick={onPlay}
       >
         {title}
       </button>
-      <span className="album-place" title={`From song ${where}`}>
+      <span className="album-place" title={t("From song {{where}}", { where })}>
         {where}
       </span>
       <button
         type="button"
         className="icon remove"
-        aria-label={`Remove the rest of ${title}`}
-        title="Remove the rest of the album"
+        aria-label={t("Remove the rest of {{title}}", { title })}
+        title={t("Remove the rest of the album")}
         onClick={onRemove}
       >
         <XIcon weight="bold" aria-hidden />
@@ -416,6 +437,7 @@ function QueueItem({
   readonly onPlay: () => void;
   readonly onRemove: () => void;
 }) {
+  const t = useWords();
   const {
     attributes,
     listeners,
@@ -425,7 +447,7 @@ function QueueItem({
     transition,
     isDragging,
   } = useSortable({ id: entry.key });
-  const title = track?.title ?? "A Track no longer here";
+  const title = track?.title ?? t("A Track no longer here");
   return (
     <li
       ref={setNodeRef}
@@ -444,10 +466,12 @@ function QueueItem({
         type="button"
         className="icon handle"
         ref={setActivatorNodeRef}
-        aria-label={`Reorder ${title}`}
-        title="Drag to reorder"
+        aria-label={t("Reorder {{view}}", { view: title })}
+        title={t("Drag to reorder")}
         {...attributes}
         {...listeners}
+        data-sortable-handle=""
+        aria-roledescription={t("sortable")}
       >
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
@@ -456,8 +480,8 @@ function QueueItem({
       <button
         type="button"
         className="entry-title"
-        aria-label={`Play ${title} now`}
-        title="Play now"
+        aria-label={t("Play {{title}} now", { title })}
+        title={t("Play now")}
         onClick={onPlay}
       >
         {title}
@@ -466,8 +490,8 @@ function QueueItem({
       <button
         type="button"
         className="icon remove"
-        aria-label={`Remove ${title}`}
-        title="Remove"
+        aria-label={t("Remove {{title}}", { title })}
+        title={t("Remove")}
         onClick={onRemove}
       >
         <XIcon weight="bold" aria-hidden />
@@ -477,7 +501,8 @@ function QueueItem({
 }
 
 /** Return "next", "second", and so on, for a place in what plays next. */
-function ordinal(place: number): string {
-  const words = ["next", "second", "third", "fourth", "fifth"];
-  return words[place] ?? `at place ${String(place + 1)}`;
+function ordinal(place: number, t: Words): string {
+  const labels = ["next", "second", "third", "fourth", "fifth"];
+  const label = labels[place];
+  return label === undefined ? t("at place {{place}}", { place: place + 1 }) : t(label);
 }

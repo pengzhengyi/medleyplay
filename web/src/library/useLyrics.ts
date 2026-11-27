@@ -5,40 +5,56 @@
  * finishes, and a song read before shows what was read until the new read answers.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { type Lyrics, api } from "../api";
 
-/**
- * Return the lyrics of the song `trackId`: `null` when it has none, `undefined` while
- * they are read or when no song plays.
- */
+interface LyricsRead {
+  readonly lyrics: Lyrics | null | undefined;
+  readonly failed: boolean;
+}
+
+const WAITING: LyricsRead = { lyrics: undefined, failed: false };
+
+/** Keep the last lyrics for this track if a refresh fails. */
 export function useLyrics(
   trackId: number | undefined,
   version?: unknown,
-): Lyrics | null | undefined {
-  const [read, setRead] = useState<{ readonly id: number; readonly lyrics: Lyrics | null }>();
+): LyricsRead & { readonly confirm: (id: number, lyrics: Lyrics | null) => void } {
+  const [read, setRead] = useState<LyricsRead & { readonly id: number }>();
+  const current = useRef<{ readonly id: number } | undefined>(undefined);
   useEffect(() => {
     if (trackId === undefined) {
       return undefined;
     }
-    let current = true;
+    const request = { id: trackId };
+    current.current = request;
     api.lyrics(trackId).then(
       (lyrics) => {
-        if (current) {
-          setRead({ id: trackId, lyrics });
+        if (current.current === request) {
+          setRead({ id: trackId, lyrics, failed: false });
         }
       },
       () => {
-        // Without an answer the song shows no lyrics; the next change reads them again.
-        if (current) {
-          setRead({ id: trackId, lyrics: null });
+        if (current.current === request) {
+          setRead((previous) =>
+            previous?.id === trackId && previous.lyrics !== undefined
+              ? previous
+              : { id: trackId, lyrics: undefined, failed: true },
+          );
         }
       },
     );
     return () => {
-      current = false;
+      current.current = undefined;
     };
   }, [trackId, version]);
-  return read !== undefined && read.id === trackId ? read.lyrics : undefined;
+  return {
+    ...(read !== undefined && read.id === trackId ? read : WAITING),
+    confirm: (id, lyrics) => {
+      if (current.current?.id !== id) return;
+      current.current = { id };
+      setRead({ id, lyrics, failed: false });
+    },
+  };
 }

@@ -9,6 +9,7 @@ import { ListPlusIcon } from "@phosphor-icons/react";
 
 import { HISTORY_LENGTHS, type HistoryLength, type Track } from "../api";
 import { formatPlayed } from "../format";
+import { useFormattingLocale, useWords } from "../locale";
 import type { Player } from "../player/usePlayer";
 import type { History } from "../player/useHistory";
 import { useNow } from "../useNow";
@@ -26,31 +27,33 @@ export function HistoryList({
   readonly player: Player;
   readonly tracks: ReadonlyMap<number, Track>;
 }) {
+  const t = useWords();
+  const locale = useFormattingLocale();
   const now = useNow();
   const { plays } = history;
   return (
     <>
       {history.failure !== "" && <p className="error">{history.failure}</p>}
-      {plays === undefined && history.failure === "" && <p className="muted">Loading…</p>}
-      {plays?.length === 0 && (
-        <p className="empty">Nothing played yet. A song shows here once half of it has played.</p>
-      )}
+      {plays === undefined && history.failure === "" && <p className="muted">{t("Loading…")}</p>}
+      {plays?.length === 0 && <p className="empty">{t("Nothing played yet.")}</p>}
       {plays !== undefined && plays.length > 0 && (
         <ol className="history-list">
           {plays.map((played) => {
             const track = tracks.get(played.track_id);
-            const title = track?.title ?? "A Track no longer here";
+            const title = track?.title ?? t("A Track no longer here");
             const at = Date.parse(played.played_at);
             const playable = track?.availability === "ok";
-            const when = formatPlayed(at, now);
+            const when = formatPlayed(at, now, { locale, t });
             return (
               <li key={played.id} className={playable ? undefined : "unplayable"}>
                 <button
                   type="button"
                   className="history-play"
                   disabled={!playable}
-                  aria-label={`Play ${title}, ${when}`}
-                  title={playable ? "Play now" : WHY[track?.availability ?? ""]}
+                  aria-label={t("Play {{title}}, {{when}}", { title, when })}
+                  title={
+                    playable ? t("Play now") : t(WHY[track?.availability ?? ""] ?? "Unavailable")
+                  }
                   onClick={() => {
                     if (track !== undefined) {
                       player.playNow(track);
@@ -69,8 +72,8 @@ export function HistoryList({
                   type="button"
                   className="icon add"
                   disabled={track === undefined}
-                  aria-label={`Add ${title} to Up next`}
-                  title="Add to Up next"
+                  aria-label={t("Add {{title}} to Up next", { title })}
+                  title={t("Add to Up next")}
                   onClick={() => {
                     if (track !== undefined) {
                       player.add(track);
@@ -86,7 +89,7 @@ export function HistoryList({
       )}
       <p className="history-length">
         <label>
-          Keeps the last{" "}
+          {t("Show the latest")}{" "}
           <select
             value={history.length}
             onChange={(event) => {
@@ -99,11 +102,11 @@ export function HistoryList({
               </option>
             ))}
           </select>{" "}
-          songs
+          {t("plays", { context: "history" })}
         </label>
         {history.lengthFailure !== "" && (
           <span className="error" role="alert">
-            {history.lengthFailure}
+            {t("The length wasn't saved: {{detail}}", { detail: history.lengthFailure })}
           </span>
         )}
       </p>
@@ -119,6 +122,7 @@ export function HistoryClear({
   readonly history: History;
   readonly onAsk: () => void;
 }) {
+  const t = useWords();
   return (
     <button
       type="button"
@@ -126,7 +130,7 @@ export function HistoryClear({
       disabled={history.plays === undefined || history.plays.length === 0}
       onClick={onAsk}
     >
-      Clear
+      {t("Clear")}
     </button>
   );
 }
@@ -139,9 +143,10 @@ export function ClearQuestion({
   readonly history: History;
   readonly onDone: () => void;
 }) {
+  const t = useWords();
   return (
-    <p className="history-confirm" role="group" aria-label="Clear History">
-      <span>Clear on every device?</span>
+    <p className="history-confirm" role="group" aria-label={t("Clear History")}>
+      <span>{t("Clear on every device?")}</span>
       <button
         type="button"
         className="text danger"
@@ -150,10 +155,10 @@ export function ClearQuestion({
           void history.clear();
         }}
       >
-        Clear
+        {t("Clear")}
       </button>
       <button type="button" className="text" onClick={onDone}>
-        Keep
+        {t("Keep")}
       </button>
     </p>
   );

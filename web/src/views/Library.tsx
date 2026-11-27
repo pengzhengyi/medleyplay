@@ -15,6 +15,7 @@ import {
   type Account,
   ApiError,
   type Kind,
+  type Lyrics,
   type MissingDetailReview,
   type SavedVideoLookup,
   LYRICS_ENRICHER,
@@ -239,21 +240,25 @@ export function Library({
   const lyricsLookup = song === undefined ? undefined : library.lookups.get(song.id);
   // Counts the household's lyrics saved or removed here, so the song playing reads its again.
   const [lyricsEdits, setLyricsEdits] = useState(0);
-  const lyrics = useLyrics(
+  const {
+    lyrics,
+    failed: lyricsFailed,
+    confirm: confirmLyrics,
+  } = useLyrics(
     song?.id,
     `${lyricsLookup?.enricher === LYRICS_ENRICHER ? lyricsLookup.state : ""}:${String(lyricsEdits)}:${library.lyricsVersion(song?.id)}`,
   );
+  const lyricsChanged = (trackId: number, answer: Lyrics | null) => {
+    confirmLyrics(trackId, answer);
+    setLyricsEdits((count) => count + 1);
+    return answer;
+  };
   /** The editor of `track`'s lyrics, syncing them to it as the player plays it. */
   const lyricsOf = (track: Track) => {
     if (track.kind === "album") {
       return undefined;
     }
     const current = song?.id === track.id;
-    const edited = <T,>(change: Promise<T>) =>
-      change.then((answer) => {
-        setLyricsEdits((count) => count + 1);
-        return answer;
-      });
     return {
       label: "Lyrics",
       editor: (
@@ -262,8 +267,14 @@ export function Library({
             key={track.id}
             load={() => api.lyrics(track.id)}
             refreshVersion={library.lyricsVersion(track.id)}
-            save={(text, instrumental) => edited(api.setLyrics(track.id, text, instrumental))}
-            forget={() => edited(api.forgetLyrics(track.id))}
+            save={(text, instrumental) =>
+              api
+                .setLyrics(track.id, text, instrumental)
+                .then((answer) => lyricsChanged(track.id, answer))
+            }
+            forget={() =>
+              api.forgetLyrics(track.id).then((answer) => lyricsChanged(track.id, answer))
+            }
             song={track}
             player={{
               current,
@@ -897,16 +908,15 @@ export function Library({
           onFavoriteAlbum={library.setAlbumFavorite}
           menuActions={actions}
           lyrics={lyrics}
+          lyricsFailed={lyricsFailed}
           {...(song === undefined || !lyrics
             ? {}
             : {
                 onSaveLyrics: async () => {
-                  await api.setLyrics(song.id, lyrics.text);
-                  setLyricsEdits((count) => count + 1);
+                  lyricsChanged(song.id, await api.setLyrics(song.id, lyrics.text));
                 },
                 onDismissLyrics: async () => {
-                  await api.dismissLyricsSuggestion(song.id);
-                  setLyricsEdits((count) => count + 1);
+                  lyricsChanged(song.id, await api.dismissLyricsSuggestion(song.id));
                 },
               })}
           queueOpen={nowPlayingQueue}

@@ -134,6 +134,27 @@ describe("the keyboard shortcuts", () => {
     expect(on.toggle).toHaveBeenCalledOnce();
   });
 
+  it("reserves arrows for the sortable handle independently of its spoken language", async () => {
+    const pressed = vi.fn();
+    const on = listening(
+      <button
+        type="button"
+        data-sortable-handle=""
+        aria-roledescription="可调整顺序"
+        onKeyDown={pressed}
+      >
+        调整顺序
+      </button>,
+    );
+    screen.getByRole("button", { name: "调整顺序" }).focus();
+
+    await userEvent.keyboard("{ArrowLeft}{ArrowRight}");
+
+    expect(pressed).toHaveBeenCalledTimes(2);
+    expect(on.back).not.toHaveBeenCalled();
+    expect(on.forward).not.toHaveBeenCalled();
+  });
+
   it("go to the next song with Shift + → even while a slider is focused, whose arrows have no Shift", async () => {
     const on = listening(<input type="range" aria-label="Position" />);
     screen.getByRole("slider", { name: "Position" }).focus();

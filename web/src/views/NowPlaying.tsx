@@ -51,6 +51,7 @@ export function NowPlaying({
   onFavoriteAlbum,
   menuActions,
   lyrics,
+  lyricsFailed = false,
   onSaveLyrics,
   onDismissLyrics,
   queueOpen,
@@ -70,6 +71,7 @@ export function NowPlaying({
   readonly menuActions: TrackMenuActions;
   /** The lyrics of the song playing: `null` for none, `undefined` while they are read. */
   readonly lyrics: Lyrics | null | undefined;
+  readonly lyricsFailed?: boolean;
   /** Save the lyrics suggested for the song playing as the household's. */
   readonly onSaveLyrics?: (() => Promise<void>) | undefined;
   /** Dismiss the lyrics suggested for the song playing. */
@@ -334,6 +336,7 @@ export function NowPlaying({
           {lyricsOpen && (
             <LyricsPanel
               lyrics={song.song === undefined ? null : lyrics}
+              failed={song.song !== undefined && lyricsFailed}
               onSave={onSaveLyrics}
               onDismiss={onDismissLyrics}
               seconds={song.seconds}

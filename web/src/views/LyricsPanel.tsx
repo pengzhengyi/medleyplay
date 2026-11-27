@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { LyricLine, Lyrics } from "../api";
 import { lineAt } from "../lyrics";
+import { useWords } from "../locale";
 
 /** How long scrolling the lyrics oneself stops them following the song, in milliseconds. */
 const BROWSE_MS = 4000;
@@ -23,29 +24,41 @@ const BROWSE_MS = 4000;
  */
 export function LyricsPanel({
   lyrics,
+  failed = false,
   seconds,
   onSeek,
   onSave,
   onDismiss,
 }: {
   readonly lyrics: Lyrics | null | undefined;
+  readonly failed?: boolean;
   readonly seconds: number;
   readonly onSeek: (seconds: number) => void;
   readonly onSave?: (() => Promise<void>) | undefined;
   readonly onDismiss?: (() => Promise<void>) | undefined;
 }) {
+  const t = useWords();
+  if (failed) {
+    return (
+      <section className="lyrics-panel" aria-label={t("Lyrics")}>
+        <p className="lyrics-none" role="status">
+          {t("Could not load lyrics.")}
+        </p>
+      </section>
+    );
+  }
   if (lyrics === undefined) {
-    return <section className="lyrics-panel" aria-label="Lyrics" aria-busy="true" />;
+    return <section className="lyrics-panel" aria-label={t("Lyrics")} aria-busy="true" />;
   }
   return (
-    <section className="lyrics-panel" aria-label="Lyrics">
+    <section className="lyrics-panel" aria-label={t("Lyrics")}>
       {lyrics?.origin === "suggested" && onSave !== undefined && onDismiss !== undefined && (
         <SuggestionBar key={lyrics.text} onSave={onSave} onDismiss={onDismiss} />
       )}
       {lyrics === null ? (
-        <p className="lyrics-none">No lyrics for this song.</p>
+        <p className="lyrics-none">{t("No lyrics for this song.")}</p>
       ) : lyrics.instrumental ? (
-        <p className="lyrics-none">Instrumental</p>
+        <p className="lyrics-none">{t("Instrumental")}</p>
       ) : lyrics.synced ? (
         <TimedLyrics lines={lyrics.lines} seconds={seconds} onSeek={onSeek} />
       ) : (
@@ -67,6 +80,7 @@ function SuggestionBar({
   readonly onSave: () => Promise<void>;
   readonly onDismiss: () => Promise<void>;
 }) {
+  const t = useWords();
   const [doing, setDoing] = useState<"save" | "dismiss">();
   const [error, setError] = useState("");
   const act = async (which: "save" | "dismiss", change: () => Promise<void>) => {
@@ -80,12 +94,12 @@ function SuggestionBar({
     }
   };
   return (
-    <div className="lyrics-suggestion" role="group" aria-label="Lyrics suggested">
+    <div className="lyrics-suggestion" role="group" aria-label={t("Lyrics suggested")}>
       <span
         className="lyrics-suggestion-tag"
-        title="The lyrics of the nearest song LRCLIB has, not saved"
+        title={t("The lyrics of the nearest song LRCLIB has, not saved")}
       >
-        Found on the web
+        {t("Found on the web")}
       </span>
       <button
         type="button"
@@ -94,7 +108,7 @@ function SuggestionBar({
         aria-busy={doing === "save"}
         onClick={() => void act("save", onSave)}
       >
-        Save
+        {t("Save")}
       </button>
       <button
         type="button"
@@ -103,7 +117,7 @@ function SuggestionBar({
         aria-busy={doing === "dismiss"}
         onClick={() => void act("dismiss", onDismiss)}
       >
-        Dismiss
+        {t("Dismiss")}
       </button>
       {error !== "" && (
         <p className="error" role="alert">
@@ -123,6 +137,7 @@ function TimedLyrics({
   readonly seconds: number;
   readonly onSeek: (seconds: number) => void;
 }) {
+  const words = useWords();
   const list = useRef<HTMLOListElement>(null);
   // Until when the listener is browsing the lines, and they don't follow the song.
   const browsing = useRef(0);
@@ -162,7 +177,7 @@ function TimedLyrics({
             }}
           >
             {line.text === "" ? (
-              <span className="lyric-pause" aria-label="A pause in the singing">
+              <span className="lyric-pause" aria-label={words("A pause in the singing")}>
                 ♪
               </span>
             ) : (

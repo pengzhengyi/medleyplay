@@ -98,6 +98,34 @@ afterEach(() => {
 });
 
 describe("the views", () => {
+  it("explains an empty library and keeps the API link when the language changes", async () => {
+    open("#/library", signedIn([]));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    expect(await screen.findByRole("link", { name: "the API" })).toHaveAttribute("href", "/docs");
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      const link = screen.getByRole("link", { name: "API" });
+      expect(link).toHaveAttribute("href", "/docs");
+      expect(link.closest("p")).toHaveTextContent("添加本地音乐文件夹");
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("explains that an artist filter matched no albums without asking for more music", async () => {
+    open("#/albums?artist=Unlisted");
+
+    expect(await screen.findByText("No albums match this artist filter.")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Remove the filter Artist: Unlisted" }),
+    ).toHaveAttribute("href", "#/albums");
+    expect(screen.queryByText(/No music yet/u)).not.toBeInTheDocument();
+  });
+
   it("opens a split file's editor from its Cleanup suggestion without saving", async () => {
     open("#/clean-up", {
       ...signedIn([
@@ -704,6 +732,50 @@ describe("search suggestions", () => {
 });
 
 describe("playlists", () => {
+  it("explains a newer smart-playlist rule version instead of saying the playlist is empty", async () => {
+    const playlist = {
+      ...playlistOf("p1", "Search", []),
+      unreadable: "The rules are version 2, newer than this server reads.",
+    };
+    open("#/playlists", signedIn(LIBRARY, [playlist]));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("link", { name: /Search.*Smart playlist rules unavailable/u });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+      await user.click(screen.getByRole("link", { name: /Search.*智能播放列表规则无法读取/u }));
+
+      expect(await screen.findByRole("heading", { name: "Search" })).toBeVisible();
+      expect(screen.getByText("规则版本为 2，当前服务器不支持此版本。")).toBeVisible();
+      expect(screen.queryByText("此播放列表中还没有歌曲。")).not.toBeInTheDocument();
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("translates the built-in Favorites but preserves a household playlist with that name", async () => {
+    open(
+      "#/playlists",
+      signedIn(LIBRARY, [favoritesPlaylistOf([1]), playlistOf("p1", "Favorites", [2, 3])]),
+    );
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Playlists" });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByRole("heading", { name: "播放列表" })).toHaveAttribute("data-rail-named");
+      expect(await screen.findByRole("link", { name: /^收藏\s*1 首歌曲/u })).toBeVisible();
+      expect(screen.getByRole("link", { name: /^Favorites\s*2 首歌曲/u })).toBeVisible();
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("lists the server's Favorites once, first, then the Account's Playlists", async () => {
     open("#/playlists");
     await screen.findByRole("link", { name: /^Mornings/u });
@@ -832,6 +904,8 @@ describe("search", () => {
       expect(screen.getByRole("combobox", { name: "搜索" })).toHaveAccessibleDescription(
         "收藏：yes",
       );
+      expect(screen.getByRole("heading", { name: "搜索结果：收藏：yes" })).toBeVisible();
+      expect(screen.getByRole("region", { name: "找到的歌曲" })).toBeVisible();
       expect(location.hash).toBe(route);
       expect(songs()).toEqual(["Search"]);
     } finally {

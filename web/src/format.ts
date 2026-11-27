@@ -14,32 +14,42 @@ export function formatTime(seconds: number | undefined): string {
 }
 
 /** Write how many songs there are and how long they play, such as `12 songs, 48 min`. */
-export function formatLength(count: number, durationMs: number): string {
-  const songs = count === 1 ? "1 song" : `${String(count)} songs`;
+export function formatLength(count: number, durationMs: number, t?: Words): string {
+  const songs = t?.("song_count", { count }) ?? (count === 1 ? "1 song" : `${String(count)} songs`);
   const minutes = Math.round(durationMs / 60_000);
   if (minutes === 0) {
     return songs;
   }
   const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
   const length =
     hours === 0
-      ? `${String(minutes)} min`
-      : minutes % 60 === 0
-        ? `${String(hours)} hr`
-        : `${String(hours)} hr ${String(minutes % 60)} min`;
-  return `${songs}, ${length}`;
+      ? (t?.("{{minutes}} min", { minutes }) ?? `${String(minutes)} min`)
+      : rest === 0
+        ? (t?.("{{hours}} hr", { hours }) ?? `${String(hours)} hr`)
+        : (t?.("{{hours}} hr {{minutes}} min", { hours, minutes: rest }) ??
+          `${String(hours)} hr ${String(rest)} min`);
+  return t?.("{{counted}}, {{length}}", { counted: songs, length }) ?? `${songs}, ${length}`;
 }
 
 /**
  * Write how many albums and songs the Library's items hold and how long they play,
  * such as `2 albums, 12 songs, 1 hr 40 min`; with no album, as `formatLength` does.
  */
-export function formatLibraryLength(albums: number, songs: number, durationMs: number): string {
-  const length = formatLength(songs, durationMs);
+export function formatLibraryLength(
+  albums: number,
+  songs: number,
+  durationMs: number,
+  t?: Words,
+): string {
+  const length = formatLength(songs, durationMs, t);
   if (albums === 0) {
     return length;
   }
-  return `${albums === 1 ? "1 album" : `${String(albums)} albums`}, ${length}`;
+  const counted =
+    t?.("album_count", { count: albums }) ??
+    (albums === 1 ? "1 album" : `${String(albums)} albums`);
+  return t?.("{{counted}}, {{length}}", { counted, length }) ?? `${counted}, ${length}`;
 }
 
 /** Write a length of minutes in words, such as `30 minutes` or `1 hour 30 minutes`. */

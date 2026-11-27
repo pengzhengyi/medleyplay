@@ -58,6 +58,8 @@ void words.use(initReactI18next).init({
         devices_waiting_other: "{{count}} devices waiting",
         song_count_one: "{{count}} song",
         song_count_other: "{{count}} songs",
+        album_count_one: "{{count}} album",
+        album_count_other: "{{count}} albums",
       },
     },
     "zh-Hans": { translation: zh },

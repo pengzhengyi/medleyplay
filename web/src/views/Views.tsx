@@ -12,6 +12,7 @@ import {
   PencilSimpleIcon,
 } from "@phosphor-icons/react";
 import { Fragment, type ReactNode, useMemo, useState } from "react";
+import { Trans } from "react-i18next";
 
 import type {
   ArtistNames,
@@ -57,8 +58,7 @@ import {
 } from "../library/views";
 import { albumUnit, bySong, everyAlbum, inLibraryOrder, songsByFile } from "../library/playOrder";
 import { querySaid } from "../library/query";
-import { useWords } from "../locale";
-import { isRailNamed } from "../rail";
+import { type Words, useWords } from "../locale";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumAbout } from "./AlbumAbout";
 import { AlbumHeading } from "./AlbumHeading";
@@ -148,6 +148,7 @@ export interface ViewProps {
 
 /** The view `route` names; each route is a view of its own, opening with no filters on. */
 export function CurrentView(given: ViewProps) {
+  const t = useWords();
   // Search stays one view while its words change, so typing keeps what it has found; the
   // Library stays one view while it shows a song asked for, then drops it from the address.
   const key =
@@ -172,7 +173,7 @@ export function CurrentView(given: ViewProps) {
         <link key={cover} rel="prefetch" as="image" href={coverUrl(cover, "medium")} />
       ))}
       <LocalArtistProfiles value={profiles}>
-        <Fragment key={key}>{viewOf(given, pages, profiles)}</Fragment>
+        <Fragment key={key}>{viewOf(given, pages, profiles, t)}</Fragment>
       </LocalArtistProfiles>
     </>
   );
@@ -194,6 +195,7 @@ function viewOf(
   given: ViewProps,
   pages: ReturnType<typeof playingPages>,
   profiles: ArtistProfiles,
+  t: Words,
 ) {
   // A Playlist names its Tracks by id among them all; every other view lists songs.
   const props = {
@@ -242,17 +244,17 @@ function viewOf(
         return (
           <>
             <ViewHeading
-              title={`Which ${route.name}?`}
+              title={t("Which {{name}}?", { name: route.name })}
               back={{ view: "artists" }}
-              backLabel="Artists"
+              backLabel={t("Artists")}
             >
-              {`${String(choices.length)} artists go by this name`}
+              {t("{{count}} artists go by this name", { count: choices.length })}
             </ViewHeading>
             <ArtistList
               artists={choices}
               favorites={props.favorites}
               links={props.links}
-              label={`Artists called ${route.name}`}
+              label={t("Artists called {{name}}", { name: route.name })}
             />
           </>
         );
@@ -270,7 +272,7 @@ function viewOf(
       const named = profiles.namedByRoute(name);
       const shown = artist?.shown_as ?? name;
       const reload = props.artistNames?.reload;
-      const title = shown || UNKNOWN_ARTIST;
+      const title = shown || t(UNKNOWN_ARTIST);
       return (
         <AlbumPage
           songs={songs}
@@ -280,12 +282,12 @@ function viewOf(
             <PictureHeading
               title={title}
               back={{ view: "artists" }}
-              backLabel="Artists"
+              backLabel={t("Artists")}
               playPlace={playPlace}
               className="artist-heading"
               picture={
                 <ArtistPicture
-                  name={title}
+                  name={shown || UNKNOWN_ARTIST}
                   songs={songs}
                   artist={artist}
                   onPhotoUsed={name === "" ? undefined : reload}
@@ -329,7 +331,7 @@ function viewOf(
               )}
             </PictureHeading>
           )}
-          empty={<p className="empty">No songs by this artist are in your Library now.</p>}
+          empty={<p className="empty">{t("No songs by this artist are in your Library now.")}</p>}
         />
       );
     }
@@ -353,17 +355,17 @@ function viewOf(
           actions={props.actions}
           heading={(playPlace) => (
             <AlbumHeading
-              title={route.name || UNKNOWN_ALBUM}
+              title={route.name || t(UNKNOWN_ALBUM)}
               artist={
                 route.artist.trim() === "" ? (
-                  UNKNOWN_ARTIST
+                  t(UNKNOWN_ARTIST)
                 ) : (
                   <AlbumArtistCredit name={route.artist} songs={songs} />
                 )
               }
               year={albumYearOf(songs)}
               back={{ view: "albums" }}
-              backLabel="Albums"
+              backLabel={t("Albums")}
               playPlace={playPlace}
               cover={
                 <AlbumAbout
@@ -408,11 +410,11 @@ function viewOf(
               edit={
                 songs.length > 0 &&
                 (file !== undefined || onEditAlbum !== undefined) && (
-                  <Hint name="Edit details" keys={[]}>
+                  <Hint name={t("Edit details")} keys={[]}>
                     <button
                       type="button"
                       className="secondary outline edit-heading"
-                      aria-label="Edit details"
+                      aria-label={t("Edit details")}
                       onClick={() => {
                         if (file === undefined) {
                           onEditAlbum?.(songs);
@@ -428,7 +430,7 @@ function viewOf(
               }
             />
           )}
-          empty={<p className="empty">No songs from this album are in your Library now.</p>}
+          empty={<p className="empty">{t("No songs from this album are in your Library now.")}</p>}
         />
       );
     }
@@ -437,7 +439,8 @@ function viewOf(
       const dismiss = props.dismissFailedDownloads;
       return (
         <Songs
-          title="Downloaded"
+          title={t("Downloaded")}
+          railNamed
           {...props}
           actions={{ ...props.actions, dismissFailedDownloads: dismiss }}
           about={
@@ -450,8 +453,9 @@ function viewOf(
           }
           empty={
             <p className="empty">
-              Nothing is downloaded yet. A song you add from a music site shows here as soon as it
-              is added, while it downloads and after.
+              {t(
+                "Nothing is downloaded yet. A song you add from a music site shows here as soon as it is added, while it downloads and after.",
+              )}
             </p>
           }
         >
@@ -529,14 +533,16 @@ function viewOf(
 
 /** Every song and album, a split file's songs folded under it. */
 function LibraryItems({ tracks, playingId, actions, route, links }: ViewProps) {
+  const t = useWords();
   const items = useMemo(() => tracks.filter((track) => track.segment_of === null), [tracks]);
   const songsIn = useMemo(() => songsByFile(tracks), [tracks]);
   const played = inLibraryOrder(items, songsIn);
   const albums = items.filter((track) => track.kind === "album").length;
   return (
     <>
-      <ViewHeading title="Library">
-        {items.length > 0 && formatLibraryLength(albums, bySong(played).length, durationOf(played))}
+      <ViewHeading title={t("Library")} railNamed>
+        {items.length > 0 &&
+          formatLibraryLength(albums, bySong(played).length, durationOf(played), t)}
       </ViewHeading>
       <TrackTable
         tracks={items}
@@ -614,6 +620,7 @@ function DismissFailedDownloads({
 /** A heading, and Tracks in the song table. */
 function Songs({
   title,
+  railNamed,
   subtitle,
   subtitleTo,
   back,
@@ -627,6 +634,7 @@ function Songs({
   actions,
 }: Omit<ViewProps, "tracks" | "route" | "playlists" | "admin" | "onEnrichersChanged"> & {
   readonly title: string;
+  readonly railNamed?: boolean | undefined;
   /** Who the view is by, under its title; a route to their page makes it a link. */
   readonly subtitle?: string | undefined;
   readonly subtitleTo?: Route | undefined;
@@ -641,10 +649,12 @@ function Songs({
   readonly children: readonly Track[];
   readonly empty: ReactNode;
 }) {
+  const t = useWords();
   return (
     <>
       <ViewHeading
         title={title}
+        railNamed={railNamed}
         subtitle={subtitle}
         subtitleTo={subtitleTo}
         back={back}
@@ -652,7 +662,7 @@ function Songs({
         heart={heart}
         edit={edit}
       >
-        {children.length > 0 && formatLength(children.length, durationOf(children))}
+        {children.length > 0 && formatLength(children.length, durationOf(children), t)}
       </ViewHeading>
       {about}
       <TrackTable tracks={children} playingId={playingId} actions={actions} empty={empty} />
@@ -678,6 +688,7 @@ function AlbumPage({
   readonly heading: (playPlace: (place: HTMLDivElement | null) => void) => ReactNode;
   readonly empty: ReactNode;
 }) {
+  const t = useWords();
   const [playPlace, setPlayPlace] = useState<HTMLDivElement | null>(null);
   return (
     <>
@@ -690,7 +701,7 @@ function AlbumPage({
         playAllIn={playPlace}
       />
       {songs.length > 0 && (
-        <p className="album-length">{formatLength(songs.length, durationOf(songs))}</p>
+        <p className="album-length">{formatLength(songs.length, durationOf(songs), t)}</p>
       )}
     </>
   );
@@ -698,6 +709,7 @@ function AlbumPage({
 
 function ViewHeading({
   title,
+  railNamed,
   subtitle,
   subtitleTo,
   back,
@@ -707,6 +719,7 @@ function ViewHeading({
   children,
 }: {
   readonly title: string;
+  readonly railNamed?: boolean | undefined;
   readonly subtitle?: string | undefined;
   /** The page of who `subtitle` names, making it a link. */
   readonly subtitleTo?: Route | undefined;
@@ -718,7 +731,7 @@ function ViewHeading({
 }) {
   const beside = [heart, edit].some((each) => each !== undefined && each !== false);
   // A view headed by its rail name; a minimized rail's menu says it already.
-  const named = back === undefined && isRailNamed(title) ? true : undefined;
+  const named = railNamed ? true : undefined;
   return (
     <header className="view-heading">
       {back !== undefined && (
@@ -759,11 +772,12 @@ function Artists({
   readonly favorites: FavoriteGroups;
   readonly links: ArtistLinks | undefined;
 }) {
+  const t = useWords();
   const artists = useMemo(() => artistsOf(tracks, links), [tracks, links]);
   return (
     <>
-      <ViewHeading title="Artists">
-        {artists.length > 0 && `${String(artists.length)} artists`}
+      <ViewHeading title={t("Artists")} railNamed>
+        {artists.length > 0 && t("{{count}} artists", { count: artists.length })}
       </ViewHeading>
       {artists.length === 0 ? (
         <NoMusic />
@@ -778,15 +792,16 @@ function ArtistList({
   artists,
   favorites,
   links = NO_LINKS,
-  label = "Artists",
+  label,
 }: {
   readonly artists: readonly Artist[];
   readonly favorites: FavoriteGroups;
   readonly links: ArtistLinks | undefined;
   readonly label?: string;
 }) {
+  const t = useWords();
   return (
-    <ul className="groups" aria-label={label}>
+    <ul className="groups" aria-label={label ?? t("Artists")}>
       {artists.map((artist) => (
         <li
           key={artist.id ?? artist.link}
@@ -809,11 +824,13 @@ function ArtistList({
               </Cover>
               {isFavoriteArtist(favorites, artist.link, artist.id) && <FavoriteBadge />}
             </span>
-            <span className="group-name">{artist.name || UNKNOWN_ARTIST}</span>
+            <span className="group-name">{artist.name || t(UNKNOWN_ARTIST)}</span>
             {artist.onAlbum !== undefined && (
-              <span className="group-meta group-album">on {artist.onAlbum}</span>
+              <span className="group-meta group-album">
+                {t("on {{album}}", { album: artist.onAlbum })}
+              </span>
             )}
-            <span className="group-meta">{formatLength(artist.count, artist.durationMs)}</span>
+            <span className="group-meta">{formatLength(artist.count, artist.durationMs, t)}</span>
           </a>
         </li>
       ))}
@@ -835,69 +852,79 @@ function Albums({
   readonly artist?: string | undefined;
   readonly links?: ArtistLinks | undefined;
 }) {
+  const t = useWords();
+  const allAlbums = useMemo(() => albumsOf(tracks), [tracks]);
   const albums = useMemo(() => {
-    const every = albumsOf(tracks);
     if (artist === undefined) {
-      return every;
+      return allAlbums;
     }
     const sung = new Set(
       tracksOfArtist(tracks, artist, links).map((track) =>
         albumKeyOf(albumArtistOf(track), track.album),
       ),
     );
-    return every.filter((album) => sung.has(albumKeyOf(album.artist, album.name)));
-  }, [tracks, artist, links]);
+    return allAlbums.filter((album) => sung.has(albumKeyOf(album.artist, album.name)));
+  }, [allAlbums, tracks, artist, links]);
   // Each album plays whole, in its track order, in the order the albums are listed.
   const playable = everyAlbum(tracks.filter((track) => track.availability === "ok"));
   return (
     <>
-      <ViewHeading title="Albums">
-        {albums.length > 0 && `${String(albums.length)} albums`}
+      <ViewHeading title={t("Albums")} railNamed>
+        {albums.length > 0 && t("{{count}} albums", { count: albums.length })}
       </ViewHeading>
       {albums.length > 0 && (
         <div className="play-all">
           <button
             type="button"
-            aria-label="Play every album"
+            aria-label={t("Play every album")}
             disabled={playable.length === 0}
             onClick={() => {
               actions.onPlayAll(playable, false, albumUnit);
             }}
           >
             <PlayIcon weight="fill" aria-hidden />
-            Play
+            {t("Play")}
           </button>
           <button
             type="button"
             className="secondary"
-            aria-label="Shuffle the albums"
-            title="Each album plays whole, in its order"
+            aria-label={t("Shuffle the albums")}
+            title={t("Each album plays whole, in its order")}
             disabled={playable.length === 0}
             onClick={() => {
               actions.onPlayAll(playable, true, albumUnit);
             }}
           >
             <ShuffleIcon weight="bold" aria-hidden />
-            Shuffle
+            {t("Shuffle")}
           </button>
         </div>
       )}
       {artist !== undefined && (
         <div className="filters-on">
           <span className="filtered-count" role="status">
-            {`${String(albums.length)} of ${String(albumsOf(tracks).length)} albums`}
+            {t("{{shown}} of {{total}} albums", {
+              shown: albums.length,
+              total: allAlbums.length,
+            })}
           </span>
           <a
             className="chip"
             href={hrefOf({ view: "albums" })}
-            aria-label={`Remove the filter Artist: ${artist}`}
+            aria-label={t("Remove the filter Artist: {{artist}}", { artist })}
           >
-            Artist: {artist}
+            {t("{{field}}: {{value}}", { field: t("Artist"), value: artist })}
             <XIcon weight="bold" aria-hidden />
           </a>
         </div>
       )}
-      {albums.length === 0 ? <NoMusic /> : <AlbumList albums={albums} favorites={favorites} />}
+      {albums.length > 0 ? (
+        <AlbumList albums={albums} favorites={favorites} />
+      ) : allAlbums.length > 0 ? (
+        <p className="empty">{t("No albums match this artist filter.")}</p>
+      ) : (
+        <NoMusic />
+      )}
     </>
   );
 }
@@ -921,8 +948,9 @@ function AlbumList({
   readonly albums: readonly Album[];
   readonly favorites: FavoriteGroups;
 }) {
+  const t = useWords();
   return (
-    <ul className="groups" aria-label="Albums">
+    <ul className="groups" aria-label={t("Albums")}>
       {albums.map((album) => {
         const favorite = isFavoriteAlbum(favorites, album.artist, album.name);
         return (
@@ -934,9 +962,12 @@ function AlbumList({
                 </Cover>
                 {favorite && <FavoriteBadge />}
               </span>
-              <span className="group-name">{album.name || UNKNOWN_ALBUM}</span>
+              <span className="group-name">{album.name || t(UNKNOWN_ALBUM)}</span>
               <span className="group-meta">
-                {album.artist || UNKNOWN_ARTIST}, {formatLength(album.count, album.durationMs)}
+                {t("{{artist}}, {{length}}", {
+                  artist: album.artist || t(UNKNOWN_ARTIST),
+                  length: formatLength(album.count, album.durationMs, t),
+                })}
               </span>
             </a>
           </li>
@@ -948,10 +979,11 @@ function AlbumList({
 
 /** A favorite artist's or album's mark on its tile. */
 function FavoriteBadge() {
+  const t = useWords();
   return (
-    <span className="favorite-badge" title="Favorite">
+    <span className="favorite-badge" title={t("Favorite")}>
       <HeartIcon weight="fill" aria-hidden />
-      <span className="visually-hidden">Favorite</span>
+      <span className="visually-hidden">{t("Favorite")}</span>
     </span>
   );
 }
@@ -963,27 +995,29 @@ function Playlists({
   readonly tracks: readonly Track[];
   readonly playlists: readonly Playlist[];
 }) {
+  const t = useWords();
   // Favorites is worked out from the hearts here, so a heart counts at once.
   const favorites = favoritesOf(tracks);
   return (
     <>
-      <ViewHeading title="Playlists" />
-      <ul className="groups" aria-label="Playlists">
+      <ViewHeading title={t("Playlists")} railNamed />
+      <ul className="groups" aria-label={t("Playlists")}>
         {playlists.some((playlist) => playlist.builtin === FAVORITES) && (
           <li>
             <a href={hrefOf({ view: "playlist", id: FAVORITES })}>
               <span className="cover-tile favorites" aria-hidden>
                 <HeartIcon weight="fill" />
               </span>
-              <span className="group-name">Favorites</span>
+              <span className="group-name">{t("Favorites")}</span>
               <span className="group-meta">
-                {formatLength(favorites.length, durationOf(favorites))}
+                {formatLength(favorites.length, durationOf(favorites), t)}
               </span>
             </a>
           </li>
         )}
         {ownPlaylists(playlists).map((playlist) => {
           const held = tracksOfPlaylist(tracks, playlist);
+          const length = formatLength(held.length, durationOf(held), t);
           return (
             <li key={playlist.id}>
               <a href={hrefOf({ view: "playlist", id: playlist.id })}>
@@ -992,8 +1026,11 @@ function Playlists({
                 </span>
                 <span className="group-name">{playlist.name}</span>
                 <span className="group-meta">
-                  {playlist.rules === null ? "" : "Smart, "}
-                  {formatLength(held.length, durationOf(held))}
+                  {playlist.unreadable !== ""
+                    ? t("Smart playlist rules unavailable")
+                    : playlist.rules === null
+                      ? length
+                      : t("Smart, {{length}}", { length })}
                 </span>
               </a>
             </li>
@@ -1005,6 +1042,7 @@ function Playlists({
 }
 
 function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
+  const t = useWords();
   const playlist = props.playlists.find((each) => each.id === id);
   // The switch shows once the Playlist is read; Favorites' is the Playlist the server keeps.
   const keepOf = (shown: Playlist | undefined) => {
@@ -1016,12 +1054,14 @@ function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
   if (id === FAVORITES || playlist?.builtin === FAVORITES) {
     return (
       <Songs
-        title="Favorites"
+        title={t("Favorites")}
         back={{ view: "playlists" }}
-        backLabel="Playlists"
+        backLabel={t("Playlists")}
         {...props}
         about={keepOf(playlist ?? props.playlists.find((each) => each.builtin === FAVORITES))}
-        empty={<p className="empty">No favorites yet. Tap a song's heart to keep it here.</p>}
+        empty={
+          <p className="empty">{t("No favorites yet. Tap a song's heart to keep it here.")}</p>
+        }
       >
         {favoritesOf(props.tracks)}
       </Songs>
@@ -1030,20 +1070,45 @@ function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
   if (playlist === undefined) {
     return (
       <>
-        <ViewHeading title="Playlist" back={{ view: "playlists" }} backLabel="Playlists" />
-        <p className="empty">This Playlist isn't here any more.</p>
+        <ViewHeading
+          title={t("Playlist")}
+          back={{ view: "playlists" }}
+          backLabel={t("Playlists")}
+        />
+        <p className="empty">{t("This Playlist isn't here any more.")}</p>
+      </>
+    );
+  }
+  if (playlist.unreadable !== "") {
+    const version = /^The rules are version (\d+), newer than this server reads\.$/u.exec(
+      playlist.unreadable,
+    )?.[1];
+    return (
+      <>
+        <ViewHeading
+          title={playlist.name}
+          back={{ view: "playlists" }}
+          backLabel={t("Playlists")}
+        />
+        <p className="empty" role="status">
+          {version === undefined
+            ? t("The smart playlist's rules could not be read. {{detail}}", {
+                detail: playlist.unreadable,
+              })
+            : t("The rules are version {{version}}, newer than this server reads.", { version })}
+        </p>
+        {keepOf(playlist)}
       </>
     );
   }
   return (
     <Songs
       title={playlist.name}
-      subtitle={playlist.unreadable === "" ? undefined : playlist.unreadable}
       back={{ view: "playlists" }}
-      backLabel="Playlists"
+      backLabel={t("Playlists")}
       {...props}
       about={keepOf(playlist)}
-      empty={<p className="empty">This Playlist has no songs yet.</p>}
+      empty={<p className="empty">{t("This Playlist has no songs yet.")}</p>}
     >
       {tracksOfPlaylist(props.tracks, playlist)}
     </Songs>
@@ -1051,16 +1116,19 @@ function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
 }
 
 function SearchResults({ query, ...props }: ViewProps & { readonly query: string }) {
+  const t = useWords();
   const found = useMemo(
     () => search(props.tracks, query, props.links),
     [props.tracks, query, props.links],
   );
-  const said = querySaid(query);
+  const said = querySaid(query, t);
   if (said === "") {
     return (
       <>
-        <ViewHeading title="Search" />
-        <p className="empty">Type a song, an artist, or an album to find it in your Library.</p>
+        <ViewHeading title={t("Search")} />
+        <p className="empty">
+          {t("Type a song, an artist, or an album to find it in your Library.")}
+        </p>
       </>
     );
   }
@@ -1068,23 +1136,25 @@ function SearchResults({ query, ...props }: ViewProps & { readonly query: string
     found.tracks.length === 0 && found.artists.length === 0 && found.albums.length === 0;
   return (
     <>
-      <ViewHeading title={`Results for ${said}`} />
-      {nothing && <p className="empty">Nothing in your Library matches {said}.</p>}
+      <ViewHeading title={t("Results for {{query}}", { query: said })} />
+      {nothing && (
+        <p className="empty">{t("Nothing in your Library matches {{query}}.", { query: said })}</p>
+      )}
       {found.artists.length > 0 && (
-        <section aria-label="Artists found">
-          <h3 className="found">Artists</h3>
+        <section aria-label={t("Artists found")}>
+          <h3 className="found">{t("Artists")}</h3>
           <ArtistList artists={found.artists} favorites={props.favorites} links={props.links} />
         </section>
       )}
       {found.albums.length > 0 && (
-        <section aria-label="Albums found">
-          <h3 className="found">Albums</h3>
+        <section aria-label={t("Albums found")}>
+          <h3 className="found">{t("Albums")}</h3>
           <AlbumList albums={found.albums} favorites={props.favorites} />
         </section>
       )}
       {found.tracks.length > 0 && (
-        <section aria-label="Songs found">
-          <h3 className="found">Songs</h3>
+        <section aria-label={t("Songs found")}>
+          <h3 className="found">{t("Songs")}</h3>
           <TrackTable
             tracks={found.tracks}
             playingId={props.playingId}
@@ -1097,11 +1167,19 @@ function SearchResults({ query, ...props }: ViewProps & { readonly query: string
   );
 }
 
+const NO_MUSIC =
+  "No music yet. An admin adds a music folder of your own in <api>the API</api>, and its songs appear here.";
+
 function NoMusic() {
+  const t = useWords();
   return (
     <p className="empty">
-      No music yet. An admin adds a music folder of your own in <a href="/docs">the API</a>, and its
-      songs appear here.
+      <Trans
+        t={t}
+        i18nKey={NO_MUSIC}
+        defaults={NO_MUSIC}
+        components={{ api: <a href="/docs">API</a> }}
+      />
     </p>
   );
 }

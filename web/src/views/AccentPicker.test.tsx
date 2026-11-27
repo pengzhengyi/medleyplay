@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { applyAccent, saveColor, savedAccent, savedColors } from "../accent";
 import { AccentPicker } from "./AccentPicker";
+import { LanguageSelect } from "./LanguageSelect";
 
 afterEach(() => {
   applyAccent(undefined);
@@ -11,6 +12,33 @@ afterEach(() => {
 });
 
 describe("the accent picker", () => {
+  it("translates expanded sliders and their updated values without remounting", async () => {
+    render(<AccentPicker />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Pick the accent color" }));
+    const hue = screen.getByRole("slider", { name: "Hue" });
+    const color = screen.getByRole("slider", { name: "Color" });
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+      expect(screen.getByRole("slider", { name: "色相" })).toBe(hue);
+      expect(screen.getByRole("slider", { name: "颜色" })).toBe(color);
+      const before = color.getAttribute("aria-valuetext");
+      expect(before).toMatch(/饱和度.*亮度/u);
+      color.focus();
+      fireEvent.keyDown(color, { key: "ArrowLeft", keyCode: 37 });
+      expect(color).toHaveFocus();
+      await waitFor(() => {
+        expect(color.getAttribute("aria-valuetext")).not.toBe(before);
+        expect(color.getAttribute("aria-valuetext")).toMatch(/饱和度.*亮度/u);
+      });
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+    expect(color.getAttribute("aria-valuetext")).toMatch(/^Saturation.*Brightness/u);
+  });
+
   it("shows jade until a color is chosen, with nothing to reset", () => {
     render(<AccentPicker />);
 

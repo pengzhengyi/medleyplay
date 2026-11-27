@@ -32,7 +32,7 @@ import {
   setRailOrder,
   useRailOrder,
 } from "../railOrder";
-import { RAIL_ENTRIES } from "./railViews";
+import { RAIL_ENTRIES, railAnnouncements } from "./railViews";
 import { useWords } from "../locale";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
@@ -60,6 +60,14 @@ export function RailOrderSettings() {
         sensors={sensors}
         collisionDetection={closestCenter}
         modifiers={MODIFIERS}
+        accessibility={{
+          screenReaderInstructions: {
+            draggable: t(
+              "Press Space to pick up a view, use the arrow keys to move it, and press Space to drop it. Press Escape to cancel.",
+            ),
+          },
+          announcements: railAnnouncements(order, t),
+        }}
         onDragEnd={drop}
       >
         <SortableContext items={[...order]} strategy={verticalListSortingStrategy}>
@@ -124,6 +132,8 @@ function RailOrderRow({
         title={t("Drag to reorder")}
         {...attributes}
         {...listeners}
+        aria-roledescription={t("sortable")}
+        data-sortable-handle=""
       >
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>

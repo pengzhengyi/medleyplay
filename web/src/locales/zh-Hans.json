@@ -1745,5 +1745,13 @@
   "Create another artist named {{name}}": "新建一位名为「{{name}}」的艺人",
   "Your rating of this album": "你对此专辑的评分",
   "Your review on Rate Your Music": "你在 Rate Your Music 上的评论",
-  "You rated it {{rating}} on Rate Your Music": "你在 Rate Your Music 上给此专辑打了 {{rating}}"
+  "You rated it {{rating}} on Rate Your Music": "你在 Rate Your Music 上给此专辑打了 {{rating}}",
+  "Hue": "色相",
+  "Color": "颜色",
+  "Saturation {{saturation}}, Brightness {{brightness}}": "饱和度 {{saturation}}，亮度 {{brightness}}",
+  "View": "视图",
+  "{{name}} would move to position {{position}}.": "{{name}} 将移至第 {{position}} 位。",
+  "{{name}} moved to position {{position}}.": "{{name}} 已移至第 {{position}} 位。",
+  "Use Rail order in Settings → Appearance to reorder views with the keyboard.": "要用键盘调整视图顺序，请前往「设置 → 外观」中的「导航栏顺序」。",
+  "Press Space to pick up a view, use the arrow keys to move it, and press Space to drop it. Press Escape to cancel.": "按空格键选中视图，用方向键移动，再按空格键放下。按 Esc 键可取消。"
 }

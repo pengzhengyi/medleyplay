@@ -9,22 +9,74 @@
 
 import { ArrowCounterClockwiseIcon, DiceFiveIcon, HeartIcon } from "@phosphor-icons/react";
 import type { CSSProperties } from "react";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 
 import { DEFAULT_ACCENT, forgetColor, saveColor, useAccent, useSavedColors } from "../accent";
 import { inkFor, randomAccent } from "../color";
-import { useWords } from "../locale";
+import { type Words, useFormattingLocale, useWords } from "../locale";
+
+type ColorValues = WeakMap<HTMLElement, readonly [number, number]>;
+
+function localizePicker(
+  root: HTMLElement,
+  t: Words,
+  locale: string,
+  values: ColorValues,
+): () => void {
+  const number = new Intl.NumberFormat(locale, { style: "percent" });
+  const update = () => {
+    const hue = root.querySelector<HTMLElement>(".react-colorful__hue [role=slider]");
+    const color = root.querySelector<HTMLElement>(".react-colorful__saturation [role=slider]");
+    for (const [slider, label] of [
+      [hue, "Hue"],
+      [color, "Color"],
+    ] as const) {
+      if (slider !== null && slider.getAttribute("aria-label") !== t(label)) {
+        slider.setAttribute("aria-label", t(label));
+      }
+    }
+    if (color === null) return;
+    const current = color.getAttribute("aria-valuetext");
+    const raw = /^Saturation (\d+)%, Brightness (\d+)%$/u.exec(current ?? "");
+    if (raw !== null) values.set(color, [Number(raw[1]), Number(raw[2])]);
+    const value = values.get(color);
+    if (value === undefined) return;
+    const translated = t("Saturation {{saturation}}, Brightness {{brightness}}", {
+      saturation: number.format(value[0] / 100),
+      brightness: number.format(value[1] / 100),
+    });
+    if (translated !== current) color.setAttribute("aria-valuetext", translated);
+  };
+  update();
+  const observer = new MutationObserver(update);
+  observer.observe(root, {
+    subtree: true,
+    childList: true,
+    attributeFilter: ["aria-valuetext", "aria-label"],
+  });
+  return () => {
+    observer.disconnect();
+  };
+}
 
 /** Choose the accent color; `random` rolls the dice. */
 export function AccentPicker({ random = Math.random }: { readonly random?: () => number }) {
   const t = useWords();
+  const locale = useFormattingLocale();
   const [accent, setAccent] = useAccent();
   const [open, setOpen] = useState(false);
   const square = useId();
   const shown = accent ?? DEFAULT_ACCENT;
   const colors = useSavedColors();
   const saved = colors.includes(shown);
+  const picker = useRef<HTMLDivElement>(null);
+  const [pickerValues] = useState<ColorValues>(() => new WeakMap());
+  useEffect(() => {
+    const root = picker.current;
+    if (open && root !== null) return localizePicker(root, t, locale, pickerValues);
+    return undefined;
+  }, [open, t, locale, pickerValues]);
   return (
     <div className="accent-picker">
       <div className="accent-row">
@@ -108,7 +160,14 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
         </ul>
       )}
       {open && (
-        <HexColorPicker id={square} className="accent-square" color={shown} onChange={setAccent} />
+        <div ref={picker}>
+          <HexColorPicker
+            id={square}
+            className="accent-square"
+            color={shown}
+            onChange={setAccent}
+          />
+        </div>
       )}
     </div>
   );

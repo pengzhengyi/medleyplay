@@ -4,6 +4,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { moved, resetRailOrder, setRailOrder, DEFAULT_RAIL_ORDER } from "../railOrder";
+import { LanguageSelect } from "./LanguageSelect";
 import { Nav } from "./Nav";
 
 /** The names of the rail's links, in order. */
@@ -14,6 +15,22 @@ afterEach(() => {
 });
 
 describe("moving between views", () => {
+  it("gives a movable link localized keyboard instructions without changing its destination", async () => {
+    render(<Nav route={{ view: "library" }} />);
+    const albums = screen.getByRole("link", { name: "Albums" });
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByRole("link", { name: "专辑" })).toBe(albums);
+      expect(albums).toHaveAccessibleDescription(/设置 → 外观.*导航栏顺序/u);
+      expect(albums).toHaveAttribute("href", "#/albums");
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
+
   it("puts Clean up under Insights, saying how many names wait", () => {
     render(<Nav route={{ view: "library" }} toDo={30} />);
 

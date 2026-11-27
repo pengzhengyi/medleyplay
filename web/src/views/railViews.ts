@@ -20,6 +20,8 @@ import {
 
 import { VIEW_LABELS } from "../rail";
 import type { RailView } from "../railOrder";
+import type { Announcements, UniqueIdentifier } from "@dnd-kit/core";
+import type { Words } from "../locale";
 
 /** A view the rail links to. */
 export type Top = RailView | "clean-up" | "settings";
@@ -52,4 +54,30 @@ export function railEntriesIn(order: readonly RailView[]): readonly RailEntry[] 
     view === "insights" ? [RAIL_ENTRIES.insights, RAIL_ENTRIES["clean-up"]] : [RAIL_ENTRIES[view]],
   );
   return [...entries, RAIL_ENTRIES.settings];
+}
+
+export function railAnnouncements(order: readonly RailView[], t: Words): Announcements {
+  const name = (id: UniqueIdentifier) =>
+    t(
+      order.find((view) => view === id) === undefined ? "View" : RAIL_ENTRIES[id as RailView].label,
+    );
+  const position = (id: UniqueIdentifier) => order.findIndex((view) => view === id) + 1;
+  return {
+    onDragStart: ({ active }) => t("Picked up {{name}}.", { name: name(active.id) }),
+    onDragOver: ({ active, over }) =>
+      over === null || over.id === active.id
+        ? undefined
+        : t("{{name}} would move to position {{position}}.", {
+            name: name(active.id),
+            position: position(over.id),
+          }),
+    onDragEnd: ({ active, over }) =>
+      over === null || over.id === active.id
+        ? t("{{name}} stays where it was.", { name: name(active.id) })
+        : t("{{name}} moved to position {{position}}.", {
+            name: name(active.id),
+            position: position(over.id),
+          }),
+    onDragCancel: ({ active }) => t("{{name}} stays where it was.", { name: name(active.id) }),
+  };
 }

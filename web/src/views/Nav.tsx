@@ -35,7 +35,7 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 
 import { type RailView, setRailOrder, useRailOrder } from "../railOrder";
-import { type RailEntry, type Top, railEntriesIn } from "./railViews";
+import { type RailEntry, type Top, railAnnouncements, railEntriesIn } from "./railViews";
 import { type Route, hrefOf } from "../routes";
 import { useWords } from "../locale";
 
@@ -109,7 +109,7 @@ export function Nav({
       setRailOrder(arrayMove([...order], from, to));
     }
   };
-  const linkOf = ({ view, label: english, icon: ViewIcon }: RailEntry) => {
+  const linkOf = ({ view, label: english, icon: ViewIcon }: RailEntry, describedBy?: string) => {
     const label = t(english);
     const current = view === top;
     const count = countOf(view);
@@ -121,6 +121,7 @@ export function Nav({
         href={hrefOf({ view })}
         aria-current={current ? "page" : undefined}
         aria-label={counted ? named : undefined}
+        aria-describedby={describedBy}
         title={collapsed ? named : undefined}
       >
         <ViewIcon weight={current ? "fill" : "regular"} aria-hidden />
@@ -178,13 +179,21 @@ export function Nav({
         collisionDetection={closestCenter}
         onDragEnd={drop}
         onDragCancel={swallowNextClick}
+        accessibility={{
+          announcements: railAnnouncements(order, t),
+          screenReaderInstructions: {
+            draggable: t(
+              "Use Rail order in Settings → Appearance to reorder views with the keyboard.",
+            ),
+          },
+        }}
       >
         <SortableContext items={[...order]} strategy={rectSortingStrategy}>
           <ul className="views-list">
             {entries.map((entry) =>
               isMovable(entry.view) ? (
                 <MovableView key={entry.view} view={entry.view}>
-                  {linkOf(entry)}
+                  {(describedBy) => linkOf(entry, describedBy)}
                 </MovableView>
               ) : (
                 <li key={entry.view} className={entry.under === true ? "under" : undefined}>
@@ -331,11 +340,13 @@ function MovableView({
   children,
 }: {
   readonly view: RailView;
-  readonly children: ReactNode;
+  readonly children: (describedBy: string) => ReactNode;
 }) {
   // Only the pointer's listeners: the link keeps its own role, and Enter still opens it.
   // Settings › Appearance moves views by keyboard.
-  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id: view });
+  const { attributes, setNodeRef, listeners, transform, transition, isDragging } = useSortable({
+    id: view,
+  });
   return (
     <li
       ref={setNodeRef}
@@ -343,7 +354,7 @@ function MovableView({
       style={{ transform: CSS.Translate.toString(transform), transition }}
       {...listeners}
     >
-      {children}
+      {children(attributes["aria-describedby"])}
     </li>
   );
 }

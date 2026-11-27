@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { api } from "./api";
 import { ASK_AGAIN_MS } from "./views/DeviceWaiting";
+import { LanguageSelect } from "./views/LanguageSelect";
 import { ALICE, enricherOf, modeOf, serve, signedIn, trackOf } from "./testing/server";
 
 /** The rail of views, where who is signed in sits on a laptop. */
@@ -16,6 +17,53 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("links to GitHub at the right end of the header after keyboard shortcuts", async () => {
+    serve(signedIn([]));
+    render(<App />);
+
+    const github = await screen.findByRole("link", {
+      name: "View medleyplay on GitHub (opens in a new tab)",
+    });
+    const header = screen.getAllByRole("banner").find((banner) => banner.contains(github));
+    if (header === undefined) throw new Error("GitHub link is not in the header");
+    const shortcuts = within(header).getByRole("button", { name: "Keyboard shortcuts" });
+
+    expect(github).toHaveAttribute("href", "https://github.com/pengzhengyi/medleyplay");
+    expect(github).toHaveAttribute("target", "_blank");
+    expect(github).toHaveAttribute("rel", "noopener noreferrer");
+    expect(github).toHaveAttribute("title", "View medleyplay on GitHub (opens in a new tab)");
+    expect(header.lastElementChild).toBe(github);
+    expect(shortcuts.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(
+      0,
+    );
+
+    within(header).getByRole("button", { name: "Alice: account" }).focus();
+    await userEvent.tab();
+
+    expect(github).toHaveFocus();
+  });
+
+  it("translates the GitHub link name and tooltip when the device language changes", async () => {
+    serve(signedIn([]));
+    render(
+      <>
+        <App />
+        <LanguageSelect />
+      </>,
+    );
+    const language = screen.getByRole("combobox", { name: "Language" });
+
+    await userEvent.selectOptions(language, "zh-Hans");
+    try {
+      const github = await screen.findByRole("link", {
+        name: "在 GitHub 上查看 medleyplay（在新标签页中打开）",
+      });
+      expect(github).toHaveAttribute("title", "在 GitHub 上查看 medleyplay（在新标签页中打开）");
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
+
   it("uses the early device request once in Strict Mode before signing an admitted device in", async () => {
     let admit: () => void = () => undefined;
     const admission = new Promise<void>((resolve) => {

@@ -1,9 +1,155 @@
 // cspell:ignore charl
 import { type Page, expect, test } from "@playwright/test";
 
-import type { Track } from "../src/api";
+import type { Mode, Track, WaitingDevice } from "../src/api";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Views" });
+
+for (const width of [320, 390, 1280]) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    const scenarios = [
+      { online: true, waitingCount: 0 },
+      { online: false, waitingCount: 0 },
+      ...(width < 1280
+        ? [
+            { online: true, waitingCount: 1 },
+            { online: false, waitingCount: 12 },
+          ]
+        : []),
+    ];
+    for (const { online, waitingCount } of scenarios) {
+      test(`the GitHub header link stays at the first row's right edge at ${String(width)}px in ${colorScheme}, ${online ? "online" : "offline"}, ${String(waitingCount)} waiting`, async ({
+        page,
+        baseURL,
+      }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.emulateMedia({ colorScheme });
+        await page.route("**/*", (route) => {
+          const request = route.request();
+          return request.method() === "GET" &&
+            new URL(request.url()).origin === new URL(baseURL ?? "").origin
+            ? route.continue()
+            : route.abort();
+        });
+        const response = await page.request.get("/api/mode");
+        expect(response.ok()).toBe(true);
+        const mode = (await response.json()) as Mode;
+        const shownMode = {
+          ...mode,
+          online,
+          setting: "auto",
+          reason: online ? "online" : "unreachable",
+        };
+        await page.route("**/api/mode", (route) =>
+          route.fulfill({
+            json: shownMode,
+          }),
+        );
+        const waiting: WaitingDevice[] = Array.from({ length: waitingCount }, (_, index) => ({
+          id: String(index),
+          label: "Safari on iPhone",
+          address: "192.0.2.1",
+          code: "4821",
+          since: "2026-11-07T18:00:00Z",
+        }));
+        await page.route("**/api/events?*", (route) =>
+          route.fulfill({
+            contentType: "text/event-stream",
+            body: `event: ready\ndata: {}\n\nevent: mode\ndata: ${JSON.stringify(shownMode)}\n\nevent: devices\ndata: ${JSON.stringify({ waiting })}\n\n`,
+          }),
+        );
+        const chinese = !online && waitingCount > 0 && colorScheme === "dark";
+        await page.addInitScript(
+          (language) => {
+            localStorage.setItem("medleyplay.language", language);
+          },
+          chinese ? "zh-Hans" : "en",
+        );
+        await page.goto("/");
+        const github = page.getByRole("link", {
+          name: chinese
+            ? "在 GitHub 上查看 medleyplay（在新标签页中打开）"
+            : "View medleyplay on GitHub (opens in a new tab)",
+        });
+        await expect(github).toBeVisible();
+        await expect(page.getByRole("link", { name: "medleyplay", exact: true })).toBeVisible();
+        if (!online) {
+          await expect(page.locator(".mode-note-link")).toBeVisible();
+        }
+        if (waitingCount > 0) {
+          await expect(
+            page.getByRole("button", {
+              name:
+                waitingCount === 1 ? "1 device waiting" : `${String(waitingCount)} devices waiting`,
+            }),
+          ).toBeVisible();
+        }
+        if (chinese) {
+          // A failed device answer renders this sibling; inserting it avoids answering a device.
+          await page.locator(".devices-waiting").evaluate((button) => {
+            const failure = document.createElement("span");
+            failure.className = "hint";
+            failure.setAttribute("role", "alert");
+            failure.textContent =
+              "无法允许此设备，因为它已停止等待批准。请让设备重新连接，然后再试一次。";
+            button.after(failure);
+          });
+          await expect(page.getByRole("alert")).toBeVisible();
+        }
+
+        const layout = await page.locator(".top").evaluate((header) => {
+          const box = header.getBoundingClientRect();
+          const brand = header.querySelector("h1")?.getBoundingClientRect();
+          const link = header.querySelector('a[href="https://github.com/pengzhengyi/medleyplay"]');
+          const github = link?.getBoundingClientRect();
+          const shortcuts = header.querySelector(".keys-button")?.getBoundingClientRect();
+          const offline = header.querySelector(".mode-note")?.getBoundingClientRect();
+          const devices = header.querySelector(".devices-waiting")?.getBoundingClientRect();
+          const failure = header.querySelector('[role="alert"]')?.getBoundingClientRect();
+          return {
+            right: box.right - parseFloat(getComputedStyle(header).paddingRight),
+            brandMiddle: brand && brand.y + brand.height / 2,
+            githubMiddle: github && github.y + github.height / 2,
+            githubLeft: github?.left,
+            githubRight: github?.right,
+            githubBottom: github?.bottom,
+            offlineTop: offline?.top,
+            devicesTop: devices?.top,
+            failureTop: failure?.top,
+            failureBottom: failure?.bottom,
+            headerBottom: box.bottom,
+            shortcutsRight: shortcuts?.right,
+            fits: document.documentElement.scrollWidth <= window.innerWidth,
+          };
+        });
+
+        expect(layout.githubMiddle).toBeCloseTo(layout.brandMiddle ?? 0, 0);
+        expect(layout.githubRight).toBeCloseTo(layout.right, 0);
+        expect(layout.fits).toBe(true);
+        if (width === 1280) {
+          expect(layout.githubLeft).toBeGreaterThan(layout.shortcutsRight ?? width);
+        } else if (!online) {
+          expect(layout.offlineTop).toBeGreaterThan(layout.githubBottom ?? 900);
+        }
+        if (waitingCount > 0) {
+          expect(layout.devicesTop).toBeGreaterThan(layout.githubBottom ?? 900);
+        }
+        if (chinese) {
+          expect(layout.failureTop).toBeGreaterThan(layout.githubBottom ?? 900);
+          expect(layout.failureBottom).toBeLessThan(layout.headerBottom);
+        }
+
+        await github.focus();
+        await page.keyboard.press("Shift+Tab");
+        await page.keyboard.press("Tab");
+
+        await expect(github).toBeFocused();
+        await expect(github).toHaveCSS("outline-style", "solid");
+        await expect(github).toHaveCSS("outline-width", "2px");
+      });
+    }
+  }
+}
 
 /** Give Alpha two separate credits and an album on the test server's read-only track response. */
 async function giveAlphaCredits(page: Page, artists: readonly string[] = ["Adele", "Sia"]) {

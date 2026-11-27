@@ -5,6 +5,7 @@
 import {
   CloudSlashIcon,
   DeviceMobileSpeakerIcon,
+  GithubLogoIcon,
   KeyboardIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
@@ -666,7 +667,7 @@ export function Library({
     >
       <header ref={top} className="top">
         <h1>
-          <a className="wordmark" href={hrefOf({ view: "library" })}>
+          <a className="wordmark" href={hrefOf({ view: "library" })} aria-label="medleyplay">
             <WaveformIcon weight="bold" aria-hidden />
             <span className="wordmark-name">medleyplay</span>
           </a>
@@ -681,30 +682,32 @@ export function Library({
           tracks={tracks}
           links={links}
         />
-        {library.mode !== null && !library.mode.online && (
-          <span className="mode-note">
-            <a
-              className="mode-note-link"
-              href={hrefOf({ view: "settings" })}
-              title="See the network in Settings"
-            >
-              <CloudSlashIcon weight="bold" aria-hidden />
-              <span>
-                {stillSince === library.mode.since ? "Still offline" : "Offline"}
-                <span className="why">: {offlineBecause(library.mode)}</span>
-              </span>
-            </a>
-            {checkable(library.mode) && (
-              <CheckNetwork
-                onChecked={(mode) => {
-                  library.modeChecked(mode);
-                  setStillSince(mode.online ? null : mode.since);
-                }}
-              />
-            )}
-          </span>
-        )}
-        {account.role === "admin" && <WaitingDevices waiting={library.waitingDevices} />}
+        <div className="header-notices">
+          {library.mode !== null && !library.mode.online && (
+            <span className="mode-note">
+              <a
+                className="mode-note-link"
+                href={hrefOf({ view: "settings" })}
+                title="See the network in Settings"
+              >
+                <CloudSlashIcon weight="bold" aria-hidden />
+                <span>
+                  {stillSince === library.mode.since ? "Still offline" : "Offline"}
+                  <span className="why">: {offlineBecause(library.mode)}</span>
+                </span>
+              </a>
+              {checkable(library.mode) && (
+                <CheckNetwork
+                  onChecked={(mode) => {
+                    library.modeChecked(mode);
+                    setStillSince(mode.online ? null : mode.since);
+                  }}
+                />
+              )}
+            </span>
+          )}
+          {account.role === "admin" && <WaitingDevices waiting={library.waitingDevices} />}
+        </div>
         <ThemeSwitch />
         <button
           type="button"
@@ -732,6 +735,16 @@ export function Library({
         <span className="header-account">
           <AccountMenu account={{ name: account.display_name, onSignOut: signOut }} />
         </span>
+        <a
+          className="icon"
+          href="https://github.com/pengzhengyi/medleyplay"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t("View medleyplay on GitHub (opens in a new tab)")}
+          title={t("View medleyplay on GitHub (opens in a new tab)")}
+        >
+          <GithubLogoIcon aria-hidden />
+        </a>
       </header>
       <Nav
         route={route}

@@ -1,5 +1,7 @@
 """Identify language hints for original lyrics and their timed translations."""
 
+# cspell:ignore kaze omoide yume yureru
+
 import pytest
 
 from medleyplay.application.lyrics_language import lyrics_languages

@@ -8,6 +8,7 @@
 
 import { useId, useRef } from "react";
 
+import { useWords } from "../locale";
 import { Modal } from "./Modal";
 
 /** Ask whether to ask the AI again about `title`, calling `onAsk` once someone agrees. */
@@ -22,6 +23,7 @@ export function AskAiAgain({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
+  const t = useWords();
   const close = () => {
     ref.current?.close();
   };
@@ -34,10 +36,12 @@ export function AskAiAgain({
       onClose={onClose}
     >
       <div className="card">
-        <h2 id={`${id}-title`}>Ask the AI again?</h2>
+        <h2 id={`${id}-title`}>{t("Ask the AI again?")}</h2>
         <p id={`${id}-why`}>
-          The AI was asked about “{title}” in the last 24 hours. Asking again sends your AI provider
-          another request, which may cost money, and it will likely answer the same.
+          {t(
+            "The AI was asked about “{{title}}” in the last 24 hours. Asking again sends your AI provider another request, which may cost money, and it will likely answer the same.",
+            { title },
+          )}
         </p>
         <footer className="dialog-buttons">
           <button
@@ -48,7 +52,7 @@ export function AskAiAgain({
               close();
             }}
           >
-            Ask again
+            {t("Ask again")}
           </button>
         </footer>
       </div>

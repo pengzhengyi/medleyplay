@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -361,6 +361,41 @@ describe("the notes offered when asking the AI", () => {
       "Name the album the song first came out on.",
     ]);
     expect(songs.getAllByRole("textbox")).toHaveLength(2);
+  });
+
+  it("translates how to use and remove shared AI notes without translating their text", async () => {
+    const { ai } = await notesOpen([]);
+    const user = userEvent.setup();
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const note = "Name the album the song first came out on.";
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const details = within(ai.getByRole("group", { name: "查询详情时可用的备注" }));
+      expect(details.getByRole("textbox", { name: `备注：${note}` })).toHaveValue(note);
+      expect(details.getByRole("button", { name: `移除备注「${note}」` })).toHaveAttribute(
+        "title",
+        "移除此备注",
+      );
+      expect(ai.getByText(/即可勾选备注并随问题一同发送/u)).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("keeps a new shared note open while confirming or canceling IME input", async () => {
+    const sent: unknown[] = [];
+    const { songs } = await notesOpen(sent);
+    await userEvent.click(songs.getByRole("button", { name: "Add a note" }));
+    const draft = songs.getByRole("textbox", { name: "New note" });
+    fireEvent.change(draft, { target: { value: "现场录音" } });
+
+    fireEvent.keyDown(draft, { key: "Escape", isComposing: true });
+    fireEvent.keyDown(draft, { key: "Enter", keyCode: 229 });
+
+    expect(songs.getByRole("textbox", { name: "New note" })).toHaveValue("现场录音");
+    expect(sent).toEqual([]);
   });
 
   it("adds a note for asking for songs, saved once typed", async () => {

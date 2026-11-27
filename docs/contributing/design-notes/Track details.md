@@ -147,9 +147,14 @@ values.
   its origin's mark.
 - **A song's album is folded:** the *Album* fields fold to one line saying
   its album, *Unknown* for an unreviewed blank, or *No album (single)* for a
-  household blank. Open the fields and choose **No album (single)** to keep
-  an intentional blank, even when no origin names an album. **Save** records
-  it; **Remove blank override** restores the next origin's value, or unknown
+  household blank. A compact **Remove album and mark as single** cross beside
+  the fold arrow asks for confirmation, even when the album is unknown.
+  Confirming stages an intentional blank; **Save** in Edit details records it.
+  Stored details and files are not deleted, though album-derived details may
+  no longer appear under the existing origin rules. Closing the prompt or
+  pressing Escape leaves the draft unchanged. The prompt closes if its details
+  or kind change, or the editor closes. Already confirmed singles have no
+  remove button. **Remove blank override** restores the next origin's value, or unknown
   when none names an album. Choosing the **Song** kind alone does not mean a
   single. The single choice is not offered for songs inside an album file.
   It is also hidden while **Guess again** waits for Save to resolve the kind.

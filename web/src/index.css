@@ -5908,15 +5908,48 @@ dialog.modal::backdrop {
 }
 
 /* A song's album, folded to one line saying it, opened to edit. */
+.detail-album {
+  position: relative;
+}
+
+.detail-remove-album {
+  position: absolute;
+  top: 0;
+  right: 1.5rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.detail-remove-album:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.detail-remove-album:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
 .detail-fold {
   margin: 0 0 1rem;
 }
 
 .detail-fold-summary {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.6rem;
   margin: 0 0 0.4rem;
+  min-height: 2rem;
   font-size: 0.85rem;
   cursor: pointer;
 }
@@ -5936,6 +5969,14 @@ dialog.modal::backdrop {
   color: var(--ink);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.can-remove-album .detail-fold-value {
+  margin-right: 2rem;
+}
+
+.single-confirmation .card {
+  width: min(28rem, calc(100vw - 2rem));
 }
 
 .detail-fold:not([open]) .detail-fold-value {
@@ -6249,6 +6290,7 @@ dialog.modal::backdrop {
 
 .kind-mark:has(.lyrics-badge) {
   position: relative;
+  isolation: isolate;
 }
 
 .photo-suggestion-art > .cover {
@@ -8735,6 +8777,7 @@ kbd {
 
 .playing-kind {
   position: relative;
+  isolation: isolate;
   display: inline-grid;
   flex: none;
   place-items: center;

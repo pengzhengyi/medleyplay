@@ -4,6 +4,7 @@ import {
   fireEvent,
   type queries,
   render,
+  renderHook,
   screen,
   waitFor,
   within,
@@ -20,6 +21,7 @@ import {
   type VideoText,
 } from "../api";
 import { LOOKUPS, type Lookup } from "../library/lookups";
+import { useLanguageChoice } from "../locale";
 import type { TrackLookup } from "../library/useLibrary";
 import {
   ALBUM_FILE_ORIGINS,
@@ -1269,9 +1271,120 @@ describe("the kind", () => {
 });
 
 describe("a song's album", () => {
-  const fold = (dialog: HTMLElement) =>
-    within(dialog).getByText("Album", { selector: ".detail-fold-title" }).closest("details");
+  const fold = (dialog: HTMLElement) => dialog.querySelector<HTMLDetailsElement>(".detail-fold");
   const summary = (dialog: HTMLElement) => fold(dialog)?.querySelector("summary");
+  const markSingle = async (dialog: HTMLElement) => {
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Remove album and mark as single" }),
+    );
+    const confirmation = screen.getByRole("dialog", { name: "Mark as single?" });
+    await userEvent.click(within(confirmation).getByRole("button", { name: "Mark as single" }));
+  };
+
+  it("translates the remove control and confirmation into Simplified Chinese", async () => {
+    const { result } = renderHook(() => useLanguageChoice());
+    const original = result.current[0];
+    const { dialog, onSave } = await renderDialog();
+    act(() => {
+      result.current[1]("zh-Hans");
+    });
+    try {
+      const remove = within(dialog).getByRole("button", { name: "移除专辑归属并标记为单曲" });
+      expect(remove).toHaveAttribute("title", "移除专辑归属并标记为单曲");
+
+      await userEvent.click(remove);
+
+      const confirmation = screen.getByRole("dialog", { name: "标记为单曲？" });
+      expect(confirmation).toHaveTextContent(
+        "移除此歌曲的专辑归属并标记为单曲？不会删除已保存的详情或文件，但来自专辑的详情可能不再显示。请在「编辑详情」中选择「保存」以应用此更改。",
+      );
+      await userEvent.click(within(confirmation).getByRole("button", { name: "标记为单曲" }));
+      expect(summary(dialog)).toHaveTextContent("无专辑（单曲）");
+      expect(onSave).not.toHaveBeenCalled();
+    } finally {
+      act(() => {
+        result.current[1](original);
+      });
+    }
+  });
+
+  it.each([false, true])("asks before removing an album with the fields open: %s", async (open) => {
+    const { dialog, onSave } = await renderDialog(detailsOf(7, { album: "Sessions" }));
+    if (open) await userEvent.click(within(dialog).getByText("Sessions", { selector: "span" }));
+    const remove = within(dialog).getByRole("button", { name: "Remove album and mark as single" });
+
+    expect(remove).toHaveAttribute("title", "Remove album and mark as single");
+    await userEvent.click(remove);
+
+    const confirmation = screen.getByRole("dialog", { name: "Mark as single?" });
+    expect(confirmation).toHaveTextContent(
+      "Remove this song’s album assignment and mark it as a single? Stored details and files are not deleted, but album-derived details may no longer appear. Choose Save in Edit details to apply this change.",
+    );
+    expect(fold(dialog)?.open).toBe(open);
+    expect(summary(dialog)).toHaveTextContent("Sessions");
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(confirmation).toHaveFocus();
+  });
+
+  it.each(["Close", "Escape"])(
+    "keeps the draft when dismissing confirmation with %s",
+    async (action) => {
+      const { dialog, onSave, onClose } = await renderDialog(detailsOf(7, { album: "Sessions" }));
+      await userEvent.type(box(dialog, "Title"), " draft");
+      const remove = within(dialog).getByRole("button", {
+        name: "Remove album and mark as single",
+      });
+      await userEvent.click(remove);
+      const confirmation = screen.getByRole("dialog", { name: "Mark as single?" });
+
+      if (action === "Close")
+        await userEvent.click(within(confirmation).getByRole("button", { name: "Close" }));
+      else await userEvent.keyboard("{Escape}");
+
+      expect(screen.queryByRole("dialog", { name: "Mark as single?" })).toBeNull();
+      expect(summary(dialog)).toHaveTextContent("Sessions");
+      expect(box(dialog, "Title")).toHaveValue("ケビョウニンゲン draft");
+      expect(remove).toHaveFocus();
+      expect(dialog).toHaveAttribute("open");
+      expect(onClose).not.toHaveBeenCalled();
+      expect(onSave).not.toHaveBeenCalled();
+    },
+  );
+
+  it("stages only the album assignment until Save and returns focus to the fold", async () => {
+    const { dialog, onSave } = await renderDialog(
+      detailsOf(7, {
+        album: "Sessions",
+        title: "Song",
+        artist: "Blue Room",
+        year: 2025,
+        genre: "Pop",
+      }),
+    );
+    const remove = within(dialog).getByRole("button", { name: "Remove album and mark as single" });
+    remove.focus();
+    await userEvent.keyboard("{Enter}");
+    const confirmation = screen.getByRole("dialog", { name: "Mark as single?" });
+
+    await userEvent.click(within(confirmation).getByRole("button", { name: "Mark as single" }));
+
+    expect(screen.queryByRole("dialog", { name: "Mark as single?" })).toBeNull();
+    expect(summary(dialog)).toHaveTextContent("No album (single)");
+    expect(summary(dialog)).toHaveFocus();
+    expect(fold(dialog)).not.toHaveAttribute("open");
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
+    expect(box(dialog, "Title")).toHaveValue("Song");
+    expect(box(dialog, "Genre")).toHaveValue("Pop");
+    expect(onSave).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByText("No album (single)", { selector: "span" }));
+    expect(box(dialog, "Year")).toHaveValue(2025);
+
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "" });
+  });
 
   it("leaves an unreviewed blank album unknown, even when Song is chosen", async () => {
     const { dialog, onSave } = await renderDialog();
@@ -1285,12 +1398,63 @@ describe("a song's album", () => {
     expect(onSave).toHaveBeenCalledExactlyOnceWith({ kind: "song" });
   });
 
+  it("dismisses the prompt when new metadata arrives without accepting the old assignment", async () => {
+    const { dialog, onSave, lookUp } = await renderDialog(detailsOf(7), undefined, undefined, {
+      reloaded: detailsOf(7, {}, { files: { title: "Song", album: "New album" } }),
+    });
+    await userEvent.type(box(dialog, "Genre"), "Pop");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Remove album and mark as single" }),
+    );
+
+    lookUp({ enricher: "musicbrainz", state: "succeeded", message: "" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Mark as single?" })).toBeNull();
+    });
+    expect(summary(dialog)).toHaveTextContent("New album");
+    expect(box(dialog, "Genre")).toHaveValue("Pop");
+    expect(
+      within(dialog).getByRole("button", { name: "Remove album and mark as single" }),
+    ).toHaveFocus();
+    expect(onSave).not.toHaveBeenCalled();
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ genre: "Pop" });
+  });
+
+  it("dismisses the prompt when the kind changes and does not reopen it on Song", async () => {
+    const { dialog, onSave } = await renderDialog(detailsOf(7, { album: "Sessions" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Remove album and mark as single" }),
+    );
+
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Album" }));
+    expect(screen.queryByRole("dialog", { name: "Mark as single?" })).toBeNull();
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Song" }));
+
+    expect(screen.queryByRole("dialog", { name: "Mark as single?" })).toBeNull();
+    expect(summary(dialog)).toHaveTextContent("Sessions");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("closes the pending confirmation with the editor without saving", async () => {
+    const { dialog, onSave, onClose } = await renderDialog();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Remove album and mark as single" }),
+    );
+
+    fireEvent(dialog, new Event("close"));
+
+    expect(screen.queryByRole("dialog", { name: "Mark as single?" })).toBeNull();
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("saves a deliberate single on an unknown album and keeps it after reloading", async () => {
     const { dialog, onSave, load } = await renderDialog();
     await userEvent.click(within(dialog).getByText("Unknown"));
 
-    const albumChoices = within(dialog).getByRole("group", { name: "Other values for Album" });
-    await userEvent.click(within(albumChoices).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
 
     expect(summary(dialog)).toHaveTextContent("No album (single)");
     expect(within(dialog).getByRole("button", { name: "Save" })).toBeEnabled();
@@ -1308,6 +1472,9 @@ describe("a song's album", () => {
   it("reopens a saved single and can remove its blank album override", async () => {
     const { dialog, onSave, load } = await renderDialog(detailsOf(7, { album: "" }));
     expect(summary(dialog)).toHaveTextContent("No album (single)");
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
     await userEvent.click(within(dialog).getByText("No album (single)", { selector: "span" }));
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove blank override" }));
@@ -1323,7 +1490,7 @@ describe("a song's album", () => {
       reloaded: detailsOf(7, { album: "Corrected title", genre: "Jazz" }),
     });
     await userEvent.click(within(dialog).getByText("Unknown"));
-    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
     lookUp({ enricher: "musicbrainz", state: "succeeded", message: "" });
     await within(dialog).findByDisplayValue("Jazz");
 
@@ -1336,7 +1503,7 @@ describe("a song's album", () => {
   it("saves a later album edit rather than the earlier single choice", async () => {
     const { dialog, onSave } = await renderDialog();
     await userEvent.click(within(dialog).getByText("Unknown"));
-    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
 
     await userEvent.type(box(dialog, "Album"), "Sessions");
     await save(dialog);
@@ -1347,7 +1514,7 @@ describe("a song's album", () => {
   it("does not keep single intent after typing and then clearing an album", async () => {
     const { dialog } = await renderDialog();
     await userEvent.click(within(dialog).getByText("Unknown"));
-    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
 
     await userEvent.type(box(dialog, "Album"), "Sessions");
     await userEvent.clear(box(dialog, "Album"));
@@ -1366,7 +1533,7 @@ describe("a song's album", () => {
       await userEvent.click(
         within(dialog).getByText("Sessions", { selector: ".detail-fold-value" }),
       );
-      await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+      await markSingle(dialog);
 
       await userEvent.click(within(dialog).getByRole("radio", { name: "Album" }));
 
@@ -1390,7 +1557,7 @@ describe("a song's album", () => {
           selector: ".detail-fold-value",
         }),
       );
-      await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+      await markSingle(dialog);
       lookUp({ enricher: "musicbrainz", state: "succeeded", message: "" });
       await within(dialog).findByDisplayValue("Jazz");
 
@@ -1413,13 +1580,15 @@ describe("a song's album", () => {
     await userEvent.clear(title);
     await userEvent.type(title, "Edited title");
     await userEvent.click(within(dialog).getByText("Unknown"));
-    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
     lookUp({ enricher: "musicbrainz", state: "succeeded", message: "" });
     await within(dialog).findByDisplayValue("Jazz");
 
     await save(dialog);
 
-    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
     expect(box(dialog, "Album")).toHaveValue("Sessions");
     expect(onSave).toHaveBeenCalledExactlyOnceWith({ title: "Edited title" });
   });
@@ -1441,14 +1610,16 @@ describe("a song's album", () => {
     await userEvent.type(title, "Edited title");
     await userEvent.click(within(dialog).getByRole("radio", { name: "Song" }));
     await userEvent.click(within(dialog).getByText("Unknown"));
-    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
     lookUp({ enricher: "musicbrainz", state: "succeeded", message: "" });
     await within(dialog).findByDisplayValue("Jazz");
 
     await save(dialog);
 
     expect(within(dialog).getByRole("radio", { name: "Album" })).toBeChecked();
-    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
     expect(onSave).toHaveBeenCalledExactlyOnceWith({ title: "Edited title" });
   });
 
@@ -1456,7 +1627,7 @@ describe("a song's album", () => {
     const { dialog, onSave } = await renderDialog();
     await userEvent.click(within(dialog).getByText("Unknown"));
     await userEvent.type(box(dialog, "Album"), "Draft album");
-    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
 
     await userEvent.click(within(dialog).getByRole("radio", { name: "Album" }));
 
@@ -1471,11 +1642,13 @@ describe("a song's album", () => {
       kind: { value: "song", reason: "named" },
     });
     await userEvent.click(within(dialog).getByText("Unknown"));
-    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+    await markSingle(dialog);
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Guess again" }));
 
-    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
     expect(summary(dialog)).toHaveTextContent("AlbumUnknown");
     load.mockResolvedValue({ ...detailsOf(7), kind: { value: "album", reason: "length" } });
     await save(dialog);
@@ -1483,7 +1656,9 @@ describe("a song's album", () => {
     await waitFor(() => {
       expect(within(dialog).getByRole("radio", { name: "Album" })).toBeChecked();
     });
-    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
   });
 
   it("labels a whitespace-only album edit as the single that Save records", async () => {
@@ -1507,7 +1682,9 @@ describe("a song's album", () => {
     });
     await userEvent.click(within(dialog).getByText("Unknown"));
 
-    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
   });
 
   it("is folded, saying the album a song is on", async () => {
@@ -1535,7 +1712,9 @@ describe("a song's album", () => {
     expect(within(dialog).getByRole("group", { name: "Album" })).toContainElement(
       box(dialog, "Album"),
     );
-    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Remove album and mark as single" }),
+    ).toBeNull();
   });
 });
 

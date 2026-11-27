@@ -26,6 +26,7 @@ import {
   QuotesIcon,
   ScissorsIcon,
   VinylRecordIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import {
   type ReactNode,
@@ -223,6 +224,17 @@ export function EditDetails({
   // The kind chosen, `null` to guess it again, or `undefined` while unchanged.
   // A song's album, folded until opened: many songs are singles, on no album.
   const [albumOpen, setAlbumOpen] = useState(false);
+  const albumSummary = useRef<HTMLElement>(null);
+  const removeAlbum = useRef<HTMLButtonElement>(null);
+  const returnFromSingle = useCallback(() => {
+    (removeAlbum.current ?? albumSummary.current ?? dialog.current)?.focus();
+  }, []);
+  const [singleRequest, setSingleRequest] = useState<{
+    details: Details;
+    edits: typeof edits;
+    trackId: number;
+    kind: Kind | null | undefined;
+  }>();
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
   const [readNote, setReadNote] = useState<VideoRead>();
@@ -493,18 +505,18 @@ export function EditDetails({
             setOwn(next);
           },
         };
-  const singleChoice = canConfirmSingle ? (
-    <button
-      type="button"
-      className="detail-alternative"
-      disabled={saving || reading || covering || isSingle}
-      onClick={() => {
-        setSingleRequested(true);
-      }}
-    >
-      {t("No album (single)")}
-    </button>
-  ) : null;
+  const canMarkSingle = canConfirmSingle && !isSingle;
+  if (
+    singleRequest !== undefined &&
+    (singleRequest.details !== details ||
+      singleRequest.edits !== edits ||
+      singleRequest.trackId !== track.id ||
+      singleRequest.kind !== kind ||
+      panel !== "details" ||
+      !canMarkSingle)
+  ) {
+    setSingleRequest(undefined);
+  }
   const boxes = (group: DetailField["group"]) =>
     details !== undefined &&
     DETAIL_FIELDS.filter((field) => field.group === group).map((field) => (
@@ -514,7 +526,6 @@ export function EditDetails({
         details={details}
         own={own}
         confirmedSingle={confirmedSingle}
-        singleChoice={field.name === "album" ? singleChoice : null}
         onCancelSingle={
           field.name === "album" && confirmedSingle
             ? () => {
@@ -538,7 +549,10 @@ export function EditDetails({
       }
       describedBy="edit-details-song"
       locked={saving || reading || covering || songsLocked}
-      onClose={onClose}
+      onClose={() => {
+        setSingleRequest(undefined);
+        onClose();
+      }}
     >
       {panel === "songs" && songs !== undefined && (
         <div className="card songs-card">
@@ -692,28 +706,45 @@ export function EditDetails({
                   {boxes("album")}
                 </fieldset>
               ) : (
-                <details
-                  className="detail-fold"
-                  open={albumOpen}
-                  onToggle={(event) => {
-                    setAlbumOpen(event.currentTarget.open);
-                  }}
-                >
-                  <summary className="detail-fold-summary">
-                    <span className="detail-fold-title">{t("Album")}</span>
-                    <span className="detail-fold-value">
-                      {albumName.trim() === ""
-                        ? isSingle
-                          ? t("No album (single)")
-                          : t("Unknown")
-                        : albumName}
-                    </span>
-                  </summary>
-                  <fieldset className="detail-group">
-                    <legend className="visually-hidden">{t("Album")}</legend>
-                    {boxes("album")}
-                  </fieldset>
-                </details>
+                <div className={canMarkSingle ? "detail-album can-remove-album" : "detail-album"}>
+                  {canMarkSingle && (
+                    <button
+                      ref={removeAlbum}
+                      type="button"
+                      className="detail-remove-album"
+                      aria-label={t("Remove album and mark as single")}
+                      title={t("Remove album and mark as single")}
+                      disabled={saving || reading || covering}
+                      onClick={() => {
+                        setSingleRequest({ details, edits, trackId: track.id, kind });
+                      }}
+                    >
+                      <XIcon aria-hidden />
+                    </button>
+                  )}
+                  <details
+                    className="detail-fold"
+                    open={albumOpen}
+                    onToggle={(event) => {
+                      setAlbumOpen(event.currentTarget.open);
+                    }}
+                  >
+                    <summary ref={albumSummary} className="detail-fold-summary">
+                      <span className="detail-fold-title">{t("Album")}</span>
+                      <span className="detail-fold-value">
+                        {albumName.trim() === ""
+                          ? isSingle
+                            ? t("No album (single)")
+                            : t("Unknown")
+                          : albumName}
+                      </span>
+                    </summary>
+                    <fieldset className="detail-group">
+                      <legend className="visually-hidden">{t("Album")}</legend>
+                      {boxes("album")}
+                    </fieldset>
+                  </details>
+                </div>
               )}
             </div>
           </div>
@@ -734,6 +765,72 @@ export function EditDetails({
           </button>
         </footer>
       </form>
+      {singleRequest !== undefined && (
+        <SingleConfirmation
+          onReturnFocus={returnFromSingle}
+          onClose={() => {
+            setSingleRequest(undefined);
+          }}
+          onConfirm={() => {
+            setSingleRequested(true);
+            setSingleRequest(undefined);
+            albumSummary.current?.focus();
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function SingleConfirmation({
+  onClose,
+  onConfirm,
+  onReturnFocus,
+}: {
+  readonly onClose: () => void;
+  readonly onConfirm: () => void;
+  readonly onReturnFocus: () => void;
+}) {
+  const t = useWords();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const title = useId();
+  const description = useId();
+  useEffect(() => {
+    const element = dialog.current;
+    element?.focus();
+    return () => {
+      element?.close();
+      onReturnFocus();
+    };
+  }, [onReturnFocus]);
+  return (
+    <Modal
+      ref={dialog}
+      className="single-confirmation"
+      labelledBy={title}
+      describedBy={description}
+      onClose={onClose}
+    >
+      <div className="card">
+        <h2 id={title}>{t("Mark as single?")}</h2>
+        <p id={description}>
+          {t(
+            "Remove this song’s album assignment and mark it as a single? Stored details and files are not deleted, but album-derived details may no longer appear. Choose Save in Edit details to apply this change.",
+          )}
+        </p>
+        <footer className="dialog-buttons">
+          <button
+            type="button"
+            className="dialog-button"
+            onClick={() => {
+              dialog.current?.close();
+              onConfirm();
+            }}
+          >
+            {t("Mark as single")}
+          </button>
+        </footer>
+      </div>
     </Modal>
   );
 }
@@ -1171,7 +1268,6 @@ function DetailBox({
   details,
   own,
   confirmedSingle,
-  singleChoice,
   onCancelSingle,
   onChange,
   chips,
@@ -1182,7 +1278,6 @@ function DetailBox({
   readonly details: Details;
   readonly own: Own;
   readonly confirmedSingle: boolean;
-  readonly singleChoice: ReactNode;
   readonly onCancelSingle?: (() => void) | undefined;
   readonly onChange: (own: Own) => void;
   /** For the artist: its chips, which take the box's place once there are several. */
@@ -1334,7 +1429,6 @@ function DetailBox({
         role="group"
         aria-label={t("Other values for {{field}}", { field: t(label) })}
       >
-        {singleChoice}
         {canRemoveBlank && (
           <button
             type="button"

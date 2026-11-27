@@ -27,10 +27,10 @@
 
 ## Data
 
-**Interface language belongs to the device.** The page follows the browser's
+**Interface language belongs to the browser.** The page follows the browser's
 language preferences until someone chooses English or Simplified Chinese at
 sign-in or in Settings → Appearance. The choice updates the page without
-reloading the player. The HTML language matches the active translation. See
+reloading the player and does not change the household's settings. See
 [Interface language](#interface-language) for what the client translates.
 
 - **The client loads the whole Library once:** `GET /api/tracks` when the page
@@ -82,16 +82,15 @@ reloading the player. The HTML language matches the active translation. See
 ## Interface language
 
 > [!NOTE]
-> **Status: proposed.** Extend the Simplified Chinese interface from the
-> existing labels to the copy that explains what to do on each screen.
+> **Status: implemented.** The interface language covers app-authored help and
+> feedback as well as labels.
 
-The language applies to the app's own copy, including help, placeholders,
-tooltips, accessible names, and loading, empty, success, and error states.
-Keep the existing English interface, the device preference, and navigation
-behavior. The library's names, lyrics, notes, search input, identifiers, and
-provider-supplied content stay as written.
+English and Simplified Chinese cover app-authored help, placeholders, tooltips,
+accessible names, and loading, empty, success, and error states. The Library's
+names, lyrics, notes, search input, identifiers, and provider-supplied content
+stay as written.
 
-| Screen group | Copy to check |
+| Screen group | Localized copy |
 | --- | --- |
 | Sign-in and the app around every view | First account, device approval, loading, recovery, rail, and shared dialogs |
 | Library and search | Songs, filters and sorting, Artists, Albums, Playlists, search suggestions, Downloaded, and upload and download flows |
@@ -99,39 +98,31 @@ provider-supplied content stay as written.
 | Editors and organizers | Song, lyrics, album, artist, image, and playlist editors; Clean up and Insights |
 | Settings | Every section for listeners and administrators, including explanations, validation, and dependent controls |
 
-The view calls `useWords` at render time for labels, or passes the translator
-to a formatter that needs to assemble a message. Keep message keys as the
-English text where that already works. Use a whole message with named
-placeholders when it contains a name, a count, or another value: the Chinese
-sentence can then put it where it belongs. Use existing i18next plural rules
-when a single key needs different English singular and plural forms. Pass
-stable route IDs and option values separately from their translated labels.
-Translate search explanations and suggestions, but keep the supported search
-syntax and values in executable examples, such as `favorite:yes` and
-`kind:albums`. A language switch leaves the query, URL, and results unchanged.
+`useWords` translates at render time. A formatter that assembles a message takes
+the translator as an argument. A complete message with named placeholders lets
+each language order the values naturally. Count families use i18next plural
+rules rather than choosing a translated suffix in code. English prose keys
+fall back to their text if untranslated; English count families define their
+forms explicitly. Route IDs, form values, and executable search examples such as
+`favorite:yes` and `kind:albums` do not change with the language.
 
-Select translations where the source of a message is known. Use an app status,
-reason code, or field-specific mapping for app-defined text; pass server
-details, provider content, and household names through as values, even if they
-match translation keys. Keep app message keys and arguments in view state, not
-their translated results. Use the active interface language for formatters that
-produce words, even when the browser prefers a different language. Missing
-translations still fall back to English, but fallback does not replace a
-translation of app copy. Reuse the current catalog and tooling; no new
-dependency, storage key, or server-side locale is needed.
+Keep a status code, message key and arguments, or original failure in view state,
+so an open editor can translate it when the language changes. Match app-defined
+refusals by status and known detail where the API returns prose. Localize the
+surrounding message without passing provider details or Library names through the
+catalog. Credential forms use safe failures that do not echo submitted values.
 
-For each increment, record the screens, dialogs, states, and shared formatters
-it covers. Classify its source audit candidates as translated, deliberately
-preserved, or not shown. Check the rendered states alongside the source audit;
-no screen or outstanding candidate should be left unreviewed in the final pass.
+The HTML `lang` matches the active translation. `useFormattingLocale` uses the
+first supported browser locale that matches the interface language, or the
+interface language itself if none matches. This preserves regional formatting
+where possible without showing words from a different language. The catalog
+and the existing local preference do not require a server locale.
 
-Check source messages and finite label maps against the Chinese resource
-without English fallback. Match named placeholders to the English message,
-allowing reordering. Exercise counts of zero, one, and two in both languages
-instead of requiring the same plural suffixes. In React tests, switch language
-with an existing refusal displayed, keep a title that matches a catalog key
-unchanged, and exercise a tagged search. Check representative desktop and phone
-layouts using a test Library, never the household's data.
+Tests switch language in open views, including a song list draft and its
+diagnostics. They check accessible names, plural counts, refusal text, and
+Library data that matches translation keys. Browser tests use a synthetic
+Library to check navigation, help, original song titles, and keyboard focus at
+desktop and phone widths.
 
 ## Views
 

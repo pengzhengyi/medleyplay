@@ -750,6 +750,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Artist suggestions respond faster while typing in a large Library; search
+  results and navigation stay the same.
 - Edit details has a compact cross beside the album fold arrow to mark a song
   as a single. It asks for confirmation and leaves the change unsaved until
   **Save**; stored metadata and files are not deleted.

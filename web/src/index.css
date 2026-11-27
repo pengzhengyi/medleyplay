@@ -184,9 +184,7 @@ a.icon {
   box-shadow: none;
   font-size: 1.25rem;
   line-height: 0;
-  transition:
-    background-color 120ms,
-    color 120ms;
+  transition: color 120ms;
 }
 
 button.icon:disabled {
@@ -200,8 +198,36 @@ a.icon {
 
 button.icon:hover:not(:disabled),
 a.icon:hover {
-  background: var(--accent-soft);
   color: var(--ink);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :where(
+    button.icon,
+    a.icon,
+    .cover-tool,
+    button.accent-tool,
+    button.artist-chip-remove,
+    button.detail-add-icon,
+    button.detail-remove-album,
+    button.missing-details-source,
+    button.modal-close,
+    button.mode-check,
+    button.playing-kind,
+    button.search-tag-remove,
+    button.shelf-button,
+    button.views-control,
+    button.why.failed
+  ) {
+    & > :where(svg:not(.spin), .star-shape) {
+      scale: var(--icon-hover-scale, none);
+      transition: scale 140ms ease-out;
+    }
+
+    &:hover:not(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
+      --icon-hover-scale: 1.14;
+    }
+  }
 }
 
 button.text {
@@ -644,8 +670,7 @@ button[aria-disabled="true"] {
 
 .search-tag-remove:hover,
 .search-tag-remove:focus-visible {
-  background: var(--accent);
-  color: var(--accent-ink);
+  color: var(--ink);
 }
 
 /* One clear for the whole search, tags and all, in place of the browser's own. */
@@ -793,11 +818,6 @@ button[aria-disabled="true"] {
   line-height: 0;
 }
 
-.mode-check:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--caution) 18%, transparent);
-  color: inherit;
-}
-
 .mode-checked {
   display: flex;
   flex-wrap: wrap;
@@ -909,7 +929,6 @@ button[aria-disabled="true"] {
 }
 
 .accent-tool:hover {
-  background: var(--raised);
   color: var(--ink);
 }
 
@@ -3075,11 +3094,6 @@ button[aria-disabled="true"] {
   color: var(--ink);
 }
 
-.shelf-button:hover {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
 /* The views: a rail of links on a surface of its own, quieter than Up next, the one shown lit. */
 .views {
   grid-area: nav;
@@ -3121,7 +3135,6 @@ button[aria-disabled="true"] {
 }
 
 .views .views-control:hover {
-  background: var(--surface);
   color: var(--ink);
 }
 
@@ -4098,7 +4111,6 @@ details.dropdown[open] > summary.filter-summary {
   cursor: pointer;
 }
 
-.tracks .why.failed:hover,
 .tracks .why.failed[data-state="open"] {
   background: color-mix(in srgb, var(--caution) 20%, transparent);
 }
@@ -4727,9 +4739,6 @@ button.icon.heart.on:hover,
   color: var(--accent-ink);
   box-shadow: 0 6px 16px -4px color-mix(in srgb, var(--accent) 55%, transparent);
   font-size: 1.35rem;
-  transition:
-    transform 120ms,
-    box-shadow 120ms;
 }
 
 :is(.player, .now-playing) button.play:disabled {
@@ -4737,9 +4746,7 @@ button.icon.heart.on:hover,
 }
 
 :is(.player, .now-playing) button.play:hover:not(:disabled) {
-  background: var(--accent);
   color: var(--accent-ink);
-  transform: scale(1.05);
 }
 
 .player .queue-toggle {
@@ -5477,7 +5484,6 @@ dialog.modal::backdrop {
 }
 
 .modal-close:hover:not(:disabled) {
-  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -5975,7 +5981,6 @@ dialog.modal::backdrop {
 }
 
 .detail-remove-album:hover:not(:disabled) {
-  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -6131,8 +6136,7 @@ dialog.modal::backdrop {
   border: 1px dashed var(--line);
 }
 
-.edit-details .artist-chip-role:hover:not(:disabled, [aria-pressed="true"]),
-.edit-details .artist-chip-remove:hover:not(:disabled) {
+.edit-details .artist-chip-role:hover:not(:disabled, [aria-pressed="true"]) {
   background: var(--line);
   color: inherit;
 }
@@ -6214,10 +6218,6 @@ dialog.modal::backdrop {
   color: #1b1f1d;
   font-size: 1.1rem;
   cursor: pointer;
-}
-
-.cover-tool:hover {
-  background: #fff;
 }
 
 .cover-tool:focus-visible {
@@ -8985,8 +8985,12 @@ button.playing-kind {
   cursor: pointer;
 }
 
-button.playing-kind:hover,
-button.playing-kind[aria-expanded="true"] {
+button.playing-kind:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+button.playing-kind[data-pinned] {
   background: var(--accent);
   color: var(--accent-ink);
 }
@@ -9552,7 +9556,11 @@ button.playing-kind[aria-expanded="true"] {
   color: var(--muted);
 }
 
-.missing-details-source:is(:hover, :focus-visible, [data-state="instant-open"]) {
+.missing-details-source:hover {
+  color: var(--ink);
+}
+
+.missing-details-source:focus-visible {
   border-color: var(--line);
   background: var(--accent-soft);
   color: var(--ink);
@@ -11191,5 +11199,4 @@ button.rail-order-handle {
 
 .edit-details .detail-add-icon:hover:not(:disabled) {
   border-color: var(--accent);
-  background: var(--accent-soft);
 }

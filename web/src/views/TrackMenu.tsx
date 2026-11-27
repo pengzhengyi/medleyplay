@@ -193,23 +193,7 @@ export function TrackMenu({
               {t("Open on RYM")}
             </a>
           </Menu.Item>
-          {track.video !== null && (
-            <Menu.Item className="track-menu-item" asChild>
-              <a
-                href={track.video}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={t("Open the video it came from on {{site}}, in a new tab", {
-                  site: siteNameOf(track.video),
-                })}
-              >
-                <span className="track-menu-icon" aria-hidden>
-                  <ArrowSquareOutIcon />
-                </span>
-                {t("Open on {{site}}", { site: siteNameOf(track.video) })}
-              </a>
-            </Menu.Item>
-          )}
+          {track.video !== null && <OpenTrackSource video={track.video} t={t} />}
           <Menu.Separator className="track-menu-line" />
           <RateMenu track={track} container={container} onRate={actions.onRate} />
           <Item
@@ -392,20 +376,127 @@ function Item({
   icon,
   children,
   disabled = false,
+  busy = false,
   onSelect,
 }: {
   readonly icon: ReactNode;
   readonly children: string;
   readonly disabled?: boolean;
+  readonly busy?: boolean;
   readonly onSelect: (event: Event) => void;
 }) {
   return (
-    <Menu.Item className="track-menu-item" disabled={disabled} onSelect={onSelect}>
+    <Menu.Item
+      className="track-menu-item"
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      onSelect={onSelect}
+    >
       <span className="track-menu-icon" aria-hidden>
         {icon}
       </span>
       {children}
     </Menu.Item>
+  );
+}
+
+function OpenTrackSource({ video, t }: { readonly video: string; readonly t: Words }) {
+  const site = siteNameOf(video);
+  return (
+    <Menu.Item className="track-menu-item" asChild>
+      <a
+        href={video}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={t("Open the video it came from on {{site}}, in a new tab", { site })}
+      >
+        <span className="track-menu-icon" aria-hidden>
+          <ArrowSquareOutIcon />
+        </span>
+        {t("Open on {{site}}", { site })}
+      </a>
+    </Menu.Item>
+  );
+}
+
+/** Actions for a download that is queued, waiting, or running. */
+export function DownloadMenu({
+  track,
+  cancel,
+}: {
+  readonly track: Track;
+  readonly cancel: (() => Promise<void>) | undefined;
+}) {
+  const t = useWords();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState("");
+
+  const stop = (event: Event) => {
+    event.preventDefault();
+    if (busy || cancel === undefined) return;
+    setBusy(true);
+    setFailure("");
+    cancel().then(
+      () => {
+        setBusy(false);
+        setOpen(false);
+      },
+      (cause: unknown) => {
+        setBusy(false);
+        setFailure(cause instanceof Error ? cause.message : "Could not cancel the download.");
+      },
+    );
+  };
+
+  return (
+    <Menu.Root modal={false} open={open} onOpenChange={setOpen}>
+      <Menu.Trigger asChild>
+        <button
+          type="button"
+          className="icon downloading-menu"
+          aria-label={t("Download actions for {{title}}", { title: track.title })}
+          title={t("Download actions")}
+        >
+          <DotsThreeIcon weight="bold" aria-hidden />
+        </button>
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content
+          className="track-menu download-job-menu"
+          align="end"
+          sideOffset={4}
+          collisionPadding={8}
+        >
+          {failure !== "" && (
+            <p className="download-job-error" role="alert">
+              {t(failure)}
+            </p>
+          )}
+          <Item
+            icon={<CrosshairIcon />}
+            onSelect={() => {
+              navigate({ view: "library", focus: track.id });
+            }}
+          >
+            {t("Show in Library")}
+          </Item>
+          {track.video !== null && <OpenTrackSource video={track.video} t={t} />}
+          {cancel !== undefined && (
+            <>
+              <Menu.Separator className="track-menu-line" />
+              <Item
+                icon={busy ? <ArrowClockwiseIcon className="spin" /> : <XIcon />}
+                busy={busy}
+                onSelect={stop}
+              >
+                {t("Cancel download")}
+              </Item>
+            </>
+          )}
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 
@@ -530,7 +621,7 @@ export function DownloadFailed({
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Content
-          className="track-menu download-failed"
+          className="track-menu download-job-menu"
           align="start"
           sideOffset={4}
           collisionPadding={8}
@@ -545,7 +636,7 @@ export function DownloadFailed({
             </Menu.Label>
           )}
           {error !== "" && (
-            <p className="download-failed-error" role="alert">
+            <p className="download-job-error" role="alert">
               {error}
             </p>
           )}

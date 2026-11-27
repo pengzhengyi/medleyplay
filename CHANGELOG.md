@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   songs in the same split album file, instead of repeating the opening.
 - Dismiss a failed download from its warning menu in *Downloaded*, or dismiss
   them all at once. Songs and audio files stay in your Library.
+- Each **Downloading** row has a menu to show the song in the Library, open its
+  source, or cancel the current download if you requested it or are an admin.
 - **Clean up → Missing artist or album** offers Library matches for missing
   details, with **Use**, **Edit**, and **Skip** alongside a single candidate.
   An admin can enable per-track AI suggestions in Settings. Suggestions are

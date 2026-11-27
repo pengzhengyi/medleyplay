@@ -10,14 +10,21 @@ import { downloadDetailOf, downloadStateOf } from "../library/downloading";
 import { useFormattingLocale, useWords } from "../locale";
 import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
+import { DownloadMenu } from "./TrackMenu";
 
 /** List the songs of `tracks` that `downloads` get, or nothing while none is under way. */
 export function Downloading({
   downloads,
   tracks,
+  admin,
+  accountId,
+  cancelDownload,
 }: {
   readonly downloads: readonly DownloadUnderWay[];
   readonly tracks: readonly Track[];
+  readonly admin: boolean;
+  readonly accountId: number;
+  readonly cancelDownload: (jobId: number) => Promise<void>;
 }) {
   const t = useWords();
   const locale = useFormattingLocale();
@@ -61,6 +68,14 @@ export function Downloading({
               <span className="downloading-state" title={detail}>
                 {status}
               </span>
+              <DownloadMenu
+                track={track}
+                cancel={
+                  admin || download.job.requested_by === accountId
+                    ? () => cancelDownload(download.job.id)
+                    : undefined
+                }
+              />
               <progress
                 aria-label={track.title}
                 aria-valuetext={detail}

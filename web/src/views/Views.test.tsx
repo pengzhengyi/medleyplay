@@ -2105,15 +2105,22 @@ describe("the Downloaded view", () => {
     return {
       ...signedIn([
         ...LIBRARY,
-        trackOf(4, "Night Drive", { artist: "Blue Room" }),
+        trackOf(4, "Night Drive", {
+          artist: "Blue Room",
+          video: "https://www.bilibili.com/video/BV17x411w7KC?p=2",
+        }),
         trackOf(5, "Mixtape", { artist: "Blue Room" }),
         trackOf(6, "Long Road", { artist: "Blue Room" }),
         trackOf(7, "Slow Train", { artist: "Blue Room" }),
       ]),
       "GET /api/downloads": {
         body: [
-          downloadUnderWayOf(4, { state: "running", progress: { fraction: 0.42, message: "" } }),
-          downloadUnderWayOf(5, { waits_for_online: true }),
+          downloadUnderWayOf(4, {
+            requested_by: ALICE.id,
+            state: "running",
+            progress: { fraction: 0.42, message: "" },
+          }),
+          downloadUnderWayOf(5, { requested_by: 2, waits_for_online: true }),
           downloadUnderWayOf(6, { state: "running" }),
           downloadUnderWayOf(7, {
             retry_at: "2026-11-25T06:00:00Z",
@@ -2123,6 +2130,90 @@ describe("the Downloaded view", () => {
       },
     };
   }
+
+  it.each([
+    { role: "member", title: "Night Drive", id: 504, other: "Mixtape" },
+    { role: "admin", title: "Mixtape", id: 505, other: "Night Drive" },
+  ] as const)(
+    "lets a $role cancel an eligible download without removing its song",
+    async ({ role, title, id, other }) => {
+      let finish: () => void = () => undefined;
+      const after = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const { calls } = open("#/downloaded", {
+        ...downloading(),
+        "GET /api/me": { body: { ...ALICE, role } },
+        [`POST /api/jobs/${String(id)}/cancel`]: {
+          body: { id, state: "cancelled", failure_message: "" },
+          after,
+        },
+      });
+      const user = userEvent.setup();
+      const active = within(await screen.findByRole("region", { name: "Downloading" }));
+
+      await user.click(active.getByRole("button", { name: `Download actions for ${title}` }));
+      await user.click(screen.getByRole("menuitem", { name: "Cancel download" }));
+
+      const cancel = screen.getByRole("menuitem", { name: "Cancel download" });
+      expect(cancel).toHaveAttribute("aria-busy", "true");
+      expect(cancel).toHaveAttribute("aria-disabled", "true");
+      expect(active.getByRole("progressbar", { name: title })).toBeVisible();
+      finish();
+      await waitFor(() => {
+        expect(active.queryByRole("progressbar", { name: title })).not.toBeInTheDocument();
+      });
+      expect(active.getByRole("progressbar", { name: other })).toBeVisible();
+      expect(calls.filter((call) => call.startsWith("POST /api/jobs/"))).toEqual([
+        `POST /api/jobs/${String(id)}/cancel`,
+      ]);
+      await user.click(screen.getByRole("link", { name: "Library" }));
+      expect(await screen.findByRole("button", { name: title })).toBeVisible();
+    },
+  );
+
+  it("offers navigation but not cancellation for another Account's active Job", async () => {
+    open("#/downloaded", {
+      ...downloading(),
+      "GET /api/me": { body: { ...ALICE, id: 3, role: "member" } },
+    });
+    const user = userEvent.setup();
+    const active = within(await screen.findByRole("region", { name: "Downloading" }));
+
+    await user.click(active.getByRole("button", { name: "Download actions for Night Drive" }));
+
+    expect(screen.queryByRole("menuitem", { name: /Cancel|Retry|Pause/u })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Open on Bilibili" })).toHaveAttribute(
+      "href",
+      "https://www.bilibili.com/video/BV17x411w7KC?p=2",
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Show in Library" }));
+    const song = await screen.findByRole("button", { name: "Night Drive" });
+    await waitFor(() => {
+      expect(song).toHaveFocus();
+    });
+  });
+
+  it("shows a cancellation refusal without hiding the active download", async () => {
+    open("#/downloaded", {
+      ...downloading(),
+      "POST /api/jobs/504/cancel": { status: 503, body: { detail: "Try again shortly." } },
+    });
+    const active = within(await screen.findByRole("region", { name: "Downloading" }));
+    const user = userEvent.setup();
+
+    await user.click(active.getByRole("button", { name: "Download actions for Night Drive" }));
+    await user.click(screen.getByRole("menuitem", { name: "Cancel download" }));
+
+    expect(await within(screen.getByRole("menu")).findByRole("alert")).toHaveTextContent(
+      "Try again shortly.",
+    );
+    expect(screen.getByRole("menuitem", { name: "Cancel download" })).not.toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(active.getByRole("progressbar", { name: "Night Drive" })).toBeVisible();
+  });
 
   it("translates download progress and the retry explanation without translating provider detail", async () => {
     open(hrefOf({ view: "downloaded" }), downloading());

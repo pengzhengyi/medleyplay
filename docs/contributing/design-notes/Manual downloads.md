@@ -160,6 +160,11 @@
   doesn't hold reads the list again, once for each such Job. Only the latest read
   shows, with progress events received during that read applied over it. Jobs
   that have already ended do not reappear.
+- **The Downloading row menu** opens the song in the Library or links to the
+  source video. The Account that requested the Job or an admin can cancel it.
+  Cancellation removes the active row once the server confirms the Job has
+  ended; it leaves the song in the Library. Retry remains in the failed
+  download menu; an active download cannot be paused or retried.
 - **A failed Track** shows a warning mark where its availability shows, named
   *Download failed* in its tooltip and to a screen reader, small so the title
   keeps its room. It opens a menu that reads, when opened, why the Download

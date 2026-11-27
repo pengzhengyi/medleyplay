@@ -349,10 +349,49 @@ Track's kind is decided.
     with three.js, and broke on the current three.js; Vanta and Granim have had
     no release since 2022. ogl, in the public domain with no dependencies, gives
     the WebGL plumbing; the effects are ours.
+- **Dynamics on a slow renderer:** see [the frame pacing design](#dynamics-frame-pacing).
 - ***Up next*** shows the queue beside the song on a wide screen, and in the
   cover's place on a phone; Q opens and closes it there.
 - **The shortcuts work while it is open,** though it is a modal `<dialog>`: it
   is marked `data-shortcuts`, which lets the keys through.
+
+### Dynamics frame pacing
+
+> [!NOTE]
+> **Status: proposed.** Keep the existing shaders when they can animate
+> smoothly. Fall back to gentle cover motion when drawing stays slow.
+
+On a 1440 × 900 viewport with device pixel ratio 2, the steady-state renderer
+normally paced at about 16.7 ms per frame on Intel UHD 630 in Chrome. In the
+same isolated renderer with software WebGL, the 95th-percentile animation
+frame interval was 117–183 ms across effects. Reducing the canvas resolution
+did not make the animation smooth. Animating the existing blurred cover
+with a transform brought the interval back to about 17 ms. These are browser
+callback intervals for a synthetic cover, not presented frame timings or
+measurements on a physical phone.
+
+Keep OGL and the existing shaders. The costly path still submits and
+composites a new WebGL frame even if a different library drives it. A native
+transform can move the existing cover without redrawing the shader on every
+frame. The fallback trades the selected effect's exact look for steadier
+motion; its use does not change the setting.
+
+- Draw at the existing resolution by default. When at least 12 of the last
+  16 active frame intervals exceed 40 ms, stop the renderer. Reset the
+  samples and previous timestamp across cover and visibility changes.
+- Keep that decision for the open dialog and selected effect. Pending
+  decodes and resizes must not draw after the renderer stops. Toggling reduced
+  motion stops or resumes the gentle motion without restarting WebGL.
+- Animate the existing blurred cover with a CSS transform. Do not fetch
+  or prepare an additional image. Pause while hidden and remove the effect
+  when Now Playing closes. Keep the existing still blur without WebGL 2 or
+  when the listener turns Dynamics off.
+- Replay healthy and slow frame intervals in deterministic tests, including
+  recovery, gaps between samples, late decodes, resize, and changes in reduced
+  motion. In production Now Playing with a synthetic cover, compare healthy
+  and software rendering against Dynamics Off. Check that input still
+  responds during fallback, and that the cover fills the backdrop and
+  controls stay legible on desktop and phone.
 
 ## Keyboard shortcuts
 

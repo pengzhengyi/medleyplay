@@ -22,6 +22,72 @@ async function play(page: Page, title: string) {
   await expect(player(page).getByText(title, { exact: true })).toBeVisible();
 }
 
+for (const [effect, animation, width] of [
+  ["flow", "np-palette-glow", 1280],
+  ["drift", "np-soft-pan", 390],
+] as const) {
+  test(`saved ${effect} plays lightweight cover motion and respects reduced motion`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const response = await request.get("/api/tracks");
+    expect(response.ok()).toBe(true);
+    const tracks = (await response.json()) as Track[];
+    await page.route("**/api/tracks", (route) =>
+      route.fulfill({
+        json: tracks.map((track) =>
+          track.title === "Alpha" ? { ...track, cover: "motion-fixture" } : track,
+        ),
+      }),
+    );
+    await page.route("**/api/covers/motion-fixture*", (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="160" height="120" fill="#ec1c62"/><rect x="70" width="90" height="120" fill="#294ccc"/></svg>',
+      }),
+    );
+    await page.addInitScript((choice) => {
+      localStorage.setItem("medleyplay.dynamics", choice);
+    }, effect);
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Alpha", exact: true }).click();
+    await player(page).getByRole("button", { name: "Open Now Playing" }).click();
+    const dialog = page.getByRole("dialog", { name: "Now Playing" });
+    const layer = dialog.locator(".np-cover-motion-layer");
+    await expect(layer).toHaveCSS("animation-name", animation);
+    const backdrop = () =>
+      layer.evaluate((element, choice) => {
+        const style = getComputedStyle(element, choice === "drift" ? "::before" : null);
+        return { image: style.backgroundImage, filter: style.filter };
+      }, effect);
+    const active = await backdrop();
+    expect(active.image).not.toBe("none");
+    if (effect === "drift") expect(active.filter).toBe("blur(40px)");
+    await expect(dialog.locator("canvas")).toHaveCount(0);
+    expect(
+      await layer.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return (
+          bounds.left <= 0 &&
+          bounds.top <= 0 &&
+          bounds.right >= window.innerWidth &&
+          bounds.bottom >= window.innerHeight
+        );
+      }),
+    ).toBe(true);
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(layer).toHaveCSS("animation-name", "none");
+    expect(await backdrop()).toEqual(active);
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(layer).toHaveCount(0);
+  });
+}
+
 test("choosing a Track plays it and queues the Tracks after it", async ({ page }) => {
   await play(page, "Alpha");
 
@@ -415,6 +481,119 @@ test("the keyboard moves a Track in the queue as dragging does", async ({ page }
 
   await expect(upNext(page)).toHaveText([/Charlie/, /Bravo/, /Delta/]);
 });
+
+for (const [language, inDialog] of [
+  ["en", false],
+  ["zh-Hans", true],
+] as const) {
+  test(`during playback, dragging past a folded album keeps the full queue order in ${language}`, async ({
+    page,
+    request,
+  }) => {
+    const response = await request.get("/api/tracks");
+    const original = ((await response.json()) as Track[]).find((track) => track.title === "Alpha");
+    if (original === undefined) throw new Error("The test library has no Alpha.");
+    const ready = await request.post(`/api/tracks/${String(original.id)}/playback`);
+    expect(ready.ok()).toBe(true);
+    const playback: unknown = await ready.json();
+    const file = 90000;
+    const tracks: Track[] = [
+      { ...original, track_number: 1 },
+      { ...original, id: 90001, title: "Bravo", track_number: 2 },
+      { ...original, id: file, title: "Album file", kind: "album", split: true },
+      { ...original, id: 90002, title: "Charlie 1", segment_of: file, track_number: 3 },
+      { ...original, id: 90003, title: "Charlie 2", segment_of: file, track_number: 4 },
+      { ...original, id: 90004, title: "Delta", track_number: 5 },
+    ];
+    await page.route("**/api/tracks", (route) => route.fulfill({ json: tracks }));
+    await page.route("**/api/tracks/*/playback", (route) => route.fulfill({ json: playback }));
+    await page.addInitScript(() => {
+      localStorage.setItem("medleyplay.language", "en");
+    });
+    await page.emulateMedia({ colorScheme: inDialog ? "dark" : "light" });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Alpha", exact: true }).click();
+    await expect.poll(async () => (await audioState(page)).position).toBeGreaterThan(0.5);
+    const started = (await audioState(page)).position;
+    const panel = page.locator("#queue");
+    await expect(panel.locator(".entry-title")).toHaveText([
+      "Bravo",
+      "Charlie 1",
+      "Charlie 2",
+      "Delta",
+    ]);
+    await panel.locator(".queue-album .fold").click();
+    if (inDialog) {
+      await page.getByRole("button", { name: "Open Now Playing" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Up next", exact: true }).click();
+    }
+    const queue = inDialog ? page.locator("#now-playing-queue") : panel;
+    const titles = queue.locator(".entry-title");
+    if (inDialog) {
+      await expect(titles).toHaveText(["Bravo", "Charlie 1", "Charlie 2", "Delta"]);
+      await queue.locator(".queue-album .fold").click();
+    }
+    await expect(titles).toHaveText(["Bravo", "Delta"]);
+    if (language !== "en") {
+      // A language choice in another tab reaches this mounted queue through storage.
+      const otherTab = await page.context().newPage();
+      await otherTab.goto("/api/setup");
+      await otherTab.evaluate((choice) => {
+        localStorage.setItem("medleyplay.language", choice);
+      }, language);
+      await otherTab.close();
+      await page.bringToFront();
+    }
+    const announcements = inDialog ? page.getByRole("dialog") : queue;
+    const reorder = (title: string) =>
+      queue.getByRole("button", {
+        name: language === "en" ? `Reorder ${title}` : `调整「${title}」的顺序`,
+      });
+
+    await reorder("Bravo").focus();
+    await page.keyboard.press("Space");
+    await expect(
+      announcements.getByText(
+        language === "en" ? "Picked up Bravo." : "已选中「Bravo」，可以移动。",
+        {
+          exact: true,
+        },
+      ),
+    ).toBeAttached();
+    // The keyboard sensor attaches its listener after pickup.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      announcements.getByText(
+        language === "en" ? "Bravo would play fourth." : "「Bravo」将第 4 首播放。",
+        {
+          exact: true,
+        },
+      ),
+    ).toBeAttached();
+    await page.keyboard.press("Space");
+    await expect(
+      announcements.getByText(
+        language === "en" ? "Bravo plays fourth." : "「Bravo」已调整为第 4 首播放。",
+        { exact: true },
+      ),
+    ).toBeAttached();
+    await queue.locator(".queue-album .fold").click();
+    await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Delta", "Bravo"]);
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    if (!inDialog) await page.getByRole("button", { name: "Up next", exact: true }).click();
+    await reorder("Bravo").dragTo(reorder("Delta"), { steps: 12 });
+    await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Bravo", "Delta"]);
+    await queue
+      .getByRole("button", { name: language === "en" ? "Remove Delta" : "移除「Delta」" })
+      .click();
+
+    await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Bravo"]);
+    expect((await audioState(page)).playing).toBe(true);
+    expect((await audioState(page)).position).toBeGreaterThan(started);
+  });
+}
 
 test("a theme chosen holds over the system's, and across a reload", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });

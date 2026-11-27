@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Now Playing offers Palette Glow and Soft Pan in place of Flow and Drift.
+  Existing selections carry over; Mesh and Off stay as they are.
 - When the animated background in Now Playing repeatedly misses frames, it
   switches to a gently moving cover without changing your Dynamics setting.
 - A quotation-mark badge on song and album icons shows when lyrics are
@@ -766,6 +768,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Long **Up next** queues stay more responsive during playback without hiding
+  songs or changing how they play, fold, or drag.
 - Artist suggestions respond faster while typing in a large Library; search
   results and navigation stay the same.
 - Edit details has a compact cross beside the album fold arrow to mark a song

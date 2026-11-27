@@ -7,8 +7,8 @@ import { useWords } from "../locale";
 
 const CHOICES: Record<Dynamics, { readonly label: string; readonly about: string }> = {
   off: { label: "Off", about: "The cover, blurred and still." },
-  flow: { label: "Flow", about: "The cover, blurred, flowing in slow folds." },
-  drift: { label: "Drift", about: "The cover, enlarged, turning slowly." },
+  flow: { label: "Palette Glow", about: "Soft pools of color from the cover drift behind it" },
+  drift: { label: "Soft Pan", about: "A blurred copy of the cover slowly pans and zooms" },
   mesh: { label: "Mesh", about: "The cover's colors, each a light wandering." },
 };
 

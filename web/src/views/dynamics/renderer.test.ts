@@ -73,7 +73,7 @@ it("stops drawing after sustained slow frames even when resize and image decode 
   const onSlow = vi.fn(() => {
     running.stop();
   });
-  const running = run(host, "flow", { still: false, onDrawn, onSlow });
+  const running = run(host, { still: false, onDrawn, onSlow });
   running.show("/cover-a");
   await first;
   running.show("/cover-b");

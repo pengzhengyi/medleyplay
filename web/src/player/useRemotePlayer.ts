@@ -10,7 +10,7 @@
  * while in use.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, type RemoteCommand, type Track, api } from "../api";
 import { EMPTY, current } from "./queue";
@@ -76,33 +76,59 @@ export function useRemotePlayer(
     };
   }, [counting]);
 
-  const command: Command = (sent) => {
-    const delivered = line.current.then(() => api.command(sent));
-    line.current = delivered.then(
-      () => undefined,
-      () => undefined,
-    );
-    return delivered.catch((error: unknown) => {
-      if (error instanceof ApiError && error.status === 401) {
-        onSignedOut();
-      }
-      throw error;
-    });
-  };
-  /** Send `sent`, saying in the player why it failed. */
-  const send = (sent: RemoteCommand) => {
-    command(sent).then(
-      () => {
-        setFailure(undefined);
-      },
-      (error: unknown) => {
-        if (!(error instanceof ApiError && error.status === 401)) {
-          const message = error instanceof Error ? error.message : String(error);
-          setFailure({ at: Date.now(), message });
+  const command = useCallback<Command>(
+    (sent) => {
+      const delivered = line.current.then(() => api.command(sent));
+      line.current = delivered.then(
+        () => undefined,
+        () => undefined,
+      );
+      return delivered.catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 401) {
+          onSignedOut();
         }
-      },
-    );
-  };
+        throw error;
+      });
+    },
+    [onSignedOut],
+  );
+  /** Send `sent`, saying in the player why it failed. */
+  const send = useCallback(
+    (sent: RemoteCommand) => {
+      command(sent).then(
+        () => {
+          setFailure(undefined);
+        },
+        (error: unknown) => {
+          if (!(error instanceof ApiError && error.status === 401)) {
+            const message = error instanceof Error ? error.message : String(error);
+            setFailure({ at: Date.now(), message });
+          }
+        },
+      );
+    },
+    [command],
+  );
+  const playAt = useCallback(
+    (key: string, seconds: number) => {
+      if (Number.isFinite(seconds)) {
+        send({ kind: "playAt", key, seconds: Math.max(0, seconds) });
+      }
+    },
+    [send],
+  );
+  const move = useCallback(
+    (key: string, to: number) => {
+      send({ kind: "move", key, to });
+    },
+    [send],
+  );
+  const remove = useCallback(
+    (key: string) => {
+      send({ kind: "remove", key });
+    },
+    [send],
+  );
 
   const reportedAt = speaker?.reportedAt ?? 0;
   const state = speaker?.state;
@@ -198,17 +224,9 @@ export function useRemotePlayer(
         send({ kind: "seek", key, seconds: Math.max(0, seconds) });
       }
     },
-    playAt: (key, seconds) => {
-      if (Number.isFinite(seconds)) {
-        send({ kind: "playAt", key, seconds: Math.max(0, seconds) });
-      }
-    },
-    move: (key, to) => {
-      send({ kind: "move", key, to });
-    },
-    remove: (key) => {
-      send({ kind: "remove", key });
-    },
+    playAt,
+    move,
+    remove,
     clear: () => {
       send({ kind: "clear" });
     },

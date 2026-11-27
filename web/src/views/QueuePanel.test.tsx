@@ -3,11 +3,124 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { EMPTY } from "../player/queue";
+import { playerOf, sleepTimerOf } from "../testing/player";
 import { serve, signedIn, trackOf } from "../testing/server";
 import { LanguageSelect } from "./LanguageSelect";
+import { LyricsAvailability } from "./lyricsAvailability";
+import { QueuePanel } from "./QueuePanel";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("queue updates during playback", () => {
+  it("advances Up next when the current index changes but the entries are reused", () => {
+    const player = playerOf({
+      queue: {
+        ...EMPTY,
+        entries: [
+          { key: "a", trackId: 1 },
+          { key: "b", trackId: 2 },
+          { key: "c", trackId: 2 },
+          { key: "d", trackId: 404 },
+        ],
+      },
+    });
+    const tracks = new Map([[2, trackOf(2, "Long Road")]]);
+    const sleep = sleepTimerOf();
+    const { rerender } = render(<QueuePanel player={player} tracks={tracks} sleep={sleep} />);
+    expect(upNext()).toEqual(["Long Road", "Long Road", "A Track no longer here"]);
+
+    rerender(
+      <QueuePanel
+        player={{ ...player, queue: { ...player.queue, position: 1 }, position: 0 }}
+        tracks={tracks}
+        sleep={sleep}
+      />,
+    );
+
+    expect(upNext()).toEqual(["Long Road", "A Track no longer here"]);
+    expect(screen.getByText("2 songs", { exact: true })).toBeVisible();
+    expect(screen.queryByText(/ending around/u)).not.toBeInTheDocument();
+  });
+
+  it("updates names and duration totals when metadata arrives and keeps the ending time live", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-01T12:00:00Z"));
+    const player = playerOf({ position: 0, duration: 200 });
+    const sleep = sleepTimerOf();
+    const tracks = new Map([[2, trackOf(2, "Long Road", { duration_ms: null })]]);
+    const { rerender } = render(<QueuePanel player={player} tracks={tracks} sleep={sleep} />);
+    expect(screen.getByText("1 song", { exact: true })).toBeVisible();
+    const updated = new Map([[2, trackOf(2, "New Road", { duration_ms: 120_000 })]]);
+
+    rerender(<QueuePanel player={player} tracks={updated} sleep={sleep} />);
+    const length = screen.getByText(/^1 song, 2 min, ending around/u);
+    const before = length.textContent;
+    rerender(<QueuePanel player={{ ...player, position: 130 }} tracks={updated} sleep={sleep} />);
+
+    expect(upNext()).toEqual(["New Road"]);
+    expect(length.textContent).not.toBe(before);
+    expect(length).toHaveTextContent(/^1 song, 2 min, ending around/u);
+    rerender(
+      <QueuePanel
+        player={{ ...player, status: { kind: "paused" } }}
+        tracks={updated}
+        sleep={sleep}
+      />,
+    );
+    expect(length).toHaveTextContent(/^1 song, 2 min$/u);
+  });
+
+  it("uses the selected player's current commands even when the queue is unchanged", async () => {
+    const local = playerOf();
+    const remote = playerOf({ queue: local.queue });
+    const tracks = new Map([[2, trackOf(2, "Long Road")]]);
+    const sleep = sleepTimerOf();
+    const { rerender } = render(<QueuePanel player={local} tracks={tracks} sleep={sleep} />);
+
+    rerender(<QueuePanel player={remote} tracks={tracks} sleep={sleep} />);
+    await userEvent.click(screen.getByRole("button", { name: "Play Long Road now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Long Road" }));
+
+    expect(remote.playAt).toHaveBeenCalledWith("b", 0);
+    expect(remote.remove).toHaveBeenCalledWith("b");
+    expect(local.playAt).not.toHaveBeenCalled();
+    expect(local.remove).not.toHaveBeenCalled();
+  });
+
+  it("updates lyrics and language through their contexts while the queue props stay unchanged", async () => {
+    const player = playerOf();
+    const tracks = new Map([[2, trackOf(2, "Long Road")]]);
+    const sleep = sleepTimerOf();
+    const albums = new Map<string, boolean>();
+    const contents = <QueuePanel player={player} tracks={tracks} sleep={sleep} />;
+    const { rerender } = render(
+      <LyricsAvailability value={{ tracks, albums }}>{contents}</LyricsAvailability>,
+    );
+    render(<LanguageSelect />);
+    expect(screen.queryByRole("img", { name: /Lyrics available/u })).not.toBeInTheDocument();
+    const withLyrics = new Map([[2, trackOf(2, "Long Road", { has_lyrics: true })]]);
+
+    rerender(
+      <LyricsAvailability value={{ tracks: withLyrics, albums }}>{contents}</LyricsAvailability>,
+    );
+    expect(screen.getByRole("img", { name: /Lyrics available/u })).toBeVisible();
+    const language = screen.getByRole("combobox", { name: "Language" });
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByRole("button", { name: "立即播放「Long Road」" })).toBeVisible();
+      expect(
+        screen.getByRole("button", { name: "调整「Long Road」的顺序" }),
+      ).toHaveAccessibleDescription(/按空格键/u);
+      expect(screen.getByRole("img", { name: /有歌词/u })).toBeVisible();
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
 });
 
 /** A signed-in page whose Tracks Intro, Long Road, and Outro are ready to play. */

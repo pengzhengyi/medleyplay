@@ -31,7 +31,8 @@ function takingCommands() {
 }
 
 function renderRemote(speaker: Speaker | null, { inUse = true }: { inUse?: boolean } = {}) {
-  return renderHook(({ shown }) => useRemotePlayer(shown, inUse, vi.fn()), {
+  const onSignedOut = vi.fn();
+  return renderHook(({ shown }) => useRemotePlayer(shown, inUse, onSignedOut), {
     initialProps: { shown: speaker },
   });
 }
@@ -59,6 +60,70 @@ afterEach(() => {
 });
 
 describe("a remote's player", () => {
+  it("keeps queue commands stable while counting elapsed time", () => {
+    const { result } = renderRemote(speakerOf());
+    const [before, , command] = result.current;
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const [after, , currentCommand] = result.current;
+    expect(after.position).toBe(14.5);
+    expect(after.queue).toBe(before.queue);
+    expect(after.playAt).toBe(before.playAt);
+    expect(after.move).toBe(before.move);
+    expect(after.remove).toBe(before.remove);
+    expect(currentCommand).toBe(command);
+  });
+
+  it("delivers commands after a rejection and binds new commands to the current sign-out callback", async () => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sent: unknown[] = [];
+    serve({
+      "POST /api/remote/commands": (body) => {
+        sent.push((body as { command: unknown }).command);
+        if (sent.length === 1) {
+          return { status: 409, body: { detail: "Please try again." }, after: held };
+        }
+        return { status: sent.length === 3 ? 401 : 204 };
+      },
+    });
+    const previousSignedOut = vi.fn();
+    const currentSignedOut = vi.fn();
+    const speaker = speakerOf();
+    const { result, rerender } = renderHook(
+      ({ onSignedOut }) => useRemotePlayer(speaker, true, onSignedOut),
+      { initialProps: { onSignedOut: previousSignedOut } },
+    );
+    act(() => {
+      result.current[0].move("b", 0);
+      result.current[0].remove("b");
+    });
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+
+    rerender({ onSignedOut: currentSignedOut });
+    act(() => {
+      result.current[0].playAt("a", 4);
+      release?.();
+    });
+
+    await vi.waitFor(() => {
+      expect(currentSignedOut).toHaveBeenCalledOnce();
+    });
+    expect(previousSignedOut).not.toHaveBeenCalled();
+    expect(sent).toEqual([
+      { kind: "move", key: "b", to: 0 },
+      { kind: "remove", key: "b" },
+      { kind: "playAt", key: "a", seconds: 4 },
+    ]);
+  });
+
   it("shows what the computer plays, as its queue", () => {
     const { result } = renderRemote(speakerOf());
 

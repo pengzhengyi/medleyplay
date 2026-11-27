@@ -330,25 +330,19 @@ Track's kind is decided.
   for the accent. Without a cover, the blur is a gradient of the theme's accent.
 - **Paused, the cover settles back** a little, and grows again when the music
   plays; with reduced motion, it stays put and the view opens without rising.
-- **Dynamics move the cover behind it,** one of three effects chosen in
-  Settings, drawn by a shader over a blurred 160-pixel copy of the cover, fine
-  enough to blend smoothly as it moves: *Flow*, three turning copies blended through slow
-  noise, as Apple Music's background moves; *Drift*, two enlarged copies turning
-  against each other; and *Mesh*, five colors of the cover's palette as lights
-  wandering. Or *Off*, the still blur.
-  - **Smooth, and still cheap:** the canvas is drawn on every frame the display
-    shows, at half the page's resolution, and not at all while the page is hidden; the
-    WebGL library and shaders, 16 KB gzipped, load only when Now Playing shows
-    an effect. A new cover fades in over the last.
-  - **It fades in once drawn,** over the still blur, so without WebGL 2 the blur
-    shows as before; with reduced motion the effect is drawn still, once a cover.
-  <!-- cspell:ignore AMLL Vanta Granim -->
-  - **ogl draws it,** chosen over the libraries that do similar: the one
-    drawing Apple Music's own background, from AMLL, is AGPL; ShaderGradient
-    draws a glossy gradient of three colors, not the cover, at 273 KB gzipped
-    with three.js, and broke on the current three.js; Vanta and Granim have had
-    no release since 2022. ogl, in the public domain with no dependencies, gives
-    the WebGL plumbing; the effects are ours.
+- **Dynamics animate the backdrop,** not the cover or the controls.
+  *Palette Glow*, the default, moves two broad gradients drawn from the
+  cover's palette. *Soft Pan* blurs a small darkened copy with a fixed CSS
+  filter and moves its containing layer without rotating or mirroring it.
+  Both prepare the backdrop once per cover and use CSS
+  transforms, without a WebGL context or a draw loop. The dark shade stays
+  fixed behind the lyrics and controls.
+  - **Mesh** uses OGL to draw five independently moving palette colors at half
+    the viewport's CSS resolution. It fades between palettes and loads the
+    renderer only when selected. *Off* shows the still blur.
+  - **When motion is reduced,** show the selected backdrop without moving it.
+    Pause animation in hidden tabs. Without artwork or when preparing a
+    backdrop fails, show the existing still background.
 - **Dynamics on a slow renderer:** see [the frame pacing design](#dynamics-frame-pacing).
 - ***Up next*** shows the queue beside the song on a wide screen, and in the
   cover's place on a phone; Q opens and closes it there.
@@ -358,23 +352,22 @@ Track's kind is decided.
 ### Dynamics frame pacing
 
 > [!NOTE]
-> **Status: implemented.** Keep the existing shaders when they can animate
-> smoothly. Fall back to gentle cover motion when drawing stays slow.
+> **Status: implemented.** Keep Mesh when it animates smoothly. Fall back to
+> gentle cover motion when drawing stays slow.
 
 On a 1440 × 900 viewport with device pixel ratio 2, the steady-state renderer
 normally paced at about 16.7 ms per frame on Intel UHD 630 in Chrome. In the
 same isolated renderer with software WebGL, the 95th-percentile animation
-frame interval was 117–183 ms across effects. Reducing the canvas resolution
+frame interval reached 183 ms. Reducing the canvas resolution
 did not make the animation smooth. Animating the existing blurred cover
 with a transform brought the interval back to about 17 ms. These are browser
 callback intervals for a synthetic cover, not presented frame timings or
 measurements on a physical phone.
 
-Keep OGL and the existing shaders. The costly path still submits and
-composites a new WebGL frame even if a different library drives it. A native
-transform can move the existing cover without redrawing the shader on every
-frame. The fallback trades the selected effect's exact look for steadier
-motion; its use does not change the setting.
+Keep OGL for Mesh. A different library would still submit a new WebGL frame
+for every draw; a CSS transform can move the existing cover instead. The
+fallback trades Mesh's exact look for steadier motion without changing the
+setting.
 
 - Draw at the existing resolution by default. When at least 12 of the last
   16 active frame intervals exceed 40 ms, stop the renderer. Reset the
@@ -734,7 +727,7 @@ One view, in sections, each saved on its own:
 - **Appearance:** the theme, the same choice as the header's switch; every
   switch on the page shows the one chosen. *Dynamics*, what moves behind Now
   Playing, kept per browser like the theme, as a device's graphics and battery
-  are its own: *Off*, *Flow* (the default), *Drift*, or *Mesh*, saying what the
+  are its own: *Off*, *Palette Glow* (the default), *Soft Pan*, or *Mesh*, saying what the
   chosen one shows. And the accent color, jade unless
   this browser chose another: a swatch opens react-colorful's color square and
   hue slider, a field takes a hex code, the dice roll a hue as strong as jade,

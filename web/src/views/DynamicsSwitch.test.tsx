@@ -19,9 +19,9 @@ describe("the Dynamics switch", () => {
       within(group)
         .getAllByRole("radio")
         .map((radio) => radio.textContent),
-    ).toEqual(["Off", "Flow", "Drift", "Mesh"]);
-    expect(within(group).getByRole("radio", { name: "Flow" })).toBeChecked();
-    expect(screen.getByText("The cover, blurred, flowing in slow folds.")).toBeVisible();
+    ).toEqual(["Off", "Palette Glow", "Soft Pan", "Mesh"]);
+    expect(within(group).getByRole("radio", { name: "Palette Glow" })).toBeChecked();
+    expect(screen.getByText("Soft pools of color from the cover drift behind it")).toBeVisible();
   });
 
   it("remembers the effect chosen for this browser", async () => {

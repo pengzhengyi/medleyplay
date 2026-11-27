@@ -35,7 +35,7 @@ import {
   DotsSixVerticalIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { type KeyboardEvent, useMemo, useState } from "react";
+import { type KeyboardEvent, memo, useCallback, useMemo, useState } from "react";
 
 import type { Track } from "../api";
 import { formatQueueLength } from "../format";
@@ -85,54 +85,33 @@ export function QueuePanel({
   const history = useHistory(tab === "history");
   // Whether History's Clear is asking once more.
   const [asking, setAsking] = useState(false);
-  const entries = upNext(player.queue);
+  const entries = useMemo(() => upNext(player.queue), [player.queue]);
   const now = useNow();
-  const songsIn = useMemo(() => songsByFile([...tracks.values()]), [tracks]);
   // The split files whose songs are folded away, by the file's id.
   const [folded, setFolded] = useState<ReadonlySet<number>>(new Set());
-  const rows = rowsOf(entries, tracks);
-  const albums = rows.flatMap((row) => (row.kind === "album" ? [row.fileId] : []));
-  const allExpanded = albums.every((file) => !folded.has(file));
+  const rows = useMemo(() => rowsOf(entries, tracks), [entries, tracks]);
+  const albums = useMemo(
+    () => rows.flatMap((row) => (row.kind === "album" ? [row.fileId] : [])),
+    [rows],
+  );
+  const allExpanded = useMemo(() => albums.every((file) => !folded.has(file)), [albums, folded]);
+  const fold = useCallback((file: number) => {
+    setFolded((was) => {
+      const next = new Set(was);
+      if (!next.delete(file)) {
+        next.add(file);
+      }
+      return next;
+    });
+  }, []);
   const foldAllLabel = allExpanded ? words("Collapse all") : words("Expand all");
   const clearLabel = words("Clear Up next");
-  const shown = rows.flatMap((row) =>
-    row.kind === "album" && folded.has(row.fileId) ? [] : row.entries,
-  );
-  const sensors = useSensors(
-    // A few pixels of movement first, so a tap on the handle isn't a drag.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-  const titleOf = (entry: Entry | undefined) =>
-    entry === undefined
-      ? words("A Track")
-      : (tracks.get(entry.trackId)?.title ?? words("A Track no longer here"));
-  const placeOf = (id: UniqueIdentifier | undefined) =>
-    entries.findIndex((entry) => entry.key === id);
-  const announcements: Announcements = {
-    onDragStart: ({ active }) =>
-      words("Picked up {{title}}.", { title: titleOf(entries[placeOf(active.id)]) }),
-    // Over its own place, it hasn't moved yet: "Picked up" stays the last word.
-    onDragOver: ({ active, over }) =>
-      over === null || over.id === active.id
-        ? undefined
-        : words("{{title}} would play {{place}}.", {
-            title: titleOf(entries[placeOf(active.id)]),
-            place: ordinal(placeOf(over.id), words),
-          }),
-    onDragEnd: ({ active, over }) =>
-      words("{{title}} plays {{place}}.", {
-        title: titleOf(entries[placeOf(active.id)]),
-        place: ordinal(placeOf(over?.id ?? active.id), words),
-      }),
-    onDragCancel: ({ active }) =>
-      words("{{title}} stays where it was.", { title: titleOf(entries[placeOf(active.id)]) }),
-  };
-
-  const durations = entries.map((entry) => tracks.get(entry.trackId)?.duration_ms);
-  const lengthMs = durations.every((duration) => typeof duration === "number")
-    ? durations.reduce((sum, duration) => sum + duration, 0)
-    : undefined;
+  const lengthMs = useMemo(() => {
+    const durations = entries.map((entry) => tracks.get(entry.trackId)?.duration_ms);
+    return durations.every((duration) => typeof duration === "number")
+      ? durations.reduce((sum, duration) => sum + duration, 0)
+      : undefined;
+  }, [entries, tracks]);
   // Only a queue playing on to its end ends at a time on the clock.
   const ending =
     player.status.kind === "playing" &&
@@ -144,12 +123,6 @@ export function QueuePanel({
           at: new Date(now + lengthMs + Math.max(0, player.duration - player.position) * 1000),
         }
       : undefined;
-
-  const drop = ({ active, over }: DragEndEvent) => {
-    if (over !== null && active.id !== over.id) {
-      player.move(String(active.id), placeOf(over.id));
-    }
-  };
 
   return (
     <section id={id} className="queue" aria-label={words("Up next")}>
@@ -247,88 +220,156 @@ export function QueuePanel({
               {words("Nothing queued. Add a Track from the list to play it later.")}
             </p>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              modifiers={MODIFIERS}
-              accessibility={{
-                announcements,
-                screenReaderInstructions: {
-                  draggable: words(
-                    "To reorder, press Space to pick the Track up, the arrow keys to move it, and Space again to drop it. Escape puts it back.",
-                  ),
-                },
-                ...(announceIn ? { container: announceIn } : {}),
-              }}
-              onDragEnd={drop}
-            >
-              <SortableContext
-                items={shown.map((entry) => entry.key)}
-                strategy={verticalListSortingStrategy}
-              >
-                <ol>
-                  {rows.map((row) => {
-                    const items = (inAlbum: boolean) =>
-                      row.entries.map((entry) => (
-                        <QueueItem
-                          key={entry.key}
-                          entry={entry}
-                          track={tracks.get(entry.trackId)}
-                          inAlbum={inAlbum}
-                          onPlay={() => {
-                            player.playAt(entry.key, 0);
-                          }}
-                          onRemove={() => {
-                            player.remove(entry.key);
-                          }}
-                        />
-                      ));
-                    if (row.kind === "entry") {
-                      return items(false);
-                    }
-                    const songs = songsIn.get(row.fileId) ?? [];
-                    const first = songs.findIndex((song) => song.id === row.entries[0]?.trackId);
-                    const isFolded = folded.has(row.fileId);
-                    return [
-                      <AlbumRow
-                        key={`album:${row.entries[0]?.key ?? ""}`}
-                        file={tracks.get(row.fileId)}
-                        place={first + 1}
-                        count={songs.length}
-                        folded={isFolded}
-                        onFold={() => {
-                          setFolded((was) => {
-                            const next = new Set(was);
-                            if (!next.delete(row.fileId)) {
-                              next.add(row.fileId);
-                            }
-                            return next;
-                          });
-                        }}
-                        onPlay={() => {
-                          const [start] = row.entries;
-                          if (start !== undefined) {
-                            player.playAt(start.key, 0);
-                          }
-                        }}
-                        onRemove={() => {
-                          for (const entry of row.entries) {
-                            player.remove(entry.key);
-                          }
-                        }}
-                      />,
-                      ...(isFolded ? [] : items(true)),
-                    ];
-                  })}
-                </ol>
-              </SortableContext>
-            </DndContext>
+            <QueueContents
+              entries={entries}
+              rows={rows}
+              tracks={tracks}
+              folded={folded}
+              onFold={fold}
+              playAt={player.playAt}
+              move={player.move}
+              remove={player.remove}
+              announceIn={announceIn}
+            />
           )}
         </div>
       )}
     </section>
   );
 }
+
+const QueueContents = memo(function QueueContents({
+  entries,
+  rows,
+  tracks,
+  folded,
+  onFold,
+  playAt,
+  move,
+  remove,
+  announceIn,
+}: {
+  readonly entries: readonly Entry[];
+  readonly rows: readonly Row[];
+  readonly tracks: ReadonlyMap<number, Track>;
+  readonly folded: ReadonlySet<number>;
+  readonly onFold: (file: number) => void;
+  readonly announceIn: HTMLElement | null | undefined;
+} & Pick<Player, "playAt" | "move" | "remove">) {
+  const words = useWords();
+  const songsIn = useMemo(() => songsByFile([...tracks.values()]), [tracks]);
+  const shown = rows.flatMap((row) =>
+    row.kind === "album" && folded.has(row.fileId) ? [] : row.entries,
+  );
+  const sensors = useSensors(
+    // A few pixels of movement first, so a tap on the handle isn't a drag.
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const titleOf = (entry: Entry | undefined) =>
+    entry === undefined
+      ? words("A Track")
+      : (tracks.get(entry.trackId)?.title ?? words("A Track no longer here"));
+  const placeOf = (id: UniqueIdentifier | undefined) =>
+    entries.findIndex((entry) => entry.key === id);
+  const announcements: Announcements = {
+    onDragStart: ({ active }) =>
+      words("Picked up {{title}}.", { title: titleOf(entries[placeOf(active.id)]) }),
+    // Over its own place, it hasn't moved yet: "Picked up" stays the last word.
+    onDragOver: ({ active, over }) =>
+      over === null || over.id === active.id
+        ? undefined
+        : words("{{title}} would play {{place}}.", {
+            title: titleOf(entries[placeOf(active.id)]),
+            place: ordinal(placeOf(over.id), words),
+          }),
+    onDragEnd: ({ active, over }) =>
+      words("{{title}} plays {{place}}.", {
+        title: titleOf(entries[placeOf(active.id)]),
+        place: ordinal(placeOf(over?.id ?? active.id), words),
+      }),
+    onDragCancel: ({ active }) =>
+      words("{{title}} stays where it was.", { title: titleOf(entries[placeOf(active.id)]) }),
+  };
+  const drop = ({ active, over }: DragEndEvent) => {
+    if (over !== null && active.id !== over.id) {
+      move(String(active.id), placeOf(over.id));
+    }
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={MODIFIERS}
+      accessibility={{
+        announcements,
+        screenReaderInstructions: {
+          draggable: words(
+            "To reorder, press Space to pick the Track up, the arrow keys to move it, and Space again to drop it. Escape puts it back.",
+          ),
+        },
+        ...(announceIn ? { container: announceIn } : {}),
+      }}
+      onDragEnd={drop}
+    >
+      <SortableContext
+        items={shown.map((entry) => entry.key)}
+        strategy={verticalListSortingStrategy}
+      >
+        <ol>
+          {rows.map((row) => {
+            const items = (inAlbum: boolean) =>
+              row.entries.map((entry) => (
+                <QueueItem
+                  key={entry.key}
+                  entry={entry}
+                  track={tracks.get(entry.trackId)}
+                  inAlbum={inAlbum}
+                  onPlay={() => {
+                    playAt(entry.key, 0);
+                  }}
+                  onRemove={() => {
+                    remove(entry.key);
+                  }}
+                />
+              ));
+            if (row.kind === "entry") {
+              return items(false);
+            }
+            const songs = songsIn.get(row.fileId) ?? [];
+            const first = songs.findIndex((song) => song.id === row.entries[0]?.trackId);
+            const isFolded = folded.has(row.fileId);
+            return [
+              <AlbumRow
+                key={`album:${row.entries[0]?.key ?? ""}`}
+                file={tracks.get(row.fileId)}
+                place={first + 1}
+                count={songs.length}
+                folded={isFolded}
+                onFold={() => {
+                  onFold(row.fileId);
+                }}
+                onPlay={() => {
+                  const [start] = row.entries;
+                  if (start !== undefined) {
+                    playAt(start.key, 0);
+                  }
+                }}
+                onRemove={() => {
+                  for (const entry of row.entries) {
+                    remove(entry.key);
+                  }
+                }}
+              />,
+              ...(isFolded ? [] : items(true)),
+            ];
+          })}
+        </ol>
+      </SortableContext>
+    </DndContext>
+  );
+});
 
 /** A queued entry on its own, or songs of one split file queued one after another. */
 type Row =

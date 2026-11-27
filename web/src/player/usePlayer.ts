@@ -6,7 +6,15 @@
  * on without reloading the file when the next song starts there.
  */
 
-import { type RefObject, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import { ApiError, type PlaybackAnswer, type Track, api, coverUrl } from "../api";
 import { newId } from "../ids";
@@ -423,12 +431,30 @@ export function usePlayer(
     }
     dispatch({ type: "next" });
   };
-  const seek = (seconds: number) => {
+  const seek = useCallback((seconds: number) => {
     const element = audio.current;
     if (element !== null && Number.isFinite(seconds)) {
       element.currentTime = fileTimeOf(stretch.current, seconds, element.duration);
     }
-  };
+  }, []);
+  const playAt = useCallback(
+    (target: string, seconds: number) => {
+      if (target === key) {
+        seek(seconds);
+        return;
+      }
+      restore.current = Math.max(0, seconds);
+      takenPlaying.current = true;
+      dispatch({ type: "jump", key: target });
+    },
+    [key, seek],
+  );
+  const move = useCallback((moving: string, to: number) => {
+    dispatch({ type: "move", key: moving, to });
+  }, []);
+  const remove = useCallback((removing: string) => {
+    dispatch({ type: "remove", key: removing });
+  }, []);
 
   /** End the current entry once: start it over, or move on, playing on into the next song of the file. */
   const finish = useEffectEvent(() => {
@@ -706,21 +732,9 @@ export function usePlayer(
     next,
     previous,
     seek,
-    playAt: (target, seconds) => {
-      if (target === key) {
-        seek(seconds);
-        return;
-      }
-      restore.current = Math.max(0, seconds);
-      takenPlaying.current = true;
-      dispatch({ type: "jump", key: target });
-    },
-    move: (moving, to) => {
-      dispatch({ type: "move", key: moving, to });
-    },
-    remove: (removing) => {
-      dispatch({ type: "remove", key: removing });
-    },
+    playAt,
+    move,
+    remove,
     clear: () => {
       dispatch({ type: "clear" });
     },

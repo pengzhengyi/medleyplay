@@ -20,7 +20,7 @@ import {
   api,
   newestOf,
 } from "../api";
-import { useAutoSave } from "../useAutoSave";
+import { useAutoSaveOf } from "../useAutoSave";
 import { classOf } from "../useNote";
 import { formatBytes } from "../format";
 import { type Route, hrefOf } from "../routes";
@@ -29,7 +29,14 @@ import {
   type SectionId,
   visibleSettingsSections,
 } from "../library/settingsSections";
-import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import {
+  CHANGED_ELSEWHERE,
+  SETTINGS_SAVE_COPY,
+  saveChange,
+  settingsNotice,
+  settingsFailure,
+  settingsKey,
+} from "../library/householdSettings";
 import { StorageFolderLocation } from "./StorageFolderLocation";
 import { ServerStorage } from "./ServerStorage";
 import { useStorageLegend } from "./useStorageLegend";
@@ -53,7 +60,7 @@ import { ShortcutSettings } from "./ShortcutSettings";
 import { SplitSettings } from "./SplitSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { LanguageSelect } from "./LanguageSelect";
-import { useWords } from "../locale";
+import { type Words, useFormattingLocale, useWords } from "../locale";
 import { RailOrderSettings } from "./RailOrderSettings";
 import { VideoDetailsSettings } from "./VideoDetailsSettings";
 
@@ -380,13 +387,20 @@ interface Removing {
   readonly preview: Preview | null;
 }
 
-const NOTHING_REMOVED: Preview = { removals: [] };
-
-/** Return how many bytes a preview removes; an unknown one, as many as there could be. */
-const sizeOf = (preview: Preview | null): number =>
-  preview === null
-    ? Number.POSITIVE_INFINITY
-    : preview.removals.reduce((total, each) => total + each.size, 0);
+function needsRemovalConfirmation(
+  preview: Preview | null,
+  confirmed: Preview | null | undefined,
+): boolean {
+  if (preview === null) return confirmed !== null;
+  if (preview.removals.length === 0) return false;
+  if (confirmed == null) return true;
+  return (["download", "cache"] as const).some((kind) => {
+    const planned = preview.removals.filter((item) => item.kind === kind);
+    const allowed = confirmed.removals.filter((item) => item.kind === kind);
+    const bytes = (items: typeof planned) => items.reduce((total, item) => total + item.size, 0);
+    return planned.length > allowed.length || bytes(planned) > bytes(allowed);
+  });
+}
 
 /** What the Downloads hold, and the storage limit. */
 function StorageSettings({
@@ -399,6 +413,7 @@ function StorageSettings({
   readonly settings: Settings | undefined;
   readonly onSettings: (settings: Settings) => void;
 }) {
+  const words = useWords();
   const [storage, setStorage] = useState<Storage | undefined>(undefined);
   const [draft, setDraft] = useState<Draft>({ unlimited: true, gb: "" });
   /** A lower limit waiting to be confirmed: what saving it removes, `null` if unknown. */
@@ -443,23 +458,22 @@ function StorageSettings({
 
   // A limit that would remove Downloads waits for a confirmation of what it removes; one
   // confirmed is asked about again if, by the time it saves, it would remove more.
-  const saving = useAutoSave(async ({ bytes, confirmed }: Limit, notes) => {
+  const saving = useAutoSaveOf(async ({ bytes, confirmed }: Limit, notes) => {
     const base = latest.current;
     if (base === undefined || bytes === base.storage_limit) {
       setRemoving(undefined);
-      notes.tell("");
+      notes.tell(null);
       return "unchanged";
     }
     try {
       if (bytes !== null) {
         const preview = await api.storage(bytes).then(
-          (planned) => planned.preview ?? NOTHING_REMOVED,
+          (planned) => planned.preview,
           () => null,
         );
-        const removes = preview === null || preview.removals.length > 0;
-        if (removes && (confirmed === undefined || sizeOf(preview) > sizeOf(confirmed))) {
+        if (needsRemovalConfirmation(preview, confirmed)) {
           setRemoving({ bytes, preview });
-          notes.tell("");
+          notes.tell(null);
           return "held";
         }
       }
@@ -469,7 +483,7 @@ function StorageSettings({
       setRemoving(undefined);
       if (outcome === "conflict") {
         setDraft(draftOf(now));
-        notes.tell(CHANGED_ELSEWHERE);
+        notes.tell(settingsKey(CHANGED_ELSEWHERE));
         return "conflict";
       }
       api.storage().then(setStorage, () => {
@@ -477,10 +491,10 @@ function StorageSettings({
       });
       return "saved";
     } catch (failure) {
-      notes.refuse(notSaved(failure));
+      notes.refuse(settingsFailure(failure));
       return "failed";
     }
-  });
+  }, SETTINGS_SAVE_COPY);
 
   const change = (next: Draft, typed: boolean) => {
     setDraft(next);
@@ -489,7 +503,7 @@ function StorageSettings({
     if (bytes === undefined) {
       saving.cancel();
     } else if (!saving.busy() && bytes === latest.current?.storage_limit) {
-      saving.tell("");
+      saving.tell(null);
     } else if (typed) {
       saving.later({ bytes });
     } else {
@@ -505,7 +519,7 @@ function StorageSettings({
       if (saved !== undefined) {
         setDraft(draftOf(saved));
       }
-      saving.refuse("Not saved: type a size in GB, such as 20.");
+      saving.refuse(settingsKey("Not saved: type a size in GB, such as 20."));
     } else if (removing === undefined && (saving.busy() || bytes !== saved?.storage_limit)) {
       saving.now({ bytes });
     }
@@ -517,12 +531,12 @@ function StorageSettings({
       {storage === undefined || settings === undefined ? (
         error === "" && (
           <p className="hint" aria-busy="true">
-            Reading what the Downloads hold…
+            {words("Reading what the Downloads hold…")}
           </p>
         )
       ) : (
         <>
-          {admin && <h4 className="download-usage-heading">Download usage</h4>}
+          {admin && <h4 className="download-usage-heading">{words("Download usage")}</h4>}
           <Usage storage={storage} />
           <StorageFolderLocation />
           {admin ? (
@@ -534,7 +548,7 @@ function StorageSettings({
               }}
             >
               <fieldset>
-                <legend>Storage limit</legend>
+                <legend>{words("Storage limit")}</legend>
                 <label className="limit-choice">
                   <input
                     type="radio"
@@ -544,7 +558,7 @@ function StorageSettings({
                       change({ ...draft, unlimited: true }, false);
                     }}
                   />
-                  No limit
+                  {words("No limit")}
                 </label>
                 <label className="limit-choice">
                   <input
@@ -557,14 +571,14 @@ function StorageSettings({
                       focusing.current = true;
                     }}
                   />
-                  Up to
+                  {words("Up to")}
                   <input
                     ref={field}
                     type="number"
                     inputMode="decimal"
                     min={0}
                     step={0.5}
-                    aria-label="Limit in GB"
+                    aria-label={words("Limit in GB")}
                     value={draft.gb}
                     disabled={draft.unlimited}
                     onChange={(event) => {
@@ -577,14 +591,14 @@ function StorageSettings({
               </fieldset>
               {removing !== undefined && (
                 <div className="limit-confirm">
-                  <p>{removalText(removing.preview)}</p>
+                  <p>{removalText(removing.preview, words)}</p>
                   <button
                     type="button"
                     onClick={() => {
                       saving.now({ bytes: removing.bytes, confirmed: removing.preview });
                     }}
                   >
-                    Remove and save
+                    {words("Remove and save")}
                   </button>
                   <button
                     type="button"
@@ -597,24 +611,27 @@ function StorageSettings({
                       }
                     }}
                   >
-                    Keep the limit
+                    {words("Keep the limit")}
                   </button>
                 </div>
               )}
               <p className={classOf(saving.note, "hint saved")} role="status">
-                {saving.note.text}
+                {settingsNotice(saving.note.text, words)}
               </p>
             </form>
           ) : (
             <p className="hint">
               {settings.storage_limit === null
-                ? "There is no storage limit. An admin can set one."
-                : `The storage limit is ${formatBytes(settings.storage_limit)}, set by an admin.`}
+                ? words("There is no storage limit. An admin can set one.")
+                : words("The storage limit is {{size}}, set by an admin.", {
+                    size: formatBytes(settings.storage_limit, words),
+                  })}
             </p>
           )}
           <p className="hint">
-            When room is needed, the Downloads of the least favorite songs go first; a song in a
-            Playlist set to Keep downloaded is never removed to make room.
+            {words(
+              "When room is needed, the Downloads of the least favorite songs go first; a song in a Playlist set to Keep downloaded is never removed to make room.",
+            )}
           </p>
         </>
       )}
@@ -624,6 +641,8 @@ function StorageSettings({
 
 /** What the Downloads and cache use, against the limit or the disk. */
 function Usage({ storage }: { readonly storage: Storage }) {
+  const t = useWords();
+  const locale = useFormattingLocale();
   const legend = useStorageLegend<"downloads" | "cache" | "reserved" | "kept">();
   if (storage.error !== null) {
     return <p role="alert">{storage.error}</p>;
@@ -640,10 +659,10 @@ function Usage({ storage }: { readonly storage: Storage }) {
   return (
     <div className="usage">
       <p className="usage-total">
-        <strong>{formatBytes(used)}</strong>{" "}
+        <strong>{formatBytes(used, t)}</strong>{" "}
         {storage.limit === null
-          ? `used, ${formatBytes(storage.free ?? 0)} free on this disk`
-          : `of ${formatBytes(storage.limit)} used`}
+          ? t("used, {{free}} free on this disk", { free: formatBytes(storage.free ?? 0, t) })
+          : t("of {{limit}} used", { limit: formatBytes(storage.limit, t) })}
       </p>
       <div className="meter usage-meter" data-highlighting={highlighting || undefined} aria-hidden>
         {(["downloads", "cache", "reserved"] as const).map((key) => (
@@ -666,28 +685,28 @@ function Usage({ storage }: { readonly storage: Storage }) {
         <div {...legend.entry("downloads")}>
           <dt>
             <span className="swatch downloads" aria-hidden />
-            <a href={hrefOf({ view: "downloaded" })} title="Show the songs downloaded">
-              Downloads
+            <a href={hrefOf({ view: "downloaded" })} title={t("Show the songs downloaded")}>
+              {t("Downloads")}
             </a>
           </dt>
-          <dd>{formatBytes(downloads)}</dd>
+          <dd>{formatBytes(downloads, t)}</dd>
         </div>
         <div {...legend.entry("cache")}>
           <dt>
             <span className="swatch cache" aria-hidden />
-            <span tabIndex={0}>Prepared copies</span>
+            <span tabIndex={0}>{t("Prepared copies")}</span>
           </dt>
-          <dd>{formatBytes(cache)}</dd>
+          <dd>{formatBytes(cache, t)}</dd>
         </div>
         {reserved > 0 && (
           <div {...legend.entry("reserved")}>
             <dt>
               <span className="swatch reserved" aria-hidden />
-              <a href={hrefOf({ view: "downloaded" })} title="Show the songs downloading">
-                Downloading
+              <a href={hrefOf({ view: "downloaded" })} title={t("Show the songs downloading")}>
+                {t("Downloading")}
               </a>
             </dt>
-            <dd>{formatBytes(reserved)}</dd>
+            <dd>{formatBytes(reserved, t)}</dd>
           </div>
         )}
         {storage.wanted !== null && (
@@ -696,42 +715,49 @@ function Usage({ storage }: { readonly storage: Storage }) {
               <span className="swatch kept" aria-hidden />
               <span
                 tabIndex={0}
-                title="The songs of the Playlists set to Keep downloaded: what their Downloads use, and an estimate for those not downloaded yet"
+                title={t(
+                  "The songs of the Playlists set to Keep downloaded: what their Downloads use, and an estimate for those not downloaded yet",
+                )}
               >
-                Playlists kept downloaded
+                {t("Playlists kept downloaded")}
               </span>
             </dt>
-            <dd>{formatBytes(storage.wanted)}</dd>
+            <dd>{formatBytes(storage.wanted, t)}</dd>
           </div>
         )}
       </dl>
       {last !== null && (
         <p className="hint">
-          Last checked {new Date(last.at).toLocaleString()}: {countOf(last.removed, "removed")},{" "}
-          {countOf(last.started, "started")}.{last.error === null ? "" : ` ${last.error}`}
+          {t("Last checked {{when}}: {{removed}}, {{started}}.", {
+            when: new Date(last.at).toLocaleString(locale),
+            removed: t("removed_managed_files", { count: last.removed }),
+            started: t("started_downloads", { count: last.started }),
+          })}
+          {last.error === null ? "" : ` ${last.error}`}
         </p>
       )}
     </div>
   );
 }
 
-const countOf = (count: number, done: string) =>
-  `${String(count)} ${count === 1 ? "download" : "downloads"} ${done}`;
-
 /** Say what saving a lower limit would remove, from its preview. */
-function removalText(preview: Preview | null): string {
+function removalText(preview: Preview | null, t: Words): string {
   if (preview === null) {
-    return "This limit may remove Downloads to fit, but what it removes couldn't be worked out.";
+    return t("This limit may remove Downloads to fit, but what it removes couldn't be worked out.");
   }
   const downloads = preview.removals.filter((each) => each.kind === "download");
   const copies = preview.removals.filter((each) => each.kind === "cache");
-  const sized = (items: typeof downloads, one: string, many: string) =>
-    `${String(items.length)} ${items.length === 1 ? one : many} (${formatBytes(
-      items.reduce((total, each) => total + each.size, 0),
-    )})`;
+  const sized = (items: typeof downloads, key: string) =>
+    t(key, {
+      count: items.length,
+      size: formatBytes(
+        items.reduce((total, each) => total + each.size, 0),
+        t,
+      ),
+    });
   const parts = [
-    downloads.length > 0 ? sized(downloads, "download", "downloads") : "",
-    copies.length > 0 ? sized(copies, "prepared copy", "prepared copies") : "",
+    downloads.length > 0 ? sized(downloads, "download_size") : "",
+    copies.length > 0 ? sized(copies, "copy_size") : "",
   ].filter(Boolean);
-  return `Saving removes ${parts.join(" and ")} to fit.`;
+  return t("Saving removes {{items}} to fit.", { items: parts.join(t(" and ")) });
 }

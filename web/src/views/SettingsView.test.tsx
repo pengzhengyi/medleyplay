@@ -544,6 +544,77 @@ describe("the Deezer section", () => {
 });
 
 describe("storage settings", () => {
+  it("translates measured bytes and startup flag descriptions in the open inspector", async () => {
+    open(true);
+    const user = userEvent.setup();
+    const language = await screen.findByRole("combobox", { name: "Language" });
+    await user.click(screen.getByRole("button", { name: "Inspect server storage" }));
+    await screen.findByRole("radio", { name: "Multiple accounts" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const composition = within(screen.getByRole("region", { name: "存储空间构成" }));
+      expect(composition.getByText("原始图片").closest("div")).toHaveTextContent("500 字节");
+      expect(composition.getByRole("radio", { name: "多个账号" })).toHaveAccessibleDescription(
+        "允许创建更多账号。",
+      );
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("requires confirmation when the requested removal preview is unavailable", async () => {
+    const { calls } = open(true, {
+      "GET /api/storage?limit=1000000000": {
+        body: { ...USING_2, error: "Cannot measure.", preview: null },
+      },
+    });
+    const user = userEvent.setup();
+    const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    await user.clear(size);
+    await user.type(size, "1");
+    await user.tab();
+
+    expect(
+      await screen.findByText(
+        "This limit may remove Downloads to fit, but what it removes couldn't be worked out.",
+      ),
+    ).toBeVisible();
+    expect(calls).not.toContain("PUT /api/settings");
+  });
+
+  it("asks again rather than replacing approved cache removals with fewer megabytes of downloads", async () => {
+    let requested = 0;
+    const { calls } = open(true, {
+      "GET /api/storage?limit=1000000000": () => ({
+        body: {
+          ...USING_2,
+          preview: {
+            removals:
+              ++requested === 1
+                ? [{ kind: "cache", size: 600_000_000 }]
+                : [
+                    { kind: "download", size: 200_000_000 },
+                    { kind: "download", size: 200_000_000 },
+                  ],
+          },
+        },
+      }),
+    });
+    const user = userEvent.setup();
+    const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    await user.clear(size);
+    await user.type(size, "1");
+    await user.tab();
+    await screen.findByText("Saving removes 1 prepared copy (600 MB) to fit.");
+
+    await user.click(screen.getByRole("button", { name: "Remove and save" }));
+
+    expect(await screen.findByText("Saving removes 2 downloads (400 MB) to fit.")).toBeVisible();
+    expect(calls).not.toContain("PUT /api/settings");
+  });
+
   it("shows all occupied managed files before the download limit and opens the breakdown from either control", async () => {
     const read = vi.fn(() => ({ body: MEASURED }));
     open(true, { "GET /api/storage/inspection": read });
@@ -1207,6 +1278,27 @@ describe("the Network section", () => {
 
 describe("the Songs and albums section", () => {
   const kinds = () => within(screen.getByRole("region", { name: "Songs and albums" }));
+
+  it("translates album and storage help without changing the saved album threshold", async () => {
+    open(true);
+    const user = userEvent.setup();
+    const threshold = await screen.findByRole("spinbutton", { name: "Shortest album, in minutes" });
+    const current = threshold.getAttribute("value");
+    const language = screen.getByRole("combobox", { name: "Language" });
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByText(/轮廓图标表示类型是推测的/u)).toBeVisible();
+      expect(screen.getByRole("spinbutton", { name: "专辑的最短时长（分钟）" })).toHaveAttribute(
+        "value",
+        current,
+      );
+      expect(screen.getByText(/需要腾出空间时/u)).toBeVisible();
+      expect(screen.getByRole("spinbutton", { name: "存储上限（GB）" })).toHaveValue(20);
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
 
   it("saves turning off guessing that a long file is an album at once, and asks for the Tracks again", async () => {
     const sent: unknown[] = [];

@@ -1,10 +1,11 @@
 /** @file An admin's overview of managed files, separate from the Download limit. */
 
 import { ArrowClockwiseIcon } from "@phosphor-icons/react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { type StorageInspection, api } from "../api";
 import { formatBytes } from "../format";
+import { useFormattingLocale, useWords } from "../locale";
 import { Hint } from "./Hint";
 import { StorageFolderLocation } from "./StorageFolderLocation";
 import { useStorageLegend } from "./useStorageLegend";
@@ -27,10 +28,10 @@ interface StoragePart {
   readonly share: number;
 }
 
-const percent = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 1 });
 const smallestShare = 0.001;
 
 export function ServerStorage() {
+  const t = useWords();
   const [expanded, setExpanded] = useState(false);
   const legend = useStorageLegend<StorageCategory>();
   const [report, setReport] = useState<StorageInspection>();
@@ -46,7 +47,7 @@ export function ServerStorage() {
   const parts: readonly StoragePart[] = report
     ? categories.map(([key, label]) => ({
         key,
-        label,
+        label: t(label),
         bytes: report[key],
         share: total === 0 ? 0 : report[key] / total,
       }))
@@ -88,37 +89,37 @@ export function ServerStorage() {
     <section
       className="storage-inspection"
       data-outdated={outdated || undefined}
-      aria-label="Server storage"
+      aria-label={t("Server storage")}
     >
       <div className="storage-composition-heading">
-        <h4>Server storage</h4>
+        <h4>{t("Server storage")}</h4>
         <button
           type="button"
           className="secondary outline storage-inspect"
-          aria-label={expanded ? "Hide storage composition" : "Inspect server storage"}
+          aria-label={expanded ? t("Hide storage composition") : t("Inspect server storage")}
           aria-expanded={expanded}
           aria-controls={panel}
           onClick={toggle}
         >
-          {expanded ? "Hide details" : "Inspect"}
+          {expanded ? t("Hide details") : t("Inspect")}
         </button>
       </div>
       <p className="usage-total" id={summary}>
         {report ? (
           <>
-            <strong>{formatBytes(total)}</strong> occupied by managed files
-            {outdated && <span className="storage-outdated">Outdated</span>}
+            <strong>{formatBytes(total, t)}</strong> {t("occupied by managed files")}
+            {outdated && <span className="storage-outdated">{t("Outdated")}</span>}
           </>
         ) : (
           <span className="hint">
-            {status === "failed" ? "Occupied space unavailable" : "Occupied space"}
+            {status === "failed" ? t("Occupied space unavailable") : t("Occupied space")}
           </span>
         )}
       </p>
       <button
         type="button"
         className="storage-meter-button"
-        aria-label="Occupied space"
+        aria-label={t("Occupied space")}
         aria-describedby={summary}
         aria-expanded={expanded}
         aria-controls={panel}
@@ -145,31 +146,31 @@ export function ServerStorage() {
       </button>
       <StorageFolderLocation scope="server" />
       <p className="hint" role="status">
-        {busy ? "Measuring server storage…" : ""}
+        {busy ? t("Measuring server storage…") : ""}
       </p>
       {status === "failed" && (
-        <p role="alert">Could not measure storage. Check server access and try again.</p>
+        <p role="alert">{t("Could not measure storage. Check server access and try again.")}</p>
       )}
       {status === "failed" && !report && (
         <button type="button" className="secondary outline storage-inspect" onClick={refresh}>
-          Retry
+          {t("Retry")}
         </button>
       )}
       <section
         id={panel}
         className="storage-panel"
-        aria-label="Storage composition"
+        aria-label={t("Storage composition")}
         hidden={!expanded}
       >
         {report && expanded && (
           <>
             <div className="storage-composition-heading">
-              <h5>Storage composition</h5>
-              <Hint name="Refresh server storage" keys={[]}>
+              <h5>{t("Storage composition")}</h5>
+              <Hint name={t("Refresh server storage")} keys={[]}>
                 <button
                   type="button"
                   className="icon"
-                  aria-label="Refresh server storage"
+                  aria-label={t("Refresh server storage")}
                   disabled={busy}
                   aria-busy={busy}
                   onClick={refresh}
@@ -194,6 +195,12 @@ function Composition({
   readonly parts: readonly StoragePart[];
   readonly legend: ReturnType<typeof useStorageLegend<StorageCategory>>;
 }) {
+  const t = useWords();
+  const locale = useFormattingLocale();
+  const percent = useMemo(
+    () => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }),
+    [locale],
+  );
   return (
     <>
       <dl className="legend storage-composition-legend">
@@ -204,7 +211,7 @@ function Composition({
               {key === "database" || key === "database_companions" ? (
                 <Hint name={label} keys={[]}>
                   <span className="storage-label-cut" tabIndex={0}>
-                    {label}
+                    {t(label)}
                   </span>
                 </Hint>
               ) : (
@@ -212,7 +219,7 @@ function Composition({
               )}
             </dt>
             <dd>
-              {formatBytes(bytes)}{" "}
+              {formatBytes(bytes, t)}{" "}
               <span className="storage-share">
                 {share > 0 && share < smallestShare
                   ? `<${percent.format(smallestShare)}`
@@ -223,17 +230,19 @@ function Composition({
         ))}
       </dl>
       <p className="hint">
-        File lengths, not space allocated on disk. Excludes reservations, job folders and library
-        originals. Measurements are reused for one minute.
+        {t(
+          "File lengths, not space allocated on disk. Excludes reservations, job folders and library originals. Measurements are reused for one minute.",
+        )}
       </p>
     </>
   );
 }
 
 function StartupSettings({ report }: { readonly report: StorageInspection }) {
+  const t = useWords();
   const id = useId();
   const flags = [
-    ["Multiple accounts", report.multiple_accounts, "Lets different people sign in separately."],
+    ["Multiple accounts", report.multiple_accounts, "Allows additional accounts to be created."],
     ["Plugin safe mode", report.safe_mode, "Starts the server without loading plugins."],
     [
       "SQLite write-ahead logging",
@@ -243,8 +252,8 @@ function StartupSettings({ report }: { readonly report: StorageInspection }) {
   ] as const;
   return (
     <div className="storage-startup">
-      <h6 id={id}>Server settings at startup</h6>
-      <p className="hint">Read only. These settings do not change the Download limit.</p>
+      <h6 id={id}>{t("Server settings at startup")}</h6>
+      <p className="hint">{t("Read only. These settings do not change the Download limit.")}</p>
       <ul className="storage-flags" aria-labelledby={id}>
         {flags.map(([label, enabled, description], index) => {
           const descriptionId = `${id}-${String(index)}`;
@@ -252,11 +261,11 @@ function StartupSettings({ report }: { readonly report: StorageInspection }) {
             <li key={label}>
               <label className="storage-flag">
                 <input type="radio" checked={enabled} disabled aria-describedby={descriptionId} />
-                {label}
+                {t(label)}
               </label>
-              <span className="storage-flag-state">{enabled ? "On" : "Off"}</span>
+              <span className="storage-flag-state">{enabled ? t("On") : t("Off")}</span>
               <p id={descriptionId} className="hint">
-                {description}
+                {t(description)}
               </p>
             </li>
           );

@@ -209,7 +209,7 @@ export function formatPlayed(at: number, now: number, presentation?: Presentatio
 const UNITS = ["bytes", "KB", "MB", "GB", "TB"] as const;
 
 /** Write `bytes` in the decimal units Finder uses, such as `420 MB` or `3.2 GB`. */
-export function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number, t?: Words): string {
   let value = bytes;
   let unit = 0;
   while (value >= 1000 && unit < UNITS.length - 1) {
@@ -217,7 +217,8 @@ export function formatBytes(bytes: number): string {
     unit += 1;
   }
   const digits = unit === 0 || value >= 100 ? 0 : 1;
-  return `${value.toFixed(digits).replace(/\.0$/, "")} ${UNITS[unit] ?? "bytes"}`;
+  const label = UNITS[unit] ?? "bytes";
+  return `${value.toFixed(digits).replace(/\.0$/, "")} ${label === "bytes" ? (t?.(label) ?? label) : label}`;
 }
 
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });

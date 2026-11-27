@@ -471,6 +471,35 @@ export function SearchBox({
         }
       }}
     >
+      {providers.length > 0 && (
+        <div className="scope" role="radiogroup" aria-label="Search in">
+          <label title="Library">
+            <input
+              type="radio"
+              name="scope"
+              checked={scope === LIBRARY}
+              onChange={() => {
+                setChosen(LIBRARY);
+              }}
+            />
+            <MusicNotesSimpleIcon className="site-mark" weight="bold" aria-hidden />
+            <span className="visually-hidden">Library</span>
+          </label>
+          {providers.map((provider) => (
+            <label key={provider} title={SITE_NAMES[provider] ?? provider}>
+              <input
+                type="radio"
+                name="scope"
+                checked={scope === provider}
+                onChange={() => {
+                  setChosen(provider);
+                }}
+              />
+              <SiteMark name={SITE_NAMES[provider] ?? provider} />
+            </label>
+          ))}
+        </div>
+      )}
       <label
         className="search-field"
         onPointerEnter={() => {
@@ -739,35 +768,6 @@ export function SearchBox({
       {settings !== undefined && suggesting && !open && (
         <div className="search-panel" role="status">
           {t("No matching settings.")}
-        </div>
-      )}
-      {providers.length > 0 && (
-        <div className="scope" role="radiogroup" aria-label="Search in">
-          <label title="Library">
-            <input
-              type="radio"
-              name="scope"
-              checked={scope === LIBRARY}
-              onChange={() => {
-                setChosen(LIBRARY);
-              }}
-            />
-            <MusicNotesSimpleIcon className="site-mark" weight="bold" aria-hidden />
-            <span className="visually-hidden">Library</span>
-          </label>
-          {providers.map((provider) => (
-            <label key={provider} title={SITE_NAMES[provider] ?? provider}>
-              <input
-                type="radio"
-                name="scope"
-                checked={scope === provider}
-                onChange={() => {
-                  setChosen(provider);
-                }}
-              />
-              <SiteMark name={SITE_NAMES[provider] ?? provider} />
-            </label>
-          ))}
         </div>
       )}
     </search>

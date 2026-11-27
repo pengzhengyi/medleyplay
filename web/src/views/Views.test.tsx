@@ -963,6 +963,28 @@ describe("search", () => {
     }
   });
 
+  it.each(["Library", "Bilibili"])(
+    "tabs from the selected %s scope to the search field without moving focus on selection",
+    async (name) => {
+      open("", withBilibili());
+      const scope = await screen.findByRole("radio", { name });
+      const box = screen.getByRole("combobox", { name: "Search" });
+
+      await userEvent.click(scope);
+
+      expect(scope).toBeChecked();
+      expect(scope).toHaveFocus();
+
+      await userEvent.tab();
+
+      expect(box).toHaveFocus();
+
+      await userEvent.tab({ shift: true });
+
+      expect(scope).toHaveFocus();
+    },
+  );
+
   it("resumes a saved result from Downloaded without asking the site or adding a song", async () => {
     const saved = { id: 8, state: "succeeded", label: "Night Drive", message: "", result: null };
     const { calls } = open("#/downloaded", {

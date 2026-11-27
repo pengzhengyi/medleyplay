@@ -193,6 +193,7 @@ function AlbumMark({
         aria-label={label}
         aria-expanded={open}
         aria-controls={id}
+        data-pinned={shown === "kept" ? "" : undefined}
         title={label}
         onClick={() => {
           if (shown === "kept") {

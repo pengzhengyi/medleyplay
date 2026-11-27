@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A quotation-mark badge on song and album icons shows when lyrics are
+  available. Albums are marked only when every song has lyrics.
 - Open the medleyplay GitHub repository from the icon at the top right.
 - When finding lyrics, compare the Library song's album and length with the
   results.

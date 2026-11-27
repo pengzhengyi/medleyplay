@@ -31,8 +31,8 @@ never a source of lyrics: it would make them up.
 
 ## Lyrics availability
 
-> [!IMPORTANT]
-> **Approved design, implementation in progress.** A quotation-mark superscript
+> [!NOTE]
+> **Implemented.** A quotation-mark superscript
 > marks songs with usable lyrics and albums whose every song has usable lyrics.
 
 - **One meaning:** the badge means lyrics are available to read, not that a search
@@ -43,9 +43,10 @@ never a source of lyrics: it would make them up.
   before checking its text. An instrumental household answer therefore hides
   readable lyrics from a lower-priority source. Unconfirmed suggestions,
   instrumental answers, and text without readable lines do not qualify; neither
-  do search candidates and unsaved AI picks. Fetch only the selected sources'
-  text in bounded batches for the relevant Tracks. No provider is contacted and
-  no new stored state is needed.
+  do search candidates and unsaved AI picks. Invalid winning text marks only its
+  Track unavailable; it does not fail the catalog or select another source.
+  Fetch only the selected sources' text in bounded batches for the relevant
+  Tracks. No provider is contacted and no new stored state is needed.
 - **Albums require complete membership:** an album file needs a known, nonempty
   song list and lyrics for every child. Its own whole-file lyrics do not stand
   for its children's lyrics. A named album grouped from separate Tracks uses its
@@ -62,9 +63,10 @@ never a source of lyrics: it would make them up.
 - **Current after changes:** saving, removing, scanning, and matching lyrics
   invalidate cached catalog answers. Existing change events also tell each open
   Library to reread Tracks: cache invalidation alone does not refresh a page.
-  This includes manual save/removal and background lyric writes. A reconnect
-  rereads it. Availability is read in batches, not one request or query per
-  visible icon.
+  Manual lyric changes send `tracks`; Songs Save sends `lyrics-saved`. Both
+  trigger a catalog reread. Completed scans, enrichment, and automatic choices
+  refresh the catalog through their Job events. A reconnect rereads it.
+  Availability is read in batches, not one request or query per visible icon.
 
 Tests cover source priority, absent text and timestamp-only LRC, unsaved matches,
 album membership and filtering, save/remove refreshes on another open page

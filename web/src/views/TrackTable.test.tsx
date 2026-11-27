@@ -7,8 +7,9 @@ import type { CoverStatus } from "../library/lookups";
 import { albumUnit, songsByFile } from "../library/playOrder";
 import type { UnitOf } from "../player/usePlayer";
 import { downloadOf, downloadUnderWayOf, serve, trackOf } from "../testing/server";
+import { trackActionsOf } from "../testing/views";
 import { LanguageSelect } from "./LanguageSelect";
-import { type TrackActions, TrackTable } from "./TrackTable";
+import { TrackTable } from "./TrackTable";
 
 /** Intro, a Long Road that can't play, and Outro, listed in that order, as the server adds them. */
 const TRACKS = [
@@ -26,23 +27,10 @@ function renderTable(
   downloads: readonly DownloadUnderWay[] = [],
   playAllIn?: HTMLElement | null,
 ) {
-  const actions: TrackActions = {
+  const actions = trackActionsOf({
     statusOf: (track) => statuses.get(track.id),
     downloadOf: (track) => downloads.find((each) => each.track_id === track.id),
-    onPlay: vi.fn(),
-    onPlayAll: vi.fn(),
-    onPlayNext: vi.fn(),
-    onAdd: vi.fn(),
-    onAddToPlaylist: vi.fn(),
-    onEditDetails: vi.fn(),
-    canFind: () => false,
-    onFind: vi.fn(),
-    onEditSongs: vi.fn(),
-    onAddFile: vi.fn(),
-    onSetKind: vi.fn(),
-    onFavorite: vi.fn(),
-    onRate: vi.fn(),
-  };
+  });
   const view = render(
     <TrackTable
       tracks={tracks}

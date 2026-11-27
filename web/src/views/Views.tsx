@@ -11,7 +11,7 @@ import {
   ShuffleIcon,
   PencilSimpleIcon,
 } from "@phosphor-icons/react";
-import { Fragment, type ReactNode, useMemo, useState } from "react";
+import { Fragment, type ReactNode, memo, useMemo, useState } from "react";
 import { Trans } from "react-i18next";
 
 import type {
@@ -876,7 +876,10 @@ function Albums({
     return allAlbums.filter((album) => sung.has(albumKeyOf(album.artist, album.name)));
   }, [allAlbums, tracks, artist, links]);
   // Each album plays whole, in its track order, in the order the albums are listed.
-  const playable = everyAlbum(tracks.filter((track) => track.availability === "ok"));
+  const playable = useMemo(
+    () => everyAlbum(tracks.filter((track) => track.availability === "ok")),
+    [tracks],
+  );
   return (
     <>
       <ViewHeading title={t("Albums")} railNamed>
@@ -951,7 +954,7 @@ function namesOf(tracks: readonly Track[]): string[] {
 /** An album's key: its artist and name, compared folded. */
 const albumKeyOf = (artist: string, name: string) => fold(`${artist}\n${name}`);
 
-function AlbumList({
+const AlbumList = memo(function AlbumList({
   albums,
   favorites,
   deferOffscreen = false,
@@ -995,7 +998,7 @@ function AlbumList({
       })}
     </ul>
   );
-}
+});
 
 /** A favorite artist's or album's mark on its tile. */
 function FavoriteBadge() {

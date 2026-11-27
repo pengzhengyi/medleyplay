@@ -5,9 +5,29 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { openWithShortcuts } from "../testing/server";
 import { setHoldForShortcuts } from "../holdForShortcuts";
 import { HOLD_KEY, HOLD_MS } from "../useHeldModifier";
+import { LanguageSelect } from "./LanguageSelect";
 import { HoldForShortcuts, ShortcutList } from "./ShortcutList";
 
 describe("the list of keyboard shortcuts", () => {
+  it("keeps the key cap but speaks its localized name", async () => {
+    await openWithShortcuts(null);
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    render(<ShortcutList onClose={vi.fn()} />);
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      const list = within(screen.getByRole("dialog", { name: "键盘快捷键" }));
+      const binding = list.getByText("Space", { selector: "kbd" });
+      expect(binding).toBeVisible();
+      expect(binding).toHaveAttribute("aria-hidden", "true");
+      expect(list.getByText("空格键")).not.toHaveAttribute("aria-hidden");
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
   it("names each command's keys as they are now", async () => {
     await openWithShortcuts({ toggle: ["j"], mute: [] });
 

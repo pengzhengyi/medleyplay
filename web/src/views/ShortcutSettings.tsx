@@ -26,36 +26,88 @@ import {
   useBindings,
 } from "../shortcuts";
 import { setHoldForShortcuts, useHoldForShortcuts } from "../holdForShortcuts";
+import { type Words, useWords } from "../locale";
 import { HOLD_LABEL } from "../useHeldModifier";
-import { classOf, useNote } from "../useNote";
+import { classOf, useNoteOf } from "../useNote";
 
 const nameOf = (command: Command) => COMMANDS.find((each) => each.command === command)?.name;
 
+type ShortcutNotice =
+  | { readonly kind: "save-failed"; readonly reason: string }
+  | { readonly kind: "browser"; readonly binding: string }
+  | {
+      readonly kind: "conflict" | "added" | "removed";
+      readonly command: Command;
+      readonly binding: string;
+    }
+  | { readonly kind: "full"; readonly command: Command }
+  | { readonly kind: "reset" };
+
+function wordsOf(notice: ShortcutNotice, t: Words): string {
+  switch (notice.kind) {
+    case "save-failed":
+      return t("Changed on this device but not saved to your account: {{reason}}", {
+        reason: notice.reason,
+      });
+    case "browser":
+      return t("The browser keeps {{keys}}. Press other keys.", {
+        keys: labelOf(notice.binding, t),
+      });
+    case "conflict":
+      return t("{{keys}} is already {{command}}. Press other keys.", {
+        command: t(nameOf(notice.command) ?? ""),
+        keys: labelOf(notice.binding, t),
+      });
+    case "full":
+      return t("{{command}} has {{count}} keys; remove one first.", {
+        command: t(nameOf(notice.command) ?? ""),
+        count: MAX_KEYS,
+      });
+    case "added":
+      return t("{{command}} now also has {{keys}}.", {
+        command: t(nameOf(notice.command) ?? ""),
+        keys: labelOf(notice.binding, t),
+      });
+    case "removed":
+      return t("{{command}} no longer has {{keys}}.", {
+        command: t(nameOf(notice.command) ?? ""),
+        keys: labelOf(notice.binding, t),
+      });
+    case "reset":
+      return t("Back to the usual keys.");
+  }
+}
+
 /** What the Settings section for the keyboard shortcuts holds. */
 export function ShortcutSettings() {
+  const t = useWords();
   const bindings = useBindings();
   const holding = useHoldForShortcuts();
   const [recording, setRecording] = useState<Command | undefined>(undefined);
-  const notes = useNote();
+  const notes = useNoteOf<ShortcutNotice | null>(null);
   // Some browsers click a button as Space comes up, so the release of a press taken is kept too.
   const taken = useRef<string | undefined>(undefined);
+  const lastSave = useRef(0);
   const defaults = changesOf(bindings) === null;
 
   /** Use `next` from now on, saying `said`, or why the server didn't keep it. */
-  const save = (next: Bindings, said: string) => {
+  const save = (next: Bindings, said: ShortcutNotice) => {
+    const request = ++lastSave.current;
     notes.confirm(said);
     saveBindings(next).catch((failure: unknown) => {
+      if (request !== lastSave.current) return;
       const reason = failure instanceof Error ? failure.message : String(failure);
-      notes.refuse(`The server didn't keep them: ${reason}. This browser has them until it does.`);
+      notes.refuse({ kind: "save-failed", reason });
     });
   };
 
   const record = (command: Command, event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       setRecording(undefined);
-      notes.tell("");
+      notes.tell(null);
       return;
     }
     const keys = bindingOf(event.nativeEvent);
@@ -68,25 +120,29 @@ export function ShortcutSettings() {
     event.stopPropagation();
     taken.current = event.code;
     if (belongsToBrowser(keys)) {
-      notes.refuse(`The browser keeps ${labelOf(keys)}. Press other keys.`);
+      notes.refuse({ kind: "browser", binding: keys });
       return;
     }
     const added = addKeys(bindings, command, keys);
     if ("taken" in added) {
-      notes.refuse(`${labelOf(keys)} is already ${nameOf(added.taken) ?? ""}. Press other keys.`);
+      notes.refuse({ kind: "conflict", command: added.taken, binding: keys });
       return;
     }
     setRecording(undefined);
     if ("full" in added) {
-      notes.refuse(`${nameOf(command) ?? ""} has ${String(MAX_KEYS)} keys; remove one first.`);
+      notes.refuse({ kind: "full", command });
       return;
     }
-    save(added.bindings, `${nameOf(command) ?? ""} now also has ${labelOf(keys)}.`);
+    if (added.bindings === bindings) {
+      notes.tell(null);
+      return;
+    }
+    save(added.bindings, { kind: "added", command, binding: keys });
   };
 
   return (
     <>
-      <p className="hint">Keys for the player, kept with your account.</p>
+      <p className="hint">{t("Keys for the player, kept with your account.")}</p>
       <label className="hold-setting">
         <input
           type="checkbox"
@@ -95,29 +151,34 @@ export function ShortcutSettings() {
             setHoldForShortcuts(event.currentTarget.checked);
           }}
         />
-        Show them while {HOLD_LABEL} is held, in this browser
+        {t("Show them while {{key}} is held, in this browser", { key: HOLD_LABEL })}
       </label>
       <ul className="shortcut-settings">
         {COMMANDS.map(({ command, name }) => {
+          const label = t(name);
           const waiting = recording === command;
           return (
             <li key={command} className="shortcut-row">
-              <span className="shortcut-name">{name}</span>
+              <span className="shortcut-name">{label}</span>
               <span className="shortcut-keys">
-                {bindings[command].length === 0 && <span className="no-keys">None</span>}
+                {bindings[command].length === 0 && <span className="no-keys">{t("None")}</span>}
                 {bindings[command].map((keys) => (
                   <span key={keys} className="key-chip">
                     <kbd>{labelOf(keys)}</kbd>
                     <button
                       type="button"
                       className="icon remove-keys"
-                      aria-label={`Remove ${labelOf(keys)} from ${name}`}
-                      title={`Remove ${labelOf(keys)}`}
+                      aria-label={t("Remove {{keys}} from {{command}}", {
+                        keys: labelOf(keys, t),
+                        command: label,
+                      })}
+                      title={t("Remove {{keys}}", { keys: labelOf(keys, t) })}
                       onClick={() => {
-                        save(
-                          removeKeys(bindings, command, keys),
-                          `${name} no longer has ${labelOf(keys)}.`,
-                        );
+                        save(removeKeys(bindings, command, keys), {
+                          kind: "removed",
+                          command,
+                          binding: keys,
+                        });
                       }}
                     >
                       <XIcon weight="bold" aria-hidden />
@@ -128,10 +189,13 @@ export function ShortcutSettings() {
               <button
                 type="button"
                 className={waiting ? "outline change-keys waiting" : "outline change-keys"}
-                aria-label={waiting ? `Press keys to add to ${name}` : `Add keys to ${name}`}
+                aria-label={t(
+                  waiting ? "Press keys to add to {{command}}" : "Add keys to {{command}}",
+                  { command: label },
+                )}
                 onClick={() => {
                   setRecording(command);
-                  notes.tell("");
+                  notes.tell(null);
                 }}
                 onKeyDown={(event) => {
                   if (waiting) {
@@ -150,14 +214,14 @@ export function ShortcutSettings() {
                   }
                 }}
               >
-                {waiting ? "Press keys…" : "Add keys"}
+                {t(waiting ? "Press keys…" : "Add keys")}
               </button>
             </li>
           );
         })}
       </ul>
       <p className={classOf(notes.note, "hint saved")} role="status">
-        {notes.note.text}
+        {notes.note.text === null ? "" : wordsOf(notes.note.text, t)}
       </p>
       <button
         type="button"
@@ -165,10 +229,10 @@ export function ShortcutSettings() {
         disabled={defaults}
         onClick={() => {
           setRecording(undefined);
-          save(DEFAULT_BINDINGS, "Back to the usual keys.");
+          save(DEFAULT_BINDINGS, { kind: "reset" });
         }}
       >
-        Reset to defaults
+        {t("Reset to defaults")}
       </button>
     </>
   );

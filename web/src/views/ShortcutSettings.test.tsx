@@ -1,10 +1,11 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setHoldForShortcuts } from "../holdForShortcuts";
 import { openWithShortcuts, preferencesOf, serve } from "../testing/server";
 import { ShortcutSettings } from "./ShortcutSettings";
+import { LanguageSelect } from "./LanguageSelect";
 
 /** The keys a command's row shows, as people read them. */
 const keysShownFor = (name: string) =>
@@ -20,6 +21,25 @@ function renderSaving() {
 }
 
 describe("changing the keyboard shortcuts", () => {
+  it("translates a visible shortcut conflict without changing the binding or leaving capture", async () => {
+    renderSaving();
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const language = screen.getByRole("combobox", { name: "Language" });
+    await user.click(screen.getByRole("button", { name: "Add keys to Shuffle" }));
+    await user.keyboard("k");
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(screen.getByRole("status")).toHaveTextContent("K 已用于「播放或暂停」。请按其他键。");
+      expect(keysShownFor("播放或暂停")).toEqual(["Space", "K"]);
+      expect(screen.getByRole("button", { name: "按键以添加到「随机播放」" })).toHaveFocus();
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
   it("shows each command with its keys", () => {
     renderSaving();
 
@@ -39,6 +59,18 @@ describe("changing the keyboard shortcuts", () => {
     await waitFor(() => {
       expect(calls).toContain("PUT /api/me/preferences");
     });
+  });
+
+  it("does not claim or save a change when the command already has the key", async () => {
+    const calls = renderSaving();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Add keys to Play or pause" }));
+
+    await user.keyboard("k");
+
+    expect(keysShownFor("Play or pause")).toEqual(["Space", "K"]);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(calls).not.toContain("PUT /api/me/preferences");
   });
 
   it("removes one of a command's keys, keeping the others", async () => {
@@ -122,7 +154,9 @@ describe("changing the keyboard shortcuts", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Remove K from Play or pause" }));
 
-    expect(await screen.findByText(/The server didn't keep them/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Changed on this device but not saved to your account/u),
+    ).toBeInTheDocument();
     expect(keysShownFor("Play or pause")).toEqual(["Space"]);
   });
 

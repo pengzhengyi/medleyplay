@@ -1208,6 +1208,22 @@ describe("the Settings sections", () => {
 });
 
 describe("the Network section", () => {
+  it("shows compact Chinese network status, connection, and timestamp without full stops", async () => {
+    const checkedAt = "2026-10-27T19:05:06Z";
+    const user = userEvent.setup();
+    open(false, {}, modeOf({ checked_at: checkedAt }));
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByText("在线", { exact: true })).toBeVisible();
+      expect(screen.getByText("已连接 Wi-Fi", { exact: true })).toBeVisible();
+      expect(screen.getByText(/^上次检查互联网连接的时间：\d\d:\d\d:\d\d$/u)).toBeVisible();
+    } finally {
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
+  });
+
   it("says why medleyplay is Offline, and the network the server is on", async () => {
     open(false, {}, ON_THE_HOTSPOT, [HOTSPOT_MARK]);
 
@@ -1230,14 +1246,14 @@ describe("the Network section", () => {
       expect(await network().findByText("Offline: on a metered network.")).toBeVisible();
       await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
 
-      expect(screen.getByText("离线：当前网络按流量计费。")).toBeVisible();
-      expect(screen.getByText("已连接 Wi-Fi，计费网络名称为「Search」。")).toBeVisible();
+      expect(screen.getByText("离线：当前网络按流量计费")).toBeVisible();
+      expect(screen.getByText("已连接 Wi-Fi，计费网络名称为「Search」")).toBeVisible();
       const time = new Intl.DateTimeFormat("zh-Hans", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
       }).format(new Date(checkedAt));
-      expect(screen.getByText(`上次检查互联网连接的时间：${time}。`)).toBeVisible();
+      expect(screen.getByText(`上次检查互联网连接的时间：${time}`)).toBeVisible();
     } finally {
       browser.mockRestore();
       const language = screen.queryByRole("combobox", { name: "语言" });

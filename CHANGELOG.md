@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Settings → Appearance. Simplified Chinese covers screen help, dialogs,
   accessibility labels, and feedback throughout the web app. Library titles,
   lyrics, and search syntax stay as written.
+- Short Simplified Chinese status lines and confirmations omit unnecessary
+  full stops.
 - Use **Google** to find an album cover on Google Images, then preview and use your
   saved image in the same tab. **Upload** just takes a file from your device. With a
   household key, select **Tavily** below MusicBrainz to search and see pictures

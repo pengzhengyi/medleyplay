@@ -1120,16 +1120,26 @@ describe("looking a song up from its details", () => {
   });
 
   it("says why a lookup failed beside it", async () => {
+    const detail = "MusicBrainz didn't answer.";
     const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
       findable: [MUSICBRAINZ],
-      lookup: { enricher: "musicbrainz", state: "failed", message: "MusicBrainz didn't answer." },
+      lookup: { enricher: "musicbrainz", state: "failed", message: detail },
     });
-
+    const user = userEvent.setup();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
     expect(
-      within(dialog).getByRole("status", {
-        name: "Looking up on MusicBrainz failed: MusicBrainz didn't answer.",
-      }),
+      within(dialog).getByRole("status", { name: `Looking up on MusicBrainz failed: ${detail}` }),
     ).toBeVisible();
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(
+        within(dialog).getByRole("status", { name: `失败：正在 MusicBrainz 查询（${detail}）` }),
+      ).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
   });
 });
 

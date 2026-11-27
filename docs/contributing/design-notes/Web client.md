@@ -400,14 +400,14 @@ motion; its use does not change the setting.
 
 | Keys | Command |
 | --- | --- |
-| Space or K | Play or pause |
+| K | Play or pause |
 | ← and → | Back or ahead 5 seconds |
 | Shift + ← and Shift + → | Previous and Next song; past an album's first or last song, on by album |
-| Alt + Shift + ← and Alt + Shift + → | Previous and Next album |
+| `[` and `]` | Previous and Next album |
 | - and = | Volume down and up, a mark at a time |
 | M | Mute or unmute; changing the volume turns the sound back on |
 | S, R, and L | Shuffle, Repeat, and favorite the song playing |
-| / | Go to the search box |
+| G | Go to the search box |
 | Q | Open or close *Up next*; where it is always open, go to it |
 | F | Open or close Now Playing |
 | Shift + / (?) | List the shortcuts |
@@ -418,20 +418,24 @@ motion; its use does not change the setting.
   (`navigator.keyboard.getLayoutMap()`, in Chromium), so the key a French
   keyboard prints *A* reads *A*; elsewhere, labels are a US keyboard's. A key
   held with Ctrl, Alt, or ⌘ is left to the browser unless a binding names that
-  modifier.
+  modifier and the combination is not reserved. Space and `/` have no app
+  defaults, leaving page scrolling and Firefox Quick Find available. In Firefox,
+  the character typed takes precedence over its physical key when it opens
+  Quick Find. If Firefox does not report a layout, the list still names physical
+  keys from a US keyboard. The shortcut only runs if the key does not type `/`
+  or `'`.
 - **A command has any number of keys,** none included, up to four.
 - **The focused control keeps the keys it uses:** typing goes into a text box,
   an arrow moves a focused slider, and Space or Enter presses a button reached
-  with the keyboard. A button focused by a click doesn't keep Space, so Space
-  after clicking a song pauses it rather than playing it again. An open dialog
-  or menu keeps every key, except Now Playing.
+  with the keyboard. If Space is added as a shortcut, a button focused by a
+  click does not keep it. An open dialog or menu keeps every key, except Now Playing.
 - **Holding a key** repeats seeking and the volume, but not the others, so
-  holding Space doesn't flicker between play and pause.
+  holding K doesn't flicker between play and pause.
 - **A screen reader's browse mode** takes bare letters and arrows for itself,
   so the shortcuts work in its focus mode, as on any page.
 - **A control names its keys** in its tooltip, its name then each key as a cap of
   its own (the modifiers as ⇧ ⌥ ⌃ ⌘ on Apple devices, as words elsewhere), and in
-  `aria-keyshortcuts`; a screen reader hears *Play (Space or K)*. Radix's tooltip
+  `aria-keyshortcuts`; a screen reader hears *Play (K)*. Radix's tooltip
   draws it, after a short rest of the pointer or when the control is reached with
   the keyboard; the search box's shows on hover alone, so it never covers what is
   typed. The header's keyboard button, or *?*, lists them
@@ -451,9 +455,10 @@ motion; its use does not change the setting.
   button, and *Add keys* waits for the next press, modifiers included, and adds
   it, unless another command has it, which it names, waiting for other keys.
   Escape, or moving away, adds nothing, and *Reset to defaults* puts every
-  command back. Keys the browser or the system keeps, such as ⌘ + W or F5, are
-  refused too, since the page would never see them or would take them from the
-  browser.
+  command back. Known browser and system shortcuts for the device, such as
+  ⌘ + W or ⌘ + Option + → on Mac, are refused. Saved combinations on that
+  list remain visible in Settings for editing but do not appear in the
+  shortcut list or run.
 - **The shortcuts are the Account's,** so they follow it to any browser or
   device: `GET` and `PUT /api/me/preferences` hold the commands changed from
   the defaults, at the revision read, and a command left on its defaults takes
@@ -461,9 +466,10 @@ motion; its use does not change the setting.
   knowing the commands. The page shows this browser's copy of the Account's
   at once, then the server's, and reads them again when it is shown. A save
   that finds them saved elsewhere since reads the revision and saves again: the
-  change chosen last wins. A saved command on keys another command has, as when
-  a new command's default is keys already saved, goes back to its default; the
-  rest stay as saved.
+  change chosen last wins. The album and search defaults give way to keys
+  saved for other commands and return when those keys are free, unless the
+  account explicitly changed those commands. Other conflicting saved commands
+  return to their defaults.
 - **react-hotkeys-hook** listens for them: it matches physical keys with their
   modifiers and leaves out form fields, and the page decides which keys a
   focused control keeps. It was chosen over tinykeys, hotkeys-js, and writing

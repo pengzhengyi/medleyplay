@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { setHoldForShortcuts } from "../holdForShortcuts";
 import { openWithShortcuts, preferencesOf, serve } from "../testing/server";
@@ -21,6 +21,10 @@ function renderSaving() {
 }
 
 describe("changing the keyboard shortcuts", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("translates a visible shortcut conflict without changing the binding or leaving capture", async () => {
     renderSaving();
     render(<LanguageSelect />);
@@ -33,7 +37,7 @@ describe("changing the keyboard shortcuts", () => {
       fireEvent.change(language, { target: { value: "zh-Hans" } });
 
       expect(screen.getByRole("status")).toHaveTextContent("K 已用于「播放或暂停」。请按其他键。");
-      expect(keysShownFor("播放或暂停")).toEqual(["Space", "K"]);
+      expect(keysShownFor("播放或暂停")).toEqual(["K"]);
       expect(screen.getByRole("button", { name: "按键以添加到「随机播放」" })).toHaveFocus();
     } finally {
       fireEvent.change(language, { target: { value: "auto" } });
@@ -43,9 +47,10 @@ describe("changing the keyboard shortcuts", () => {
   it("shows each command with its keys", () => {
     renderSaving();
 
-    expect(keysShownFor("Play or pause")).toEqual(["Space", "K"]);
+    expect(keysShownFor("Play or pause")).toEqual(["K"]);
     expect(keysShownFor("Next song")).toEqual(["Shift + →"]);
-    expect(keysShownFor("Next album")).toEqual(["Alt + Shift + →"]);
+    expect(keysShownFor("Next album")).toEqual(["]"]);
+    expect(keysShownFor("Search")).toEqual(["G"]);
   });
 
   it("adds the next keys pressed to a command, and saves them with the Account", async () => {
@@ -68,12 +73,13 @@ describe("changing the keyboard shortcuts", () => {
 
     await user.keyboard("k");
 
-    expect(keysShownFor("Play or pause")).toEqual(["Space", "K"]);
+    expect(keysShownFor("Play or pause")).toEqual(["K"]);
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
     expect(calls).not.toContain("PUT /api/me/preferences");
   });
 
   it("removes one of a command's keys, keeping the others", async () => {
+    await openWithShortcuts({ toggle: ["space", "k"] });
     renderSaving();
 
     await userEvent.click(screen.getByRole("button", { name: "Remove K from Play or pause" }));
@@ -107,23 +113,47 @@ describe("changing the keyboard shortcuts", () => {
     renderSaving();
 
     await userEvent.click(screen.getByRole("button", { name: "Add keys to Shuffle" }));
-    await userEvent.keyboard(" ");
+    await userEvent.keyboard("k");
 
-    expect(screen.getByRole("status")).toHaveTextContent("Space is already Play or pause.");
+    expect(screen.getByRole("status")).toHaveTextContent("K is already Play or pause.");
     expect(keysShownFor("Shuffle")).toEqual(["S"]);
     expect(screen.getByRole("button", { name: "Press keys to add to Shuffle" })).toHaveFocus();
   });
 
   it("refuses keys the browser keeps, and waits for others", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
     renderSaving();
 
     await userEvent.click(screen.getByRole("button", { name: "Add keys to Shuffle" }));
-    await userEvent.keyboard("{Meta>}w{/Meta}");
+    const recorder = screen.getByRole("button", { name: "Press keys to add to Shuffle" });
+    const allowed = fireEvent.keyDown(recorder, { code: "KeyW", key: "w", metaKey: true });
 
+    expect(allowed).toBe(true);
     expect(screen.getByRole("status")).toHaveTextContent("The browser keeps ⌘ + W.");
-    expect(
-      screen.getByRole("button", { name: "Press keys to add to Shuffle" }),
-    ).toBeInTheDocument();
+    expect(recorder).toHaveFocus();
+  });
+
+  it("warns about a saved browser tab shortcut without removing the saved key", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    await openWithShortcuts({ nextAlbum: ["alt+meta+right"] });
+    const calls = renderSaving();
+
+    expect(screen.getByText(/Some saved shortcuts belong to the browser or system/u)).toBeVisible();
+    expect(keysShownFor("Next album")).toEqual(["Alt + ⌘ + →"]);
+    expect(calls).not.toContain("PUT /api/me/preferences");
+  });
+
+  it("leaves a produced slash to Firefox while recording", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 Firefox/144.0");
+    const calls = renderSaving();
+    await userEvent.click(screen.getByRole("button", { name: "Add keys to Previous album" }));
+    const recorder = screen.getByRole("button", { name: "Press keys to add to Previous album" });
+
+    const allowed = fireEvent.keyDown(recorder, { code: "BracketLeft", key: "/" });
+
+    expect(allowed).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent("The browser keeps [.");
+    expect(calls).not.toContain("PUT /api/me/preferences");
   });
 
   it("adds nothing on Escape", async () => {
@@ -157,7 +187,7 @@ describe("changing the keyboard shortcuts", () => {
     expect(
       await screen.findByText(/Changed on this device but not saved to your account/u),
     ).toBeInTheDocument();
-    expect(keysShownFor("Play or pause")).toEqual(["Space"]);
+    expect(keysShownFor("Play or pause")).toEqual([]);
   });
 
   it("puts every command back on its usual keys", async () => {
@@ -166,7 +196,7 @@ describe("changing the keyboard shortcuts", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
 
-    expect(keysShownFor("Play or pause")).toEqual(["Space", "K"]);
+    expect(keysShownFor("Play or pause")).toEqual(["K"]);
     expect(screen.getByRole("button", { name: "Reset to defaults" })).toBeDisabled();
   });
 });

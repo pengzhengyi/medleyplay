@@ -1,3 +1,5 @@
+// cspell:ignore bracketleft bracketright
+
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -33,6 +35,7 @@ const ALICES_COPY = "medleyplay.shortcuts.v2.1";
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("a binding's names", () => {
@@ -118,15 +121,61 @@ describe("recording a binding", () => {
 });
 
 describe("keys the browser keeps", () => {
-  it.each(["meta+w", "ctrl+t", "meta+q", "ctrl+r", "f5", "f11", "shift+f12"])(
-    "include %s",
-    (keys) => {
-      expect(belongsToBrowser(keys)).toBe(true);
-    },
-  );
+  it.each([
+    ["meta+w", true],
+    ["ctrl+t", false],
+    ["meta+q", true],
+    ["ctrl+r", false],
+    ["f5", false],
+    ["f11", false],
+    ["shift+f12", false],
+    ["alt+meta+left", true],
+    ["alt+meta+right", true],
+    ["alt+meta+i", true],
+    ["alt+meta+j", true],
+    ["meta+bracketleft", true],
+    ["ctrl+pageup", false],
+    ["meta+4", true],
+    ["ctrl+f", false],
+    ["ctrl+k", false],
+    ["alt+left", false],
+    ["meta+space", true],
+  ] as const)("include %s (Apple: %s)", (keys, apple) => {
+    expect(belongsToBrowser(keys, apple)).toBe(true);
+  });
 
-  it.each(["w", "shift+w", "alt+t", "k", "meta+k"])("leave out %s", (keys) => {
-    expect(belongsToBrowser(keys)).toBe(false);
+  it.each([
+    ["w", false],
+    ["shift+w", false],
+    ["alt+t", false],
+    ["k", false],
+    ["g", true],
+    ["bracketleft", true],
+    ["bracketright", false],
+    ["ctrl+alt+k", false],
+    ["ctrl+right", false],
+    ["alt+shift+right", true],
+    ["alt+meta+k", true],
+  ] as const)("leave out %s (Apple: %s)", (keys, apple) => {
+    expect(belongsToBrowser(keys, apple)).toBe(false);
+  });
+
+  it("uses Firefox's Linux tab and quit keys without taking Ctrl plus a number", () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 Firefox/144.0");
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+
+    expect(belongsToBrowser("ctrl+1")).toBe(false);
+    expect(belongsToBrowser("alt+1")).toBe(true);
+    expect(belongsToBrowser("ctrl+q")).toBe(true);
+  });
+
+  it("uses Firefox's Windows tab and quit keys", () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 Firefox/144.0");
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Win32");
+
+    expect(belongsToBrowser("ctrl+1")).toBe(true);
+    expect(belongsToBrowser("alt+1")).toBe(false);
+    expect(belongsToBrowser("ctrl+shift+q")).toBe(true);
   });
 });
 
@@ -138,7 +187,7 @@ describe("changing a command's keys", () => {
   });
 
   it("refuses keys another command has, naming it", () => {
-    expect(addKeys(DEFAULT_BINDINGS, "next", "space")).toEqual({ taken: "toggle" });
+    expect(addKeys(DEFAULT_BINDINGS, "next", "k")).toEqual({ taken: "toggle" });
   });
 
   it("changes nothing for keys the command already has", () => {
@@ -152,7 +201,9 @@ describe("changing a command's keys", () => {
   });
 
   it("removes one of a command's keys, leaving the others", () => {
-    expect(removeKeys(DEFAULT_BINDINGS, "toggle", "space").toggle).toEqual(["k"]);
+    expect(
+      removeKeys({ ...DEFAULT_BINDINGS, toggle: ["space", "k"] }, "toggle", "space").toggle,
+    ).toEqual(["k"]);
   });
 });
 
@@ -162,7 +213,7 @@ describe("the shortcuts the server keeps", () => {
   });
 
   it("are the commands changed from the defaults, with all their keys", () => {
-    const changed = removeKeys(DEFAULT_BINDINGS, "toggle", "k");
+    const changed = removeKeys({ ...DEFAULT_BINDINGS, toggle: ["space", "k"] }, "toggle", "k");
 
     expect(changesOf(changed)).toEqual({ toggle: ["space"] });
   });
@@ -190,17 +241,31 @@ describe("the shortcuts the server keeps", () => {
   });
 
   it("put a command saved on another's keys back on its default, keeping the rest", () => {
-    expect(bindingsOf({ next: ["space"], shuffle: ["x"] })).toEqual({
+    expect(bindingsOf({ next: ["k"], shuffle: ["x"] })).toEqual({
       ...DEFAULT_BINDINGS,
       shuffle: ["x"],
     });
   });
 
   it("put back each command whose default the first one put back now clashes with", () => {
-    expect(bindingsOf({ next: ["space"], previous: ["shift+right"], shuffle: ["x"] })).toEqual({
+    expect(bindingsOf({ next: ["k"], previous: ["shift+right"], shuffle: ["x"] })).toEqual({
       ...DEFAULT_BINDINGS,
       shuffle: ["x"],
     });
+  });
+
+  it("keeps a saved shortcut that takes the new default for another command", () => {
+    const saved = { next: ["bracketright"], shuffle: ["g"], toggle: ["space", "k"] };
+
+    const bindings = bindingsOf(saved);
+
+    expect(bindings).toMatchObject({
+      ...saved,
+      search: [],
+      previousAlbum: ["bracketleft"],
+      nextAlbum: [],
+    });
+    expect(bindingsOf(changesOf(bindings))).toEqual(bindings);
   });
 });
 
@@ -223,6 +288,35 @@ describe("an Account's shortcuts", () => {
 
     expect(result.current.toggle).toEqual(["j"]);
   });
+
+  it.each([
+    { saved: { shuffle: ["s", "g"] }, expected: ["g"], stored: null },
+    { saved: { shuffle: ["s", "g"], search: [] }, expected: [], stored: { search: [] } },
+  ])(
+    "restores a freed default unless it was explicitly cleared ($expected)",
+    async ({ saved, expected, stored }) => {
+      const sent: unknown[] = [];
+      serve({
+        "GET /api/me/preferences": { body: { shortcuts: saved, revision: 3 } },
+        "PUT /api/me/preferences": (body) => {
+          sent.push(body);
+          return { body: { revision: 4 } };
+        },
+      });
+      const { result } = renderHook(() => useBindings());
+      await act(() => openAccount(1));
+      expect(result.current.search).toEqual([]);
+      expect(JSON.parse(localStorage.getItem(ALICES_COPY) ?? "null")).toEqual({ shortcuts: saved });
+
+      await act(() => saveBindings(removeKeys(result.current, "shuffle", "g")));
+
+      expect(result.current.search).toEqual(expected);
+      expect(sent).toEqual([{ shortcuts: stored, revision: 3 }]);
+      expect(JSON.parse(localStorage.getItem(ALICES_COPY) ?? "null")).toEqual({
+        shortcuts: stored,
+      });
+    },
+  );
 
   it("aren't another Account's, kept in the same browser", async () => {
     localStorage.setItem(ALICES_COPY, JSON.stringify({ shortcuts: { toggle: ["j"] } }));

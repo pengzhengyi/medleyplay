@@ -332,11 +332,11 @@ describe("Now Playing", () => {
     expect(screen.queryByRole("dialog", { name: "Now Playing" })).toBeNull();
   });
 
-  it("leaves Space to play or pause once opened with its shortcut", async () => {
+  it("keeps Now Playing open when the playback shortcut is pressed", async () => {
     await playingIntro();
     await userEvent.keyboard("f");
 
-    await userEvent.keyboard(" ");
+    await userEvent.keyboard("k");
 
     expect(screen.getByRole("dialog", { name: "Now Playing" })).toBeInTheDocument();
   });

@@ -4,13 +4,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { openWithShortcuts } from "../testing/server";
 import { setHoldForShortcuts } from "../holdForShortcuts";
+import { setLayoutForTests } from "../shortcuts";
 import { HOLD_KEY, HOLD_MS } from "../useHeldModifier";
 import { LanguageSelect } from "./LanguageSelect";
 import { HoldForShortcuts, ShortcutList } from "./ShortcutList";
 
 describe("the list of keyboard shortcuts", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("keeps the key cap but speaks its localized name", async () => {
-    await openWithShortcuts(null);
+    await openWithShortcuts({ toggle: ["space"] });
     render(<LanguageSelect />);
     const language = screen.getByRole("combobox", { name: "Language" });
     render(<ShortcutList onClose={vi.fn()} />);
@@ -36,8 +41,28 @@ describe("the list of keyboard shortcuts", () => {
     const list = within(screen.getByRole("dialog", { name: "Keyboard shortcuts" }));
     expect(list.getByText("Play or pause").nextElementSibling).toHaveTextContent(/^J$/);
     expect(list.getByText("Next song").nextElementSibling).toHaveTextContent("Shift + →");
-    expect(list.getByText("Next album").nextElementSibling).toHaveTextContent("Alt + Shift + →");
+    expect(list.getByText("Next album").nextElementSibling).toHaveTextContent(/^\]$/u);
     expect(list.getByText("Mute or unmute").nextElementSibling).toHaveTextContent("None");
+  });
+
+  it("does not advertise a saved shortcut reserved by the browser", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    await openWithShortcuts({ nextAlbum: ["alt+meta+right"] });
+
+    render(<ShortcutList onClose={vi.fn()} />);
+
+    expect(screen.getByText("Next album").nextElementSibling).toHaveTextContent("None");
+  });
+
+  it("leaves a saved slash off Firefox's shortcut list when the layout reports slash", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 Firefox/144.0");
+    setLayoutForTests(new Map([["Slash", "/"]]));
+    await openWithShortcuts({ search: ["slash", "j"] });
+
+    render(<ShortcutList onClose={vi.fn()} />);
+
+    expect(screen.getByText("Search").nextElementSibling).toHaveTextContent(/^J$/u);
+    expect(screen.getByText(/open Quick Find instead/u)).toBeVisible();
   });
 
   it("leads to Settings to change them, closing as it goes", async () => {

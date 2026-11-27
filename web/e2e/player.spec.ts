@@ -67,9 +67,9 @@ test("the Up next tabs and album queue controls fit on one line", async ({ page,
   });
   await play(page, first.title);
   const queue = page.getByRole("region", { name: "Up next" });
-  // Give the header the width it would have with a 15px scrollbar on overlay-scrollbar systems.
+  // Allow for a wide scrollbar, even on systems that overlay it.
   await queue.evaluate((panel: HTMLElement) => {
-    const missing = 15 - (panel.offsetWidth - panel.clientWidth);
+    const missing = 20 - (panel.offsetWidth - panel.clientWidth);
     if (missing > 0) {
       panel.style.paddingInlineEnd = `calc(${getComputedStyle(panel).paddingInlineEnd} + ${String(missing)}px)`;
     }

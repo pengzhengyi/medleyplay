@@ -226,11 +226,18 @@ export function formatBytes(bytes: number, t?: Words): string {
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
 /** Write how many follow an artist, such as `4.1M fans` or `1 fan`; empty when unknown. */
-export function formatFans(fans: number | null): string {
+export function formatFans(fans: number | null, t?: Words, locale?: string): string {
   if (fans === null) {
     return "";
   }
-  return fans === 1 ? "1 fan" : `${compact.format(fans)} fans`;
+  const amount =
+    locale === undefined
+      ? compact.format(fans)
+      : new Intl.NumberFormat(locale, { notation: "compact" }).format(fans);
+  return (
+    t?.(fans === 1 ? "{{amount}} fan" : "{{amount}} fans", { amount }) ??
+    (fans === 1 ? "1 fan" : `${amount} fans`)
+  );
 }
 
 const letters = new Intl.Segmenter();

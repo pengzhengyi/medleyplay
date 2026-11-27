@@ -1495,7 +1495,7 @@ describe("which artist going by a name a song is by", () => {
 
     expect(
       within(dialog).getByRole("button", { name: "Another artist named Jay?" }),
-    ).toHaveAttribute("title", "Two artists share the name Jay: choose which one sings this song");
+    ).toHaveAttribute("title", "Choose the artist for this song. Changes apply immediately.");
     expect(within(dialog).getByRole("button", { name: "More artists" })).toHaveAttribute(
       "title",
       "This song is by more than one artist: add each one",
@@ -1510,7 +1510,7 @@ describe("which artist going by a name a song is by", () => {
 
     const menu = await openMenu(dialog);
     await userEvent.click(
-      within(menu).getByRole("menuitem", { name: "Another artist called Jay" }),
+      within(menu).getByRole("menuitem", { name: "Create another artist named Jay" }),
     );
 
     expect(onChooseArtist).toHaveBeenCalledWith("Jay", null);
@@ -1539,7 +1539,7 @@ describe("which artist going by a name a song is by", () => {
 
     const menu = await openMenu(dialog);
     await userEvent.click(
-      within(menu).getByRole("menuitem", { name: "Another artist called Jay" }),
+      within(menu).getByRole("menuitem", { name: "Create another artist named Jay" }),
     );
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("No artist called Jay.");

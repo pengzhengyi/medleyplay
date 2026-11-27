@@ -202,11 +202,11 @@ export function FindAlbumCovers({
               <SuggestedFrame
                 of={each.album}
                 noun="cover"
-                why={
+                why={t(
                   each.picked
                     ? "An AI model picked this"
-                    : "A MusicBrainz release with this album's title and artist"
-                }
+                    : "A MusicBrainz release with this album's title and artist",
+                )}
                 picked={each.picked}
                 busy={saving.has(suggestionKey(each))}
                 onUse={() => void take([each], place)}
@@ -272,7 +272,6 @@ export function FindAlbumCovers({
       )}
       {changing !== undefined && actions !== undefined && changingTarget.length > 0 && (
         <PictureEditor
-          startOn="musicbrainz"
           sources={{
             kind: "cover",
             of: changing.album,

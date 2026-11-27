@@ -58,6 +58,8 @@ void words.use(initReactI18next).init({
         devices_waiting_other: "{{count}} devices waiting",
         song_count_one: "{{count}} song",
         song_count_other: "{{count}} songs",
+        release_track_count_one: "{{count}} track",
+        release_track_count_other: "{{count}} tracks",
         album_count_one: "{{count}} album",
         album_count_other: "{{count}} albums",
         star_count_one: "{{count}} star",

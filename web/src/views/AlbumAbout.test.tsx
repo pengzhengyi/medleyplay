@@ -169,8 +169,8 @@ describe("a cover suggested for an album without one", () => {
     expect(sent).toEqual([{ album: "Help!", artist: "The Beatles", cover: "cover-1965" }]);
   });
 
-  it("opens the cover editor on MusicBrainz to choose another", async () => {
-    serve({ [HELP_COVERS]: { body: helpFound({ suggested: "cover-1965" }) } });
+  it("shows the search disclosure before opening MusicBrainz to choose another cover", async () => {
+    const { calls } = serve({ [HELP_COVERS]: { body: helpFound({ suggested: "cover-1965" }) } });
     help();
 
     await userEvent.click(
@@ -178,9 +178,11 @@ describe("a cover suggested for an album without one", () => {
     );
 
     const editor = await screen.findByRole("dialog", { name: "Add a cover" });
-    expect(within(editor).getByRole("tab", { name: /MusicBrainz/u })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(within(editor).getByText(/your provider may charge/u)).toBeVisible();
+    expect(calls.filter((call) => call === HELP_COVERS)).toHaveLength(1);
+    await userEvent.click(within(editor).getByRole("tab", { name: "MusicBrainz" }));
+    expect(
+      await within(editor).findByRole("region", { name: "Covers on MusicBrainz" }),
+    ).toBeVisible();
   });
 });

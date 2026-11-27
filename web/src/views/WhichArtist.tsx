@@ -21,13 +21,16 @@ import { CheckIcon, PlusIcon, QuestionIcon } from "@phosphor-icons/react";
 import { Fragment } from "react";
 
 import type { Namesake, TrackArtist } from "../api";
+import { type Words, useWords } from "../locale";
 
 /** Return what tells another artist of a name apart: who it is, its albums, and its songs. */
-function namesakeLabel(namesake: Namesake): string {
-  const songs = namesake.songs === 1 ? "1 song" : `${String(namesake.songs)} songs`;
-  const albums = namesake.albums.length === 0 ? "" : `On ${namesake.albums.join(", ")} · `;
-  const who = namesake.linked === null ? "" : `${namesake.linked.name} · `;
-  return `${who}${albums}${songs}`;
+function namesakeLabel(namesake: Namesake, t: Words): string {
+  const songs = t("song_count", { count: namesake.songs });
+  const albums =
+    namesake.albums.length === 0
+      ? ""
+      : t("On {{albums}}", { albums: namesake.albums.join(t(", ")) });
+  return [namesake.linked?.name, albums, songs].filter(Boolean).join(" · ");
 }
 
 export function WhichArtist({
@@ -41,14 +44,13 @@ export function WhichArtist({
   /** Bind the song's artist `written` to the artist `id`, or to another one for `null`. */
   readonly onChoose: (written: string, id: string | null) => void;
 }) {
+  const t = useWords();
   const [only] = artists;
   if (only === undefined) {
     return null;
   }
   const one = artists.length === 1;
-  const why = one
-    ? `Two artists share the name ${only.written}: choose which one sings this song`
-    : "Two artists share one of these names: choose which ones sing this song";
+  const why = t("Choose the artist for this song. Changes apply immediately.");
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger asChild disabled={disabled}>
@@ -57,7 +59,9 @@ export function WhichArtist({
           className="icon artist-tag-which"
           title={why}
           aria-label={
-            one ? `Another artist named ${only.written}?` : "Another artist of the same name?"
+            one
+              ? t("Another artist named {{name}}?", { name: only.written })
+              : t("Another artist of the same name?")
           }
         >
           <QuestionIcon weight="bold" aria-hidden />
@@ -83,7 +87,7 @@ export function WhichArtist({
               }}
             >
               <Menu.RadioItem className="track-menu-item" value={artist.artist_id}>
-                <span className="which-artist-text">The one it is by now</span>
+                <span className="which-artist-text">{t("The one it is by now")}</span>
                 <Chosen />
               </Menu.RadioItem>
               {artist.namesakes.map((namesake) => (
@@ -92,7 +96,7 @@ export function WhichArtist({
                   className="track-menu-item"
                   value={namesake.artist_id}
                 >
-                  <span className="which-artist-text">{namesakeLabel(namesake)}</span>
+                  <span className="which-artist-text">{namesakeLabel(namesake, t)}</span>
                   <Chosen />
                 </Menu.RadioItem>
               ))}
@@ -106,7 +110,7 @@ export function WhichArtist({
               <span className="track-menu-icon" aria-hidden>
                 <PlusIcon />
               </span>
-              Another artist called {artist.written}
+              {t("Create another artist named {{name}}", { name: artist.written })}
             </Menu.Item>
           </Fragment>
         ))}

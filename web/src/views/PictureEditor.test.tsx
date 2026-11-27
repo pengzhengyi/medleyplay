@@ -1,8 +1,9 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { beatlesPictures, helpFound, serve } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 import { MAX_PICTURE_BYTES, PictureEditor, type PictureSources } from "./PictureEditor";
 
 const COVERS = `GET /api/album-covers?${new URLSearchParams({ album: "Help!", artist: "The Beatles" }).toString()}`;
@@ -54,6 +55,28 @@ afterEach(() => {
 });
 
 describe("the picture editor", () => {
+  it("translates file restrictions and source guidance while keeping the same album and link", async () => {
+    serve({ "GET /api/image-search": { body: { configured: false } } });
+    const { dialog } = editing(helpCover());
+    const user = userEvent.setup();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByRole("dialog", { name: "更换封面" })).toHaveAccessibleDescription("Help!");
+      expect(dialog.getByText(/JPEG、PNG 或 WebP，最大 10 MiB/u)).toBeVisible();
+      await user.click(dialog.getByRole("tab", { name: "Google" }));
+      const source = dialog.getByRole("link", { name: "在 Google 图片中搜索" });
+      expect(new URL(source.getAttribute("href") ?? "").searchParams.get("q")).toBe(
+        "The Beatles Help! album cover",
+      );
+      expect(dialog.getByText("打开来源页面，保存有权使用的图片。")).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("opens on Upload without the Google Images link or starting a job", () => {
     const { calls } = serve({ "GET /api/image-search": { body: { configured: false } } });
 
@@ -63,6 +86,8 @@ describe("the picture editor", () => {
     expect(panel.getByRole("button", { name: "Choose a file…" })).toBeVisible();
     expect(dialog.queryByRole("link", { name: "Search Google Images" })).not.toBeInTheDocument();
     const sources = dialog.getByRole("tablist", { name: "Where the cover comes from" });
+    expect(dialog.getByText(/your provider may charge/u)).toBeVisible();
+    expect(sources).toHaveAccessibleDescription(/Previews may load from other sites/u);
     expect(
       within(sources)
         .getAllByRole("tab")
@@ -71,6 +96,61 @@ describe("the picture editor", () => {
     expect(dialog.getByRole("tab", { name: "Upload" })).toHaveAttribute("aria-selected", "true");
     expect(dialog.getByText("Help!")).toBeVisible();
     expect(calls).toEqual(["GET /api/image-search"]);
+  });
+
+  it("asks for one file when two supported pictures are dropped together", async () => {
+    serve({});
+    const { dialog } = editing(helpCover());
+    const files = [jpeg("first.jpg"), jpeg("second.jpg")];
+
+    fireEvent.drop(dialog.getByRole("button", { name: "Choose a file…" }), {
+      dataTransfer: {
+        files,
+        items: files.map((file) => ({ kind: "file", getAsFile: () => file })),
+        types: ["Files"],
+      },
+    });
+
+    expect(await dialog.findByRole("alert")).toHaveTextContent("Choose one picture at a time.");
+    expect(dialog.queryByRole("button", { name: "Use this cover" })).toBeNull();
+  });
+
+  it("clears the previous album's covers and retries the next album's read without asking again", async () => {
+    const nextAlbum = { album: "Revolver", artist: "The Beatles" };
+    const nextRoute = `GET /api/album-covers?${new URLSearchParams(nextAlbum).toString()}`;
+    let reads = 0;
+    const { calls } = serve({
+      [COVERS]: { body: helpFound() },
+      [nextRoute]: () =>
+        ++reads === 1
+          ? { status: 503, body: { detail: "Read unavailable." } }
+          : { body: helpFound({ may_find: false, choice_failure: "Provider unavailable." }) },
+    });
+    const onClose = vi.fn();
+    const initial = helpCover();
+    const next = helpCover({
+      of: nextAlbum.album,
+      album: nextAlbum,
+      pictured: { kind: "album", ...nextAlbum },
+    });
+    const { rerender } = render(
+      <PictureEditor sources={initial} startOn="musicbrainz" onClose={onClose} />,
+    );
+    const covers = await screen.findAllByRole("button", { name: /^Use the cover of Help!/u });
+    expect(covers[0]).toBeVisible();
+
+    rerender(<PictureEditor sources={next} startOn="musicbrainz" onClose={onClose} />);
+
+    expect(screen.queryAllByRole("button", { name: /^Use the cover of Help!/u })).toHaveLength(0);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Read unavailable.");
+    await userEvent.click(screen.getByRole("button", { name: "Retry reading results" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not get the AI's picture choice: Provider unavailable.",
+    );
+    expect(screen.queryByRole("button", { name: "Look again" })).not.toBeInTheDocument();
+    expect(calls.filter((call) => call.startsWith("POST"))).toEqual([]);
+    expect(next.use).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("searches with Tavily only on request and opens the candidate's source without saving", async () => {
@@ -348,11 +428,15 @@ describe("the picture editor", () => {
       />,
     );
 
-    expect(await dialog.findByRole("tab", { name: "Tavily" })).toHaveAttribute(
+    const nextDialog = within(screen.getByRole("dialog"));
+    expect(await nextDialog.findByRole("tab", { name: "Tavily" })).toHaveAttribute(
       "aria-selected",
       "false",
     );
-    expect(dialog.getByRole("tab", { name: "Upload" })).toHaveAttribute("aria-selected", "true");
+    expect(nextDialog.getByRole("tab", { name: "Upload" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(calls).toEqual([`GET ${PHOTO_SEARCH}`, `GET ${PHOTO_SEARCH}/results`, `GET ${other}`]);
   });
 

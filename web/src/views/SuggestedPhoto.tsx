@@ -12,6 +12,7 @@ import { type ReactNode, useState } from "react";
 
 import { api } from "../api";
 import { formatFans } from "../format";
+import { useFormattingLocale, useWords } from "../locale";
 import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { Cover } from "./Cover";
 import { SuggestedFrame } from "./SuggestedFrame";
@@ -30,7 +31,16 @@ export function SuggestedPhoto({
   /** Called once a photo is used, so the artist is read again. */
   readonly onUsed: () => void;
 }) {
-  const { state, error: readError, dismiss } = useArtistPictures(artistId);
+  const t = useWords();
+  const locale = useFormattingLocale();
+  const {
+    state,
+    error: requestError,
+    choiceError,
+    readError,
+    retryRead,
+    dismiss,
+  } = useArtistPictures(artistId);
   const [using, setUsing] = useState(false);
   const [error, setError] = useState("");
   const [changing, setChanging] = useState(false);
@@ -47,11 +57,18 @@ export function SuggestedPhoto({
       }}
     />
   );
-  const failure = [error, readError].find((each) => each !== "");
-  const problem = failure !== undefined && (
-    <p className="error" role="alert">
-      {failure}
-    </p>
+  const failure = error || requestError || readError || choiceError;
+  const problem = failure !== "" && (
+    <>
+      <p className="error" role="alert">
+        {t("Could not update the photo suggestions: {{detail}}", { detail: failure })}
+      </p>
+      {readError !== "" && (
+        <button type="button" className="link-button" onClick={retryRead}>
+          {t("Retry reading results")}
+        </button>
+      )}
+    </>
   );
   if (state === undefined || suggested === null || picture === undefined) {
     return (
@@ -62,12 +79,14 @@ export function SuggestedPhoto({
       </>
     );
   }
-  const pick = state.pick;
-  const fans = formatFans(picture.fans);
+  const pick = state.pick?.cover === suggested ? state.pick : null;
+  const fans = formatFans(picture.fans, t, locale);
   const why =
     pick === null
-      ? `Deezer's ${[picture.name, fans].filter(Boolean).join(", ")}, going by this artist's name`
-      : `${pick.model} picked this: ${pick.why}`;
+      ? t("Deezer's {{artist}}, going by this artist's name", {
+          artist: [picture.name, fans].filter(Boolean).join(t(", ")),
+        })
+      : t("{{model}} picked this: {{reason}}", { model: pick.model, reason: pick.why });
   const use = async () => {
     setUsing(true);
     setError("");

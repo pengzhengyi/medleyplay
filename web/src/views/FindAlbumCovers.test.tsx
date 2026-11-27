@@ -342,7 +342,7 @@ describe("finding album covers in Clean up", () => {
     );
 
     const editor = await screen.findByRole("dialog", { name: "Add a cover" });
-    expect(within(editor).getByRole("tab", { name: /MusicBrainz/u })).toHaveAttribute(
+    expect(within(editor).getByRole("tab", { name: "Upload" })).toHaveAttribute(
       "aria-selected",
       "true",
     );

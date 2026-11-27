@@ -13,13 +13,19 @@
  */
 
 import { CircleNotchIcon, SparkleIcon } from "@phosphor-icons/react";
-import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { type PictureLinks, type Pictured, type SuggestedLink, api, coverUrl } from "../api";
+import { useWords } from "../locale";
+import { composing } from "../ime";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
 
 const READ_EVERY_MS = 2000;
+interface Approval {
+  readonly url: string;
+  following: boolean;
+}
 
 /** Say why a request failed, in the server's words when it gave some. */
 function messageOf(failure: unknown): string {
@@ -33,11 +39,6 @@ function siteOf(url: string): string {
   } catch {
     return url;
   }
-}
-
-/** What the picture is of, in the words of the notes: *album* or *artist*. */
-function subjectOf(pictured: Pictured): string {
-  return pictured.kind === "album" ? "album" : "artist";
 }
 
 /** An example of a note to the AI, for the picture wanted. */
@@ -62,13 +63,16 @@ export function ImageLinks({
   readonly busy?: boolean;
   readonly onUse: (cover: string) => void;
 }) {
+  const t = useWords();
   const noAi = useAiSetUp();
   const [state, setState] = useState<PictureLinks>();
   // Counts the reads asked for, so each asks the server again.
   const [reads, setReads] = useState(0);
   const [error, setError] = useState("");
-  // The links approved here and not yet used, and those whose picture won't show.
-  const [approved, setApproved] = useState<ReadonlySet<string>>(new Set());
+  const [readFailure, setReadFailure] = useState("");
+  const [approvalFailure, setApprovalFailure] = useState<{ readonly detail?: string }>();
+  const [approved, setApproved] = useState<string>();
+  const approval = useRef<Approval | undefined>(undefined);
   const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
   // The note to the AI while it is being written, kept to write on when asking again.
   const [noting, setNoting] = useState(false);
@@ -77,14 +81,20 @@ export function ImageLinks({
   const askedOnOpening = useRef(false);
   const noteId = useId();
   const key = JSON.stringify(pictured);
+  useLayoutEffect(() => {
+    return () => {
+      approval.current = undefined;
+    };
+  }, [key]);
   const readAgain = () => {
     setReads((count) => count + 1);
   };
-  const forget = (url: string) => {
-    setApproved((was) => new Set([...was].filter((each) => each !== url)));
+  const finishApproval = () => {
+    approval.current = undefined;
+    setApproved(undefined);
   };
 
-  const onRead = useEffectEvent((known: PictureLinks) => {
+  const onRead = useEffectEvent((known: PictureLinks, following: Approval | undefined) => {
     setState(known);
     if (
       !askedOnOpening.current &&
@@ -96,28 +106,29 @@ export function ImageLinks({
       askedOnOpening.current = true;
       ask("");
     }
-    for (const link of known.links) {
-      if (!approved.has(link.url)) {
-        continue;
-      }
-      if (link.cover !== null) {
-        forget(link.url);
-        onUse(link.cover);
-      } else if (!link.fetching && (link.unavailable !== "" || link.failure !== null)) {
-        forget(link.url);
-      }
+    if (following === undefined || following !== approval.current) return;
+    const link = known.links.find((candidate) => following.url === candidate.url);
+    if (link?.cover != null) {
+      finishApproval();
+      onUse(link.cover);
+    } else if (link?.fetching !== true) {
+      finishApproval();
+      if (link === undefined || (link.unavailable === "" && link.failure === null))
+        setApprovalFailure({});
     }
   });
   useEffect(() => {
     let current = true;
+    const following = approval.current?.following === true ? approval.current : undefined;
     api.imageLinks(JSON.parse(key) as Pictured).then(
       (known) => {
         if (current) {
-          onRead(known);
+          setReadFailure("");
+          onRead(known, following);
         }
       },
-      () => {
-        // Unread, the section stays hidden; asking again reads it again.
+      (failure: unknown) => {
+        if (current) setReadFailure(messageOf(failure));
       },
     );
     return () => {
@@ -125,14 +136,19 @@ export function ImageLinks({
     };
   }, [key, reads]);
   useEffect(() => {
-    if (state?.asking !== true && !(state?.links.some((link) => link.fetching) ?? false)) {
+    if (
+      readFailure !== "" ||
+      (state?.asking !== true &&
+        approved === undefined &&
+        !state?.links.some((link) => link.fetching))
+    ) {
       return;
     }
     const timer = setTimeout(readAgain, READ_EVERY_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [state]);
+  }, [approved, readFailure, state]);
 
   function ask(hint: string) {
     setError("");
@@ -145,79 +161,129 @@ export function ImageLinks({
     });
   }
   const approve = (link: SuggestedLink) => {
-    setError("");
-    setApproved((was) => new Set([...was, link.url]));
+    if (approval.current !== undefined) return;
+    setApprovalFailure(undefined);
+    const request: Approval = { url: link.url, following: false };
+    approval.current = request;
+    setApproved(link.url);
     api.approveImageLink(pictured, link.url).then(
       ({ cover }) => {
+        if (approval.current !== request) return;
         if (cover === null) {
+          request.following = true;
           readAgain();
         } else {
-          forget(link.url);
+          finishApproval();
           onUse(cover);
         }
       },
       (failure: unknown) => {
-        forget(link.url);
-        setError(messageOf(failure));
+        if (approval.current !== request) return;
+        finishApproval();
+        setApprovalFailure({ detail: messageOf(failure) });
       },
     );
   };
 
   if (state === undefined) {
-    return null;
+    return readFailure === "" ? (
+      <p role="status" aria-busy="true">
+        {t("Reading picture suggestions…")}
+      </p>
+    ) : (
+      <>
+        <p role="alert">
+          {t("Could not read picture suggestions: {{detail}}", { detail: readFailure })}
+        </p>
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => {
+            setReadFailure("");
+            readAgain();
+          }}
+        >
+          {t("Retry reading results")}
+        </button>
+      </>
+    );
   }
   const links = state.links;
   const asking = state.asking;
   const failure = error || state.failure;
-  const subject = subjectOf(pictured);
+  const canAsk = !busy && approved === undefined && state.may_suggest && !noAi.missing;
+  const retryRead = readFailure !== "" && (
+    <>
+      <p role="alert">
+        {t("Could not read picture suggestions: {{detail}}", { detail: readFailure })}
+      </p>
+      <button
+        type="button"
+        className="link-button"
+        onClick={() => {
+          setReadFailure("");
+          readAgain();
+        }}
+      >
+        {t("Retry reading results")}
+      </button>
+    </>
+  );
   return (
-    <section className="cover-finder image-links" aria-label="Pictures the AI suggests">
+    <section className="cover-finder image-links" aria-label={t("Pictures the AI suggests")}>
+      {retryRead}
+      <p className="hint">
+        {t(
+          "AI suggests links, not verified pictures. The browser may load previews from image hosts. Review the source and usage rights before downloading a picture to the server and using it.",
+        )}
+      </p>
       {!asking && (
         <div className="cover-finder-head">
           {state.asked_at === null ? (
             <button
               type="button"
               className="link-button"
-              aria-disabled={noAi.missing}
-              title={noAi.missing ? noAi.why : "Ask the AI for pictures; nothing is downloaded yet"}
+              title={noAi.missing ? noAi.why : t("Ask the AI to suggest picture links")}
+              disabled={!canAsk}
               onClick={() => {
                 noAi.whenSetUp(() => {
                   ask("");
                 });
               }}
             >
-              Ask AI
+              {t("Ask AI")}
             </button>
           ) : (
             <button
               type="button"
               className="link-button"
-              aria-expanded={noting}
+              aria-expanded={noting && canAsk}
               aria-controls={noteId}
-              aria-disabled={noAi.missing}
-              title={noAi.missing ? noAi.why : "Ask the AI again, saying what picture you want"}
+              title={noAi.missing ? noAi.why : t("Ask the AI again, saying what picture you want")}
+              disabled={!canAsk}
               onClick={() => {
                 setNoting((was) => !was);
               }}
             >
-              Ask again
+              {t("Ask again")}
             </button>
           )}
         </div>
       )}
-      {noting && !asking && (
+      {noting && !asking && canAsk && (
         <form
           id={noteId}
           className="picture-note"
           onSubmit={(event) => {
             event.preventDefault();
+            if (approval.current !== undefined) return;
             noAi.whenSetUp(() => {
               ask(note);
             });
           }}
         >
           <label className="visually-hidden" htmlFor={`${noteId}-text`}>
-            Anything the AI should know?
+            {t("Anything the AI should know?")}
           </label>
           <input
             id={`${noteId}-text`}
@@ -225,7 +291,8 @@ export function ImageLinks({
             type="text"
             value={note}
             maxLength={500}
-            placeholder={noteExample(pictured)}
+            placeholder={t(noteExample(pictured))}
+            disabled={busy}
             // The field opens on pressing Ask again, to type the note at once.
             autoFocus
             onChange={(event) => {
@@ -234,45 +301,80 @@ export function ImageLinks({
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 // Escape puts the note away, not the dialog it is in.
-                event.preventDefault();
                 event.stopPropagation();
+                if (composing(event.nativeEvent)) return;
+                event.preventDefault();
                 setNoting(false);
               }
             }}
           />
-          <button type="submit" className="dialog-button">
-            Ask
+          <button type="submit" className="dialog-button" disabled={busy}>
+            {t("Ask")}
           </button>
         </form>
       )}
-      {noAi.missing && state.asked_at === null && (
-        <p className="cover-finder-note">
-          No AI provider is set up. <AiSetUpHint newTab />
-        </p>
+      {noAi.missing && (
+        <div className="cover-finder-note">
+          <p>
+            {noAi.why} {noAi.admin && <AiSetUpHint newTab />}
+          </p>
+          {noAi.recheck !== undefined && (
+            <button
+              type="button"
+              className="link-button"
+              disabled={busy}
+              onClick={() => {
+                askedOnOpening.current = true;
+                noAi.whenSetUp(readAgain);
+              }}
+            >
+              {t("Check again")}
+            </button>
+          )}
+        </div>
+      )}
+      {!noAi.missing && !state.may_suggest && (
+        <p className="cover-finder-note">{t("AI picture suggestions are unavailable.")}</p>
       )}
       {asking && (
         <p className="cover-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-          {state.waiting ? "Waiting for Online to ask the AI…" : "Asking the AI for pictures…"}
+          {t(state.waiting ? "Waiting for Online to ask the AI…" : "Asking the AI for pictures…")}
         </p>
       )}
       {failure && (
         <p className="cover-finder-note error" role="alert">
-          {failure}
+          {t("Could not get picture suggestions: {{detail}}", { detail: failure })}
+        </p>
+      )}
+      {approvalFailure !== undefined && (
+        <p className="cover-finder-note error" role="alert">
+          {approvalFailure.detail === undefined
+            ? t("The download did not finish. Try again.")
+            : t("Could not download the picture: {{detail}}", { detail: approvalFailure.detail })}
         </p>
       )}
       {!asking && !failure && state.asked_at !== null && links.length === 0 && (
-        <p className="cover-finder-note">The AI knows no picture of this {subject}.</p>
+        <p className="cover-finder-note">
+          {t(
+            pictured.kind === "album"
+              ? "The AI knows no picture of this album."
+              : "The AI knows no picture of this artist.",
+          )}
+        </p>
       )}
       {links.length > 0 && (
         <ul className="cover-finder-grid">
           {links.map((link) => {
             const site = siteOf(link.url);
-            const downloading = link.fetching || approved.has(link.url);
+            const downloading = link.fetching || approved === link.url;
             // A picture that won't show can't be judged; one the server found none at may be asked again.
-            const notShown = broken.has(link.url) ? "It can't be shown." : "";
+            const notShown = broken.has(link.url) ? t("It can't be shown.") : "";
             const why = link.unavailable || notShown;
-            const said = `${state.model || "The AI"} suggested this${link.why ? `: ${link.why}` : ""}`;
+            const said = t(
+              link.why ? "{{model}} suggested this: {{reason}}" : "{{model}} suggested this",
+              { model: state.model || t("The AI"), reason: link.why },
+            );
             return (
               <li key={link.url}>
                 <div className="cover-choice image-link" title={why || said}>
@@ -290,7 +392,7 @@ export function ImageLinks({
                           }}
                         />
                       ) : (
-                        <span className="image-link-missing">Unavailable</span>
+                        <span className="image-link-missing">{t("Unavailable")}</span>
                       )
                     ) : (
                       <img
@@ -301,15 +403,16 @@ export function ImageLinks({
                       />
                     )}
                     {downloading && (
-                      <span className="cover-saving" role="status" aria-label="Downloading…">
+                      <span className="cover-saving" role="status" aria-label={t("Downloading…")}>
                         <CircleNotchIcon weight="bold" className="spin" aria-hidden />
                       </span>
                     )}
                   </span>
                   <span className="cover-choice-about image-link-site" title={site}>
                     <SparkleIcon weight="fill" aria-hidden />
+                    <span className="image-link-host">{site}</span>
                     {link.page === null ? (
-                      <span className="image-link-host">{site}</span>
+                      <span>{t("No source page provided.")}</span>
                     ) : (
                       <a
                         className="image-link-host image-link-page"
@@ -317,7 +420,7 @@ export function ImageLinks({
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        {site}
+                        {t("Source page: {{site}}", { site: siteOf(link.page) })}
                       </a>
                     )}
                   </span>
@@ -327,15 +430,16 @@ export function ImageLinks({
                     className="secondary outline image-link-use"
                     aria-pressed={link.cover !== null && link.cover === shown}
                     aria-disabled={notShown !== ""}
-                    aria-label={
+                    aria-label={t(
                       link.cover === null
-                        ? `Download and use the picture from ${site}`
-                        : `Use the picture from ${site}`
-                    }
-                    title={notShown || (link.cover === null ? "Download it and use it" : "Use it")}
-                    disabled={busy || downloading}
+                        ? "Download and use the picture from {{site}}"
+                        : "Use the picture from {{site}}",
+                      { site },
+                    )}
+                    title={notShown || t(link.cover === null ? "Download it and use it" : "Use it")}
+                    disabled={busy || downloading || approved !== undefined}
                     onClick={() => {
-                      if (notShown !== "") {
+                      if (notShown !== "" || approval.current !== undefined) {
                         return;
                       }
                       if (link.cover === null) {
@@ -345,11 +449,13 @@ export function ImageLinks({
                       }
                     }}
                   >
-                    {link.cover !== null
-                      ? "Use"
-                      : link.unavailable === ""
-                        ? "Approve"
-                        : "Try again"}
+                    {t(
+                      link.cover !== null
+                        ? "Use"
+                        : link.unavailable === ""
+                          ? "Approve"
+                          : "Try again",
+                    )}
                   </button>
                 </div>
               </li>

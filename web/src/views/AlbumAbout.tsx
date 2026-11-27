@@ -10,6 +10,7 @@
 import { type ReactNode, useRef, useState } from "react";
 
 import { type Track, coverUrl } from "../api";
+import { useWords } from "../locale";
 import { Cover } from "./Cover";
 import { type CoverAlbum, PictureEditor } from "./PictureEditor";
 import { PictureFrame } from "./PictureFrame";
@@ -41,9 +42,10 @@ export function AlbumAbout({
   /** Shown beside the cover, as your rating of the album. */
   readonly children?: ReactNode;
 }) {
-  const [replacing, setReplacing] = useState<"upload" | "musicbrainz">();
+  const t = useWords();
+  const [replacing, setReplacing] = useState(false);
   const about = useRef<HTMLElement>(null);
-  const editor = onCloseRequestedEditor === undefined ? replacing : "upload";
+  const editorOpen = replacing || onCloseRequestedEditor !== undefined;
   const art = <Cover size="medium" cover={cover} className="album-art" />;
   const framed = (
     <PictureFrame
@@ -51,7 +53,7 @@ export function AlbumAbout({
       replaceLabel={cover === null ? "Add a cover" : "Replace the cover"}
       save={cover === null ? undefined : { href: coverUrl(cover, "original"), name: album }}
       onReplace={() => {
-        setReplacing("upload");
+        setReplacing(true);
       }}
     >
       {art}
@@ -59,7 +61,7 @@ export function AlbumAbout({
   );
   const editable = onUse !== undefined && onUpload !== undefined && songs.length > 0;
   return (
-    <section ref={about} tabIndex={-1} className="album-about" aria-label="About the album">
+    <section ref={about} tabIndex={-1} className="album-about" aria-label={t("About the album")}>
       {!editable ? (
         art
       ) : cover === null ? (
@@ -69,16 +71,15 @@ export function AlbumAbout({
           fallback={framed}
           onUse={(chosen) => onUse(songs, chosen, { album, artist })}
           onChange={() => {
-            setReplacing("musicbrainz");
+            setReplacing(true);
           }}
         />
       ) : (
         framed
       )}
       {children}
-      {editable && editor !== undefined && (
+      {editable && editorOpen && (
         <PictureEditor
-          startOn={editor}
           sources={{
             kind: "cover",
             of: album,
@@ -91,7 +92,7 @@ export function AlbumAbout({
             use: (chosen) => onUse(songs, chosen, { album, artist }),
           }}
           onClose={() => {
-            setReplacing(undefined);
+            setReplacing(false);
             if (onCloseRequestedEditor !== undefined) {
               onCloseRequestedEditor();
               about.current?.focus();

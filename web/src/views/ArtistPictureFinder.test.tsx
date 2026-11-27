@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -19,6 +19,21 @@ const TRIBUTE_PICK = {
   host: "api.deepseek.com",
   at: "2026-11-19T00:00:00Z",
 };
+
+it("reports a refused AI choice without hiding pictures found on Deezer", async () => {
+  serve({
+    [PICTURES]: { body: beatlesPictures({ may_choose: true }) },
+    [CHOOSE]: { status: 503, body: { detail: "Model is busy." } },
+  });
+  finder();
+
+  await userEvent.click(await screen.findByRole("button", { name: "Pick by AI" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Could not get the AI's picture choice: Model is busy.",
+  );
+  expect(screen.getByRole("button", { name: /^Use the picture of The Beatles,/u })).toBeEnabled();
+});
 
 /** Answer the reads of The Beatles' pictures with each of `answers` in turn, then the last again. */
 function reading(...answers: ArtistPictures[]) {
@@ -163,7 +178,9 @@ describe("finding an artist's pictures on Deezer", () => {
       name: "Use the picture of The Beatles Revival, the AI's pick",
     });
 
-    expect(pick).toHaveFocus();
+    await waitFor(() => {
+      expect(pick).toHaveFocus();
+    });
     expect(within(pick).getByText("AI pick")).toBeVisible();
     expect(screen.getByText("deepseek-flash picked it: A tribute, by its following")).toBeVisible();
     expect(screen.getByText("You said “the tribute act”.", { exact: false })).toBeVisible();

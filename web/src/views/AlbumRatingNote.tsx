@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 
 import { type AlbumRating, api } from "../api";
+import { useWords } from "../locale";
 
 /** Your stars and review of the album `album` by `artist`, if you imported any; else nothing. */
 export function AlbumRatingNote({
@@ -14,6 +15,7 @@ export function AlbumRatingNote({
   readonly artist: string;
   readonly album: string;
 }) {
+  const t = useWords();
   const [rating, setRating] = useState<AlbumRating | null>(null);
   useEffect(() => {
     let current = true;
@@ -35,11 +37,13 @@ export function AlbumRatingNote({
     return null;
   }
   return (
-    <aside className="album-rating" role="note" aria-label="Your rating of this album">
+    <aside className="album-rating" role="note" aria-label={t("Your rating of this album")}>
       <p>
         {rating.stars === null
-          ? "Your review on Rate Your Music"
-          : `You rated it ${rating.stars === 1 ? "1 star" : `${String(rating.stars)} stars`} on Rate Your Music`}
+          ? t("Your review on Rate Your Music")
+          : t("You rated it {{rating}} on Rate Your Music", {
+              rating: t("star_count", { count: rating.stars }),
+            })}
       </p>
       {rating.note !== "" && <p className="album-review">{rating.note}</p>}
     </aside>

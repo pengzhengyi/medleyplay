@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { api, type ImageSearchResults, type Pictured } from "../api";
+import { useWords } from "../locale";
 
 export function GoogleImagesLink({
   artist,
@@ -11,16 +12,18 @@ export function GoogleImagesLink({
   readonly artist: string;
   readonly album?: string;
 }) {
+  const t = useWords();
   const q = album === undefined ? `${artist} artist photo` : `${artist} ${album} album cover`;
   const query = new URLSearchParams({ udm: "2", q: q.trim() });
   return (
     <a href={`https://www.google.com/search?${query.toString()}`} target="_blank" rel="noreferrer">
-      Search Google Images
+      {t("Search Google Images")}
     </a>
   );
 }
 
 export function TavilySearch(pictured: Pictured) {
+  const t = useWords();
   const { album, artist } = pictured.kind === "album" ? pictured : { album: "", artist: "" };
   const artistId = pictured.kind === "artist" ? pictured.artistId : undefined;
   const [result, setResult] = useState<ImageSearchResults>();
@@ -71,27 +74,29 @@ export function TavilySearch(pictured: Pictured) {
             setRequested((count) => count + 1);
           }}
         >
-          Search again
+          {t("Search again")}
         </button>
       )}
       {failure && (
         <p className="error" role="alert">
-          {failure}
+          {t("Could not search for pictures: {{detail}}", { detail: failure })}
         </p>
       )}
       <p className="cover-finder-note" role="status">
-        {result?.waiting
-          ? "Waiting to search."
-          : busy
-            ? "Searching for pictures…"
-            : result && result.images.length > 0
-              ? "Check the source and its license before uploading a picture."
-              : result && !failure
-                ? "No pictures found."
-                : ""}
+        {t(
+          result?.waiting
+            ? "Waiting to search."
+            : busy
+              ? "Searching for pictures…"
+              : result && result.images.length > 0
+                ? "Check the source and its license before uploading a picture."
+                : result && !failure
+                  ? "No pictures found."
+                  : "",
+        )}
       </p>
       {result && result.images.length > 0 && (
-        <ul className="cover-finder-grid" aria-label="Image search results">
+        <ul className="cover-finder-grid" aria-label={t("Image search results")}>
           {result.images.map((image) => (
             <li key={image.url}>
               <a className="cover-choice" href={image.page} target="_blank" rel="noreferrer">

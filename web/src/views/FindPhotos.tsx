@@ -153,9 +153,9 @@ export function FindPhotos({
             <li key={each.artist_id} className="photo-suggestion-item">
               <SuggestedFrame
                 of={each.name}
-                why={
-                  each.picked ? "An AI model picked this" : "Going by this artist's name on Deezer"
-                }
+                why={t(
+                  each.picked ? "An AI model picked this" : "Going by this artist's name on Deezer",
+                )}
                 picked={each.picked}
                 busy={saving.has(suggestionKey(each))}
                 onUse={() => void take([each])}

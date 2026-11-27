@@ -51,7 +51,7 @@ export function SuggestedFrame({
 }) {
   const t = useWords();
   const cover = noun === "cover";
-  const reason = t(why);
+  const reason = why;
   return (
     <div
       className={[

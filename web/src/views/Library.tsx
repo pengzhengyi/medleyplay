@@ -51,7 +51,7 @@ import { useSleepTimer } from "../player/useSleepTimer";
 import { useSpeaker } from "../player/useSpeaker";
 import { stepVolume } from "../player/volume";
 import { hrefOf, navigate, useRoute } from "../routes";
-import { useWords } from "../locale";
+import { useFormattingLocale, useWords } from "../locale";
 import { learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { AskAiAgain } from "./AskAiAgain";
@@ -89,7 +89,7 @@ const NOTICE_MS = 4000;
 const SEEK_SECONDS = 5;
 /** Where the queue can close, as the page's styles have it; wider, it is always open. */
 const NARROW = "(width <= 64rem)";
-const listFormat = new Intl.ListFormat(undefined, { type: "conjunction" });
+type LibraryNotice = string | { readonly title: string; readonly playlists: readonly string[] };
 
 /** Everything a signed-in Account sees. */
 
@@ -108,6 +108,8 @@ export function Library({
 }) {
   const route = useRoute();
   const t = useWords();
+  const locale = useFormattingLocale();
+  const listFormat = useMemo(() => new Intl.ListFormat(locale, { type: "conjunction" }), [locale]);
   const library = useLibrary(onSignedOut);
   const byId = library.tracks;
   const tracks = useMemo(() => [...byId.values()], [byId]);
@@ -306,7 +308,7 @@ export function Library({
   const [askingAgain, setAskingAgain] = useState<
     { readonly lookup: Lookup; readonly track: Track } | undefined
   >(undefined);
-  const [notice, setNotice] = useFading("");
+  const [notice, setNotice] = useFading<LibraryNotice>("");
   // Said to screen readers only: what the page shows where it happens, such as a lookup.
   const [said, setSaid] = useFading("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
@@ -542,12 +544,8 @@ export function Library({
     };
   };
   const addTo = async (track: Track, ids: readonly string[], newNames: readonly string[]) => {
-    await library.addToPlaylists(track, ids, newNames);
-    const names = [
-      ...library.playlists.filter((playlist) => ids.includes(playlist.id)).map((p) => p.name),
-      ...newNames,
-    ];
-    setNotice(`Added “${track.title}” to ${listFormat.format(names)}.`);
+    const playlists = await library.addToPlaylists(track, ids, newNames);
+    if (playlists.length > 0) setNotice({ title: track.title, playlists });
   };
 
   /**
@@ -1032,7 +1030,12 @@ export function Library({
       <HoldForShortcuts blocked={listingShortcuts} />
       <Shortcuts on={shortcuts} />
       <p className="notice" role="status">
-        {notice}
+        {typeof notice === "string"
+          ? notice
+          : t("Added “{{title}}” to {{playlists}}.", {
+              title: notice.title,
+              playlists: listFormat.format(notice.playlists),
+            })}
       </p>
       <p className="visually-hidden" role="status">
         {said}
@@ -1044,7 +1047,7 @@ export function Library({
 }
 
 /** A value that goes back to `cleared` a few seconds after it is set, as a notice fades. */
-function useFading(cleared: string) {
+function useFading<Value>(cleared: Value) {
   const [value, setValue] = useState(cleared);
   useEffect(() => {
     if (value === cleared) {

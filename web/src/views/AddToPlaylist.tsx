@@ -9,7 +9,9 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useRef, useState } from "react";
 
 import type { Playlist, Track } from "../api";
+import { isManualPlaylist } from "../library/views";
 import { Modal } from "./Modal";
+import { useWords } from "../locale";
 
 /** Choose Playlists for `track`; `onSave` adds it to the ids chosen and to new Playlists by name. */
 export function AddToPlaylist({
@@ -23,6 +25,7 @@ export function AddToPlaylist({
   readonly onSave: (ids: readonly string[], newNames: readonly string[]) => Promise<void>;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => {
     dialog.current?.close();
@@ -33,8 +36,11 @@ export function AddToPlaylist({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // Only plain Playlists take a song; Favorites follows the hearts, a smart one its rules.
-  const own = playlists.filter((playlist) => playlist.builtin === null && playlist.rules === null);
-  const count = chosen.size + newNames.length;
+  const own = playlists.filter(isManualPlaylist);
+  const eligible = own.filter(
+    (playlist) => chosen.has(playlist.id) && !playlist.track_ids.includes(track.id),
+  );
+  const count = eligible.length + newNames.length;
 
   const choose = (id: string, on: boolean) => {
     setChosen((now) => {
@@ -56,10 +62,14 @@ export function AddToPlaylist({
   };
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (count === 0 || saving) return;
     setSaving(true);
     setError("");
     try {
-      await onSave([...chosen], newNames);
+      await onSave(
+        eligible.map((playlist) => playlist.id),
+        newNames,
+      );
       close();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
@@ -76,9 +86,13 @@ export function AddToPlaylist({
       onClose={onClose}
     >
       <form className="card" onSubmit={(event) => void save(event)}>
-        <h2 id="add-to-playlist-title">Add “{track.title}” to playlists</h2>
+        <h2 id="add-to-playlist-title">
+          {t("Add “{{title}}” to playlists", { title: track.title })}
+        </h2>
         {own.length === 0 && newNames.length === 0 && (
-          <p className="empty">No playlists yet. Name one below to make it.</p>
+          <p className="empty">
+            {t("No playlists take songs by hand yet. Name one below to make it.")}
+          </p>
         )}
         <ul className="choices">
           {own.map((playlist) => {
@@ -97,7 +111,9 @@ export function AddToPlaylist({
                   />
                   <span className="choice-name">{playlist.name}</span>
                   <span className="choice-meta">
-                    {holds ? "Already added" : songsOf(playlist.track_ids.length)}
+                    {holds
+                      ? t("Already added")
+                      : t("song_count", { count: playlist.track_ids.length })}
                   </span>
                 </label>
               </li>
@@ -115,7 +131,7 @@ export function AddToPlaylist({
                   }}
                 />
                 <span className="choice-name">{newName}</span>
-                <span className="choice-meta">New</span>
+                <span className="choice-meta">{t("New")}</span>
               </label>
             </li>
           ))}
@@ -124,15 +140,15 @@ export function AddToPlaylist({
           <input
             type="text"
             className="new-playlist-name"
-            aria-label="New playlist"
-            placeholder="New playlist"
+            aria-label={t("New playlist")}
+            placeholder={t("New playlist")}
             value={name}
             maxLength={128}
             onChange={(event) => {
               setName(event.currentTarget.value);
             }}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
+              if (event.key === "Enter" && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 addName();
               }
@@ -145,7 +161,7 @@ export function AddToPlaylist({
             disabled={name.trim() === ""}
           >
             <PlusIcon weight="bold" aria-hidden />
-            Make
+            {t("Make")}
           </button>
         </div>
         {error !== "" && (
@@ -160,16 +176,10 @@ export function AddToPlaylist({
             disabled={count === 0 || saving}
             aria-busy={saving}
           >
-            {count === 0
-              ? "Add"
-              : `Add to ${count === 1 ? "1 playlist" : `${String(count)} playlists`}`}
+            {count === 0 ? t("Add") : t("add_to_playlists", { count })}
           </button>
         </footer>
       </form>
     </Modal>
   );
-}
-
-function songsOf(count: number): string {
-  return count === 1 ? "1 song" : `${String(count)} songs`;
 }

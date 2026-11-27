@@ -6,12 +6,16 @@
  * between hiragana and katakana.
  */
 
-import type { Track } from "../api";
+import type { Playlist, Track } from "../api";
 import type { Route } from "../routes";
 import type { ArtistLinks } from "./artistLinks";
 import { closestOf, ranked } from "./fuzzy";
 import { type Tag, parseQuery } from "./query";
 import { ratingOf } from "./ratings";
+
+export function isManualPlaylist(playlist: Playlist): boolean {
+  return playlist.builtin === null && playlist.rules === null && playlist.unreadable === "";
+}
 
 /** A group of Tracks, with how many there are and how long they play. */
 interface Listed {

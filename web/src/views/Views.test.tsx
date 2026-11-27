@@ -732,6 +732,34 @@ describe("search suggestions", () => {
 });
 
 describe("playlists", () => {
+  it("confirms the saved playlist names in the selected language", async () => {
+    const car = playlistOf("p1", "Car", []);
+    const gym = playlistOf("p2", "Search", []);
+    open("#/library", {
+      ...signedIn(LIBRARY, [car, gym]),
+      "PUT /api/playlists/p1": { body: { ...car, track_ids: [1] } },
+      "PUT /api/playlists/p2": { body: { ...gym, track_ids: [1] } },
+    });
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions for Melt" }));
+    await user.click(screen.getByRole("menuitem", { name: "Add to playlist…" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    await user.click(await dialog.findByRole("checkbox", { name: /^Car/u }));
+    await user.click(dialog.getByRole("checkbox", { name: /^Search/u }));
+    await user.click(dialog.getByRole("button", { name: "Add to 2 playlists" }));
+    expect(await screen.findByText("Added “Melt” to Car and Search.")).toBeVisible();
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByText("已将「Melt」添加到 Car和Search。")).toBeVisible();
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("explains a newer smart-playlist rule version instead of saying the playlist is empty", async () => {
     const playlist = {
       ...playlistOf("p1", "Search", []),

@@ -83,8 +83,6 @@ export interface TrackMenuActions {
 /** The ratings offered, the most stars first. */
 const STARS = [5, 4, 3, 2, 1] as const;
 
-const starsOf = (stars: number) => `${String(stars)} ${stars === 1 ? "star" : "stars"}`;
-
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
 export function TrackMenu({
   track,
@@ -101,6 +99,7 @@ export function TrackMenu({
   /** Called before *Go to* opens another view. */
   readonly onNavigate?: () => void;
 }) {
+  const t = useWords();
   const playable = track.availability === "ok";
   return (
     <Menu.Root modal={false}>
@@ -108,8 +107,8 @@ export function TrackMenu({
         <button
           type="button"
           className="icon more"
-          aria-label={`More actions for ${track.title}`}
-          title="More actions"
+          aria-label={t("More actions for {{title}}", { title: track.title })}
+          title={t("More actions")}
         >
           <DotsThreeIcon weight="bold" aria-hidden />
         </button>
@@ -125,7 +124,7 @@ export function TrackMenu({
                   actions.onPlayNext(track);
                 }}
               >
-                Play next
+                {t("Play next")}
               </Item>
               <Item
                 icon={<ListPlusIcon />}
@@ -134,7 +133,7 @@ export function TrackMenu({
                   actions.onAdd(track);
                 }}
               >
-                Add to queue
+                {t("Add to queue")}
               </Item>
               <Menu.Separator className="track-menu-line" />
             </>
@@ -146,7 +145,7 @@ export function TrackMenu({
               navigate({ view: "library", focus: track.id });
             }}
           >
-            Show in Library
+            {t("Show in Library")}
           </Item>
           {artistNamesOf(track).length > 1 ? (
             artistNamesOf(track).map((name, place) => (
@@ -158,7 +157,7 @@ export function TrackMenu({
                   navigate(artistRouteOf(track, place));
                 }}
               >
-                {`Go to ${name}`}
+                {t("Go to {{artist}}", { artist: name })}
               </Item>
             ))
           ) : (
@@ -169,7 +168,7 @@ export function TrackMenu({
                 navigate(artistRouteOf(track, 0));
               }}
             >
-              Go to artist
+              {t("Go to artist")}
             </Item>
           )}
           <Item
@@ -179,19 +178,19 @@ export function TrackMenu({
               navigate({ view: "album", artist: albumArtistOf(track), name: track.album });
             }}
           >
-            Go to album
+            {t("Go to album")}
           </Item>
           <Menu.Item className="track-menu-item" asChild>
             <a
               href={rymSearchOf(track)}
               target="_blank"
               rel="noopener noreferrer"
-              title="Search Rate Your Music in a new tab"
+              title={t("Search Rate Your Music in a new tab")}
             >
               <span className="track-menu-icon" aria-hidden>
                 <ArrowSquareOutIcon />
               </span>
-              Open on RYM
+              {t("Open on RYM")}
             </a>
           </Menu.Item>
           {track.video !== null && (
@@ -200,12 +199,14 @@ export function TrackMenu({
                 href={track.video}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={`Open the video it came from on ${siteNameOf(track.video)}, in a new tab`}
+                title={t("Open the video it came from on {{site}}, in a new tab", {
+                  site: siteNameOf(track.video),
+                })}
               >
                 <span className="track-menu-icon" aria-hidden>
                   <ArrowSquareOutIcon />
                 </span>
-                Open on {siteNameOf(track.video)}
+                {t("Open on {{site}}", { site: siteNameOf(track.video) })}
               </a>
             </Menu.Item>
           )}
@@ -217,7 +218,7 @@ export function TrackMenu({
               actions.onAddToPlaylist(track);
             }}
           >
-            Add to playlist…
+            {t("Add to playlist…")}
           </Item>
           <Item
             icon={<PencilSimpleIcon />}
@@ -225,7 +226,7 @@ export function TrackMenu({
               actions.onEditDetails(track);
             }}
           >
-            Edit details…
+            {t("Edit details…")}
           </Item>
           {LOOKUPS.filter((lookup) => actions.canFind(lookup, track)).map((lookup) => (
             <Item
@@ -235,7 +236,7 @@ export function TrackMenu({
                 actions.onFind(lookup, track);
               }}
             >
-              {lookup.label}
+              {t(lookup.label)}
             </Item>
           ))}
           {/* A split file, and each of its songs, has the Kind its split gives it. */}
@@ -246,7 +247,7 @@ export function TrackMenu({
                 actions.onSetKind(track, track.kind === "song" ? "album" : "song");
               }}
             >
-              {track.kind === "song" ? "Mark as album" : "Mark as song"}
+              {t(track.kind === "song" ? "Mark as album" : "Mark as song")}
             </Item>
           )}
           <Item
@@ -255,7 +256,7 @@ export function TrackMenu({
               actions.onEditSongs(track);
             }}
           >
-            {track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…"}
+            {t(track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…")}
           </Item>
           {track.site !== null && !track.joined && (
             <Item
@@ -264,7 +265,7 @@ export function TrackMenu({
                 actions.onAddFile(track);
               }}
             >
-              Add the file yourself…
+              {t("Add the file yourself…")}
             </Item>
           )}
         </Menu.Content>
@@ -327,17 +328,22 @@ function RateMenu({
   readonly container: HTMLElement | null | undefined;
   readonly onRate: (track: Track, rating: number | null) => void;
 }) {
+  const t = useWords();
   const rating = track.rating;
   return (
     <Menu.Sub>
       <Menu.SubTrigger
         className="track-menu-item"
-        aria-label={rating === null ? "Rate" : `Rate, ${starsOf(rating)}`}
+        aria-label={
+          rating === null
+            ? t("Rate")
+            : t("Rate, {{rating}}", { rating: t("star_count", { count: rating }) })
+        }
       >
         <span className="track-menu-icon" aria-hidden>
           <StarIcon weight={rating === null ? "regular" : "fill"} />
         </span>
-        Rate
+        {t("Rate")}
         <CaretRightIcon className="track-menu-caret" aria-hidden />
       </Menu.SubTrigger>
       <Menu.Portal container={container}>
@@ -354,7 +360,7 @@ function RateMenu({
                 key={stars}
                 className="track-menu-item track-menu-stars"
                 value={String(stars)}
-                aria-label={starsOf(stars)}
+                aria-label={t("star_count", { count: stars })}
               >
                 {Array.from({ length: 5 }, (_, at) => (
                   <StarIcon key={at} weight={at < stars ? "fill" : "regular"} aria-hidden />
@@ -362,8 +368,8 @@ function RateMenu({
                 <Chosen />
               </Menu.RadioItem>
             ))}
-            <Menu.RadioItem className="track-menu-item" value="none" aria-label="No rating">
-              No rating
+            <Menu.RadioItem className="track-menu-item" value="none" aria-label={t("No rating")}>
+              {t("No rating")}
               <Chosen />
             </Menu.RadioItem>
           </Menu.RadioGroup>

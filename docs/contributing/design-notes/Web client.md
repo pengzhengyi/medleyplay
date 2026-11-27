@@ -561,7 +561,7 @@ data. No first-Library-load improvement is claimed.
 #### Search-computation acceptance
 
 - [x] Test projection equivalence: requested groups equal their groups in
-      default search, and unrequested groups are empty. Cover an empty
+      default search, and groups not requested are empty. Cover an empty
       request, disjoint groups, multiple recognized kinds, and unknown-only
       kinds. No recognized kind means unrestricted; an empty intersection
       means no results.

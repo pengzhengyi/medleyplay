@@ -634,14 +634,23 @@ class LyricsChoices:
     def choose(self, request: ChooseLyrics) -> ChosenLyrics:
         if request.title.startswith("Refused"):
             return ChosenLyrics(status=FindStatus.REFUSED, message="The key was refused.")
-        timed = (
+        timed = [
             at
             for at, option in enumerate(request.options)
             if option.timed
             and option.title == request.title
             and not request.title.startswith("Silence")
+        ]
+        preferred = next(
+            (
+                at
+                for at in timed
+                if request.interface_language is not None
+                and request.options[at].translation_language == request.interface_language
+            ),
+            None,
         )
-        option = next(timed, None)
+        option = preferred if preferred is not None else next(iter(timed), None)
         return ChosenLyrics(
             option=option,
             why="" if option is None else "The studio recording, as long as the file",
@@ -704,6 +713,15 @@ def lyrics_of(title: str) -> str:
 PLAIN_LYRICS: Final = "First line\nSecond line"
 """The plain lyrics the `lyrics` enricher answers for a song titled *Plain*."""
 
+LANTERN_WALTZ: Final = """\
+[00:01.00]あおい空
+[00:05.50]ゆれる灯
+"""
+LANTERN_WALTZ_TRANSLATION: Final = """\
+[00:01.00]I see the sky
+[00:05.50]Your light is with me
+"""
+
 
 class Lyricist:
     """Answers each song's lyrics as the table says.
@@ -757,17 +775,29 @@ class Lyricist:
                 return FoundLyricsOptions()
             case "Refused":
                 return FoundLyricsOptions(status=FindStatus.REFUSED, message="HTTP Error 403.")
+        lantern_waltz = request.title.startswith("Lantern Waltz")
         song = LyricsOption(
             provider=LyricsProvider.LRCLIB,
             title=request.title,
             artist=request.artist,
             duration_ms=request.duration_ms,
-            text=lyrics_of(request.title),
+            text=LANTERN_WALTZ if lantern_waltz else lyrics_of(request.title),
         )
         live = song.model_copy(
             update={"title": f"{request.title} (Live)", "duration_ms": None, "text": PLAIN_LYRICS}
         )
-        elsewhere = song.model_copy(update={"provider": LyricsProvider.NETEASE})
+        elsewhere = song.model_copy(
+            update={
+                "provider": LyricsProvider.NETEASE,
+                "text": song.text + LANTERN_WALTZ_TRANSLATION if lantern_waltz else song.text,
+            }
+        )
+        if request.title == "Lantern Waltz (Instrumental Candidate)":
+            song = song.model_copy(update={"instrumental": True, "text": ""})
+        elif request.title == "Lantern Waltz (Unclassified Translation)":
+            song = song.model_copy(
+                update={"text": song.text + "[00:01.00]sora no you ni\n[00:05.50]hi no you ni\n"}
+            )
         on_netease = (elsewhere,) if LyricsProvider.NETEASE in request.sites else ()
         return FoundLyricsOptions(options=(song, live, *on_netease))
 

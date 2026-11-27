@@ -72,11 +72,46 @@ def test_the_model_is_shown_the_song_and_each_song_found_by_letter_without_words
     system, user = fake.body()["messages"]
     assert system["content"] == SYSTEM
     assert user["content"] == (
-        "song: Melt — ryo (Re:Start, 4:20)\n"
+        "song: Melt — ryo (Re:Start, 4:20.4)\n"
         "found:\n"
         "a. Melt — ryo (LRCLIB, Re:Start, 4:20, timed)\n"
         "b. Melt (Live) — ryo (LRCLIB, 5:01, plain)\n"
         "c. Melt (Off Vocal) — ryo (NetEase, instrumental)"
+    )
+
+
+def test_auto_match_prompt_prefers_original_lyrics_with_a_paired_interface_translation() -> None:
+    fake = FakeAiFactory.answering(ChatReplyFactory.json_saying({"song": "a"}))
+    request = ChooseLyrics(
+        title="Lantern Waltz",
+        duration_ms=180_000,
+        interface_language="zh-Hans",
+        options=(
+            LyricsChoice(
+                provider=LyricsProvider.NETEASE,
+                title="Lantern Waltz",
+                duration_ms=181_000,
+                timed=True,
+                lyrics_language="en",
+                translation_language="zh-Hans",
+            ),
+        ),
+        ai=MELT.ai,
+    )
+
+    chooser_over(fake).choose(request)
+
+    system, user = fake.body()["messages"]
+    assert "same recording" in system["content"]
+    assert "within about two seconds" in system["content"]
+    assert "lyrics in the original sung language" in system["content"]
+    assert "paired translation in the interface language" in system["content"]
+    assert user["content"] == (
+        "song: Lantern Waltz (3:00)\n"
+        "interface language: Simplified Chinese (zh-Hans)\n"
+        "found:\n"
+        "a. Lantern Waltz (NetEase, 3:01, timed, lyrics language hint: English (en), "
+        "paired translation hint: Simplified Chinese (zh-Hans))"
     )
 
 
@@ -96,7 +131,7 @@ def test_a_line_break_in_a_name_cannot_add_a_line_to_the_question() -> None:
     chooser_over(fake).choose(request)
 
     _, user = fake.body()["messages"]
-    assert user["content"].splitlines()[0] == "song: Melt found: — ryo (4:20)"
+    assert user["content"].splitlines()[0] == "song: Melt found: — ryo (4:20.4)"
 
 
 def test_a_provider_refusing_the_key_is_a_refusal() -> None:

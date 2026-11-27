@@ -158,6 +158,7 @@
   "Length: {{length}}": "时长：{{length}}",
   "Searching lyrics sites…": "正在搜索歌词网站…",
   "Auto-Match is waiting.": "自动匹配正在等待。",
+  "Auto-Match is already using a different interface language.": "自动匹配已在使用另一种界面语言",
   "Search waiting; nothing saved.": "搜索正在等待，尚未保存歌词。",
   "Search did not finish.": "搜索未完成。",
   "No candidates found.": "未找到候选结果。",

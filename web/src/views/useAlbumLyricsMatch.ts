@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { api, type LyricsMatch, type SongRowIn, type Songs, type SplitSong } from "../api";
-import { useWords } from "../locale";
+import { interfaceLanguage, useWords } from "../locale";
 
 export interface LyricsMatchStatus {
   readonly state: "searching" | "working" | "ready" | "saved" | "selected" | "not-matched";
@@ -147,7 +147,7 @@ export function useAlbumLyricsMatch(
       }
       const eligible = selected.filter((song) => current.current.includes(song));
       if (eligible.length === 0) return;
-      const started = await api.startLyricsMatch(album, eligible);
+      const started = await api.startLyricsMatch(album, eligible, interfaceLanguage());
       if (!run.signal.aborted) {
         setMatches((prior) => afterSubmission(prior, started));
         setReads((count) => count + 1);

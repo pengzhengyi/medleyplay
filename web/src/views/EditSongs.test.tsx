@@ -219,6 +219,31 @@ const lyricsButton = (dialog: HTMLElement, title: string) =>
 const MATCH_URL = "/api/tracks/104/songs/lyrics-match";
 
 describe("editing a file's songs", () => {
+  it("requests Auto-Match in the language selected for the interface", async () => {
+    serve({
+      "GET /api/me/preferences": { body: { lyrics_match_confirmation: "direct", revision: 1 } },
+      [`GET ${MATCH_URL}`]: { body: [] },
+      [`POST ${MATCH_URL}`]: { status: 202, body: [] },
+    });
+    const fetch = vi.fn(globalThis.fetch);
+    vi.stubGlobal("fetch", fetch);
+    const { dialog } = await renderEditor();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+      await press(dialog, "自动匹配歌词");
+
+      const request = fetch.mock.calls.find(
+        ([path, init]) => path === MATCH_URL && init?.method === "POST",
+      );
+      expect(request).toBeDefined();
+      expect(new Headers(request?.[1]?.headers).get("Accept-Language")).toBe("zh-Hans");
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
+
   it("starts one direct batch and saves every ready pick after reopening without reviewing songs", async () => {
     let started = false;
     let finished = false;

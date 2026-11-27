@@ -9,7 +9,7 @@ lyrics, for the household to choose from; choosing saves them as its own.
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, Field
 
 from medleyplay.application.lyrics import ShownLyrics
@@ -19,7 +19,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.jobs import JobId
 from medleyplay.domain.lyrics import MAX_LYRICS, LyricsOrigin
 from medleyplay.domain.video_text import MAX_SONGS
-from medleyplay.plugin_api import MAX_NAME, LyricsOption
+from medleyplay.plugin_api import MAX_NAME, LyricsInterfaceLanguage, LyricsOption
 from medleyplay.programs.find_lyrics import MatchSong
 from medleyplay.web.deps import LyricsDep, LyricsMatchDep, LyricsSearchDep, SignedInAccount
 from medleyplay.web.ids import RowId
@@ -239,9 +239,16 @@ def start_background_match(
     songs: Annotated[list[MatchSongInput], Field(min_length=1, max_length=MAX_SONGS)],
     me: SignedInAccount,
     service: LyricsMatchDep,
+    accept_language: Annotated[str | None, Header()] = None,
 ) -> tuple[MatchStatus, ...]:
     """Start Auto-Match for the given saved songs of this album."""
-    return service.start(me, TrackId(track_id), songs)
+    language: LyricsInterfaceLanguage | None = None
+    match accept_language:
+        case "en":
+            language = "en"
+        case "zh-Hans":
+            language = "zh-Hans"
+    return service.start(me, TrackId(track_id), songs, interface_language=language)
 
 
 @router.get("/{track_id}/songs/lyrics-match")

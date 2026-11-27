@@ -191,9 +191,11 @@ from medleyplay.plugin_api.lyrics_search import (
     ChosenLyrics,
     FindLyrics,
     FoundLyricsOptions,
+    LyricLanguageHint,
     LyricsChoice,
     LyricsChooser,
     LyricsFinder,
+    LyricsInterfaceLanguage,
     LyricsOption,
 )
 from medleyplay.plugin_api.progress import report_progress
@@ -382,9 +384,11 @@ __all__ = [
     "LibraryPath",
     "LibraryRoot",
     "ListFiles",
+    "LyricLanguageHint",
     "LyricsChoice",
     "LyricsChooser",
     "LyricsFinder",
+    "LyricsInterfaceLanguage",
     "LyricsOption",
     "LyricsProvider",
     "MadeThumbnails",

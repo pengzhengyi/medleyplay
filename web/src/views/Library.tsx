@@ -1199,6 +1199,7 @@ export function Library({
           <ListenOnDevice.Component
             username={account.username}
             load={api.addresses}
+            waitingCount={admin ? library.waitingDevices.length : undefined}
             onClose={() => {
               setListening(false);
             }}

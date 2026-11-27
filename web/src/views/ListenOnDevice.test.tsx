@@ -9,17 +9,18 @@ import { LanguageSelect } from "./LanguageSelect";
 const ON_THIS_MACHINE = { protocol: "http:", hostname: "localhost", port: "8000" };
 
 /** Open the guide for Alice, the server answering on the network at `addresses`. */
-async function open(addresses: readonly string[]) {
+async function open(addresses: readonly string[], here = ON_THIS_MACHINE, waitingCount?: number) {
   render(
     <ListenOnDevice
       username="alice"
       load={() => Promise.resolve({ addresses })}
-      here={ON_THIS_MACHINE}
+      here={here}
+      waitingCount={waitingCount}
       onClose={vi.fn()}
     />,
   );
   const dialog = screen.getByRole("dialog", { name: "Listen on your device" });
-  await within(dialog).findByText(/Join the same Wi-Fi|can't reach this computer/u);
+  await within(dialog).findByText(/Join the same Wi-Fi|No local network address/u);
   return dialog;
 }
 
@@ -39,6 +40,7 @@ describe("listening on another device", () => {
       const guide = within(dialog);
       expect(dialog).toHaveAccessibleName("在你的设备上收听");
       expect(guide.getByText("连接到与这台电脑相同的 Wi-Fi。")).toBeVisible();
+      expect(guide.getByRole("region", { name: "连接信息" })).toHaveTextContent("协议HTTP");
       expect(guide.getByRole("img", { name: "http://192.168.1.20:8000 的二维码" })).toBeVisible();
       expect(guide.getByText("alice", { selector: "strong" })).toBeVisible();
       expect(guide.getByText(/让此电脑保持开机并连接网络/u)).toBeVisible();
@@ -59,6 +61,11 @@ describe("listening on another device", () => {
 
   it("shows another address when it is chosen", async () => {
     const dialog = await open(["192.168.1.20", "mac-mini.local"]);
+    const connection = within(within(dialog).getByRole("region", { name: "Connection info" }));
+    expect(connection.getByText("http://192.168.1.20:8000")).toBeVisible();
+    expect(connection.getByText("HTTP")).toBeVisible();
+    expect(connection.getByText("8000")).toBeVisible();
+    expect(connection.getByText(/does not verify access from another device/u)).toBeVisible();
 
     await userEvent.click(within(dialog).getByRole("button", { name: "mac-mini.local:8000" }));
 
@@ -69,12 +76,34 @@ describe("listening on another device", () => {
       "aria-pressed",
       "true",
     );
+    expect(connection.getByText("http://mac-mini.local:8000")).toBeVisible();
+  });
+
+  it("shows the effective port for a secure share URL without an explicit port", async () => {
+    const dialog = await open([], { protocol: "https:", hostname: "music.example", port: "" });
+
+    const connection = within(within(dialog).getByRole("region", { name: "Connection info" }));
+    expect(connection.getByText("https://music.example")).toBeVisible();
+    expect(connection.getByText("HTTPS")).toBeVisible();
+    expect(connection.getByText("443")).toBeVisible();
+  });
+
+  it("shows an admin when a device did reach the server and needs approval", async () => {
+    const dialog = await open(["192.168.1.20"], ON_THIS_MACHINE, 1);
+    const connection = within(within(dialog).getByRole("region", { name: "Connection info" }));
+
+    expect(connection.getByText("1 device waiting")).toBeVisible();
+    expect(connection.getByRole("link", { name: "Open Devices settings" })).toHaveAttribute(
+      "href",
+      "#/settings?section=devices",
+    );
   });
 
   it("offers no choice of address when there is one", async () => {
     const dialog = await open(["192.168.1.20"]);
 
     expect(within(dialog).queryByRole("list", { name: "Addresses" })).toBeNull();
+    expect(within(dialog).queryByRole("link", { name: "Open Devices settings" })).toBeNull();
   });
 
   it("copies the address and says so beside it", async () => {
@@ -90,7 +119,7 @@ describe("listening on another device", () => {
     expect(await within(dialog).findByText("Copied")).toHaveRole("status");
   });
 
-  it("says how to make the computer reachable when no other device can reach it", async () => {
+  it("says what to check when no address is found without claiming the server is unreachable", async () => {
     const dialog = await open([]);
 
     expect(
@@ -98,6 +127,10 @@ describe("listening on another device", () => {
         /If medleyplay started before the connection was available, restart it/u,
       ),
     ).toBeVisible();
+    expect(within(dialog).getByText(/No local network address was found/u)).toBeVisible();
     expect(within(dialog).queryByRole("img")).toBeNull();
+    await userEvent.click(within(dialog).getByText("Can't connect?"));
+    expect(within(dialog).getByText(/If the page does not load/u)).toBeVisible();
+    expect(within(dialog).getByText(/If the device is waiting for approval/u)).toBeVisible();
   });
 });

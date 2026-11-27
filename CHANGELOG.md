@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Listen on your device** shows the share URL, protocol, and TCP port, with
+  help for network failures and a shortcut to device approvals for admins.
 - Now Playing offers Palette Glow and Soft Pan in place of Flow and Drift.
   Existing selections carry over; Mesh and Off stay as they are.
 - When the animated background in Now Playing repeatedly misses frames, it

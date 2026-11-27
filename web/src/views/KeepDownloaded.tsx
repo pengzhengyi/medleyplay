@@ -6,6 +6,7 @@
 import { useState } from "react";
 
 import type { Playlist } from "../api";
+import { useWords } from "../locale";
 
 /** The switch for `playlist`, saved through `onChange`; why the server refused shows beside it. */
 export function KeepDownloaded({
@@ -15,13 +16,14 @@ export function KeepDownloaded({
   readonly playlist: Playlist;
   readonly onChange: (playlist: Playlist, keep: boolean) => Promise<void>;
 }) {
+  const t = useWords();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   return (
     <div className="keep-downloaded">
       <label
         className="lyrics-sites-switch"
-        title="Download every song here, and never remove them to make room"
+        title={t("Download every song here, and never remove them to make room")}
       >
         <input
           type="checkbox"
@@ -44,7 +46,7 @@ export function KeepDownloaded({
             );
           }}
         />
-        Keep downloaded
+        {t("Keep downloaded")}
       </label>
       {error !== "" && (
         <p className="error" role="alert">

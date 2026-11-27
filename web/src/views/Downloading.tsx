@@ -7,6 +7,7 @@ import { useId, useMemo } from "react";
 
 import type { DownloadUnderWay, Track } from "../api";
 import { downloadDetailOf, downloadStateOf } from "../library/downloading";
+import { useFormattingLocale, useWords } from "../locale";
 import { Cover } from "./Cover";
 
 /** List the songs of `tracks` that `downloads` get, or nothing while none is under way. */
@@ -17,6 +18,8 @@ export function Downloading({
   readonly downloads: readonly DownloadUnderWay[];
   readonly tracks: readonly Track[];
 }) {
+  const t = useWords();
+  const locale = useFormattingLocale();
   const heading = useId();
   const byId = useMemo(() => new Map(tracks.map((track) => [track.id, track])), [tracks]);
   const shown = downloads.flatMap((download) => {
@@ -29,7 +32,7 @@ export function Downloading({
   return (
     <section className="downloading" aria-labelledby={heading}>
       <h3 id={heading} className="found">
-        Downloading
+        {t("Downloading")}
       </h3>
       <ul>
         {shown.map(({ download, track }) => {
@@ -37,7 +40,8 @@ export function Downloading({
           // Job says how far it has got.
           const fraction =
             download.job.state === "running" ? (download.job.progress?.fraction ?? null) : 0;
-          const status = downloadStateOf(download);
+          const status = downloadStateOf(download, t);
+          const detail = downloadDetailOf(download, status, { locale, t });
           return (
             <li key={download.job.id} className="downloading-row">
               <Cover size="small" cover={track.cover} className="downloading-cover" />
@@ -45,12 +49,12 @@ export function Downloading({
                 <span className="downloading-title">{track.title}</span>
                 <span className="downloading-artist">{track.artist}</span>
               </span>
-              <span className="downloading-state" title={downloadDetailOf(download, status)}>
+              <span className="downloading-state" title={detail}>
                 {status}
               </span>
               <progress
                 aria-label={track.title}
-                aria-valuetext={status}
+                aria-valuetext={detail}
                 max={1}
                 {...(fraction === null ? {} : { value: fraction })}
               />

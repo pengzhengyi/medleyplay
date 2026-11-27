@@ -30,13 +30,21 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
-import { type Kind, type MissingDetailReview, type Track, api } from "../api";
+import {
+  ApiError,
+  type Kind,
+  type MissingDetailReview,
+  type Track,
+  type TrackDownload,
+  api,
+} from "../api";
+import { downloadFailureOf } from "../library/downloading";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf, artistNamesOf, artistRouteOf } from "../library/views";
-import { useWords } from "../locale";
+import { type Words, useWords } from "../locale";
 import { navigate } from "../routes";
 
 /** Rate Your Music's search, which the household's own browser opens; medleyplay never reads the site. */
@@ -395,6 +403,35 @@ function Item({
   );
 }
 
+type DownloadRead =
+  | { readonly state: "loading" }
+  | {
+      readonly state: "loaded";
+      readonly status: TrackDownload["status"];
+      readonly text: string;
+      readonly job: number | null;
+    }
+  | { readonly state: "failed"; readonly cause: unknown };
+
+function downloadRequestError(
+  failure: unknown,
+  action: "read" | "retry" | "dismiss",
+  t: Words,
+): string {
+  const text = failure instanceof Error ? failure.message : String(failure);
+  if (action !== "retry" || !(failure instanceof ApiError)) return text;
+  if (
+    failure.status === 403 &&
+    text === "Only the Account that asked for a Job, or an admin, can change it."
+  )
+    return t(text);
+  if (failure.status === 409 && text === "Only a failed or cancelled Job can be retried.") {
+    return t(text);
+  }
+  const id = failure.status === 404 ? /^There is no Job (\d+)\.$/u.exec(text)?.[1] : undefined;
+  return id === undefined ? text : t("There is no Job {{id}}.", { id });
+}
+
 /**
  * *Download failed* on a song's row, opening why it failed, read when opened, with
  * *Retry download*, *Add the file…*, and a way to dismiss the failure in Downloaded.
@@ -410,35 +447,55 @@ export function DownloadFailed({
 }) {
   const words = useWords();
   const [open, setOpen] = useState(false);
-  const [why, setWhy] = useState<{ readonly message: string; readonly job: number | null }>();
+  const [read, setRead] = useState<DownloadRead>({ state: "loading" });
   const [busy, setBusy] = useState<"retry" | "dismiss">();
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{
+    readonly action: "retry" | "dismiss";
+    readonly cause: unknown;
+  }>();
+  const generation = useRef(0);
   const failedJob = track.download_failure_job_id;
-  const read = () => {
-    setError("");
+  const job = read.state === "loaded" && read.status === "failed" ? read.job : null;
+  const openRead = () => {
+    const request = ++generation.current;
+    setFailure(undefined);
+    setRead({ state: "loading" });
     api.download(track.id).then(
       (download) => {
-        setWhy({ message: download.message, job: download.job_id });
+        if (request === generation.current) {
+          setRead({
+            state: "loaded",
+            status: download.status,
+            text: download.message,
+            job: download.job_id,
+          });
+        }
       },
-      (failure: unknown) => {
-        setError(failure instanceof Error ? failure.message : String(failure));
+      (cause: unknown) => {
+        if (request === generation.current) setRead({ state: "failed", cause });
       },
     );
   };
   const act = (action: "retry" | "dismiss", request: Promise<unknown>) => {
     setBusy(action);
-    setError("");
+    setFailure(undefined);
     request.then(
       () => {
         setBusy(undefined);
         setOpen(false);
       },
-      (failure: unknown) => {
+      (cause: unknown) => {
         setBusy(undefined);
-        setError(failure instanceof Error ? failure.message : String(failure));
+        setFailure({ action, cause });
       },
     );
   };
+  const error =
+    failure !== undefined
+      ? downloadRequestError(failure.cause, failure.action, words)
+      : read.state === "failed"
+        ? downloadRequestError(read.cause, "read", words)
+        : "";
   return (
     <Menu.Root
       modal={false}
@@ -446,7 +503,9 @@ export function DownloadFailed({
       onOpenChange={(opening) => {
         setOpen(opening);
         if (opening) {
-          read();
+          openRead();
+        } else {
+          ++generation.current;
         }
       }}
     >
@@ -454,8 +513,10 @@ export function DownloadFailed({
         <button
           type="button"
           className="why failed"
-          aria-label={`Download failed: why, and what to do, for ${track.title}`}
-          title="Download failed: why, and what to do"
+          aria-label={words("Download failed: why, and what to do, for {{title}}", {
+            title: track.title,
+          })}
+          title={words("Download failed: why, and what to do")}
         >
           <WarningCircleIcon weight="bold" aria-hidden />
           <CaretDownIcon weight="bold" aria-hidden />
@@ -468,9 +529,15 @@ export function DownloadFailed({
           sideOffset={4}
           collisionPadding={8}
         >
-          <Menu.Label className="download-failed-why">
-            {why === undefined ? "Reading why it failed…" : why.message}
-          </Menu.Label>
+          {read.state !== "failed" && (
+            <Menu.Label className="download-failed-why">
+              {read.state === "loading"
+                ? words("Reading why it failed…")
+                : read.status === "downloading"
+                  ? words("This download is already in progress.")
+                  : downloadFailureOf(read.text, words)}
+            </Menu.Label>
+          )}
           {error !== "" && (
             <p className="download-failed-error" role="alert">
               {error}
@@ -478,16 +545,16 @@ export function DownloadFailed({
           )}
           <Item
             icon={<ArrowClockwiseIcon className={busy === "retry" ? "spin" : undefined} />}
-            disabled={why?.job == null || busy !== undefined}
+            disabled={job === null || busy !== undefined}
             onSelect={(event) => {
               // Open until the server answers, so a refusal shows here.
               event.preventDefault();
-              if (why?.job != null) {
-                act("retry", api.retryJob(why.job));
+              if (job !== null) {
+                act("retry", api.retryJob(job));
               }
             }}
           >
-            {busy === "retry" ? "Retrying…" : "Retry download"}
+            {words(busy === "retry" ? "Retrying…" : "Retry download")}
           </Item>
           {!track.joined && (
             <Item
@@ -497,7 +564,7 @@ export function DownloadFailed({
                 onAddFile(track);
               }}
             >
-              Add the file…
+              {words("Add the file…")}
             </Item>
           )}
           {dismiss !== undefined && failedJob !== null && (

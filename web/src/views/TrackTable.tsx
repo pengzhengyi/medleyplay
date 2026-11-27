@@ -62,6 +62,7 @@ import { formatTime } from "../format";
 import { heartTitleOf } from "../heart";
 import type { CoverStatus } from "../library/lookups";
 import { downloadDetailOf, downloadStateOf } from "../library/downloading";
+import { useFormattingLocale, useWords } from "../locale";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
 import { ratingOf } from "../library/ratings";
 import { albumArtistOf } from "../library/views";
@@ -291,20 +292,38 @@ function saveLayout(layout: Layout): void {
 }
 
 /** What a Track's cover shows of its Download: a spinner while it runs, or a clock while it waits. */
-function downloadStatusOf(download: DownloadUnderWay): CoverStatus {
-  const label = downloadDetailOf(download, downloadStateOf(download));
-  return { kind: download.job.state === "running" ? "looking" : "waiting", label };
+function DownloadCoverBadge({
+  download,
+  playing,
+}: {
+  readonly download: DownloadUnderWay;
+  readonly playing: boolean;
+}) {
+  const t = useWords();
+  const locale = useFormattingLocale();
+  const label = downloadDetailOf(download, downloadStateOf(download, t), { locale, t });
+  return (
+    <CoverBadge
+      status={{ kind: download.job.state === "running" ? "looking" : "waiting", label }}
+      playing={playing}
+    />
+  );
 }
 
 /** How far a row's Download has got, beside its title: a download mark and a word or two. */
 function DownloadNote({ download }: { readonly download: DownloadUnderWay }) {
-  const status = downloadStateOf(download);
-  const detail = downloadDetailOf(download, status);
+  const t = useWords();
+  const locale = useFormattingLocale();
+  const status = downloadStateOf(download, t);
+  const detail = downloadDetailOf(download, status, { locale, t });
+  const percentage = /^\d+%$/u.test(status) && download.job.state === "running";
   return (
     <span className="why downloading" title={detail}>
       <DownloadSimpleIcon weight="bold" aria-hidden />
-      {detail === `Downloading ${status}` && <span className="visually-hidden">Downloading </span>}
-      <span className="download-note-label">{status}</span>
+      {percentage && <span className="visually-hidden">{detail}</span>}
+      <span className="download-note-label" aria-hidden={percentage || undefined}>
+        {status}
+      </span>
     </span>
   );
 }
@@ -988,10 +1007,11 @@ const COLUMNS: Column[] = [
           )}
           <span className="thumb-frame">
             <Cover size="small" cover={track.cover} className="thumb" />
-            <CoverBadge
-              status={download === undefined ? actions.statusOf(track) : downloadStatusOf(download)}
-              playing={track.id === playingId}
-            />
+            {download === undefined ? (
+              <CoverBadge status={actions.statusOf(track)} playing={track.id === playingId} />
+            ) : (
+              <DownloadCoverBadge download={download} playing={track.id === playingId} />
+            )}
           </span>
           <KindMark kind={track.kind} reason={track.kind_reason} />
           <button

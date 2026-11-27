@@ -1093,6 +1093,7 @@ describe("search", () => {
     if (!row) throw new Error("Expected the failed lookup in a list item.");
     expect(within(row).getByText("Not a video.")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Choose parts" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel lookup" })).toBeVisible();
     await userEvent.click(within(row).getByRole("button", { name: "Dismiss" }));
     await waitFor(() => {
       expect(screen.queryByText("Video B")).not.toBeInTheDocument();
@@ -1840,6 +1841,30 @@ describe("the Downloaded view", () => {
     };
   }
 
+  it("translates download progress and the retry explanation without translating provider detail", async () => {
+    open(hrefOf({ view: "downloaded" }), downloading());
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("region", { name: "Downloading" });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      const downloads = within(screen.getByRole("region", { name: "正在下载" }));
+      expect(downloads.getByRole("progressbar", { name: "Mixtape" })).toHaveAttribute(
+        "aria-valuetext",
+        "medleyplay 恢复在线后开始下载",
+      );
+      expect(downloads.getByRole("progressbar", { name: "Slow Train" })).toHaveAttribute(
+        "aria-valuetext",
+        expect.stringMatching(/^将于 .+ 重试。Bilibili refused the request \(403\)\.$/u),
+      );
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("shows the songs downloading above those downloaded, each with how far it has got", async () => {
     open(hrefOf({ view: "downloaded" }), downloading());
 
@@ -1913,6 +1938,28 @@ describe("the Downloaded view", () => {
     expect(sent).toEqual([{ job_ids: [17] }]);
     await userEvent.click(screen.getByRole("link", { name: "Library" }));
     expect(await screen.findByRole("button", { name: "Lost Signal" })).toBeInTheDocument();
+  });
+
+  it("reports a failed dismissal instead of an earlier download status error", async () => {
+    const lost = trackOf(7, "Lost Signal", { download_failed: true, download_failure_job_id: 17 });
+    open("#/downloaded", {
+      ...signedIn([...LIBRARY, lost]),
+      "GET /api/tracks/7/download": { status: 503, body: { detail: "Could not read status." } },
+      "POST /api/downloads/failed/dismiss": { status: 503, body: { detail: "Could not dismiss." } },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: /^Download failed/u }));
+    const menu = within(screen.getByRole("menu"));
+    expect(await menu.findByRole("alert")).toHaveTextContent("Could not read status.");
+
+    await userEvent.click(menu.getByRole("menuitem", { name: "Dismiss failed download" }));
+
+    await waitFor(() => {
+      expect(menu.getByRole("alert")).toHaveTextContent("Could not dismiss.");
+    });
+    expect(menu.getByRole("menuitem", { name: "Retry download" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
   });
 
   it("dismisses all failed downloads without removing a saved file", async () => {

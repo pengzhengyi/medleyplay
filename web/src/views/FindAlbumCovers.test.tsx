@@ -6,6 +6,7 @@ import type { MissingCover, Track } from "../api";
 import { toDoOf } from "../library/cleanUp";
 import { UNKNOWN_COVERS, serve, trackOf } from "../testing/server";
 import { CleanUpView } from "./CleanUpView";
+import { LanguageSelect } from "./LanguageSelect";
 import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 
 const USE = "POST /api/album-covers/use";
@@ -46,12 +47,14 @@ function cleanUp(
   albums: readonly MissingCover[],
   onUse = vi.fn(() => Promise.resolve()),
   tracks: readonly Track[] = HELP_SONGS,
+  admin = true,
 ) {
   const reload = vi.fn();
   const onUsed = vi.fn();
   const view = (answered: number, shown: readonly MissingCover[]) => (
     <LyricsAvailabilityProvider tracks={tracks}>
       <CleanUpView
+        admin={admin}
         tidy={{ names: [], reload: vi.fn() }}
         artistNames={undefined}
         tracks={tracks}
@@ -86,6 +89,89 @@ afterEach(() => {
 });
 
 describe("finding album covers in Clean up", () => {
+  it("uses the next 1,000 covers when the suggestions exceed one batch", async () => {
+    const albums = Array.from({ length: 1001 }, (_, at) =>
+      missing(`Album ${String(at)}`, "The Beatles", {
+        suggested: `cover-${String(at)}`,
+        found: true,
+      }),
+    );
+    let sent: unknown;
+    serve({
+      [USE]: (body) => {
+        sent = body;
+        return { status: 204 };
+      },
+    });
+    cleanUp(albums);
+
+    await userEvent.click(section().getByText("Use next 1000", { selector: "button" }));
+
+    expect(sent).toEqual({
+      albums: albums
+        .slice(0, 1000)
+        .map(({ album, artist, suggested: cover }) => ({ album, artist, cover })),
+    });
+  }, 15000);
+
+  it("keeps the settings link out of the member view and separates active searches", () => {
+    cleanUp(
+      [
+        missing("Help!", "The Beatles", { finding: true }),
+        missing("Rubber Soul", "The Beatles"),
+        missing("Revolver", "The Beatles", { found: true }),
+      ],
+      undefined,
+      HELP_SONGS,
+      false,
+    );
+
+    expect(section().getByRole("status")).toHaveTextContent("Looking on MusicBrainz for 1 album");
+    expect(
+      section().getByText(/1 album has no current cover suggestion; 1 album isn't searched yet/u),
+    ).toHaveTextContent("An admin controls when MusicBrainz searches for covers.");
+    expect(
+      section().queryByRole("link", { name: "Settings → MusicBrainz" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("can act on a new image after dismissing a suggestion for the same album", async () => {
+    serve({ [DISMISS]: { status: 204 } });
+    const { answeredAgain } = cleanUp([
+      missing("Help!", "The Beatles", { suggested: "first", found: true }),
+    ]);
+    await userEvent.click(
+      section().getByRole("button", { name: "Dismiss the suggested cover of Help!" }),
+    );
+
+    answeredAgain(1, [missing("Help!", "The Beatles", { suggested: "second", found: true })]);
+
+    expect(
+      section().getByRole("button", { name: "Use the suggested cover of Help!" }),
+    ).toBeEnabled();
+  });
+  it("explains in Chinese why a cover was suggested and where searches are configured", async () => {
+    cleanUp([...SUGGESTED, missing("Rubber Soul", "The Beatles")]);
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const suggestions = within(screen.getByRole("list", { name: "建议的封面" }));
+      expect(suggestions.getByRole("button", { name: "采用「Help!」的建议封面" })).toBeVisible();
+      expect(
+        suggestions.getByRole("img", { name: /「Help!」的封面建议.*MusicBrainz/u }),
+      ).toBeVisible();
+      expect(screen.getByRole("link", { name: "设置 → MusicBrainz" })).toHaveAttribute(
+        "href",
+        "#/settings?section=musicbrainz",
+      );
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("marks available album lyrics beside the suggestion name without covering its image", () => {
     cleanUp(
       SUGGESTED,
@@ -256,7 +342,7 @@ describe("finding album covers in Clean up", () => {
     );
 
     const editor = await screen.findByRole("dialog", { name: "Add a cover" });
-    expect(within(editor).getByRole("tab", { name: /MusicBrainz/u })).toHaveAttribute(
+    expect(within(editor).getByRole("tab", { name: "Upload" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -267,7 +353,7 @@ describe("finding album covers in Clean up", () => {
 
     expect(
       section().getByText(
-        /^1 album has no cover on MusicBrainz that fits; 2 albums aren't searched yet\./u,
+        /^1 album has no current cover suggestion; 2 albums aren't searched yet\./u,
       ),
     ).toBeVisible();
     expect(section().getByRole("link", { name: "Settings → MusicBrainz" })).toHaveAttribute(

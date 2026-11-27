@@ -59,17 +59,19 @@ export function PlayingKind({
   /** Favorite a song of the album, or not; without it, the songs show no hearts. */
   readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
-  const motion = moving ? "moving" : "still";
   const t = useWords();
+  const motion = moving ? "moving" : "still";
   const songLyrics = useLyricsLabel(playing.kind === "song" ? track : undefined);
-  const songLabel = songLyrics === undefined ? t("Song") : `${t("Song")}, ${songLyrics}`;
+  const songLabel = songLyrics === undefined ? t("Song") : [t("Song"), songLyrics].join(t(", "));
   if (playing.kind === "song") {
     return (
       <span
         className="playing-kind"
         role="img"
         aria-label={
-          songLyrics === undefined ? t("Playing a song") : `${t("Playing a song")}, ${songLyrics}`
+          songLyrics === undefined
+            ? t("Playing a song")
+            : [t("Playing a song"), songLyrics].join(t(", "))
         }
         title={songLabel}
       >
@@ -117,9 +119,9 @@ function AlbumMark({
   readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
   const lyricsLabel = useLyricsLabel(track.kind === "song" ? albumLyricsSubject(track) : track);
-  const t = useWords();
   // Pointing opens the songs, and a press keeps them open while the pointer stays or
   // focus is in them; leaving with the mouse closes them either way.
+  const t = useWords();
   const [shown, setShown] = useState<"closed" | "pointed" | "kept">("closed");
   const open = shown !== "closed";
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -149,13 +151,13 @@ function AlbumMark({
   const { songs } = playing;
   const albumLabel =
     songs.length === 0
-      ? t("Album: {{name}}", { name })
-      : t("Album: {{name}}, song {{current}} of {{count}}", {
-          name,
+      ? t("Album: {{album}}", { album: name })
+      : t("Album: {{album}}, song {{current}} of {{total}}", {
+          album: name,
           current: playing.current + 1,
-          count: songs.length,
+          total: songs.length,
         });
-  const label = lyricsLabel === undefined ? albumLabel : `${albumLabel}, ${lyricsLabel}`;
+  const label = lyricsLabel === undefined ? albumLabel : [albumLabel, lyricsLabel].join(t(", "));
   return (
     <span
       className="playing-kind-frame"
@@ -208,7 +210,11 @@ function AlbumMark({
         <LyricsBadge label={lyricsLabel} />
       </button>
       {open && (
-        <section id={id} className={`album-songs ${opens}`} aria-label={`Songs of ${name}`}>
+        <section
+          id={id}
+          className={`album-songs ${opens}`}
+          aria-label={t("Songs of {{album}}", { album: name })}
+        >
           <AlbumSongs
             playing={playing}
             track={track}
@@ -294,6 +300,7 @@ function AlbumSongs({
   /** Favorite a song of the album, or not; without it, the songs show no hearts. */
   readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
+  const t = useWords();
   const { songs, current, length } = playing;
   if (songs.length === 0) {
     return (
@@ -303,7 +310,7 @@ function AlbumSongs({
             <ScissorsIcon />
           </span>
           <strong className="album-songs-name">{name}</strong>
-          <p>One file, not yet split into its songs.</p>
+          <p>{t("One file, not yet split into its songs.")}</p>
           <button
             type="button"
             className="album-songs-split"
@@ -312,7 +319,7 @@ function AlbumSongs({
             }}
           >
             <ScissorsIcon aria-hidden />
-            Split into songs
+            {t("Split into songs")}
           </button>
         </div>
       </>
@@ -341,7 +348,7 @@ function AlbumSongs({
       <ol className="album-songs-list">
         {songs.map((song, index) => {
           const state = index < current ? "played" : index === current ? "playing" : "pending";
-          const title = song.track?.title ?? "A Track no longer here";
+          const title = song.track?.title ?? t("A Track no longer here");
           const pointedHere = pointed?.index === index;
           return (
             <li key={`${song.entry.key}@${String(song.from)}`} className="album-songs-row">
@@ -352,7 +359,7 @@ function AlbumSongs({
                 type="button"
                 className={pointedHere ? `album-song ${state} pointed` : `album-song ${state}`}
                 aria-current={state === "playing" ? "true" : undefined}
-                aria-label={`${title}, ${STATE_WORDS[state]}`}
+                aria-label={t("{{title}}, {{state}}", { title, state: t(STATE_WORDS[state]) })}
                 tabIndex={pointerOnly ? -1 : undefined}
                 onClick={() => {
                   onPlaySong(song);
@@ -407,13 +414,14 @@ function SongHeart({
   readonly pointerOnly: boolean;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
 }) {
+  const t = useWords();
   return (
     <button
       type="button"
       className={track.favorite ? "icon heart album-song-heart on" : "icon heart album-song-heart"}
-      aria-label={`Favorite ${track.title}`}
+      aria-label={t("Favorite {{title}}", { title: track.title })}
       aria-pressed={track.favorite}
-      title={heartTitleOf(track.title, track.favorite)}
+      title={heartTitleOf(track.title, track.favorite, t)}
       tabIndex={pointerOnly ? -1 : undefined}
       onClick={() => {
         onFavorite(track, !track.favorite);

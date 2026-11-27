@@ -3,8 +3,26 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { AskAiAgain } from "./AskAiAgain";
+import { LanguageSelect } from "./LanguageSelect";
 
 describe("asking the AI again", () => {
+  it("describes the paid request in Chinese before asking and keeps the track name", async () => {
+    const onAsk = vi.fn();
+    const user = userEvent.setup();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+      render(<AskAiAgain title="Night Drive" onAsk={onAsk} onClose={vi.fn()} />);
+
+      const dialog = screen.getByRole("dialog", { name: "再次询问 AI？" });
+      expect(dialog).toHaveAccessibleDescription(/「Night Drive」.*可能产生费用/u);
+      expect(onAsk).not.toHaveBeenCalled();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("says what asking again costs before anything is asked", () => {
     const onAsk = vi.fn();
 

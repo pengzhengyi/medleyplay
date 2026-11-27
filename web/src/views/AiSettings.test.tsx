@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiProvider, AiSetting, Enricher } from "../api";
 import { type Routes, aiProviderOf, enricherOf, serve } from "../testing/server";
 import { AiSettings } from "./AiSettings";
+import { LanguageSelect } from "./LanguageSelect";
 
 const KEY = "sk-4f9a1c7e5b2d";
 
@@ -79,6 +80,26 @@ afterEach(() => {
 });
 
 describe("what is sent to a provider", () => {
+  it("uses Chinese for the failure age and disclosure without translating the model", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-11-06T12:05:00Z"));
+    open([{ ...DEEPSEEK, failure: "refused", failed_at: "2026-11-06T12:00:00Z" }]);
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await openCard(user, "DeepSeek");
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByText(/密钥被拒绝.*5分钟前/u)).toBeVisible();
+      expect(screen.getByText(/只发送简介的前 6,000 个字符/u)).toBeVisible();
+      expect(screen.getByRole("textbox", { name: "模型" })).toHaveValue("deepseek-flash");
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("says a video's title, description, and chapters are sent, and how much of it", async () => {
     open([]);
 
@@ -90,6 +111,86 @@ describe("what is sent to a provider", () => {
 });
 
 describe("adding a provider", () => {
+  it.each(["switches presets", "cancels", "edits the address"])(
+    "never carries a GitHub token to another destination when the admin %s",
+    async (change) => {
+      let sent: unknown;
+      const user = userEvent.setup();
+      open([], {
+        "POST /api/ai/providers": (body) => {
+          sent = body;
+          return { status: 201, body: OLLAMA };
+        },
+      });
+      await user.click(await screen.findByRole("button", { name: "GitHub Copilot" }));
+      await user.type(screen.getByLabelText("GitHub token"), "sample-copilot-token");
+
+      if (change === "edits the address") {
+        const address = screen.getByLabelText("Base URL");
+        await user.clear(address);
+        await user.type(address, OLLAMA.base_url);
+      } else {
+        if (change === "cancels") {
+          await user.click(screen.getByRole("button", { name: "Cancel" }));
+        }
+        await user.click(screen.getByRole("button", { name: "Ollama" }));
+      }
+      await user.click(screen.getByRole("button", { name: "Add provider" }));
+
+      await screen.findByText("Ollama added.");
+      expect(sent).toMatchObject({ base_url: OLLAMA.base_url });
+      expect(sent).not.toHaveProperty("key");
+    },
+  );
+  it("explains Copilot token permissions and limits in Chinese without changing the token link", async () => {
+    open([]);
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "GitHub Copilot" }));
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const form = within(screen.getByRole("form", { name: "添加 GitHub Copilot" }));
+      expect(form.getByLabelText("GitHub 令牌")).toHaveAttribute("type", "password");
+      expect(form.getByText(/每次询问都会计入 Copilot 用量/u)).toHaveTextContent(
+        "Copilot Requests",
+      );
+      expect(form.getByRole("link", { name: "创建令牌" })).toHaveAttribute(
+        "href",
+        "https://github.com/settings/personal-access-tokens/new",
+      );
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("uses a safe Chinese error when an unexpected add refusal includes the typed key", async () => {
+    open([], {
+      "POST /api/ai/providers": {
+        status: 422,
+        body: { detail: "Unexpected error: sample-credential" },
+      },
+    });
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "DeepSeek" }));
+    await user.type(screen.getByLabelText("Key"), "sample-credential");
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
+    const alert = await screen.findByRole("alert");
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(alert).toHaveTextContent("无法添加 AI 服务。请重试。");
+      expect(alert).not.toHaveTextContent("sample-credential");
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("says none is set up, and offers each preset and another provider to add", async () => {
     open([]);
 
@@ -249,6 +350,36 @@ describe("adding a provider", () => {
 });
 
 describe("a saved provider", () => {
+  it("explains an enablement refusal without opening the card", async () => {
+    const user = userEvent.setup();
+    open([DEEPSEEK], {
+      "PUT /api/ai/providers/d1/enabled": {
+        status: 403,
+        body: { detail: "Only an admin can set up the AI providers." },
+      },
+    });
+    const toggle = await screen.findByRole("switch", { name: "Ask DeepSeek" });
+
+    await user.click(toggle);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Only an admin can set up the AI providers.",
+    );
+    expect(toggle).toBeChecked();
+    expect(await header("DeepSeek")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("warns when removal leaves only a disabled provider", async () => {
+    const user = userEvent.setup();
+    open([DEEPSEEK, { ...OLLAMA, enabled: false }]);
+    await openCard(user, "DeepSeek");
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    expect(screen.getByRole("group", { name: "Remove" })).toHaveTextContent(
+      "Suggestions stop unless you enable another provider.",
+    );
+  });
   it("is a card showing its place, name, model, and that it has a key", async () => {
     open([DEEPSEEK]);
 
@@ -424,6 +555,30 @@ describe("a saved provider", () => {
 });
 
 describe("the order providers are asked in", () => {
+  it("translates the sortable handle role and instructions when the language changes", async () => {
+    open([DEEPSEEK, OLLAMA]);
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const handle = await screen.findByRole("button", { name: "Reorder DeepSeek" });
+    const user = userEvent.setup();
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(handle).toHaveAccessibleName("调整 DeepSeek 的顺序");
+      expect(handle).toHaveAttribute("aria-roledescription", "可调整顺序");
+      expect(handle).toHaveAccessibleDescription(/按空格键/u);
+      expect(handle).toHaveAttribute("data-sortable-handle");
+      handle.focus();
+      await user.keyboard(" ");
+      expect(await screen.findByText("已选中 DeepSeek，可调整顺序。")).toBeInTheDocument();
+      await user.keyboard("{Escape}");
+      expect(await screen.findByText("DeepSeek 保持原有顺序。")).toBeInTheDocument();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("is said only once there are several, with no way to reorder one alone", async () => {
     open([DEEPSEEK]);
 
@@ -494,11 +649,12 @@ describe("the AI suggestions", () => {
     expect(await screen.findByText("3 Tracks can be given suggestions.")).toBeInTheDocument();
   });
 
-  it("says suggestions only suggest, and are asked for once a day per text", async () => {
+  it("distinguishes suggestions from automatic splitting and describes the request limit", async () => {
     open([DEEPSEEK]);
 
-    expect(await screen.findByText(/only a suggestion/u)).toBeInTheDocument();
-    expect(screen.getByText(/never about the same text twice in a day/u)).toBeInTheDocument();
+    const guidance = await screen.findByText(/change nothing until used/u);
+    expect(guidance).toHaveTextContent("can apply trusted lists automatically");
+    expect(guidance).toHaveTextContent("do not repeat the same text within a day");
   });
 
   it("shows it stopped after the providers refused the key, with a reset", async () => {

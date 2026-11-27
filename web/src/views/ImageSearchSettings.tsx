@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { classOf, useNote } from "../useNote";
+import { useWords } from "../locale";
 
 export function ImageSearchSettings() {
+  const t = useWords();
   const [configured, setConfigured] = useState<boolean>();
   const [key, setKey] = useState("");
   const [editing, setEditing] = useState(false);
@@ -45,10 +47,27 @@ export function ImageSearchSettings() {
       setKey("");
       setEditing(false);
       notes.confirm(action === "save" ? "Saved." : "Key removed.");
-    } catch {
-      setError("Could not change the key. Try again.");
+    } catch (failure) {
+      setError(keyError(failure, action));
     } finally {
       setSaving(undefined);
+    }
+
+    function keyError(failure: unknown, action: "save" | "remove"): string {
+      if (failure instanceof ApiError) {
+        const detail = failure.message;
+        if (failure.status === 403 && detail === "Only an admin can change the picture search key.")
+          return detail;
+        if (
+          action === "save" &&
+          failure.status === 422 &&
+          (detail === "A provider key must contain only ASCII characters." ||
+            detail === "A key has no spaces or control characters." ||
+            detail === "A key is from 4 to 512 characters.")
+        )
+          return detail;
+      }
+      return "Could not change the key. Try again.";
     }
   };
   return (
@@ -59,13 +78,14 @@ export function ImageSearchSettings() {
       }}
     >
       <p className="hint">
-        Search for album covers and artist photos inside the editor with a household key. Searching
-        Google Images needs no key.
+        {t(
+          "Search for album covers and artist photos inside the editor with a household key. Searching Google Images needs no key.",
+        )}
       </p>
       {(configured === false || editing) && (
         <>
           <label>
-            Tavily API key
+            {t("Tavily API key")}
             <input
               ref={keyInput}
               type="password"
@@ -78,7 +98,7 @@ export function ImageSearchSettings() {
             />
           </label>
           <a href="https://app.tavily.com/" target="_blank" rel="noreferrer">
-            Get a Tavily key
+            {t("Get a Tavily key")}
           </a>
         </>
       )}
@@ -95,7 +115,7 @@ export function ImageSearchSettings() {
               setEditing(true);
             }}
           >
-            Change Key
+            {t("Change Key")}
           </button>
         ) : (
           <button
@@ -104,7 +124,7 @@ export function ImageSearchSettings() {
             aria-busy={saving === "save"}
             disabled={saving !== undefined || key.trim() === "" || configured === undefined}
           >
-            Save key
+            {t("Save key")}
           </button>
         )}
         {editing && (
@@ -119,7 +139,7 @@ export function ImageSearchSettings() {
               setEditing(false);
             }}
           >
-            Cancel
+            {t("Cancel")}
           </button>
         )}
         {configured && !editing && (
@@ -130,17 +150,17 @@ export function ImageSearchSettings() {
             disabled={saving !== undefined}
             onClick={() => void change("remove")}
           >
-            Remove Key
+            {t("Remove Key")}
           </button>
         )}
       </div>
       {error && (
         <p className="error" role="alert">
-          {error}
+          {t(error)}
         </p>
       )}
       <p role="status" className={classOf(notes.note)}>
-        {notes.note.text}
+        {t(notes.note.text)}
       </p>
     </form>
   );

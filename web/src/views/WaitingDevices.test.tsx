@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { WaitingDevice } from "../api";
 import { serve } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 import { WaitingDevices } from "./WaitingDevices";
 
 /** Safari on Mia's iPhone, waiting with code 4821. */
@@ -73,5 +74,38 @@ describe("WaitingDevices", () => {
     await user.click(screen.getByRole("menuitem", { name: "Turn away" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("no longer waiting");
+  });
+
+  it("translates the approval menu and its refusal without changing the device name or code", async () => {
+    serve({
+      "POST /api/devices/0123456789abcdef/turn-away": {
+        status: 404,
+        body: { detail: "That device is no longer waiting; it may have stopped asking." },
+      },
+    });
+    render(
+      <>
+        <LanguageSelect />
+        <WaitingDevices waiting={[{ ...IPHONE, label: "Search" }]} />
+      </>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "1 device waiting" }));
+    await user.click(screen.getByRole("menuitem", { name: "Turn away" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("no longer waiting");
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "此设备已不在等待列表中，可能已停止请求。",
+      );
+      await user.click(screen.getByRole("button", { name: "1 台设备等待批准" }));
+      expect(screen.getByRole("group", { name: "Search，验证码 4821" })).toBeVisible();
+      expect(screen.getByRole("menuitem", { name: "允许" })).toBeVisible();
+    } finally {
+      await user.keyboard("{Escape}");
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
   });
 });

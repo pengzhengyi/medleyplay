@@ -12,6 +12,7 @@ import {
   UploadSimpleIcon,
 } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
+import { useWords } from "../locale";
 
 /**
  * The picture `children` in a frame: `save` downloads it, `onReplace` opens the editor,
@@ -41,6 +42,7 @@ export function PictureFrame({
   readonly onRemove?: (() => void) | undefined;
   readonly children: ReactNode;
 }) {
+  const t = useWords();
   return (
     <div className={className === undefined ? "cover-frame" : `cover-frame ${className}`}>
       {children}
@@ -50,8 +52,8 @@ export function PictureFrame({
             className="cover-tool"
             href={save.href}
             download={save.name}
-            aria-label="Save the image"
-            title="Save image"
+            aria-label={t("Save the image")}
+            title={t("Save image")}
           >
             <DownloadSimpleIcon weight="bold" aria-hidden />
           </a>
@@ -60,8 +62,8 @@ export function PictureFrame({
           type="button"
           className="cover-tool"
           disabled={busy}
-          aria-label={`${replaceLabel}…`}
-          title={replaceLabel}
+          aria-label={t("{{action}}…", { action: t(replaceLabel) })}
+          title={t(replaceLabel)}
           onClick={onReplace}
         >
           <UploadSimpleIcon weight="bold" aria-hidden />
@@ -71,8 +73,8 @@ export function PictureFrame({
             type="button"
             className="cover-tool"
             disabled={busy}
-            aria-label={removeLabel}
-            title={removeLabel}
+            aria-label={t(removeLabel)}
+            title={t(removeLabel)}
             onClick={onRemove}
           >
             <TrashIcon weight="bold" aria-hidden />
@@ -80,7 +82,7 @@ export function PictureFrame({
         )}
       </div>
       {saving !== undefined && (
-        <span className="cover-saving" role="status" aria-label={saving}>
+        <span className="cover-saving" role="status" aria-label={t(saving)}>
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
         </span>
       )}

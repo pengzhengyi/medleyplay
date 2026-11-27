@@ -3,6 +3,7 @@
  */
 
 import { type Dynamics, DYNAMICS, useDynamics } from "../dynamics";
+import { useWords } from "../locale";
 
 const CHOICES: Record<Dynamics, { readonly label: string; readonly about: string }> = {
   off: { label: "Off", about: "The cover, blurred and still." },
@@ -13,10 +14,11 @@ const CHOICES: Record<Dynamics, { readonly label: string; readonly about: string
 
 /** The choices in one control, the chosen one raised, and what it shows. */
 export function DynamicsSwitch() {
+  const t = useWords();
   const [dynamics, setDynamics] = useDynamics();
   return (
     <div className="dynamics-row">
-      <div className="theme-switch dynamics-switch" role="radiogroup" aria-label="Dynamics">
+      <div className="theme-switch dynamics-switch" role="radiogroup" aria-label={t("Dynamics")}>
         {DYNAMICS.map((choice) => (
           <button
             key={choice}
@@ -24,16 +26,16 @@ export function DynamicsSwitch() {
             role="radio"
             className="dynamics-choice"
             aria-checked={choice === dynamics}
-            title={CHOICES[choice].about}
+            title={t(CHOICES[choice].about)}
             onClick={() => {
               setDynamics(choice);
             }}
           >
-            {CHOICES[choice].label}
+            {t(CHOICES[choice].label)}
           </button>
         ))}
       </div>
-      <span className="hint dynamics-about">{CHOICES[dynamics].about}</span>
+      <span className="hint dynamics-about">{t(CHOICES[dynamics].about)}</span>
     </div>
   );
 }

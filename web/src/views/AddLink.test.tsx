@@ -2,9 +2,10 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AddedPart, LinkLookup, VideoChoices } from "../api";
+import { type AddedPart, ApiError, type LinkLookup, type VideoChoices } from "../api";
 import { lookupOf, unreadableLookupOf } from "../testing/server";
 import { AddLink } from "./AddLink";
+import { LanguageSelect } from "./LanguageSelect";
 
 const FIRST: AddedPart = { part: 1, track_id: 7, source_id: 70, job: null };
 
@@ -54,7 +55,50 @@ async function manual(lookup: LinkLookup) {
   return opened;
 }
 
+it("explains an unreadable video in Chinese and submits the original title and part", async () => {
+  const { add, dialog } = renderDialog(
+    unreadableLookupOf("Bilibili couldn't be reached.", "network", 2),
+  );
+  const form = within(dialog);
+  const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+  const user = userEvent.setup();
+
+  try {
+    await user.selectOptions(language, "zh-Hans");
+
+    expect(await form.findByRole("alert")).toHaveTextContent("无法连接到网站。");
+    expect(form.getByText(/下载失败时也可以自行添加文件/u)).toBeVisible();
+    await user.type(form.getByRole("textbox", { name: "第 2 段的标题" }), "Side B");
+    await user.click(form.getByRole("button", { name: "添加" }));
+
+    expect(add).toHaveBeenCalledExactlyOnceWith(8, "best", [
+      { part: 2, title: "Side B", artist: "" },
+    ]);
+  } finally {
+    await user.selectOptions(language, "auto");
+  }
+});
+
 describe("adding a video that was read", () => {
+  it("copies a command for the selected part still eligible after changing layouts", async () => {
+    const lookup = lookupOf(3);
+    const { dialog } = renderDialog({
+      ...lookup,
+      parts: lookup.parts.map((part) => (part.part === 2 ? { ...part, track_id: 12 } : part)),
+    });
+    const user = userEvent.setup();
+    const write = vi.spyOn(navigator.clipboard, "writeText");
+    const form = within(dialog);
+    await user.click(await form.findByRole("checkbox", { name: "Part 1: Mixtape 1" }));
+    await user.click(form.getByRole("radio", { name: "One album file" }));
+    await user.click(form.getByRole("checkbox", { name: "Part 2: Mixtape 2" }));
+    await user.click(form.getByRole("radio", { name: "Separate files" }));
+    await user.click(form.getByText("Other ways to get the file"));
+
+    await user.click(form.getByRole("button", { name: "Copy the BBDown command" }));
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("?p=3"));
+  });
   it("clears every selection and downloads only the edited part selected again", async () => {
     const { add, dialog } = await manual(lookupOf(3));
     const form = within(dialog);
@@ -272,14 +316,22 @@ describe("adding a video that was read", () => {
   it("says why when the server refuses, and stays open", async () => {
     const { add, onClose, dialog } = await manual(lookupOf(1));
     add.mockRejectedValueOnce(
-      new Error("medleyplay is Offline, so links wait until it is Online."),
+      new ApiError(409, "medleyplay is Offline, so links wait until it is Online."),
     );
     await within(dialog).findByText("【MV】Night Drive");
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("medleyplay is Offline");
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent("medleyplay is Offline");
     expect(onClose).not.toHaveBeenCalled();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+      expect(alert).toHaveTextContent("medleyplay 当前离线，请在恢复在线后再添加链接。");
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
   });
 
   it("offers the other ways to get the file, folded, with the part's link filled in", async () => {
@@ -294,9 +346,17 @@ describe("adding a video that was read", () => {
   });
 
   it("says why the link could not be looked up", async () => {
-    const { dialog } = renderDialog(new Error("medleyplay can't add music from 'x'."));
+    const { dialog } = renderDialog(new ApiError(422, "medleyplay can't add music from 'x'."));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("can't add music from");
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent("can't add music from 'x'");
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+      expect(alert).toHaveTextContent("medleyplay 无法从 'x' 添加音乐。");
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
   });
 });
 
@@ -310,8 +370,10 @@ describe("adding a video that could not be read", () => {
       "The site couldn’t be reached. Bilibili couldn't be reached.",
     );
 
-    expect(within(dialog).getByRole("spinbutton", { name: "Part number 1" })).toHaveValue(2);
-    expect(within(dialog).getByRole("textbox", { name: "Title of part 1" })).toHaveValue("");
+    expect(within(dialog).getByRole("spinbutton", { name: "Part number for row 1" })).toHaveValue(
+      2,
+    );
+    expect(within(dialog).getByRole("textbox", { name: "Title of part 2" })).toHaveValue("");
     expect(within(dialog).getByRole("button", { name: "Add" })).toBeDisabled();
   });
 
@@ -320,10 +382,9 @@ describe("adding a video that could not be read", () => {
 
     await within(dialog).findByRole("alert");
 
-    expect(within(dialog).getByRole("spinbutton", { name: "Part number 1" })).toHaveAttribute(
-      "placeholder",
-      "Part",
-    );
+    expect(
+      within(dialog).getByRole("spinbutton", { name: "Part number for row 1" }),
+    ).toHaveAttribute("placeholder", "Part");
     expect(within(dialog).getByRole("textbox", { name: "Title of part 1" })).toHaveAttribute(
       "placeholder",
       "Title",
@@ -369,11 +430,28 @@ describe("adding a video that could not be read", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Add another part" }));
     await userEvent.type(within(dialog).getByRole("textbox", { name: "Title of part 2" }), "B");
 
-    const second = within(dialog).getByRole("spinbutton", { name: "Part number 2" });
+    const second = within(dialog).getByRole("spinbutton", { name: "Part number for row 2" });
     await userEvent.clear(second);
     await userEvent.type(second, "1");
 
     expect(within(dialog).getByRole("button", { name: "Add 2 songs" })).toBeDisabled();
+  });
+
+  it("labels a manual part by its number and copies the command after the number changes", async () => {
+    const { dialog } = renderDialog(unreadableLookupOf("Gone.", "gone", 2));
+    const form = within(dialog);
+    const user = userEvent.setup();
+    const write = vi.spyOn(navigator.clipboard, "writeText");
+    const part = await form.findByRole("spinbutton", { name: "Part number for row 1" });
+    await user.clear(part);
+    expect(form.getByRole("textbox", { name: "Title in row 1" })).toBeVisible();
+    await user.type(part, "7");
+    expect(form.getByRole("textbox", { name: "Title of part 7" })).toBeVisible();
+    await user.click(form.getByText("Other ways to get the file"));
+
+    await user.click(form.getByRole("button", { name: "Copy the BBDown command" }));
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("?p=7"));
   });
 
   it("removes a part added by mistake", async () => {

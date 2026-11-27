@@ -14,27 +14,85 @@ import {
   useRef,
   useState,
 } from "react";
+import { Trans } from "react-i18next";
 
-import type { AddedPart, LinkLookup, SavedVideoLookup, VideoChoices } from "../api";
+import {
+  type AddedPart,
+  ApiError,
+  type LinkLookup,
+  type SavedVideoLookup,
+  type VideoChoices,
+} from "../api";
 import { formatTime } from "../format";
+import { downloadFailureOf } from "../library/downloading";
 import { partLink } from "../library/otherWays";
 import { suggestedArtist, suggestedTitle, withoutTags } from "../library/suggest";
-import { useWords } from "../locale";
+import { type Words, useFormattingLocale, useWords } from "../locale";
 import { type Route, hrefOf } from "../routes";
 import { Modal } from "./Modal";
 import { OtherWays } from "./OtherWays";
 
 const MAX_PART_NUMBER = 9999;
 const BEST = "best";
+const LOOKUP_HELP = "Choose parts here or later in <downloaded>Downloaded</downloaded>.";
 type AlbumDestination =
   Extract<Route, { view: "album" }> | { readonly view: "library"; readonly focus: number };
-const WHY: Record<string, string> = {
+const WHY = {
   gone: "The site no longer has this video.",
   needs_login: "Only a signed-in account can see this video.",
   network: "The site couldn’t be reached.",
   refused: "The site refused to show this video.",
   fault: "Reading the video failed.",
-};
+} satisfies Record<NonNullable<LinkLookup["reason"]>, string>;
+const LINK_REFUSALS = new Map<number, ReadonlySet<string>>([
+  [404, new Set(["There is no such video lookup."])],
+  [
+    409,
+    new Set([
+      "medleyplay is Offline, so links wait until it is Online.",
+      "No downloader is available. Enable one before downloading.",
+      "All parts are already in the Library.",
+    ]),
+  ],
+  [
+    422,
+    new Set([
+      "The link doesn't name a video.",
+      "An album needs a name and a video with several parts.",
+      "An album needs a name.",
+      "This video has no readable part list. Enter the parts yourself.",
+      "A part number is 1 to 9999.",
+      "A video that can't be read is added at the quality best.",
+      "Choose one or more different parts.",
+      "A title is 1 to 512 characters, and an artist at most 512.",
+    ]),
+  ],
+]);
+interface LinkFailure {
+  readonly cause: unknown;
+}
+
+function linkError(cause: unknown, t: Words): string {
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  if (cause instanceof ApiError) {
+    if (LINK_REFUSALS.get(cause.status)?.has(detail)) return t(detail);
+    if (cause.status === 422) {
+      const source = /^medleyplay can't add music from (.+)\.$/u.exec(detail)?.[1];
+      if (source !== undefined) return t("medleyplay can't add music from {{source}}.", { source });
+      const part = /^The video has no part (\d+)\.$/u.exec(detail)?.[1];
+      if (part !== undefined) return t("The video has no part {{number}}.", { number: part });
+      const quality = /^The video can't be added at the quality (.+)\.$/u.exec(detail)?.[1];
+      if (quality !== undefined)
+        return t("The video can't be added at the quality {{quality}}.", { quality });
+    }
+    if (cause.status === 409) {
+      const part = /^Part (\d+) is already in the Library\. Deselect it\.$/u.exec(detail)?.[1];
+      if (part !== undefined)
+        return t("Part {{number}} is already in the Library. Deselect it.", { number: part });
+    }
+  }
+  return downloadFailureOf(detail, t);
+}
 
 /** Follow one selected lookup; closing the dialog leaves it in Downloads. */
 export function AddLink({
@@ -52,10 +110,11 @@ export function AddLink({
   readonly onAdded: (count: number, destination?: AlbumDestination) => void;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const [submitted, setSubmitted] = useState<SavedVideoLookup>();
   const [loaded, setLoaded] = useState<SavedVideoLookup>();
-  const [error, setError] = useState("");
+  const [error, setError] = useState<LinkFailure>();
   const loadResult = useEffectEvent(load);
   const readyId =
     submitted?.result === null &&
@@ -68,8 +127,8 @@ export function AddLink({
       (lookup) => {
         if (current) setSubmitted(lookup);
       },
-      (failure: unknown) => {
-        if (current) setError(failure instanceof Error ? failure.message : String(failure));
+      (cause: unknown) => {
+        if (current) setError({ cause });
       },
     );
     return () => {
@@ -83,8 +142,8 @@ export function AddLink({
       (lookup) => {
         if (current) setLoaded(lookup);
       },
-      (failure: unknown) => {
-        if (current) setError(failure instanceof Error ? failure.message : String(failure));
+      (cause: unknown) => {
+        if (current) setError({ cause });
       },
     );
     return () => {
@@ -94,12 +153,15 @@ export function AddLink({
   const opened = loaded ?? submitted;
   const status = listed.find((row) => row.id === opened?.id) ?? opened;
   const failure =
-    error ||
-    (status?.state === "failed"
-      ? status.message || "The lookup failed."
-      : status?.state === "cancelled"
-        ? "The lookup was cancelled."
-        : "");
+    error !== undefined
+      ? t("Could not open the video lookup: {{detail}}", { detail: linkError(error.cause, t) })
+      : status?.state === "failed"
+        ? status.message === ""
+          ? t("The lookup failed.")
+          : t("The lookup failed: {{detail}}", { detail: downloadFailureOf(status.message, t) })
+        : status?.state === "cancelled"
+          ? t("The lookup was cancelled.")
+          : "";
   const lookup = opened?.result;
   const close = () => {
     dialog.current?.close();
@@ -113,18 +175,21 @@ export function AddLink({
   return (
     <Modal ref={dialog} className="add-link" labelledBy="add-link-title" onClose={onClose}>
       <div className="card">
-        <h2 id="add-link-title">Add from Bilibili</h2>
+        <h2 id="add-link-title">{t("Add from Bilibili")}</h2>
         {failure === "" && !lookup && (
           <>
             <p className="empty" aria-busy="true">
-              Looking the video up…
+              {t("Looking the video up…")}
             </p>
             <p>
-              Choose parts here or later in{" "}
-              <a href={hrefOf({ view: "downloaded" })} onClick={close}>
-                Downloaded
-              </a>
-              .
+              <Trans
+                t={t}
+                i18nKey={LOOKUP_HELP}
+                defaults={LOOKUP_HELP}
+                components={{
+                  downloaded: <a href={hrefOf({ view: "downloaded" })} onClick={close} />,
+                }}
+              />
             </p>
           </>
         )}
@@ -154,14 +219,14 @@ interface FormProps {
 /** What the household is told while a form saves, or why it didn't. */
 function useSaving(onAdded: (added: readonly AddedPart[]) => void) {
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<LinkFailure>();
   const save = async (send: () => Promise<readonly AddedPart[]>) => {
     setSaving(true);
-    setError("");
+    setError(undefined);
     try {
       onAdded(await send());
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+    } catch (cause) {
+      setError({ cause });
     } finally {
       setSaving(false);
     }
@@ -183,6 +248,7 @@ type FileLayout = "separate" | "joined";
 
 function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
   const t = useWords();
+  const number = new Intl.NumberFormat(useFormattingLocale());
   const [layout, setLayout] = useState<FileLayout>("separate");
   const [group, setGroup] = useState(false);
   const [edit, setEdit] = useState(false);
@@ -237,8 +303,8 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
       : t("Download {{count}} files", { count: chosen.length });
   const action = manual
     ? chosen.length <= 1
-      ? "Add"
-      : `Add ${String(chosen.length)} songs`
+      ? t("Add")
+      : t("Add {{amount}} songs", { amount: number.format(chosen.length) })
     : chosen.length === 0
       ? t("Choose parts to download")
       : downloadLabel;
@@ -266,6 +332,7 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
   };
 
   const labelled = eligible[0]?.part;
+  const commandPart = chosen[0]?.part;
 
   return (
     <form onSubmit={submit}>
@@ -291,8 +358,8 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
         <div className="video-part-picker-heading">
           <span role="status">
             {t("{{selected}} of {{available}} selected", {
-              selected: chosen.length,
-              available: eligible.length,
+              selected: number.format(chosen.length),
+              available: number.format(eligible.length),
             })}
           </span>
           {eligible.length > 0 && (
@@ -318,7 +385,10 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
                   aria-label={
                     manual
                       ? undefined
-                      : t("Part {{number}}: {{title}}", { number: row.part, title: row.original })
+                      : t("Part {{number}}: {{title}}", {
+                          number: number.format(row.part),
+                          title: row.original,
+                        })
                   }
                   onChange={(event) => {
                     change(row.part, { chosen: event.currentTarget.checked });
@@ -326,8 +396,11 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
                 />
                 <span>
                   {manual
-                    ? t("Part {{number}}", { number: row.part })
-                    : `${String(row.part)}. ${row.original}`}
+                    ? t("Part {{number}}", { number: number.format(row.part) })
+                    : t("{{number}}. {{title}}", {
+                        number: number.format(row.part),
+                        title: row.original,
+                      })}
                   {row.taken && <span className="choice-meta"> {t("Already added")}</span>}
                 </span>
                 {!manual && (joined || !row.taken) && row.duration !== null && (
@@ -340,8 +413,10 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
                     <input
                       type="text"
                       className="part-input"
-                      aria-label={`Title of part ${String(row.part)}`}
-                      placeholder="Title"
+                      aria-label={t("Title of part {{number}}", {
+                        number: number.format(row.part),
+                      })}
+                      placeholder={t("Title")}
                       value={row.title}
                       maxLength={512}
                       disabled={!row.chosen || saving}
@@ -354,8 +429,10 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
                     <input
                       type="text"
                       className="part-input"
-                      aria-label={`Artist of part ${String(row.part)}`}
-                      placeholder="Artist"
+                      aria-label={t("Artist of part {{number}}", {
+                        number: number.format(row.part),
+                      })}
+                      placeholder={t("Artist")}
                       value={row.artist}
                       maxLength={512}
                       disabled={!row.chosen || saving}
@@ -463,7 +540,9 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
           )}
         </p>
       ) : (
-        <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, firstOf(rows))} />
+        commandPart !== undefined && (
+          <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, commandPart)} />
+        )
       )}
     </form>
   );
@@ -510,8 +589,8 @@ function VideoFileLayout({
   );
 }
 
-function firstOf(rows: readonly Row[]): number {
-  return (rows.find((row) => row.chosen) ?? rows[0])?.part ?? 1;
+function validPart(part: number): boolean {
+  return Number.isInteger(part) && part >= 1 && part <= MAX_PART_NUMBER;
 }
 
 interface Draft {
@@ -522,6 +601,8 @@ interface Draft {
 }
 
 function UnreadableVideo({ id, lookup, add, onAdded }: FormProps) {
+  const t = useWords();
+  const number = new Intl.NumberFormat(useFormattingLocale());
   const first = lookup.parts[0]?.part ?? 1;
   const [drafts, setDrafts] = useState<readonly Draft[]>([
     { key: 0, part: String(first), title: "", artist: "" },
@@ -531,12 +612,14 @@ function UnreadableVideo({ id, lookup, add, onAdded }: FormProps) {
     setDrafts((now) => now.map((draft) => (draft.key === key ? { ...draft, ...changes } : draft)));
   };
   const numbers = drafts.map((draft) => Number(draft.part));
+  const commandPart = numbers.find(validPart);
   const complete =
     drafts.every((draft) => draft.title.trim() !== "") &&
-    numbers.every((n) => Number.isInteger(n) && n >= 1 && n <= MAX_PART_NUMBER) &&
+    numbers.every(validPart) &&
     new Set(numbers).size === numbers.length;
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!complete || saving) return;
     void save(() =>
       add(
         id,
@@ -549,81 +632,104 @@ function UnreadableVideo({ id, lookup, add, onAdded }: FormProps) {
       ),
     );
   };
+  const reason = t(WHY[lookup.reason ?? "fault"]);
+  const detail = downloadFailureOf(lookup.message, t);
 
   return (
     <form onSubmit={submit}>
       <p className="error" role="alert">
-        {WHY[lookup.reason ?? "fault"]} {lookup.message}
+        {detail === "" || detail === reason
+          ? reason
+          : t("{{reason}} {{detail}}", { reason, detail })}
       </p>
       <p className="add-link-explain">
-        You can still add it. Give each part a title and an artist; medleyplay will try to download
-        it, and you can add the file yourself if that fails. It is added at the best quality.
+        {t(
+          "You can still add it. Give each part a title and, if known, an artist. medleyplay will try to download it at the best available quality. If it fails, you can add the file yourself.",
+        )}
       </p>
       <ul className="parts">
-        {drafts.map((draft, index) => (
-          <li key={draft.key} className="part">
-            <div className="part-fields numbered">
-              <PartField label="Part" shown={index === 0}>
-                <input
-                  type="number"
-                  className="part-input part-number"
-                  min={1}
-                  max={MAX_PART_NUMBER}
-                  aria-label={`Part number ${String(index + 1)}`}
-                  placeholder="Part"
-                  value={draft.part}
-                  onChange={(event) => {
-                    change(draft.key, { part: event.currentTarget.value });
-                  }}
-                />
-              </PartField>
-              <PartField label="Title" shown={index === 0}>
-                <input
-                  type="text"
-                  className="part-input"
-                  aria-label={`Title of part ${String(index + 1)}`}
-                  placeholder="Title"
-                  value={draft.title}
-                  maxLength={512}
-                  onChange={(event) => {
-                    change(draft.key, { title: event.currentTarget.value });
-                  }}
-                />
-              </PartField>
-              <PartField label="Artist" shown={index === 0}>
-                <input
-                  type="text"
-                  className="part-input"
-                  aria-label={`Artist of part ${String(index + 1)}`}
-                  placeholder="Artist"
-                  value={draft.artist}
-                  maxLength={512}
-                  onChange={(event) => {
-                    change(draft.key, { artist: event.currentTarget.value });
-                  }}
-                />
-              </PartField>
-              {drafts.length > 1 && (
-                <button
-                  type="button"
-                  className="icon"
-                  aria-label={`Remove part ${String(index + 1)}`}
-                  title="Remove"
-                  onClick={() => {
-                    setDrafts((now) => now.filter((each) => each.key !== draft.key));
-                  }}
-                >
-                  <TrashIcon weight="regular" aria-hidden />
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
+        {drafts.map((draft, index) => {
+          const part = Number(draft.part);
+          const isPart = validPart(part);
+          const row = number.format(index + 1);
+          const fieldNumber = isPart ? number.format(part) : row;
+          return (
+            <li key={draft.key} className="part">
+              <div className="part-fields numbered">
+                <PartField label="Part" shown={index === 0}>
+                  <input
+                    type="number"
+                    className="part-input part-number"
+                    min={1}
+                    max={MAX_PART_NUMBER}
+                    aria-label={t("Part number for row {{number}}", { number: row })}
+                    placeholder={t("Part")}
+                    disabled={saving}
+                    value={draft.part}
+                    onChange={(event) => {
+                      change(draft.key, { part: event.currentTarget.value });
+                    }}
+                  />
+                </PartField>
+                <PartField label="Title" shown={index === 0}>
+                  <input
+                    type="text"
+                    className="part-input"
+                    aria-label={t(isPart ? "Title of part {{number}}" : "Title in row {{number}}", {
+                      number: fieldNumber,
+                    })}
+                    placeholder={t("Title")}
+                    disabled={saving}
+                    value={draft.title}
+                    maxLength={512}
+                    onChange={(event) => {
+                      change(draft.key, { title: event.currentTarget.value });
+                    }}
+                  />
+                </PartField>
+                <PartField label="Artist" shown={index === 0}>
+                  <input
+                    type="text"
+                    className="part-input"
+                    aria-label={t(
+                      isPart ? "Artist of part {{number}}" : "Artist in row {{number}}",
+                      { number: fieldNumber },
+                    )}
+                    placeholder={t("Artist")}
+                    disabled={saving}
+                    value={draft.artist}
+                    maxLength={512}
+                    onChange={(event) => {
+                      change(draft.key, { artist: event.currentTarget.value });
+                    }}
+                  />
+                </PartField>
+                {drafts.length > 1 && (
+                  <button
+                    type="button"
+                    className="icon"
+                    aria-label={t(isPart ? "Remove part {{number}}" : "Remove row {{number}}", {
+                      number: fieldNumber,
+                    })}
+                    title={t("Remove")}
+                    disabled={saving}
+                    onClick={() => {
+                      setDrafts((now) => now.filter((each) => each.key !== draft.key));
+                    }}
+                  >
+                    <TrashIcon weight="regular" aria-hidden />
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
       {drafts.length < MAX_PART_NUMBER && (
         <button
           type="button"
           className="secondary outline dialog-button add-part"
+          disabled={saving}
           onClick={() => {
             setDrafts((now) => [
               ...now,
@@ -637,12 +743,16 @@ function UnreadableVideo({ id, lookup, add, onAdded }: FormProps) {
           }}
         >
           <PlusIcon weight="bold" aria-hidden />
-          Add another part
+          {t("Add another part")}
         </button>
       )}
-      <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, first)} />
+      {commandPart !== undefined && (
+        <OtherWays kind={lookup.kind} link={partLink(lookup.kind, lookup.video, commandPart)} />
+      )}
       <Footer error={error} saving={saving} disabled={!complete}>
-        {drafts.length === 1 ? "Add" : `Add ${String(drafts.length)} songs`}
+        {drafts.length === 1
+          ? t("Add")
+          : t("Add {{amount}} songs", { amount: number.format(drafts.length) })}
       </Footer>
     </form>
   );
@@ -654,16 +764,19 @@ function Footer({
   disabled,
   children,
 }: {
-  readonly error: string;
+  readonly error: LinkFailure | undefined;
   readonly saving: boolean;
   readonly disabled: boolean;
   readonly children: string;
 }) {
+  const t = useWords();
   return (
     <>
-      {error !== "" && (
+      {error !== undefined && (
         <p className="error" role="alert">
-          {error}
+          {t("Could not add the selected parts: {{detail}}", {
+            detail: linkError(error.cause, t),
+          })}
         </p>
       )}
       <footer className="dialog-buttons">
@@ -694,9 +807,10 @@ function PartField({
   readonly shown: boolean;
   readonly children: ReactNode;
 }) {
+  const t = useWords();
   return (
     <label className="part-field">
-      <span className={shown ? "part-field-label" : "visually-hidden"}>{label}</span>
+      <span className={shown ? "part-field-label" : "visually-hidden"}>{t(label)}</span>
       {children}
     </label>
   );

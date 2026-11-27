@@ -1,9 +1,10 @@
 import { EditorView } from "@codemirror/view";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ListCheck } from "../api";
+import { LanguageSelect } from "./LanguageSelect";
 import ListEditor from "./ListEditor";
 
 /** A server that reads each line `0:00 Title` as a song, and any other as no song. */
@@ -38,6 +39,71 @@ function editorView(): EditorView {
 }
 
 describe("typing a song list", () => {
+  beforeEach(() => {
+    Object.defineProperties(Range.prototype, {
+      getClientRects: { configurable: true, value: () => [] },
+      getBoundingClientRect: { configurable: true, value: () => new DOMRect() },
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(Range.prototype, "getClientRects");
+    Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+  });
+
+  it("translates help and diagnostics without restarting CodeMirror or rechecking a draft", async () => {
+    const initial = "0:00 Intro\nEncore";
+    const verify = vi.fn(() =>
+      Promise.resolve({
+        songs: [],
+        problems: [{ line: 2, message: "This line has no time, such as 3:12." }],
+      }),
+    );
+    render(<ListEditor initial={initial} check={verify} artists={[]} onListed={vi.fn()} />);
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await screen.findByRole("button", { name: /^Line 2:/u });
+    const original = editorView();
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const field = screen.getByRole("textbox", { name: "歌曲列表" });
+      expect(EditorView.findFromDOM(field)).toBe(original);
+      expect(original.state.doc.toString()).toBe(initial);
+      expect(
+        screen.getByRole("button", { name: "第 2 行：此行缺少起始时间，例如 3:12。" }),
+      ).toBeVisible();
+      expect(screen.getByText(/例如：3:12 夜行 - 蓝房间/u)).toBeVisible();
+      expect(verify).toHaveBeenCalledExactlyOnceWith(initial);
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("ignores a successful check for text edited before the next debounce", async () => {
+    const onListed = vi.fn();
+    let finish: (answer: ListCheck) => void = () => undefined;
+    const response = new Promise<ListCheck>((resolve) => {
+      finish = resolve;
+    });
+    render(
+      <ListEditor initial="0:00 Intro" check={() => response} artists={[]} onListed={onListed} />,
+    );
+    act(() => {
+      const editor = editorView();
+      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: "Encore" } });
+    });
+
+    await act(async () => {
+      finish({ songs: [{ start_ms: 0, title: "Intro", artist: "" }], problems: [] });
+      await response;
+    });
+
+    expect(onListed).toHaveBeenLastCalledWith(undefined);
+    expect(screen.getByText("Checking…")).toBeVisible();
+  });
+
   it("lists each line the server says is no song, and offers no songs until it checks clean", async () => {
     const onListed = vi.fn();
     render(

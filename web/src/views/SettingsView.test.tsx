@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -8,12 +8,33 @@ import {
   enricherOf,
   modeOf,
   modeSettingsOf,
+  preferencesOf,
   serve,
   settingsOf,
 } from "../testing/server";
 import { SettingsView } from "./SettingsView";
 
 const GB = 1_000_000_000;
+
+it("translates appearance help and controls without changing the selected theme", async () => {
+  open(false);
+  const user = userEvent.setup();
+  const theme = await screen.findByRole("radio", { name: "Match the system" });
+  const checked = theme.getAttribute("aria-checked");
+
+  try {
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+    expect(screen.getByText("跟随设备的浅色或深色设置，也可以固定使用一种。")).toBeVisible();
+    expect(screen.getByRole("radio", { name: "跟随系统" })).toHaveAttribute(
+      "aria-checked",
+      checked,
+    );
+    expect(screen.getByRole("button", { name: "将音乐库下移" })).toHaveAttribute("title", "下移");
+  } finally {
+    await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+  }
+});
 
 /** A limit of 20 GB, saved twice before, so at revision 2. */
 const LIMIT_20: Settings = settingsOf({ storage_limit: 20 * GB, revision: 2 });
@@ -139,6 +160,31 @@ afterEach(() => {
 });
 
 describe("the image search section", () => {
+  it.each([
+    ["A provider key must contain only ASCII characters.", "服务密钥只能包含 ASCII 字符。"],
+    ["Unexpected refusal for sample-key", "无法更改密钥。请重试。"],
+  ])(
+    "explains safe key refusals in Chinese without echoing the key: %s",
+    async (detail, expected) => {
+      open(true, { "PUT /api/image-search/key": { status: 422, body: { detail } } });
+      const section = within(screen.getByRole("region", { name: "Image search" }));
+      const user = userEvent.setup();
+      const language = screen.getByRole("combobox", { name: "Language" });
+      await user.type(await section.findByLabelText("Tavily API key"), "sample-key");
+      await user.click(section.getByRole("button", { name: "Save key" }));
+      const alert = await section.findByRole("alert");
+
+      try {
+        await user.selectOptions(language, "zh-Hans");
+
+        expect(alert).toHaveTextContent(expected);
+        expect(alert).not.toHaveTextContent("sample-key");
+      } finally {
+        await user.selectOptions(language, "auto");
+      }
+    },
+  );
+
   it("lets an admin save, replace, and remove the key without showing it again", async () => {
     let saved: unknown;
     const { calls } = open(true, {
@@ -251,6 +297,23 @@ describe("the Other devices section", () => {
 });
 
 describe("the AI section", () => {
+  it("discloses AI data and automatic album list behavior even before a provider is configured", async () => {
+    open(true);
+    const user = userEvent.setup();
+    const language = await screen.findByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const ai = within(screen.getByRole("region", { name: "AI" }));
+      expect(await ai.findByText("尚未设置 AI 服务。")).toBeVisible();
+      expect(ai.getByText(/只发送简介的前 6,000 个字符/u)).toBeVisible();
+      expect(ai.getByText(/可自动采用可信的列表/u)).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("is the admin's, with the providers and the suggestion for every Track", async () => {
     open(true);
 
@@ -298,6 +361,41 @@ describe("the notes offered when asking the AI", () => {
       "Name the album the song first came out on.",
     ]);
     expect(songs.getAllByRole("textbox")).toHaveLength(2);
+  });
+
+  it("translates how to use and remove shared AI notes without translating their text", async () => {
+    const { ai } = await notesOpen([]);
+    const user = userEvent.setup();
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const note = "Name the album the song first came out on.";
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const details = within(ai.getByRole("group", { name: "查询详情时可用的备注" }));
+      expect(details.getByRole("textbox", { name: `备注：${note}` })).toHaveValue(note);
+      expect(details.getByRole("button", { name: `移除备注「${note}」` })).toHaveAttribute(
+        "title",
+        "移除此备注",
+      );
+      expect(ai.getByText(/即可勾选备注并随问题一同发送/u)).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("keeps a new shared note open while confirming or canceling IME input", async () => {
+    const sent: unknown[] = [];
+    const { songs } = await notesOpen(sent);
+    await userEvent.click(songs.getByRole("button", { name: "Add a note" }));
+    const draft = songs.getByRole("textbox", { name: "New note" });
+    fireEvent.change(draft, { target: { value: "现场录音" } });
+
+    fireEvent.keyDown(draft, { key: "Escape", isComposing: true });
+    fireEvent.keyDown(draft, { key: "Enter", keyCode: 229 });
+
+    expect(songs.getByRole("textbox", { name: "New note" })).toHaveValue("现场录音");
+    expect(sent).toEqual([]);
   });
 
   it("adds a note for asking for songs, saved once typed", async () => {
@@ -403,6 +501,21 @@ describe("the MusicBrainz section", () => {
 
 describe("the Lyrics section", () => {
   const lyrics = () => within(screen.getByRole("region", { name: "Lyrics" }));
+
+  it("lets a member save Auto-Match without exposing household lyrics writes", async () => {
+    const { calls } = open(false, preferencesOf());
+    const user = userEvent.setup();
+    const preference = await lyrics().findByRole("combobox", { name: "Auto-Match lyrics" });
+
+    await user.selectOptions(preference, "direct");
+
+    expect(await lyrics().findByText("Saved.")).toBeVisible();
+    expect(lyrics().queryByRole("switch")).not.toBeInTheDocument();
+    expect(lyrics().queryByRole("radio")).not.toBeInTheDocument();
+    expect(calls).toContain("PUT /api/me/preferences");
+    expect(calls).not.toContain("GET /api/enrichers/lyrics");
+    expect(calls).not.toContain("PUT /api/settings");
+  });
 
   it("turns NetEase on at once, to be asked for the lyrics LRCLIB lacks", async () => {
     const sent: unknown[] = [];
@@ -524,6 +637,77 @@ describe("the Deezer section", () => {
 });
 
 describe("storage settings", () => {
+  it("translates measured bytes and startup flag descriptions in the open inspector", async () => {
+    open(true);
+    const user = userEvent.setup();
+    const language = await screen.findByRole("combobox", { name: "Language" });
+    await user.click(screen.getByRole("button", { name: "Inspect server storage" }));
+    await screen.findByRole("radio", { name: "Multiple accounts" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const composition = within(screen.getByRole("region", { name: "存储空间构成" }));
+      expect(composition.getByText("原始图片").closest("div")).toHaveTextContent("500 字节");
+      expect(composition.getByRole("radio", { name: "多个账号" })).toHaveAccessibleDescription(
+        "允许创建更多账号。",
+      );
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("requires confirmation when the requested removal preview is unavailable", async () => {
+    const { calls } = open(true, {
+      "GET /api/storage?limit=1000000000": {
+        body: { ...USING_2, error: "Cannot measure.", preview: null },
+      },
+    });
+    const user = userEvent.setup();
+    const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    await user.clear(size);
+    await user.type(size, "1");
+    await user.tab();
+
+    expect(
+      await screen.findByText(
+        "This limit may remove Downloads to fit, but what it removes couldn't be worked out.",
+      ),
+    ).toBeVisible();
+    expect(calls).not.toContain("PUT /api/settings");
+  });
+
+  it("asks again rather than replacing approved cache removals with fewer megabytes of downloads", async () => {
+    let requested = 0;
+    const { calls } = open(true, {
+      "GET /api/storage?limit=1000000000": () => ({
+        body: {
+          ...USING_2,
+          preview: {
+            removals:
+              ++requested === 1
+                ? [{ kind: "cache", size: 600_000_000 }]
+                : [
+                    { kind: "download", size: 200_000_000 },
+                    { kind: "download", size: 200_000_000 },
+                  ],
+          },
+        },
+      }),
+    });
+    const user = userEvent.setup();
+    const size = await screen.findByRole("spinbutton", { name: "Limit in GB" });
+    await user.clear(size);
+    await user.type(size, "1");
+    await user.tab();
+    await screen.findByText("Saving removes 1 prepared copy (600 MB) to fit.");
+
+    await user.click(screen.getByRole("button", { name: "Remove and save" }));
+
+    expect(await screen.findByText("Saving removes 2 downloads (400 MB) to fit.")).toBeVisible();
+    expect(calls).not.toContain("PUT /api/settings");
+  });
+
   it("shows all occupied managed files before the download limit and opens the breakdown from either control", async () => {
     const read = vi.fn(() => ({ body: MEASURED }));
     open(true, { "GET /api/storage/inspection": read });
@@ -1031,6 +1215,36 @@ describe("the Network section", () => {
     expect(network().getByText("On Wi-Fi, marked metered as “iPhone hotspot”.")).toBeVisible();
   });
 
+  it("translates the network status but keeps the name of a metered network as entered", async () => {
+    const browser = vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-US"]);
+    const checkedAt = "2026-10-27T19:05:06Z";
+    const mode = modeOf({
+      online: false,
+      reason: "metered",
+      network: { kind: "wifi", metered_as: "Search", hotspot_like: true },
+      checked_at: checkedAt,
+    });
+    const user = userEvent.setup();
+    try {
+      open(false, {}, mode);
+      expect(await network().findByText("Offline: on a metered network.")).toBeVisible();
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByText("离线：当前网络按流量计费。")).toBeVisible();
+      expect(screen.getByText("已连接 Wi-Fi，计费网络名称为「Search」。")).toBeVisible();
+      const time = new Intl.DateTimeFormat("zh-Hans", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(new Date(checkedAt));
+      expect(screen.getByText(`上次检查互联网连接的时间：${time}。`)).toBeVisible();
+    } finally {
+      browser.mockRestore();
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("says when the internet was last checked, and checks it now when asked", async () => {
     const unreachable = modeOf({ online: false, reason: "unreachable" });
     const checked = vi.fn();
@@ -1042,6 +1256,23 @@ describe("the Network section", () => {
     await waitFor(() => {
       expect(checked).toHaveBeenCalledWith(modeOf());
     });
+  });
+
+  it("keeps the British clock format when the device follows British English", async () => {
+    const browser = vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-GB"]);
+    const checkedAt = "2026-10-27T19:05:06Z";
+    const localTime = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(checkedAt));
+    try {
+      open(false, {}, modeOf({ checked_at: checkedAt }));
+
+      expect(await network().findByText(`Internet last checked at ${localTime}.`)).toBeVisible();
+    } finally {
+      browser.mockRestore();
+    }
   });
 
   it("says when a settling Mode goes Online, and how many downloads wait", async () => {
@@ -1094,6 +1325,30 @@ describe("the Network section", () => {
     });
   });
 
+  it.each([
+    {
+      detail: "The server can't tell which network it is on now, so it can't mark it.",
+      shown: "服务器无法识别当前网络，因此无法为其添加标记。",
+    },
+    { detail: "Search", shown: "Search" },
+  ])("translates only the known metered-network refusal: $detail", async ({ detail, shown }) => {
+    open(true, { "POST /api/mode/metered": { status: 409, body: { detail } } });
+    const user = userEvent.setup();
+    await user.type(await network().findByRole("textbox", { name: /Mark this network/ }), "Office");
+    await user.click(network().getByRole("button", { name: "Mark metered" }));
+    expect(await network().findByRole("alert")).toHaveTextContent(detail);
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(
+        within(screen.getByRole("region", { name: "网络" })).getByRole("alert").textContent,
+      ).toBe(shown);
+    } finally {
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
+  });
+
   it("says a network on a phone hotspot's usual subnet looks like one", async () => {
     const onAHotspot = modeOf({
       network: { kind: "wifi", metered_as: null, hotspot_like: true },
@@ -1116,6 +1371,27 @@ describe("the Network section", () => {
 
 describe("the Songs and albums section", () => {
   const kinds = () => within(screen.getByRole("region", { name: "Songs and albums" }));
+
+  it("translates album and storage help without changing the saved album threshold", async () => {
+    open(true);
+    const user = userEvent.setup();
+    const threshold = await screen.findByRole("spinbutton", { name: "Shortest album, in minutes" });
+    const current = threshold.getAttribute("value");
+    const language = screen.getByRole("combobox", { name: "Language" });
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByText(/轮廓图标表示类型是推测的/u)).toBeVisible();
+      expect(screen.getByRole("spinbutton", { name: "专辑的最短时长（分钟）" })).toHaveAttribute(
+        "value",
+        current,
+      );
+      expect(screen.getByText(/需要腾出空间时/u)).toBeVisible();
+      expect(screen.getByRole("spinbutton", { name: "存储上限（GB）" })).toHaveValue(20);
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
 
   it("saves turning off guessing that a long file is an album at once, and asks for the Tracks again", async () => {
     const sent: unknown[] = [];

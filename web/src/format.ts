@@ -2,6 +2,8 @@
  * @file How the page writes times.
  */
 
+import type { Words } from "./locale";
+
 /** Write `seconds` as minutes and seconds, such as `3:07`; an unknown length is `–:––`. */
 export function formatTime(seconds: number | undefined): string {
   if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
@@ -12,38 +14,50 @@ export function formatTime(seconds: number | undefined): string {
 }
 
 /** Write how many songs there are and how long they play, such as `12 songs, 48 min`. */
-export function formatLength(count: number, durationMs: number): string {
-  const songs = count === 1 ? "1 song" : `${String(count)} songs`;
+export function formatLength(count: number, durationMs: number, t?: Words): string {
+  const songs = t?.("song_count", { count }) ?? (count === 1 ? "1 song" : `${String(count)} songs`);
   const minutes = Math.round(durationMs / 60_000);
   if (minutes === 0) {
     return songs;
   }
-  const hours = Math.floor(minutes / 60);
-  const length =
-    hours === 0
-      ? `${String(minutes)} min`
-      : minutes % 60 === 0
-        ? `${String(hours)} hr`
-        : `${String(hours)} hr ${String(minutes % 60)} min`;
-  return `${songs}, ${length}`;
+  const length = shortMinutes(minutes, t);
+  return t?.("{{counted}}, {{length}}", { counted: songs, length }) ?? `${songs}, ${length}`;
 }
 
 /**
  * Write how many albums and songs the Library's items hold and how long they play,
  * such as `2 albums, 12 songs, 1 hr 40 min`; with no album, as `formatLength` does.
  */
-export function formatLibraryLength(albums: number, songs: number, durationMs: number): string {
-  const length = formatLength(songs, durationMs);
+export function formatLibraryLength(
+  albums: number,
+  songs: number,
+  durationMs: number,
+  t?: Words,
+): string {
+  const length = formatLength(songs, durationMs, t);
   if (albums === 0) {
     return length;
   }
-  return `${albums === 1 ? "1 album" : `${String(albums)} albums`}, ${length}`;
+  const counted =
+    t?.("album_count", { count: albums }) ??
+    (albums === 1 ? "1 album" : `${String(albums)} albums`);
+  return t?.("{{counted}}, {{length}}", { counted, length }) ?? `${counted}, ${length}`;
 }
 
 /** Write a length of minutes in words, such as `30 minutes` or `1 hour 30 minutes`. */
-export function formatMinutes(minutes: number): string {
+export function formatMinutes(minutes: number, t?: Words): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
+  if (t !== undefined) {
+    if (hours === 0) return rest === 0 ? "" : t("minute_count", { count: rest });
+    const duration = t("hour_count", { count: hours });
+    return rest === 0
+      ? duration
+      : t("{{hours}} {{minutes}}", {
+          hours: duration,
+          minutes: t("minute_count", { count: rest }),
+        });
+  }
   const inHours = hours === 0 ? "" : hours === 1 ? "1 hour" : `${String(hours)} hours`;
   const inMinutes = rest === 0 ? "" : rest === 1 ? "1 minute" : `${String(rest)} minutes`;
   return [inHours, inMinutes].filter(Boolean).join(" ");
@@ -53,60 +67,88 @@ export function formatMinutes(minutes: number): string {
  * Write about how long was listened to, such as `38 min` or `4 hr 12 min`; from ten
  * hours on, in whole hours, such as `43 hr`.
  */
-export function formatListened(ms: number): string {
+export function formatListened(ms: number, t?: Words): string {
   const minutes = Math.round(ms / 60_000);
   if (minutes === 0) {
-    return "Under 1 min";
+    return t?.("Under 1 min") ?? "Under 1 min";
   }
   if (minutes < 60) {
-    return `${String(minutes)} min`;
+    return t?.("{{minutes}} min", { minutes }) ?? `${String(minutes)} min`;
   }
   if (minutes >= 600) {
-    return `${String(Math.round(minutes / 60))} hr`;
+    const hours = Math.round(minutes / 60);
+    return t?.("{{hours}} hr", { hours }) ?? `${String(hours)} hr`;
   }
   const hours = Math.floor(minutes / 60);
   return minutes % 60 === 0
-    ? `${String(hours)} hr`
-    : `${String(hours)} hr ${String(minutes % 60)} min`;
+    ? (t?.("{{hours}} hr", { hours }) ?? `${String(hours)} hr`)
+    : (t?.("{{hours}} hr {{minutes}} min", { hours, minutes: minutes % 60 }) ??
+        `${String(hours)} hr ${String(minutes % 60)} min`);
 }
 
 /** Write the time left, rounded up to whole minutes, such as `29 min` or `1 hr 30 min`. */
-export function formatTimeLeft(ms: number): string {
-  const minutes = Math.max(1, Math.ceil(ms / 60_000));
-  const hours = Math.floor(minutes / 60);
-  if (hours === 0) {
-    return `${String(minutes)} min`;
-  }
-  return minutes % 60 === 0
-    ? `${String(hours)} hr`
-    : `${String(hours)} hr ${String(minutes % 60)} min`;
+export function formatTimeLeft(ms: number, t?: Words): string {
+  return shortMinutes(Math.max(1, Math.ceil(ms / 60_000)), t);
 }
 
-const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+function shortMinutes(minutes: number, t?: Words): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) {
+    return t?.("{{minutes}} min", { minutes }) ?? `${String(minutes)} min`;
+  }
+  return rest === 0
+    ? (t?.("{{hours}} hr", { hours }) ?? `${String(hours)} hr`)
+    : (t?.("{{hours}} hr {{minutes}} min", { hours, minutes: rest }) ??
+        `${String(hours)} hr ${String(rest)} min`);
+}
+
+const dayOptions = { month: "short", day: "numeric" } as const;
+const day = dateFormatOf(dayOptions);
 
 /**
  * Write how long ago something was seen, `now` being the time to count from:
  * `Just now`, `5 min ago`, `3 hr ago`, or its day, such as `Nov 7`.
  */
-export function formatSeen(at: number, now: number): string {
+export function formatSeen(at: number, now: number, presentation?: Presentation): string {
   const minutes = Math.floor((now - at) / 60_000);
   if (minutes < 1) {
-    return "Just now";
+    return presentation?.t("Just now") ?? "Just now";
   }
   if (minutes < 60) {
-    return `${String(minutes)} min ago`;
+    return presentation?.t("{{minutes}} min ago", { minutes }) ?? `${String(minutes)} min ago`;
   }
   const hours = Math.floor(minutes / 60);
-  return hours < 24 ? `${String(hours)} hr ago` : day.format(at);
+  if (hours < 24) {
+    return presentation?.t("{{hours}} hr ago", { hours }) ?? `${String(hours)} hr ago`;
+  }
+  return day(presentation?.locale).format(at);
 }
 
-const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
-const dayAndClock = new Intl.DateTimeFormat(undefined, {
+const clockOptions = { timeStyle: "short" } as const;
+const dayAndClockOptions = {
   weekday: "short",
   hour: "numeric",
   minute: "2-digit",
-});
+} as const;
+const clock = dateFormatOf(clockOptions);
+const dayAndClock = dateFormatOf(dayAndClockOptions);
 const WEEK_MS = 7 * 24 * 3_600_000;
+interface Presentation {
+  readonly locale: string;
+  readonly t: Words;
+}
+
+function dateFormatOf(options: Intl.DateTimeFormatOptions) {
+  const byLocale = new Map<string | undefined, Intl.DateTimeFormat>();
+  return (locale: string | undefined): Intl.DateTimeFormat => {
+    const existing = byLocale.get(locale);
+    if (existing !== undefined) return existing;
+    const format = new Intl.DateTimeFormat(locale, options);
+    byLocale.set(locale, format);
+    return format;
+  };
+}
 
 /**
  * Write what is queued and, given `ending`, when it ends: the time on the clock,
@@ -115,16 +157,23 @@ const WEEK_MS = 7 * 24 * 3_600_000;
  */
 export function formatQueueLength(
   count: number,
-  durationMs: number,
+  durationMs: number | undefined,
   ending?: { readonly now: Date; readonly at: Date },
+  presentation?: Presentation,
 ): string {
-  const length = formatLength(count, durationMs);
+  const t = presentation?.t;
+  if (durationMs === undefined) return formatLength(count, 0, t);
+  const length = formatLength(count, durationMs, t);
   if (ending === undefined || ending.at.getTime() - ending.now.getTime() >= WEEK_MS) {
     return length;
   }
   const { now, at } = ending;
   const today = at.toDateString() === now.toDateString();
-  return `${length}, ending around ${(today ? clock : dayAndClock).format(at)}`;
+  const time = (today ? clock : dayAndClock)(presentation?.locale).format(at);
+  return (
+    t?.("{{length}}, ending around {{time}}", { length, time }) ??
+    `${length}, ending around ${time}`
+  );
 }
 
 /**
@@ -132,31 +181,37 @@ export function formatQueueLength(
  * `12 min ago`, the time today, `Yesterday 9:14 PM`, `Mon 9:14 PM` within the
  * week, then the day, such as `Oct 25`.
  */
-export function formatPlayed(at: number, now: number): string {
+export function formatPlayed(at: number, now: number, presentation?: Presentation): string {
+  const t = presentation?.t;
   const minutes = Math.floor((now - at) / 60_000);
   if (minutes < 1) {
-    return "Just now";
+    return t?.("Just now") ?? "Just now";
   }
   if (minutes < 60) {
-    return `${String(minutes)} min ago`;
+    return t?.("{{minutes}} min ago", { minutes }) ?? `${String(minutes)} min ago`;
   }
   const played = new Date(at);
   const today = new Date(now);
   const yesterday = new Date(now);
   yesterday.setDate(today.getDate() - 1);
-  if (played.toDateString() === today.toDateString()) {
-    return clock.format(at);
+  if (
+    played.toDateString() === today.toDateString() ||
+    played.toDateString() === yesterday.toDateString()
+  ) {
+    const time = clock(presentation?.locale).format(at);
+    return played.toDateString() === today.toDateString()
+      ? time
+      : (t?.("Yesterday {{time}}", { time }) ?? `Yesterday ${time}`);
   }
-  if (played.toDateString() === yesterday.toDateString()) {
-    return `Yesterday ${clock.format(at)}`;
-  }
-  return now - at < WEEK_MS - 24 * 3_600_000 ? dayAndClock.format(at) : day.format(at);
+  const thisWeek = now - at < WEEK_MS - 24 * 3_600_000;
+  const format = (thisWeek ? dayAndClock : day)(presentation?.locale);
+  return format.format(at);
 }
 
 const UNITS = ["bytes", "KB", "MB", "GB", "TB"] as const;
 
 /** Write `bytes` in the decimal units Finder uses, such as `420 MB` or `3.2 GB`. */
-export function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number, t?: Words): string {
   let value = bytes;
   let unit = 0;
   while (value >= 1000 && unit < UNITS.length - 1) {
@@ -164,17 +219,25 @@ export function formatBytes(bytes: number): string {
     unit += 1;
   }
   const digits = unit === 0 || value >= 100 ? 0 : 1;
-  return `${value.toFixed(digits).replace(/\.0$/, "")} ${UNITS[unit] ?? "bytes"}`;
+  const label = UNITS[unit] ?? "bytes";
+  return `${value.toFixed(digits).replace(/\.0$/, "")} ${label === "bytes" ? (t?.(label) ?? label) : label}`;
 }
 
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
 /** Write how many follow an artist, such as `4.1M fans` or `1 fan`; empty when unknown. */
-export function formatFans(fans: number | null): string {
+export function formatFans(fans: number | null, t?: Words, locale?: string): string {
   if (fans === null) {
     return "";
   }
-  return fans === 1 ? "1 fan" : `${compact.format(fans)} fans`;
+  const amount =
+    locale === undefined
+      ? compact.format(fans)
+      : new Intl.NumberFormat(locale, { notation: "compact" }).format(fans);
+  return (
+    t?.(fans === 1 ? "{{amount}} fan" : "{{amount}} fans", { amount }) ??
+    (fans === 1 ? "1 fan" : `${amount} fans`)
+  );
 }
 
 const letters = new Intl.Segmenter();

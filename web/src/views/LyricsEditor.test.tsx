@@ -6,6 +6,7 @@ import type { Lyrics } from "../api";
 import type { ComponentProps } from "react";
 import { lyricsFoundOf, lyricsOf, lyricsOptionOf, serve, trackOf } from "../testing/server";
 import { LyricsEditor, type SyncPlayer } from "./LyricsEditor";
+import { LanguageSelect } from "./LanguageSelect";
 import { SongsControlsContext } from "./songsControls";
 
 /** *Melt* as plain lyrics, not synced yet: three lines. */
@@ -71,6 +72,29 @@ function editing(
 }
 
 describe("editing a song's lyrics", () => {
+  it("translates LRC help after a language switch without modifying the text to save", async () => {
+    const { region, save } = editing(null);
+    await within(region()).findByText("None yet");
+    const field = within(region()).getByRole("textbox", { name: "Lyrics, as LRC or plain text" });
+    const text = "[00:12.34]The lantern is still lit";
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await user.click(field);
+    await user.paste(text);
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const panel = within(screen.getByRole("region", { name: "歌词" }));
+      expect(panel.getByRole("textbox", { name: "歌词（LRC 或纯文本）" })).toHaveValue(text);
+      expect(panel.getByText(/例如 \[00:12.34\]/u)).toBeVisible();
+      await user.click(panel.getByRole("button", { name: "保存歌词" }));
+      expect(save).toHaveBeenCalledExactlyOnceWith(text, false);
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("starts from the lyrics shown, saying where they came from", async () => {
     const { region } = editing(lyricsOf());
 
@@ -88,6 +112,49 @@ describe("editing a song's lyrics", () => {
 
     expect(await within(region()).findByText("Found on LRCLIB")).toBeVisible();
     expect(within(region()).getByRole("textbox")).toHaveValue(PLAIN.text);
+  });
+
+  it("refreshes unchanged lyrics after a rejected save and keeps the right source with the text", async () => {
+    const { region, refresh, save } = editing(PLAIN);
+    await within(region()).findByText("Found on LRCLIB");
+    save.mockRejectedValueOnce(new Error("Temporarily unavailable."));
+    await userEvent.click(within(region()).getByRole("button", { name: "Save lyrics" }));
+    expect(await within(region()).findByRole("alert")).toHaveTextContent(
+      "Temporarily unavailable.",
+    );
+
+    refresh(() => Promise.resolve(lyricsOf({ origin: "household", text: "Updated words" })));
+
+    expect(await within(region()).findByText("Yours")).toBeVisible();
+    expect(within(region()).getByRole("textbox")).toHaveValue("Updated words");
+  });
+
+  it("offers recovery after a result read fails even without album or duration metadata", async () => {
+    let first = true;
+    serve({
+      "GET /api/tracks/7/lyrics/found": () => {
+        if (!first) return { body: lyricsFoundOf() };
+        first = false;
+        return { status: 503, body: { detail: "Read interrupted." } };
+      },
+    });
+    const { region } = editing(
+      null,
+      playingAt(0),
+      trackOf(7, "Melt", { artist: "ryo", album: "", duration_ms: null }),
+    );
+    const entry = within(region()).getByRole("button", { name: "Find" });
+    expect(within(region()).getByText(/Your provider may charge/u)).toBeVisible();
+    expect(entry).toHaveAccessibleDescription(/Your provider may charge/u);
+    await userEvent.click(entry);
+    const finder = within(screen.getByRole("region", { name: "Find lyrics" }));
+    expect(await finder.findByRole("alert")).toHaveTextContent("Read interrupted.");
+
+    await userEvent.click(finder.getByRole("button", { name: "Retry reading results" }));
+
+    expect(await finder.findByRole("list", { name: "Lyrics found" })).toBeVisible();
+    expect(finder.queryByRole("alert")).not.toBeInTheDocument();
+    expect(finder.getByRole("button", { name: "Find" })).toBeEnabled();
   });
 
   it("keeps a draft entered before the refresh finishes", async () => {
@@ -111,6 +178,8 @@ describe("editing a song's lyrics", () => {
     });
 
     expect(box).toHaveValue("My version");
+    expect(within(region()).getByText("Unsaved draft")).toBeVisible();
+    expect(within(region()).queryByText("Found on LRCLIB")).not.toBeInTheDocument();
     await userEvent.click(within(region()).getByRole("button", { name: "Save lyrics" }));
     expect(save).toHaveBeenCalledExactlyOnceWith("My version", false);
   });

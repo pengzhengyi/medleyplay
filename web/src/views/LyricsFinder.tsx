@@ -14,7 +14,7 @@ import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
 import { type LyricsFound, type LyricsOption, type Track, api } from "../api";
 import { formatTime } from "../format";
-import { useWords } from "../locale";
+import { type Words, useWords } from "../locale";
 import { LYRICS_SITE_NAMES, firstLinesOf } from "../lyrics";
 
 const READ_EVERY_MS = 2000;
@@ -27,16 +27,16 @@ function messageOf(failure: unknown): string {
 }
 
 /** Say what tells a song found apart, in a few words: *LRCLIB, Re:Start, 4:20, Timed*. */
-function aboutOf(option: LyricsOption): string {
+function aboutOf(option: LyricsOption, t: Words): string {
   const kind = option.instrumental
     ? "Instrumental"
     : firstLinesOf(option.text, 1).length > 0 && /^\s*\[\d/mu.test(option.text)
       ? "Timed"
       : "Plain";
   const length = option.duration_ms === null ? "" : formatTime(option.duration_ms / 1000);
-  return [LYRICS_SITE_NAMES[option.provider], option.album, length, kind]
+  return [LYRICS_SITE_NAMES[option.provider], option.album, length, t(kind)]
     .filter(Boolean)
-    .join(", ");
+    .join(t(", "));
 }
 
 /**
@@ -60,6 +60,7 @@ export function LyricsFinder({
   // Counts the reads asked for, so each asks the server again.
   const [reads, setReads] = useState(0);
   const [error, setError] = useState("");
+  const [readFailure, setReadFailure] = useState("");
   const [asking, setAsking] = useState({ title, artist });
   // The sites are asked once on opening, never looked for before.
   const asked = useRef(false);
@@ -100,12 +101,13 @@ export function LyricsFinder({
     api.lyricsFound(trackId).then(
       (known) => {
         if (current) {
+          setReadFailure("");
           onRead(known);
         }
       },
       (failure: unknown) => {
         if (current) {
-          setError(messageOf(failure));
+          setReadFailure(messageOf(failure));
         }
       },
     );
@@ -128,18 +130,23 @@ export function LyricsFinder({
   const failure = error || state?.failure;
   const pick = state?.pick ?? null;
   return (
-    <section className="lyrics-finder" aria-label="Find lyrics">
+    <section className="lyrics-finder" aria-label={t("Find lyrics")}>
+      <p className="hint">
+        {t(
+          "Search lyric sites by title and artist. When available, AI may suggest which result matches. Using a result fills the editor; it does not replace saved lyrics until you save.",
+        )}
+      </p>
       <form
         className="lyrics-finder-ask"
         onSubmit={(event) => {
           event.preventDefault();
-          if (asking.title.trim() !== "") {
+          if (!busy && !finding && !readFailure && asking.title.trim() !== "") {
             find(asking);
           }
         }}
       >
         <label className="lyrics-finder-label" htmlFor={titleId}>
-          Title
+          {t("Title")}
         </label>
         <input
           id={titleId}
@@ -153,7 +160,7 @@ export function LyricsFinder({
           }}
         />
         <label className="lyrics-finder-label" htmlFor={artistId}>
-          Artist
+          {t("Artist")}
         </label>
         <input
           id={artistId}
@@ -170,9 +177,9 @@ export function LyricsFinder({
           type="submit"
           className="dialog-button"
           aria-busy={finding && state !== undefined}
-          disabled={busy || finding || asking.title.trim() === ""}
+          disabled={busy || finding || readFailure !== "" || asking.title.trim() === ""}
         >
-          Find
+          {t("Find")}
         </button>
       </form>
       {(album !== "" || duration !== null) && (
@@ -184,29 +191,62 @@ export function LyricsFinder({
           )}
         </p>
       )}
-      {finding && state !== undefined && (
+      {state === undefined && !failure && readFailure === "" && (
+        <p role="status" aria-busy="true">
+          {t("Reading lyric search results…")}
+        </p>
+      )}
+      {readFailure !== "" && (
+        <>
+          <p role="alert">
+            {t("Could not read lyric search results: {{detail}}", { detail: readFailure })}
+          </p>
+          <button
+            type="button"
+            className="secondary link-button"
+            disabled={busy}
+            onClick={() => {
+              setReadFailure("");
+              readAgain();
+            }}
+          >
+            {t("Retry reading results")}
+          </button>
+        </>
+      )}
+      {finding && state !== undefined && readFailure === "" && (
         <p className="lyrics-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-          {state.waiting ? "Waiting for Online to look for lyrics…" : "Looking for lyrics…"}
+          {t(state.waiting ? "Waiting for Online to look for lyrics…" : "Looking for lyrics…")}
         </p>
       )}
       {failure && (
         <p className="lyrics-finder-note error" role="alert">
-          {failure}
+          {t("Could not look for lyrics: {{detail}}", { detail: failure })}
         </p>
       )}
-      {!finding && !failure && state.found_at !== null && options.length === 0 && (
-        <p className="lyrics-finder-note">
-          {state.artist === ""
-            ? `Nothing found for “${state.title}”.`
-            : `Nothing found for “${state.title}” by ${state.artist}.`}
-        </p>
-      )}
+      {!finding &&
+        !failure &&
+        readFailure === "" &&
+        state.found_at !== null &&
+        options.length === 0 && (
+          <p className="lyrics-finder-note">
+            {state.artist === ""
+              ? t("Nothing found for “{{title}}”.", { title: state.title })
+              : t("Nothing found for “{{title}}” by {{artist}}.", {
+                  title: state.title,
+                  artist: state.artist,
+                })}
+          </p>
+        )}
       {options.length > 0 && (
-        <ul className="lyrics-found" aria-label="Lyrics found">
+        <ul className="lyrics-found" aria-label={t("Lyrics found")}>
           {options.map((option, at) => {
             const named =
-              option.artist === "" ? option.title : `${option.title} by ${option.artist}`;
+              option.artist === ""
+                ? option.title
+                : t("{{title}} by {{artist}}", { title: option.title, artist: option.artist });
+            const about = aboutOf(option, t);
             const picked = pick?.option === at ? pick : null;
             return (
               <li
@@ -215,8 +255,12 @@ export function LyricsFinder({
                 key={`${option.provider}-${String(at)}`}
                 aria-label={
                   picked === null
-                    ? `${named}, ${aboutOf(option)}`
-                    : `${named}, ${aboutOf(option)}, the AI's pick: ${picked.why}`
+                    ? t("{{name}}, {{about}}", { name: named, about })
+                    : t("{{name}}, {{about}}, the AI's pick: {{reason}}", {
+                        name: named,
+                        about,
+                        reason: picked.why,
+                      })
                 }
               >
                 <div className="lyrics-found-about">
@@ -224,10 +268,13 @@ export function LyricsFinder({
                     {picked !== null && (
                       <span
                         className="lyrics-found-pick"
-                        title={`${picked.model} picked this: ${picked.why}`}
+                        title={t("{{model}} picked this: {{reason}}", {
+                          model: picked.model,
+                          reason: picked.why,
+                        })}
                       >
                         <SparkleIcon weight="fill" aria-hidden />
-                        AI pick
+                        {t("AI pick")}
                       </span>
                     )}
                     <strong className="lyrics-found-title">{option.title}</strong>
@@ -235,7 +282,7 @@ export function LyricsFinder({
                       <span className="lyrics-found-artist"> {option.artist}</span>
                     )}
                   </span>
-                  <small className="lyrics-found-meta">{aboutOf(option)}</small>
+                  <small className="lyrics-found-meta">{about}</small>
                   {!option.instrumental && (
                     <span className="lyrics-found-lines lyrics-found-line">
                       {firstLinesOf(option.text).join(" ")}
@@ -246,12 +293,15 @@ export function LyricsFinder({
                   type="button"
                   className="dialog-button"
                   disabled={busy}
-                  title={`Use the lyrics of ${named}, found on ${LYRICS_SITE_NAMES[option.provider]}`}
+                  title={t("Use the lyrics of {{name}}, found on {{site}}", {
+                    name: named,
+                    site: LYRICS_SITE_NAMES[option.provider],
+                  })}
                   onClick={() => {
                     onUse(option);
                   }}
                 >
-                  Use
+                  {t("Use")}
                 </button>
               </li>
             );
@@ -261,12 +311,14 @@ export function LyricsFinder({
       {state?.choosing === true && (
         <p className="lyrics-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-          Asking the AI which is this song…
+          {t("Asking the AI which is this song…")}
         </p>
       )}
       {state?.choice_failure && (
         <p className="lyrics-finder-note error" role="alert">
-          {state.choice_failure}
+          {t("Could not get the AI's lyric suggestion: {{detail}}", {
+            detail: state.choice_failure,
+          })}
         </p>
       )}
     </section>

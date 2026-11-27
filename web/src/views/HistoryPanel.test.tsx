@@ -1,10 +1,11 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { HistoryLength, Played, Track } from "../api";
+import { type HistoryLength, type Played, type Track, api } from "../api";
 import { App } from "../App";
 import { historyOf, preferencesOf, serve, signedIn, trackOf } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -29,12 +30,23 @@ function playedAgo(number: number, track: Track, minutes: number): Played {
  */
 async function playingIntroWithHistory(
   plays: readonly Played[],
-  { tracks = [INTRO, LONG_ROAD, OUTRO], length = null as HistoryLength | null } = {},
+  {
+    tracks = [INTRO, LONG_ROAD, OUTRO],
+    length = null as HistoryLength | null,
+    readFailure = "",
+    clearFailure = "",
+  } = {},
 ) {
   const { calls } = serve({
     ...signedIn(tracks),
     ...preferencesOf(null, length),
     ...historyOf(plays),
+    ...(readFailure === ""
+      ? {}
+      : { "GET /api/plays?limit=50": { status: 503, body: { detail: readFailure } } }),
+    ...(clearFailure === ""
+      ? {}
+      : { "DELETE /api/plays": { status: 503, body: { detail: clearFailure } } }),
     ...Object.fromEntries(
       tracks.map(({ id }) => [
         `POST /api/tracks/${String(id)}/playback`,
@@ -126,6 +138,25 @@ describe("History", () => {
     expect(within(panel).getByText(/^Nothing played yet\./u)).toBeInTheDocument();
   });
 
+  it("translates an open history failure without changing the diagnostic detail", async () => {
+    await playingIntroWithHistory([], { readFailure: "Playback database unavailable." });
+    const panel = within(await openHistory());
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      expect(await panel.findByRole("alert")).toHaveTextContent(
+        "Could not read listening history: Playback database unavailable.",
+      );
+      await userEvent.selectOptions(language, "zh-Hans");
+      expect(panel.getByRole("alert")).toHaveTextContent(
+        "无法读取播放记录：Playback database unavailable.",
+      );
+      expect(panel.queryByRole("status")).toBeNull();
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
+
   it("plays a song now and leaves Up next as it was", async () => {
     await playingIntroWithHistory([playedAgo(1, OUTRO, 12)]);
     const panel = await openHistory();
@@ -159,6 +190,42 @@ describe("History", () => {
     expect(within(panel).getByRole("button", { name: /^Play Outro,/u })).toBeDisabled();
   });
 
+  it("keeps a refused clear visible when an older refresh finishes", async () => {
+    const play = playedAgo(1, OUTRO, 12);
+    await playingIntroWithHistory([play], { clearFailure: "Database refused clear." });
+    const panel = await openHistory();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    let finish: (plays: Played[]) => void = () => undefined;
+    const earlier = new Promise<Played[]>((resolve) => {
+      finish = resolve;
+    });
+    const read = vi.spyOn(api, "history").mockReturnValueOnce(earlier);
+
+    try {
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(read).toHaveBeenCalledOnce();
+      const queue = screen.getByRole("region", { name: "Up next" });
+      await userEvent.click(within(queue).getByRole("button", { name: "Clear" }));
+      const question = within(queue).getByRole("group", { name: "Clear History" });
+      await userEvent.click(within(question).getByRole("button", { name: "Clear" }));
+      await within(panel).findByRole("alert");
+      await userEvent.selectOptions(language, "zh-Hans");
+
+      await act(async () => {
+        finish([play]);
+        await earlier;
+      });
+
+      expect(within(panel).getByRole("alert")).toHaveTextContent(
+        "无法清除播放记录：Database refused clear.",
+      );
+      expect(titlesIn(panel)).toEqual(["Outro"]);
+    } finally {
+      read.mockRestore();
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
+
   it("clears on every device once asked again, and not before", async () => {
     const calls = await playingIntroWithHistory([playedAgo(1, OUTRO, 12)]);
     const panel = await openHistory();
@@ -179,7 +246,7 @@ describe("History", () => {
 
     const panel = await openHistory();
 
-    expect(within(panel).getByRole("combobox", { name: /Keeps the last/u })).toHaveValue("100");
+    expect(within(panel).getByRole("combobox", { name: /Show the latest/u })).toHaveValue("100");
     expect(calls).toContain("GET /api/plays?limit=100");
   });
 
@@ -188,7 +255,7 @@ describe("History", () => {
     const panel = await openHistory();
 
     await userEvent.selectOptions(
-      within(panel).getByRole("combobox", { name: /Keeps the last/u }),
+      within(panel).getByRole("combobox", { name: /Show the latest/u }),
       "25",
     );
 

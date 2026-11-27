@@ -117,6 +117,7 @@ const IN_PLACE = 0.25;
 
 const UNPLAYABLE: Record<string, string> = {
   offline: "This Track's Library is offline.",
+  waiting_online: "This Track can play once medleyplay is Online.",
   unavailable: "This Track is unavailable.",
   missing: "This Track's file is missing.",
   cant_play: "This Track can't be played.",

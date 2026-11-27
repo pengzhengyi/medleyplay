@@ -88,7 +88,7 @@ describe("an album's cover on its page", () => {
     await userEvent.upload(within(editor).getByLabelText("Choose a cover file"), IMAGE);
     await userEvent.click(within(editor).getByRole("button", { name: "Use this cover" }));
 
-    expect(onUpload).toHaveBeenCalledWith(FANTASY, IMAGE);
+    expect(onUpload).toHaveBeenCalledWith(FANTASY, IMAGE, { album: "范特西", artist: "周杰伦" });
   });
 
   it("only shows the cover when it can't be changed here", () => {
@@ -144,7 +144,10 @@ describe("a cover suggested for an album without one", () => {
       await screen.findByRole("button", { name: "Use the suggested cover of Help!" }),
     );
 
-    expect(onUse).toHaveBeenCalledWith(HELP, "cover-1965");
+    expect(onUse).toHaveBeenCalledWith(HELP, "cover-1965", {
+      album: "Help!",
+      artist: "The Beatles",
+    });
   });
 
   it("is dismissed in one click, and the empty cover stands again", async () => {
@@ -166,8 +169,8 @@ describe("a cover suggested for an album without one", () => {
     expect(sent).toEqual([{ album: "Help!", artist: "The Beatles", cover: "cover-1965" }]);
   });
 
-  it("opens the cover editor on MusicBrainz to choose another", async () => {
-    serve({ [HELP_COVERS]: { body: helpFound({ suggested: "cover-1965" }) } });
+  it("shows the search disclosure before opening MusicBrainz to choose another cover", async () => {
+    const { calls } = serve({ [HELP_COVERS]: { body: helpFound({ suggested: "cover-1965" }) } });
     help();
 
     await userEvent.click(
@@ -175,9 +178,11 @@ describe("a cover suggested for an album without one", () => {
     );
 
     const editor = await screen.findByRole("dialog", { name: "Add a cover" });
-    expect(within(editor).getByRole("tab", { name: /MusicBrainz/u })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(within(editor).getByText(/your provider may charge/u)).toBeVisible();
+    expect(calls.filter((call) => call === HELP_COVERS)).toHaveLength(1);
+    await userEvent.click(within(editor).getByRole("tab", { name: "MusicBrainz" }));
+    expect(
+      await within(editor).findByRole("region", { name: "Covers on MusicBrainz" }),
+    ).toBeVisible();
   });
 });

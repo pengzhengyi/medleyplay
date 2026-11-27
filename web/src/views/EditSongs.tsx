@@ -61,16 +61,25 @@ import {
   useState,
 } from "react";
 
-import type { ListCheck, PlaybackAnswer, Silences, Song, SongRowIn, Songs, Track } from "../api";
+import {
+  ApiError,
+  type ListCheck,
+  type PlaybackAnswer,
+  type Silences,
+  type Song,
+  type SongRowIn,
+  type Songs,
+  type Track,
+} from "../api";
+import { composing } from "../ime";
 import { newId } from "../ids";
 import { formatLength, formatTime } from "../format";
 import { checkParts, endOf, keptIds, listTextOf } from "../library/songList";
 import { countsDisagree, doubtsOf } from "../library/splitDoubts";
 import { formatStart, parseStart } from "../library/songTimes";
 import type { TrackLookup } from "../library/useLibrary";
-import { aiNameOf } from "../library/aiAnswer";
 import { snapStarts } from "../library/snap";
-import { useWords } from "../locale";
+import { type Words, useWords } from "../locale";
 import { AiNotePanel } from "./AiNotePanel";
 import { AlbumLyricsMatch, SongLyricsButton } from "./AlbumLyricsMatch";
 import { AiSetUpHint } from "./AiSetUpHint";
@@ -133,10 +142,26 @@ const GAPS_EVERY_MS = 500;
 const MAX_SONGS = 300;
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
-const INSTRUCTIONS = {
-  draggable:
-    "To reorder, press Space to pick the song up, the arrow keys to move it, and Space again to drop it. Escape puts it back.",
-};
+const INSTRUCTIONS =
+  "To reorder, press Space to pick the song up, the arrow keys to move it, and Space again to drop it. Escape puts it back.";
+
+interface SongNote {
+  readonly key: string;
+  readonly values?: Readonly<Record<string, string | number>>;
+  readonly fallbackModel?: "the AI" | "The AI";
+}
+
+const said = (note: SongNote | string, t: Words) =>
+  typeof note === "string"
+    ? note === ""
+      ? ""
+      : t(note)
+    : t(
+        note.key,
+        note.fallbackModel === undefined
+          ? (note.values ?? {})
+          : { ...note.values, model: t(note.fallbackModel) },
+      );
 
 /**
  * Edit the songs `album`'s file is split into, read with `load`; `check` checks a
@@ -176,7 +201,7 @@ export function SongsEditor({
     known: readonly number[],
     lyricPicks?: readonly number[],
   ) => Promise<void>;
-  readonly onUnsplit: () => Promise<void>;
+  readonly onUnsplit: (known: readonly number[]) => Promise<void>;
   readonly lyricsOf: (trackId: number) => ReactNode;
   readonly matchOnline: boolean;
   readonly matchRevision?: number;
@@ -194,7 +219,7 @@ export function SongsEditor({
   const [typing, setTyping] = useState(false);
   // The songs the list typed comes to, once it checks clean.
   const [listed, setListed] = useState<readonly Song[] | undefined>(undefined);
-  const [fillNote, setFillNote] = useState("");
+  const [fillNote, setFillNote] = useState<SongNote | string>("");
   const [askedAi, setAskedAi] = useState(false);
   // Whether the rows are the AI's answer as it gave it, so pressing AI asks again.
   const [fromAi, setFromAi] = useState(false);
@@ -211,9 +236,11 @@ export function SongsEditor({
   // The rows a snap moved, until the next edit, and the rows before it, to undo it.
   const [snapped, setSnapped] = useState<ReadonlySet<string>>(new Set());
   const [beforeSnap, setBeforeSnap] = useState<readonly Row[] | undefined>(undefined);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<SongNote | string>("");
   // Set once saving or unsplitting has said what it removes, so the next press goes ahead.
   const [confirming, setConfirming] = useState<"save" | "unsplit" | undefined>(undefined);
+  const [unsplitKnown, setUnsplitKnown] = useState<readonly number[]>([]);
+  const rowRevision = useRef(0);
   const audio = useRef<HTMLAudioElement | null>(null);
   // The parts left to play of what is playing, and which row's it is.
   const plan = useRef<{ key: string; parts: { from: number; to: number }[] } | null>(null);
@@ -253,7 +280,7 @@ export function SongsEditor({
     [stopPlan],
   );
   const [heard, setHeard] = useState(false);
-  const [audioNote, setAudioNote] = useState("");
+  const [audioNote, setAudioNote] = useState<SongNote | string>("");
   // Each play's number, so only the latest seeks and plays.
   const listening = useRef(0);
   // The file's answer while it is asked for, so plays pressed meanwhile ask once.
@@ -276,6 +303,7 @@ export function SongsEditor({
       (loaded) => {
         if (open) {
           setSongs(loaded);
+          rowRevision.current += 1;
           setRows(
             loaded.songs.map((song) => ({ ...rowOf(song, song.id), trackId: song.track_id })),
           );
@@ -283,7 +311,10 @@ export function SongsEditor({
       },
       (failure: unknown) => {
         if (open) {
-          setError(messageOf(failure));
+          setError({
+            key: "Could not read the songs: {{detail}}",
+            values: { detail: messageOf(failure) },
+          });
         }
       },
     );
@@ -293,6 +324,7 @@ export function SongsEditor({
   }, [album.id, load]);
 
   const edit = (next: readonly Row[]) => {
+    rowRevision.current += 1;
     setRows(next);
     setSnapped(new Set());
     setBeforeSnap(undefined);
@@ -320,17 +352,32 @@ export function SongsEditor({
     }));
   };
   const rowsOfList = (list: readonly Song[]) => namedRows(list).map((song) => rowOf(song, song.id));
-  const fill = (list: readonly Song[], from: string, byAi = false) => {
+  const fill = (list: readonly Song[], from: "video" | "list" | "ai", model?: string) => {
     edit(rowsOfList(list));
-    setFillNote(`${songCount(list.length)} ${from}${byAi ? ", starts estimated" : ""}`);
-    setFromAi(byAi);
+    const key =
+      from === "ai"
+        ? "songs_filled_ai"
+        : from === "video"
+          ? "songs_filled_video"
+          : "songs_filled_list";
+    setFillNote({
+      key,
+      values: { count: list.length, ...(model === undefined ? {} : { model }) },
+      ...(from === "ai" && model === undefined ? { fallbackModel: "the AI" } : {}),
+    });
+    setFromAi(from === "ai");
   };
   /** Move each start to the gap in the audio nearest it, finding the gaps first if need be. */
   const snap = async () => {
+    const revision = rowRevision.current;
     setSnapping(true);
     setFillNote("Finding the gaps in the audio…");
     try {
       const known = await gapsOf(album.id, silences);
+      if (revision !== rowRevision.current) {
+        setFillNote("The song list changed while finding gaps. Try aligning again.");
+        return;
+      }
       if (known.state !== "found") {
         setFillNote(
           known.state === "no_tool"
@@ -342,7 +389,7 @@ export function SongsEditor({
       const starts = rows.map(startOf);
       const next = snapStarts(starts, known.silences);
       const moved = new Set(rows.filter((_, i) => next[i] !== starts[i]).map((row) => row.key));
-      setBeforeSnap(rows);
+      if (moved.size > 0) setBeforeSnap(rows);
       setSnapped(moved);
       setRows(
         rows.map((row, i) => {
@@ -353,10 +400,16 @@ export function SongsEditor({
       setFillNote(
         moved.size === 0
           ? "No start had a gap in the audio within half a minute."
-          : `Moved ${String(moved.size)} of ${String(rows.length - 1)} starts to the gaps in the audio.`,
+          : {
+              key: "Moved {{moved}} of {{total}} starts to the gaps in the audio.",
+              values: { moved: moved.size, total: rows.length - 1 },
+            },
       );
     } catch (failure) {
-      setFillNote(messageOf(failure));
+      setFillNote({
+        key: "Could not find the audio gaps: {{detail}}",
+        values: { detail: messageOf(failure) },
+      });
     } finally {
       setSnapping(false);
     }
@@ -384,19 +437,29 @@ export function SongsEditor({
     if (ai.state === "failed") {
       // The songs stay as they were; any earlier answer is still there to use.
       setAiOutcome("failed");
-      setFillNote(`The AI couldn't say: ${ai.message}`);
+      setFillNote({ key: "The AI couldn't say: {{detail}}", values: { detail: ai.message } });
       return;
     }
     setAiOutcome("answered");
     if (loaded.suggested.length > 0 && editedSinceAsking) {
       // Rows changed while it was asked stay; pressing AI uses its songs.
-      setFillNote(
-        `${aiNameOf(loaded.suggested_by, true)} answered with ${songCount(loaded.suggested.length)}: press AI to use them.`,
-      );
+      setFillNote({
+        key: "songs_ai_answered",
+        values: {
+          count: loaded.suggested.length,
+          ...(loaded.suggested_by == null ? {} : { model: loaded.suggested_by.model }),
+        },
+        ...(loaded.suggested_by == null ? { fallbackModel: "The AI" } : {}),
+      });
     } else if (loaded.suggested.length > 0) {
-      fill(loaded.suggested, `from ${aiNameOf(loaded.suggested_by)}`, true);
+      fill(loaded.suggested, "ai", loaded.suggested_by?.model);
     } else {
-      setFillNote(`${aiNameOf(loaded.suggested_by, true)} found no song list for this file.`);
+      setFillNote({
+        key: "{{model}} found no song list for this file.",
+        ...(loaded.suggested_by == null
+          ? { fallbackModel: "The AI" }
+          : { values: { model: loaded.suggested_by.model } }),
+      });
     }
   });
   useEffect(() => {
@@ -413,7 +476,10 @@ export function SongsEditor({
       (failure: unknown) => {
         if (open) {
           setAskedAi(false);
-          setFillNote(messageOf(failure));
+          setFillNote({
+            key: "Could not read the song list: {{detail}}",
+            values: { detail: messageOf(failure) },
+          });
         }
       },
     );
@@ -449,7 +515,8 @@ export function SongsEditor({
     try {
       await work();
     } catch (failure) {
-      setError(messageOf(failure));
+      setConfirming(undefined);
+      setError(songWriteError(failure));
     } finally {
       setBusy(false);
     }
@@ -500,7 +567,10 @@ export function SongsEditor({
       // A newer file or the editor closing stopped this play, which isn't a fault.
       if (!(failure instanceof DOMException && failure.name === "AbortError")) {
         stopPlan();
-        setAudioNote(messageOf(failure));
+        setAudioNote({
+          key: "Could not play the file: {{detail}}",
+          values: { detail: messageOf(failure) },
+        });
       }
     }
   };
@@ -517,7 +587,7 @@ export function SongsEditor({
     const starts = rows.map(startOf);
     const from = starts[index];
     if (from === undefined) {
-      setAudioNote(`Song ${String(index + 1)} starts at no time; write it as 3:12 or 1:07:40.`);
+      setAudioNote(startNeeded(index + 1));
       return;
     }
     const to = endOf(starts, index, songs?.length_ms ?? null) ?? Number.POSITIVE_INFINITY;
@@ -534,19 +604,29 @@ export function SongsEditor({
     }
   };
   const named = (row: Row | undefined, place: number) =>
-    row === undefined || row.title.trim() === "" ? `Song ${String(place + 1)}` : `“${row.title}”`;
+    row === undefined || row.title.trim() === ""
+      ? t("Song {{number}}", { number: place + 1 })
+      : t("“{{title}}”", { title: row.title });
   const placeOf = (id: UniqueIdentifier | undefined) => rows.findIndex((row) => row.key === id);
   const announcements: Announcements = {
     onDragStart: ({ active }) =>
-      `Picked up ${named(rows[placeOf(active.id)], placeOf(active.id))}.`,
+      t("Picked up {{name}}.", { name: named(rows[placeOf(active.id)], placeOf(active.id)) }),
     onDragOver: ({ active, over }) =>
       over === null || over.id === active.id
         ? undefined
-        : `${named(rows[placeOf(active.id)], placeOf(active.id))} would be song ${String(placeOf(over.id) + 1)}.`,
+        : t("{{name}} would be song {{number}}.", {
+            name: named(rows[placeOf(active.id)], placeOf(active.id)),
+            number: placeOf(over.id) + 1,
+          }),
     onDragEnd: ({ active, over }) =>
-      `${named(rows[placeOf(active.id)], placeOf(active.id))} is song ${String(placeOf(over?.id ?? active.id) + 1)}.`,
+      t("{{name}} is song {{number}}.", {
+        name: named(rows[placeOf(active.id)], placeOf(active.id)),
+        number: placeOf(over?.id ?? active.id) + 1,
+      }),
     onDragCancel: ({ active }) =>
-      `${named(rows[placeOf(active.id)], placeOf(active.id))} stays where it was.`,
+      t("{{name}} stays where it was.", {
+        name: named(rows[placeOf(active.id)], placeOf(active.id)),
+      }),
   };
   const drop = ({ active, over }: DragEndEvent) => {
     if (over !== null && active.id !== over.id) {
@@ -557,7 +637,8 @@ export function SongsEditor({
   const split = (songs?.songs.length ?? 0) > 0;
   const kept = new Set(rows.flatMap((row) => (row.id === null ? [] : [row.id])));
   const removing = songs?.songs.filter((song) => !kept.has(song.id)).length ?? 0;
-  const thinking = askedAi && !aiDone;
+  const thinking =
+    askedAi && (ai.state === "waiting" || ai.state === "queued" || ai.state === "running");
   /** Stop asking the AI; the rows stay as they are. */
   const stopAi = () => {
     ai.stop();
@@ -591,7 +672,7 @@ export function SongsEditor({
   /** Save `saved`, asking first when that removes songs. */
   const saveRows = (saved: readonly Row[], confirmed: boolean) => {
     const sent = rowsIn(saved, songs?.length_ms ?? null);
-    if (typeof sent === "string") {
+    if (!Array.isArray(sent)) {
       setError(sent);
       return;
     }
@@ -618,6 +699,7 @@ export function SongsEditor({
   };
   const save = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (busy || snapping || thinking) return;
     if (!typing) {
       saveRows(rows, confirming === "save");
       return;
@@ -627,17 +709,19 @@ export function SongsEditor({
     }
     // The list becomes the rows, shown while they save, or while removing songs is asked.
     const next = rowsOfList(listed);
-    fill(listed, "from the list");
+    fill(listed, "list");
     setTyping(false);
     saveRows(next, false);
   };
   const unsplit = () => {
+    if (busy || snapping || thinking || songs === undefined) return;
     if (confirming !== "unsplit") {
+      setUnsplitKnown(songs.songs.map((song) => song.id));
       setConfirming("unsplit");
       return;
     }
     void run(async () => {
-      await onUnsplit();
+      await onUnsplit(unsplitKnown);
       onDone();
     });
   };
@@ -651,14 +735,17 @@ export function SongsEditor({
   const disagree =
     songs === undefined
       ? null
-      : countsDisagree([
-          ...songs.found
-            .filter((list) => list.length > 0)
-            .map((list) => ({ name: "the video", count: list.length })),
-          ...(songs.suggested.length > 0
-            ? [{ name: aiNameOf(songs.suggested_by), count: songs.suggested.length }]
-            : []),
-        ]);
+      : countsDisagree(
+          [
+            ...songs.found
+              .filter((list) => list.length > 0)
+              .map((list) => ({ name: t("the video"), count: list.length })),
+            ...(songs.suggested.length > 0
+              ? [{ name: songs.suggested_by?.model ?? t("the AI"), count: songs.suggested.length }]
+              : []),
+          ],
+          t,
+        );
 
   const {
     results: lyricResults,
@@ -690,8 +777,9 @@ export function SongsEditor({
       ? []
       : namedRows(listed)
     : rowsIn(rows, songs?.length_ms ?? null);
-  const pickCount =
-    typeof proposed === "string" ? 0 : readyLyricPicks(songs, proposed, lyricResults).length;
+  const pickCount = Array.isArray(proposed)
+    ? readyLyricPicks(songs, proposed, lyricResults).length
+    : 0;
   const childLyrics = lyricsTrack !== null && (
     <Modal
       ref={lyricsDialog}
@@ -712,14 +800,14 @@ export function SongsEditor({
         <SongsControlsContext
           value={{
             headingId: lyricsHeading,
-            backLabel: "Songs",
+            backLabel: t("Songs"),
             onBack: closeLyrics,
             onDone: closeLyrics,
             onLock: setLyricsLocked,
           }}
         >
           {lyricsOf(lyricsTrack) ?? (
-            <h2 id={lyricsHeading}>This song is no longer in the album.</h2>
+            <h2 id={lyricsHeading}>{t("This song is no longer in the album.")}</h2>
           )}
         </SongsControlsContext>
       </div>
@@ -728,40 +816,40 @@ export function SongsEditor({
   const listForm = (
     <form className="songs-panel" onSubmit={save}>
       <header className="songs-heading">
-        <button type="button" className="songs-back" onClick={onBack}>
+        <button type="button" className="songs-back" onClick={onBack} disabled={busy}>
           <CaretLeftIcon weight="bold" aria-hidden />
-          Details
+          {t("Details")}
         </button>
         <h2 id={headingId} className="songs-title" tabIndex={-1}>
-          {split ? "Songs" : "Split into songs"}
+          {t(split ? "Songs" : "Split into songs")}
         </h2>
         <p className="edit-details-song">{album.title}</p>
       </header>
       {songs === undefined && error === "" && (
         <p className="empty" role="status">
-          Reading the songs…
+          {t("Reading the songs…")}
         </p>
       )}
       {songs !== undefined && (
         <>
           {songs.needs_check && (
             <p className="songs-note">
-              The file's length changed since it was split; check where each song starts.
+              {t("The file's length changed since it was split; check where each song starts.")}
             </p>
           )}
           <div className="songs-fill">
             <button
               type="button"
               className={typing ? "fill-button on" : "fill-button"}
-              aria-label="Fill from a list"
+              aria-label={t("Fill from a list")}
               aria-pressed={typing}
-              disabled={busy}
-              title="Type or paste the songs as a list"
+              disabled={busy || snapping}
+              title={t("Type or paste the songs as a list")}
               onClick={() => {
                 setTyping((open) => !open);
               }}
             >
-              <TextAlignLeftIcon aria-hidden /> List
+              <TextAlignLeftIcon aria-hidden /> {t("List")}
             </button>
             {songs.found.map((list, index) => (
               <button
@@ -769,11 +857,15 @@ export function SongsEditor({
                 type="button"
                 className="fill-button"
                 disabled={busy}
-                aria-label={`Fill from the video's ${songCount(list.length)}`}
-                title={`The ${songCount(list.length)} the video's details list`}
+                aria-label={t("Fill from the video's {{songs}}", {
+                  songs: songCount(list.length, t),
+                })}
+                title={t("The {{songs}} the video's details list", {
+                  songs: songCount(list.length, t),
+                })}
                 onClick={() => {
                   setTyping(false);
-                  fill(list, "from the video");
+                  fill(list, "video");
                 }}
               >
                 <OriginTag origin="video" full="From the video" /> {list.length}
@@ -793,23 +885,26 @@ export function SongsEditor({
                 }}
                 disabled={busy}
                 aria-disabled={noAi}
-                aria-label={
-                  thinking ? "Stop asking the AI" : fromAi ? "Ask the AI again" : "Fill with AI"
-                }
+                aria-label={t(
+                  thinking ? "Stop asking the AI" : fromAi ? "Ask the AI again" : "Fill with AI",
+                )}
                 aria-expanded={fromAi && !thinking ? noting : undefined}
                 aria-busy={thinking}
                 title={
                   thinking
-                    ? "Stop asking the AI"
+                    ? t("Stop asking the AI")
                     : fromAi
-                      ? "Ask the AI again, with a note if you like"
+                      ? t("Ask the AI again, with a note if you like")
                       : songs.suggested.length > 0
-                        ? `The ${songCount(songs.suggested.length)} ${aiNameOf(songs.suggested_by)} suggested`
+                        ? t("The {{songs}} {{model}} suggested", {
+                            songs: songCount(songs.suggested.length, t),
+                            model: songs.suggested_by?.model ?? t("the AI"),
+                          })
                         : ai.can
-                          ? "Ask the AI for the songs"
+                          ? t("Ask the AI for the songs")
                           : aiSetUp.missing
                             ? aiSetUp.why
-                            : "The AI can't be asked about this file now"
+                            : t("The AI can't be asked about this file now")
                 }
                 onClick={() => {
                   if (thinking) {
@@ -823,7 +918,7 @@ export function SongsEditor({
                   if (fromAi) {
                     setNoting((open) => !open);
                   } else if (songs.suggested.length > 0) {
-                    fill(songs.suggested, `from ${aiNameOf(songs.suggested_by)}`, true);
+                    fill(songs.suggested, "ai", songs.suggested_by?.model);
                   } else {
                     askAi();
                   }
@@ -843,8 +938,8 @@ export function SongsEditor({
                 className="fill-button ai-note-toggle"
                 disabled={busy || thinking}
                 aria-disabled={noAi}
-                aria-label="Ask AI with a note"
-                title="Ask AI with a note"
+                aria-label={t("Ask AI with a note")}
+                title={t("Ask AI with a note")}
                 aria-expanded={noting}
                 aria-controls={notePanel}
                 onClick={() => {
@@ -863,13 +958,13 @@ export function SongsEditor({
               className="fill-button"
               disabled={busy || snapping}
               aria-disabled={tooFewToSnap}
-              aria-label="Snap the starts to the gaps in the audio"
+              aria-label={t("Snap the starts to the gaps in the audio")}
               aria-busy={snapping}
-              title={
+              title={t(
                 tooFewToSnap
                   ? "Add two songs or more to snap their starts"
-                  : "Move each start to the gap in the audio nearest it, within half a minute"
-              }
+                  : "Move each start to the gap in the audio nearest it, within half a minute",
+              )}
               onClick={() => {
                 if (!tooFewToSnap) {
                   void snap();
@@ -881,16 +976,17 @@ export function SongsEditor({
               ) : (
                 <WaveformIcon aria-hidden />
               )}{" "}
-              Snap
+              {t("Snap")}
             </button>
             <AlbumLyricsMatch {...lyricsMatch} />
             <span className="songs-fill-note" role="status">
-              {thinking ? "Asking the AI…" : fillNote}
+              {thinking ? t("Asking the AI…") : said(fillNote, t)}
             </span>
             {beforeSnap !== undefined && !snapping && (
               <button
                 type="button"
                 className="link-button"
+                disabled={busy}
                 onClick={() => {
                   setRows(beforeSnap);
                   setSnapped(new Set());
@@ -898,7 +994,7 @@ export function SongsEditor({
                   setFillNote("The starts are back where they were.");
                 }}
               >
-                Undo
+                {t("Undo")}
               </button>
             )}
           </div>
@@ -922,14 +1018,16 @@ export function SongsEditor({
           )}
           {disagree !== null && <p className="songs-note songs-doubt">{disagree}</p>}
           {typing && (
-            <LazyPart doing="Opening the list…">
-              <ListEditor.Component
-                initial={listTextOf(rows)}
-                check={(text) => check(album.id, text)}
-                artists={artists}
-                onListed={setListed}
-              />
-            </LazyPart>
+            <div inert={busy}>
+              <LazyPart doing="Opening the list…">
+                <ListEditor.Component
+                  initial={listTextOf(rows)}
+                  check={(text) => check(album.id, text)}
+                  artists={artists}
+                  onListed={setListed}
+                />
+              </LazyPart>
+            </div>
           )}
           <audio
             ref={holdAudio}
@@ -940,21 +1038,25 @@ export function SongsEditor({
           />
           {/* On the page while empty, so a screen reader hears what it comes to say. */}
           <p className="songs-note songs-audio-note" role="status">
-            {audioNote}
+            {said(audioNote, t)}
           </p>
           <div hidden={typing}>
             {doubts.few && rows.length > 1 && (
               <p className="songs-note songs-doubt">
                 <WarningIcon weight="bold" aria-hidden />
-                {formatLength(rows.length, songs.length_ms ?? 0)}: an album this long usually has
-                more, so a song may be missing.
+                {t("{{length}}: an album this long usually has more, so a song may be missing.", {
+                  length: formatLength(rows.length, songs.length_ms ?? 0, t),
+                })}
               </p>
             )}
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               modifiers={MODIFIERS}
-              accessibility={{ announcements, screenReaderInstructions: INSTRUCTIONS }}
+              accessibility={{
+                announcements,
+                screenReaderInstructions: { draggable: t(INSTRUCTIONS) },
+              }}
               onDragStart={() => {
                 setDragging(true);
               }}
@@ -983,6 +1085,7 @@ export function SongsEditor({
                       }}
                       place={index + 1}
                       first={index === 0}
+                      disabled={busy}
                       last={index === rows.length - 1}
                       heard={heard}
                       long={doubts.long.has(index) ? lengthOf(index) : undefined}
@@ -998,7 +1101,7 @@ export function SongsEditor({
                         offer === undefined
                           ? undefined
                           : row.key === offering
-                            ? { hint: fillHintOf(offer, without) }
+                            ? { hint: fillHintOf(offer, without, t) }
                             : { ghost: offer }
                       }
                       onArtistKey={(key) => {
@@ -1037,12 +1140,12 @@ export function SongsEditor({
             <button
               type="button"
               className="secondary outline songs-add"
-              disabled={rows.length >= MAX_SONGS}
+              disabled={busy || rows.length >= MAX_SONGS}
               onClick={() => {
                 edit([...rows, rowOf({ start_ms: 0, title: "", artist: "" }, null, "")]);
               }}
             >
-              <PlusIcon aria-hidden /> Add a song
+              <PlusIcon aria-hidden /> {t("Add a song")}
             </button>
           </div>
         </>
@@ -1050,13 +1153,17 @@ export function SongsEditor({
       {confirming !== undefined && (
         <p className="songs-note" role="status">
           {confirming === "save"
-            ? `Saving removes ${songCount(removing)}, with their ratings and plays.`
-            : `Unsplitting removes ${songCount(songs?.songs.length ?? 0)}, with their ratings and plays.`}
+            ? t("Saving removes {{songs}}, with their ratings, plays, and saved lyrics.", {
+                songs: songCount(removing, t),
+              })
+            : t("Unsplitting removes {{songs}}, with their ratings, plays, and saved lyrics.", {
+                songs: songCount(unsplitKnown.length, t),
+              })}
         </p>
       )}
       {error !== "" && (
         <p className="error" role="alert">
-          {error}
+          {said(error, t)}
         </p>
       )}
       {pickCount > 0 && (
@@ -1071,21 +1178,25 @@ export function SongsEditor({
           <button
             type="button"
             className="secondary outline dialog-button songs-unsplit"
-            disabled={busy}
+            disabled={busy || snapping || thinking}
             onClick={unsplit}
           >
             {confirming === "unsplit"
-              ? `Unsplit and remove ${songCount(songs?.songs.length ?? 0)}`
-              : "Unsplit"}
+              ? t("Unsplit and remove {{songs}}", { songs: songCount(unsplitKnown.length, t) })
+              : t("Unsplit")}
           </button>
         )}
         <button
           type="submit"
           className="dialog-button"
-          disabled={songs === undefined || busy || (typing && listed === undefined)}
+          disabled={
+            songs === undefined || busy || snapping || thinking || (typing && listed === undefined)
+          }
           aria-busy={busy}
         >
-          {confirming === "save" ? `Save and remove ${songCount(removing)}` : "Save"}
+          {confirming === "save"
+            ? t("Save and remove {{songs}}", { songs: songCount(removing, t) })
+            : t("Save")}
         </button>
       </footer>
     </form>
@@ -1107,6 +1218,7 @@ function SongRow({
   row,
   place,
   first,
+  disabled,
   last,
   heard,
   long,
@@ -1128,6 +1240,7 @@ function SongRow({
   readonly onLyrics: (button: HTMLButtonElement) => void;
   readonly place: number;
   readonly first: boolean;
+  readonly disabled: boolean;
   readonly last: boolean;
   readonly heard: boolean;
   /** How long the song is, as `18:30`, when it is so long it may be two. */
@@ -1150,7 +1263,11 @@ function SongRow({
   readonly onPlay: (mode: Playing["mode"]) => void;
   readonly onStartHere: () => void;
 }) {
-  const named = row.title.trim() === "" ? `song ${String(place)}` : `“${row.title}”`;
+  const t = useWords();
+  const named =
+    row.title.trim() === ""
+      ? t("song {{number}}", { number: place })
+      : t("“{{title}}”", { title: row.title });
   const hintId = useId();
   const {
     attributes,
@@ -1160,7 +1277,7 @@ function SongRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: row.key });
+  } = useSortable({ id: row.key, disabled });
   return (
     <li
       ref={setNodeRef}
@@ -1171,28 +1288,33 @@ function SongRow({
         type="button"
         className="icon song-handle"
         ref={setActivatorNodeRef}
-        aria-label={`Reorder ${named}`}
-        title="Drag to reorder"
+        disabled={disabled}
+        aria-label={t("Reorder {{name}}", { name: named })}
+        title={t("Drag to reorder")}
         {...attributes}
         {...listeners}
+        aria-roledescription={t("sortable")}
+        data-sortable-handle=""
       >
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
       <input
         className={snapped ? "detail-input song-start snapped" : "detail-input song-start"}
-        aria-label={`Start of song ${String(place)}`}
-        aria-description={snapped ? "Moved to the gap in the audio" : undefined}
-        title={snapped ? "Moved to the gap in the audio" : undefined}
+        aria-label={t("Start of song {{number}}", { number: place })}
+        aria-description={snapped ? t("Moved to the gap in the audio") : undefined}
+        title={snapped ? t("Moved to the gap in the audio") : undefined}
         placeholder="0:00"
         value={row.start}
+        disabled={disabled}
         onChange={(event) => {
           onChange("start", event.currentTarget.value);
         }}
       />
       <input
         className="detail-input song-title"
-        aria-label={`Title of song ${String(place)}`}
+        aria-label={t("Title of song {{number}}", { number: place })}
         value={row.title}
+        disabled={disabled}
         onChange={(event) => {
           onChange("title", event.currentTarget.value);
         }}
@@ -1204,16 +1326,18 @@ function SongRow({
               ? "detail-input song-artist ghost"
               : "detail-input song-artist"
           }
-          aria-label={`Artist of song ${String(place)}`}
+          aria-label={t("Artist of song {{number}}", { number: place })}
           aria-describedby={artistOffer !== undefined && "hint" in artistOffer ? hintId : undefined}
           placeholder={
-            artistOffer !== undefined && "ghost" in artistOffer ? artistOffer.ghost : "Artist"
+            artistOffer !== undefined && "ghost" in artistOffer ? artistOffer.ghost : t("Artist")
           }
           value={row.artist}
+          disabled={disabled}
           onChange={(event) => {
             onChange("artist", event.currentTarget.value);
           }}
           onKeyDown={(event) => {
+            if (composing(event.nativeEvent)) return;
             if ((event.key === "Tab" && !event.shiftKey) || event.key === "Escape") {
               if (onArtistKey?.(event.key) === true) {
                 // Escape drops the offer only; the editor stays open.
@@ -1234,9 +1358,9 @@ function SongRow({
         <button
           type="button"
           className={playing === "song" ? "icon on" : "icon"}
-          aria-label={`Play song ${String(place)}`}
+          aria-label={t("Play song {{number}}", { number: place })}
           aria-pressed={playing === "song"}
-          title={playing === "song" ? "Stop" : "Play just this song"}
+          title={t(playing === "song" ? "Stop" : "Play just this song")}
           onClick={() => {
             onPlay("song");
           }}
@@ -1246,9 +1370,9 @@ function SongRow({
         <button
           type="button"
           className={playing === "check" ? "icon on" : "icon"}
-          aria-label={`Check song ${String(place)} by ear`}
+          aria-label={t("Check song {{number}} by ear", { number: place })}
           aria-pressed={playing === "check"}
-          title={playing === "check" ? "Stop" : "Hear its first and last 5 seconds"}
+          title={t(playing === "check" ? "Stop" : "Hear its first and last 5 seconds")}
           onClick={() => {
             onPlay("check");
           }}
@@ -1258,11 +1382,11 @@ function SongRow({
         <button
           type="button"
           className="icon"
-          aria-label={`Start song ${String(place)} here`}
-          title={
-            heard ? "Start where it is playing" : "Listen first, then start it where it is playing"
-          }
-          disabled={!heard}
+          aria-label={t("Start song {{number}} here", { number: place })}
+          title={t(
+            heard ? "Start where it is playing" : "Listen first, then start it where it is playing",
+          )}
+          disabled={disabled || !heard}
           onClick={onStartHere}
         >
           <MapPinIcon aria-hidden />
@@ -1270,8 +1394,8 @@ function SongRow({
         <button
           type="button"
           className="icon"
-          aria-label={`Move ${named} up`}
-          disabled={first}
+          aria-label={t("Move {{name}} up", { name: named })}
+          disabled={disabled || first}
           onClick={() => {
             onMove(-1);
           }}
@@ -1281,8 +1405,8 @@ function SongRow({
         <button
           type="button"
           className="icon"
-          aria-label={`Move ${named} down`}
-          disabled={last}
+          aria-label={t("Move {{name}} down", { name: named })}
+          disabled={disabled || last}
           onClick={() => {
             onMove(1);
           }}
@@ -1291,18 +1415,26 @@ function SongRow({
         </button>
         <SongLyricsButton
           song={named}
-          saved={row.trackId !== null}
+          saved={!disabled && row.trackId !== null}
           match={lyricsMatch}
           onOpen={onLyrics}
         />
-        <button type="button" className="icon" aria-label={`Remove ${named}`} onClick={onRemove}>
+        <button
+          type="button"
+          className="icon"
+          aria-label={t("Remove {{name}}", { name: named })}
+          disabled={disabled}
+          onClick={onRemove}
+        >
           <TrashIcon aria-hidden />
         </button>
       </span>
       {long !== undefined && (
         <p className="song-doubt">
           <WarningIcon weight="bold" aria-hidden />
-          {long} long: it may be two songs. Check where the next one starts.
+          {t("{{length}} long: it may be two songs. Check where the next one starts.", {
+            length: long,
+          })}
         </p>
       )}
     </li>
@@ -1347,16 +1479,18 @@ function rowOf(song: Song, id: number | null, start = formatStart(song.start_ms)
 }
 
 /** Return the rows as the server takes them, or why one can't be, in a file `lengthMs` long. */
-function rowsIn(rows: readonly Row[], lengthMs: number | null): SongRowIn[] | string {
+function rowsIn(rows: readonly Row[], lengthMs: number | null): SongRowIn[] | SongNote {
   const sent: SongRowIn[] = [];
   for (const [index, row] of rows.entries()) {
     const start = startOf(row);
-    const song = `Song ${String(index + 1)}`;
     if (start === undefined) {
-      return `${song} starts at no time; write it as 3:12 or 1:07:40.`;
+      return startNeeded(index + 1);
     }
     if (lengthMs !== null && start >= lengthMs) {
-      return `${song} starts after the file ends, at ${formatStart(lengthMs)}.`;
+      return {
+        key: "Song {{number}} starts after the file ends, at {{end}}.",
+        values: { number: index + 1, end: formatStart(lengthMs) },
+      };
     }
     sent.push({ id: row.id, start_ms: start, title: row.title.trim(), artist: row.artist.trim() });
   }
@@ -1380,15 +1514,69 @@ function seek(element: HTMLAudioElement, seconds: number): void {
   }
 }
 
-function songCount(count: number): string {
-  return count === 1 ? "1 song" : `${String(count)} songs`;
+function songCount(count: number, t: Words): string {
+  return t("song_count", { count });
+}
+
+function startNeeded(number: number): SongNote {
+  return {
+    key: "Song {{number}} starts at no time; write it as 3:12 or 1:07:40.",
+    values: { number },
+  };
 }
 
 function messageOf(failure: unknown): string {
   return failure instanceof Error ? failure.message : String(failure);
 }
 
+function songWriteError(failure: unknown): SongNote {
+  const detail = messageOf(failure);
+  if (failure instanceof ApiError) {
+    if (
+      failure.status === 409 &&
+      detail === "The songs changed since they were opened; open them again."
+    )
+      return { key: detail };
+    if (failure.status === 422) {
+      if (detail === "Each song starts at least a second before the file ends.")
+        return { key: detail };
+      const rules = [
+        [
+          /^Starts rise at least a second a song; song (\d+) breaks that\.$/u,
+          "Starts rise at least a second a song; song {{number}} breaks that.",
+          "number",
+        ],
+        [
+          /^The title of song (\d+) is blank, untrimmed, or too long\.$/u,
+          "The title of song {{number}} is blank, untrimmed, or too long.",
+          "number",
+        ],
+        [
+          /^The artist of song (\d+) is untrimmed or too long\.$/u,
+          "The artist of song {{number}} is untrimmed or too long.",
+          "number",
+        ],
+        [
+          /^A song list has at least (\d+) songs\.$/u,
+          "A song list has at least {{min}} songs.",
+          "min",
+        ],
+        [
+          /^A song list has at most (\d+) songs\.$/u,
+          "A song list has at most {{max}} songs.",
+          "max",
+        ],
+      ] as const;
+      for (const [match, key, field] of rules) {
+        const value = match.exec(detail)?.[1];
+        if (value !== undefined) return { key, values: { [field]: value } };
+      }
+    }
+  }
+  return { key: "Could not save the songs: {{detail}}", values: { detail } };
+}
+
 /** What Tab does with `artist`, typed in one row, for the `count` rows with no artist. */
-function fillHintOf(artist: string, count: number): string {
-  return `Tab fills “${artist}” into the ${count === 1 ? "song" : `${String(count)} songs`} with no artist`;
+function fillHintOf(artist: string, count: number, t: Words): string {
+  return t("song_fill_artist", { artist, count });
 }

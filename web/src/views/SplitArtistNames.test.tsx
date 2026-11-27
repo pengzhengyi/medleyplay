@@ -71,6 +71,21 @@ afterEach(() => {
 });
 
 describe("splitting artist names in Clean up", () => {
+  it("splits at most 500 unlinked names in one batch", async () => {
+    const sent = recording("/api/artist-splits/split");
+    const offers = Array.from({ length: 501 }, (_, at) => ({
+      ...DUET,
+      written: `Duo ${String(at)}`,
+    }));
+    cleanUp({ offers, decided: [] });
+
+    await userEvent.click(
+      section().getByText("Split next 500 unlinked artist names", { selector: "button" }),
+    );
+
+    expect(sent).toEqual([{ names: offers.slice(0, 500).map(({ written }) => written) }]);
+  });
+
   it("counts each name offered", () => {
     expect(toDoOf([], undefined, undefined, { offers: [DUET, FEATURING], decided: [] })).toBe(2);
   });
@@ -114,7 +129,7 @@ describe("splitting artist names in Clean up", () => {
     const sent = recording("/api/artist-splits/split");
     cleanUp({ offers: [DUET, LINKED, FEATURING], decided: [] });
 
-    await userEvent.click(section().getByRole("button", { name: "Split all" }));
+    await userEvent.click(section().getByRole("button", { name: "Split 2 unlinked artist names" }));
 
     expect(sent).toEqual([{ names: ["GUMI/MAYU", "スズム feat. GUMI"] }]);
     expect(section().getByText(/Linked to one artist/u)).toBeVisible();

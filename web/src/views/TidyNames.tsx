@@ -11,6 +11,7 @@ import { ArrowElbowDownRightIcon, BroomIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { api, type NameToTidy } from "../api";
+import { type Words, useFormattingLocale, useWords } from "../locale";
 
 /** The names to tidy, each to tidy or keep, and all to tidy at once. */
 export function TidyNames({
@@ -21,6 +22,8 @@ export function TidyNames({
   /** Called after a change, so the names are read again. */
   readonly onChanged: () => void;
 }) {
+  const t = useWords();
+  const number = new Intl.NumberFormat(useFormattingLocale());
   const [busy, setBusy] = useState(false);
   // Why a name couldn't be tidied or kept, by the name as written; "" for all of them.
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(new Map());
@@ -45,8 +48,8 @@ export function TidyNames({
       <header className="clean-up-head">
         <h3 id="tidy-names-title">
           <BroomIcon className="clean-up-icon" weight="bold" aria-hidden />
-          Tidy names
-          <span className="clean-up-count">{names.length}</span>
+          {t("Tidy names")}
+          <span className="clean-up-count">{number.format(names.length)}</span>
         </h3>
         {names.length > 1 && (
           <button
@@ -55,23 +58,24 @@ export function TidyNames({
             disabled={busy}
             onClick={() => void run("", () => api.tidyNames(names))}
           >
-            Tidy all
+            {t("Tidy all")}
           </button>
         )}
       </header>
       <p className="tidy-lead">
-        These artist and album names have more than the name in them. Tidying sets the name on their
-        songs, and the year where a song has none.
+        {t(
+          "Tidy updates the names used on these songs. If a suggestion includes a year, it fills in missing years. Keep leaves the original name unchanged and stops offering it for tidying.",
+        )}
       </p>
       {allError !== undefined && (
         <p className="error" role="alert">
-          {allError}
+          {t("Could not tidy the names: {{detail}}", { detail: allError })}
         </p>
       )}
       {names.length === 0 ? (
-        <p className="empty">Every artist and album name is tidy.</p>
+        <p className="empty">{t("Every artist and album name is tidy.")}</p>
       ) : (
-        <ul className="tidy-list" aria-label="Names to tidy">
+        <ul className="tidy-list" aria-label={t("Names to tidy")}>
           {names.map((name) => {
             const error = errors.get(keyOf(name));
             return (
@@ -86,37 +90,40 @@ export function TidyNames({
                 </div>
                 <p className="tidy-meta">
                   {fieldOf(name) !== undefined && (
-                    <span className="tidy-field">{fieldOf(name)}</span>
+                    <span className="tidy-field">{t(fieldOf(name) ?? "")}</span>
                   )}
-                  {metaOf(name)}
+                  {metaOf(name, t)}
                 </p>
                 <div className="tidy-actions">
                   <button
                     type="button"
                     className="secondary outline dialog-button"
-                    aria-label={`Keep ${name.written} as written`}
+                    aria-label={t("Keep {{name}} as written", { name: name.written })}
                     disabled={busy}
                     onClick={() =>
                       void run(keyOf(name), () => api.keepName(name.kind, name.written))
                     }
                   >
-                    Keep
+                    {t("Keep")}
                   </button>
                   <button
                     type="button"
                     className="dialog-button"
-                    aria-label={`Tidy ${name.written} to ${name.name}`}
+                    aria-label={t("Tidy {{before}} to {{after}}", {
+                      before: name.written,
+                      after: name.name,
+                    })}
                     disabled={busy}
                     onClick={() =>
                       void run(keyOf(name), () => api.tidyName(name.kind, name.written))
                     }
                   >
-                    Tidy
+                    {t("Tidy")}
                   </button>
                 </div>
                 {error !== undefined && (
                   <p className="error" role="alert">
-                    {error}
+                    {t("Could not change this name: {{detail}}", { detail: error })}
                   </p>
                 )}
               </li>
@@ -129,13 +136,15 @@ export function TidyNames({
 }
 
 /** Say how many songs show the name, and how many keep a year of their own. */
-function metaOf(name: NameToTidy): string {
-  const songs = `${String(name.track_ids.length)} ${name.track_ids.length === 1 ? "song" : "songs"}`;
+function metaOf(name: NameToTidy, t: Words): string {
+  const songs = t("song_count", { count: name.track_ids.length });
   if (name.years_differ === 0) {
     return songs;
   }
-  const keeps = name.years_differ === 1 ? "keeps its" : "keep their";
-  return `${songs}, ${String(name.years_differ)} ${keeps} own year`;
+  return t("{{songs}}, {{years}}", {
+    songs,
+    years: t("tidy_keep_year", { count: name.years_differ }),
+  });
 }
 
 /** Say what a name is when it isn't an artist's: an album, or only an album artist. */

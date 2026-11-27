@@ -15,6 +15,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { coverUrl } from "../api";
 import { formatFans } from "../format";
+import { useFormattingLocale, useWords } from "../locale";
 import { useAiSetUp } from "./aiSetUp";
 import { useArtistPictures } from "./useArtistPictures";
 
@@ -33,7 +34,10 @@ export function ArtistPictureFinder({
   readonly busy?: boolean;
   readonly onUse: (cover: string) => void;
 }) {
-  const { state, error, find, choose } = useArtistPictures(artistId);
+  const t = useWords();
+  const locale = useFormattingLocale();
+  const { state, error, choiceError, readError, retryRead, find, choose } =
+    useArtistPictures(artistId);
   // The note to the AI being written, while *Refine* is open.
   const [note, setNote] = useState<string>();
   const noteId = useId();
@@ -51,24 +55,29 @@ export function ArtistPictureFinder({
 
   const pictures = state?.pictures ?? [];
   const off = state !== undefined && !state.may_find;
-  const finding = state === undefined || state.finding;
+  const finding = state?.finding === true;
   const choosing = state?.choosing === true;
-  const failure = error || (state?.failure ?? state?.choice_failure);
+  const failure = error || state?.failure;
+  const choiceFailure = choiceError || state?.choice_failure;
   // An AI model is offered while one may be asked, or to say how to set one up.
-  const aiOffered = !finding && pictures.length > 1 && (state.may_choose || noAi.missing);
+  const aiOffered =
+    !finding &&
+    readError === "" &&
+    pictures.length > 1 &&
+    (state?.may_choose === true || noAi.missing);
   return (
-    <section className="cover-finder" aria-label="Pictures on Deezer">
+    <section className="cover-finder" aria-label={t("Pictures on Deezer")}>
       <div className="cover-finder-head">
-        <h4>Pictures on Deezer</h4>
+        <h4>{t("Pictures on Deezer")}</h4>
         <span className="cover-finder-actions">
           {aiOffered && (
             <>
               <button
                 type="button"
                 className="link-button picture-ask"
-                disabled={choosing}
+                disabled={busy || choosing}
                 aria-disabled={noAi.missing}
-                title={noAi.missing ? noAi.why : "Ask the AI which picture is of this artist"}
+                title={noAi.missing ? noAi.why : t("Ask the AI which picture is of this artist")}
                 onClick={() => {
                   choose(note ?? pick?.hint ?? "");
                 }}
@@ -78,39 +87,55 @@ export function ArtistPictureFinder({
                 ) : (
                   <SparkleIcon aria-hidden />
                 )}
-                {choosing ? "Picking…" : "Pick by AI"}
+                {t(choosing ? "Picking…" : "Pick by AI")}
               </button>
               <button
                 type="button"
                 className="link-button"
+                disabled={busy}
                 aria-expanded={note !== undefined}
                 aria-controls={noteId}
                 onClick={() => {
                   setNote((now) => (now === undefined ? (pick?.hint ?? "") : undefined));
                 }}
               >
-                Refine
+                {t("Refine")}
               </button>
             </>
           )}
-          {!finding && !off && (
-            <button type="button" className="link-button" onClick={find}>
-              Look again
+          {!finding && readError === "" && state?.may_find === true && (
+            <button type="button" className="link-button" onClick={find} disabled={busy}>
+              {t("Look again")}
             </button>
           )}
         </span>
       </div>
+      {state === undefined && readError === "" && (
+        <p role="status" aria-busy="true">
+          {t("Reading picture search results…")}
+        </p>
+      )}
+      {readError !== "" && (
+        <>
+          <p role="alert">
+            {t("Could not read picture search results: {{detail}}", { detail: readError })}
+          </p>
+          <button type="button" className="link-button" disabled={busy} onClick={retryRead}>
+            {t("Retry reading results")}
+          </button>
+        </>
+      )}
       {aiOffered && note !== undefined && (
         <form
           id={noteId}
           className="picture-note"
           onSubmit={(event) => {
             event.preventDefault();
-            choose(note);
+            if (!busy && !choosing) choose(note);
           }}
         >
           <label className="visually-hidden" htmlFor={`${noteId}-text`}>
-            Note for the AI
+            {t("Note for the AI")}
           </label>
           <input
             id={`${noteId}-text`}
@@ -118,39 +143,51 @@ export function ArtistPictureFinder({
             type="text"
             value={note}
             maxLength={500}
-            placeholder="Which artist you mean, such as “the Taiwanese singer”"
+            placeholder={t("Which artist you mean, such as “the Taiwanese singer”")}
+            disabled={busy}
             onChange={(event) => {
               setNote(event.target.value);
             }}
           />
-          <button type="submit" className="dialog-button" disabled={choosing}>
-            Ask
+          <button type="submit" className="dialog-button" disabled={busy || choosing}>
+            {t("Ask")}
           </button>
         </form>
       )}
       {off && (
         <p className="cover-finder-note">
-          Deezer is off. An admin turns it on in Settings, under Deezer.
+          {t("Deezer is off. An admin turns it on in Settings, under Deezer.")}
         </p>
       )}
-      {finding && state !== undefined && (
+      {finding && (
         <p className="cover-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-          {state.waiting ? "Waiting for Online to look on Deezer…" : "Looking on Deezer…"}
+          {t(state.waiting ? "Waiting for Online to look on Deezer…" : "Looking on Deezer…")}
         </p>
       )}
       {failure && (
         <p className="cover-finder-note error" role="alert">
-          {failure}
+          {t("Could not find artist pictures: {{detail}}", { detail: failure })}
         </p>
       )}
-      {!off && !finding && !failure && pictures.length === 0 && (
-        <p className="cover-finder-note">Deezer has no picture of this artist.</p>
+      {choiceFailure && (
+        <p className="cover-finder-note error" role="alert">
+          {t("Could not get the AI's picture choice: {{detail}}", { detail: choiceFailure })}
+        </p>
       )}
+      {state !== undefined &&
+        !off &&
+        !finding &&
+        !failure &&
+        readError === "" &&
+        pictures.length === 0 && (
+          <p className="cover-finder-note">{t("Deezer has no picture of this artist.")}</p>
+        )}
       {pictures.length > 0 && (
         <ul className="cover-finder-grid">
           {pictures.map(({ name, fans, cover }) => {
-            const about = [name, formatFans(fans)].filter(Boolean).join(", ");
+            const following = formatFans(fans, t, locale);
+            const about = [name, following].filter(Boolean).join(t(", "));
             const isPick = pick?.cover === cover;
             return (
               <li key={cover}>
@@ -159,8 +196,20 @@ export function ArtistPictureFinder({
                   type="button"
                   className={isPick ? "cover-choice picked" : "cover-choice"}
                   aria-pressed={cover === shown}
-                  aria-label={`Use the picture of ${about}${isPick ? ", the AI's pick" : ""}`}
-                  title={pick !== null && isPick ? `${pick.model} picked this: ${pick.why}` : about}
+                  aria-label={t(
+                    isPick
+                      ? "Use the picture of {{name}}, the AI's pick"
+                      : "Use the picture of {{name}}",
+                    { name: about },
+                  )}
+                  title={
+                    pick !== null && isPick
+                      ? t("{{model}} picked this: {{reason}}", {
+                          model: pick.model,
+                          reason: pick.why,
+                        })
+                      : about
+                  }
                   disabled={busy}
                   onClick={() => {
                     onUse(cover);
@@ -169,11 +218,11 @@ export function ArtistPictureFinder({
                   <img src={coverUrl(cover, "medium")} alt="" loading="lazy" decoding="async" />
                   {isPick && (
                     <span className="cover-pick">
-                      <SparkleIcon weight="fill" aria-hidden /> AI pick
+                      <SparkleIcon weight="fill" aria-hidden /> {t("AI pick")}
                     </span>
                   )}
                   <span className="cover-choice-about">{name}</span>
-                  {fans !== null && <span className="picture-fans">{formatFans(fans)}</span>}
+                  {fans !== null && <span className="picture-fans">{following}</span>}
                 </button>
               </li>
             );
@@ -184,9 +233,11 @@ export function ArtistPictureFinder({
         <p className="cover-finder-note picture-pick-why">
           <SparkleIcon className="picture-pick-mark" aria-hidden />
           <span>
-            {`${pick.model} picked it: ${pick.why}`}
+            {t("{{model}} picked it: {{reason}}", { model: pick.model, reason: pick.why })}
             {pick.hint !== "" && (
-              <span className="picture-pick-hint">{` You said “${pick.hint}”.`}</span>
+              <span className="picture-pick-hint">
+                {t(" You said “{{hint}}”.", { hint: pick.hint })}
+              </span>
             )}
           </span>
         </p>

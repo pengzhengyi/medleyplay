@@ -30,13 +30,21 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
-import { type Kind, type MissingDetailReview, type Track, api } from "../api";
+import {
+  ApiError,
+  type Kind,
+  type MissingDetailReview,
+  type Track,
+  type TrackDownload,
+  api,
+} from "../api";
+import { downloadFailureOf } from "../library/downloading";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf, artistNamesOf, artistRouteOf } from "../library/views";
-import { useWords } from "../locale";
+import { type Words, useWords } from "../locale";
 import { navigate } from "../routes";
 
 /** Rate Your Music's search, which the household's own browser opens; medleyplay never reads the site. */
@@ -75,8 +83,6 @@ export interface TrackMenuActions {
 /** The ratings offered, the most stars first. */
 const STARS = [5, 4, 3, 2, 1] as const;
 
-const starsOf = (stars: number) => `${String(stars)} ${stars === 1 ? "star" : "stars"}`;
-
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
 export function TrackMenu({
   track,
@@ -93,6 +99,7 @@ export function TrackMenu({
   /** Called before *Go to* opens another view. */
   readonly onNavigate?: () => void;
 }) {
+  const t = useWords();
   const playable = track.availability === "ok";
   return (
     <Menu.Root modal={false}>
@@ -100,8 +107,8 @@ export function TrackMenu({
         <button
           type="button"
           className="icon more"
-          aria-label={`More actions for ${track.title}`}
-          title="More actions"
+          aria-label={t("More actions for {{title}}", { title: track.title })}
+          title={t("More actions")}
         >
           <DotsThreeIcon weight="bold" aria-hidden />
         </button>
@@ -117,7 +124,7 @@ export function TrackMenu({
                   actions.onPlayNext(track);
                 }}
               >
-                Play next
+                {t("Play next")}
               </Item>
               <Item
                 icon={<ListPlusIcon />}
@@ -126,7 +133,7 @@ export function TrackMenu({
                   actions.onAdd(track);
                 }}
               >
-                Add to queue
+                {t("Add to queue")}
               </Item>
               <Menu.Separator className="track-menu-line" />
             </>
@@ -138,7 +145,7 @@ export function TrackMenu({
               navigate({ view: "library", focus: track.id });
             }}
           >
-            Show in Library
+            {t("Show in Library")}
           </Item>
           {artistNamesOf(track).length > 1 ? (
             artistNamesOf(track).map((name, place) => (
@@ -150,7 +157,7 @@ export function TrackMenu({
                   navigate(artistRouteOf(track, place));
                 }}
               >
-                {`Go to ${name}`}
+                {t("Go to {{artist}}", { artist: name })}
               </Item>
             ))
           ) : (
@@ -161,7 +168,7 @@ export function TrackMenu({
                 navigate(artistRouteOf(track, 0));
               }}
             >
-              Go to artist
+              {t("Go to artist")}
             </Item>
           )}
           <Item
@@ -171,19 +178,19 @@ export function TrackMenu({
               navigate({ view: "album", artist: albumArtistOf(track), name: track.album });
             }}
           >
-            Go to album
+            {t("Go to album")}
           </Item>
           <Menu.Item className="track-menu-item" asChild>
             <a
               href={rymSearchOf(track)}
               target="_blank"
               rel="noopener noreferrer"
-              title="Search Rate Your Music in a new tab"
+              title={t("Search Rate Your Music in a new tab")}
             >
               <span className="track-menu-icon" aria-hidden>
                 <ArrowSquareOutIcon />
               </span>
-              Open on RYM
+              {t("Open on RYM")}
             </a>
           </Menu.Item>
           {track.video !== null && (
@@ -192,12 +199,14 @@ export function TrackMenu({
                 href={track.video}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={`Open the video it came from on ${siteNameOf(track.video)}, in a new tab`}
+                title={t("Open the video it came from on {{site}}, in a new tab", {
+                  site: siteNameOf(track.video),
+                })}
               >
                 <span className="track-menu-icon" aria-hidden>
                   <ArrowSquareOutIcon />
                 </span>
-                Open on {siteNameOf(track.video)}
+                {t("Open on {{site}}", { site: siteNameOf(track.video) })}
               </a>
             </Menu.Item>
           )}
@@ -209,7 +218,7 @@ export function TrackMenu({
               actions.onAddToPlaylist(track);
             }}
           >
-            Add to playlist…
+            {t("Add to playlist…")}
           </Item>
           <Item
             icon={<PencilSimpleIcon />}
@@ -217,7 +226,7 @@ export function TrackMenu({
               actions.onEditDetails(track);
             }}
           >
-            Edit details…
+            {t("Edit details…")}
           </Item>
           {LOOKUPS.filter((lookup) => actions.canFind(lookup, track)).map((lookup) => (
             <Item
@@ -227,7 +236,7 @@ export function TrackMenu({
                 actions.onFind(lookup, track);
               }}
             >
-              {lookup.label}
+              {t(lookup.label)}
             </Item>
           ))}
           {/* A split file, and each of its songs, has the Kind its split gives it. */}
@@ -238,7 +247,7 @@ export function TrackMenu({
                 actions.onSetKind(track, track.kind === "song" ? "album" : "song");
               }}
             >
-              {track.kind === "song" ? "Mark as album" : "Mark as song"}
+              {t(track.kind === "song" ? "Mark as album" : "Mark as song")}
             </Item>
           )}
           <Item
@@ -247,7 +256,7 @@ export function TrackMenu({
               actions.onEditSongs(track);
             }}
           >
-            {track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…"}
+            {t(track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…")}
           </Item>
           {track.site !== null && !track.joined && (
             <Item
@@ -256,7 +265,7 @@ export function TrackMenu({
                 actions.onAddFile(track);
               }}
             >
-              Add the file yourself…
+              {t("Add the file yourself…")}
             </Item>
           )}
         </Menu.Content>
@@ -319,17 +328,22 @@ function RateMenu({
   readonly container: HTMLElement | null | undefined;
   readonly onRate: (track: Track, rating: number | null) => void;
 }) {
+  const t = useWords();
   const rating = track.rating;
   return (
     <Menu.Sub>
       <Menu.SubTrigger
         className="track-menu-item"
-        aria-label={rating === null ? "Rate" : `Rate, ${starsOf(rating)}`}
+        aria-label={
+          rating === null
+            ? t("Rate")
+            : t("Rate, {{rating}}", { rating: t("star_count", { count: rating }) })
+        }
       >
         <span className="track-menu-icon" aria-hidden>
           <StarIcon weight={rating === null ? "regular" : "fill"} />
         </span>
-        Rate
+        {t("Rate")}
         <CaretRightIcon className="track-menu-caret" aria-hidden />
       </Menu.SubTrigger>
       <Menu.Portal container={container}>
@@ -346,7 +360,7 @@ function RateMenu({
                 key={stars}
                 className="track-menu-item track-menu-stars"
                 value={String(stars)}
-                aria-label={starsOf(stars)}
+                aria-label={t("star_count", { count: stars })}
               >
                 {Array.from({ length: 5 }, (_, at) => (
                   <StarIcon key={at} weight={at < stars ? "fill" : "regular"} aria-hidden />
@@ -354,8 +368,8 @@ function RateMenu({
                 <Chosen />
               </Menu.RadioItem>
             ))}
-            <Menu.RadioItem className="track-menu-item" value="none" aria-label="No rating">
-              No rating
+            <Menu.RadioItem className="track-menu-item" value="none" aria-label={t("No rating")}>
+              {t("No rating")}
               <Chosen />
             </Menu.RadioItem>
           </Menu.RadioGroup>
@@ -395,6 +409,35 @@ function Item({
   );
 }
 
+type DownloadRead =
+  | { readonly state: "loading" }
+  | {
+      readonly state: "loaded";
+      readonly status: TrackDownload["status"];
+      readonly text: string;
+      readonly job: number | null;
+    }
+  | { readonly state: "failed"; readonly cause: unknown };
+
+function downloadRequestError(
+  failure: unknown,
+  action: "read" | "retry" | "dismiss",
+  t: Words,
+): string {
+  const text = failure instanceof Error ? failure.message : String(failure);
+  if (action !== "retry" || !(failure instanceof ApiError)) return text;
+  if (
+    failure.status === 403 &&
+    text === "Only the Account that asked for a Job, or an admin, can change it."
+  )
+    return t(text);
+  if (failure.status === 409 && text === "Only a failed or cancelled Job can be retried.") {
+    return t(text);
+  }
+  const id = failure.status === 404 ? /^There is no Job (\d+)\.$/u.exec(text)?.[1] : undefined;
+  return id === undefined ? text : t("There is no Job {{id}}.", { id });
+}
+
 /**
  * *Download failed* on a song's row, opening why it failed, read when opened, with
  * *Retry download*, *Add the file…*, and a way to dismiss the failure in Downloaded.
@@ -410,35 +453,55 @@ export function DownloadFailed({
 }) {
   const words = useWords();
   const [open, setOpen] = useState(false);
-  const [why, setWhy] = useState<{ readonly message: string; readonly job: number | null }>();
+  const [read, setRead] = useState<DownloadRead>({ state: "loading" });
   const [busy, setBusy] = useState<"retry" | "dismiss">();
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{
+    readonly action: "retry" | "dismiss";
+    readonly cause: unknown;
+  }>();
+  const generation = useRef(0);
   const failedJob = track.download_failure_job_id;
-  const read = () => {
-    setError("");
+  const job = read.state === "loaded" && read.status === "failed" ? read.job : null;
+  const openRead = () => {
+    const request = ++generation.current;
+    setFailure(undefined);
+    setRead({ state: "loading" });
     api.download(track.id).then(
       (download) => {
-        setWhy({ message: download.message, job: download.job_id });
+        if (request === generation.current) {
+          setRead({
+            state: "loaded",
+            status: download.status,
+            text: download.message,
+            job: download.job_id,
+          });
+        }
       },
-      (failure: unknown) => {
-        setError(failure instanceof Error ? failure.message : String(failure));
+      (cause: unknown) => {
+        if (request === generation.current) setRead({ state: "failed", cause });
       },
     );
   };
   const act = (action: "retry" | "dismiss", request: Promise<unknown>) => {
     setBusy(action);
-    setError("");
+    setFailure(undefined);
     request.then(
       () => {
         setBusy(undefined);
         setOpen(false);
       },
-      (failure: unknown) => {
+      (cause: unknown) => {
         setBusy(undefined);
-        setError(failure instanceof Error ? failure.message : String(failure));
+        setFailure({ action, cause });
       },
     );
   };
+  const error =
+    failure !== undefined
+      ? downloadRequestError(failure.cause, failure.action, words)
+      : read.state === "failed"
+        ? downloadRequestError(read.cause, "read", words)
+        : "";
   return (
     <Menu.Root
       modal={false}
@@ -446,7 +509,9 @@ export function DownloadFailed({
       onOpenChange={(opening) => {
         setOpen(opening);
         if (opening) {
-          read();
+          openRead();
+        } else {
+          ++generation.current;
         }
       }}
     >
@@ -454,8 +519,10 @@ export function DownloadFailed({
         <button
           type="button"
           className="why failed"
-          aria-label={`Download failed: why, and what to do, for ${track.title}`}
-          title="Download failed: why, and what to do"
+          aria-label={words("Download failed: why, and what to do, for {{title}}", {
+            title: track.title,
+          })}
+          title={words("Download failed: why, and what to do")}
         >
           <WarningCircleIcon weight="bold" aria-hidden />
           <CaretDownIcon weight="bold" aria-hidden />
@@ -468,9 +535,15 @@ export function DownloadFailed({
           sideOffset={4}
           collisionPadding={8}
         >
-          <Menu.Label className="download-failed-why">
-            {why === undefined ? "Reading why it failed…" : why.message}
-          </Menu.Label>
+          {read.state !== "failed" && (
+            <Menu.Label className="download-failed-why">
+              {read.state === "loading"
+                ? words("Reading why it failed…")
+                : read.status === "downloading"
+                  ? words("This download is already in progress.")
+                  : downloadFailureOf(read.text, words)}
+            </Menu.Label>
+          )}
           {error !== "" && (
             <p className="download-failed-error" role="alert">
               {error}
@@ -478,16 +551,16 @@ export function DownloadFailed({
           )}
           <Item
             icon={<ArrowClockwiseIcon className={busy === "retry" ? "spin" : undefined} />}
-            disabled={why?.job == null || busy !== undefined}
+            disabled={job === null || busy !== undefined}
             onSelect={(event) => {
               // Open until the server answers, so a refusal shows here.
               event.preventDefault();
-              if (why?.job != null) {
-                act("retry", api.retryJob(why.job));
+              if (job !== null) {
+                act("retry", api.retryJob(job));
               }
             }}
           >
-            {busy === "retry" ? "Retrying…" : "Retry download"}
+            {words(busy === "retry" ? "Retrying…" : "Retry download")}
           </Item>
           {!track.joined && (
             <Item
@@ -497,7 +570,7 @@ export function DownloadFailed({
                 onAddFile(track);
               }}
             >
-              Add the file…
+              {words("Add the file…")}
             </Item>
           )}
           {dismiss !== undefined && failedJob !== null && (

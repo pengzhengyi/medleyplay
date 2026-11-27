@@ -32,7 +32,7 @@ import {
 import { type AlbumCoverActions, FindAlbumCovers } from "./FindAlbumCovers";
 import { FindPhotos } from "./FindPhotos";
 import { MissingDetails } from "./MissingDetails";
-import { useWords } from "../locale";
+import { type Words, useFormattingLocale, useWords } from "../locale";
 import { LinkArtists } from "./LinkArtists";
 import { SharedNames } from "./SharedNames";
 import { SplitArtistNames } from "./SplitArtistNames";
@@ -47,6 +47,7 @@ interface Read<T> {
 
 /** The names to tidy and to link. */
 export function CleanUpView({
+  admin = false,
   tidy,
   artistNames,
   tracks = [],
@@ -59,6 +60,7 @@ export function CleanUpView({
   missingDetails,
   onEditSongs,
 }: {
+  readonly admin?: boolean;
   readonly tidy: Read<readonly NameToTidy[]>;
   readonly artistNames: Read<ArtistNames> | undefined;
   /** The Library's Tracks, split files too, to show and rename the songs of each name to link. */
@@ -167,8 +169,10 @@ export function CleanUpView({
             id: "clean-up-photos",
             title: "Find artist photos",
             waiting: toUse,
+            artwork: true,
             body: (
               <FindPhotos
+                admin={admin}
                 artists={missingPhotos.artists}
                 answered={missingPhotos.answered}
                 onChanged={missingPhotos.reload}
@@ -183,8 +187,10 @@ export function CleanUpView({
             id: "clean-up-covers",
             title: "Find album covers",
             waiting: coversToUse,
+            artwork: true,
             body: (
               <FindAlbumCovers
+                admin={admin}
                 albums={missingCovers.albums}
                 answered={missingCovers.answered}
                 tracks={tracks}
@@ -219,7 +225,7 @@ export function CleanUpView({
       : [
           {
             id: "clean-up-missing-details",
-            title: t("Missing artist or album"),
+            title: "Missing artist or album",
             waiting: null,
             body: <MissingDetails {...missingDetails} />,
           },
@@ -229,10 +235,10 @@ export function CleanUpView({
     <>
       <header className="view-heading">
         <h2 className="section" data-rail-named>
-          Clean up
+          {t("Clean up")}
         </h2>
         <p className="meta">
-          {summaryOf(toTidy, toLink, toSplit, toSplitNames, toTellApart, toUse, coversToUse)}
+          {summaryOf(t, toTidy, toLink, toSplit, toSplitNames, toTellApart, toUse, coversToUse)}
         </p>
       </header>
       {toTidy === 0 &&
@@ -244,15 +250,16 @@ export function CleanUpView({
       !missingAnyCover &&
       missingDetails === undefined ? (
         <p className="empty">
-          Nothing to clean up. Names that could be tidied or linked to one artist, and long files to
-          split into songs, show here.
+          {t(
+            "Nothing to clean up. Names that could be tidied or linked to one artist, and long files to split into songs, show here.",
+          )}
         </p>
       ) : (
         <>
           <SectionBar sections={allSections} />
           <div className="clean-up">
             {allSections.map(({ id, body }) => (
-              <div key={id} id={id} className="clean-up-anchor">
+              <div key={id} id={id} className="clean-up-anchor" tabIndex={-1}>
                 {body}
               </div>
             ))}
@@ -268,6 +275,7 @@ interface Section {
   readonly id: string;
   readonly title: string;
   readonly waiting: number;
+  readonly artwork?: boolean;
   readonly body: ReactNode;
 }
 
@@ -278,31 +286,44 @@ function SectionBar({
   readonly sections: readonly (Omit<Section, "waiting"> & { readonly waiting: number | null })[];
 }) {
   const t = useWords();
+  const number = new Intl.NumberFormat(useFormattingLocale());
   return (
-    <nav className="settings-toc clean-up-toc" aria-label="Clean up sections">
+    <nav className="settings-toc clean-up-toc" aria-label={t("Clean up sections")}>
       <ul>
-        {sections.map(({ id, title, waiting }) => (
+        {sections.map(({ id, title, waiting, artwork = false }) => (
           <li key={id}>
             <button
               type="button"
               className="secondary outline"
               aria-label={
                 waiting === null
-                  ? t("Go to {{section}}", { section: title })
-                  : `Go to ${title}, ${waiting > 0 ? `${String(waiting)} waiting` : "done"}`
+                  ? t("Go to {{section}}", { section: t(title) })
+                  : waiting > 0
+                    ? t("Go to {{section}}, {{pending}} waiting", {
+                        section: t(title),
+                        pending: number.format(waiting),
+                      })
+                    : t(
+                        artwork
+                          ? "Go to {{section}}, no suggestions to review"
+                          : "Go to {{section}}, done",
+                        { section: t(title) },
+                      )
               }
               onClick={() => {
-                document.getElementById(id)?.scrollIntoView({ block: "start" });
+                const target = document.getElementById(id);
+                target?.focus({ preventScroll: true });
+                target?.scrollIntoView({ block: "start" });
               }}
             >
-              {title}
+              {t(title)}
               {waiting === null ? null : waiting > 0 ? (
                 <span className="clean-up-toc-count" aria-hidden>
-                  {waiting}
+                  {number.format(waiting)}
                 </span>
-              ) : (
+              ) : !artwork ? (
                 <CheckIcon className="clean-up-toc-done" weight="bold" aria-hidden />
-              )}
+              ) : null}
             </button>
           </li>
         ))}
@@ -312,6 +333,7 @@ function SectionBar({
 }
 
 function summaryOf(
+  t: Words,
   toTidy: number,
   toLink: number,
   toSplit: number,
@@ -321,16 +343,13 @@ function summaryOf(
   coversToUse: number,
 ): string {
   const waiting = [
-    toTidy > 0 && `${String(toTidy)} ${toTidy === 1 ? "name" : "names"} to tidy`,
-    toSplitNames > 0 &&
-      `${String(toSplitNames)} artist ${toSplitNames === 1 ? "name" : "names"} to split`,
-    toLink > 0 && `${String(toLink)} to link`,
-    toTellApart > 0 &&
-      `${String(toTellApart)} shared ${toTellApart === 1 ? "name" : "names"} to tell apart`,
-    toUse > 0 && `${String(toUse)} artist ${toUse === 1 ? "photo" : "photos"} to use`,
-    coversToUse > 0 &&
-      `${String(coversToUse)} album ${coversToUse === 1 ? "cover" : "covers"} to use`,
-    toSplit > 0 && `${String(toSplit)} ${toSplit === 1 ? "file" : "files"} to split`,
+    toTidy > 0 && t("cleanup_tidy", { count: toTidy }),
+    toSplitNames > 0 && t("cleanup_split_artist", { count: toSplitNames }),
+    toLink > 0 && t("{{count}} to link", { count: toLink }),
+    toTellApart > 0 && t("cleanup_shared", { count: toTellApart }),
+    toUse > 0 && t("cleanup_photos", { count: toUse }),
+    coversToUse > 0 && t("cleanup_covers", { count: coversToUse }),
+    toSplit > 0 && t("cleanup_files", { count: toSplit }),
   ].filter(Boolean);
-  return waiting.length === 0 ? "Every name is tidy and linked." : waiting.join(", ");
+  return waiting.length === 0 ? t("Every name is tidy and linked.") : waiting.join(t(", "));
 }

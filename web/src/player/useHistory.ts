@@ -14,8 +14,8 @@ import { onPlaysRecorded } from "./plays";
 export interface History {
   /** The plays, newest first; `undefined` until they load. */
   readonly plays: readonly Played[] | undefined;
-  /** Why the plays couldn't load or be cleared, or `""`. */
-  readonly failure: string;
+  /** Why the plays couldn't load or be cleared. */
+  readonly failure: { readonly action: "read" | "clear"; readonly detail: string } | undefined;
   readonly length: HistoryLength;
   /** Why the length couldn't be saved, or `""`; the length is then as it was. */
   readonly lengthFailure: string;
@@ -29,7 +29,7 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 /** The Account's History, loaded while `shown`. */
 export function useHistory(shown: boolean): History {
   const [plays, setPlays] = useState<readonly Played[] | undefined>(undefined);
-  const [failure, setFailure] = useState("");
+  const [failure, setFailure] = useState<History["failure"]>();
   const [length, setShownLength] = useState<HistoryLength | undefined>(undefined);
   const [lengthFailure, setLengthFailure] = useState("");
   // The revision the preferences were last read at, to save the length at.
@@ -65,13 +65,13 @@ export function useHistory(shown: boolean): History {
     api.history(limit).then(
       (answer) => {
         if (ask === asked.current) {
-          setFailure("");
+          setFailure(undefined);
           setPlays(answer);
         }
       },
       (error: unknown) => {
         if (ask === asked.current) {
-          setFailure(messageOf(error));
+          setFailure({ action: "read", detail: messageOf(error) });
         }
       },
     );
@@ -120,7 +120,7 @@ export function useHistory(shown: boolean): History {
       },
       (error: unknown) => {
         setShownLength(was);
-        setLengthFailure(`The length wasn't saved: ${messageOf(error)}`);
+        setLengthFailure(messageOf(error));
       },
     );
   };
@@ -129,10 +129,11 @@ export function useHistory(shown: boolean): History {
     try {
       await api.clearHistory();
       asked.current += 1;
-      setFailure("");
+      setFailure(undefined);
       setPlays([]);
     } catch (error) {
-      setFailure(messageOf(error));
+      asked.current += 1;
+      setFailure({ action: "clear", detail: messageOf(error) });
     }
   };
 

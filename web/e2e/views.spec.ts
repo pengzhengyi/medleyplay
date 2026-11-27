@@ -18,7 +18,9 @@ for (const width of [320, 390, 1280]) {
         : []),
     ];
     for (const { online, waitingCount } of scenarios) {
-      test(`the GitHub header link stays at the first row's right edge at ${String(width)}px in ${colorScheme}, ${online ? "online" : "offline"}, ${String(waitingCount)} waiting`, async ({
+      const chinese = !online && colorScheme === "dark" && (waitingCount > 0 || width === 1280);
+      const withDeviceFailure = chinese && waitingCount > 0;
+      test(`the GitHub header link stays at the first row's right edge at ${String(width)}px in ${colorScheme}, ${online ? "online" : "offline"}, ${String(waitingCount)} waiting, ${chinese ? "Simplified Chinese" : "English"}`, async ({
         page,
         baseURL,
       }) => {
@@ -69,7 +71,6 @@ for (const width of [320, 390, 1280]) {
             body: `event: ready\ndata: {}\n\nevent: mode\ndata: ${JSON.stringify(shownMode)}\n\nevent: devices\ndata: ${JSON.stringify({ waiting })}\n\n`,
           }),
         );
-        const chinese = !online && waitingCount > 0 && colorScheme === "dark";
         await page.addInitScript(
           (language) => {
             localStorage.setItem("medleyplay.language", language);
@@ -90,12 +91,15 @@ for (const width of [320, 390, 1280]) {
         if (waitingCount > 0) {
           await expect(
             page.getByRole("button", {
-              name:
-                waitingCount === 1 ? "1 device waiting" : `${String(waitingCount)} devices waiting`,
+              name: chinese
+                ? `${String(waitingCount)} 台设备等待批准`
+                : waitingCount === 1
+                  ? "1 device waiting"
+                  : `${String(waitingCount)} devices waiting`,
             }),
           ).toBeVisible();
         }
-        if (chinese) {
+        if (withDeviceFailure) {
           // A failed device answer renders this sibling; inserting it avoids answering a device.
           await page.locator(".devices-waiting").evaluate((button) => {
             const failure = document.createElement("span");
@@ -108,10 +112,13 @@ for (const width of [320, 390, 1280]) {
           await expect(page.getByRole("alert")).toBeVisible();
         }
 
-        const scope = page.getByRole("radiogroup", { name: "Search in" });
-        const search = page.getByRole("combobox", { name: "Search" });
+        const scope = page.getByRole("radiogroup", { name: chinese ? "搜索范围" : "Search in" });
+        const search = page.getByRole("combobox", { name: chinese ? "搜索" : "Search" });
         for (const name of ["Library", "Bilibili"]) {
-          const radio = scope.getByRole("radio", { name, exact: true });
+          const radio = scope.getByRole("radio", {
+            name: chinese && name === "Library" ? "音乐库" : name,
+            exact: true,
+          });
           await radio.locator("..").click();
           await expect(radio).toBeChecked();
           await expect(radio).toBeFocused();
@@ -129,7 +136,10 @@ for (const width of [320, 390, 1280]) {
           expect(fieldBox.x + fieldBox.width).toBeLessThanOrEqual(width);
 
           if (name === "Library") {
-            await page.getByRole("button", { name: "Clear search" }).click();
+            await expect(
+              page.getByRole("heading", { name: /^(?:搜索结果：|Results for ).*layout/u }),
+            ).toBeVisible();
+            await page.getByRole("button", { name: chinese ? "清除搜索" : "Clear search" }).click();
             await expect(search).toHaveValue("");
             await expect(search).toBeFocused();
           } else {
@@ -174,7 +184,7 @@ for (const width of [320, 390, 1280]) {
         if (waitingCount > 0) {
           expect(layout.devicesTop).toBeGreaterThan(layout.githubBottom ?? 900);
         }
-        if (chinese) {
+        if (withDeviceFailure) {
           expect(layout.failureTop).toBeGreaterThan(layout.githubBottom ?? 900);
           expect(layout.failureBottom).toBeLessThan(layout.headerBottom);
         }
@@ -270,8 +280,12 @@ for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
       await page.goto("/");
+      await expect(page.getByRole("button", { name: "Alpha", exact: true })).toBeVisible();
       const search = page.getByRole("combobox", { name: "Search" });
       await search.fill("unmatched search");
+      await expect(
+        page.getByRole("heading", { name: "Results for “unmatched search”" }),
+      ).toBeVisible();
       const clear = page.getByRole("button", { name: "Clear search" });
 
       await page.keyboard.press("Tab");

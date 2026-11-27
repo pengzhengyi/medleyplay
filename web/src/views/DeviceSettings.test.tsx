@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AllowedDevice, Devices } from "../api";
 import { type Routes, serve } from "../testing/server";
 import { DeviceSettings } from "./DeviceSettings";
+import { LanguageSelect } from "./LanguageSelect";
 
 const NOW = "2026-11-07T18:00:00Z";
 
@@ -63,6 +64,33 @@ const iPhoneRow = async () =>
   (await screen.findByRole("button", { name: "Rename Safari on iPhone" })).closest("li");
 
 describe("DeviceSettings", () => {
+  it("explains removal with Allow all active without saying the devices need approval", async () => {
+    serve({ "GET /api/devices": { body: { ...HOUSEHOLD, admission: "everyone" } } });
+    render(
+      <>
+        <LanguageSelect />
+        <DeviceSettings waiting={HOUSEHOLD.waiting} />
+      </>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Remove all" }));
+    expect(screen.getByRole("group", { name: "Remove all devices" })).toHaveTextContent(
+      "This signs them out. The New devices setting determines whether they can reconnect.",
+    );
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      const confirm = screen.getByRole("group", { name: "移除所有设备" });
+      expect(confirm).toHaveTextContent(
+        "要移除这 2 台设备吗？这些设备将退出登录。能否重新连接取决于「新设备」设置。",
+      );
+      expect(within(confirm).getByRole("button", { name: "保留" })).toBeVisible();
+    } finally {
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
+  });
+
   it("shows the choice for new devices", async () => {
     open();
 
@@ -173,13 +201,20 @@ describe("DeviceSettings", () => {
     expect(await screen.findByRole("button", { name: "Rename Safari on iPhone" })).toHaveFocus();
   });
 
-  it("says beside the device why its name was refused", async () => {
-    open({
+  it("translates the visible rename refusal beside the same device", async () => {
+    serve({
+      "GET /api/devices": { body: HOUSEHOLD },
       "PUT /api/devices/bbbbbbbbbbbbbbbb/name": {
-        status: 400,
+        status: 422,
         body: { detail: "A device's name can't hold line breaks or other control characters." },
       },
     });
+    render(
+      <>
+        <LanguageSelect />
+        <DeviceSettings waiting={HOUSEHOLD.waiting} />
+      </>,
+    );
     const user = userEvent.setup();
 
     await user.click(await screen.findByRole("button", { name: "Rename Safari on iPhone" }));
@@ -189,5 +224,16 @@ describe("DeviceSettings", () => {
     expect(
       await within(field.closest("li") ?? document.body).findByRole("alert"),
     ).toHaveTextContent("control characters");
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      const name = screen.getByRole("textbox", { name: "「Safari on iPhone」的名称" });
+      expect(within(name.closest("li") ?? document.body).getByRole("alert")).toHaveTextContent(
+        "设备名称不能包含换行符或其他控制字符。",
+      );
+    } finally {
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
   });
 });

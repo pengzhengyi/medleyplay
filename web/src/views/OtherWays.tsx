@@ -5,10 +5,11 @@
  */
 
 import { CheckIcon, CopyIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { copyText } from "../clipboard";
 import { otherWays } from "../library/otherWays";
+import { useWords } from "../locale";
 
 /** How long a copy button says it copied. */
 const COPIED_MS = 2000;
@@ -26,52 +27,81 @@ export function OtherWays({
   readonly link: string;
   readonly open?: boolean;
 }) {
+  const t = useWords();
   const ways = otherWays(kind, link);
-  const [copied, setCopied] = useState<string | undefined>(undefined);
+  const attempt = useRef(0);
+  const [result, setResult] = useState<{ readonly command: string; readonly copied: boolean }>();
+  useEffect(
+    () => () => {
+      attempt.current += 1;
+    },
+    [],
+  );
   if (ways.length === 0) {
     return null;
   }
   const copy = (command: string) => {
+    const current = ++attempt.current;
+    setResult(undefined);
     void copyText(command).then((worked) => {
+      if (attempt.current !== current) return;
+      setResult({ command, copied: worked });
       if (worked) {
-        setCopied(command);
         setTimeout(() => {
-          setCopied((now) => (now === command ? undefined : now));
+          if (attempt.current === current) setResult(undefined);
         }, COPIED_MS);
       }
     });
   };
   return (
     <details className="other-ways" open={open}>
-      <summary className="other-ways-summary">Other ways to get the file</summary>
+      <summary className="other-ways-summary">{t("Other ways to get the file")}</summary>
       <p className="other-ways-note">
-        Run one on your own computer, then add the file it saves. medleyplay doesn’t run them.
+        {t(
+          "Run one on your own computer, then add the file it saves. medleyplay doesn’t run them.",
+        )}
       </p>
       <ol>
-        {ways.map((way) => (
-          <li key={way.name} className="way">
-            <p className="way-name">{way.name}</p>
-            <p className="way-when">{way.when}</p>
-            <div className="way-command">
-              <code>{way.command}</code>
-              <button
-                type="button"
-                className="icon"
-                aria-label={`Copy the ${way.name} command`}
-                title={copied === way.command ? "Copied" : "Copy"}
-                onClick={() => {
-                  copy(way.command);
-                }}
+        {ways.map((way) => {
+          const outcome = result?.command === way.command ? result : undefined;
+          return (
+            <li key={way.name} className="way">
+              <p className="way-name">{t(way.name)}</p>
+              <p className="way-when">{t(way.when)}</p>
+              <div className="way-command">
+                <code>{way.command}</code>
+                <button
+                  type="button"
+                  className="icon"
+                  aria-label={t("Copy the {{name}} command", { name: t(way.name) })}
+                  title={t(outcome?.copied === true ? "Copied" : "Copy")}
+                  onClick={() => {
+                    copy(way.command);
+                  }}
+                >
+                  {outcome?.copied === true ? (
+                    <CheckIcon weight="bold" aria-hidden />
+                  ) : (
+                    <CopyIcon weight="regular" aria-hidden />
+                  )}
+                </button>
+              </div>
+              <p
+                className={outcome?.copied === false ? "hint" : "visually-hidden"}
+                aria-live="polite"
+                role={outcome === undefined ? undefined : "status"}
               >
-                {copied === way.command ? (
-                  <CheckIcon weight="bold" aria-hidden />
-                ) : (
-                  <CopyIcon weight="regular" aria-hidden />
-                )}
-              </button>
-            </div>
-          </li>
-        ))}
+                {outcome === undefined
+                  ? ""
+                  : t(
+                      outcome.copied
+                        ? "Command copied."
+                        : "Could not copy the command. Select and copy it manually.",
+                    )}
+              </p>
+            </li>
+          );
+        })}
       </ol>
     </details>
   );

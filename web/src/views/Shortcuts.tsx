@@ -36,7 +36,7 @@ const PRESSED =
 /** Controls the arrows move along, or move within. */
 const MOVED =
   "input[type=range], [role=slider], [role=radio], [role=tab], [role=option], " +
-  "[aria-roledescription=sortable]";
+  "[data-sortable-handle], [aria-roledescription=sortable]";
 /** Inputs that take no typing. */
 const UNTYPED = new Set([
   "range",

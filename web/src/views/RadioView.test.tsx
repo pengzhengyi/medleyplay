@@ -6,6 +6,7 @@ import type { Track } from "../api";
 import type { FavoriteGroups } from "../library/favoriteGroups";
 import type { Station } from "../library/useStation";
 import { favoriteGroupsNaming, trackOf } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 import { RadioView } from "./RadioView";
 import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 
@@ -62,6 +63,71 @@ function renderRadio(
 }
 
 describe("the Radio tab", () => {
+  it("keeps the recommendation across a language switch after the same day's cutoff", async () => {
+    const noon = new Date(2026, 10, 6, 12);
+    const added = new Date(noon.getTime() - 30 * 86_400_000).toISOString();
+    const tracks = [
+      trackOf(1, "One", { artist: "A", album: "Cutoff", added_at: added }),
+      trackOf(2, "Two", { artist: "A", album: "Cutoff", added_at: added }),
+    ];
+    const station: Station = {
+      seed: undefined,
+      playing: undefined,
+      start: () => false,
+      startFavorites: () => false,
+    };
+    const renderAt = (now: Date) => (
+      <RadioView tracks={tracks} station={station} onPlayAll={vi.fn()} accountId={1} now={now} />
+    );
+    const { rerender } = render(renderAt(noon));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const original = within(screen.getByRole("region", { name: "Just added" })).getByRole("link", {
+      name: /Cutoff/u,
+    });
+
+    try {
+      rerender(renderAt(new Date(noon.getTime() + 120_000)));
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(
+        within(screen.getByRole("region", { name: "最近添加" })).getByRole("link", {
+          name: /Cutoff/u,
+        }),
+      ).toBe(original);
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("explains when no song can start the station", async () => {
+    renderRadio([], { start: () => false });
+
+    await userEvent.click(screen.getByRole("button", { name: "Play my station" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "No songs can start your station right now.",
+    );
+  });
+
+  it("translates why an album was suggested without changing the album or artist", async () => {
+    renderRadio();
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const language = screen.getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const shelf = within(screen.getByRole("region", { name: "尚未播放" }));
+      expect(shelf.getByText("你还没听过，来自「朴树」")).toBeVisible();
+      expect(shelf.getByRole("button", { name: "播放「猎户星座」" })).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("marks complete split-file lyrics even when its children have no album tags", () => {
     const file = trackOf(10, "One file", { kind: "album", split: true, has_lyrics: true });
     const tracks = [
@@ -103,7 +169,7 @@ describe("the Radio tab", () => {
   it("says which song the Account's own station plays from", () => {
     renderRadio(LIBRARY, { seed: LIBRARY[1], playing: "mine" });
 
-    expect(screen.getByText("Playing from 生如夏花 by 朴树")).toBeInTheDocument();
+    expect(screen.getByText("Started from 生如夏花 by 朴树")).toBeInTheDocument();
   });
 
   it("plays the favorites station, saying how many favorites it holds", async () => {
@@ -132,7 +198,7 @@ describe("the Radio tab", () => {
       { playing: "favorites" },
     );
 
-    expect(screen.getByRole("region", { name: "Favorites" })).toHaveTextContent("Playing now");
+    expect(screen.getByRole("region", { name: "Favorites" })).toHaveTextContent("Current station");
   });
 
   it("says how to fill the favorites station while it is empty", () => {

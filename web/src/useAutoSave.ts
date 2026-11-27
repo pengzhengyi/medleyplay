@@ -14,7 +14,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { type Notes, useNote } from "./useNote";
+import { type Notes, useNoteOf } from "./useNote";
 
 /** How long typing must pause before a typed value is saved. */
 export const AUTO_SAVE_MS = 800;
@@ -27,7 +27,7 @@ export const AUTO_SAVE_MS = 800;
 export type Outcome = "saved" | "unchanged" | "held" | "conflict" | "failed";
 
 /** A setting saved as it changes, and the note beside it. */
-export interface AutoSave<T> extends Notes {
+export interface AutoSave<T, Message = string> extends Notes<Message> {
   /** Save `value` once typing pauses, replacing a value still waiting. */
   readonly later: (value: T) => void;
   /** Save `value` now, or as soon as the save running ends. */
@@ -42,7 +42,25 @@ export interface AutoSave<T> extends Notes {
 
 /** Save each value through `save`, which says how it went and writes any note but *Saved.* */
 export function useAutoSave<T>(save: (value: T, notes: Notes) => Promise<Outcome>): AutoSave<T> {
-  const notes = useNote();
+  return useAutoSaveOf(save, {
+    empty: "",
+    saving: "Saving…",
+    saved: "Saved.",
+    failed: (failure) =>
+      `Not saved: ${failure instanceof Error ? failure.message : String(failure)}`,
+  });
+}
+
+export function useAutoSaveOf<T, Message>(
+  save: (value: T, notes: Notes<Message>) => Promise<Outcome>,
+  copy: {
+    readonly empty: Message;
+    readonly saving: Message;
+    readonly saved: Message;
+    readonly failed: (failure: unknown) => Message;
+  },
+): AutoSave<T, Message> {
+  const notes = useNoteOf(copy.empty);
   const saving = useRef(save);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const waiting = useRef<{ readonly value: T }>(undefined);
@@ -59,7 +77,7 @@ export function useAutoSave<T>(save: (value: T, notes: Notes) => Promise<Outcome
     }
     waiting.current = undefined;
     running.current = true;
-    notes.tell("Saving…");
+    notes.tell(copy.saving);
     const settle = (outcome: Outcome) => {
       running.current = false;
       if (outcome === "conflict") {
@@ -72,11 +90,11 @@ export function useAutoSave<T>(save: (value: T, notes: Notes) => Promise<Outcome
       if (waiting.current !== undefined) {
         run();
       } else if (outcome === "saved") {
-        notes.confirm("Saved.");
+        notes.confirm(copy.saved);
       }
     };
     saving.current(next.value, notes).then(settle, (failure: unknown) => {
-      notes.refuse(`Not saved: ${failure instanceof Error ? failure.message : String(failure)}`);
+      notes.refuse(copy.failed(failure));
       settle("failed");
     });
   };

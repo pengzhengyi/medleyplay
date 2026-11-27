@@ -10,11 +10,13 @@
 
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { useState } from "react";
+import { Trans } from "react-i18next";
 
 import { type KnownArtist, type Track, coverUrl } from "../api";
 import { initialOf } from "../format";
 import { artistMosaic, fold } from "../library/views";
 import { hrefOf } from "../routes";
+import { useWords } from "../locale";
 import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { Cover } from "./Cover";
 import { PictureFrame } from "./PictureFrame";
@@ -22,6 +24,7 @@ import { SuggestedPhoto } from "./SuggestedPhoto";
 
 /** How many other names show before *and N more*. */
 const NAMES_SHOWN = 6;
+const LINK_HELP = "Not linked to an artist yet. <associate>Link it to an artist</associate>";
 
 /** Say who MusicBrainz says the artist is: `The Beatles (Liverpool rock band, GB)`. */
 function describe(artist: KnownArtist): string {
@@ -88,6 +91,7 @@ export function ArtistPicture({
   readonly artist: KnownArtist | undefined;
   readonly onPhotoUsed?: (() => void) | undefined;
 }) {
+  const t = useWords();
   const covers = artistMosaic(songs);
   const [replacing, setReplacing] = useState(false);
   const photo = artist?.photo ?? null;
@@ -95,7 +99,7 @@ export function ArtistPicture({
     <div
       className={`artist-art tiles-${String(covers.length)}`}
       role="img"
-      aria-label={`Album covers of ${name}`}
+      aria-label={t("Album covers of {{name}}", { name })}
     >
       {covers.length === 0 ? (
         <span className="artist-initial">{initialOf(name)}</span>
@@ -110,7 +114,7 @@ export function ArtistPicture({
     photo === null ? (
       mosaic
     ) : (
-      <div className="artist-art tiles-1" role="img" aria-label={`Photo of ${name}`}>
+      <div className="artist-art tiles-1" role="img" aria-label={t("Photo of {{name}}", { name })}>
         <Cover size="medium" cover={photo} className="artist-tile">
           <span className="artist-initial">{initialOf(name)}</span>
         </Cover>
@@ -166,18 +170,21 @@ export function ArtistFacts({
   readonly artist: KnownArtist | undefined;
   readonly toLink: boolean;
 }) {
+  const t = useWords();
   const others = artist === undefined ? [] : otherNames(artist, name);
   const [allNames, setAllNames] = useState(false);
   const hidden = allNames ? 0 : Math.max(0, others.length - NAMES_SHOWN);
   const photo = artist?.photo ?? null;
   const credit = overHttps(artist?.photo_page ?? null);
   return (
-    <section className="artist-facts" aria-label="About the artist">
+    <section className="artist-facts" aria-label={t("About the artist")}>
       {artist !== undefined && <p className="artist-who">{describe(artist)}</p>}
       {artist?.about != null && <p className="artist-note">{artist.about}</p>}
       {others.length > 0 && (
         <p className="artist-names">
-          Goes by {others.slice(0, others.length - hidden).join(", ")}
+          {t("Goes by {{names}}", {
+            names: others.slice(0, others.length - hidden).join(t(", ")),
+          })}
           {hidden > 0 && (
             <>
               {" "}
@@ -188,13 +195,16 @@ export function ArtistFacts({
                   setAllNames(true);
                 }}
               >
-                and {hidden} more
+                {t("and {{count}} more names", {
+                  count: hidden,
+                  defaultValue: "and {{count}} more",
+                })}
               </button>
             </>
           )}
         </p>
       )}
-      <ul className="artist-places" aria-label="The artist elsewhere">
+      <ul className="artist-places" aria-label={t("The artist elsewhere")}>
         {placesOf(name, artist).map(({ site, href }) => (
           <li key={site}>
             <a
@@ -202,7 +212,7 @@ export function ArtistFacts({
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              title={`Open ${site} in a new tab`}
+              title={t("Open {{site}} in a new tab", { site })}
             >
               {site}
               <ArrowSquareOutIcon aria-hidden />
@@ -216,16 +226,20 @@ export function ArtistFacts({
             href={credit}
             target="_blank"
             rel="noopener noreferrer"
-            title="Who took the photo, and its license, in a new tab"
+            title={t("Who took the photo, and its license, in a new tab")}
           >
-            Photo: Wikimedia Commons
+            {t("Photo: Wikimedia Commons")}
           </a>
         </p>
       )}
       {toLink && (
         <p className="hint">
-          Not linked to an artist yet.{" "}
-          <a href={hrefOf({ view: "clean-up" })}>Link it to an artist</a>
+          <Trans
+            t={t}
+            i18nKey={LINK_HELP}
+            defaults={LINK_HELP}
+            components={{ associate: <a href={hrefOf({ view: "clean-up" })} /> }}
+          />
         </p>
       )}
     </section>

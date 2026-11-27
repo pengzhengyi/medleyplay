@@ -9,6 +9,7 @@ import { formatMinutes, formatTimeLeft } from "../format";
 import { SLEEP_MINUTES, type SleepTimer } from "../player/useSleepTimer";
 import { useNow } from "../useNow";
 import { Hint } from "./Hint";
+import { type Words, useWords } from "../locale";
 
 /**
  * A moon that opens the timer menu and shows the remaining duration on hover or focus.
@@ -21,17 +22,18 @@ export function SleepTimerMenu({
   readonly timer: SleepTimer;
   readonly container?: HTMLElement | null | undefined;
 }) {
+  const t = useWords();
   const now = useNow();
   const { endsAt, setAt } = timer;
-  const status = endsAt === null ? null : timeLeft(endsAt, setAt, now);
+  const status = endsAt === null ? null : timeLeft(endsAt, setAt, now, t);
   return (
     <Menu.Root modal={false}>
-      <Hint name={status ?? "Sleep timer"} keys={[]}>
+      <Hint name={status ?? t("Sleep timer")} keys={[]}>
         <Menu.Trigger asChild>
           <button
             type="button"
             className={status === null ? "icon sleep-timer" : "icon sleep-timer on"}
-            aria-label={status === null ? "Sleep timer" : "Sleep timer, on"}
+            aria-label={t(status === null ? "Sleep timer" : "Sleep timer, on")}
           >
             <MoonIcon weight={status === null ? "regular" : "fill"} aria-hidden />
           </button>
@@ -49,7 +51,7 @@ export function SleepTimerMenu({
           }}
         >
           {status !== null && <Menu.Label className="track-menu-label">{status}</Menu.Label>}
-          <Menu.Label className="track-menu-label">Pause after</Menu.Label>
+          <Menu.Label className="track-menu-label">{t("Pause after")}</Menu.Label>
           {SLEEP_MINUTES.map((minutes) => (
             <Menu.Item
               key={minutes}
@@ -58,14 +60,14 @@ export function SleepTimerMenu({
                 timer.start(minutes);
               }}
             >
-              {formatMinutes(minutes)}
+              {formatMinutes(minutes, t)}
             </Menu.Item>
           ))}
           {endsAt !== null && (
             <>
               <Menu.Separator className="track-menu-separator" />
               <Menu.Item className="track-menu-item" onSelect={timer.stop}>
-                Turn off the timer
+                {t("Turn off the timer")}
               </Menu.Item>
             </>
           )}
@@ -75,7 +77,9 @@ export function SleepTimerMenu({
   );
 }
 
-function timeLeft(endsAt: number, setAt: number | null, now: number): string {
-  const left = `${formatTimeLeft(endsAt - Math.max(now, setAt ?? now))} left`;
-  return setAt === null ? left : `${left} of ${formatTimeLeft(endsAt - setAt)}`;
+function timeLeft(endsAt: number, setAt: number | null, now: number, t: Words): string {
+  const left = formatTimeLeft(endsAt - Math.max(now, setAt ?? now), t);
+  return setAt === null
+    ? t("{{left}} left", { left })
+    : t("{{left}} left of {{total}}", { left, total: formatTimeLeft(endsAt - setAt, t) });
 }

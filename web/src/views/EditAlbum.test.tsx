@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Track } from "../api";
 import { albumCoversOf, serve, trackOf } from "../testing/server";
 import { EditAlbum } from "./EditAlbum";
+import { LanguageSelect } from "./LanguageSelect";
 
 /** *Supercell*, two songs of their own that agree on all but the year. */
 const SUPERCELL: readonly Track[] = [
@@ -50,6 +51,29 @@ async function pictureEditor() {
 }
 
 describe("editing an album of songs of their own", () => {
+  it("explains the bulk edit in Chinese and submits only the edited field", async () => {
+    const { onSave } = renderEditor();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const editor = within(screen.getByRole("dialog", { name: "编辑专辑" }));
+      expect(editor.getByText(/应用到这 2 首歌曲/u)).toBeVisible();
+      expect(editor.getByText(/只保存已编辑的字段/u)).toBeVisible();
+      expect(editor.getByRole("textbox", { name: "专辑" })).toHaveValue("Supercell");
+      const year = editor.getByRole("spinbutton", { name: "年份" });
+      expect(year).toHaveAttribute("placeholder", "各歌曲的值不同，留空则分别保留");
+      await user.type(year, "2009");
+      await user.click(editor.getByRole("button", { name: "保存" }));
+
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({ year: 2009 });
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("fills each detail its songs agree on, and leaves blank one they don't", () => {
     renderEditor();
 

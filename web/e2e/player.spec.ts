@@ -31,78 +31,106 @@ test("choosing a Track plays it and queues the Tracks after it", async ({ page }
   await expect(player(page).getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
-test("the Up next tabs and album queue controls fit on one line", async ({ page, request }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const response = await request.get("/api/tracks");
-  expect(response.ok()).toBe(true);
-  const [sample] = (await response.json()) as Track[];
-  if (sample === undefined) throw new Error("The test library has no tracks.");
-  const first: Track = { ...sample, availability: "ok" };
-  const file: Track = { ...first, id: 90000, title: "Album file", kind: "album", split: true };
-  const tracks: Track[] = [
-    first,
-    file,
-    ...Array.from({ length: 45 }, (_, index) => ({
-      ...first,
-      id: 90001 + index,
-      title: `Album song ${String(index + 1)}`,
-      segment_of: file.id,
-      track_number: index + 1,
-    })),
-  ];
-  await page.route("**/api/tracks", (route) => route.fulfill({ json: tracks }));
-  await page.route("**/api/tracks/*/playback", (route) =>
-    route.fulfill({
-      json: {
-        state: "ready",
-        source_id: 1,
-        audio_url: "/api/queue-test-audio",
-        media_type: "audio/wav",
-      },
-    }),
-  );
-  await page.route("**/api/queue-test-audio", (route) => route.fulfill({ status: 204 }));
-  await page.addInitScript(() => {
-    HTMLMediaElement.prototype.play = () => Promise.resolve();
-  });
-  await play(page, first.title);
-  const queue = page.getByRole("region", { name: "Up next" });
-  // Allow for a wide scrollbar, even on systems that overlay it.
-  await queue.evaluate((panel: HTMLElement) => {
-    const missing = 20 - (panel.offsetWidth - panel.clientWidth);
-    if (missing > 0) {
-      panel.style.paddingInlineEnd = `calc(${getComputedStyle(panel).paddingInlineEnd} + ${String(missing)}px)`;
-    }
-  });
-  const tab = queue.getByRole("tab", { name: "Up next" });
-  const fold = queue.getByRole("button", { name: "Collapse all" });
-  const timer = queue.getByRole("button", { name: "Sleep timer" });
-  const clear = queue.getByRole("button", { name: /^Clear( Up next)?$/u });
+const queueHeaderWords = {
+  en: {
+    next: "Up next",
+    history: "History",
+    fold: "Collapse all",
+    timer: "Sleep timer",
+    clear: "Clear Up next",
+  },
+  "zh-Hans": {
+    next: "接下来播放",
+    history: "历史",
+    fold: "全部折叠",
+    timer: "睡眠定时器",
+    clear: "清空接下来播放的队列",
+  },
+};
 
-  for (const width of [1280, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    if (width === 390) {
-      await player(page).getByRole("button", { name: "Up next", exact: true }).click();
-    }
-    await expect(clear).toBeEnabled();
-    expect(await queue.evaluate((panel) => panel.scrollHeight > panel.clientHeight)).toBe(true);
-    const tabBox = await tab.boundingBox();
-    const foldBox = await fold.boundingBox();
-    const timerBox = await timer.boundingBox();
-    const clearBox = await clear.boundingBox();
-    const queueBox = await queue.boundingBox();
-    if (!tabBox || !foldBox || !timerBox || !clearBox || !queueBox) {
-      throw new Error("Queue header is not visible.");
-    }
-    expect(clearBox.y + clearBox.height / 2).toBeCloseTo(tabBox.y + tabBox.height / 2, 0);
-    expect(clearBox.width).toBe(foldBox.width);
-    expect(clearBox.width).toBe(timerBox.width);
-    expect(clearBox.x + clearBox.width).toBeLessThan(queueBox.x + queueBox.width);
-  }
+for (const language of ["en", "zh-Hans"] as const) {
+  test(`the Up next tabs and album queue controls fit on one line in ${language}`, async ({
+    page,
+    request,
+  }) => {
+    const words = queueHeaderWords[language];
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const response = await request.get("/api/tracks");
+    expect(response.ok()).toBe(true);
+    const [sample] = (await response.json()) as Track[];
+    if (sample === undefined) throw new Error("The test library has no tracks.");
+    const first: Track = { ...sample, availability: "ok" };
+    const file: Track = { ...first, id: 90000, title: "Album file", kind: "album", split: true };
+    const tracks: Track[] = [
+      first,
+      file,
+      ...Array.from({ length: 45 }, (_, index) => ({
+        ...first,
+        id: 90001 + index,
+        title: `Album song ${String(index + 1)}`,
+        segment_of: file.id,
+        track_number: index + 1,
+      })),
+    ];
+    await page.route("**/api/tracks", (route) => route.fulfill({ json: tracks }));
+    await page.route("**/api/tracks/*/playback", (route) =>
+      route.fulfill({
+        json: {
+          state: "ready",
+          source_id: 1,
+          audio_url: "/api/queue-test-audio",
+          media_type: "audio/wav",
+        },
+      }),
+    );
+    await page.route("**/api/queue-test-audio", (route) => route.fulfill({ status: 204 }));
+    await page.addInitScript((choice) => {
+      localStorage.setItem("medleyplay.language", choice);
+      HTMLMediaElement.prototype.play = () => Promise.resolve();
+    }, language);
+    await page.goto("/");
+    await page.getByRole("button", { name: first.title, exact: true }).click();
+    const queue = page.getByRole("region", { name: words.next, exact: true });
+    // Allow for a wide scrollbar, even on systems that overlay it.
+    await queue.evaluate((panel: HTMLElement) => {
+      const missing = 20 - (panel.offsetWidth - panel.clientWidth);
+      if (missing > 0) {
+        panel.style.paddingInlineEnd = `calc(${getComputedStyle(panel).paddingInlineEnd} + ${String(missing)}px)`;
+      }
+    });
+    const tab = queue.getByRole("tab", { name: words.next });
+    const history = queue.getByRole("tab", { name: words.history, exact: true });
+    const fold = queue.getByRole("button", { name: words.fold });
+    const timer = queue.getByRole("button", { name: words.timer });
+    const clear = queue.getByRole("button", { name: words.clear, exact: true });
 
-  await clear.hover();
-  await expect(page.getByRole("tooltip", { name: "Clear Up next" })).toBeVisible();
-});
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (width === 390) {
+        await page.getByRole("button", { name: words.next, exact: true }).click();
+      }
+      await expect(clear).toBeEnabled();
+      expect(await queue.evaluate((panel) => panel.scrollHeight > panel.clientHeight)).toBe(true);
+      const tabBox = await tab.boundingBox();
+      const historyBox = await history.boundingBox();
+      const foldBox = await fold.boundingBox();
+      const timerBox = await timer.boundingBox();
+      const clearBox = await clear.boundingBox();
+      const queueBox = await queue.boundingBox();
+      if (!tabBox || !historyBox || !foldBox || !timerBox || !clearBox || !queueBox) {
+        throw new Error("Queue header is not visible.");
+      }
+      expect(clearBox.y + clearBox.height / 2).toBeCloseTo(tabBox.y + tabBox.height / 2, 0);
+      expect(historyBox.y).toBeCloseTo(tabBox.y, 0);
+      expect(clearBox.width).toBe(foldBox.width);
+      expect(clearBox.width).toBe(timerBox.width);
+      expect(clearBox.x + clearBox.width).toBeLessThan(queueBox.x + queueBox.width);
+    }
+
+    await clear.hover();
+    await expect(page.getByRole("tooltip", { name: words.clear })).toBeVisible();
+  });
+}
 
 /** Return where the seek bar is, once the Track's length lets it move. */
 async function seekBar(page: Page) {

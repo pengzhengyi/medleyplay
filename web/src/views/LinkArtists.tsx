@@ -36,6 +36,7 @@ import { unlinkedOf } from "../library/cleanUp";
 import { describeKnown } from "../library/knownArtists";
 import { likelyNameOf } from "../library/likelyName";
 import { fold } from "../library/views";
+import { type Words, useWords } from "../locale";
 import { navigate } from "../routes";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
@@ -44,6 +45,14 @@ import { useAiSetUp } from "./aiSetUp";
 const OFFERED = 3;
 /** The most songs a name's song count shows. */
 const SONGS_SHOWN = 8;
+
+function errorDetail(failure: unknown, t: Words): string {
+  return failure instanceof Error
+    ? failure.message
+    : typeof failure === "string"
+      ? failure
+      : t("Something went wrong here.");
+}
 
 /** Each name's songs, by its folded name: as artist, one of its artists, or album artist. */
 function songsByName(tracks: readonly Track[]): ReadonlyMap<string, readonly Track[]> {
@@ -72,7 +81,8 @@ export function LinkArtists({
   /** Called after a change, so the names are read again. */
   readonly onChanged: () => void;
 }) {
-  const [error, setError] = useState("");
+  const t = useWords();
+  const [error, setError] = useState<unknown>();
   // Only a choice made here is kept; until one is, a name's recommendation is chosen.
   const [picked, setPicked] = useState<ReadonlyMap<string, string>>(new Map());
   const [linkingAll, setLinkingAll] = useState(false);
@@ -122,9 +132,9 @@ export function LinkArtists({
   const asking = names.recommending === true;
 
   const lookUp = (wanted: readonly string[]) => {
-    setError("");
+    setError(undefined);
     api.lookUpArtists(wanted).then(onChanged, (failure: unknown) => {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      setError(() => failure);
     });
   };
   /** Move to the Link of the next name that can be linked after `key`. */
@@ -138,21 +148,21 @@ export function LinkArtists({
   const noAi = useAiSetUp();
   const askAi = () => {
     noAi.whenSetUp(() => {
-      setError("");
+      setError(undefined);
       api.recommendArtists().then(onChanged, (failure: unknown) => {
-        setError(failure instanceof Error ? failure.message : String(failure));
+        setError(() => failure);
       });
     });
   };
   const linkAll = async () => {
-    setError("");
+    setError(undefined);
     setLinkingAll(true);
     try {
       for (const row of toLink) {
         await api.linkArtist(row.named.name, row.chosen);
       }
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      setError(() => failure);
     } finally {
       setLinkingAll(false);
       onChanged();
@@ -163,7 +173,7 @@ export function LinkArtists({
       <header className="clean-up-head">
         <h3 id="link-artists-title">
           <LinkSimpleIcon className="clean-up-icon" weight="bold" aria-hidden />
-          Link artist names
+          {t("Link artist names")}
           <span className="clean-up-count">{unlinkedOf(names)}</span>
         </h3>
         <span className="clean-up-head-actions">
@@ -177,7 +187,7 @@ export function LinkArtists({
               title={
                 noAi.missing
                   ? noAi.why
-                  : "Ask the AI which artist each name names; it links nothing"
+                  : t("Ask the AI which artist each name names; it links nothing")
               }
               onClick={askAi}
             >
@@ -186,7 +196,7 @@ export function LinkArtists({
               ) : (
                 <SparkleIcon aria-hidden />
               )}
-              {asking ? "Asking the AI…" : "Ask AI"}
+              {t(asking ? "Asking the AI…" : "Ask AI")}
             </button>
           )}
           {(toAsk > 0 || asking) && <AiSetUpHint />}
@@ -198,7 +208,7 @@ export function LinkArtists({
                 lookUp(toLookUp);
               }}
             >
-              {`Look up ${String(toLookUp.length)} ${toLookUp.length === 1 ? "name" : "names"}`}
+              {t("artist_lookup", { count: toLookUp.length })}
             </button>
           )}
           {toLink.length > 0 && (
@@ -209,24 +219,27 @@ export function LinkArtists({
               aria-busy={linkingAll}
               onClick={() => void linkAll()}
             >
-              {`Link ${String(toLink.length)} recommended`}
+              {t("Link {{count}} recommended", { count: toLink.length })}
             </button>
           )}
         </span>
       </header>
       <p className="tidy-lead">
-        Names linked to one artist count as one artist, each song keeping its name as written.
-        MusicBrainz is asked about each name, a second apart.
+        {t(
+          "Names linked to one artist count as one artist, each song keeping its name as written. MusicBrainz is asked about each name, a second apart.",
+        )}
       </p>
-      {error !== "" && (
+      {error !== undefined && (
         <p className="error" role="alert">
-          {error}
+          {t("Could not update artist links: {{detail}}", {
+            detail: errorDetail(error, t),
+          })}
         </p>
       )}
       {shown.length === 0 ? (
-        <p className="empty">No artist name to link yet.</p>
+        <p className="empty">{t("No artist name to link yet.")}</p>
       ) : (
-        <ul className="tidy-list" aria-label="Artist names">
+        <ul className="tidy-list" aria-label={t("Artist names")}>
           {rows.map(({ named, offered, chosen, recommended, ai, aiPick, apart, likely }) => (
             <NameRow
               key={named.key}
@@ -315,20 +328,21 @@ function NameRow({
   readonly onLinked: () => void;
   readonly onChanged: () => void;
 }) {
-  const [error, setError] = useState("");
+  const t = useWords();
+  const [error, setError] = useState<unknown>();
   const act = (change: Promise<unknown>, then: () => void = () => undefined) => {
-    setError("");
+    setError(undefined);
     change.then(
       () => {
         then();
         onChanged();
       },
       (failure: unknown) => {
-        setError(failure instanceof Error ? failure.message : String(failure));
+        setError(() => failure);
       },
     );
   };
-  const count = `${String(named.tracks)} ${named.tracks === 1 ? "song" : "songs"}`;
+  const count = t("song_count", { count: named.tracks });
   const choosing = !named.linked && !named.finding && named.look_up !== "tidy_first";
   return (
     <li className="tidy-row link-row">
@@ -341,31 +355,37 @@ function NameRow({
           <>
             <span className="link-to">
               {named.artist_id === null
-                ? "Not on MusicBrainz"
-                : `Linked to ${describeKnown(artists.get(named.artist_id))}`}
+                ? t("Not on MusicBrainz")
+                : t("Linked to {{artist}}", {
+                    artist: describeKnown(artists.get(named.artist_id)),
+                  })}
             </span>
             {named.finding && (
               <span className="link-to">
-                <SpinnerGapIcon className="spin" aria-hidden /> Finding its other names on Wikidata…
+                <SpinnerGapIcon className="spin" aria-hidden />{" "}
+                {t("Finding its other names on Wikidata…")}
               </span>
             )}
           </>
         ) : named.finding ? (
           <span className="link-to">
-            <SpinnerGapIcon className="spin" aria-hidden /> Looking it up on MusicBrainz…
+            <SpinnerGapIcon className="spin" aria-hidden /> {t("Looking it up on MusicBrainz…")}
           </span>
         ) : named.look_up === "tidy_first" ? (
-          <span className="link-to">Tidy the name first, then look it up</span>
+          <span className="link-to">{t("Tidy the name first, then look it up")}</span>
         ) : named.looked_at === null && offered.length === 0 ? (
-          <span className="link-to">Not looked up yet</span>
+          <span className="link-to">{t("Not looked up yet")}</span>
         ) : offered.length === 0 ? (
           <span className="link-to">
-            MusicBrainz knows no artist by this name
-            {likely !== undefined && <>, likely {likely}</>}
+            {likely === undefined
+              ? t("MusicBrainz knows no artist by this name")
+              : t("MusicBrainz knows no artist by this name, likely {{name}}", { name: likely })}
           </span>
         ) : (
           <fieldset className="link-choices">
-            <legend className="visually-hidden">{`Artists for ${named.name}`}</legend>
+            <legend className="visually-hidden">
+              {t("Artists for {{name}}", { name: named.name })}
+            </legend>
             {offered.map((artist) => {
               const marked = recommended && !apart && chosen === artist.id;
               return (
@@ -384,13 +404,16 @@ function NameRow({
                   />
                   <span>{describeKnown(artist)}</span>
                   {marked && ai !== null && artist.id === aiPick ? (
-                    <span className="link-tag ai" title={`${ai.why} ${answeredOf(ai) ?? ""}`}>
-                      <SparkleIcon aria-hidden /> {ai.model} suggests
+                    <span
+                      className="link-tag ai"
+                      title={[ai.why, answeredOf(ai, t)].filter(Boolean).join("\n")}
+                    >
+                      <SparkleIcon aria-hidden /> {t("{{model}} suggests", { model: ai.model })}
                     </span>
                   ) : (
                     marked &&
                     artist.id === named.suggested && (
-                      <span className="link-tag">Goes by this name</span>
+                      <span className="link-tag">{t("Goes by this name")}</span>
                     )
                   )}
                 </label>
@@ -399,8 +422,9 @@ function NameRow({
           </fieldset>
         )}
         {apart && ai !== null && (
-          <span className="link-to link-ai-none" title={answeredOf(ai)}>
-            <SparkleIcon aria-hidden /> {`${ai.model} suggests none of these: ${ai.why}`}
+          <span className="link-to link-ai-none" title={answeredOf(ai, t)}>
+            <SparkleIcon aria-hidden />{" "}
+            {t("{{model}} suggests none of these: {{reason}}", { model: ai.model, reason: ai.why })}
           </span>
         )}
       </div>
@@ -409,12 +433,12 @@ function NameRow({
           <button
             type="button"
             className="secondary outline dialog-button"
-            aria-label={`Unlink ${named.name}`}
+            aria-label={t("Unlink {{name}}", { name: named.name })}
             onClick={() => {
               act(api.unlinkArtist(named.name));
             }}
           >
-            Unlink
+            {t("Unlink")}
           </button>
         ) : (
           choosing && (
@@ -423,10 +447,10 @@ function NameRow({
                 <button
                   type="button"
                   className="secondary outline dialog-button"
-                  aria-label={`Look up ${named.name}`}
+                  aria-label={t("Look up {{name}}", { name: named.name })}
                   onClick={onLookUp}
                 >
-                  Look up
+                  {t("Look up")}
                 </button>
               )}
               {likely !== undefined && (
@@ -434,13 +458,19 @@ function NameRow({
                   ref={linkRef}
                   type="button"
                   className="dialog-button recommended"
-                  aria-label={`Show the songs of ${named.name} by ${likely}`}
-                  title={`Show its ${count} by ${likely}, as the Library writes it`}
+                  aria-label={t("Show the songs of {{name}} by {{artist}}", {
+                    name: named.name,
+                    artist: likely,
+                  })}
+                  title={t("Show its {{songs}} by {{artist}}, as the Library writes it", {
+                    songs: count,
+                    artist: likely,
+                  })}
                   onClick={() => {
                     act(renamed(songs, named.name, likely), onLinked);
                   }}
                 >
-                  Use {likely}
+                  {t("Use {{name}}", { name: likely })}
                 </button>
               )}
               {(named.looked_at !== null || offered.length > 0) && (
@@ -452,12 +482,12 @@ function NameRow({
                       ? "secondary outline dialog-button recommended"
                       : "secondary outline dialog-button"
                   }
-                  aria-label={`None of these for ${named.name}`}
+                  aria-label={t("None of these for {{name}}", { name: named.name })}
                   onClick={() => {
                     act(api.linkArtist(named.name, null), onLinked);
                   }}
                 >
-                  {offered.length === 0 ? "Keep apart" : "None of these"}
+                  {t(offered.length === 0 ? "Keep apart" : "None of these")}
                 </button>
               )}
               {offered.length > 0 && (
@@ -468,16 +498,16 @@ function NameRow({
                     className={
                       recommended && !apart ? "dialog-button recommended" : "dialog-button"
                     }
-                    aria-label={`Link ${named.name}`}
+                    aria-label={t("Link {{name}}", { name: named.name })}
                     disabled={chosen === ""}
                     onClick={() => {
                       act(api.linkArtist(named.name, chosen), onLinked);
                     }}
                   >
-                    Link
+                    {t("Link")}
                   </button>
                   <span className="link-hint" aria-hidden>
-                    <KeyReturnIcon /> to link
+                    <KeyReturnIcon /> {t("to link")}
                   </span>
                 </span>
               )}
@@ -485,9 +515,13 @@ function NameRow({
           )
         )}
       </span>
-      {error !== "" && (
+      {error !== undefined && (
         <p className="error" role="alert">
-          {error}
+          {error instanceof RenameError
+            ? t(error.reason, { name: error.written })
+            : t("Could not change this name: {{detail}}", {
+                detail: errorDetail(error, t),
+              })}
         </p>
       )}
     </li>
@@ -508,6 +542,7 @@ function NameSongs({
   /** The name, whose page shows its songs. */
   readonly name: string;
 }) {
+  const t = useWords();
   const tip = useId();
   if (songs.length === 0) {
     return <span className="tidy-meta">{count}</span>;
@@ -519,7 +554,7 @@ function NameSongs({
         type="button"
         className="tidy-meta link-songs-count"
         aria-describedby={tip}
-        title={songs.length === 1 ? "Show it in the Library" : "Show them"}
+        title={t(songs.length === 1 ? "Show it in the Library" : "Show them")}
         onClick={() => {
           const [only] = songs;
           navigate(
@@ -539,7 +574,9 @@ function NameSongs({
             </li>
           ))}
         </ul>
-        {more > 0 && <span className="link-songs-more">{`and ${String(more)} more`}</span>}
+        {more > 0 && (
+          <span className="link-songs-more">{t("and {{count}} more", { count: more })}</span>
+        )}
       </span>
     </>
   );
@@ -554,19 +591,25 @@ async function renamed(songs: readonly Track[], from: string, to: string): Promi
   const where = (name: string) => fold(name.trim()) === key;
   const artists = new Map<string, number[]>();
   for (const song of songs) {
-    const part = song.artists.find(where);
+    const part = song.artists.findIndex(where);
     const artist = where(song.artist)
       ? to
-      : part === undefined
+      : part < 0
         ? undefined
-        : song.artist.replace(part, to);
+        : renamedCredit(song.artist, song.artists, part, to);
+    if (part >= 0 && artist === undefined) {
+      throw new RenameError(
+        "Could not find the exact credit for “{{name}}”. Edit that song's artists instead.",
+        from,
+      );
+    }
     if (artist !== undefined) {
       artists.set(artist, [...(artists.get(artist) ?? []), song.id]);
     }
   }
   const asAlbumArtist = songs.filter((song) => where(song.album_artist)).map((song) => song.id);
   if (artists.size === 0 && asAlbumArtist.length === 0) {
-    throw new Error(`No song shows “${from}” any more.`);
+    throw new RenameError("No song shows “{{name}}” any more.", from);
   }
   for (const [artist, ids] of artists) {
     await api.setDetails(ids, { artist });
@@ -574,4 +617,62 @@ async function renamed(songs: readonly Track[], from: string, to: string): Promi
   if (asAlbumArtist.length > 0) {
     await api.setDetails(asAlbumArtist, { album_artist: to });
   }
+}
+
+class RenameError extends Error {
+  constructor(
+    readonly reason: string,
+    readonly written: string,
+  ) {
+    super(reason);
+  }
+}
+
+const CREDIT_SEPARATOR = /^(?:\s*[,/&、，;；／]\s*|\s+[x×]\s+)$/iu;
+const FEATURE_SEPARATOR = /^\s*([([（［【])?\s*(?:feat\.?|ft\.?|featuring)\s+$/iu;
+const CLOSE_CREDIT: Readonly<Record<string, string>> = {
+  "(": ")",
+  "[": "]",
+  "（": "）",
+  "［": "］",
+  "【": "】",
+};
+
+function renamedCredit(
+  written: string,
+  artists: readonly string[],
+  part: number,
+  to: string,
+): string | undefined {
+  const credit = artists[part];
+  if (artists.length < 2 || credit === undefined || credit === "") return undefined;
+  // Only replace a span if the earliest and latest ordered matches agree on its position.
+  let first = -1;
+  let end = 0;
+  let closes = "";
+  for (const [index, artist] of artists.entries()) {
+    const from = written.indexOf(artist, end);
+    if (from < 0 || artist === "") return undefined;
+    const gap = written.slice(end, from);
+    if (index === 0) {
+      if (gap.trim() !== "") return undefined;
+    } else if (!CREDIT_SEPARATOR.test(gap)) {
+      const feature = FEATURE_SEPARATOR.exec(gap);
+      if (feature === null || closes !== "") return undefined;
+      closes = CLOSE_CREDIT[feature[1] ?? ""] ?? "";
+    }
+    if (index === part) first = from;
+    end = from + artist.length;
+  }
+  if (written.slice(end).trim() !== closes) return undefined;
+  let start = written.length;
+  for (let index = artists.length - 1; index >= part; index -= 1) {
+    const artist = artists[index];
+    if (artist === undefined || start < artist.length) return undefined;
+    start = written.lastIndexOf(artist, start - artist.length);
+    if (start < 0) return undefined;
+  }
+  return first === start
+    ? written.slice(0, start) + to + written.slice(start + credit.length)
+    : undefined;
 }

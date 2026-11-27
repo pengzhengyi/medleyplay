@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProxySetting } from "../api";
 import { type Routes, serve } from "../testing/server";
 import { BilibiliSettings } from "./BilibiliSettings";
+import { LanguageSelect } from "./LanguageSelect";
 
 /** A proxy with a login, as the server shows it: its address, never the login. */
 const WITH_LOGIN: ProxySetting = {
@@ -121,10 +122,18 @@ describe("the Bilibili proxy", () => {
     await user.type(await screen.findByLabelText("Proxy URL"), "socks5://127.0.0.1:1080");
     await user.click(screen.getByRole("button", { name: "Save proxy" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Use socks5h, which looks names up through the proxy.",
-    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Use socks5h, which looks names up through the proxy.");
     expect(screen.getByLabelText("Proxy URL")).toHaveValue("socks5://127.0.0.1:1080");
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(alert).toHaveTextContent("请使用 socks5h，它会通过代理解析域名。");
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
   });
 
   it("removes the proxy and says it is gone", async () => {

@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { PictureLinks, Pictured, SuggestedLink } from "../api";
+import { type PictureLinks, type Pictured, type SuggestedLink, api } from "../api";
 import { serve } from "../testing/server";
 import { ImageLinks } from "./ImageLinks";
+import { LanguageSelect } from "./LanguageSelect";
 import { AiSetUpContext } from "./aiSetUp";
 
 const HELP: Pictured = { kind: "album", album: "Help!", artist: "The Beatles" };
@@ -81,11 +82,11 @@ describe("pictures an AI model suggests", () => {
     const section = await screen.findByRole("region", { name: "Pictures the AI suggests" });
     const pictures = within(section).getAllByRole("presentation");
     expect(pictures.map((picture) => picture.getAttribute("src"))).toEqual([COVER_LINK, BAND_LINK]);
-    expect(within(section).getByRole("link", { name: "upload.wikimedia.org" })).toHaveAttribute(
-      "href",
-      COVER_PAGE,
-    );
+    expect(
+      within(section).getByRole("link", { name: "Source page: en.wikipedia.org" }),
+    ).toHaveAttribute("href", COVER_PAGE);
     expect(calls.filter((call) => call.startsWith("POST"))).toEqual([]);
+    expect(within(section).getByText("No source page provided.")).toBeVisible();
   });
 
   it("asks the AI on opening when it was never asked", async () => {
@@ -125,7 +126,7 @@ describe("pictures an AI model suggests", () => {
       </AiSetUpContext>,
     );
 
-    expect(await screen.findByText(/No AI provider is set up\./u)).toBeVisible();
+    expect(await screen.findByText(/No AI provider is enabled\./u)).toBeVisible();
     expect(screen.getByRole("link", { name: "Set up AI" })).toBeVisible();
     expect(calls.filter((call) => call.startsWith("POST"))).toEqual([]);
   });
@@ -205,6 +206,7 @@ describe("pictures an AI model suggests", () => {
         return { status: 202, body: { cover: null } };
       },
     });
+
     const onUse = suggestions();
 
     await userEvent.click(
@@ -218,6 +220,141 @@ describe("pictures an AI model suggests", () => {
     });
     expect(approved).toEqual({ album: "Help!", artist: "The Beatles", url: COVER_LINK });
     expect(onUse).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies only the approved picture even if another download also finishes", async () => {
+    const fetched = helpSuggested(
+      linkTo(BAND_LINK, { cover: "other-cover" }),
+      linkTo(COVER_LINK, { cover: "cover-help" }),
+    );
+    const { calls } = serve({
+      [LINKS]: reading(helpSuggested(), fetched),
+      "POST /api/image-links/album/approve": { status: 202, body: { cover: null } },
+    });
+
+    const onUse = suggestions();
+    const first = await screen.findByRole("button", { name: /from upload\.wikimedia\.org/u });
+    const second = screen.getByRole("button", { name: /from covers\.example\.org/u });
+
+    fireEvent.click(first);
+    fireEvent.click(second);
+
+    expect(second).toBeDisabled();
+    await waitFor(() => {
+      expect(onUse).toHaveBeenCalledExactlyOnceWith("cover-help");
+    });
+    expect(calls.filter((call) => call.endsWith("/approve"))).toHaveLength(1);
+  });
+
+  it("releases the picture controls when an accepted download stops without an image", async () => {
+    serve({
+      [LINKS]: { body: helpSuggested() },
+      "POST /api/image-links/album/approve": { status: 202, body: { cover: null } },
+    });
+    const onUse = suggestions();
+    const button = await screen.findByRole("button", { name: /from upload\.wikimedia\.org/u });
+
+    await userEvent.click(button);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The download did not finish. Try again.",
+    );
+    expect(button).toBeEnabled();
+    expect(onUse).not.toHaveBeenCalled();
+  });
+
+  it("does not mistake a previous failure read before approval for the retry's result", async () => {
+    const old = helpSuggested(linkTo(COVER_LINK, { unavailable: "HTTP 404" }));
+    const { calls } = serve({ [LINKS]: { body: old } });
+    let finish: (result: { cover: string }) => void = () => undefined;
+    const approval = vi.spyOn(api, "approveImageLink").mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const onUse = suggestions();
+    const button = await screen.findByRole("button", { name: /from upload\.wikimedia\.org/u });
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(button);
+      await act(() => vi.advanceTimersByTimeAsync(2000));
+      expect(calls.filter((call) => call === LINKS)).toHaveLength(2);
+      expect(button).toBeDisabled();
+
+      await act(async () => {
+        finish({ cover: "fetched-on-retry" });
+        await Promise.resolve();
+      });
+
+      expect(onUse).toHaveBeenCalledExactlyOnceWith("fetched-on-retry");
+    } finally {
+      approval.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("explains how a member can restore Ask again even when past suggestions are still shown", async () => {
+    serve({ [LINKS]: { body: { ...helpSuggested(), may_suggest: false } } });
+    render(
+      <AiSetUpContext
+        value={{ missing: true, admin: false, recheck: () => Promise.resolve(false) }}
+      >
+        <ImageLinks pictured={HELP} shown={null} onUse={vi.fn()} />
+      </AiSetUpContext>,
+    );
+
+    const ask = await screen.findByRole("button", { name: "Ask again" });
+
+    expect(ask).toBeDisabled();
+    expect(ask).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.getByText("No AI provider is enabled. Ask an admin to add or enable one."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /from upload\.wikimedia\.org/u })).toBeEnabled();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+      expect(screen.getByRole("button", { name: "重新检查" })).toBeEnabled();
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
+
+  it("does not submit a suggestion request when the configured service cannot offer one", async () => {
+    const { calls } = serve({ [LINKS]: { body: { ...UNASKED, may_suggest: false } } });
+    suggestions();
+
+    const ask = await screen.findByRole("button", { name: "Ask AI" });
+    await userEvent.click(ask);
+
+    expect(ask).toBeDisabled();
+    expect(screen.getByText("AI picture suggestions are unavailable.")).toBeVisible();
+    expect(calls).toEqual([LINKS]);
+  });
+
+  it("translates the visible approval and retry actions without changing their image hosts", async () => {
+    serve({
+      [LINKS]: {
+        body: helpSuggested(linkTo(COVER_LINK), linkTo(BAND_LINK, { unavailable: "HTTP 404" })),
+      },
+    });
+    suggestions();
+    const user = userEvent.setup();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(
+        await screen.findByRole("button", { name: /upload\.wikimedia\.org/u }),
+      ).toHaveTextContent("确认下载");
+      expect(screen.getByRole("button", { name: /covers\.example\.org/u })).toHaveTextContent(
+        "重试",
+      );
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
   });
 
   it("uses a picture downloaded before at once", async () => {
@@ -264,14 +401,14 @@ describe("pictures an AI model suggests", () => {
     expect(screen.getByTitle(why)).toContainElement(screen.getByText("Unavailable"));
   });
 
-  it("shows nothing when the links can't be read", async () => {
+  it("reports unread suggestions without assuming there are no pictures", async () => {
     serve({});
 
-    const { container } = render(<ImageLinks pictured={HELP} shown={null} onUse={vi.fn()} />);
+    render(<ImageLinks pictured={HELP} shown={null} onUse={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(container).toBeEmptyDOMElement();
-    });
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not read picture suggestions",
+    );
+    expect(screen.queryByText(/The AI knows no picture/u)).not.toBeInTheDocument();
   });
 });

@@ -75,9 +75,9 @@ describe("lyrics availability marks", () => {
       );
 
       expect(screen.queryByRole("img", { name: "有歌词" })).not.toBeInTheDocument();
-      expect(screen.getByRole("img", { name: "歌曲, 有歌词" })).toHaveAttribute(
+      expect(screen.getByRole("img", { name: "歌曲，有歌词" })).toHaveAttribute(
         "title",
-        "歌曲, 有歌词",
+        "歌曲，有歌词",
       );
     } finally {
       act(() => {

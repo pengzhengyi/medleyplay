@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TrackDownload } from "../api";
 import { downloadOf, trackOf } from "../testing/server";
 import { AddFile } from "./AddFile";
+import { LanguageSelect } from "./LanguageSelect";
 
 const NIGHT_DRIVE = trackOf(3, "Night Drive", { site: "bilibili", download_failed: true });
 const SONG = new File(["not really audio"], "night-drive.m4a", { type: "audio/mp4" });
@@ -36,6 +37,31 @@ function renderDialog(
 }
 
 describe("adding a Track's file by hand", () => {
+  it("describes replacement, progress, and stopping in Chinese without changing the title", async () => {
+    let report: (sent: number, total: number) => void = () => undefined;
+    const { dialog } = renderDialog(undefined, (_id, _file, onProgress) => {
+      report = onProgress;
+      return new Promise(() => undefined);
+    });
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+      expect(dialog).toHaveAccessibleName("为「Night Drive」添加文件");
+      expect(within(dialog).getByText(/替换现有文件并停止该曲目的下载/u)).toBeVisible();
+      await user.upload(within(dialog).getByLabelText("文件"), SONG);
+      await user.click(within(dialog).getByRole("button", { name: "添加" }));
+      report(4, 16);
+
+      const progress = await within(dialog).findByRole("progressbar", { name: "上传进度" });
+      expect(progress).toHaveAttribute("aria-valuetext", "已上传 25%，共 16 字节");
+      expect(within(dialog).getByRole("button", { name: "停止" })).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("says why the download failed, and lists the other ways with the part's link", async () => {
     const { dialog } = renderDialog();
 

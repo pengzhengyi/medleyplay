@@ -16,6 +16,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
+import { useWords } from "../locale";
 
 /**
  * The picture `children`, suggested as the photo or cover, `noun`, of `of`, with its three
@@ -48,6 +49,9 @@ export function SuggestedFrame({
   readonly onChange: () => void;
   readonly children: ReactNode;
 }) {
+  const t = useWords();
+  const cover = noun === "cover";
+  const reason = why;
   return (
     <div
       className={[
@@ -63,23 +67,33 @@ export function SuggestedFrame({
           className === undefined ? "photo-suggestion-art" : `photo-suggestion-art ${className}`
         }
         role="img"
-        aria-label={`Suggested ${noun} of ${of}: ${why}`}
-        title={why}
+        aria-label={t(
+          cover
+            ? "Suggested cover of {{name}}: {{reason}}"
+            : "Suggested photo of {{name}}: {{reason}}",
+          { name: of, reason },
+        )}
+        title={reason}
       >
         {children}
       </div>
       <div
         className="photo-suggestion-controls"
         role="group"
-        aria-label={`Suggested ${noun} of ${of}`}
+        aria-label={t(cover ? "Suggested cover of {{name}}" : "Suggested photo of {{name}}", {
+          name: of,
+        })}
         aria-busy={busy}
       >
         <button
           type="button"
           className="photo-suggestion-control photo-suggestion-change"
           disabled={busy}
-          aria-label={`Choose another ${noun} of ${of}…`}
-          title={`Choose another ${noun}`}
+          aria-label={t(
+            cover ? "Choose another cover of {{name}}…" : "Choose another photo of {{name}}…",
+            { name: of },
+          )}
+          title={t(cover ? "Choose another cover" : "Choose another photo")}
           onClick={onChange}
         >
           <PencilSimpleIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
@@ -88,8 +102,13 @@ export function SuggestedFrame({
           type="button"
           className="photo-suggestion-control photo-suggestion-dismiss"
           disabled={busy}
-          aria-label={`Dismiss the suggested ${noun} of ${of}`}
-          title="Dismiss"
+          aria-label={t(
+            cover
+              ? "Dismiss the suggested cover of {{name}}"
+              : "Dismiss the suggested photo of {{name}}",
+            { name: of },
+          )}
+          title={t("Dismiss")}
           onClick={onDismiss}
         >
           <XIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
@@ -98,8 +117,11 @@ export function SuggestedFrame({
           type="button"
           className="photo-suggestion-control photo-suggestion-use"
           disabled={busy}
-          aria-label={`Use the suggested ${noun} of ${of}`}
-          title={`Use this ${noun}`}
+          aria-label={t(
+            cover ? "Use the suggested cover of {{name}}" : "Use the suggested photo of {{name}}",
+            { name: of },
+          )}
+          title={t(cover ? "Use this cover" : "Use this photo")}
           onClick={onUse}
         >
           <CheckIcon className="photo-suggestion-icon" weight="bold" aria-hidden />
@@ -108,14 +130,14 @@ export function SuggestedFrame({
       <span className="photo-suggestion-tag" aria-hidden={!busy}>
         {busy ? (
           <>
-            <CircleNotchIcon weight="bold" className="spin" aria-hidden /> Saving…
+            <CircleNotchIcon weight="bold" className="spin" aria-hidden /> {t("Saving…")}
           </>
         ) : picked ? (
           <>
-            <SparkleIcon weight="fill" /> AI pick
+            <SparkleIcon weight="fill" aria-hidden /> {t("AI pick")}
           </>
         ) : (
-          "Suggested"
+          t("Suggested")
         )}
       </span>
     </div>

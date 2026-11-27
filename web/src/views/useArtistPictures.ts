@@ -27,6 +27,9 @@ function messageOf(failure: unknown): string {
 export function useArtistPictures(artistId: string): {
   readonly state: ArtistPictures | undefined;
   readonly error: string;
+  readonly choiceError: string;
+  readonly readError: string;
+  readonly retryRead: () => void;
   readonly find: () => void;
   readonly choose: (hint: string) => void;
   readonly dismiss: (cover: string) => void;
@@ -35,6 +38,8 @@ export function useArtistPictures(artistId: string): {
   // Counts the reads asked for, so each asks the server again.
   const [reads, setReads] = useState(0);
   const [error, setError] = useState("");
+  const [choiceError, setChoiceError] = useState("");
+  const [readError, setReadError] = useState("");
   const noAi = useAiSetUp();
   // Deezer is looked to, and a model asked, once on its own; then only when asked to.
   const found = useRef(false);
@@ -45,6 +50,7 @@ export function useArtistPictures(artistId: string): {
   const find = () => {
     found.current = true;
     setError("");
+    setChoiceError("");
     setState((was) => (was === undefined ? was : { ...was, finding: true, failure: null }));
     api.findArtistPictures(artistId).then(readAgain, (failure: unknown) => {
       setError(messageOf(failure));
@@ -54,12 +60,12 @@ export function useArtistPictures(artistId: string): {
   const choose = (hint: string) => {
     asked.current = true;
     noAi.whenSetUp(() => {
-      setError("");
+      setChoiceError("");
       setState((was) =>
         was === undefined ? was : { ...was, choosing: true, choice_failure: null },
       );
       api.chooseArtistPicture(artistId, hint).then(readAgain, (failure: unknown) => {
-        setError(messageOf(failure));
+        setChoiceError(messageOf(failure));
         readAgain();
       });
     });
@@ -99,12 +105,13 @@ export function useArtistPictures(artistId: string): {
     api.artistPictures(artistId).then(
       (known) => {
         if (current) {
+          setReadError("");
           onRead(known);
         }
       },
       (failure: unknown) => {
         if (current) {
-          setError(messageOf(failure));
+          setReadError(messageOf(failure));
         }
       },
     );
@@ -113,13 +120,17 @@ export function useArtistPictures(artistId: string): {
     };
   }, [artistId, reads]);
   useEffect(() => {
-    if (state?.finding !== true && state?.choosing !== true) {
+    if (readError !== "" || (state?.finding !== true && state?.choosing !== true)) {
       return;
     }
     const timer = setTimeout(readAgain, READ_EVERY_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [state]);
-  return { state, error, find, choose, dismiss };
+  }, [readError, state]);
+  const retryRead = () => {
+    setReadError("");
+    readAgain();
+  };
+  return { state, error, choiceError, readError, retryRead, find, choose, dismiss };
 }

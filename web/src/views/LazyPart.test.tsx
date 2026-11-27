@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RETRY_AFTER_MS, lazyPart } from "../lazyPart";
+import { LanguageSelect } from "./LanguageSelect";
 import { LazyPart } from "./LazyPart";
 
 /** What a part shows once loaded. */
@@ -100,6 +101,33 @@ describe("a part of the page loaded when it opens", () => {
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByText("Hello")).toBeInTheDocument();
+  });
+
+  it("translates a visible connection error without retrying the load", async () => {
+    servePage(undefined);
+    const { part } = partBehindTheNetwork();
+    render(
+      <>
+        <LanguageSelect />
+        <LazyPart doing="Opening…">
+          <part.Component />
+        </LazyPart>
+      </>,
+    );
+    await failToLoad();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Check the connection/u);
+
+    try {
+      await userEvent.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "无法连接到 medleyplay。请检查网络连接后重试。",
+      );
+      expect(screen.getByRole("button", { name: "重试" })).toBeVisible();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      await userEvent.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
   });
 
   it("offers to reload, saying the music stops, when medleyplay was updated since the page opened", async () => {

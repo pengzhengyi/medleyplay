@@ -4,6 +4,7 @@
  */
 
 import type { AnsweredBy } from "../api";
+import type { Words } from "../locale";
 
 /**
  * Return the model that answered, such as `deepseek-chat`, or "the AI" when none is
@@ -14,6 +15,9 @@ export function aiNameOf(by: AnsweredBy | null | undefined, start = false): stri
 }
 
 /** Say which model answered and where it was asked, or nothing when none is known. */
-export function answeredOf(by: AnsweredBy | null | undefined): string | undefined {
-  return by == null ? undefined : `Answered by ${by.model} at ${by.host}`;
+export function answeredOf(by: AnsweredBy | null | undefined, t?: Words): string | undefined {
+  return by == null
+    ? undefined
+    : (t?.("Answered by {{model}} at {{host}}", { model: by.model, host: by.host }) ??
+        `Answered by ${by.model} at ${by.host}`);
 }

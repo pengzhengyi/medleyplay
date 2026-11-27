@@ -3,6 +3,7 @@
  */
 
 import { formatTime } from "../format";
+import { useWords } from "../locale";
 
 /**
  * Show `at` seconds of `length`, the time that moves set apart from the length, which
@@ -17,11 +18,12 @@ export function PlayTime({
   readonly length: number | undefined;
   readonly joiner?: "/" | "of";
 }) {
+  const t = useWords();
   return (
     <>
       <span className="time-at">{formatTime(at)}</span>{" "}
       <span className="time-length">
-        {joiner === "/" ? <span aria-hidden>/</span> : joiner} {formatTime(length)}
+        {joiner === "/" ? <span aria-hidden>/</span> : t("of")} {formatTime(length)}
       </span>
     </>
   );

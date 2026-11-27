@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ImportedAlbum, RatingsImport } from "../api";
 import { type Routes, serve } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 import { RatingsSettings } from "./RatingsSettings";
 
 afterEach(() => {
@@ -51,6 +52,29 @@ const choose = async () => {
 };
 
 describe("importing your Rate Your Music ratings", () => {
+  it("explains a Chinese import preview without changing playlist and album names", async () => {
+    renderSettings(0, { [PREVIEW]: { body: THREE_ALBUMS } });
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await choose();
+    const preview = await screen.findByRole("region", { name: "Before you import" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(preview).toHaveAccessibleName("导入前预览");
+      expect(preview).toHaveTextContent("3 张专辑有评分或评论，其中 1 张在资料库中。");
+      expect(within(preview).getByRole("list", { name: "你的智能歌单" })).toHaveTextContent(
+        "4 stars：1 首歌曲将加入",
+      );
+      await user.click(within(preview).getByText("有 2 张专辑不在资料库中"));
+      expect(within(preview).getByText("スズム – 八日目")).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("says what importing changes before it imports", async () => {
     renderSettings(0, { [PREVIEW]: { body: THREE_ALBUMS } });
 
@@ -93,12 +117,52 @@ describe("importing your Rate Your Music ratings", () => {
     const preview = await screen.findByRole("region", { name: "Before you import" });
     expect(within(preview).getByRole("radio", { name: "Merge with it" })).toBeChecked();
     expect(preview).toHaveTextContent(
-      "1 album you imported before takes its new rating. Your import will have 7 albums.",
+      "The incoming entries replace 1 previously imported album entry. Your import will have 7 albums.",
     );
     await userEvent.click(within(preview).getByRole("radio", { name: "Replace it" }));
     expect(
       await within(preview).findByText(/It replaces your earlier import of 5 albums\./),
     ).toBeInTheDocument();
+  });
+
+  it("explains overlapping entries even when the earlier import count could not be read", async () => {
+    renderSettings(0, {
+      "GET /api/ratings/import": { status: 500 },
+      [PREVIEW]: { body: { ...THREE_ALBUMS, replaced_albums: 1, total_albums: 7 } },
+    });
+    await screen.findByText(
+      "Could not read your earlier import. You can still preview a new file.",
+    );
+
+    await choose();
+
+    const preview = await screen.findByRole("region", { name: "Before you import" });
+    expect(preview).toHaveTextContent(
+      "The incoming entries replace 1 previously imported album entry. Your import will have 7 albums.",
+    );
+  });
+
+  it("keeps the new import visible after an older count arrives", async () => {
+    let finishRead: () => void = () => undefined;
+    const after = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    renderSettings(0, {
+      "GET /api/ratings/import": { after, body: { albums: 0 } },
+      [PREVIEW]: { body: THREE_ALBUMS },
+      [IMPORT]: { body: THREE_ALBUMS },
+    });
+    await choose();
+    await userEvent.click(await screen.findByRole("button", { name: "Import" }));
+    await screen.findByText("Imported 3 albums.");
+
+    await act(async () => {
+      finishRead();
+      await after;
+    });
+
+    expect(screen.getByText("Your imported ratings (3 albums)")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Discard import" })).toBeEnabled();
   });
 
   it("imports as the mode you chose", async () => {
@@ -115,6 +179,34 @@ describe("importing your Rate Your Music ratings", () => {
     expect(await screen.findByText("Imported 3 albums.")).toBeInTheDocument();
     expect(calls).toContain("POST /api/ratings/import?mode=replace");
     expect(calls).not.toContain(IMPORT);
+  });
+
+  it("cannot import in a mode whose preview was refused", async () => {
+    let retry = false;
+    const { calls } = renderSettings(5, {
+      [PREVIEW]: { body: THREE_ALBUMS },
+      "POST /api/ratings/import/preview?mode=replace": () => {
+        if (retry) return { body: THREE_ALBUMS };
+        retry = true;
+        return { status: 422, body: { detail: "Could not preview the replacement." } };
+      },
+      "POST /api/ratings/import?mode=replace": { body: THREE_ALBUMS },
+    });
+    await choose();
+    await userEvent.click(await screen.findByRole("radio", { name: "Replace it" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not preview the replacement.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    expect(calls).not.toContain("POST /api/ratings/import?mode=replace");
+
+    await userEvent.click(screen.getByRole("button", { name: "Retry preview" }));
+    expect(screen.getByRole("radio", { name: "Replace it" })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(await screen.findByText("Imported 3 albums.")).toBeVisible();
+    expect(calls).toContain("POST /api/ratings/import?mode=replace");
   });
 
   it("offers no choice of mode before you import", async () => {
@@ -157,15 +249,42 @@ describe("importing your Rate Your Music ratings", () => {
     renderSettings(0, {
       [PREVIEW]: {
         status: 422,
-        body: { detail: "The export's column 1 is 'Artist', not 'RYM Album'." },
+        body: {
+          detail:
+            "The export's column 1 is 'Artist', not 'RYM Album'; this isn't a Rate Your Music export this server can read.",
+        },
       },
     });
 
     await choose();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "The export's column 1 is 'Artist', not 'RYM Album'.",
+      "The export's column 1 is 'Artist', not 'RYM Album'; this isn't a Rate Your Music export this server can read.",
     );
+  });
+
+  it("translates a header refusal without changing the CSV header names", async () => {
+    renderSettings(0, {
+      [PREVIEW]: {
+        status: 422,
+        body: {
+          detail: `The export's column 1 is "Artist's name", not 'RYM Album'; this isn't a Rate Your Music export this server can read.`,
+        },
+      },
+    });
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await choose();
+    const alert = await screen.findByRole("alert");
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(alert).toHaveTextContent(`导出文件的第 1 列是 "Artist's name"，而不是 'RYM Album'。`);
+      expect(alert).toHaveTextContent("请导入原始 Rate Your Music 导出文件");
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
   });
 });
 
@@ -193,6 +312,24 @@ describe("the import you keep", () => {
 
     expect(screen.queryByText(/Discard the 3 albums/)).toBeNull();
     expect(calls).not.toContain("DELETE /api/ratings/import");
+  });
+
+  it("cannot keep an import after its deletion has started", async () => {
+    let finishDelete: () => void = () => undefined;
+    const after = new Promise<void>((resolve) => {
+      finishDelete = resolve;
+    });
+    renderSettings(3, { "DELETE /api/ratings/import": { after, status: 204 } });
+    await userEvent.click(await screen.findByRole("button", { name: "Discard import" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(screen.getByRole("button", { name: "Keep it" })).toBeDisabled();
+    await act(async () => {
+      finishDelete();
+      await after;
+    });
+    expect(await screen.findByText("Discarded the import.")).toBeVisible();
   });
 
   it("can't be discarded before you import", async () => {
@@ -260,6 +397,29 @@ describe("your imported ratings", () => {
 
     expect(within(table).getAllByRole("row").slice(1)).toHaveLength(1);
     expect(table).toHaveTextContent("Film of Life");
+  });
+
+  it("does not report the previous review table as current when rereading fails", async () => {
+    let changed = false;
+    renderSettings(3, {
+      [PREVIEW]: { body: THREE_ALBUMS },
+      [IMPORT]: () => {
+        changed = true;
+        return { body: { ...THREE_ALBUMS, total_albums: 4 } };
+      },
+      "GET /api/ratings/imported": () =>
+        changed
+          ? { status: 503, body: { detail: "Could not read new reviews." } }
+          : { body: IMPORTED },
+    });
+    await openList();
+    await choose();
+
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not read new reviews.");
+    expect(screen.getByText("Your imported ratings (4 albums)")).toBeVisible();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
   it("says when no album matches", async () => {

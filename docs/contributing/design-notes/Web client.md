@@ -449,6 +449,8 @@ Track's kind is decided.
   chosen, the box takes a link or a bare video code and *Enter* opens the add
   dialog; it doesn't search anything else. See
   [Manual downloads](Manual%20downloads.md#the-web-client).
+- **Clear search** highlights on hover. Its keyboard-focus ring stays inside
+  the button and search field; clearing returns focus to the text input.
 - **Typing `bilibili:` chooses Bilibili,** as its toggle does, at a word's start
   in the box; what follows it stays typed, so `bilibili:BV1…` pasted is ready for
   *Enter*. The tags listed in an empty box end with it, and Backspace in an empty

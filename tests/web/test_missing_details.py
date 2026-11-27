@@ -103,6 +103,69 @@ def test_an_intentionally_blank_album_stays_out_of_cleanup_until_its_override_is
     assert again["fields"] == [{"field": "album", "candidates": []}]
 
 
+def test_editing_a_single_excludes_only_its_album_until_the_blank_override_is_removed(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    single = catalog.add_track(SourceKeyFactory.bilibili(part=1), TrackDetails("Single"))
+    unknown = catalog.add_track(SourceKeyFactory.bilibili(part=2), TrackDetails("Unknown", "Trio"))
+    before = _item(client, single)
+    assert before["fields"] == [
+        {"field": "album", "candidates": []},
+        {"field": "artist", "candidates": []},
+    ]
+
+    saved = client.post(
+        "/api/tracks/details", json={"track_ids": [single], "values": {"album": ""}}
+    )
+
+    assert saved.status_code == 200
+    details = client.get(f"/api/tracks/{single}/details").json()
+    assert details["origins"]["household"] == {"album": ""}
+    assert _item(client, single)["fields"] == [{"field": "artist", "candidates": []}]
+    assert _item(client, unknown)["fields"] == [{"field": "album", "candidates": []}]
+    removed = client.post(
+        "/api/tracks/details", json={"track_ids": [single], "values": {"album": None}}
+    )
+    assert removed.status_code == 200
+    assert _item(client, single)["fields"] == before["fields"]
+
+
+def test_a_single_choice_invalidates_an_earlier_ai_album_request(
+    ai_cleanup: tuple[TestClient, Enriching],
+) -> None:
+    client, running = ai_cleanup
+    track = running.add_song("Single", artist="")
+    _ai_on(client)
+    running.online.online = False
+    before = _item(client, track)
+    asked = client.post(f"{MISSING}/{track}/ask", json={"key": before["key"]})
+    assert asked.status_code == 202
+
+    saved = client.post("/api/tracks/details", json={"track_ids": [track], "values": {"album": ""}})
+
+    assert saved.status_code == 200
+    refused = client.post(f"{MISSING}/{track}/ask", json={"key": before["key"]})
+    assert refused.status_code == 409
+    running.online.online = True
+    running.runner.wake()
+    running.wait_for(JobId(asked.json()["id"]), JobState.FAILED)
+    assert _item(client, track)["fields"] == [{"field": "artist", "candidates": []}]
+    assert _item(client, track)["ai"] == "ready"
+    stale = client.post(
+        f"{MISSING}/{track}/decision",
+        json={
+            "key": before["key"],
+            "field": "album",
+            "value": "Synthetic Album",
+            "origin": "ai",
+        },
+    )
+    assert stale.status_code == 409
+    details = client.get(f"/api/tracks/{track}/details").json()
+    assert details["origins"]["household"] == {"album": ""}
+
+
 def test_another_listeners_edit_wins_over_a_stale_missing_album_candidate(
     client: TestClient, catalog: CatalogService
 ) -> None:

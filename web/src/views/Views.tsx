@@ -922,7 +922,7 @@ function Albums({
         </div>
       )}
       {albums.length > 0 ? (
-        <AlbumList albums={albums} favorites={favorites} />
+        <AlbumList albums={albums} favorites={favorites} deferOffscreen />
       ) : allAlbums.length > 0 ? (
         <p className="empty">{t("No albums match this artist filter.")}</p>
       ) : (
@@ -947,13 +947,15 @@ const albumKeyOf = (artist: string, name: string) => fold(`${artist}\n${name}`);
 function AlbumList({
   albums,
   favorites,
+  deferOffscreen = false,
 }: {
   readonly albums: readonly Album[];
   readonly favorites: FavoriteGroups;
+  readonly deferOffscreen?: boolean;
 }) {
   const t = useWords();
   return (
-    <ul className="groups" aria-label={t("Albums")}>
+    <ul className={deferOffscreen ? "groups deferred-gallery" : "groups"} aria-label={t("Albums")}>
       {albums.map((album) => {
         const favorite = isFavoriteAlbum(favorites, album.artist, album.name);
         return (

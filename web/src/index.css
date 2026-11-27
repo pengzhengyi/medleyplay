@@ -657,6 +657,12 @@ button[aria-disabled="true"] {
   flex: none;
   margin: 0 0.45rem 0 0;
   color: var(--muted);
+  outline: none;
+}
+
+.search-field .search-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
 }
 
 .search-words {
@@ -2773,6 +2779,11 @@ button[aria-disabled="true"] {
 
 /* Artists, albums, and Playlists: tiles, each lifting when pointed at. */
 .groups {
+  --gallery-padding: 0.75rem;
+  --gallery-gap: 0.3rem;
+  --gallery-cover-gap: 0.35rem;
+  --gallery-meta-size: 0.82rem;
+
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
   gap: 0.75rem;
@@ -2788,8 +2799,8 @@ button[aria-disabled="true"] {
 
 .groups a {
   display: grid;
-  gap: 0.3rem;
-  padding: 0.75rem;
+  gap: var(--gallery-gap);
+  padding: var(--gallery-padding);
   border-radius: 1rem;
   color: inherit;
   text-decoration: none;
@@ -2801,6 +2812,22 @@ button[aria-disabled="true"] {
 .groups a:hover {
   background: var(--surface);
   box-shadow: var(--lift);
+}
+
+@supports (content-visibility: auto) and (contain-intrinsic-block-size: calc(100cqi + 1lh)) {
+  .deferred-gallery > li {
+    container-type: inline-size;
+  }
+
+  .deferred-gallery > li > a {
+    content-visibility: auto;
+
+    /* The skipped content holds a square cover, one title line, and one metadata line. */
+    contain-intrinsic-block-size: calc(
+      100cqi - var(--gallery-padding) * 2 + var(--gallery-cover-gap) + 1lh +
+        var(--gallery-meta-size) * var(--pico-line-height) + 2 * var(--gallery-gap)
+    );
+  }
 }
 
 /* Pointed at, a credit link takes the ink and a full underline. */
@@ -2824,7 +2851,7 @@ button[aria-disabled="true"] {
   place-items: center;
   overflow: hidden;
   aspect-ratio: 1;
-  margin-bottom: 0.35rem;
+  margin-bottom: var(--gallery-cover-gap, 0.35rem);
   border-radius: 0.9rem;
   background: var(--accent-soft);
   color: var(--accent);
@@ -2882,7 +2909,7 @@ button[aria-disabled="true"] {
 
 .group-meta {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--gallery-meta-size, 0.82rem);
 }
 
 /* The Radio tab: the stations, side by side when there is room, then shelves of albums. */
@@ -4221,9 +4248,18 @@ button.icon.heart.on:hover,
 
 .queue header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.25rem;
   padding: 0 0.5rem 0.5rem;
+}
+
+.queue-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-inline-start: auto;
 }
 
 .queue header .sleep-timer {
@@ -4392,6 +4428,7 @@ button.icon.heart.on:hover,
 /* Up next and History head the panel as two tabs; the one shown is raised. */
 .queue-tabs {
   display: flex;
+  flex: none;
   gap: 0.15rem;
 }
 
@@ -4404,6 +4441,7 @@ button.icon.heart.on:hover,
   color: var(--muted);
   font-size: 1rem;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .queue-tabs [role="tab"][aria-selected="true"] {
@@ -6311,6 +6349,9 @@ dialog.modal::backdrop {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+
+  /* Each button has its own focus ring. */
+  box-shadow: none;
 }
 
 .detail-alternatives:empty {
@@ -6336,6 +6377,7 @@ dialog.modal::backdrop {
   max-width: 100%;
   margin: 0;
   padding: 0.15rem 0.6rem;
+  scroll-margin-block: 0.5rem;
   overflow: hidden;
   border: 1px dashed var(--line);
   border-radius: 999px;

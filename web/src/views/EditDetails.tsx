@@ -174,12 +174,22 @@ export function EditDetails({
   const dialog = useRef<HTMLDialogElement>(null);
   const [details, setDetails] = useState<Details | undefined>(undefined);
   const [edits, setEdits] = useState<Partial<Record<Detail, string | null | undefined>>>({});
+  const [kindDraft, setKind] = useState<Kind | null | undefined>(undefined);
+  const [singleRequested, setSingleRequested] = useState(false);
+  const fixed = fixedKind(details?.kind.reason);
+  const kind = fixed ? undefined : kindDraft;
+  const canConfirmSingle =
+    details !== undefined && !fixed && kind !== null && (kind ?? details.kind.value) === "song";
+  const confirmedSingle = singleRequested && canConfirmSingle;
+  if (fixed && kindDraft !== undefined) setKind(undefined);
+  if (singleRequested && !canConfirmSingle) setSingleRequested(false);
   const held = details === undefined ? {} : ownOf(details);
   const merged = new Map<string, string>(Object.entries(held));
   for (const [field, value] of Object.entries(edits)) {
     if (value === null) merged.delete(field);
     else if (value !== undefined) merged.set(field, value);
   }
+  if (confirmedSingle) merged.set("album", "");
   const own: Own = Object.fromEntries(merged);
   const setOwn = (next: Own) => {
     setEdits((before) => {
@@ -190,6 +200,10 @@ export function EditDetails({
       }
       return after;
     });
+  };
+  const changeOwn = (next: Own) => {
+    if (next.album !== own.album) setSingleRequested(false);
+    setOwn(next);
   };
   // The song's artists as chips, or `undefined` while it has one artist in a box.
   const [creditEdit, setCreditEdit] = useState<readonly Credit[] | null>();
@@ -207,7 +221,6 @@ export function EditDetails({
   const [removedArtist, setRemovedArtist] = useState<string>();
   const artistBox = useRef<HTMLInputElement>(null);
   // The kind chosen, `null` to guess it again, or `undefined` while unchanged.
-  const [kind, setKind] = useState<Kind | null | undefined>(undefined);
   // A song's album, folded until opened: many songs are singles, on no album.
   const [albumOpen, setAlbumOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -297,6 +310,7 @@ export function EditDetails({
       (loaded) => {
         if (open) {
           setDetails(loaded);
+          setSingleRequested(false);
           const canPrefill = review !== undefined && canPrefillMissingDetail(loaded, review.field);
           setEdits(canPrefill ? { [review.field]: review.value } : {});
           setCreditEdit(undefined);
@@ -348,10 +362,15 @@ export function EditDetails({
     details === undefined
       ? {}
       : {
-          ...withoutArtist(changesOf(details, own), chosen !== undefined),
+          ...withoutArtist(changesOf(details, own, confirmedSingle), chosen !== undefined),
           ...kindChange(details, kind),
         };
   const changed = Object.keys(changes).length > 0 || artists !== undefined;
+  const albumName = details === undefined ? "" : boxText(details, own, "album");
+  const isSingle =
+    details !== undefined &&
+    details.kind.reason !== "segment" &&
+    settle(details, own, confirmedSingle).album?.trim() === "";
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!changed || saving || reading || covering) {
@@ -366,6 +385,7 @@ export function EditDetails({
       if (fresh !== undefined) {
         setDetails(fresh);
         setEdits({});
+        setSingleRequested(false);
         setCreditEdit(undefined);
         setDraft("");
         setKind(undefined);
@@ -473,6 +493,18 @@ export function EditDetails({
             setOwn(next);
           },
         };
+  const singleChoice = canConfirmSingle ? (
+    <button
+      type="button"
+      className="detail-alternative"
+      disabled={saving || reading || covering || isSingle}
+      onClick={() => {
+        setSingleRequested(true);
+      }}
+    >
+      {t("No album (single)")}
+    </button>
+  ) : null;
   const boxes = (group: DetailField["group"]) =>
     details !== undefined &&
     DETAIL_FIELDS.filter((field) => field.group === group).map((field) => (
@@ -481,7 +513,16 @@ export function EditDetails({
         field={field}
         details={details}
         own={own}
-        onChange={setOwn}
+        confirmedSingle={confirmedSingle}
+        singleChoice={field.name === "album" ? singleChoice : null}
+        onCancelSingle={
+          field.name === "album" && confirmedSingle
+            ? () => {
+                setSingleRequested(false);
+              }
+            : undefined
+        }
+        onChange={changeOwn}
         disabled={saving || reading || covering}
         chips={field.name === "artist" ? artistChips : undefined}
         chipsChanged={field.name === "artist" && artists !== undefined}
@@ -635,8 +676,11 @@ export function EditDetails({
               <KindChoice
                 details={details}
                 chosen={kind}
-                onChoose={setKind}
                 disabled={saving || reading || covering}
+                onChoose={(next) => {
+                  if (next !== "song") setSingleRequested(false);
+                  setKind(next);
+                }}
               />
               <fieldset className="detail-group">
                 <legend>{t("Song")}</legend>
@@ -658,9 +702,11 @@ export function EditDetails({
                   <summary className="detail-fold-summary">
                     <span className="detail-fold-title">{t("Album")}</span>
                     <span className="detail-fold-value">
-                      {boxText(details, own, "album").trim() === ""
-                        ? t("None, a single")
-                        : boxText(details, own, "album")}
+                      {albumName.trim() === ""
+                        ? isSingle
+                          ? t("No album (single)")
+                          : t("Unknown")
+                        : albumName}
                     </span>
                   </summary>
                   <fieldset className="detail-group">
@@ -698,6 +744,10 @@ function kindChange(details: Details, chosen: Kind | null | undefined): { kind?:
   return chosen === undefined || chosen === had ? {} : { kind: chosen };
 }
 
+function fixedKind(reason: KindReason | undefined): boolean {
+  return reason === "split" || reason === "segment";
+}
+
 const KIND_WHY: Readonly<Record<KindReason, string>> = {
   named: "",
   split: "Split into songs, so an album",
@@ -722,7 +772,7 @@ function KindChoice({
   readonly disabled: boolean;
 }) {
   const t = useWords();
-  const fixed = details.kind.reason === "split" || details.kind.reason === "segment";
+  const fixed = fixedKind(details.kind.reason);
   const shown = chosen ?? details.kind.value;
   // Whether the household's word will be kept, so it can be dropped for the guess again.
   const named =
@@ -1120,6 +1170,9 @@ function DetailBox({
   field,
   details,
   own,
+  confirmedSingle,
+  singleChoice,
+  onCancelSingle,
   onChange,
   chips,
   chipsChanged = false,
@@ -1128,6 +1181,9 @@ function DetailBox({
   readonly field: DetailField;
   readonly details: Details;
   readonly own: Own;
+  readonly confirmedSingle: boolean;
+  readonly singleChoice: ReactNode;
+  readonly onCancelSingle?: (() => void) | undefined;
   readonly onChange: (own: Own) => void;
   /** For the artist: its chips, which take the box's place once there are several. */
   readonly chips?: ArtistChipsProps | undefined;
@@ -1137,11 +1193,11 @@ function DetailBox({
   const t = useWords();
   const { name, label, kind } = field;
   const id = `detail-${name}`;
-  const typed = boxText(details, own, name);
-  const yours = name in settle(details, own);
+  const typed = boxText(details, own, name, confirmedSingle);
+  const yours = name in settle(details, own, confirmedSingle);
   const origin = chipsChanged
     ? ({ text: t("Yours"), from: "household" } as const)
-    : originOf(details, own, field, t);
+    : originOf(details, own, field, confirmedSingle, t);
   const described = origin === undefined ? undefined : `${id}-origin`;
   const range = RANGES[name];
   const suggestion = suggestionOf(details, name);
@@ -1149,7 +1205,7 @@ function DetailBox({
   const use = chips === undefined ? onChange : chips.onUse;
   const canRemoveBlank =
     (name === "artist" || name === "album" || name === "album_artist") &&
-    details.origins.household?.[name] === "" &&
+    (details.origins.household?.[name] === "" || onCancelSingle !== undefined) &&
     own[name] === "";
   // The one artist saved, shown as a tag until clicked to edit; typed, it is a box again.
   const [editing, setEditing] = useState(false);
@@ -1278,16 +1334,18 @@ function DetailBox({
         role="group"
         aria-label={t("Other values for {{field}}", { field: t(label) })}
       >
+        {singleChoice}
         {canRemoveBlank && (
           <button
             type="button"
             className="detail-alternative"
             disabled={disabled}
             onClick={() => {
-              use(Object.fromEntries(Object.entries(own).filter(([field]) => field !== name)));
+              if (onCancelSingle !== undefined) onCancelSingle();
+              else use(Object.fromEntries(Object.entries(own).filter(([field]) => field !== name)));
             }}
           >
-            {t("Remove blank override")}
+            {t(onCancelSingle === undefined ? "Remove blank override" : "Undo single choice")}
           </button>
         )}
         {alternativesOf(details, name, typed).map(({ value, origin: from }) => {
@@ -1356,11 +1414,12 @@ function originOf(
   details: Details,
   own: Own,
   field: DetailField,
+  confirmedSingle: boolean,
   t: Words,
 ): { readonly text: string; readonly from?: Origin } | undefined {
   const { name, kind } = field;
-  const shows = previewOf(details, own)[name];
-  if (name in settle(details, own)) {
+  const shows = previewOf(details, own, confirmedSingle)[name];
+  if (name in settle(details, own, confirmedSingle)) {
     if (kind === "number" && own[name]?.trim() === "") {
       return {
         text:

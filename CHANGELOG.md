@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Open the medleyplay GitHub repository from the icon at the top right.
 - When finding lyrics, compare the Library song's album and length with the
   results.
-- In the floating **Up next** panel, one button expands or collapses all album
+- In **Up next**, one button expands or collapses all album
   groups without changing what plays.
 - Dismiss a failed download from its warning menu in *Downloaded*, or dismiss
   them all at once. Songs and audio files stay in your Library.
@@ -750,6 +750,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Large album galleries open faster while keeping every album and the same
+  keyboard navigation.
 - The Library/Bilibili toggle sits to the left of the search field.
 - In **Clean up → Missing artist or album**, **Ask AI** and **Ask again**
   now sit alongside **Use**, **Edit**, and **Skip**.
@@ -944,6 +946,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Mark a song as **No album (single)** in Edit details to stop album suggestions
+  in Clean up. Unknown albums are no longer labeled as singles.
+
+- The search clear button keeps its keyboard-focus ring inside the search
+  field, with only a hover highlight for pointer use.
 - Lyrics quotation marks decorate the small song and album indicators, not
   covers, including when phone lyrics hide the artwork.
 - In Songs, manually saved lyrics show a solid border instead of the previous

@@ -180,7 +180,7 @@ export function QueuePanel({
           ))}
         </div>
         {tab === "queue" ? (
-          <>
+          <div className="queue-actions">
             <SleepTimerMenu timer={sleep} container={announceIn} />
             {showFoldAll && albums.length > 0 && (
               <Hint name={foldAllLabel} keys={[]}>
@@ -209,7 +209,7 @@ export function QueuePanel({
             >
               {words("Clear")}
             </button>
-          </>
+          </div>
         ) : (
           <HistoryClear
             history={history}

@@ -2,6 +2,8 @@
  * @file The server's API, as the client uses it: typed requests that throw on failure.
  */
 
+import type { Language } from "./locale";
+
 /** Whether a Track can play now, best first. */
 export type Availability =
   "ok" | "offline" | "waiting_online" | "unavailable" | "missing" | "cant_play";
@@ -1482,10 +1484,16 @@ async function refusalOf(response: Response): Promise<ApiError> {
   return refusal;
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers?: Record<string, string>,
+): Promise<T> {
   const init: RequestInit = { method, credentials: "same-origin" };
+  if (headers !== undefined) init.headers = headers;
   if (body !== undefined) {
-    init.headers = { "Content-Type": "application/json" };
+    init.headers = { "Content-Type": "application/json", ...headers };
     init.body = JSON.stringify(body);
   }
   return readResponse<T>(await fetch(path, init));
@@ -1766,7 +1774,7 @@ export const api = {
     call<null>("POST", `/api/tracks/${String(trackId)}/lyrics/choose`),
   lyricsMatches: (album: number) =>
     call<readonly LyricsMatch[]>("GET", `/api/tracks/${String(album)}/songs/lyrics-match`),
-  startLyricsMatch: (album: number, songs: readonly SplitSong[]) =>
+  startLyricsMatch: (album: number, songs: readonly SplitSong[], language: Language) =>
     call<readonly LyricsMatch[]>(
       "POST",
       `/api/tracks/${String(album)}/songs/lyrics-match`,
@@ -1777,6 +1785,7 @@ export const api = {
         title,
         artist,
       })),
+      { "Accept-Language": language },
     ),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
   artistNames: () => heldReads.read<ArtistNames>("/api/artist-names"),

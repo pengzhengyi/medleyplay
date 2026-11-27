@@ -273,11 +273,18 @@ def test_submission_normalizes_repeated_rows_and_reuses_the_active_match(
     search = enriching.lyrics_search.find(alice, other, "Other", "Radiohead")
     enriching.wait_for(search, JobState.SUCCEEDED)
 
-    (first,) = enriching.lyrics_match.start(alice, album, [melt, melt])
-    (second,) = enriching.lyrics_match.start(bob, album, [melt])
+    (first,) = enriching.lyrics_match.start(alice, album, [melt, melt], interface_language="en")
+    (second,) = enriching.lyrics_match.start(bob, album, [melt], interface_language="en")
+    (different,) = enriching.lyrics_match.start(bob, album, [melt], interface_language="zh-Hans")
 
     assert first.job_id is not None
     assert second.job_id == first.job_id
+    assert (different.state, different.job_id, different.previous_job_id) == (
+        "skipped",
+        None,
+        first.job_id,
+    )
+    assert "different interface language" in different.note
     assert enriching.jobs.get_job(first.job_id).job.requested_by == alice.id
     with pytest.raises(ForbiddenError):
         enriching.jobs.cancel(bob, first.job_id)
@@ -297,6 +304,25 @@ def test_a_replacement_choice_cannot_be_confirmed_by_the_earlier_pick_id(
             track_id=ready.track_id, offered=tuple(search.offered), option=1, why="The live take."
         )
         assert store_choice(db, search, replacement, enriching.clock) is not None
+
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(album, _rows(rows), lyric_picks=[ready.choice_job_id])
+
+    assert enriching.lyrics.lyrics(ready.track_id) is None
+
+
+def test_songs_save_refuses_a_pick_whose_candidate_text_changed_without_metadata_changes(
+    enriching: Enriching, alice: Account, songs: SongsService
+) -> None:
+    album, rows = _album(enriching, alice, songs)
+    enriching.lyrics_match.start(alice, album, [rows[0]])
+    enriching.finish_every_job()
+    (ready,) = enriching.lyrics_match.status(alice, album)
+    assert ready.choice_job_id is not None
+    with enriching.units.begin() as db:
+        search = db.get_one(LyricsSearchRow, ready.track_id)
+        first, *others = search.options
+        search.options = [first | {"text": "[00:01.00]A changed lyric"}, *others]
 
     with pytest.raises(ConflictError, match="changed"):
         songs.save(album, _rows(rows), lyric_picks=[ready.choice_job_id])

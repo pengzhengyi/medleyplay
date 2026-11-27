@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
+from hashlib import sha256
 from typing import Final
 
 from sqlalchemy import select
@@ -23,6 +24,7 @@ from medleyplay.application import Clock
 from medleyplay.application.ai import is_set_up, provider_named
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.lyrics import record_lyrics
+from medleyplay.application.lyrics_language import LyricsLanguages, lyrics_languages
 from medleyplay.application.lyrics_match_state import (
     MATCH_CHOOSE,
     MATCH_FIND,
@@ -52,6 +54,7 @@ from medleyplay.plugin_api import (
     LYRICS_FINDER,
     MAX_NAME,
     LyricsChoice,
+    LyricsInterfaceLanguage,
     LyricsOption,
     LyricsProvider,
 )
@@ -384,7 +387,12 @@ def require_match_providers(db: Session, plugins: PluginService) -> None:
 
 
 def choice_request(
-    track: TrackRow, row: LyricsSearchRow, options: tuple[LyricsOption, ...], search_job: int | None
+    track: TrackRow,
+    row: LyricsSearchRow,
+    options: tuple[LyricsOption, ...],
+    search_job: int | None,
+    *,
+    interface_language: LyricsInterfaceLanguage | None = None,
 ) -> ChooseLyricsJob:
     """Capture the exact candidates and song details shown to the chooser."""
     return ChooseLyricsJob(
@@ -393,10 +401,12 @@ def choice_request(
         artist=(track.artist or row.artist)[:MAX_NAME],
         album=track.album[:MAX_NAME],
         duration_ms=track.duration_ms,
-        options=tuple(_choice_of(each) for each in options),
+        options=tuple(_choice_of(each, with_language=True) for each in options),
         offered=tuple(_key_of(each) for each in options),
         chooser=CHOOSER,
         search_job=search_job,
+        interface_language=interface_language,
+        candidates_fingerprint=_fingerprint_of(options),
     )
 
 
@@ -517,7 +527,7 @@ def _matched_option(
         or not 0 <= pick.option < len(options)
     ):
         raise ConflictError(_CHANGED)
-    if tuple(_choice_of(each) for each in options) != asked.options:
+    if not _same_candidates(asked, options):
         raise ConflictError(_CHANGED)
     option = options[pick.option]
 
@@ -529,10 +539,46 @@ def _matched_option(
             each.duration_ms,
         )
 
-    if sum(recording(each) == recording(option) for each in options) != 1:
+    competing = tuple(
+        at
+        for at, each in enumerate(options)
+        if at != pick.option and recording(each) == recording(option)
+    )
+    if competing and not _preferred_translation(asked, pick.option, competing):
         message = "Skipped: more than one candidate matches that recording."
         raise ConflictError(message)
     return option
+
+
+def _preferred_translation(asked: ChooseLyricsJob, pick: int, competing: tuple[int, ...]) -> bool:
+    language = asked.interface_language
+    chosen = asked.options[pick]
+    return (
+        language is not None
+        and chosen.translation_language == language
+        and chosen.lyrics_language not in (None, language)
+        and not chosen.instrumental
+        and asked.offered.count(asked.offered[pick]) == 1
+        and all(
+            not other.instrumental
+            and other.lyrics_language == chosen.lyrics_language
+            and (not other.has_paired_text or other.translation_language not in (None, language))
+            for other in (asked.options[at] for at in competing)
+        )
+    )
+
+
+def _fingerprint_of(options: tuple[LyricsOption, ...]) -> str:
+    digest = sha256()
+    for option in options:
+        digest.update(option.model_dump_json().encode())
+    return digest.hexdigest()
+
+
+def _same_candidates(asked: ChooseLyricsJob, options: tuple[LyricsOption, ...]) -> bool:
+    if asked.candidates_fingerprint is not None:
+        return _fingerprint_of(options) == asked.candidates_fingerprint
+    return tuple(_choice_of(each, with_language=False) for each in options) == asked.options
 
 
 def _failure(job: Job | None, viewer: Account) -> str | None:
@@ -550,8 +596,9 @@ def _key_of(option: LyricsOption) -> str:
     return f"{option.provider.value}\n{option.title}\n{option.artist}\n{option.duration_ms}"
 
 
-def _choice_of(option: LyricsOption) -> LyricsChoice:
+def _choice_of(option: LyricsOption, *, with_language: bool) -> LyricsChoice:
     """Return a song found as a model is shown it: what tells it apart, without its words."""
+    hints = lyrics_languages(option.text) if with_language else LyricsLanguages()
     return LyricsChoice(
         provider=option.provider,
         title=option.title,
@@ -560,6 +607,9 @@ def _choice_of(option: LyricsOption) -> LyricsChoice:
         duration_ms=option.duration_ms,
         timed=_timed(option.text),
         instrumental=option.instrumental,
+        lyrics_language=hints.primary,
+        translation_language=hints.translation,
+        has_paired_text=hints.has_paired_text,
     )
 
 
@@ -611,13 +661,14 @@ def _complete_choice(db: Session, job: Job, result: ChosenLyricsResult, *, clock
     A pick among songs other than those found now, as songs found again since, is dropped.
     """
     submitted = db.get(JobRow, job.id)
-    expected = None if submitted is None else submitted.request.get("search_job")
+    asked = None if submitted is None else ChooseLyricsJob.model_validate(submitted.request)
+    expected = None if asked is None else asked.search_job
     if expected is not None:
         latest = _latest_job(db, FIND_LYRICS_KIND, find_lyrics_target(TrackId(result.track_id)))
         if latest is None or latest.id != expected:
             return
     row = db.get(LyricsSearchRow, result.track_id)
-    if row is not None:
+    if row is not None and (asked is None or _same_candidates(asked, _options_of(row))):
         store_choice(db, row, result, clock)
 
 

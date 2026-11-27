@@ -24,7 +24,7 @@ the request is a reply, not a failure, so it doesn't count against the plugin.
 """
 
 from datetime import timedelta
-from typing import Annotated, Final, Protocol
+from typing import Annotated, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -36,6 +36,8 @@ MAX_LYRICS_FOUND: Final = 8
 """The most songs a finder answers with."""
 
 type Named = Annotated[str, StringConstraints(max_length=MAX_NAME)]
+type LyricsInterfaceLanguage = Literal["en", "zh-Hans"]
+type LyricLanguageHint = Literal["en", "ja", "ko", "zh-Hans"]
 
 
 class _Model(BaseModel):
@@ -107,6 +109,7 @@ class LyricsChoice(_Model):
     """A song found, offered to choose from by what tells it apart, without its words.
 
     `timed` says its lyrics are LRC, timed line by line.
+    The language hints describe the primary text and its paired lines, when recognizable.
     """
 
     provider: LyricsProvider
@@ -116,6 +119,9 @@ class LyricsChoice(_Model):
     duration_ms: Annotated[int, Field(ge=0)] | None = None
     timed: bool = False
     instrumental: bool = False
+    lyrics_language: LyricLanguageHint | None = None
+    translation_language: LyricLanguageHint | None = None
+    has_paired_text: bool = False
 
 
 class ChooseLyrics(_Model):
@@ -130,6 +136,7 @@ class ChooseLyrics(_Model):
     duration_ms: Annotated[int, Field(ge=0)] | None = None
     options: Annotated[tuple[LyricsChoice, ...], Field(min_length=1, max_length=MAX_LYRICS_FOUND)]
     ai: tuple[AiEndpoint, ...] = Field(default=(), repr=False)
+    interface_language: LyricsInterfaceLanguage | None = None
 
 
 class ChosenLyrics(_Model):

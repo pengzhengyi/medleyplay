@@ -55,7 +55,7 @@ from medleyplay.persistence.schema import (
     TrackLyricsRow,
     TrackRow,
 )
-from medleyplay.plugin_api import MAX_NAME, LyricsProvider
+from medleyplay.plugin_api import MAX_NAME, LyricsInterfaceLanguage, LyricsProvider
 from medleyplay.programs.find_lyrics import (
     ChooseLyricsJob,
     ChosenLyricsResult,
@@ -128,7 +128,12 @@ class LyricsMatchService:
         self._units, self._plugins, self._jobs, self._kind = units, plugins, jobs, kind
 
     def start(
-        self, caller: Account, album: TrackId, songs: Sequence[MatchSongInput]
+        self,
+        caller: Account,
+        album: TrackId,
+        songs: Sequence[MatchSongInput],
+        *,
+        interface_language: LyricsInterfaceLanguage | None = None,
     ) -> tuple[MatchStatus, ...]:
         """Accept each distinct song once; do not attach to an incompatible active Job."""
         asked: dict[int, MatchSongInput] = {}
@@ -147,7 +152,9 @@ class LyricsMatchService:
             saved = {row.track_id: row for row in songs_of(db, album)}
             sites = tuple(LyricsProvider(site.value) for site in read_settings(db).lyrics_sites)
             results = tuple(
-                self._start_song(db, caller, song, saved.get(song.track_id), sites, queued)
+                self._start_song(
+                    db, caller, song, saved.get(song.track_id), sites, queued, interface_language
+                )
                 for song in asked.values()
             )
         self._jobs.announce_queued(*queued)
@@ -161,23 +168,34 @@ class LyricsMatchService:
         segment: SegmentRow | None,
         sites: tuple[LyricsProvider, ...],
         queued: list[JobId],
+        interface_language: LyricsInterfaceLanguage | None,
     ) -> MatchStatus:
         track_id = TrackId(song.track_id)
         try:
-            request = _request(db, song, segment, sites)
+            request = _request(db, song, segment, sites, interface_language)
         except ConflictError as error:
             return _submission_skip(db, track_id, str(error))
         if (active := active_match(db, track_id)) is not None:
             root = _search_row(db, active)
-            if root is not None and FindLyricsJob.model_validate(root.request) == request:
-                return _status(caller, track_id, active, online=True)
+            if root is not None:
+                running = FindLyricsJob.model_validate(root.request)
+                if running == request:
+                    return _status(caller, track_id, active, online=True)
+                if running.model_copy(update={"interface_language": interface_language}) == request:
+                    return _submission_skip(
+                        db, track_id, "Auto-Match is already using a different interface language."
+                    )
             note = "Auto-Match is working on an earlier version of this song."
             return _submission_skip(db, track_id, note)
         if _other_lyrics_job(db, track_id):
             note = "The song's lyrics are already being looked up."
             return _submission_skip(db, track_id, note)
         job, inserted = self._jobs.submit_in(
-            db, self._kind, match_target(track_id), request, caller.id
+            db,
+            self._kind,
+            match_target(track_id),
+            request,
+            caller.id,
         )
         if inserted:
             discard_pending_pick(db, track_id)
@@ -232,6 +250,7 @@ def _request(
     song: MatchSongInput,
     segment: SegmentRow | None,
     sites: tuple[LyricsProvider, ...],
+    interface_language: LyricsInterfaceLanguage | None,
 ) -> FindLyricsJob:
     track = db.get(TrackRow, song.track_id)
     if track is None or segment is None or segment.id != song.segment_id:
@@ -248,6 +267,7 @@ def _request(
         sites=sites,
         match=MatchSong.model_validate(song.model_dump(exclude={"track_id"})),
         match_album=track.album,
+        interface_language=interface_language,
     )
     require_same_search(db, track, request)
     require_empty(db, TrackId(track.id))
@@ -380,7 +400,9 @@ def _find(
         db,
         choose,
         job.target,
-        choice_request(track, row, found.options, job.id),
+        choice_request(
+            track, row, found.options, job.id, interface_language=request.interface_language
+        ),
         job.requested_by,
         clock,
     )

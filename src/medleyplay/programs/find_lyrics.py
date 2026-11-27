@@ -17,6 +17,7 @@ from medleyplay.plugin_api import (
     FindLyrics,
     FindStatus,
     LyricsChoice,
+    LyricsInterfaceLanguage,
     LyricsOption,
     LyricsProvider,
 )
@@ -54,6 +55,7 @@ class FindLyricsJob(_Model):
     finder: Annotated[str, StringConstraints(max_length=64)] = "lyrics"
     match: MatchSong | None = None
     match_album: str | None = None
+    interface_language: LyricsInterfaceLanguage | None = None
 
 
 class FoundLyricsResult(_Model):
@@ -109,6 +111,10 @@ class ChooseLyricsJob(_Model):
     offered: Annotated[tuple[str, ...], Field(max_length=MAX_LYRICS_FOUND)]
     chooser: Annotated[str, StringConstraints(max_length=64)] = "ai-details"
     search_job: int | None = None
+    interface_language: LyricsInterfaceLanguage | None = None
+    candidates_fingerprint: Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{64}$")] | None = (
+        None
+    )
 
 
 class ChosenLyricsResult(_Model):
@@ -133,6 +139,7 @@ def run_choice(request: ChooseLyricsJob, context: JobContext) -> ChosenLyricsRes
             duration_ms=request.duration_ms,
             options=request.options,
             ai=context.ai,
+            interface_language=request.interface_language,
         ),
     )
     if answer.status is FindStatus.REFUSED:

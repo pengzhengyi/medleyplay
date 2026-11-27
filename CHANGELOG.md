@@ -777,6 +777,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Albums stays more responsive during playback by reusing unchanged cards
+  and their playback order. All albums and controls remain available.
 - Long **Up next** queues stay more responsive during playback without hiding
   songs or changing how they play, fold, or drag.
 - Artist suggestions respond faster while typing in a large Library; search

@@ -62,6 +62,76 @@ const playing = (player: () => Player, track: Track) =>
   });
 
 describe("playing songs inside one file", () => {
+  it("keeps queue commands stable while elapsed time changes", async () => {
+    serve(ANSWERS);
+    const { media, player } = renderPlayer([FIRST, SECOND, OTHER]);
+    act(() => {
+      player().playList([FIRST, SECOND, OTHER], 0);
+    });
+    await playing(player, FIRST);
+    const before = player();
+
+    act(() => {
+      media.playTo(8);
+    });
+
+    expect(player().position).toBe(8);
+    expect(player().queue).toBe(before.queue);
+    expect(player().playAt).toBe(before.playAt);
+    expect(player().move).toBe(before.move);
+    expect(player().remove).toBe(before.remove);
+  });
+
+  it("uses the current song and stretch when seeking after a queue jump", async () => {
+    serve(ANSWERS);
+    const { element, player } = renderPlayer([FIRST, SECOND]);
+    act(() => {
+      player().playList([FIRST, SECOND], 0);
+    });
+    await playing(player, FIRST);
+    const seek = player().seek;
+    const second = player().queue.entries[1]?.key ?? "";
+    act(() => {
+      player().playAt(second, 5);
+    });
+    await playing(player, SECOND);
+
+    act(() => {
+      player().playAt(second, 9);
+    });
+    expect(element.currentTime).toBe(39);
+    act(() => {
+      seek(12);
+    });
+
+    expect(element.currentTime).toBe(42);
+    expect(element.getAttribute("src")).toBe("/api/sources/104/audio");
+  });
+
+  it("moves and removes from the current queue through retained commands", async () => {
+    serve(ANSWERS);
+    const { player } = renderPlayer([FIRST, SECOND, OTHER]);
+    act(() => {
+      player().playList([FIRST, SECOND], 0);
+    });
+    await playing(player, FIRST);
+    const { move, remove } = player();
+    act(() => {
+      player().add(OTHER);
+    });
+    const added = player().queue.entries[2]?.key ?? "";
+
+    act(() => {
+      move(added, 0);
+    });
+    expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([154, 7, 155]);
+    act(() => {
+      remove(added);
+    });
+
+    expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([154, 155]);
+  });
+
   it("ends a song at its end, and plays on into the next song of its file without loading it again", async () => {
     serve(ANSWERS);
     const { element, media, player } = renderPlayer([FIRST, SECOND]);

@@ -416,6 +416,119 @@ test("the keyboard moves a Track in the queue as dragging does", async ({ page }
   await expect(upNext(page)).toHaveText([/Charlie/, /Bravo/, /Delta/]);
 });
 
+for (const [language, inDialog] of [
+  ["en", false],
+  ["zh-Hans", true],
+] as const) {
+  test(`during playback, dragging past a folded album keeps the full queue order in ${language}`, async ({
+    page,
+    request,
+  }) => {
+    const response = await request.get("/api/tracks");
+    const original = ((await response.json()) as Track[]).find((track) => track.title === "Alpha");
+    if (original === undefined) throw new Error("The test library has no Alpha.");
+    const ready = await request.post(`/api/tracks/${String(original.id)}/playback`);
+    expect(ready.ok()).toBe(true);
+    const playback: unknown = await ready.json();
+    const file = 90000;
+    const tracks: Track[] = [
+      { ...original, track_number: 1 },
+      { ...original, id: 90001, title: "Bravo", track_number: 2 },
+      { ...original, id: file, title: "Album file", kind: "album", split: true },
+      { ...original, id: 90002, title: "Charlie 1", segment_of: file, track_number: 3 },
+      { ...original, id: 90003, title: "Charlie 2", segment_of: file, track_number: 4 },
+      { ...original, id: 90004, title: "Delta", track_number: 5 },
+    ];
+    await page.route("**/api/tracks", (route) => route.fulfill({ json: tracks }));
+    await page.route("**/api/tracks/*/playback", (route) => route.fulfill({ json: playback }));
+    await page.addInitScript(() => {
+      localStorage.setItem("medleyplay.language", "en");
+    });
+    await page.emulateMedia({ colorScheme: inDialog ? "dark" : "light" });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Alpha", exact: true }).click();
+    await expect.poll(async () => (await audioState(page)).position).toBeGreaterThan(0.5);
+    const started = (await audioState(page)).position;
+    const panel = page.locator("#queue");
+    await expect(panel.locator(".entry-title")).toHaveText([
+      "Bravo",
+      "Charlie 1",
+      "Charlie 2",
+      "Delta",
+    ]);
+    await panel.locator(".queue-album .fold").click();
+    if (inDialog) {
+      await page.getByRole("button", { name: "Open Now Playing" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Up next", exact: true }).click();
+    }
+    const queue = inDialog ? page.locator("#now-playing-queue") : panel;
+    const titles = queue.locator(".entry-title");
+    if (inDialog) {
+      await expect(titles).toHaveText(["Bravo", "Charlie 1", "Charlie 2", "Delta"]);
+      await queue.locator(".queue-album .fold").click();
+    }
+    await expect(titles).toHaveText(["Bravo", "Delta"]);
+    if (language !== "en") {
+      // A language choice in another tab reaches this mounted queue through storage.
+      const otherTab = await page.context().newPage();
+      await otherTab.goto("/api/setup");
+      await otherTab.evaluate((choice) => {
+        localStorage.setItem("medleyplay.language", choice);
+      }, language);
+      await otherTab.close();
+      await page.bringToFront();
+    }
+    const announcements = inDialog ? page.getByRole("dialog") : queue;
+    const reorder = (title: string) =>
+      queue.getByRole("button", {
+        name: language === "en" ? `Reorder ${title}` : `调整「${title}」的顺序`,
+      });
+
+    await reorder("Bravo").focus();
+    await page.keyboard.press("Space");
+    await expect(
+      announcements.getByText(
+        language === "en" ? "Picked up Bravo." : "已选中「Bravo」，可以移动。",
+        {
+          exact: true,
+        },
+      ),
+    ).toBeAttached();
+    // The keyboard sensor attaches its listener after pickup.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      announcements.getByText(
+        language === "en" ? "Bravo would play fourth." : "「Bravo」将第 4 首播放。",
+        {
+          exact: true,
+        },
+      ),
+    ).toBeAttached();
+    await page.keyboard.press("Space");
+    await expect(
+      announcements.getByText(
+        language === "en" ? "Bravo plays fourth." : "「Bravo」已调整为第 4 首播放。",
+        { exact: true },
+      ),
+    ).toBeAttached();
+    await queue.locator(".queue-album .fold").click();
+    await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Delta", "Bravo"]);
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    if (!inDialog) await page.getByRole("button", { name: "Up next", exact: true }).click();
+    await reorder("Bravo").dragTo(reorder("Delta"), { steps: 12 });
+    await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Bravo", "Delta"]);
+    await queue
+      .getByRole("button", { name: language === "en" ? "Remove Delta" : "移除「Delta」" })
+      .click();
+
+    await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Bravo"]);
+    expect((await audioState(page)).playing).toBe(true);
+    expect((await audioState(page)).position).toBeGreaterThan(started);
+  });
+}
+
 test("a theme chosen holds over the system's, and across a reload", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");

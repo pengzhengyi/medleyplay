@@ -534,13 +534,11 @@ test.describe("on a phone", () => {
     const queue = page.getByRole("region", { name: "Up next" });
     await expect(queue).toBeHidden();
 
-    await page.getByRole("button", { name: "Up next" }).click();
+    const toggle = page.getByRole("button", { name: "Up next", exact: true });
+    await toggle.click();
 
     await expect(queue.getByRole("listitem")).toHaveText([/Bravo/, /Charlie/, /Delta/]);
-    await expect(page.getByRole("button", { name: "Up next" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await nav(page).getByRole("link", { name: "Albums" }).click();
     await expect(page.getByRole("heading", { name: "Albums" })).toBeVisible();
   });

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- When the animated background in Now Playing repeatedly misses frames, it
+  switches to a gently moving cover without changing your Dynamics setting.
 - A quotation-mark badge on song and album icons shows when lyrics are
   available. Albums are marked only when every song has lyrics. The Songs editor
   uses the same quotation mark for its Lyrics buttons, keeping match progress

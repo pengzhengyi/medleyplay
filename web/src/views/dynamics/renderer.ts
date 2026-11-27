@@ -17,6 +17,7 @@ import { Mesh, Program, Renderer, Texture, Triangle } from "ogl";
 
 import type { Dynamics } from "../../dynamics";
 import { type Color, paletteOf } from "../../library/palette";
+import { framePacing } from "./framePacing";
 
 /** The size of the copy of the cover each effect samples, in pixels a side. */
 const COPY = 160;
@@ -117,7 +118,15 @@ const SHADERS: Record<Exclude<Dynamics, "off">, string> = { flow: FLOW, drift: D
 export function run(
   host: HTMLElement,
   effect: Exclude<Dynamics, "off">,
-  { still, onDrawn }: { readonly still: boolean; readonly onDrawn: (drawn: boolean) => void },
+  {
+    still,
+    onDrawn,
+    onSlow,
+  }: {
+    readonly still: boolean;
+    readonly onDrawn: (drawn: boolean) => void;
+    readonly onSlow: () => void;
+  },
 ): Running {
   const renderer = new Renderer({ dpr: RESOLUTION, alpha: false, antialias: false });
   const gl = renderer.gl;
@@ -155,23 +164,32 @@ export function run(
   let frame = 0;
   let hasCover = false;
   let stopped = false;
+  const pacing = framePacing();
 
   const draw = (now: number) => {
+    if (stopped) return;
     uniforms.uTime.value = still ? 40 : now / 1000;
     uniforms.uFade.value = still ? 1 : Math.min(1, (now - fadeFrom) / FADE_MS);
     renderer.render({ scene: mesh });
   };
   const loop = (now: number) => {
+    if (stopped || document.hidden) return;
+    if (pacing.slowAt(now)) {
+      onSlow();
+      return;
+    }
     frame = requestAnimationFrame(loop);
     draw(now);
   };
   const play = () => {
+    pacing.reset();
     cancelAnimationFrame(frame);
     if (!still && hasCover && !document.hidden && !stopped) {
       frame = requestAnimationFrame(loop);
     }
   };
   const resize = () => {
+    if (stopped) return;
     renderer.setSize(host.clientWidth, host.clientHeight);
     const ratio = host.clientWidth / Math.max(1, host.clientHeight);
     uniforms.uAspect.value = ratio > 1 ? [ratio, 1] : [1, 1 / ratio];
@@ -187,6 +205,8 @@ export function run(
   // Each cover asked for is read in turn; one read after another was asked for is dropped.
   let asked = 0;
   const show = (url: string | null) => {
+    if (stopped) return;
+    pacing.reset();
     asked += 1;
     const ask = asked;
     if (url === null) {

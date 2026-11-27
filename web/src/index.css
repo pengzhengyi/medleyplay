@@ -3560,6 +3560,19 @@ button[aria-disabled="true"] {
   place-items: center;
   color: var(--muted);
   font-size: 0.85rem;
+  width: 1em;
+  height: 1em;
+}
+
+.kind-mark.title-kind {
+  margin-inline-end: 0.4rem;
+  vertical-align: -0.1em;
+}
+
+.picture-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
 }
 
 .kind-mark.kind-album {
@@ -4569,7 +4582,7 @@ button.icon.heart.on:hover,
   font-weight: 600;
 }
 
-.player .names span {
+.player .names > span {
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -6215,6 +6228,43 @@ dialog.modal::backdrop {
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+}
+
+.kind-mark:has(.lyrics-badge) {
+  position: relative;
+}
+
+.photo-suggestion-art > .cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.lyrics-badge {
+  position: absolute;
+  z-index: 2;
+  top: -0.25rem;
+  right: -0.25rem;
+  display: inline-grid;
+  width: 0.65rem;
+  height: 0.65rem;
+  place-items: center;
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
+  color: var(--accent-ink);
+  font-size: 0.45rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.kind-mark.guessed:has(.lyrics-badge) {
+  opacity: 1;
+}
+
+.kind-mark.guessed:has(.lyrics-badge) > svg {
+  opacity: 0.75;
 }
 
 /* Pasting a video's title and description, folded away until wanted. */
@@ -7978,6 +8028,7 @@ kbd {
 
 /* A still mark beside a name, sized as the moving one is. */
 .np-mark {
+  position: relative;
   display: inline-grid;
   flex: none;
   place-items: center;
@@ -7987,6 +8038,11 @@ kbd {
   background: rgb(255 255 255 / 12%);
   color: var(--ink);
   font-size: 1rem;
+}
+
+.np-mark > .kind-mark {
+  color: inherit;
+  font-size: inherit;
 }
 
 /* The album, then the song in it: the slash reads as a path, album to song. */
@@ -8657,6 +8713,7 @@ kbd {
  */
 
 .playing-kind {
+  position: relative;
   display: inline-grid;
   flex: none;
   place-items: center;
@@ -10701,6 +10758,10 @@ button.rail-order-handle {
 
   .picture-names .section {
     font-size: 1.6rem;
+  }
+
+  .picture-title {
+    justify-content: center;
   }
 
   .picture-heading .picture-names .subtitle {

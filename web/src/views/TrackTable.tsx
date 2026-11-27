@@ -993,7 +993,7 @@ const COLUMNS: Column[] = [
               playing={track.id === playingId}
             />
           </span>
-          <KindMark kind={track.kind} reason={track.kind_reason} />
+          <KindMark kind={track.kind} reason={track.kind_reason} lyrics={track} />
           <button
             type="button"
             className="title"

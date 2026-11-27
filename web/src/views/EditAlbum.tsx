@@ -13,6 +13,7 @@ import { type SubmitEvent, useRef, useState } from "react";
 import { type Detail, type Track, coverUrl } from "../api";
 import { albumArtistOf } from "../library/views";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 import { Modal } from "./Modal";
 import { PictureEditor } from "./PictureEditor";
 import { PictureFrame } from "./PictureFrame";
@@ -118,6 +119,17 @@ export function EditAlbum({
     >
       <form className="card" onSubmit={(event) => void save(event)}>
         <h2 id="edit-album-title">Edit album</h2>
+        {shared.album !== undefined && shared.album !== "" && (
+          <p className="edit-album-name">
+            <KindMark
+              kind="album"
+              reason="named"
+              lyrics={{ artist: shared.album_artist ?? "", album: shared.album }}
+              besideTitle
+            />
+            {shared.album}
+          </p>
+        )}
         <p className="hint">
           {`${String(songs.length)} songs of their own. What you type here is set on each of them.`}
         </p>

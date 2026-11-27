@@ -36,6 +36,37 @@ afterEach(() => {
 });
 
 describe("the Library", () => {
+  it.each(["lyrics-saved", "tracks"])(
+    "rereads lyrics availability after %s without reconnecting",
+    async (event) => {
+      const original = trackOf(1, "Intro");
+      const { calls } = serve(signedIn([original]));
+      const { result } = renderHook(() => useLibrary(vi.fn()));
+      await waitFor(() => {
+        expect(result.current.loaded).toBe(true);
+      });
+      serve(signedIn([{ ...original, has_lyrics: true }]));
+
+      act(() => {
+        stream().send(event, { track_ids: [1] });
+      });
+
+      await waitFor(() => {
+        expect(result.current.tracks.get(1)?.has_lyrics).toBe(true);
+      });
+      expect(asked(calls)).toBe(1);
+      serve(signedIn([original]));
+
+      act(() => {
+        stream().send(event, { track_ids: [1] });
+      });
+
+      await waitFor(() => {
+        expect(result.current.tracks.get(1)?.has_lyrics).toBe(false);
+      });
+    },
+  );
+
   it("reads its songs first and alone, and what shows around them once they are in", async () => {
     let answer: (() => void) | undefined;
     const songsAnswered = new Promise<void>((resolve) => {
@@ -116,6 +147,22 @@ describe("the Library", () => {
       stream().send("ready");
     });
     expect(result.current.lyricsVersion(2)).not.toBe(outro);
+  });
+
+  it("reloads the catalog after automatic lyric matching saves its choice", async () => {
+    const { calls } = serve(signedIn([trackOf(1, "Intro")]));
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    vi.useFakeTimers();
+
+    act(() => {
+      stream().send("job", { id: 1, kind: "auto_match_choose", state: "succeeded" });
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(asked(calls)).toBe(2);
   });
 
   it("asks for the Tracks once, a moment after the last scan or Download to finish", async () => {

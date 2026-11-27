@@ -142,3 +142,14 @@ def test_a_change_of_the_settings_tells_every_page_to_read_the_tracks_again() ->
             return await _drained(subscription)
 
     assert asyncio.run(scenario()) == [TRACKS]
+
+
+def test_a_lyrics_change_tells_every_open_page_to_read_the_tracks_again() -> None:
+    events = Events()
+
+    async def scenario() -> tuple[list[Event], list[Event]]:
+        async with events.subscribe() as first, events.subscribe() as second:
+            events.hear_change("lyrics")
+            return await _drained(first), await _drained(second)
+
+    assert asyncio.run(scenario()) == ([TRACKS], [TRACKS])

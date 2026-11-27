@@ -26,6 +26,7 @@ import { preloadWhenIdle } from "../lazyPart";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
 import { afterNextPaint } from "../library/stages";
 import { useLibrary } from "../library/useLibrary";
+import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 import { useLookAhead } from "../library/useLookAhead";
 import { useLyrics } from "../library/useLyrics";
 import { songTimeOf } from "../lyrics";
@@ -1051,7 +1052,11 @@ export function Library({
       <audio ref={audio} preload="auto" />
     </div>
   );
-  return <AiSetUpContext value={aiSetUp}>{page}</AiSetUpContext>;
+  return (
+    <AiSetUpContext value={aiSetUp}>
+      <LyricsAvailabilityProvider tracks={tracks}>{page}</LyricsAvailabilityProvider>
+    </AiSetUpContext>
+  );
 }
 
 /** A value that goes back to `cleared` a few seconds after it is set, as a notice fades. */

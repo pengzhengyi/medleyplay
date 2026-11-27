@@ -61,6 +61,7 @@ import { useWords } from "../locale";
 import { isRailNamed } from "../rail";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumAbout } from "./AlbumAbout";
+import { KindMark } from "./KindMark";
 import { AlbumHeading } from "./AlbumHeading";
 import { PictureHeading } from "./PictureHeading";
 import { AlbumRatingNote } from "./AlbumRatingNote";
@@ -354,6 +355,7 @@ function viewOf(
           heading={(playPlace) => (
             <AlbumHeading
               title={route.name || UNKNOWN_ALBUM}
+              lyrics={{ artist: route.artist, album: route.name }}
               artist={
                 route.artist.trim() === "" ? (
                   UNKNOWN_ARTIST
@@ -940,7 +942,15 @@ function AlbumList({
                 </Cover>
                 {favorite && <FavoriteBadge />}
               </span>
-              <span className="group-name">{album.name || UNKNOWN_ALBUM}</span>
+              <span className="group-name">
+                <KindMark
+                  kind="album"
+                  reason="named"
+                  lyrics={{ artist: album.artist, album: album.name }}
+                  besideTitle
+                />
+                {album.name || UNKNOWN_ALBUM}
+              </span>
               <span className="group-meta">
                 {album.artist || UNKNOWN_ARTIST}, {formatLength(album.count, album.durationMs)}
               </span>

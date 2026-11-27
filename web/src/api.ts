@@ -45,6 +45,7 @@ export interface Track {
   readonly kind: Kind;
   /** Why it is that kind: settled, as named or split, or guessed. */
   readonly kind_reason: KindReason;
+  readonly has_lyrics: boolean;
   /** The cover shown, by name, served at `coverUrl(cover, size)`. */
   readonly cover: string | null;
   /** What listeners elsewhere rated the song or its album, when enough did; it only shows. */

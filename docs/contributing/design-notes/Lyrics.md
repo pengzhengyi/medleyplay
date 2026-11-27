@@ -9,6 +9,7 @@
 ## Contents
 
 - [What it offers](#what-it-offers)
+- [Lyrics availability](#lyrics-availability)
 - [Where lyrics come from](#where-lyrics-come-from)
 - [Reading lyrics](#reading-lyrics)
 - [Lyrics from the files](#lyrics-from-the-files)
@@ -27,6 +28,55 @@ The words of the song playing, timed line by line where a source times them, as
 Apple Music shows them: beside the cover in Now Playing, the line sung now under
 the title in the player, and a button that shows or hides them. An AI model is
 never a source of lyrics: it would make them up.
+
+## Lyrics availability
+
+> [!NOTE]
+> **Implemented.** A quotation-mark superscript
+> marks songs with usable lyrics and albums whose every song has usable lyrics.
+
+- **One meaning:** the badge means lyrics are available to read, not that a search
+  finished or that the household wrote them. It is separate from the Songs
+  editor's manual-selection border.
+- **One source of truth:** a derived `has_lyrics` boolean accompanies each Track
+  in the catalog API. Select the first non-dismissed source in display priority
+  before checking its text. An instrumental household answer therefore hides
+  readable lyrics from a lower-priority source. Unconfirmed suggestions,
+  instrumental answers, and text without readable lines do not qualify; neither
+  do search candidates and unsaved AI picks. Invalid winning text marks only its
+  Track unavailable; it does not fail the catalog or select another source.
+  Fetch only the selected sources' text in bounded batches for the relevant
+  Tracks. No provider is contacted and no new stored state is needed.
+- **Albums require complete membership:** an album file needs a known, nonempty
+  song list and lyrics for every child. Its own whole-file lyrics do not stand
+  for its children's lyrics. A named album grouped from separate Tracks uses its
+  complete Library membership, not the filtered list or the songs left in Up next.
+  Empty or unknown album membership is not complete.
+- **One visual vocabulary:** a small quotation-mark badge sits at the top right
+  of the small music-note or record kind indicator, never on artwork. A view with
+  only a cover adds the same compact kind indicator beside its title. Existing
+  indicators are reused, with their settled or guessed glyph intact. Shared
+  rendering covers song lists, Up next, album pages, and other song or album
+  representations, including previews. Now Playing keeps each song and album
+  mark beside its name whether the cover is visible or replaced by lyrics on a
+  phone. Artist icons and artwork are unchanged.
+- **Accessible and quiet:** the existing accent palette supplies contrast in
+  light and dark themes. The badge does not animate or add a new action. Its
+  containing indicator combines its kind with "Lyrics available" or "All songs
+  have lyrics" in the device's language for assistive technology and on hover,
+  without changing play or menu behavior.
+- **Current after changes:** saving, removing, scanning, and matching lyrics
+  invalidate cached catalog answers. Existing change events also tell each open
+  Library to reread Tracks: cache invalidation alone does not refresh a page.
+  Manual lyric changes send `tracks`; Songs Save sends `lyrics-saved`. Both
+  trigger a catalog reread. Completed scans, enrichment, and automatic choices
+  refresh the catalog through their Job events. A reconnect rereads it.
+  Availability is read in batches, not one request or query per visible icon.
+
+Tests cover source priority, absent text and timestamp-only LRC, unsaved matches,
+album membership and filtering, save/remove refreshes on another open page
+without reconnecting, and representative layouts at phone and desktop widths
+in both themes. Browser tests use synthetic data.
 
 ## Where lyrics come from
 

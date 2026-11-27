@@ -132,12 +132,8 @@ class Events:
         self._offer(subscriptions, DEVICES, progress=False)
 
     def hear_change(self, what: str) -> None:
-        """Tell every subscriber to read the Tracks again when the settings changed.
-
-        The settings decide how a Track shows, such as whether a long file is an
-        album; other changes reach the page that made them, or come as Jobs.
-        """
-        if what != "settings":
+        """Tell every subscriber to reread Tracks after settings or lyrics change."""
+        if what not in {"settings", "lyrics"}:
             return
         with self._lock:
             subscriptions = tuple(self._subscriptions)

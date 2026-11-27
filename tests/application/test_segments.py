@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.details import DetailsService
+from medleyplay.application.lyrics import LyricsService
 from medleyplay.application.segments import SongsService, SongView
 from medleyplay.application.track_artists import artists_of
 from medleyplay.domain.accounts import Account
@@ -60,6 +61,40 @@ def test_a_first_split_makes_a_track_of_each_song(songs: SongsService, album: Tr
         (480_000, 3_600_000, "Last"),
     ]
     assert len({song.track_id for song in view.songs}) == 3
+
+
+@pytest.mark.parametrize("with_lyrics", [0, 2, 3])
+def test_album_lyrics_require_every_child_without_inheriting_whole_file_lyrics(
+    songs: SongsService,
+    catalog: CatalogService,
+    lyrics: LyricsService,
+    album: TrackId,
+    alice: Account,
+    with_lyrics: int,
+) -> None:
+    children = songs.save(album, THREE_SONGS).songs
+    lyrics.set_own(album, "Whole album lyrics")
+    for child in children[:with_lyrics]:
+        lyrics.set_own(child.track_id, "Sing with me")
+
+    listed = {track.id: track for track in catalog.list_tracks(alice.id)}
+
+    assert listed[album].has_lyrics is (with_lyrics == len(children))
+    assert catalog.get_track(alice.id, album).has_lyrics == listed[album].has_lyrics
+    for index, child in enumerate(children):
+        assert listed[child.track_id].has_lyrics is (index < with_lyrics)
+        assert catalog.get_track(alice.id, child.track_id).has_lyrics == (
+            listed[child.track_id].has_lyrics
+        )
+
+
+def test_an_unsplit_album_has_no_complete_lyrics_membership(
+    catalog: CatalogService, lyrics: LyricsService, album: TrackId, alice: Account
+) -> None:
+    lyrics.set_own(album, "Whole album lyrics")
+
+    assert not catalog.get_track(alice.id, album).has_lyrics
+    assert not catalog.list_tracks(alice.id)[0].has_lyrics
 
 
 def test_a_song_takes_its_album_fields_from_its_album_file_and_its_place(

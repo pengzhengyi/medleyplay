@@ -12,12 +12,7 @@
  * file names only the album, or, once it is split, also the song the position is in.
  */
 
-import {
-  ArrowSquareOutIcon,
-  MicrophoneStageIcon,
-  MusicNoteSimpleIcon,
-  VinylRecordIcon,
-} from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, MicrophoneStageIcon } from "@phosphor-icons/react";
 
 import type { Track } from "../api";
 import {
@@ -34,6 +29,8 @@ import { FavoriteHeart } from "./FavoriteHeart";
 import { PlayingKind } from "./PlayingKind";
 import { SiteMark } from "./SiteMark";
 import { FavoriteButton } from "./Transport";
+import { KindMark } from "./KindMark";
+import { albumLyricsSubject } from "./lyricsAvailability";
 
 export function NowPlayingNames({
   track,
@@ -87,8 +84,8 @@ export function NowPlayingNames({
             {playing.kind === "album" ? (
               mark
             ) : (
-              <span className="np-mark" title="Album">
-                <VinylRecordIcon weight="fill" aria-hidden />
+              <span className="np-mark">
+                <KindMark kind="album" reason="named" lyrics={albumLyricsSubject(track)} />
               </span>
             )}
             {song === undefined ? (
@@ -128,8 +125,8 @@ export function NowPlayingNames({
             {playing.kind === "song" ? (
               mark
             ) : (
-              <span className="np-mark" title="Song">
-                <MusicNoteSimpleIcon weight="fill" aria-hidden />
+              <span className="np-mark">
+                <KindMark kind={song.kind} reason={song.kind_reason} lyrics={song} />
               </span>
             )}
             <h2>{song.title}</h2>

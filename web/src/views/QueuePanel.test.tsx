@@ -56,7 +56,7 @@ describe("the queue", () => {
       ).toHaveAccessibleDescription(/按空格键/u);
       expect(chinese.getByRole("button", { name: "立即播放「Long Road」" })).toBeVisible();
       expect(chinese.getByText(/^2 首歌曲，6 分钟/u)).toBeVisible();
-      await user.click(chinese.getByRole("button", { name: "清空" }));
+      await user.click(chinese.getByRole("button", { name: "清空接下来播放的队列" }));
       expect(within(queue).getByText("队列为空。可从列表中添加曲目，稍后播放。")).toBeVisible();
     } finally {
       await user.selectOptions(language, "auto");
@@ -112,13 +112,18 @@ describe("the queue", () => {
     expect(upNext()).toEqual(["Outro", "Long Road", "Outro"]);
   });
 
-  it("clears what plays next", async () => {
+  it("clears what plays next without removing the current track", async () => {
     await playingIntro();
+    const clear = screen.getByRole("button", { name: "Clear Up next" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    await userEvent.click(clear);
 
     expect(
       screen.getByText("Nothing queued. Add a Track from the list to play it later."),
+    ).toBeInTheDocument();
+    expect(clear).toBeDisabled();
+    expect(
+      within(screen.getByRole("region", { name: "Player" })).getByText("Intro"),
     ).toBeInTheDocument();
   });
 

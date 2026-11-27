@@ -94,6 +94,7 @@ export function QueuePanel({
   const albums = rows.flatMap((row) => (row.kind === "album" ? [row.fileId] : []));
   const allExpanded = albums.every((file) => !folded.has(file));
   const foldAllLabel = allExpanded ? words("Collapse all") : words("Expand all");
+  const clearLabel = words("Clear Up next");
   const shown = rows.flatMap((row) =>
     row.kind === "album" && folded.has(row.fileId) ? [] : row.entries,
   );
@@ -201,14 +202,17 @@ export function QueuePanel({
                 </button>
               </Hint>
             )}
-            <button
-              type="button"
-              className="text"
-              onClick={player.clear}
-              disabled={entries.length === 0}
-            >
-              {words("Clear")}
-            </button>
+            <Hint name={clearLabel} keys={[]}>
+              <button
+                type="button"
+                className="icon"
+                aria-label={clearLabel}
+                onClick={player.clear}
+                disabled={entries.length === 0}
+              >
+                <XIcon aria-hidden />
+              </button>
+            </Hint>
           </div>
         ) : (
           <HistoryClear

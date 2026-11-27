@@ -847,9 +847,14 @@ button[aria-disabled="true"] {
   gap: 0.4rem 0.75rem;
 }
 
+.dynamics-switch {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .dynamics-switch .dynamics-choice {
   width: auto;
-  padding: 0 0.8rem;
+  padding: 0 clamp(0.35rem, 1.5vw, 0.8rem);
   font-size: 0.9rem;
   line-height: 1;
 }
@@ -8000,6 +8005,68 @@ kbd {
 
   to {
     transform: rotate(3deg) scale(1.18);
+  }
+}
+
+.np-cover-motion {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #101614;
+}
+
+.np-cover-motion-layer {
+  position: absolute;
+  inset: -14%;
+}
+
+[data-effect="flow"] > .np-cover-motion-layer {
+  background-image:
+    radial-gradient(ellipse at 29% 42%, var(--np-cover-a), transparent 68%),
+    radial-gradient(ellipse at 75% 55%, var(--np-cover-b), transparent 67%);
+}
+
+[data-effect="drift"] > .np-cover-motion-layer::before {
+  position: absolute;
+  inset: -12%;
+  background: center / cover no-repeat var(--np-cover-image);
+  filter: blur(40px);
+  content: "";
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-effect="flow"] > .np-cover-motion-layer {
+    animation: np-palette-glow 22s ease-in-out infinite alternate;
+  }
+
+  [data-effect="drift"] > .np-cover-motion-layer {
+    animation: np-soft-pan 26s ease-in-out infinite alternate;
+  }
+
+  .np-cover-motion[data-paused="true"] > .np-cover-motion-layer {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes np-palette-glow {
+  from {
+    opacity: 0.76;
+    transform: translate(-2%, 1%) scale(1.02);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(3%, -2%) scale(1.12);
+  }
+}
+
+@keyframes np-soft-pan {
+  from {
+    transform: translate(-3%, 2%) scale(1.03);
+  }
+
+  to {
+    transform: translate(4%, -3%) scale(1.12);
   }
 }
 

@@ -323,13 +323,103 @@ for (const width of [390, 1280]) {
       const resting = await clear.evaluate((button) => getComputedStyle(button).backgroundColor);
       await clear.hover();
       await expect(clear).toHaveCSS("outline-style", "none");
-      await expect(clear).not.toHaveCSS("background-color", resting);
+      await expect(clear).toHaveCSS("background-color", resting);
+      await expect(clear.locator("svg")).toHaveCSS("scale", "none");
       await clear.click();
       await expect(search).toHaveValue("");
       await expect(search).toBeFocused();
     });
   }
 }
+
+test("hover enlarges a header and dialog icon without filling or moving the button", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const help = page.getByRole("button", { name: "Keyboard shortcuts" });
+  const checkHover = async (control: typeof help) => {
+    const icon = control.locator("svg");
+    const background = await control.evaluate((button) => getComputedStyle(button).backgroundColor);
+    const before = await control.boundingBox();
+    const idleIcon = await icon.boundingBox();
+    if (idleIcon === null) throw new Error("Missing icon.");
+
+    await control.hover();
+
+    await expect
+      .poll(async () => (await icon.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(idleIcon.width + 0.5);
+    await expect(control).toHaveCSS("background-color", background);
+    expect(await control.boundingBox()).toEqual(before);
+  };
+  await checkHover(help);
+  await help.click();
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  await checkHover(close);
+  await close.click();
+  await expect(dialog).toBeHidden();
+});
+
+test("the cover download grows on hover and the album mark fills only when pinned", async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const response = await request.get("/api/tracks");
+  expect(response.ok()).toBe(true);
+  const tracks = (await response.json()) as Track[];
+  await page.route("**/api/tracks", (route) =>
+    route.fulfill({
+      json: tracks.map((track) =>
+        track.title === "Alpha"
+          ? {
+              ...track,
+              album: "Hover album",
+              artist: "",
+              album_artist: "",
+              cover: "hover-fixture",
+              kind: "album",
+              kind_reason: "named",
+            }
+          : track,
+      ),
+    }),
+  );
+  await page.route("**/api/covers/hover-fixture*", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#6b4ca5"/></svg>',
+    }),
+  );
+  await page.goto("/#/album?artist=&name=Hover%20album");
+  const title = page.getByRole("heading", { name: "Hover album", exact: true });
+  const frame = page.getByRole("region", { name: "About the album" });
+  await frame.locator(".cover-frame").hover();
+  const save = frame.getByRole("link", { name: "Save the image" });
+  const saveBackground = await save.evaluate((link) => getComputedStyle(link).backgroundColor);
+  await save.hover();
+  await expect(save.locator("svg")).not.toHaveCSS("scale", "none");
+  await expect(save).toHaveCSS("background-color", saveBackground);
+
+  await page.getByRole("button", { name: "Alpha", exact: true }).click();
+  const mark = page.getByRole("button", { name: "Album: Hover album", exact: true });
+  const idle = await mark.evaluate((button) => getComputedStyle(button).backgroundColor);
+  await mark.hover();
+  await expect(mark).toHaveAttribute("aria-expanded", "true");
+  await expect(mark).toHaveCSS("background-color", idle);
+  await title.hover();
+  await expect(mark).toHaveAttribute("aria-expanded", "false");
+
+  await mark.focus();
+  await page.keyboard.press("Enter");
+  await expect(mark).toHaveAttribute("aria-expanded", "true");
+  await expect(mark).not.toHaveCSS("background-color", idle);
+  await expect(mark).toHaveCSS("outline-style", "solid");
+});
 
 test("a row previews its favorite action without marking the song as a favorite", async ({
   page,

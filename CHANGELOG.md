@@ -772,6 +772,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Icon controls enlarge their glyph on hover instead of adding a background.
+  Keyboard focus stays visible, and Reduce Motion keeps the icons still.
+
 - Albums stays more responsive during playback by reusing unchanged cards
   and their playback order. All albums and controls remain available.
 - Long **Up next** queues stay more responsive during playback without hiding

@@ -1753,5 +1753,7 @@
   "{{name}} would move to position {{position}}.": "{{name}} 将移至第 {{position}} 位。",
   "{{name}} moved to position {{position}}.": "{{name}} 已移至第 {{position}} 位。",
   "Use Rail order in Settings → Appearance to reorder views with the keyboard.": "要用键盘调整视图顺序，请前往「设置 → 外观」中的「导航栏顺序」。",
-  "Press Space to pick up a view, use the arrow keys to move it, and press Space to drop it. Press Escape to cancel.": "按空格键选中视图，用方向键移动，再按空格键放下。按 Esc 键可取消。"
+  "Press Space to pick up a view, use the arrow keys to move it, and press Space to drop it. Press Escape to cancel.": "按空格键选中视图，用方向键移动，再按空格键放下。按 Esc 键可取消。",
+  "Could not read listening history: {{detail}}": "无法读取播放记录：{{detail}}",
+  "Could not clear listening history: {{detail}}": "无法清除播放记录：{{detail}}"
 }

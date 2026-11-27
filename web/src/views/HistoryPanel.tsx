@@ -33,8 +33,19 @@ export function HistoryList({
   const { plays } = history;
   return (
     <>
-      {history.failure !== "" && <p className="error">{history.failure}</p>}
-      {plays === undefined && history.failure === "" && <p className="muted">{t("Loading…")}</p>}
+      {history.failure !== undefined && (
+        <p className="error" role="alert">
+          {t(
+            history.failure.action === "read"
+              ? "Could not read listening history: {{detail}}"
+              : "Could not clear listening history: {{detail}}",
+            { detail: history.failure.detail },
+          )}
+        </p>
+      )}
+      {plays === undefined && history.failure === undefined && (
+        <p className="muted">{t("Loading…")}</p>
+      )}
       {plays?.length === 0 && <p className="empty">{t("Nothing played yet.")}</p>}
       {plays !== undefined && plays.length > 0 && (
         <ol className="history-list">

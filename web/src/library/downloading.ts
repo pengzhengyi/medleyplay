@@ -7,6 +7,7 @@
  */
 
 import type { DownloadUnderWay, JobEvent } from "../api";
+import type { Words } from "../locale";
 
 /** The kind of Job that downloads a Source. */
 export const DOWNLOAD_KIND = "download_source";
@@ -58,26 +59,77 @@ export function withDownloadEvent(download: DownloadUnderWay, event: JobEvent): 
 }
 
 /** Say what the Download is doing, with a percentage when known. */
-export function downloadStateOf(download: DownloadUnderWay): string {
+export function downloadStateOf(download: DownloadUnderWay, t?: Words): string {
   const { state, progress, waits_for_online, retry_at: retryAt } = download.job;
   if (state !== "running") {
-    if (waits_for_online) return "Waiting for Online";
-    return retryAt != null ? "Retry scheduled" : "Queued";
+    const key = waits_for_online
+      ? "Waiting for Online"
+      : retryAt != null
+        ? "Retry scheduled"
+        : "Queued";
+    return t?.(key) ?? key;
   }
-  if (progress === null) return "Preparing download";
+  if (progress === null) return t?.("Preparing download") ?? "Preparing download";
   const stage = progress.message.trim() || "Downloading";
-  if (progress.fraction === null || stage === "Checking audio") return stage;
+  const shown = t === undefined ? stage : stageWords(stage, t);
+  if (progress.fraction === null || stage === "Checking audio") return shown;
   const percent = `${String(Math.round(progress.fraction * 100))}%`;
-  return stage === "Downloading" ? percent : `${stage} · ${percent}`;
+  return stage === "Downloading"
+    ? percent
+    : (t?.("{{stage}} · {{percent}}", { stage: shown, percent }) ?? `${shown} · ${percent}`);
+}
+
+function stageWords(stage: string, t: Words): string {
+  if (stage === "Downloading" || stage === "Checking audio") return t(stage);
+  const part = /^(Downloading|Joining) part (\d+)(?: \((\d+)\/(\d+)\))?$/u.exec(stage);
+  if (part === null) return stage;
+  const [, action, number, current, total] = part;
+  if (current === undefined || total === undefined) {
+    return action === "Downloading" ? t("Downloading part {{part}}", { part: number }) : stage;
+  }
+  return t(
+    action === "Downloading"
+      ? "Downloading part {{part}} ({{current}}/{{total}})"
+      : "Joining part {{part}} ({{current}}/{{total}})",
+    { part: number, current, total },
+  );
+}
+
+const KNOWN_FAILURES: ReadonlySet<string> = new Set([
+  "The download failed.",
+  "The site no longer has this video.",
+  "Joining several parts requires FFmpeg and ffprobe. Use Separate files instead.",
+  "There is not enough temporary disk space to join this album.",
+]);
+
+export function downloadFailureOf(detail: string, t: Words): string {
+  return KNOWN_FAILURES.has(detail) ? t(detail) : detail;
 }
 
 /** Say the status in full and include any failure message the server lets this Account read. */
-export function downloadDetailOf(download: DownloadUnderWay, status: string): string {
+export function downloadDetailOf(
+  download: DownloadUnderWay,
+  status: string,
+  presentation?: { readonly locale: string; readonly t: Words },
+): string {
   const { state, failure_message: failure, retry_at: retryAt, waits_for_online } = download.job;
-  if (state === "running") return /^\d+%$/u.test(status) ? `Downloading ${status}` : status;
-  if (waits_for_online) return "Downloading once medleyplay is Online";
-  if (retryAt == null) return "Queued to download";
-  const time = new Date(retryAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const retry = `Retry scheduled at ${time}`;
-  return failure ? `${retry}. ${failure}` : retry;
+  const t = presentation?.t;
+  if (state === "running") {
+    return /^\d+%$/u.test(status)
+      ? (t?.("Downloading {{percent}}", { percent: status }) ?? `Downloading ${status}`)
+      : status;
+  }
+  if (waits_for_online) {
+    return t?.("Downloading once medleyplay is Online") ?? "Downloading once medleyplay is Online";
+  }
+  if (retryAt == null) return t?.("Queued to download") ?? "Queued to download";
+  const time = new Date(retryAt).toLocaleTimeString(presentation?.locale ?? [], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const retry = t?.("Retry scheduled at {{time}}", { time }) ?? `Retry scheduled at ${time}`;
+  if (!failure) return retry;
+  return t === undefined
+    ? `${retry}. ${failure}`
+    : t("{{status}}. {{detail}}", { status: retry, detail: downloadFailureOf(failure, t) });
 }

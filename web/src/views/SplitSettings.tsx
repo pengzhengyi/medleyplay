@@ -7,7 +7,14 @@
 import { useState } from "react";
 
 import type { Settings, SplitAlbums } from "../api";
-import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import {
+  CHANGED_ELSEWHERE,
+  type SettingsNotice,
+  saveChange,
+  settingsNotice,
+  settingsFailure,
+} from "../library/householdSettings";
+import { useWords } from "../locale";
 
 /** Each choice, its name, and what it does. */
 const CHOICES: readonly {
@@ -44,9 +51,10 @@ export function SplitSettings({
   readonly settings: Settings | undefined;
   readonly onSettings: (settings: Settings) => void;
 }) {
+  const t = useWords();
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<SettingsNotice>(null);
   if (settings === undefined) {
     return null;
   }
@@ -55,13 +63,13 @@ export function SplitSettings({
   const choose = async (value: SplitAlbums) => {
     setSaving(true);
     setNote("");
-    setError("");
+    setError(null);
     try {
       const { outcome, settings: now } = await saveChange(settings, { split_albums: value });
       onSettings(now);
       setNote(outcome === "conflict" ? CHANGED_ELSEWHERE : "Saved.");
     } catch (failure) {
-      setError(notSaved(failure));
+      setError(settingsFailure(failure));
     } finally {
       setSaving(false);
     }
@@ -69,12 +77,18 @@ export function SplitSettings({
 
   if (!admin) {
     return (
-      <p>{`Split albums: ${chosen?.label ?? ""}. ${chosen?.about ?? ""}`} An admin changes this.</p>
+      <p>
+        {t("Split albums: {{mode}}. {{help}}", {
+          mode: t(chosen?.label ?? ""),
+          help: t(chosen?.about ?? ""),
+        })}{" "}
+        {t("An admin changes this.")}
+      </p>
     );
   }
   return (
     <fieldset className="split-albums" aria-busy={saving}>
-      <legend>Split albums</legend>
+      <legend>{t("Split albums")}</legend>
       {CHOICES.map((choice) => (
         <label key={choice.value} className="split-albums-choice">
           <input
@@ -86,14 +100,14 @@ export function SplitSettings({
             onChange={() => void choose(choice.value)}
           />
           <span>
-            <strong>{choice.label}</strong>
-            <small>{choice.about}</small>
+            <strong>{t(choice.label)}</strong>
+            <small>{t(choice.about)}</small>
           </span>
         </label>
       ))}
-      {error !== "" && <p role="alert">{error}</p>}
+      {error !== null && <p role="alert">{settingsNotice(error, t)}</p>}
       <p className="hint saved" role="status">
-        {note}
+        {t(note)}
       </p>
     </fieldset>
   );

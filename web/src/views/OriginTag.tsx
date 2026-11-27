@@ -4,6 +4,7 @@
  */
 
 import type { Origin } from "../api";
+import { useWords } from "../locale";
 import { ORIGIN_TAGS } from "./originTags";
 
 /** The tag of `origin`, saying `full` in full, such as `From the video`. */
@@ -16,16 +17,19 @@ export function OriginTag({
   readonly origin: Origin;
   readonly full: string;
 }) {
-  const { short, icon: Mark } = ORIGIN_TAGS[origin];
+  const t = useWords();
+  const { short: key, icon: Mark } = ORIGIN_TAGS[origin];
+  const short = t(key);
+  const description = t(full);
   return (
-    <small id={id} className={`origin-tag ${origin}`} title={full}>
+    <small id={id} className={`origin-tag ${origin}`} title={description}>
       <Mark weight="bold" aria-hidden />
-      {short === full ? (
+      {short === description ? (
         short
       ) : (
         <>
           <span aria-hidden>{short}</span>
-          <span className="visually-hidden">{full}</span>
+          <span className="visually-hidden">{description}</span>
         </>
       )}
     </small>

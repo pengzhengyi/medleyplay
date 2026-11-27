@@ -9,7 +9,14 @@
 import { useState } from "react";
 
 import type { LyricsSite, Settings } from "../api";
-import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import {
+  CHANGED_ELSEWHERE,
+  type SettingsNotice,
+  saveChange,
+  settingsNotice,
+  settingsFailure,
+} from "../library/householdSettings";
+import { useWords } from "../locale";
 
 /** The switches that turn NetEase and suggestions on or off, for an admin. */
 export function LyricsSites({
@@ -20,9 +27,10 @@ export function LyricsSites({
   readonly settings: Settings | undefined;
   readonly onSettings: (settings: Settings) => void;
 }) {
+  const t = useWords();
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<SettingsNotice>(null);
   if (settings === undefined) {
     return null;
   }
@@ -31,13 +39,13 @@ export function LyricsSites({
   const save = async (change: Partial<Settings>) => {
     setSaving(true);
     setNote("");
-    setError("");
+    setError(null);
     try {
       const { outcome, settings: now } = await saveChange(settings, change);
       onSettings(now);
       setNote(outcome === "conflict" ? CHANGED_ELSEWHERE : "Saved.");
     } catch (failure) {
-      setError(notSaved(failure));
+      setError(settingsFailure(failure));
     } finally {
       setSaving(false);
     }
@@ -56,12 +64,12 @@ export function LyricsSites({
             void save({ lyrics_sites: sites });
           }}
         />
-        Also look on NetEase Cloud Music
+        {t("Also look on NetEase Cloud Music")}
       </label>
       <small className="hint">
-        Asked for a song LRCLIB has no lyrics for, by its title and artist, once a second at most;
-        turning it on looks those songs up again. NetEase has no public API, so it may stop
-        answering.
+        {t(
+          "Asked for a song LRCLIB has no lyrics for, by its title and artist, once a second at most; turning it on looks those songs up again. NetEase has no public API, so it may stop answering.",
+        )}
       </small>
       <label className="lyrics-sites-switch">
         <input
@@ -71,15 +79,16 @@ export function LyricsSites({
           disabled={saving}
           onChange={(event) => void save({ suggest_lyrics: event.target.checked })}
         />
-        Suggest lyrics that nearly match
+        {t("Suggest lyrics that nearly match")}
       </label>
       <small className="hint">
-        A song no site has lyrics for shows those of the nearest song LRCLIB has, of the same title
-        and nearly as long, tagged Found on the web, to save or dismiss.
+        {t(
+          "If no site has a song's lyrics, suggest a close match from LRCLIB based on the title, artist, and duration when known. You can save or dismiss lyrics tagged Found on the web.",
+        )}
       </small>
-      {error !== "" && <p role="alert">{error}</p>}
+      {error !== null && <p role="alert">{settingsNotice(error, t)}</p>}
       <p className="hint saved" role="status">
-        {note}
+        {t(note)}
       </p>
     </div>
   );

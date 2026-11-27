@@ -7,6 +7,7 @@
  */
 
 import { ApiError, type Settings, api } from "../api";
+import type { Words } from "../locale";
 
 /** What a section says when someone else changed its field first. */
 export const CHANGED_ELSEWHERE = "Someone else changed this first, so here it is now.";
@@ -14,6 +15,36 @@ export const CHANGED_ELSEWHERE = "Someone else changed this first, so here it is
 /** What a section says when its change couldn't be saved; it is tried again. */
 export function notSaved(failure: unknown): string {
   return `Not saved: ${failure instanceof Error ? failure.message : String(failure)}`;
+}
+
+export type SettingsNotice =
+  | { readonly kind: "key"; readonly key: string }
+  | { readonly kind: "minutes"; readonly max: number }
+  | { readonly kind: "failed"; readonly detail: string }
+  | null;
+
+export const settingsKey = (key: string): SettingsNotice => ({ kind: "key", key });
+export const settingsFailure = (failure: unknown): SettingsNotice => ({
+  kind: "failed",
+  detail: failure instanceof Error ? failure.message : String(failure),
+});
+export const SETTINGS_SAVE_COPY = {
+  empty: null,
+  saving: settingsKey("Saving…"),
+  saved: settingsKey("Saved."),
+  failed: settingsFailure,
+};
+
+export function settingsNotice(notice: SettingsNotice, t: Words): string {
+  if (notice === null) return "";
+  switch (notice.kind) {
+    case "minutes":
+      return t("Not saved: type whole minutes from 1 to {{max}}.", { max: notice.max });
+    case "failed":
+      return t("Not saved: {{detail}}", { detail: notice.detail });
+    case "key":
+      return t(notice.key);
+  }
 }
 
 /** A change to some of the household's settings. */

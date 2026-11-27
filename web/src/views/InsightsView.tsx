@@ -13,6 +13,7 @@ import type { Track } from "../api";
 import { formatListened } from "../format";
 import { type Listened, insightsOf } from "../library/insights";
 import { type Period, usePlayCounts } from "../library/usePlayCounts";
+import { type Words, useFormattingLocale, useWords } from "../locale";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
@@ -27,17 +28,22 @@ const PERIODS: readonly { readonly period: Period; readonly label: string }[] = 
 const NOTHING_PLAYED: Record<Period, string> = {
   7: "Nothing played in the last 7 days.",
   30: "Nothing played in the last 30 days.",
-  all: "Nothing played yet. Once half a song has played, what you listen to most shows here.",
+  all: "No plays recorded yet. Your listening statistics will appear here once a play is recorded.",
 };
 
 /** How many artists, albums, and songs each ranking shows. */
 const SHOWN = 10;
 
-const playsOf = (plays: number) => (plays === 1 ? "1 play" : `${String(plays)} plays`);
+const playsOf = (plays: number, t: Words) => t("insights_plays", { count: plays });
 
 /** Write about how long and how often, such as `About 6 hr, 40 plays`; not timed, only how often. */
-const listenedOf = ({ listenedMs, plays }: { listenedMs: number; plays: number }) =>
-  listenedMs === 0 ? playsOf(plays) : `About ${formatListened(listenedMs)}, ${playsOf(plays)}`;
+const listenedOf = ({ listenedMs, plays }: { listenedMs: number; plays: number }, t: Words) =>
+  listenedMs === 0
+    ? playsOf(plays, t)
+    : t("About {{duration}}, {{plays}}", {
+        duration: formatListened(listenedMs, t),
+        plays: playsOf(plays, t),
+      });
 
 export function InsightsView({
   tracks,
@@ -52,6 +58,8 @@ export function InsightsView({
    * tab bar, reaches it from here. */
   readonly toDo?: number;
 }) {
+  const t = useWords();
+  const number = new Intl.NumberFormat(useFormattingLocale());
   const [period, setPeriod] = useState<Period>(30);
   const { counts, failure } = usePlayCounts(period);
   const insights = useMemo(
@@ -62,8 +70,8 @@ export function InsightsView({
   return (
     <>
       <header className="view-heading insights-heading">
-        <h2 className="section">Insights</h2>
-        <div className="scope" role="radiogroup" aria-label="Period">
+        <h2 className="section">{t("Insights")}</h2>
+        <div className="scope" role="radiogroup" aria-label={t("Period")}>
           {PERIODS.map((choice) => (
             <label key={choice.period}>
               <input
@@ -74,7 +82,7 @@ export function InsightsView({
                   setPeriod(choice.period);
                 }}
               />
-              {choice.label}
+              {t(choice.label)}
             </label>
           ))}
         </div>
@@ -82,34 +90,46 @@ export function InsightsView({
       {toDo > 0 && (
         <a className="clean-up-link on-phone" href={hrefOf({ view: "clean-up" })}>
           <BroomIcon className="clean-up-icon" weight="bold" aria-hidden />
-          {`Clean up ${String(toDo)} ${toDo === 1 ? "name" : "names"}`}
+          {t("insights_cleanup", { count: toDo })}
           <CaretRightIcon className="clean-up-go" aria-hidden />
         </a>
       )}
-      {failure !== "" && <p className="error">{failure}</p>}
-      {insights === undefined && failure === "" && <p className="muted">Loading…</p>}
-      {insights?.plays === 0 && <p className="empty">{NOTHING_PLAYED[period]}</p>}
+      {failure !== "" && (
+        <p className="error" role="alert">
+          {t("Could not read listening statistics: {{detail}}", { detail: failure })}
+        </p>
+      )}
+      {insights === undefined && failure === "" && (
+        <p className="muted" aria-busy="true">
+          {t("Loading…")}
+        </p>
+      )}
+      {insights?.plays === 0 && <p className="empty">{t(NOTHING_PLAYED[period])}</p>}
       {insights !== undefined && insights.plays > 0 && (
         <div className="insights">
           <dl className="insights-totals">
             <div>
-              <dt>Listening time</dt>
+              <dt>{t("Listening time")}</dt>
               <dd>
-                {insights.listenedMs === 0 ? "–" : `About ${formatListened(insights.listenedMs)}`}
+                {insights.listenedMs === 0
+                  ? "–"
+                  : t("About {{duration}}", { duration: formatListened(insights.listenedMs, t) })}
               </dd>
             </div>
             <div>
-              <dt>Plays</dt>
-              <dd>{insights.plays}</dd>
+              <dt>{t("Plays")}</dt>
+              <dd>{number.format(insights.plays)}</dd>
             </div>
             <div>
-              <dt>Songs</dt>
-              <dd>{insights.songs}</dd>
+              <dt>{t("Songs")}</dt>
+              <dd>{number.format(insights.songs)}</dd>
             </div>
           </dl>
           {insights.playsNotTimed > 0 && (
             <p className="muted insights-note">
-              {`Not timed: ${playsOf(insights.playsNotTimed)} of whole albums or songs of unknown length.`}
+              {t("Not timed: {{plays}} of whole albums or songs of unknown length.", {
+                plays: playsOf(insights.playsNotTimed, t),
+              })}
             </p>
           )}
           <div className="insights-tops">
@@ -126,7 +146,7 @@ export function InsightsView({
           </div>
           {topSongs.length > 0 && (
             <section className="insights-ranking" aria-labelledby="insights-songs">
-              <h3 id="insights-songs">Top songs</h3>
+              <h3 id="insights-songs">{t("Top songs")}</h3>
               <ol className="insights-songs">
                 {topSongs.map(({ track, plays }, index) => {
                   const playable = track.availability === "ok";
@@ -136,8 +156,11 @@ export function InsightsView({
                         type="button"
                         className="insights-song"
                         disabled={!playable}
-                        aria-label={`Play ${track.title}, ${playsOf(plays)}`}
-                        title={playable ? "Play now" : WHY[track.availability]}
+                        aria-label={t("Play {{title}}, {{plays}}", {
+                          title: track.title,
+                          plays: playsOf(plays, t),
+                        })}
+                        title={t(playable ? "Play now" : (WHY[track.availability] ?? "Can't play"))}
                         onClick={() => {
                           onPlay(
                             topSongs.map((song) => song.track),
@@ -156,7 +179,7 @@ export function InsightsView({
                           {track.title}
                         </span>
                         <span className="entry-artist">{track.artist}</span>
-                        <span className="insights-plays">{playsOf(plays)}</span>
+                        <span className="insights-plays">{playsOf(plays, t)}</span>
                       </button>
                     </li>
                   );
@@ -166,8 +189,10 @@ export function InsightsView({
           )}
           <p className="muted insights-note">
             {insights.playsEstimated > 0 &&
-              `Plays from before listening was measured count the whole song: ${playsOf(insights.playsEstimated)}. `}
-            {"Clearing History doesn't change Insights."}
+              t("Plays from before listening was measured count the whole song: {{plays}}. ", {
+                plays: playsOf(insights.playsEstimated, t),
+              })}
+            {t("Clearing History doesn't change Insights.")}
           </p>
         </div>
       )}
@@ -184,11 +209,14 @@ const hrefTo = (of: Of, listened: Listened) =>
     : hrefOf({ view: "album", artist: listened.artist, name: listened.name });
 
 function TopCard({ of, listened }: { readonly of: Of; readonly listened: Listened }) {
+  const t = useWords();
   return (
     <a className="insights-top" href={hrefTo(of, listened)}>
       <Cover size="medium" cover={listened.cover} className="cover-tile insights-cover" />
       <span className="insights-top-text">
-        <span className="insights-top-label">{of === "artist" ? "Top artist" : "Top album"}</span>
+        <span className="insights-top-label">
+          {t(of === "artist" ? "Top artist" : "Top album")}
+        </span>
         <span className="insights-top-name">
           {of === "album" && (
             <KindMark
@@ -201,9 +229,9 @@ function TopCard({ of, listened }: { readonly of: Of; readonly listened: Listene
           {listened.name}
         </span>
         {of === "album" && (
-          <span className="group-meta">{listened.artist || "Unknown artist"}</span>
+          <span className="group-meta">{listened.artist || t("Unknown artist")}</span>
         )}
-        <span className="group-meta">{listenedOf(listened)}</span>
+        <span className="group-meta">{listenedOf(listened, t)}</span>
       </span>
     </a>
   );
@@ -219,6 +247,7 @@ function Ranking({
   readonly title: string;
   readonly items: readonly Listened[];
 }) {
+  const t = useWords();
   if (items.length === 0) {
     return null;
   }
@@ -229,7 +258,7 @@ function Ranking({
   const id = `insights-${of}s`;
   return (
     <section className="insights-ranking" aria-labelledby={id}>
-      <h3 id={id}>{title}</h3>
+      <h3 id={id}>{t(title)}</h3>
       <ol className="insights-bars">
         {shown.map((item) => (
           <li key={`${item.artist}\n${item.name}`} className="insights-row">
@@ -245,10 +274,10 @@ function Ranking({
                 )}
                 {item.name}
                 {of === "album" && (
-                  <span className="insights-bar-artist">{item.artist || "Unknown artist"}</span>
+                  <span className="insights-bar-artist">{item.artist || t("Unknown artist")}</span>
                 )}
               </span>
-              <span className="insights-bar-value">{listenedOf(item)}</span>
+              <span className="insights-bar-value">{listenedOf(item, t)}</span>
               <span
                 className="insights-bar"
                 aria-hidden

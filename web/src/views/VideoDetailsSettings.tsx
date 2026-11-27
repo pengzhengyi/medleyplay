@@ -10,16 +10,9 @@ const WORDS: EnricherWords = {
   enricher: DETAILS_ENRICHER,
   site: "Bilibili",
   heading: "Video details",
-  description: (
-    <>
-      Find details online asks Bilibili for a video&apos;s title, description, and cover, one Track
-      at a time, and never the same video twice in a day.
-    </>
-  ),
-  count: (tracks) =>
-    tracks === 1
-      ? "1 Track can have its details found."
-      : `${String(tracks)} Tracks can have their details found.`,
+  description:
+    "Find details online asks Bilibili for a video's title, description, and cover, one Track at a time, and never the same video twice in a day.",
+  count: (count, t) => t("video_details_eligible", { count }),
   off: "Finding video details is turned off.",
 };
 

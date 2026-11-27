@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { type Routes, serve, signedIn, trackOf } from "../testing/server";
+import { type Routes, lyricsOf, serve, signedIn, trackOf } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -54,6 +55,106 @@ async function runOutTheQueue(nowPlaying: HTMLElement) {
 }
 
 describe("Now Playing", () => {
+  it("keeps a dismissed suggestion gone when the follow-up lyrics read fails", async () => {
+    const suggestion = lyricsOf({ origin: "suggested" });
+    let dismissed = false;
+    const { calls } = await playingIntro({
+      "GET /api/tracks/1/lyrics": () =>
+        dismissed ? { status: 503, body: { detail: "Try again later." } } : { body: suggestion },
+      "DELETE /api/tracks/1/lyrics/suggestion": () => {
+        dismissed = true;
+        return { body: null };
+      },
+    });
+    const dialog = within(await openNowPlaying());
+    const bar = within(await dialog.findByRole("group", { name: "Lyrics suggested" }));
+
+    await userEvent.click(bar.getByRole("button", { name: "Dismiss" }));
+
+    await waitFor(() => {
+      expect(calls.filter((call) => call === "GET /api/tracks/1/lyrics")).toHaveLength(2);
+    });
+    expect(await dialog.findByText("No lyrics for this song.")).toBeVisible();
+    expect(dialog.queryByRole("group", { name: "Lyrics suggested" })).not.toBeInTheDocument();
+  });
+
+  it("says lyrics could not load instead of saying the song has none", async () => {
+    await playingIntro({
+      "GET /api/tracks/1/lyrics": { status: 503, body: { detail: "Try again later." } },
+    });
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const dialog = within(await openNowPlaying());
+    expect(await dialog.findByText("Could not load lyrics.")).toBeVisible();
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(dialog.getByText("无法加载歌词。")).toBeVisible();
+      expect(dialog.queryByText("这首歌暂无歌词。")).not.toBeInTheDocument();
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
+  it("uses the same song for the favorite heart and shortcut when a split album plays whole", async () => {
+    const album = trackOf(10, "Whole album", { kind: "album", split: true });
+    const first = trackOf(11, "First song", {
+      segment_of: 10,
+      duration_ms: 60_000,
+      track_number: 1,
+    });
+    const { calls } = serve({
+      ...signedIn([album, first]),
+      "POST /api/tracks/10/playback": {
+        body: {
+          state: "ready",
+          source_id: 10,
+          audio_url: "/api/sources/10/audio",
+          media_type: "audio/wav",
+        },
+      },
+      "PUT /api/tracks/11/favorite": { body: { ...first, favorite: true } },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Whole album" }));
+    const dialog = within(await openNowPlaying());
+    await user.click(dialog.getByRole("button", { name: "Favorite First song" }));
+    await user.keyboard("l");
+
+    expect(calls.filter((request) => request.endsWith("/favorite"))).toEqual([
+      "PUT /api/tracks/11/favorite",
+      "PUT /api/tracks/11/favorite",
+    ]);
+  });
+
+  it("changes Now Playing help and accessible controls without closing the player", async () => {
+    await playingIntro({}, trackOf(1, "Intro", { has_lyrics: true }));
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const dialog = await openNowPlaying();
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(screen.getByRole("dialog", { name: "正在播放" })).toBe(dialog);
+      expect(within(dialog).getByRole("button", { name: "关闭正在播放" })).toBeVisible();
+      expect(within(dialog).getByRole("img", { name: "正在播放歌曲，有歌词" })).toBeVisible();
+      expect(within(dialog).getByRole("button", { name: "歌词" })).toHaveAttribute(
+        "title",
+        "隐藏歌词",
+      );
+      expect(within(dialog).getByRole("slider", { name: "播放进度" })).toHaveAttribute(
+        "aria-valuetext",
+        expect.stringContaining("总时长"),
+      );
+      expect(within(dialog).getByText("Intro", { exact: true })).toBeVisible();
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
   it("shows song lyrics on the player and Now Playing note without marking artwork or an incomplete album", async () => {
     await playingIntro({}, trackOf(1, "Intro", { has_lyrics: true, cover: "blue" }));
     const player = screen.getByRole("region", { name: "Player" });
@@ -93,13 +194,14 @@ describe("Now Playing", () => {
     );
   });
 
-  it("favorites a whole album in one file from the player's heart, as Now Playing shows it", async () => {
+  it("uses the album favorite for both the player's heart and the shortcut when no song is split", async () => {
     const album = trackOf(4, "Jim Restaurant", {
       kind: "album",
       album: "Jim Restaurant",
       artist: "赵雷",
       duration_ms: 3_000_000,
     });
+    const sent: unknown[] = [];
     const { calls } = serve({
       ...signedIn([album]),
       "POST /api/tracks/4/playback": {
@@ -110,8 +212,14 @@ describe("Now Playing", () => {
           media_type: "audio/wav",
         },
       },
-      "PUT /api/albums/favorite": {
-        body: { artists: [], albums: [{ artist: "赵雷", name: "Jim Restaurant" }] },
+      "PUT /api/albums/favorite": (body) => {
+        sent.push(body);
+        return {
+          body: {
+            artists: [],
+            albums: sent.length === 1 ? [{ artist: "赵雷", name: "Jim Restaurant" }] : [],
+          },
+        };
       },
     });
     render(<App />);
@@ -127,6 +235,17 @@ describe("Now Playing", () => {
     expect(
       within(nowPlaying).getByRole("button", { name: "Favorite album Jim Restaurant" }),
     ).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.keyboard("l");
+
+    expect(sent).toEqual([
+      { artist: "赵雷", name: "Jim Restaurant", favorite: true },
+      { artist: "赵雷", name: "Jim Restaurant", favorite: false },
+    ]);
+    expect(calls).not.toContain("PUT /api/tracks/4/favorite");
+    expect(
+      within(nowPlaying).getByRole("button", { name: "Favorite album Jim Restaurant" }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   it("opens from the player's cover", async () => {

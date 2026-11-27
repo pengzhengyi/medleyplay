@@ -10,11 +10,13 @@ import { useRef } from "react";
 import { hrefOf } from "../routes";
 import { useHoldForShortcuts } from "../holdForShortcuts";
 import { COMMANDS, labelOf, useBindings } from "../shortcuts";
+import { useWords } from "../locale";
 import { HOLD_LABEL, useHeldModifier } from "../useHeldModifier";
 import { Modal } from "./Modal";
 
 /** Every command and its keys, in a modal. */
 export function ShortcutList({ onClose }: { readonly onClose: () => void }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => {
     dialog.current?.close();
@@ -27,11 +29,11 @@ export function ShortcutList({ onClose }: { readonly onClose: () => void }) {
       onClose={onClose}
     >
       <div className="card">
-        <h2 id="shortcut-list-title">Keyboard shortcuts</h2>
+        <h2 id="shortcut-list-title">{t("Keyboard shortcuts")}</h2>
         <ShortcutTable />
         <footer className="dialog-buttons">
           <a className="change-keys" href={hrefOf({ view: "settings" })} onClick={close}>
-            Change them in Settings
+            {t("Change them in Settings")}
           </a>
         </footer>
       </div>
@@ -48,6 +50,7 @@ export function HoldForShortcuts({ blocked }: { readonly blocked: boolean }) {
 
 /** The list for a glance: nothing to press, and focus stays where it was. */
 export function HeldShortcuts() {
+  const t = useWords();
   return (
     <section
       className="held-shortcuts"
@@ -56,31 +59,37 @@ export function HeldShortcuts() {
       aria-labelledby="held-shortcuts-title"
     >
       <div className="card">
-        <h2 id="held-shortcuts-title">Keyboard shortcuts</h2>
+        <h2 id="held-shortcuts-title">{t("Keyboard shortcuts")}</h2>
         <ShortcutTable />
-        <p className="held-hint">Let go of {HOLD_LABEL} to close.</p>
+        <p className="held-hint">{t("Let go of {{key}} to close.", { key: HOLD_LABEL })}</p>
       </div>
     </section>
   );
 }
 
 function ShortcutTable() {
+  const t = useWords();
   const bindings = useBindings();
   return (
     <dl className="shortcuts">
       {COMMANDS.map(({ command, name }) => (
         <div key={command} className="shortcut">
-          <dt>{name}</dt>
+          <dt>{t(name)}</dt>
           <dd>
             {bindings[command].length === 0 ? (
-              <span className="no-keys">None</span>
+              <span className="no-keys">{t("None")}</span>
             ) : (
-              bindings[command].map((keys, index) => (
-                <span key={keys}>
-                  {index > 0 && <span className="or"> or </span>}
-                  <kbd>{labelOf(keys)}</kbd>
-                </span>
-              ))
+              bindings[command].map((keys, index) => {
+                const cap = labelOf(keys);
+                const spoken = labelOf(keys, t);
+                return (
+                  <span key={keys}>
+                    {index > 0 && <span className="or">{t(" or ")}</span>}
+                    <kbd aria-hidden={spoken !== cap || undefined}>{cap}</kbd>
+                    {spoken !== cap && <span className="visually-hidden">{spoken}</span>}
+                  </span>
+                );
+              })
             )}
           </dd>
         </div>

@@ -12,6 +12,7 @@
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { type AlbumCovers, api } from "../api";
+import { type Words, useWords } from "../locale";
 import { Cover } from "./Cover";
 import { SuggestedFrame } from "./SuggestedFrame";
 
@@ -23,8 +24,8 @@ function messageOf(failure: unknown): string {
 }
 
 /** Say what tells the release apart: `1965, GB, 12" Vinyl`. */
-function releaseOf(release: AlbumCovers["covers"][number]["release"]): string {
-  return [release.date.slice(0, 4), release.country, release.format].filter(Boolean).join(", ");
+function releaseOf(release: AlbumCovers["covers"][number]["release"], t: Words): string {
+  return [release.date.slice(0, 4), release.country, release.format].filter(Boolean).join(t(", "));
 }
 
 /**
@@ -44,6 +45,7 @@ export function SuggestedCover({
   readonly onUse: (cover: string) => Promise<void>;
   readonly onChange: () => void;
 }) {
+  const t = useWords();
   const [state, setState] = useState<AlbumCovers>();
   const [reads, setReads] = useState(0);
   const [using, setUsing] = useState(false);
@@ -87,7 +89,7 @@ export function SuggestedCover({
   const found = state?.covers.find((each) => each.cover === suggested);
   const problem = error !== "" && (
     <p className="error" role="alert">
-      {error}
+      {t("Could not update the cover suggestions: {{detail}}", { detail: error })}
     </p>
   );
   if (suggested === null || found === undefined) {
@@ -96,19 +98,25 @@ export function SuggestedCover({
         {fallback}
         {asking && (
           <p className="cover-looking" role="status">
-            {state.waiting ? "Looks on MusicBrainz once Online" : "Looking on MusicBrainz…"}
+            {t(
+              state.waiting
+                ? "Waiting for Online to look on MusicBrainz…"
+                : "Looking on MusicBrainz…",
+            )}
           </p>
         )}
         {problem}
       </div>
     );
   }
-  const pick = state?.pick ?? null;
   const release = found.release;
+  const pick = state?.pick?.release_id === release.release_id ? state.pick : null;
   const why =
     pick === null
-      ? `MusicBrainz's ${[release.title, releaseOf(release)].filter(Boolean).join(", ")}`
-      : `${pick.model} picked this: ${pick.why}`;
+      ? t("MusicBrainz's {{release}}", {
+          release: [release.title, releaseOf(release, t)].filter(Boolean).join(t(", ")),
+        })
+      : t("{{model}} picked this: {{reason}}", { model: pick.model, reason: pick.why });
   const use = async () => {
     setUsing(true);
     setError("");

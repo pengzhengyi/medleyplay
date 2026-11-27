@@ -206,13 +206,14 @@ export function FavoriteButton({
   readonly track: Track;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
 }) {
+  const t = useWords();
   const keys = useBindings();
   return (
-    <Hint name={heartTitleOf(track.title, track.favorite)} keys={keys.favorite}>
+    <Hint name={heartTitleOf(track.title, track.favorite, t)} keys={keys.favorite}>
       <button
         type="button"
         className={track.favorite ? "icon heart on" : "icon heart"}
-        aria-label={`Favorite ${track.title}`}
+        aria-label={t("Favorite {{title}}", { title: track.title })}
         aria-pressed={track.favorite}
         onClick={() => {
           onFavorite(track, !track.favorite);

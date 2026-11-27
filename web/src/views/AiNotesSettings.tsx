@@ -8,9 +8,21 @@
 
 import { PlusIcon, XIcon } from "@phosphor-icons/react";
 import { useState } from "react";
+import { Trans } from "react-i18next";
 
 import { type AiAsk, type AiNote, MAX_AI_NOTE, type Settings } from "../api";
-import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import { composing } from "../ime";
+import {
+  CHANGED_ELSEWHERE,
+  type SettingsNotice,
+  saveChange,
+  settingsFailure,
+  settingsNotice,
+} from "../library/householdSettings";
+import { useWords } from "../locale";
+
+const HELP =
+  "Offered beside each <ask>Ask AI</ask> button, under ▾ or a right-click, to tick and send with the question.";
 
 /** Each kind of ask, as its group of notes is named. */
 const ASKS: readonly { readonly ask: AiAsk; readonly legend: string }[] = [
@@ -27,10 +39,11 @@ export function AiNotesSettings({
   readonly settings: Settings | undefined;
   readonly onSettings: (settings: Settings) => void;
 }) {
+  const t = useWords();
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState<AiAsk | undefined>(undefined);
   const [note, setNote] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<SettingsNotice>(null);
   if (settings === undefined) {
     return null;
   }
@@ -39,13 +52,13 @@ export function AiNotesSettings({
   const save = async (next: readonly AiNote[]) => {
     setSaving(true);
     setNote("");
-    setError("");
+    setError(null);
     try {
       const { outcome, settings: now } = await saveChange(settings, { ai_notes: next });
       onSettings(now);
       setNote(outcome === "conflict" ? CHANGED_ELSEWHERE : "Saved.");
     } catch (failure) {
-      setError(notSaved(failure));
+      setError(settingsFailure(failure));
     } finally {
       setSaving(false);
     }
@@ -74,25 +87,24 @@ export function AiNotesSettings({
   return (
     <div className="ai-notes" aria-busy={saving}>
       <p className="hint">
-        Offered beside each <strong>Ask AI</strong> button, under ▾ or a right-click, to tick and
-        send with the question.
+        <Trans t={t} i18nKey={HELP} defaults={HELP} components={{ ask: <strong /> }} />
       </p>
       {ASKS.map(({ ask, legend }) => (
         <fieldset key={ask} className="ai-notes-group" disabled={saving}>
-          <legend>{legend}</legend>
+          <legend>{t(legend)}</legend>
           {notes.map((each, index) =>
             each.ask === ask ? (
               <div key={`${String(index)} ${each.text}`} className="ai-notes-row">
                 <input
                   className="detail-input"
-                  aria-label={`Note: ${each.text}`}
+                  aria-label={t("Note: {{note}}", { note: each.text })}
                   defaultValue={each.text}
                   maxLength={MAX_AI_NOTE}
                   onBlur={(event) => {
                     reword(index, event.currentTarget.value);
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                    if (event.key === "Enter" && !composing(event.nativeEvent)) {
                       event.preventDefault();
                       reword(index, event.currentTarget.value);
                     }
@@ -101,8 +113,8 @@ export function AiNotesSettings({
                 <button
                   type="button"
                   className="icon"
-                  aria-label={`Remove the note “${each.text}”`}
-                  title="Remove this note"
+                  aria-label={t("Remove the note “{{note}}”", { note: each.text })}
+                  title={t("Remove this note")}
                   onClick={() => void save(notes.filter((_, at) => at !== index))}
                 >
                   <XIcon aria-hidden />
@@ -113,16 +125,17 @@ export function AiNotesSettings({
           {adding === ask ? (
             <input
               className="detail-input"
-              aria-label="New note"
+              aria-label={t("New note")}
               maxLength={MAX_AI_NOTE}
-              placeholder="Tell the AI what to look for"
+              placeholder={t("Tell the AI what to look for")}
               // The field opens on pressing Add a note, to type the note at once.
               autoFocus
               onBlur={(event) => {
                 add(ask, event.currentTarget.value);
               }}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                if (composing(event.nativeEvent)) return;
+                if (event.key === "Enter") {
                   event.preventDefault();
                   add(ask, event.currentTarget.value);
                 } else if (event.key === "Escape") {
@@ -139,14 +152,14 @@ export function AiNotesSettings({
                 setAdding(ask);
               }}
             >
-              <PlusIcon aria-hidden /> Add a note
+              <PlusIcon aria-hidden /> {t("Add a note")}
             </button>
           )}
         </fieldset>
       ))}
-      {error !== "" && <p role="alert">{error}</p>}
+      {error !== null && <p role="alert">{settingsNotice(error, t)}</p>}
       <p className="hint saved" role="status">
-        {note}
+        {note === "" ? "" : t(note)}
       </p>
     </div>
   );

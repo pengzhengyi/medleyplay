@@ -12,6 +12,8 @@
  * searches that site instead, where one can be searched.
  */
 
+import type { Words } from "../locale";
+
 /** The fields a tag can name, in the order the help lists them. */
 export const FIELDS = ["artist", "album", "song", "kind", "rating", "favorite"] as const;
 
@@ -111,12 +113,18 @@ export function siteTyped(
  * Return `query` as a heading says it: each tag as *Artist: Jay Chou*, then the words
  * quoted, as *Artist: Jay Chou, “love”*; `""` when it asks nothing.
  */
-export function querySaid(text: string): string {
+export function querySaid(text: string, t?: Words): string {
   const { tags, words } = parseQuery(text);
   return [
     ...tags
       .filter((tag) => tag.value !== "")
-      .map((tag) => `${FIELD_LABELS[tag.field]}: ${tag.value}`),
-    ...(words.trim() === "" ? [] : [`“${words.trim()}”`]),
-  ].join(", ");
+      .map(({ field, value }) =>
+        t === undefined
+          ? `${FIELD_LABELS[field]}: ${value}`
+          : t("{{field}}: {{value}}", { field: t(FIELD_LABELS[field]), value }),
+      ),
+    ...(words.trim() === ""
+      ? []
+      : [t?.("“{{words}}”", { words: words.trim() }) ?? `“${words.trim()}”`]),
+  ].join(t?.(", ") ?? ", ");
 }

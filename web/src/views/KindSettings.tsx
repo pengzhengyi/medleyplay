@@ -9,9 +9,17 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { type Settings, api, newestOf } from "../api";
-import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
-import { useAutoSave } from "../useAutoSave";
+import {
+  CHANGED_ELSEWHERE,
+  SETTINGS_SAVE_COPY,
+  saveChange,
+  settingsNotice,
+  settingsFailure,
+  settingsKey,
+} from "../library/householdSettings";
+import { useAutoSaveOf } from "../useAutoSave";
 import { classOf } from "../useNote";
+import { useWords } from "../locale";
 
 const MAX_MINUTES = 600;
 
@@ -48,6 +56,7 @@ export function KindSettings({
   readonly onSettings: (settings: Settings) => void;
   readonly onChanged: () => void;
 }) {
+  const words = useWords();
   const [draft, setDraft] = useState<Draft>({ guess: true, minutes: "20" });
   const [error, setError] = useState("");
   const latest = useRef(settings);
@@ -78,10 +87,10 @@ export function KindSettings({
     loadOnOpen();
   }, []);
 
-  const saving = useAutoSave(async (albumMinutes: number | null, notes) => {
+  const saving = useAutoSaveOf(async (albumMinutes: number | null, notes) => {
     const base = latest.current;
     if (base === undefined || albumMinutes === base.album_minutes) {
-      notes.tell("");
+      notes.tell(null);
       return "unchanged";
     }
     try {
@@ -90,16 +99,16 @@ export function KindSettings({
       onSettings(now);
       if (outcome === "conflict") {
         setDraft(draftOf(now));
-        notes.tell(CHANGED_ELSEWHERE);
+        notes.tell(settingsKey(CHANGED_ELSEWHERE));
         return "conflict";
       }
       onChanged();
       return "saved";
     } catch (failure) {
-      notes.refuse(notSaved(failure));
+      notes.refuse(settingsFailure(failure));
       return "failed";
     }
-  });
+  }, SETTINGS_SAVE_COPY);
 
   const change = (next: Draft, typed: boolean) => {
     setDraft(next);
@@ -107,7 +116,7 @@ export function KindSettings({
     if (minutes === undefined) {
       saving.cancel();
     } else if (!saving.busy() && minutes === latest.current?.album_minutes) {
-      saving.tell("");
+      saving.tell(null);
     } else if (typed) {
       saving.later(minutes);
     } else {
@@ -123,7 +132,7 @@ export function KindSettings({
       if (saved !== undefined) {
         setDraft(draftOf(saved));
       }
-      saving.refuse(`Not saved: type whole minutes from 1 to ${String(MAX_MINUTES)}.`);
+      saving.refuse({ kind: "minutes", max: MAX_MINUTES });
     } else if (saving.busy() || minutes !== saved?.album_minutes) {
       saving.now(minutes);
     }
@@ -132,7 +141,7 @@ export function KindSettings({
   if (settings === undefined) {
     return error === "" ? (
       <p className="hint" aria-busy="true">
-        Reading the settings…
+        {words("Reading the settings…")}
       </p>
     ) : (
       <p role="alert">{error}</p>
@@ -157,10 +166,10 @@ export function KindSettings({
                 change({ ...draft, guess: event.target.checked }, false);
               }}
             />
-            Guess that a long file is an album
+            {words("Guess that a long file is an album")}
           </label>
           <label className="kind-guess-minutes">
-            At least
+            {words("At least")}
             <input
               type="number"
               inputMode="numeric"
@@ -169,28 +178,32 @@ export function KindSettings({
               step={1}
               value={draft.minutes}
               disabled={!draft.guess}
-              aria-label="Shortest album, in minutes"
+              aria-label={words("Shortest album, in minutes")}
               onChange={(event) => {
                 change({ ...draft, minutes: event.target.value }, true);
               }}
               onBlur={leave}
             />
-            minutes
+            {words("minutes")}
           </label>
         </form>
       ) : (
         <p>
           {settings.album_minutes === null
-            ? "A file no one names the kind of is a song."
-            : `A file ${String(settings.album_minutes)} minutes or longer is guessed an album.`}{" "}
-          An admin changes this.
+            ? words("A file no one names the kind of is a song.")
+            : words("A file {{minutes}} minutes or longer is guessed an album.", {
+                minutes: settings.album_minutes,
+              })}{" "}
+          {words("An admin changes this.")}
         </p>
       )}
       <p className="hint">
-        A guess shows as an outlined mark; choosing Song or Album in Edit details settles it.
+        {words(
+          "A guess shows as an outlined mark; choosing Song or Album in Edit details settles it.",
+        )}
       </p>
       <p className={classOf(saving.note, "hint saved")} role="status">
-        {saving.note.text}
+        {settingsNotice(saving.note.text, words)}
       </p>
     </>
   );

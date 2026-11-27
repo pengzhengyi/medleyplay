@@ -17,24 +17,32 @@ import { hrefOf } from "../routes";
 import { ArtistPhotoEditor } from "./ArtistPhotoEditor";
 import { Cover } from "./Cover";
 import { SuggestedFrame } from "./SuggestedFrame";
+import { Trans } from "react-i18next";
+import { useWords } from "../locale";
 
 const READ_EVERY_MS = 3000;
+const SETTINGS_HELP = "They are looked up as <settings>Settings → Deezer</settings> says.";
+type Suggested = MissingPhoto & { readonly suggested: string };
+const suggestionKey = (photo: Suggested) => JSON.stringify([photo.artist_id, photo.suggested]);
 
 /** The artists with no photo, each with the one suggested, to use. */
 export function FindPhotos({
   artists,
   answered,
   onChanged,
+  admin = false,
 }: {
   readonly artists: readonly MissingPhoto[];
   /** How many answers came while Deezer was asked, the same one too; each reads again. */
   readonly answered: number;
   /** Called after a change, or to read the artists again. */
   readonly onChanged: () => void;
+  readonly admin?: boolean;
 }) {
+  const t = useWords();
   // The artists whose photo is being used or dismissed: each stays saving until it is gone.
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
-  const [usingAll, setUsingAll] = useState(false);
+  const [usingAll, setUsingAll] = useState<number>();
   const [error, setError] = useState("");
   // The artist whose photo is chosen in the photo editor, if any.
   const [changing, setChanging] = useState<MissingPhoto>();
@@ -63,12 +71,18 @@ export function FindPhotos({
     };
   }, [answered, finding]);
 
-  const suggested = artists.filter(
-    (each): each is MissingPhoto & { readonly suggested: string } => each.suggested !== null,
-  );
-  const unfit = artists.filter((each) => each.suggested === null && each.found).length;
-  const unasked = artists.filter((each) => !each.found).length;
-  const ready = suggested.filter((each) => !saving.has(each.artist_id));
+  const suggested = artists.filter((each): each is Suggested => each.suggested !== null);
+  const unfit = artists.filter(
+    (each) => each.suggested === null && each.found && !each.finding,
+  ).length;
+  const unasked = artists.filter((each) => !each.found && !each.finding).length;
+  const ready = suggested.filter((each) => !saving.has(suggestionKey(each)));
+  const [previousArtists, setPreviousArtists] = useState(artists);
+  if (previousArtists !== artists) {
+    setPreviousArtists(artists);
+    const current = new Set(suggested.map(suggestionKey));
+    setSaving(new Set([...saving].filter((key) => current.has(key))));
+  }
   // Saves `change` to the artists `ids`, saving until they are read again without them.
   const save = async (ids: readonly string[], change: () => Promise<unknown>) => {
     setSaving((was) => new Set([...was, ...ids]));
@@ -82,67 +96,68 @@ export function FindPhotos({
       onChanged();
     }
   };
-  const take = (chosen: readonly { readonly artist_id: string; readonly suggested: string }[]) =>
-    save(
-      chosen.map((each) => each.artist_id),
-      async () => {
-        for (const each of chosen) {
-          await api.useArtistPhotoCover(each.artist_id, each.suggested);
-        }
-      },
-    );
+  const take = (chosen: readonly Suggested[]) =>
+    save(chosen.map(suggestionKey), async () => {
+      for (const each of chosen) {
+        await api.useArtistPhotoCover(each.artist_id, each.suggested);
+      }
+    });
   const takeAll = async () => {
-    setUsingAll(true);
+    setUsingAll(ready.length);
     await take(ready);
-    setUsingAll(false);
+    setUsingAll(undefined);
   };
-  const dismiss = (artist: MissingPhoto & { readonly suggested: string }) =>
-    save([artist.artist_id], () => api.dismissArtistPicture(artist.artist_id, artist.suggested));
+  const dismiss = (artist: Suggested) =>
+    save([suggestionKey(artist)], () =>
+      api.dismissArtistPicture(artist.artist_id, artist.suggested),
+    );
   return (
     <section className="clean-up-section" aria-labelledby="find-photos-title">
       <header className="clean-up-head">
         <h3 id="find-photos-title">
           <UserCircleIcon className="clean-up-icon" weight="bold" aria-hidden />
-          Find artist photos
+          {t("Find artist photos")}
           <span className="clean-up-count">{photosToUseOf(artists)}</span>
         </h3>
         {suggested.length > 1 && (
           <button
             type="button"
             className="dialog-button"
-            disabled={usingAll || ready.length === 0}
-            aria-busy={usingAll}
+            disabled={usingAll !== undefined || ready.length === 0}
+            aria-busy={usingAll !== undefined}
             onClick={() => void takeAll()}
           >
-            {`Use all ${String(suggested.length)}`}
+            {t("Use all {{count}}", { count: usingAll ?? ready.length })}
           </button>
         )}
       </header>
       <p className="tidy-lead">
-        A photo found on Deezer for each artist with none. Using one makes it the artist's photo.
+        {t(
+          "A photo found on Deezer for each artist with none. Using one makes it the artist's photo.",
+        )}
       </p>
       {error !== "" && (
         <p className="error" role="alert">
-          {error}
+          {t("Could not update the photo suggestions: {{detail}}", { detail: error })}
         </p>
       )}
       {finding > 0 && (
         <p className="cover-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-          {`Looking on Deezer for ${String(finding)} ${finding === 1 ? "artist" : "artists"}…`}
+          {t("artist_photo_search", { count: finding })}
         </p>
       )}
       {suggested.length > 0 && (
-        <ul className="photo-suggestions" aria-label="Photos suggested">
+        <ul className="photo-suggestions" aria-label={t("Photos suggested")}>
           {suggested.map((each) => (
             <li key={each.artist_id} className="photo-suggestion-item">
               <SuggestedFrame
                 of={each.name}
-                why={
-                  each.picked ? "An AI model picked this" : "Going by this artist's name on Deezer"
-                }
+                why={t(
+                  each.picked ? "An AI model picked this" : "Going by this artist's name on Deezer",
+                )}
                 picked={each.picked}
-                busy={saving.has(each.artist_id)}
+                busy={saving.has(suggestionKey(each))}
                 onUse={() => void take([each])}
                 onDismiss={() => void dismiss(each)}
                 onChange={() => {
@@ -157,9 +172,7 @@ export function FindPhotos({
               >
                 {each.name}
               </a>
-              <span className="tidy-meta">
-                {each.songs === 1 ? "1 song" : `${String(each.songs)} songs`}
-              </span>
+              <span className="tidy-meta">{t("song_count", { count: each.songs })}</span>
             </li>
           ))}
         </ul>
@@ -167,20 +180,25 @@ export function FindPhotos({
       {unfit + unasked > 0 && (
         <p className="tidy-lead">
           {[
-            unfit > 0 &&
-              `${String(unfit)} ${unfit === 1 ? "artist has" : "artists have"} no picture on Deezer that fits`,
-            unasked > 0 &&
-              `${String(unasked)} ${unasked === 1 ? "artist isn't" : "artists aren't"} looked up yet`,
+            unfit > 0 && t("artist_photo_no_match", { count: unfit }),
+            unasked > 0 && t("artist_photo_not_searched", { count: unasked }),
           ]
             .filter(Boolean)
-            .join("; ")}
-          .{" "}
-          {unasked > 0 && (
-            <>
-              They are looked up as{" "}
-              <a href={hrefOf({ view: "settings", section: "deezer" })}>Settings → Deezer</a> says.
-            </>
-          )}
+            .join(t("; "))}
+          {t(". ")}
+          {unasked > 0 &&
+            (admin ? (
+              <Trans
+                t={t}
+                i18nKey={SETTINGS_HELP}
+                defaults={SETTINGS_HELP}
+                components={{
+                  settings: <a href={hrefOf({ view: "settings", section: "deezer" })} />,
+                }}
+              />
+            ) : (
+              t("An admin controls when Deezer searches for photos.")
+            ))}
         </p>
       )}
       {changing !== undefined && (

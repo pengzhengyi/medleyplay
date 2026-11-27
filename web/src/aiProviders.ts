@@ -3,12 +3,12 @@
  * or its host, whether it needs a key, and why it last failed and when.
  */
 
-import type { AiFailure, AiPreset, AiProvider } from "./api";
+import { ApiError, type AiFailure, type AiPreset, type AiProvider } from "./api";
+import type { Words } from "./locale";
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 /** The address that names GitHub Copilot, asked with a GitHub token rather than an API key. */
 const COPILOT = "https://api.githubcopilot.com";
-const relative = new Intl.RelativeTimeFormat("en-US", { numeric: "auto", style: "short" });
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -16,30 +16,34 @@ const DAY = 24 * HOUR;
 /** What a failure is called on a card, and what to do about it. */
 export const FAILURE_WORDS: Readonly<Record<AiFailure, { label: string; fix: string }>> = {
   unreachable: { label: "Couldn't be reached", fix: "Check the address, or that it is running." },
-  busy: { label: "Too busy", fix: "It stayed busy, so the next provider was asked." },
+  busy: { label: "Too busy", fix: "The provider stayed busy. Try again later." },
   refused: { label: "Key refused", fix: "Replace the key." },
   unusable: { label: "Answer unusable", fix: "Check the model." },
   key_missing: { label: "Key missing", fix: "The Keychain no longer holds it; replace the key." },
 };
 
 /** How to fix why the provider last gave no answer, as specific as what was kept allows. */
-export function fixOf(provider: AiProvider): string {
+export function fixOf(provider: AiProvider, t: Words): string {
   if (provider.failure === null) {
     return "";
   }
   switch (provider.failure_reason) {
     case "rejected":
-      return `It answered ${String(provider.failure_status ?? "with a refusal")}: check the model and the base URL.`;
+      return provider.failure_status === null
+        ? t("It answered with a refusal: check the model and the base URL.")
+        : t("It answered {{status}}: check the model and the base URL.", {
+            status: provider.failure_status,
+          });
     case "redirected":
-      return "It answered with a redirect: check the base URL.";
+      return t("It answered with a redirect: check the base URL.");
     case "cut_off":
-      return "Its answer ran out of room before it finished.";
+      return t("Its answer ran out of room before it finished.");
     case "empty":
-      return "Its answer was empty: check the model.";
+      return t("Its answer was empty: check the model.");
     case "not_json":
-      return "Its answer wasn't the JSON asked for, even when asked again: try another model.";
+      return t("Its answer wasn't the JSON asked for, even when asked again: try another model.");
     case null:
-      return FAILURE_WORDS[provider.failure].fix;
+      return t(FAILURE_WORDS[provider.failure].fix);
   }
 }
 
@@ -60,7 +64,8 @@ export function isLocal(baseUrl: string): boolean {
 }
 
 /** How long ago `at` was, from `now`: "now", "5 min. ago", "2 hr. ago", "yesterday". */
-export function agoOf(at: string, now: number): string {
+export function agoOf(at: string, now: number, locale: string): string {
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" });
   const since = Math.max(now - Date.parse(at), 0);
   if (since < MINUTE) {
     return relative.format(0, "second");
@@ -71,9 +76,48 @@ export function agoOf(at: string, now: number): string {
   if (since < DAY) {
     return relative.format(-Math.floor(since / HOUR), "hour");
   }
-  return relative.format(-Math.floor(since / DAY), "day");
+  const dayOf = (date: Date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  return relative.format((dayOf(new Date(at)) - dayOf(new Date(now))) / DAY, "day");
 }
 
+const PROVIDER_REFUSALS: ReadonlyMap<number, ReadonlySet<string>> = new Map([
+  [403, new Set(["Only an admin can set up the AI providers."])],
+  [404, new Set(["That AI provider is no longer set up."])],
+  [
+    409,
+    new Set([
+      "The AI providers changed since they were shown; here they are now.",
+      "At most 5 AI providers are kept; remove one first.",
+      "That provider and model are set up already.",
+    ]),
+  ],
+  [
+    422,
+    new Set([
+      "The base URL is at most 256 characters.",
+      "The base URL has no spaces or control characters.",
+      "The base URL has no query or fragment.",
+      "The base URL is like https://api.deepseek.com or http://127.0.0.1:11434/v1.",
+      "The base URL has no login; the key is entered apart.",
+      "The base URL is https unless it is on this machine.",
+      "The model is a name of at most 128 characters.",
+      "The model has no spaces or control characters.",
+      "A key is from 4 to 512 characters.",
+      "A key has no spaces or control characters.",
+      "A provider key must contain only ASCII characters.",
+    ]),
+  ],
+  [503, new Set(["The AI providers' keys are no longer in the Keychain; replace them."])],
+]);
+
+export function providerError(failure: unknown, fallback: string | undefined, t: Words): string {
+  const detail = failure instanceof Error ? failure.message : String(failure);
+  return failure instanceof ApiError && PROVIDER_REFUSALS.get(failure.status)?.has(detail)
+    ? t(detail)
+    : fallback === undefined
+      ? detail
+      : t(fallback);
+}
 /** The ids with the one at `from` moved to `to`. */
 export function movedOrder(ids: readonly string[], from: number, to: number): string[] {
   const order = [...ids];

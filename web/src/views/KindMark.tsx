@@ -33,8 +33,10 @@ export function KindMark({
   const album = kind === "album";
   const settled = kindSettled(reason);
   const named = t(album ? "Album" : "Song");
-  const kindLabel = settled ? named : `${named}, ${t(UNSETTLED[reason] ?? "")}`;
-  const label = lyricsLabel === undefined ? kindLabel : `${kindLabel}, ${lyricsLabel}`;
+  const kindLabel = settled
+    ? named
+    : t("{{kind}}, {{reason}}", { kind: named, reason: t(UNSETTLED[reason] ?? "") });
+  const label = lyricsLabel === undefined ? kindLabel : [kindLabel, lyricsLabel].join(t(", "));
   const weight = settled ? "fill" : "regular";
   return (
     <span

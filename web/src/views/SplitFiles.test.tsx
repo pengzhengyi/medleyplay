@@ -80,6 +80,55 @@ afterEach(() => {
 });
 
 describe("splitting long files in Clean up", () => {
+  it("splits at most 500 albums in one batch", async () => {
+    let sent: unknown;
+    serve({
+      "POST /api/split-offers/split": (body) => {
+        sent = body;
+        return { body: null };
+      },
+    });
+    const files = Array.from({ length: 501 }, (_, at) => ({ ...LIVE, track_id: at + 10 }));
+    cleanUp(files);
+
+    await userEvent.click(section().getByText("Split next 500 albums", { selector: "button" }));
+
+    expect(sent).toEqual({
+      files: files
+        .slice(0, 500)
+        .map(({ track_id, offer }) => ({ track_id, signature: offer?.signature })),
+    });
+  });
+
+  it("allows another AI request after the first one finishes without a song list", async () => {
+    serve({
+      "POST /api/enrichers/ai-details/tracks/9": {
+        body: { id: 1, state: "queued", failure_message: "" },
+      },
+      "GET /api/jobs/1": {
+        body: { id: 1, state: "failed", failure_message: "Provider unavailable." },
+      },
+    });
+    cleanUp([MIXTAPE]);
+    await userEvent.click(
+      section().getByRole("button", { name: "Ask the AI for the songs of Mixtape" }),
+    );
+    expect(
+      section().queryByRole("button", { name: "Ask the AI for the songs of Mixtape" }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      await section().findByText(
+        /The AI request failed\. Provider unavailable\./u,
+        {},
+        { timeout: 4500 },
+      ),
+    ).toBeVisible();
+    expect(
+      section().getByRole("button", { name: "Ask the AI for the songs of Mixtape" }),
+    ).toBeEnabled();
+  }, 7000);
+
   it("counts each long file with a list to split it by, unless offering is off", () => {
     expect(toDoOf([], undefined, { setting: "approval", files: [LIVE, MIXTAPE] })).toBe(1);
     expect(toDoOf([], undefined, { setting: "off", files: [LIVE] })).toBe(0);
@@ -151,7 +200,9 @@ describe("splitting long files in Clean up", () => {
 
   it("asks the AI for the songs of a file with text and no list, and says it is asked", async () => {
     const { calls } = serve({
-      "POST /api/enrichers/ai-details/tracks/9": { body: { id: 1 } },
+      "POST /api/enrichers/ai-details/tracks/9": {
+        body: { id: 1, state: "queued", failure_message: "" },
+      },
     });
     cleanUp([MIXTAPE]);
 
@@ -161,7 +212,7 @@ describe("splitting long files in Clean up", () => {
 
     expect(calls).toContain("POST /api/enrichers/ai-details/tracks/9");
     await waitFor(() => {
-      expect(section().getByText(/the AI is asked for its songs/u)).toBeVisible();
+      expect(section().getByText(/The AI request for a song list is pending/u)).toBeVisible();
     });
   });
 
@@ -178,7 +229,7 @@ describe("splitting long files in Clean up", () => {
                 code: "asked_recently",
               },
             }
-          : { body: { id: 1 } };
+          : { body: { id: 1, state: "queued", failure_message: "" } };
       },
     });
     cleanUp([MIXTAPE]);
@@ -191,7 +242,7 @@ describe("splitting long files in Clean up", () => {
 
     expect(sent).toEqual([undefined, { again: true, hint: "" }]);
     await waitFor(() => {
-      expect(section().getByText(/the AI is asked for its songs/u)).toBeVisible();
+      expect(section().getByText(/The AI request for a song list is pending/u)).toBeVisible();
     });
     expect(section().queryByRole("alert")).toBeNull();
   });

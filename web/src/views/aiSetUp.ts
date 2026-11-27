@@ -4,6 +4,7 @@
  */
 
 import { createContext, use } from "react";
+import { useWords } from "../locale";
 
 export interface AiSetUp {
   /** Whether the server said no provider is set up and turned on; false until it says. */
@@ -17,8 +18,8 @@ export interface AiSetUp {
 export const AiSetUpContext = createContext<AiSetUp>({ missing: false, admin: false });
 
 /** Why a button that asks the AI can't, for an admin and for a member. */
-const WHY_ADMIN = "No AI provider is set up; set one up in Settings";
-const WHY_MEMBER = "No AI provider is set up; an admin sets one up in Settings";
+const WHY_ADMIN = "No AI provider is enabled. Add or enable one in Settings.";
+const WHY_MEMBER = "No AI provider is enabled. Ask an admin to add or enable one.";
 
 /**
  * Return whether no AI provider is set up, whether the listener is an admin, why a
@@ -30,6 +31,7 @@ export function useAiSetUp(): AiSetUp & {
   readonly whenSetUp: (ask: () => void) => void;
 } {
   const setUp = use(AiSetUpContext);
+  const t = useWords();
   const whenSetUp = (ask: () => void) => {
     if (!setUp.missing) {
       ask();
@@ -41,5 +43,5 @@ export function useAiSetUp(): AiSetUp & {
       }
     });
   };
-  return { ...setUp, why: setUp.admin ? WHY_ADMIN : WHY_MEMBER, whenSetUp };
+  return { ...setUp, why: t(setUp.admin ? WHY_ADMIN : WHY_MEMBER), whenSetUp };
 }

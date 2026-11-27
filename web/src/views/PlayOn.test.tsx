@@ -1,10 +1,11 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import { FakeEventSource, stream } from "../testing/events";
 import { type Routes, serve, signedIn, speakerStateOf, trackOf } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 
 const LEMON = trackOf(1, "Lemon");
 const FLAMINGO = trackOf(2, "Flamingo");
@@ -37,6 +38,34 @@ afterEach(() => {
 });
 
 describe("Play on", () => {
+  it("shows the remote playback instruction in Chinese inside Now Playing", async () => {
+    serve(phone());
+    render(<App />);
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const choose = await screen.findByRole("button", { name: "Play on: this device" });
+    act(() => {
+      stream().send("remote", {
+        page: "host-page-0001",
+        state: speakerStateOf({ status: "blocked" }),
+        age_ms: 0,
+      });
+    });
+    await user.click(choose);
+    await user.click(screen.getByRole("menuitemradio", { name: /The computer/u }));
+    await user.click(within(player()).getByRole("button", { name: "Open Now Playing" }));
+    const dialog = await screen.findByRole("dialog", { name: "Now Playing" });
+    const language = screen.getByRole("combobox", { name: "Language" });
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(within(dialog).getByText("请在电脑上点击一次以允许播放。")).toBeVisible();
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
   it("offers the computer only once medleyplay is open there", async () => {
     serve(phone());
     render(<App />);
@@ -85,6 +114,33 @@ describe("Play on", () => {
 
     expect(within(player()).getByRole("button", { name: "Play" })).toBeInTheDocument();
     expect(sent).toEqual([{ kind: "toggle" }]);
+  });
+
+  it.each([
+    ["The computer hasn't caught up yet; try again in a moment.", "电脑仍在处理请求，请稍后重试。"],
+    ["Search", "Search"],
+  ])("keeps or translates the remote Pause refusal: %s", async (detail, shown) => {
+    serve(phone({ "POST /api/remote/commands": { status: 429, body: { detail } } }));
+    render(<App />);
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const choose = await screen.findByRole("button", { name: "Play on: this device" });
+    computerPlaysLemon();
+    await user.click(choose);
+    await user.click(screen.getByRole("menuitemradio", { name: /The computer/u }));
+    await user.click(within(player()).getByRole("button", { name: "Pause" }));
+    expect(await within(player()).findByRole("alert")).toHaveTextContent(detail);
+    const language = screen.getByRole("combobox", { name: "Language" });
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(
+        within(screen.getByRole("region", { name: "播放器" })).getByRole("alert").textContent,
+      ).toBe(shown);
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
   });
 
   it("says why the music couldn't move back here, and leaves it on the computer", async () => {

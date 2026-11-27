@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { AI_ENRICHER, DETAILS_ENRICHER, LYRICS_ENRICHER, MUSICBRAINZ_ENRICHER } from "../api";
+import type { Words } from "../locale";
 import type { TrackLookup } from "./useLibrary";
 
 /** One way to look a Track up online. */
@@ -22,7 +23,7 @@ export interface Lookup {
   /** A word for it beside its mark, as on Edit details' button. */
   readonly short: string;
   /** Says the Track `title` is being asked about. */
-  readonly notice: (title: string) => string;
+  readonly notice: string;
   /** What the Track's row says it is doing, such as `Looking up on MusicBrainz`. */
   readonly doing: string;
   readonly icon: Icon;
@@ -36,7 +37,7 @@ export const LOOKUPS: readonly Lookup[] = [
     enricher: DETAILS_ENRICHER,
     label: "Find details online",
     short: "Bilibili",
-    notice: (title) => `Looking up “${title}” on Bilibili.`,
+    notice: "Looking up “{{title}}” on Bilibili.",
     doing: "Looking up on Bilibili",
     icon: GlobeIcon,
   },
@@ -44,7 +45,7 @@ export const LOOKUPS: readonly Lookup[] = [
     enricher: MUSICBRAINZ_ENRICHER,
     label: "Find on MusicBrainz",
     short: "MusicBrainz",
-    notice: (title) => `Looking up “${title}” on MusicBrainz.`,
+    notice: "Looking up “{{title}}” on MusicBrainz.",
     doing: "Looking up on MusicBrainz",
     icon: MusicNotesIcon,
   },
@@ -52,7 +53,7 @@ export const LOOKUPS: readonly Lookup[] = [
     enricher: AI_ENRICHER,
     label: "Suggest details with AI",
     short: "AI",
-    notice: (title) => `Asking the AI about “${title}”.`,
+    notice: "Asking the AI about “{{title}}”.",
     doing: "Asking the AI",
     icon: SparkleIcon,
   },
@@ -60,7 +61,7 @@ export const LOOKUPS: readonly Lookup[] = [
     enricher: LYRICS_ENRICHER,
     label: "Find lyrics",
     short: "Lyrics",
-    notice: (title) => `Looking up the lyrics of “${title}”.`,
+    notice: "Looking up the lyrics of “{{title}}”.",
     doing: "Looking up lyrics",
     icon: QuotesIcon,
     forSong: true,
@@ -77,28 +78,36 @@ export interface CoverStatus {
 export function coverStatusOf(
   lookup: TrackLookup | undefined,
   online: boolean,
+  t?: Words,
 ): CoverStatus | undefined {
   const asked = LOOKUPS.find((each) => each.enricher === lookup?.enricher);
   if (lookup === undefined || asked === undefined) {
     return undefined;
   }
+  const action = t?.(asked.doing) ?? asked.doing;
   switch (lookup.state) {
     case "waiting":
     case "queued":
       return online
-        ? { kind: "looking", label: asked.doing }
-        : { kind: "waiting", label: `${asked.doing} once medleyplay is Online` };
+        ? { kind: "looking", label: action }
+        : {
+            kind: "waiting",
+            label:
+              t?.("{{action}} once medleyplay is Online", { action }) ??
+              `${action} once medleyplay is Online`,
+          };
     case "running":
-      return { kind: "looking", label: asked.doing };
+      return { kind: "looking", label: action };
     case "succeeded":
-      return { kind: "done", label: `${asked.doing}: done` };
+      return { kind: "done", label: t?.("{{action}}: done", { action }) ?? `${action}: done` };
     case "failed":
       return {
         kind: "failed",
         label:
           lookup.message === ""
-            ? `${asked.doing} failed`
-            : `${asked.doing} failed: ${lookup.message}`,
+            ? (t?.("{{action}} failed", { action }) ?? `${action} failed`)
+            : (t?.("{{action}} failed: {{detail}}", { action, detail: lookup.message }) ??
+              `${action} failed: ${lookup.message}`),
       };
     case "cancelled":
       return undefined;

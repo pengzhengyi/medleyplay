@@ -9,7 +9,14 @@
 import { useState } from "react";
 
 import type { CoverSearch, Settings } from "../api";
-import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import {
+  CHANGED_ELSEWHERE,
+  settingsFailure,
+  settingsNotice,
+  type SettingsNotice,
+  saveChange,
+} from "../library/householdSettings";
+import { useWords } from "../locale";
 
 /** Which albums with no cover are searched without anyone asking, and what each means. */
 const SEARCHES: readonly {
@@ -39,9 +46,10 @@ export function CoverSearchSettings({
   readonly settings: Settings | undefined;
   readonly onSettings: (settings: Settings) => void;
 }) {
+  const t = useWords();
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<SettingsNotice>(null);
   if (settings === undefined) {
     return null;
   }
@@ -49,13 +57,13 @@ export function CoverSearchSettings({
   const save = async (change: Partial<Settings>) => {
     setSaving(true);
     setNote("");
-    setError("");
+    setError(null);
     try {
       const { outcome, settings: now } = await saveChange(settings, change);
       onSettings(now);
       setNote(outcome === "conflict" ? CHANGED_ELSEWHERE : "Saved.");
     } catch (failure) {
-      setError(notSaved(failure));
+      setError(settingsFailure(failure));
     } finally {
       setSaving(false);
     }
@@ -64,7 +72,7 @@ export function CoverSearchSettings({
   return (
     <div className="lyrics-sites" aria-busy={saving}>
       <fieldset className="split-albums" disabled={saving}>
-        <legend>Find covers of albums with none</legend>
+        <legend>{t("Find covers of albums with none")}</legend>
         {SEARCHES.map((search) => (
           <label key={search.value} className="split-albums-choice">
             <input
@@ -75,13 +83,13 @@ export function CoverSearchSettings({
               onChange={() => void save({ find_album_covers: search.value })}
             />
             <span>
-              <strong>{search.label}</strong>
-              <small>{search.about}</small>
+              <strong>{t(search.label)}</strong>
+              <small>{t(search.about)}</small>
             </span>
           </label>
         ))}
         <small className="hint">
-          A cover that fits waits on the album's page and in Clean up, to use in one click.
+          {t("A cover that fits waits on the album's page and in Clean up, to use in one click.")}
         </small>
       </fieldset>
       <label className="lyrics-sites-switch">
@@ -92,15 +100,16 @@ export function CoverSearchSettings({
           disabled={saving}
           onChange={(event) => void save({ pick_album_covers_by_ai: event.target.checked })}
         />
-        Pick covers by AI when none plainly fits
+        {t("Pick covers by AI when none plainly fits")}
       </label>
       <small className="hint">
-        Off, the AI is asked only in the cover editor. On, it is asked once for each album whose
-        covers were found but none has its title and artist, which your AI provider may charge for.
+        {t(
+          "Off, the AI is asked only in the cover editor. On, it is asked once for each album whose covers were found but none has its title and artist, which your AI provider may charge for.",
+        )}
       </small>
-      {error !== "" && <p role="alert">{error}</p>}
+      {error !== null && <p role="alert">{settingsNotice(error, t)}</p>}
       <p className="hint saved" role="status">
-        {note}
+        {t(note)}
       </p>
     </div>
   );

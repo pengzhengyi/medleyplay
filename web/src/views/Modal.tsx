@@ -10,6 +10,8 @@
 import { XIcon } from "@phosphor-icons/react";
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 
+import { useWords } from "../locale";
+
 /**
  * A modal named by the element `labelledBy`, and described by `describedBy`; the
  * caller keeps `ref` to close it. While `locked`, as during a save, only the caller closes it.
@@ -31,6 +33,7 @@ export function Modal({
   readonly onClose: () => void;
   readonly children: ReactNode;
 }) {
+  const t = useWords();
   // Whether the press began on the backdrop, so a drag out of a box doesn't close it.
   const pressedOutside = useRef(false);
   const closer = useRef<HTMLButtonElement>(null);
@@ -93,8 +96,8 @@ export function Modal({
           ref={closer}
           type="button"
           className="modal-close"
-          aria-label="Close"
-          title="Close (Esc)"
+          aria-label={t("Close")}
+          title={t("Close (Esc)")}
           disabled={locked}
           onClick={() => ref.current?.close()}
         >

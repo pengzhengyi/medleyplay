@@ -9,6 +9,7 @@
 import { Component, Fragment, type ReactNode, Suspense, useEffect, useState } from "react";
 
 import { PartLoadError, forgetFailedLoads } from "../lazyPart";
+import { useWords } from "../locale";
 
 /** Why a part isn't shown. */
 type Failure = "unreachable" | "updated" | "missed" | "broken";
@@ -26,12 +27,13 @@ export function LazyPart({
   readonly frame?: (shown: ReactNode) => ReactNode;
   readonly children: ReactNode;
 }) {
+  const t = useWords();
   return (
     <PartBoundary failed={(error, retry) => frame(<PartFailed error={error} retry={retry} />)}>
       <Suspense
         fallback={frame(
           <p className="empty" aria-busy="true">
-            {doing}
+            {t(doing)}
           </p>,
         )}
       >
@@ -75,6 +77,7 @@ class PartBoundary extends Component<
 
 /** What went wrong, once known, and what helps. */
 function PartFailed({ error, retry }: { readonly error: unknown; readonly retry: () => void }) {
+  const t = useWords();
   const [failure, setFailure] = useState<Failure>();
   useEffect(() => {
     let shown = true;
@@ -93,21 +96,23 @@ function PartFailed({ error, retry }: { readonly error: unknown; readonly retry:
   }
   const tryAgain = (
     <button type="button" className="secondary" onClick={retry}>
-      Try again
+      {t("Try again")}
     </button>
   );
   return (
     <div className="part-failed" role="alert">
       {failure === "unreachable" && (
         <>
-          <p>Can't reach medleyplay. Check the connection, then try again.</p>
+          <p>{t("Can't reach medleyplay. Check the connection, then try again.")}</p>
           {tryAgain}
         </>
       )}
       {failure === "updated" && (
         <>
           <p>
-            medleyplay was updated. Reload to open this; the music stops while the page reloads.
+            {t(
+              "medleyplay was updated. Reload to open this; the music stops while the page reloads.",
+            )}
           </p>
           <button
             type="button"
@@ -115,19 +120,19 @@ function PartFailed({ error, retry }: { readonly error: unknown; readonly retry:
               location.reload();
             }}
           >
-            Reload
+            {t("Reload")}
           </button>
         </>
       )}
       {failure === "missed" && (
         <>
-          <p>This part of the page didn't load.</p>
+          <p>{t("This part of the page didn't load.")}</p>
           {tryAgain}
         </>
       )}
       {failure === "broken" && (
         <>
-          <p>Something went wrong here.</p>
+          <p>{t("Something went wrong here.")}</p>
           {tryAgain}
         </>
       )}

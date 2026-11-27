@@ -11,6 +11,7 @@
 ## Contents
 
 - [Data](#data)
+- [Interface language](#interface-language)
 - [Views](#views)
 - [The song table](#the-song-table)
 - [A song's menu](#a-songs-menu)
@@ -26,12 +27,11 @@
 
 ## Data
 
-**Interface language belongs to the device.** The page follows the browser's
+**Interface language belongs to the browser.** The page follows the browser's
 language preferences until someone chooses English or Simplified Chinese at
 sign-in or in Settings → Appearance. The choice updates the page without
-reloading the player. The HTML language matches the active translation.
-Interface messages use i18next; names, lyrics, and text entered by the
-household are not translation keys. Screens without a translation use English.
+reloading the player and does not change the household's settings. See
+[Interface language](#interface-language) for what the client translates.
 
 - **The client loads the whole Library once:** `GET /api/tracks` when the page
   opens, keyed by id. Every view, sort, and search is worked out in the browser
@@ -78,6 +78,51 @@ household are not translation keys. Screens without a translation use English.
   for it and the next queue entry. It asks the browser to prefetch their local
   heading pictures. Preparing the pages does not open them, ask an outside
   site, or start a Job to search for artwork.
+
+## Interface language
+
+> [!NOTE]
+> **Status: implemented.** The interface language covers app-authored help and
+> feedback as well as labels.
+
+English and Simplified Chinese cover app-authored help, placeholders, tooltips,
+accessible names, and loading, empty, success, and error states. The Library's
+names, lyrics, notes, search input, identifiers, and provider-supplied content
+stay as written.
+
+| Screen group | Localized copy |
+| --- | --- |
+| Sign-in and the app around every view | First account, device approval, loading, recovery, rail, and shared dialogs |
+| Library and search | Songs, filters and sorting, Artists, Albums, Playlists, search suggestions, Downloaded, and upload and download flows |
+| Playback | Player, Now Playing, queue, radio, history, shortcuts, and listening on another device |
+| Editors and organizers | Song, lyrics, album, artist, image, and playlist editors; Clean up and Insights |
+| Settings | Every section for listeners and administrators, including explanations, validation, and dependent controls |
+
+`useWords` translates at render time. A formatter that assembles a message takes
+the translator as an argument. A complete message with named placeholders lets
+each language order the values naturally. Count families use i18next plural
+rules rather than choosing a translated suffix in code. English prose keys
+fall back to their text if untranslated; English count families define their
+forms explicitly. Route IDs, form values, and executable search examples such as
+`favorite:yes` and `kind:albums` do not change with the language.
+
+Keep a status code, message key and arguments, or original failure in view state,
+so an open editor can translate it when the language changes. Match app-defined
+refusals by status and known detail where the API returns prose. Localize the
+surrounding message without passing provider details or Library names through the
+catalog. Credential forms use safe failures that do not echo submitted values.
+
+The HTML `lang` matches the active translation. `useFormattingLocale` uses the
+first supported browser locale that matches the interface language, or the
+interface language itself if none matches. This preserves regional formatting
+where possible without showing words from a different language. The catalog
+and the existing local preference do not require a server locale.
+
+Tests switch language in open views, including a song list draft and its
+diagnostics. They check accessible names, plural counts, refusal text, and
+Library data that matches translation keys. Browser tests use a synthetic
+Library to check navigation, help, original song titles, and keyboard focus at
+desktop and phone widths.
 
 ## Views
 

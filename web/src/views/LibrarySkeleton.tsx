@@ -3,6 +3,8 @@
  * the songs then take the place of, so the page doesn't jump when they come.
  */
 
+import { useWords } from "../locale";
+
 /** How wide each placeholder row's title and artist are, as a song list's vary. */
 const ROWS: readonly (readonly [number, number])[] = [
   [46, 28],
@@ -21,10 +23,11 @@ const ROWS: readonly (readonly [number, number])[] = [
 
 /** Rows shaped like songs, while the Library's are read; says so to a screen reader. */
 export function LibrarySkeleton() {
+  const t = useWords();
   return (
     <div className="library-skeleton" aria-busy="true">
       <p className="visually-hidden" role="status">
-        Loading your music…
+        {t("Loading your music…")}
       </p>
       <ul className="library-skeleton-rows" aria-hidden="true">
         {ROWS.map(([title, artist], place) => (

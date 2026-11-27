@@ -33,6 +33,8 @@ import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
 import { Hint } from "./Hint";
+import { playbackMessage } from "./unplayable";
+import { useWords } from "../locale";
 
 /**
  * `track`, playing in `player`, over the whole screen, with the song's `lyrics` beside
@@ -49,6 +51,7 @@ export function NowPlaying({
   onFavoriteAlbum,
   menuActions,
   lyrics,
+  lyricsFailed = false,
   onSaveLyrics,
   onDismissLyrics,
   queueOpen,
@@ -68,6 +71,7 @@ export function NowPlaying({
   readonly menuActions: TrackMenuActions;
   /** The lyrics of the song playing: `null` for none, `undefined` while they are read. */
   readonly lyrics: Lyrics | null | undefined;
+  readonly lyricsFailed?: boolean;
   /** Save the lyrics suggested for the song playing as the household's. */
   readonly onSaveLyrics?: (() => Promise<void>) | undefined;
   /** Dismiss the lyrics suggested for the song playing. */
@@ -76,6 +80,7 @@ export function NowPlaying({
   readonly onToggleQueue: () => void;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const ref = useRef<HTMLDialogElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const upNext = useRef<HTMLDivElement>(null);
@@ -116,12 +121,12 @@ export function NowPlaying({
   const album = { view: "album", artist: albumArtistOf(track), name: track.album } as const;
   const editCover = { ...album, editCover: true } as const;
   const cover = <Cover size="original" cover={track.cover} />;
-  const coverLabel = `Edit album cover for ${track.album}`;
+  const coverLabel = t("Edit album cover for {{album}}", { album: track.album });
   return (
     <dialog
       ref={ref}
       className="now-playing"
-      aria-label="Now Playing"
+      aria-label={t("Now Playing")}
       data-shortcuts
       onClose={onClose}
       onKeyDown={(event) => {
@@ -163,8 +168,13 @@ export function NowPlaying({
       </div>
       <div ref={body} className="np-body" tabIndex={-1}>
         <header className="np-top">
-          <Hint name={"Close Now Playing"} keys={keys.nowPlaying}>
-            <button type="button" className="icon" aria-label="Close Now Playing" onClick={close}>
+          <Hint name={t("Close Now Playing")} keys={keys.nowPlaying}>
+            <button
+              type="button"
+              className="icon"
+              aria-label={t("Close Now Playing")}
+              onClick={close}
+            >
               <CaretDownIcon weight="bold" aria-hidden />
             </button>
           </Hint>
@@ -248,8 +258,10 @@ export function NowPlaying({
                 <span>{formatTime(shownPosition)}</span>
                 <span>
                   <span aria-hidden>−</span>
-                  <span className="visually-hidden">left: </span>
-                  {formatTime(remaining)}
+                  <span className="visually-hidden">
+                    {t("left: {{time}}", { time: formatTime(remaining) })}
+                  </span>
+                  <span aria-hidden>{formatTime(remaining)}</span>
                 </span>
               </div>
             </div>
@@ -269,21 +281,21 @@ export function NowPlaying({
               <button
                 type="button"
                 className={lyricsOpen ? "icon np-lyrics-toggle on" : "icon np-lyrics-toggle"}
-                aria-label="Lyrics"
+                aria-label={t("Lyrics")}
                 aria-pressed={lyricsOpen}
-                title={lyricsOpen ? "Hide the lyrics" : "Show the lyrics"}
+                title={lyricsOpen ? t("Hide the lyrics") : t("Show the lyrics")}
                 onClick={() => {
                   setLyricsHidden(lyricsOpen);
                 }}
               >
                 <QuotesIcon weight={lyricsOpen ? "fill" : "regular"} aria-hidden />
               </button>
-              <Hint name={"Up next"} keys={keys.queue}>
+              <Hint name={t("Up next")} keys={keys.queue}>
                 <button
                   ref={upNextButton}
                   type="button"
                   className={queueOpen ? "icon np-queue-toggle on" : "icon np-queue-toggle"}
-                  aria-label="Up next"
+                  aria-label={t("Up next")}
                   aria-expanded={queueOpen}
                   aria-controls="now-playing-queue"
                   onClick={onToggleQueue}
@@ -304,16 +316,27 @@ export function NowPlaying({
                 </div>
               )}
             </div>
+            {status.kind === "preparing" && (
+              <p className="note" role="status">
+                {t("Preparing…")}
+              </p>
+            )}
+            {status.kind === "blocked" && (
+              <p className="note" role="status">
+                {playbackMessage(status.message, t)}
+              </p>
+            )}
             {status.kind === "failed" && (
               <p className="note failed" role="alert">
                 <WarningCircleIcon weight="fill" aria-hidden />
-                {status.message}
+                {playbackMessage(status.message, t)}
               </p>
             )}
           </div>
           {lyricsOpen && (
             <LyricsPanel
               lyrics={song.song === undefined ? null : lyrics}
+              failed={song.song !== undefined && lyricsFailed}
               onSave={onSaveLyrics}
               onDismiss={onDismissLyrics}
               seconds={song.seconds}

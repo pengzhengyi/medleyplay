@@ -14,28 +14,31 @@ export const CONFIRMED_MS = 4000;
 export const FADE_MS = 600;
 
 /** The note shown: its text, `""` for none, and whether it is a refusal or fading. */
-export interface Note {
-  readonly text: string;
+export interface Note<Message = string> {
+  readonly text: Message;
   readonly refused: boolean;
   readonly fading: boolean;
 }
 
-const QUIET: Note = { text: "", refused: false, fading: false };
-
 /** A note, and the ways to change it. */
-export interface Notes {
-  readonly note: Note;
+export interface Notes<Message = string> {
+  readonly note: Note<Message>;
   /** Confirm what just happened, as *Saved.*; it fades and clears. */
-  readonly confirm: (text: string) => void;
+  readonly confirm: (text: Message) => void;
   /** Say what the person should read, as a conflict; it stays. `""` clears the note. */
-  readonly tell: (text: string) => void;
+  readonly tell: (text: Message) => void;
   /** Say why something was refused; it stays. */
-  readonly refuse: (text: string) => void;
+  readonly refuse: (text: Message) => void;
 }
 
 /** Keep a note beside a control, fading each confirmation. */
 export function useNote(): Notes {
-  const [note, setNote] = useState<Note>(QUIET);
+  return useNoteOf("");
+}
+
+export function useNoteOf<Message>(empty: Message): Notes<Message> {
+  const quiet = { text: empty, refused: false, fading: false };
+  const [note, setNote] = useState<Note<Message>>(quiet);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const stop = () => {
@@ -44,7 +47,7 @@ export function useNote(): Notes {
   };
   useEffect(() => stop, []);
 
-  const stay = (text: string, refused: boolean) => {
+  const stay = (text: Message, refused: boolean) => {
     stop();
     setNote({ text, refused, fading: false });
   };
@@ -57,7 +60,7 @@ export function useNote(): Notes {
           setNote({ text, refused: false, fading: true });
         }, CONFIRMED_MS - FADE_MS),
         setTimeout(() => {
-          setNote(QUIET);
+          setNote(quiet);
         }, CONFIRMED_MS),
       ];
     },
@@ -71,6 +74,6 @@ export function useNote(): Notes {
 }
 
 /** Return the classes of a note's element: `base`, then whether it is refused or fading. */
-export function classOf(note: Note, base = "hint"): string {
+export function classOf(note: Pick<Note, "refused" | "fading">, base = "hint"): string {
   return [base, note.refused && "refused", note.fading && "fading"].filter(Boolean).join(" ");
 }

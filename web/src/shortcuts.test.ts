@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -252,6 +252,88 @@ describe("an Account's shortcuts", () => {
     expect(JSON.parse(localStorage.getItem(ALICES_COPY) ?? "null")).toEqual({
       shortcuts: { mute: ["u"] },
     });
+  });
+
+  it("sends the newer edit after the older save supplies its revision", async () => {
+    const sent: unknown[] = [];
+    let release: () => void = () => undefined;
+    const answer = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    serve({
+      "GET /api/me/preferences": { body: { shortcuts: null, revision: 3 } },
+      "PUT /api/me/preferences": (body) => {
+        const { revision, shortcuts } = body as { revision: number; shortcuts: unknown };
+        sent.push(body);
+        return {
+          body: { shortcuts, revision: revision + 1 },
+          ...(sent.length === 1 ? { after: answer } : {}),
+        };
+      },
+    });
+    await openAccount(1);
+    const first = saveBindings({ ...DEFAULT_BINDINGS, mute: ["u"] });
+    await waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+
+    const second = saveBindings({ ...DEFAULT_BINDINGS, mute: ["j"] });
+    release();
+    await Promise.all([first, second]);
+
+    expect(sent).toEqual([
+      { shortcuts: { mute: ["u"] }, revision: 3 },
+      { shortcuts: { mute: ["j"] }, revision: 4 },
+    ]);
+  });
+
+  it("loads another account's bindings during a pending save for the old account", async () => {
+    const sent: unknown[] = [];
+    let account = 1;
+    let release: () => void = () => undefined;
+    const answer = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    serve({
+      "GET /api/me/preferences": () => ({
+        body:
+          account === 1
+            ? { shortcuts: null, revision: 3 }
+            : { shortcuts: { toggle: ["j"] }, revision: 7 },
+      }),
+      "PUT /api/me/preferences": (body) => {
+        const { revision, shortcuts } = body as { revision: number; shortcuts: unknown };
+        sent.push({ account, body });
+        return {
+          body: { shortcuts, revision: revision + 1 },
+          ...(account === 1 ? { after: answer } : {}),
+        };
+      },
+    });
+    const { result } = renderHook(() => useBindings());
+    await act(() => openAccount(1));
+    let first: Promise<void> | undefined;
+    act(() => {
+      first = saveBindings({ ...DEFAULT_BINDINGS, mute: ["u"] });
+    });
+    await waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+
+    account = 2;
+    await act(() => openAccount(2));
+    expect(result.current.toggle).toEqual(["j"]);
+    await act(async () => {
+      release();
+      await first;
+      await saveBindings({ ...result.current, shuffle: ["z"] });
+    });
+
+    expect(sent[1]).toEqual({
+      account: 2,
+      body: { shortcuts: { toggle: ["j"], shuffle: ["z"] }, revision: 7 },
+    });
+    expect(result.current.toggle).toEqual(["j"]);
   });
 
   it("replace ones saved elsewhere since, as the last chosen", async () => {

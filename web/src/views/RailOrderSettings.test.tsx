@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_RAIL_ORDER, resetRailOrder } from "../railOrder";
+import { LanguageSelect } from "./LanguageSelect";
 import { Nav } from "./Nav";
 import { RailOrderSettings } from "./RailOrderSettings";
 
@@ -17,6 +18,28 @@ afterEach(() => {
 });
 
 describe("choosing the rail's order in Settings", () => {
+  it("announces keyboard pickup and cancellation in the selected language", async () => {
+    render(<RailOrderSettings />);
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const handle = screen.getByRole("button", { name: "Reorder Library" });
+    const user = userEvent.setup();
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+      expect(handle).toHaveAccessibleDescription(/按空格键/u);
+      expect(handle).toHaveAttribute("aria-roledescription", "可调整顺序");
+      handle.focus();
+      await user.keyboard(" ");
+      expect(await screen.findByText("已选中 音乐库，可调整顺序。")).toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+      expect(await screen.findByText("音乐库 保持原有顺序。")).toBeInTheDocument();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+    expect(listed()).toEqual(DEFAULT_RAIL_ORDER);
+  });
+
   it("lists the views that move, in the rail's order", () => {
     render(<RailOrderSettings />);
 

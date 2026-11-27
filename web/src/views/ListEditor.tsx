@@ -12,17 +12,59 @@ import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { type Diagnostic, lintGutter, setDiagnostics } from "@codemirror/lint";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, keymap, lineNumbers, placeholder } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { ListCheck, Song } from "../api";
+import { type Words, useWords } from "../locale";
 
 /** How long typing pauses before the list is checked. */
 const CHECK_AFTER_MS = 350;
 /** What an empty list shows, a line each, to say how a list is written. */
 const EXAMPLE = ["0:00 Intro", "3:12 Night Drive - Blue Room"];
+const PROBLEMS = new Set([
+  "This line is too long for a song.",
+  "This line has no time, such as 3:12.",
+  "This line has no title.",
+  "This starts before the song above.",
+  "This starts less than a second after the song above.",
+]);
+const EDITOR_PHRASES = [
+  "Completions",
+  "Diagnostics",
+  "No diagnostics",
+  "Control character",
+  "Selection deleted",
+  "close",
+  "to",
+];
+
+function problemOf(message: string, t: Words): string {
+  if (PROBLEMS.has(message)) return t(message);
+  const end = /^This starts after the file ends, at ([\d:]+)\.$/u.exec(message)?.[1];
+  if (end !== undefined) return t("This starts after the file ends, at {{end}}.", { end });
+  const min = /^A song list has at least (\d+) songs\.$/u.exec(message)?.[1];
+  if (min !== undefined) return t("A song list has at least {{min}} songs.", { min });
+  const max = /^A song list has at most (\d+) songs\.$/u.exec(message)?.[1];
+  return max === undefined ? message : t("A song list has at most {{max}} songs.", { max });
+}
+
+function editorWords(t: Words) {
+  return [
+    placeholder(EXAMPLE.map((line) => t(line)).join("\n")),
+    EditorView.contentAttributes.of({ "aria-label": t("Song list") }),
+    EditorState.phrases.of(
+      Object.fromEntries(
+        EDITOR_PHRASES.map((phrase) => [
+          phrase,
+          t(`CodeMirror: ${phrase}`, { defaultValue: phrase }),
+        ]),
+      ),
+    ),
+  ];
+}
 
 const TIME = /^(?:\d{1,2}:)?\d{1,3}:\d{2}(?![\d:])/u;
 const DASH = /^\s+[-–—]\s+|^\s*－\s*/u;
@@ -66,12 +108,12 @@ export default function ListEditor({
   /** Told the songs each time the list checks clean, and `undefined` while it doesn't. */
   readonly onListed: (songs: readonly Song[] | undefined) => void;
 }) {
+  const t = useWords();
   const parent = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const [language] = useState(() => new Compartment());
   const [checked, setChecked] = useState<ListCheck | undefined>(undefined);
   const [failure, setFailure] = useState("");
-  // The latest text sent, so an older answer can't land after it.
-  const sent = useRef("");
   const checkLatest = useRef(check);
   useEffect(() => {
     checkLatest.current = check;
@@ -83,20 +125,19 @@ export default function ListEditor({
       return undefined;
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let version = 0;
     const ask = (editor: EditorView) => {
       const text = editor.state.doc.toString();
-      sent.current = text;
+      const sent = version;
+      const current = () => view.current === editor && sent === version;
       checkLatest.current(text).then(
         (answer) => {
-          if (sent.current !== text || view.current !== editor) {
-            return;
-          }
+          if (!current()) return;
           setFailure("");
           setChecked(answer);
-          editor.dispatch(setDiagnostics(editor.state, diagnosticsOf(editor.state, answer)));
         },
         (error: unknown) => {
-          if (sent.current === text) {
+          if (current()) {
             setFailure(error instanceof Error ? error.message : String(error));
           }
         },
@@ -135,12 +176,13 @@ export default function ListEditor({
               },
             ],
           }),
-          placeholder(EXAMPLE.join("\n")),
+          language.of(editorWords(t)),
           EditorView.lineWrapping,
-          EditorView.contentAttributes.of({ "aria-label": "Song list" }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
+              version += 1;
               setChecked(undefined);
+              setFailure("");
               clearTimeout(timer);
               timer = setTimeout(() => {
                 ask(update.view);
@@ -162,6 +204,20 @@ export default function ListEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    view.current?.dispatch({ effects: language.reconfigure(editorWords(t)) });
+  }, [language, t]);
+  useEffect(() => {
+    const editor = view.current;
+    if (editor !== null)
+      editor.dispatch(
+        setDiagnostics(
+          editor.state,
+          checked === undefined ? [] : diagnosticsOf(editor.state, checked, t),
+        ),
+      );
+  }, [checked, t]);
+
   const toLine = (line: number) => {
     const editor = view.current;
     if (editor !== null && line <= editor.state.doc.lines) {
@@ -178,18 +234,27 @@ export default function ListEditor({
   }, [usable]);
   return (
     <div className="list-editor">
+      <p className="hint">
+        {t(
+          "Write one song per line: start time, then title. To include the artist, use Title - Artist with a space on both sides of the hyphen. For example: 3:12 Night Drive - Blue Room.",
+        )}
+      </p>
       <div ref={parent} className="list-editor-text" />
       <div className="list-editor-status" role="status">
-        {checked === undefined && failure === "" && <span className="muted">Checking…</span>}
-        {failure !== "" && <span className="error">{failure}</span>}
-        {usable !== undefined && <span>{`${String(usable.length)} songs`}</span>}
+        {checked === undefined && failure === "" && <span className="muted">{t("Checking…")}</span>}
+        {failure !== "" && (
+          <span className="error">
+            {t("Could not check the song list: {{detail}}", { detail: failure })}
+          </span>
+        )}
+        {usable !== undefined && <span>{t("song_count", { count: usable.length })}</span>}
       </div>
       {checked !== undefined && checked.problems.length > 0 && (
-        <ul className="list-problems" aria-label="Problems">
+        <ul className="list-problems" aria-label={t("Problems")}>
           {checked.problems.map((problem, index) => (
             <li key={index} className="list-problem">
               {problem.line === null ? (
-                problem.message
+                problemOf(problem.message, t)
               ) : (
                 <button
                   type="button"
@@ -198,7 +263,10 @@ export default function ListEditor({
                     toLine(problem.line ?? 1);
                   }}
                 >
-                  {`Line ${String(problem.line)}: ${problem.message}`}
+                  {t("Line {{number}}: {{problem}}", {
+                    number: problem.line,
+                    problem: problemOf(problem.message, t),
+                  })}
                 </button>
               )}
             </li>
@@ -210,12 +278,14 @@ export default function ListEditor({
 }
 
 /** The marks the editor shows for `answer`'s problems, each across its line. */
-function diagnosticsOf(state: EditorState, answer: ListCheck): Diagnostic[] {
+function diagnosticsOf(state: EditorState, answer: ListCheck, t: Words): Diagnostic[] {
   return answer.problems.flatMap((problem) => {
     if (problem.line === null || problem.line > state.doc.lines) {
       return [];
     }
     const line = state.doc.line(problem.line);
-    return [{ from: line.from, to: line.to, severity: "error", message: problem.message }];
+    return [
+      { from: line.from, to: line.to, severity: "error", message: problemOf(problem.message, t) },
+    ];
   });
 }

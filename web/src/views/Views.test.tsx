@@ -25,6 +25,8 @@ import {
   twoJaysNames,
   twoJaysSongs,
 } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
+import { SettingsView as SettingsPart } from "./parts";
 
 /**
  * A Library of three Tracks and one Playlist:
@@ -96,6 +98,34 @@ afterEach(() => {
 });
 
 describe("the views", () => {
+  it("explains an empty library and keeps the API link when the language changes", async () => {
+    open("#/library", signedIn([]));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    expect(await screen.findByRole("link", { name: "the API" })).toHaveAttribute("href", "/docs");
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      const link = screen.getByRole("link", { name: "API" });
+      expect(link).toHaveAttribute("href", "/docs");
+      expect(link.closest("p")).toHaveTextContent("添加本地音乐文件夹");
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("explains that an artist filter matched no albums without asking for more music", async () => {
+    open("#/albums?artist=Unlisted");
+
+    expect(await screen.findByText("No albums match this artist filter.")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Remove the filter Artist: Unlisted" }),
+    ).toHaveAttribute("href", "#/albums");
+    expect(screen.queryByText(/No music yet/u)).not.toBeInTheDocument();
+  });
+
   it("uses every album member for its lyrics badge even when search shows only a matching song", async () => {
     const first = trackOf(1, "First light", { has_lyrics: true });
     const last = trackOf(2, "Last train");
@@ -493,19 +523,23 @@ describe("Settings search", () => {
   });
 
   it("matches a translated title on Settings and keeps the section ID in the URL", async () => {
+    await SettingsPart.preload();
     open("#/settings");
     const language = await screen.findByLabelText("Language");
     await userEvent.selectOptions(language, "zh-Hans");
     try {
-      await userEvent.click(screen.getByRole("combobox", { name: "Search" }));
+      await userEvent.click(screen.getByRole("combobox", { name: "搜索" }));
       await userEvent.paste("settings: 评分");
-      await userEvent.click(screen.getByRole("option", { name: "我的评分" }));
+      expect(screen.getByRole("option", { name: "我的评分" })).toBeVisible();
+      await userEvent.selectOptions(language, "en");
+      await userEvent.click(screen.getByRole("combobox", { name: "Search" }));
+      await userEvent.click(screen.getByRole("option", { name: "Your ratings" }));
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: "我的评分" })).toHaveFocus();
+        expect(screen.getByRole("button", { name: "Your ratings" })).toHaveFocus();
       });
       expect(location.hash).toBe("#/settings?section=ratings");
     } finally {
-      await userEvent.selectOptions(await screen.findByLabelText("语言"), "auto");
+      await userEvent.selectOptions(language, "auto");
     }
   });
 
@@ -660,6 +694,29 @@ describe("search suggestions", () => {
     expect(box).toHaveFocus();
   });
 
+  it("shows translated search help with values the parser accepts", async () => {
+    open("");
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("button", { name: "Melt" });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+      await user.click(screen.getByRole("combobox", { name: "搜索" }));
+      await user.keyboard("{ArrowDown}");
+
+      const tags = screen.getByRole("listbox", { name: "搜索标签" });
+      expect(within(tags).getByRole("option", { name: /^favorite:/u })).toHaveTextContent(
+        "填 yes（仅收藏）或 no（仅未收藏）",
+      );
+      expect(within(tags).getByRole("option", { name: /^kind:/u })).toHaveTextContent(
+        "填 songs（歌曲）、albums（专辑）或 artists（艺人）",
+      );
+    } finally {
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
+  });
+
   it("completes a site's name being typed, and searches it when chosen", async () => {
     open("", withBilibili());
     const box = await screen.findByRole("combobox", { name: "Search" });
@@ -728,6 +785,78 @@ describe("search suggestions", () => {
 });
 
 describe("playlists", () => {
+  it("confirms the saved playlist names in the selected language", async () => {
+    const car = playlistOf("p1", "Car", []);
+    const gym = playlistOf("p2", "Search", []);
+    open("#/library", {
+      ...signedIn(LIBRARY, [car, gym]),
+      "PUT /api/playlists/p1": { body: { ...car, track_ids: [1] } },
+      "PUT /api/playlists/p2": { body: { ...gym, track_ids: [1] } },
+    });
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions for Melt" }));
+    await user.click(screen.getByRole("menuitem", { name: "Add to playlist…" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    await user.click(await dialog.findByRole("checkbox", { name: /^Car/u }));
+    await user.click(dialog.getByRole("checkbox", { name: /^Search/u }));
+    await user.click(dialog.getByRole("button", { name: "Add to 2 playlists" }));
+    expect(await screen.findByText("Added “Melt” to Car and Search.")).toBeVisible();
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByText("已将「Melt」添加到 Car和Search。")).toBeVisible();
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("explains a newer smart-playlist rule version instead of saying the playlist is empty", async () => {
+    const playlist = {
+      ...playlistOf("p1", "Search", []),
+      unreadable: "The rules are version 2, newer than this server reads.",
+    };
+    open("#/playlists", signedIn(LIBRARY, [playlist]));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("link", { name: /Search.*Smart playlist rules unavailable/u });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+      await user.click(screen.getByRole("link", { name: /Search.*智能播放列表规则无法读取/u }));
+
+      expect(await screen.findByRole("heading", { name: "Search" })).toBeVisible();
+      expect(screen.getByText("规则版本为 2，当前服务器不支持此版本。")).toBeVisible();
+      expect(screen.queryByText("此播放列表中还没有歌曲。")).not.toBeInTheDocument();
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("translates the built-in Favorites but preserves a household playlist with that name", async () => {
+    open(
+      "#/playlists",
+      signedIn(LIBRARY, [favoritesPlaylistOf([1]), playlistOf("p1", "Favorites", [2, 3])]),
+    );
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Playlists" });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByRole("heading", { name: "播放列表" })).toHaveAttribute("data-rail-named");
+      expect(await screen.findByRole("link", { name: /^收藏\s*1 首歌曲/u })).toBeVisible();
+      expect(screen.getByRole("link", { name: /^Favorites\s*2 首歌曲/u })).toBeVisible();
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("lists the server's Favorites once, first, then the Account's Playlists", async () => {
     open("#/playlists");
     await screen.findByRole("link", { name: /^Mornings/u });
@@ -839,6 +968,33 @@ describe("keeping a Playlist downloaded", () => {
 });
 
 describe("search", () => {
+  it("keeps a tagged search and its matches when the interface language changes", async () => {
+    const route = hrefOf({ view: "search", query: "favorite:yes" });
+    open(route, signedIn([trackOf(1, "Search", { favorite: true }), trackOf(2, "Another song")]));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    expect(await screen.findByRole("button", { name: "Search" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveAccessibleDescription(
+      "Favorite: yes",
+    );
+
+    try {
+      const language = screen.getByRole("combobox", { name: "Language" });
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByRole("combobox", { name: "搜索" })).toHaveAccessibleDescription(
+        "收藏：yes",
+      );
+      expect(screen.getByRole("heading", { name: "搜索结果：收藏：yes" })).toBeVisible();
+      expect(screen.getByRole("region", { name: "找到的歌曲" })).toBeVisible();
+      expect(location.hash).toBe(route);
+      expect(songs()).toEqual(["Search"]);
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("finds songs, artists, and albums as you type, ignoring hiragana or katakana", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });
@@ -1040,6 +1196,7 @@ describe("search", () => {
     if (!row) throw new Error("Expected the failed lookup in a list item.");
     expect(within(row).getByText("Not a video.")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Choose parts" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel lookup" })).toBeVisible();
     await userEvent.click(within(row).getByRole("button", { name: "Dismiss" }));
     await waitFor(() => {
       expect(screen.queryByText("Video B")).not.toBeInTheDocument();
@@ -1676,10 +1833,190 @@ describe("editing an album from its page", () => {
     });
   });
 
+  it("targets the current album when replacing a cover after saving track details", async () => {
+    const song = trackOf(1, "Night Drive", { artist: "Trio", album: "Old Album" });
+    const stayed = trackOf(2, "Old Song", { artist: "Trio", album: "Old Album" });
+    const newAlbum = trackOf(3, "New Song", { artist: "Trio", album: "New Album" });
+    let current = song;
+    const sent: unknown[] = [];
+    open("#/library", {
+      ...signedIn([song, stayed, newAlbum]),
+      "GET /api/tracks/1": () => ({ body: current }),
+      "GET /api/tracks": () => ({ body: [current, stayed, newAlbum] }),
+      "GET /api/tracks/1/details": () => ({
+        body: detailsOf(1, {
+          title: song.title,
+          album: current.album,
+          artist: song.artist,
+          cover: "original-cover",
+        }),
+      }),
+      "PUT /api/tracks/1/cover": { body: detailsOf(1, { cover: "new-cover" }) },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        current = { ...song, album: "New Album" };
+        return { body: { changed: 1 } };
+      },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit details…" }));
+    const details = within(await screen.findByRole("dialog", { name: "Edit details" }));
+    await user.click(await details.findByText("Album", { selector: ".detail-fold-title" }));
+    const album = details.getByRole("textbox", { name: "Album" });
+    await user.clear(album);
+    await user.type(album, "New Album");
+    await user.click(details.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Saved the details of “Night Drive”.")).toBeInTheDocument();
+    expect(
+      await details.findByText("Cover changes apply immediately to the 2 songs of “New Album”."),
+    ).toBeVisible();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByText("已保存「Night Drive」的详情。")).toBeInTheDocument();
+      expect(details.getByText("封面更改会立即应用到「New Album」的 2 首歌曲。")).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+
+    await user.click(details.getByRole("button", { name: "Replace the cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Replace the cover" }));
+    await user.upload(
+      picture.getByLabelText("Choose a cover file"),
+      new File(["png"], "cover.png", { type: "image/png" }),
+    );
+    await user.click(await picture.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([
+        { track_ids: [1], values: { album: "New Album" } },
+        { track_ids: [1, 3], values: { cover: "new-cover" } },
+      ]);
+    });
+  });
+
+  it("refuses a cover change when different songs now share the album", async () => {
+    const song = trackOf(1, "Night Drive", { artist: "Trio", album: "Home" });
+    const second = trackOf(2, "Second", { artist: "Trio", album: "Home" });
+    const third = trackOf(3, "Third", { artist: "Trio", album: "Away" });
+    let moved = false;
+    const { calls } = open("#/library", {
+      ...signedIn([song, second, third]),
+      "GET /api/tracks": () => ({
+        body: moved
+          ? [song, { ...second, album: "Away" }, { ...third, album: "Home" }]
+          : [song, second, third],
+      }),
+      "GET /api/tracks/1/details": {
+        body: detailsOf(1, { title: song.title, album: song.album, cover: "original-cover" }),
+      },
+      "POST /api/tracks/details": { body: { changed: 2 } },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit details…" }));
+    const details = within(await screen.findByRole("dialog", { name: "Edit details" }));
+    const remove = await details.findByRole("button", { name: "Remove your cover" });
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    moved = true;
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+      await user.click(remove);
+
+      expect(await details.findByRole("alert")).toHaveTextContent(
+        "封面的应用范围已更改。请查看最新范围后重试。",
+      );
+      expect(calls).not.toContain("POST /api/tracks/details");
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("does not apply an uploaded image to old album members when membership changes during upload", async () => {
+    const first = trackOf(1, "First", { artist: "Trio", album: "Home" });
+    const second = trackOf(2, "Second", { artist: "Trio", album: "Home" });
+    const third = trackOf(3, "Third", { artist: "Trio", album: "Away" });
+    let finishUpload: () => void = () => undefined;
+    const after = new Promise<void>((resolve) => {
+      finishUpload = resolve;
+    });
+    let moved = false;
+    const { calls } = open(hrefOf({ view: "album", artist: "Trio", name: "Home" }), {
+      ...signedIn([first, second, third]),
+      "GET /api/tracks": () => ({
+        body: moved
+          ? [first, { ...second, album: "Away" }, { ...third, album: "Home" }]
+          : [first, second, third],
+      }),
+      "PUT /api/tracks/1/cover": { after, body: detailsOf(1, { cover: "uploaded" }) },
+      "POST /api/tracks/details": { body: { changed: 2 } },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Edit details" }));
+    const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
+    await user.click(album.getByRole("button", { name: "Add a cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await user.upload(
+      picture.getByLabelText("Choose a cover file"),
+      new File(["png"], "cover.png", { type: "image/png" }),
+    );
+    await user.click(await picture.findByRole("button", { name: "Use this cover" }));
+    await waitFor(() => {
+      expect(calls).toContain("PUT /api/tracks/1/cover");
+    });
+
+    moved = true;
+    finishUpload();
+
+    expect(await picture.findByRole("alert")).toHaveTextContent(
+      "The image was uploaded to one track, but it was not applied to the rest of the album.",
+    );
+    expect(calls).not.toContain("POST /api/tracks/details");
+  });
+
+  it("lets a mixed album update its cover on just its listed songs", async () => {
+    const tracks = [
+      trackOf(9, "Home file", { artist: "Trio", album: "Home", kind: "album", split: true }),
+      trackOf(11, "Opening", { artist: "Trio", album: "Home", segment_of: 9 }),
+      trackOf(12, "Closing", { artist: "Trio", album: "Home", segment_of: 9 }),
+      trackOf(30, "Encore", { artist: "Trio", album: "Home" }),
+    ];
+    const sent: unknown[] = [];
+    const cover = { body: detailsOf(11, { cover: "new-cover" }) };
+    open(hrefOf({ view: "album", artist: "Trio", name: "Home" }), {
+      ...signedIn(tracks),
+      "PUT /api/tracks/11/cover": cover,
+      "PUT /api/tracks/12/cover": cover,
+      "PUT /api/tracks/30/cover": cover,
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 3 } };
+      },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Edit details" }));
+    const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
+    await user.click(album.getByRole("button", { name: "Add a cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await user.upload(
+      picture.getByLabelText("Choose a cover file"),
+      new File(["png"], "cover.png", { type: "image/png" }),
+    );
+
+    await user.click(await picture.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ track_ids: [11, 12, 30], values: { cover: "new-cover" } }]);
+    });
+  });
+
   it("gives a cover from the page of an album that is one split file to that file", async () => {
     const sent: unknown[] = [];
     const jay = [
-      trackOf(9, "Jay", { artist: "周杰伦", album: "Jay", kind: "album", split: true }),
+      trackOf(9, "Jay", { artist: "周杰伦", album: "Original title", kind: "album", split: true }),
       trackOf(11, "可爱女人", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
       trackOf(12, "完美主义", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
     ];
@@ -1787,6 +2124,30 @@ describe("the Downloaded view", () => {
     };
   }
 
+  it("translates download progress and the retry explanation without translating provider detail", async () => {
+    open(hrefOf({ view: "downloaded" }), downloading());
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("region", { name: "Downloading" });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      const downloads = within(screen.getByRole("region", { name: "正在下载" }));
+      expect(downloads.getByRole("progressbar", { name: "Mixtape" })).toHaveAttribute(
+        "aria-valuetext",
+        "medleyplay 恢复在线后开始下载",
+      );
+      expect(downloads.getByRole("progressbar", { name: "Slow Train" })).toHaveAttribute(
+        "aria-valuetext",
+        expect.stringMatching(/^将于 .+ 重试。Bilibili refused the request \(403\)\.$/u),
+      );
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("shows the songs downloading above those downloaded, each with how far it has got", async () => {
     open(hrefOf({ view: "downloaded" }), downloading());
 
@@ -1860,6 +2221,28 @@ describe("the Downloaded view", () => {
     expect(sent).toEqual([{ job_ids: [17] }]);
     await userEvent.click(screen.getByRole("link", { name: "Library" }));
     expect(await screen.findByRole("button", { name: "Lost Signal" })).toBeInTheDocument();
+  });
+
+  it("reports a failed dismissal instead of an earlier download status error", async () => {
+    const lost = trackOf(7, "Lost Signal", { download_failed: true, download_failure_job_id: 17 });
+    open("#/downloaded", {
+      ...signedIn([...LIBRARY, lost]),
+      "GET /api/tracks/7/download": { status: 503, body: { detail: "Could not read status." } },
+      "POST /api/downloads/failed/dismiss": { status: 503, body: { detail: "Could not dismiss." } },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: /^Download failed/u }));
+    const menu = within(screen.getByRole("menu"));
+    expect(await menu.findByRole("alert")).toHaveTextContent("Could not read status.");
+
+    await userEvent.click(menu.getByRole("menuitem", { name: "Dismiss failed download" }));
+
+    await waitFor(() => {
+      expect(menu.getByRole("alert")).toHaveTextContent("Could not dismiss.");
+    });
+    expect(menu.getByRole("menuitem", { name: "Retry download" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
   });
 
   it("dismisses all failed downloads without removing a saved file", async () => {

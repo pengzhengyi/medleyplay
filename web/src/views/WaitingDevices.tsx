@@ -8,11 +8,8 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import { useState } from "react";
 
 import { type WaitingDevice, api } from "../api";
-
-/** Return how the pill names the waiting devices, as "2 devices waiting". */
-function waitingSaid(count: number): string {
-  return count === 1 ? "1 device waiting" : `${String(count)} devices waiting`;
-}
+import { useWords } from "../locale";
+import { deviceError } from "./deviceError";
 
 /**
  * A pill naming how many devices wait, opening a menu with each one's label,
@@ -21,22 +18,28 @@ function waitingSaid(count: number): string {
  * the pill.
  */
 export function WaitingDevices({ waiting }: { readonly waiting: readonly WaitingDevice[] }) {
-  const [failed, setFailed] = useState("");
+  const t = useWords();
+  const [failure, setFailure] = useState<{ readonly cause: unknown }>();
   if (waiting.length === 0) {
     return null;
   }
   const answer = (request: Promise<unknown>) => {
-    setFailed("");
+    setFailure(undefined);
     request.catch((failure: unknown) => {
-      setFailed(failure instanceof Error ? failure.message : String(failure));
+      setFailure({ cause: failure });
     });
   };
-  const said = waitingSaid(waiting.length);
+  const said = t("devices_waiting", { count: waiting.length });
+  const failed = failure === undefined ? "" : deviceError(failure.cause, t);
   return (
     <>
       <Menu.Root modal={false}>
         <Menu.Trigger asChild>
-          <button type="button" className="devices-waiting" title={`${said}: allow or turn away`}>
+          <button
+            type="button"
+            className="devices-waiting"
+            title={t("{{waiting}}: allow or turn away", { waiting: said })}
+          >
             <DeviceMobileIcon weight="bold" aria-hidden />
             {said}
           </button>
@@ -47,13 +50,17 @@ export function WaitingDevices({ waiting }: { readonly waiting: readonly Waiting
               <Menu.Group
                 key={device.id}
                 className="devices-menu-group"
-                aria-label={`${device.label}, code ${device.code}`}
+                aria-label={t("{{device}}, code {{code}}", {
+                  device: device.label,
+                  code: device.code,
+                })}
               >
                 {index > 0 && <Menu.Separator className="track-menu-separator" />}
                 <Menu.Label className="device-asking">
                   <span>{device.label}</span>
                   <span className="hint">
-                    {device.address} · code <strong>{device.code}</strong>
+                    {t("{{address}} · code", { address: device.address })}{" "}
+                    <strong>{device.code}</strong>
                   </span>
                 </Menu.Label>
                 <Menu.Item
@@ -62,7 +69,7 @@ export function WaitingDevices({ waiting }: { readonly waiting: readonly Waiting
                     answer(api.allowDevice(device.id));
                   }}
                 >
-                  Allow
+                  {t("Allow")}
                 </Menu.Item>
                 <Menu.Item
                   className="track-menu-item"
@@ -70,7 +77,7 @@ export function WaitingDevices({ waiting }: { readonly waiting: readonly Waiting
                     answer(api.turnAwayDevice(device.id));
                   }}
                 >
-                  Turn away
+                  {t("Turn away")}
                 </Menu.Item>
               </Menu.Group>
             ))}

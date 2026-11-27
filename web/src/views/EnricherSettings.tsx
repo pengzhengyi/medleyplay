@@ -8,9 +8,10 @@
  * refuses a request, the lookup stops for good until it is reset here.
  */
 
-import { type ReactNode, useEffect, useEffectEvent, useId, useState } from "react";
+import { useEffect, useEffectEvent, useId, useState } from "react";
 
-import { type Enricher, type EnricherMode, api } from "../api";
+import { AI_ENRICHER, ApiError, type Enricher, type EnricherMode, api } from "../api";
+import { type Words, useWords } from "../locale";
 import { classOf, useNote } from "../useNote";
 
 /** How one enricher's part of Settings reads. */
@@ -20,13 +21,14 @@ export interface EnricherWords {
   /** The site it asks, as the refusal names it. */
   readonly site: string;
   readonly heading: string;
-  readonly description: ReactNode;
+  readonly description: string;
   /** Says how many Tracks can be looked up. */
-  readonly count: (tracks: number) => string;
+  readonly count: (tracks: number, t: Words) => string;
   /** Says the lookup is turned off. */
   readonly off: string;
   /** The ways it may be asked, when not every way. */
   readonly modes?: readonly EnricherMode[];
+  readonly manualHelp?: string;
 }
 
 /** Each mode, a word or two for it, and what it does. */
@@ -59,14 +61,24 @@ export function EnricherSettings({
   readonly words: EnricherWords;
   readonly onChanged?: (() => void) | undefined;
 }) {
+  const t = useWords();
   const [enricher, setEnricher] = useState<Enricher | null>(null);
   const [saving, setSaving] = useState(false);
   const notes = useNote();
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{ readonly cause: unknown }>();
+  const cause = failure?.cause;
+  const detail =
+    failure === undefined ? "" : cause instanceof Error ? cause.message : String(cause);
+  const error =
+    cause instanceof ApiError &&
+    cause.status === 403 &&
+    detail === "Only an admin manages what the enrichers do for every Track."
+      ? t(detail)
+      : detail;
   const modeHint = useId();
 
   const failed = (failure: unknown) => {
-    setError(failure instanceof Error ? failure.message : String(failure));
+    setFailure({ cause: failure });
   };
   const reload = (
     then = () => {
@@ -86,7 +98,7 @@ export function EnricherSettings({
   }, []);
 
   const choose = (mode: EnricherMode) => {
-    setError("");
+    setFailure(undefined);
     notes.tell("");
     setSaving(true);
     api.setEnricherMode(words.enricher, mode).then(
@@ -103,7 +115,7 @@ export function EnricherSettings({
     );
   };
   const reset = () => {
-    setError("");
+    setFailure(undefined);
     api.resetEnricher(words.enricher).then(() => {
       reload(() => {
         notes.confirm("Reset.");
@@ -113,23 +125,26 @@ export function EnricherSettings({
 
   const offered = MODES.filter(({ mode }) => words.modes?.includes(mode) ?? true);
   const chosen = offered.find((each) => each.mode === enricher?.mode) ?? offered[0];
+  const site = words.enricher === AI_ENRICHER ? t(words.site) : words.site;
   return (
     <>
-      <h4>{words.heading}</h4>
-      <p className="hint">{words.description}</p>
+      <h4>{t(words.heading, { context: "enricher" })}</h4>
+      <p className="hint">{t(words.description)}</p>
       {error !== "" && <p role="alert">{error}</p>}
       {enricher === null ? (
         error === "" && (
           <p className="hint" aria-busy="true">
-            Reading {words.heading.toLowerCase()}…
+            {t("Reading {{heading}}…", {
+              heading: t(words.heading, { context: "enricher" }).toLocaleLowerCase(),
+            })}
           </p>
         )
       ) : !enricher.available ? (
-        <p>{words.off}</p>
+        <p>{t(words.off)}</p>
       ) : (
         <>
           <fieldset className="enricher-mode" aria-describedby={modeHint} disabled={saving}>
-            <legend>Ask {words.site}</legend>
+            <legend>{t("Ask {{site}}", { site })}</legend>
             {offered.map(({ mode, label }) => (
               <label key={mode} className="enricher-mode-choice">
                 <input
@@ -142,28 +157,33 @@ export function EnricherSettings({
                     choose(mode);
                   }}
                 />
-                {label}
+                {t(label)}
               </label>
             ))}
             <small id={modeHint} className="hint enricher-mode-does">
-              {chosen?.does}
+              {t((chosen?.mode === "manual" ? words.manualHelp : undefined) ?? chosen?.does ?? "")}
             </small>
           </fieldset>
           {enricher.stopped !== null ? (
             <p role="alert">
-              Stopped after {words.site} refused a request: {enricher.stopped.reason} Nothing more
-              is asked until it is reset.{" "}
+              {t(
+                "Stopped after {{site}} refused a request: {{reason}} Nothing more is asked until it is reset.",
+                {
+                  site,
+                  reason: enricher.stopped.reason,
+                },
+              )}{" "}
               <button type="button" className="secondary outline enricher-reset" onClick={reset}>
-                Reset
+                {t("Reset")}
               </button>
             </p>
           ) : (
-            <p>{words.count(enricher.eligible.length)}</p>
+            <p>{words.count(enricher.eligible.length, t)}</p>
           )}
         </>
       )}
       <p className={classOf(notes.note)} role="status">
-        {notes.note.text}
+        {t(notes.note.text)}
       </p>
     </>
   );

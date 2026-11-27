@@ -12,7 +12,14 @@
 import { useState } from "react";
 
 import type { PhotoSearch, Settings } from "../api";
-import { CHANGED_ELSEWHERE, notSaved, saveChange } from "../library/householdSettings";
+import {
+  CHANGED_ELSEWHERE,
+  settingsFailure,
+  settingsNotice,
+  type SettingsNotice,
+  saveChange,
+} from "../library/householdSettings";
+import { useWords } from "../locale";
 
 /** Which artists with no photo are looked up without anyone asking, and what each means. */
 const SEARCHES: readonly {
@@ -42,9 +49,10 @@ export function PictureSites({
   readonly settings: Settings | undefined;
   readonly onSettings: (settings: Settings) => void;
 }) {
+  const t = useWords();
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<SettingsNotice>(null);
   if (settings === undefined) {
     return null;
   }
@@ -53,13 +61,13 @@ export function PictureSites({
   const save = async (change: Partial<Settings>) => {
     setSaving(true);
     setNote("");
-    setError("");
+    setError(null);
     try {
       const { outcome, settings: now } = await saveChange(settings, change);
       onSettings(now);
       setNote(outcome === "conflict" ? CHANGED_ELSEWHERE : "Saved.");
     } catch (failure) {
-      setError(notSaved(failure));
+      setError(settingsFailure(failure));
     } finally {
       setSaving(false);
     }
@@ -75,12 +83,12 @@ export function PictureSites({
           disabled={saving}
           onChange={(event) => void save({ picture_sites: event.target.checked ? ["deezer"] : [] })}
         />
-        Find artist photos on Deezer
+        {t("Find artist photos on Deezer")}
       </label>
       <small className="hint">
-        Asked by the artist's name when you look for a photo of an artist, or open the page of one
-        with none, a few requests at a time. A photo that fits is suggested there; nothing changes
-        until you use one.
+        {t(
+          "Asked by the artist's name when you look for a photo of an artist, or open the page of one with none, a few requests at a time. A photo that fits is suggested there; nothing changes until you use one.",
+        )}
       </small>
       <label className="lyrics-sites-switch">
         <input
@@ -90,14 +98,15 @@ export function PictureSites({
           disabled={saving || !on}
           onChange={(event) => void save({ pick_pictures_by_ai: event.target.checked })}
         />
-        Pick by AI as soon as pictures are found
+        {t("Pick by AI as soon as pictures are found")}
       </label>
       <small className="hint">
-        Off, the AI is asked only when you press Pick by AI. On, it is asked once for each artist
-        whose pictures are found, which your AI provider may charge for.
+        {t(
+          "Off, the AI is asked only when you press Pick by AI. On, it is asked once for each artist whose pictures are found, which your AI provider may charge for.",
+        )}
       </small>
       <fieldset className="split-albums" disabled={saving || !on}>
-        <legend>Look up photos of artists with none</legend>
+        <legend>{t("Look up photos of artists with none")}</legend>
         {SEARCHES.map((search) => (
           <label key={search.value} className="split-albums-choice">
             <input
@@ -108,18 +117,18 @@ export function PictureSites({
               onChange={() => void save({ find_artist_photos: search.value })}
             />
             <span>
-              <strong>{search.label}</strong>
-              <small>{search.about}</small>
+              <strong>{t(search.label)}</strong>
+              <small>{t(search.about)}</small>
             </span>
           </label>
         ))}
         <small className="hint">
-          A photo found for each waits in Clean up, to use in one click.
+          {t("A photo found for each waits in Clean up, to use in one click.")}
         </small>
       </fieldset>
-      {error !== "" && <p role="alert">{error}</p>}
+      {error !== null && <p role="alert">{settingsNotice(error, t)}</p>}
       <p className="hint saved" role="status">
-        {note}
+        {t(note)}
       </p>
     </div>
   );

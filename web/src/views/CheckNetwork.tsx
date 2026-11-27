@@ -6,6 +6,7 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { type Mode, api } from "../api";
+import { useWords } from "../locale";
 
 /**
  * Check the network now, then pass on the Mode it comes to; `said` shows beside the
@@ -18,6 +19,7 @@ export function CheckNetwork({
   readonly onChecked: (mode: Mode) => void;
   readonly said?: string;
 }) {
+  const t = useWords();
   const [checking, setChecking] = useState(false);
   const [failure, setFailure] = useState("");
 
@@ -35,10 +37,10 @@ export function CheckNetwork({
   };
 
   const label = checking
-    ? "Checking the network"
+    ? t("Checking the network")
     : failure === ""
-      ? "Check the network"
-      : `Couldn't check the network: ${failure} Check again`;
+      ? t("Check the network")
+      : t("Couldn't check the network: {{failure}} Check again", { failure });
   return (
     <button
       type="button"

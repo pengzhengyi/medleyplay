@@ -38,10 +38,3 @@ export const VIEW_LABELS = {
   "clean-up": "Clean up",
   settings: "Settings",
 } as const;
-
-const RAIL_NAMES: ReadonlySet<string> = new Set(Object.values(VIEW_LABELS));
-
-/** Whether `title` is a view's own name in the rail, as *Library* is. */
-export function isRailNamed(title: string): boolean {
-  return RAIL_NAMES.has(title);
-}

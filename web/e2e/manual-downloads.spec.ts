@@ -123,9 +123,9 @@ test("a video that cannot be read is added on the details given, then gets its f
 }) => {
   const dialog = await lookUp(page, "https://www.bilibili.com/video/BVdown?p=2");
   await expect(dialog.getByRole("alert")).toContainText("The site couldn’t be reached.");
-  await expect(dialog.getByRole("spinbutton", { name: "Part number 1" })).toHaveValue("2");
-  await dialog.getByRole("textbox", { name: "Title of part 1" }).fill("Side B");
-  await dialog.getByRole("textbox", { name: "Artist of part 1" }).fill("Blue Room");
+  await expect(dialog.getByRole("spinbutton", { name: "Part number for row 1" })).toHaveValue("2");
+  await dialog.getByRole("textbox", { name: "Title of part 2" }).fill("Side B");
+  await dialog.getByRole("textbox", { name: "Artist of part 2" }).fill("Blue Room");
 
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
 

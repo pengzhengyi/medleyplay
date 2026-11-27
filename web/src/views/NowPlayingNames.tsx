@@ -23,6 +23,7 @@ import {
 } from "../library/favoriteGroups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf, artistNamesOf, artistRouteOf } from "../library/views";
+import { useWords } from "../locale";
 import { type AlbumSong, type Playing, songPlaying } from "../player/albumNow";
 import { hrefOf } from "../routes";
 import { FavoriteHeart } from "./FavoriteHeart";
@@ -61,6 +62,7 @@ export function NowPlayingNames({
   /** Called as a name's link leaves for its page. */
   readonly onNavigate: () => void;
 }) {
+  const t = useWords();
   const song = songPlaying(track, playing);
   const album = track.album !== "" ? track.album : track.kind === "album" ? track.title : "";
   const albumArtist = albumArtistOf(track);
@@ -140,7 +142,7 @@ export function NowPlayingNames({
             <span className="np-artist">
               <span
                 className="np-mark"
-                title={artistNamesOf(track).length > 1 ? "Artists" : "Artist"}
+                title={t(artistNamesOf(track).length > 1 ? "Artists" : "Artist")}
               >
                 <MicrophoneStageIcon weight="fill" aria-hidden />
               </span>
@@ -177,7 +179,9 @@ export function NowPlayingNames({
               href={track.video}
               target="_blank"
               rel="noopener noreferrer"
-              title={`Open the video it came from on ${siteNameOf(track.video)}, in a new tab`}
+              title={t("Open the video it came from on {{site}}, in a new tab", {
+                site: siteNameOf(track.video),
+              })}
             >
               <SiteMark name={siteNameOf(track.video)} />
               <ArrowSquareOutIcon aria-hidden />

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DownloadUnderWay, JobEvent } from "../api";
+import { simplifiedChineseWords } from "../locale";
 import { downloadEnded, downloadStateOf, followDownload } from "./downloading";
 
 /** Track 7's Download, its Job 70 `state`, `fraction` of the way through. */
@@ -103,8 +104,8 @@ describe("how far a Download has got", () => {
       retry_at: null,
     }).next;
 
-    expect(retry.map(downloadStateOf)).toEqual(["Retry scheduled"]);
-    expect(running.map(downloadStateOf)).toEqual(["Preparing download"]);
+    expect(retry.map((download) => downloadStateOf(download))).toEqual(["Retry scheduled"]);
+    expect(running.map((download) => downloadStateOf(download))).toEqual(["Preparing download"]);
   });
 
   it("shows the part being joined beside overall progress", () => {
@@ -113,6 +114,21 @@ describe("how far a Download has got", () => {
       progress: { fraction: 0.625, message: "Joining part 3 (2/4)" },
     });
 
-    expect(next.map(downloadStateOf)).toEqual(["Joining part 3 (2/4) · 63%"]);
+    expect(next.map((download) => downloadStateOf(download))).toEqual([
+      "Joining part 3 (2/4) · 63%",
+    ]);
+  });
+
+  it("translates a known join stage without treating arbitrary progress detail as a key", () => {
+    const running = downloadOf("running", 0.625);
+    const progress = (message: string) => ({
+      ...running,
+      job: { ...running.job, progress: { fraction: 0.625, message } },
+    });
+
+    expect(downloadStateOf(progress("Joining part 3 (2/4)"), simplifiedChineseWords)).toBe(
+      "正在合并第 3 个分P（2/4） · 63%",
+    );
+    expect(downloadStateOf(progress("Search"), simplifiedChineseWords)).toBe("Search · 63%");
   });
 });

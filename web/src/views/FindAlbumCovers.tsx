@@ -17,20 +17,26 @@ import { albumFileOf, songsOf, tracksOfAlbum } from "../library/views";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
-import { PictureEditor } from "./PictureEditor";
+import { type CoverAlbum, PictureEditor } from "./PictureEditor";
 import { SuggestedFrame } from "./SuggestedFrame";
+import { Trans } from "react-i18next";
+import { useWords } from "../locale";
 
 const READ_EVERY_MS = 3000;
+const MAX_USE_BATCH = 1000;
+const SETTINGS_HELP = "They are searched as <settings>Settings → MusicBrainz</settings> says.";
 
 type Suggested = MissingCover & { readonly suggested: string };
 
 /** The key of `album` among those shown. */
 const keyOf = (album: MissingCover) => `${album.artist}\n${album.album}`;
+const suggestionKey = (album: Suggested) =>
+  JSON.stringify([album.artist, album.album, album.suggested]);
 
 /** The ways to set an album's cover, as its page sets it: on its songs, or on its one file. */
 export interface AlbumCoverActions {
-  readonly onUse: (songs: readonly Track[], cover: string) => Promise<void>;
-  readonly onUpload: (songs: readonly Track[], image: File) => Promise<string>;
+  readonly onUse: (songs: readonly Track[], cover: string, subject: CoverAlbum) => Promise<void>;
+  readonly onUpload: (songs: readonly Track[], image: File, subject: CoverAlbum) => Promise<string>;
 }
 
 /** Return what an album's cover is set on: its one file, else its songs. */
@@ -48,6 +54,7 @@ export function FindAlbumCovers({
   actions,
   onChanged,
   onUsed,
+  admin = false,
 }: {
   readonly albums: readonly MissingCover[];
   /** How many answers came while MusicBrainz was searched, the same one too; each reads again. */
@@ -60,10 +67,12 @@ export function FindAlbumCovers({
   readonly onChanged: () => void;
   /** Called once covers found were used, to read the songs again. */
   readonly onUsed?: (() => void) | undefined;
+  readonly admin?: boolean;
 }) {
+  const t = useWords();
   // The albums whose cover is being used or dismissed: each stays saving until it is gone.
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
-  const [usingAll, setUsingAll] = useState(false);
+  const [usingAll, setUsingAll] = useState<{ readonly count: number; readonly partial: boolean }>();
   const [error, setError] = useState("");
   // The album whose cover is chosen in the cover editor, if any.
   const [changing, setChanging] = useState<MissingCover>();
@@ -95,16 +104,25 @@ export function FindAlbumCovers({
     const tiles = list.current?.querySelectorAll<HTMLElement>(":scope > li") ?? [];
     tiles[Math.min(moved.place, tiles.length - 1)]?.querySelector<HTMLElement>("button")?.focus();
   }, [albums]);
-  const unfit = albums.filter((each) => each.suggested === null && each.found).length;
-  const unasked = albums.filter((each) => !each.found).length;
-  const ready = suggested.filter((each) => !saving.has(keyOf(each)));
+  const unfit = albums.filter(
+    (each) => each.suggested === null && each.found && !each.finding,
+  ).length;
+  const unasked = albums.filter((each) => !each.found && !each.finding).length;
+  const ready = suggested.filter((each) => !saving.has(suggestionKey(each)));
+  const batch = ready.slice(0, MAX_USE_BATCH);
+  const [previousAlbums, setPreviousAlbums] = useState(albums);
+  if (previousAlbums !== albums) {
+    setPreviousAlbums(albums);
+    const current = new Set(suggested.map(suggestionKey));
+    setSaving(new Set([...saving].filter((key) => current.has(key))));
+  }
   // Saves `change` to the albums `chosen`, saving until they are read again without them.
   const act = async (
     chosen: readonly Suggested[],
     place: number | undefined,
     change: () => Promise<unknown>,
   ) => {
-    const keys = chosen.map(keyOf);
+    const keys = chosen.map(suggestionKey);
     setSaving((was) => new Set([...was, ...keys]));
     setError("");
     try {
@@ -129,9 +147,9 @@ export function FindAlbumCovers({
   const dismiss = (album: Suggested, place: number) =>
     act([album], place, () => api.dismissAlbumCover(album.album, album.artist, album.suggested));
   const takeAll = async () => {
-    setUsingAll(true);
-    await take(ready);
-    setUsingAll(false);
+    setUsingAll({ count: batch.length, partial: ready.length > batch.length });
+    await take(batch);
+    setUsingAll(undefined);
   };
   const changingTarget = changing === undefined ? [] : targetOf(tracks, changing);
   return (
@@ -139,50 +157,58 @@ export function FindAlbumCovers({
       <header className="clean-up-head">
         <h3 id="find-covers-title">
           <VinylRecordIcon className="clean-up-icon" weight="bold" aria-hidden />
-          Find album covers
+          {t("Find album covers")}
           <span className="clean-up-count">{coversToUseOf(albums)}</span>
         </h3>
         {suggested.length > 1 && (
           <button
             type="button"
             className="dialog-button"
-            disabled={usingAll || ready.length === 0}
-            aria-busy={usingAll}
+            disabled={usingAll !== undefined || ready.length === 0}
+            aria-busy={usingAll !== undefined}
             onClick={() => void takeAll()}
           >
-            {`Use all ${String(suggested.length)}`}
+            {t(
+              (usingAll?.partial ?? ready.length > batch.length)
+                ? "Use next {{count}}"
+                : "Use all {{count}}",
+              {
+                count: usingAll?.count ?? batch.length,
+              },
+            )}
           </button>
         )}
       </header>
       <p className="tidy-lead">
-        A cover found on MusicBrainz for each album with none. Using one puts it on the album's
-        songs.
+        {t(
+          "A cover found on MusicBrainz for each album with none. Using one puts it on the album's songs.",
+        )}
       </p>
       {error !== "" && (
         <p className="error" role="alert">
-          {error}
+          {t("Could not update the cover suggestions: {{detail}}", { detail: error })}
         </p>
       )}
       {finding > 0 && (
         <p className="cover-finder-note" role="status">
           <CircleNotchIcon weight="bold" className="spin" aria-hidden />
-          {`Looking on MusicBrainz for ${String(finding)} ${finding === 1 ? "album" : "albums"}…`}
+          {t("album_art_search", { count: finding })}
         </p>
       )}
       {suggested.length > 0 && (
-        <ul ref={list} className="photo-suggestions" aria-label="Covers suggested">
+        <ul ref={list} className="photo-suggestions" aria-label={t("Covers suggested")}>
           {suggested.map((each, place) => (
             <li key={keyOf(each)} className="photo-suggestion-item">
               <SuggestedFrame
                 of={each.album}
                 noun="cover"
-                why={
+                why={t(
                   each.picked
                     ? "An AI model picked this"
-                    : "A MusicBrainz release with this album's title and artist"
-                }
+                    : "A MusicBrainz release with this album's title and artist",
+                )}
                 picked={each.picked}
-                busy={saving.has(keyOf(each))}
+                busy={saving.has(suggestionKey(each))}
                 onUse={() => void take([each], place)}
                 onDismiss={() => void dismiss(each, place)}
                 onChange={() => {
@@ -212,9 +238,9 @@ export function FindAlbumCovers({
                 {each.album}
               </a>
               <span className="tidy-meta">
-                {[each.artist, each.songs === 1 ? "1 song" : `${String(each.songs)} songs`]
+                {[each.artist, t("song_count", { count: each.songs })]
                   .filter(Boolean)
-                  .join(", ")}
+                  .join(t(", "))}
               </span>
             </li>
           ))}
@@ -223,28 +249,29 @@ export function FindAlbumCovers({
       {unfit + unasked > 0 && (
         <p className="tidy-lead">
           {[
-            unfit > 0 &&
-              `${String(unfit)} ${unfit === 1 ? "album has" : "albums have"} no cover on MusicBrainz that fits`,
-            unasked > 0 &&
-              `${String(unasked)} ${unasked === 1 ? "album isn't" : "albums aren't"} searched yet`,
+            unfit > 0 && t("album_art_no_match", { count: unfit }),
+            unasked > 0 && t("album_art_not_searched", { count: unasked }),
           ]
             .filter(Boolean)
-            .join("; ")}
-          .{" "}
-          {unasked > 0 && (
-            <>
-              They are searched as{" "}
-              <a href={hrefOf({ view: "settings", section: "musicbrainz" })}>
-                Settings → MusicBrainz
-              </a>{" "}
-              says.
-            </>
-          )}
+            .join(t("; "))}
+          {t(". ")}
+          {unasked > 0 &&
+            (admin ? (
+              <Trans
+                t={t}
+                i18nKey={SETTINGS_HELP}
+                defaults={SETTINGS_HELP}
+                components={{
+                  settings: <a href={hrefOf({ view: "settings", section: "musicbrainz" })} />,
+                }}
+              />
+            ) : (
+              t("An admin controls when MusicBrainz searches for covers.")
+            ))}
         </p>
       )}
       {changing !== undefined && actions !== undefined && changingTarget.length > 0 && (
         <PictureEditor
-          startOn="musicbrainz"
           sources={{
             kind: "cover",
             of: changing.album,
@@ -252,11 +279,17 @@ export function FindAlbumCovers({
             album: { album: changing.album, artist: changing.artist },
             pictured: { kind: "album", album: changing.album, artist: changing.artist },
             upload: async (image) => {
-              await actions.onUpload(changingTarget, image);
+              await actions.onUpload(changingTarget, image, {
+                album: changing.album,
+                artist: changing.artist,
+              });
               onChanged();
             },
             use: async (cover) => {
-              await actions.onUse(changingTarget, cover);
+              await actions.onUse(changingTarget, cover, {
+                album: changing.album,
+                artist: changing.artist,
+              });
               onChanged();
             },
           }}

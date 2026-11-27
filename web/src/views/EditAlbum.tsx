@@ -12,6 +12,7 @@ import { type SubmitEvent, useRef, useState } from "react";
 
 import { type Detail, type Track, coverUrl } from "../api";
 import { albumArtistOf } from "../library/views";
+import { useWords } from "../locale";
 import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
 import { Modal } from "./Modal";
@@ -69,6 +70,7 @@ export function EditAlbum({
   readonly onUploadCover: (image: File) => Promise<string>;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const [shared] = useState(() => sharedOf(songs));
   const [draft, setDraft] = useState<Record<AlbumDetail, string>>(() => ({
@@ -97,6 +99,7 @@ export function EditAlbum({
 
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!changed || saving) return;
     setSaving(true);
     setError("");
     try {
@@ -118,7 +121,7 @@ export function EditAlbum({
       onClose={onClose}
     >
       <form className="card" onSubmit={(event) => void save(event)}>
-        <h2 id="edit-album-title">Edit album</h2>
+        <h2 id="edit-album-title">{t("Edit album")}</h2>
         {shared.album !== undefined && shared.album !== "" && (
           <p className="edit-album-name">
             <KindMark
@@ -130,13 +133,16 @@ export function EditAlbum({
             {shared.album}
           </p>
         )}
+        <p className="hint">{t("album_edit_scope", { count: songs.length })}</p>
         <p className="hint">
-          {`${String(songs.length)} songs of their own. What you type here is set on each of them.`}
+          {t(
+            "Only edited fields are saved. Clearing a shared value removes the household's override; songs then show their own details.",
+          )}
         </p>
         <div className="edit-album-fields">
           {FIELDS.map(({ detail, label }) => (
             <label key={detail} className="edit-album-field">
-              {label}
+              {t(label)}
               <input
                 className="edit-album-box"
                 type={detail === "year" ? "number" : "text"}
@@ -145,8 +151,9 @@ export function EditAlbum({
                 max={detail === "year" ? 9999 : undefined}
                 maxLength={detail === "year" ? undefined : 512}
                 value={draft[detail]}
+                disabled={saving}
                 placeholder={
-                  shared[detail] === undefined ? "Varies; each keeps its own" : undefined
+                  shared[detail] === undefined ? t("Varies; each keeps its own") : undefined
                 }
                 onChange={(event) => {
                   const { value } = event.currentTarget;
@@ -198,18 +205,18 @@ export function EditAlbum({
         )}
         {error !== "" && (
           <p className="error" role="alert">
-            {error}
+            {t("Could not save the album details: {{detail}}", { detail: error })}
           </p>
         )}
         <footer className="dialog-buttons">
           <button
             type="submit"
-            title={`Saves to each of the ${String(songs.length)} songs`}
+            title={t("album_edit_saves", { count: songs.length })}
             className="dialog-button"
             disabled={!changed || saving}
             aria-busy={saving}
           >
-            Save
+            {t("Save")}
           </button>
         </footer>
       </form>

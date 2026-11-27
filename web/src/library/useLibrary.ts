@@ -49,6 +49,7 @@ import { type FavoriteGroups, NO_FAVORITES, albumKey, favoriteGroupsOf } from ".
 import { afterNextPaint } from "./stages";
 import { LOOKUPS } from "./lookups";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
+import { isManualPlaylist } from "./views";
 
 /** A lookup asked about a Track, as far as its Job has gone. */
 export interface TrackLookup {
@@ -156,7 +157,7 @@ export interface Library {
     lyricPicks?: readonly number[],
   ) => Promise<void>;
   /** Remove every song of the file `id`; the Tracks then show the file whole again. */
-  readonly unsplit: (id: number) => Promise<void>;
+  readonly unsplit: (id: number, known: readonly number[]) => Promise<void>;
   /**
    * Set the household's values on every Track of `ids`, `null` dropping one; all change
    * or none, and the Tracks then show what was saved.
@@ -201,7 +202,7 @@ export interface Library {
     track: Track,
     ids: readonly string[],
     newNames: readonly string[],
-  ) => Promise<void>;
+  ) => Promise<readonly string[]>;
   /** Switch whether `playlist` keeps its songs downloaded; it shows as the server saved it. */
   readonly keepDownloaded: (playlist: Playlist, keep: boolean) => Promise<void>;
 }
@@ -820,8 +821,8 @@ export function useLibrary(onSignedOut: () => void): Library {
     saveSongs: async (id, rows, known, lyricPicks) => {
       await changeTracks(api.saveSongs(id, rows, known, lyricPicks));
     },
-    unsplit: async (id) => {
-      await changeTracks(api.unsplit(id));
+    unsplit: async (id, known) => {
+      await changeTracks(api.unsplit(id, known));
     },
     setDetailsOn: async (ids, values) => {
       await changeTracks(api.setDetails(ids, values));
@@ -853,7 +854,12 @@ export function useLibrary(onSignedOut: () => void): Library {
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [
         ...playlists
-          .filter((playlist) => ids.includes(playlist.id))
+          .filter(
+            (playlist) =>
+              ids.includes(playlist.id) &&
+              isManualPlaylist(playlist) &&
+              !playlist.track_ids.includes(track.id),
+          )
           .map((playlist) =>
             api.putPlaylist(playlist.id, {
               name: playlist.name,
@@ -879,6 +885,7 @@ export function useLibrary(onSignedOut: () => void): Library {
         }
         throw refused.reason;
       }
+      return saved.map((playlist) => playlist.name);
     },
     keepDownloaded: async (playlist, keep) => {
       const saved = await signedOutOn401(api.setKeepDownloaded(playlist.id, keep));

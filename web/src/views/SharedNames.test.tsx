@@ -66,14 +66,20 @@ const SEVERAL: SharedName = {
 
 function cleanUp(names: readonly SharedName[]) {
   const reload = vi.fn();
-  render(
+  const view = (current: readonly SharedName[]) => (
     <CleanUpView
       tidy={{ names: [], reload: vi.fn() }}
       artistNames={{ names: { names: [], artists: [CHOU, RAPPER] }, reload: vi.fn() }}
-      sharedNames={{ names, reload }}
-    />,
+      sharedNames={{ names: current, reload }}
+    />
   );
-  return { reload };
+  const { rerender } = render(view(names));
+  return {
+    reload,
+    show: (current: readonly SharedName[]) => {
+      rerender(view(current));
+    },
+  };
 }
 
 const section = () => within(screen.getByRole("region", { name: /^Artists sharing a name/u }));
@@ -152,6 +158,30 @@ describe("telling apart artists who share a name in Clean up", () => {
     expect(sent).toEqual([{ names: ["Jay"] }]);
   });
 
+  it("keeps an unsaved assignment with its album after the rows reorder", async () => {
+    const sent = recording("PUT /api/shared-names/albums");
+    const { show } = cleanUp([AMBIGUOUS]);
+    await userEvent.selectOptions(
+      section().getByRole("combobox", { name: "Who Rap Tape is by" }),
+      "Jay (UK rapper, GB)",
+    );
+    show([{ ...AMBIGUOUS, albums: [...AMBIGUOUS.albums].reverse() }]);
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Confirm who each album by Jay is by" }),
+    );
+
+    expect(sent).toEqual([
+      {
+        name: "Jay",
+        albums: [
+          { track_ids: [3], musicbrainz_id: RAPPER.id },
+          { track_ids: [1, 2], artist_id: JAY },
+        ],
+      },
+    ]);
+  });
+
   it("offers a name's own artists by what each is, marking the albums confirmed", () => {
     cleanUp([SEVERAL]);
 
@@ -173,6 +203,23 @@ describe("telling apart artists who share a name in Clean up", () => {
     );
 
     expect(sent).toEqual([{ names: ["Jay"] }]);
+  });
+
+  it("reports a failed undo and keeps the current decision visible", async () => {
+    serve({
+      "POST /api/shared-names/forget": { status: 409, body: { detail: "The decision changed." } },
+    });
+    cleanUp([{ ...AMBIGUOUS, kept: true, waiting: false }]);
+    await userEvent.click(section().getByText("1 name done"));
+
+    await userEvent.click(
+      section().getByRole("button", { name: "Undo keeping Jay as one artist" }),
+    );
+
+    expect(await section().findByRole("alert")).toHaveTextContent(
+      "Could not change this name: The decision changed.",
+    );
+    expect(section().getByText("Kept as one artist")).toBeVisible();
   });
 
   it("saves a done name only once an album is changed", async () => {

@@ -8,10 +8,28 @@ import { SparkleIcon } from "@phosphor-icons/react";
 import { useEffect, useId, useState } from "react";
 
 import { type AiAsk, type AiNote, MAX_HINT, api } from "../api";
+import { composing } from "../ime";
 import { noteOf } from "../library/aiNote";
+import { useFormattingLocale, useWords } from "../locale";
 
 /** Where this browser keeps the details last typed for each ask. */
 const REMEMBERED = "medleyplay.aiNote.";
+
+function rememberedDetails(ask: AiAsk): string {
+  try {
+    return localStorage.getItem(REMEMBERED + ask) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberDetails(ask: AiAsk, details: string): void {
+  try {
+    localStorage.setItem(REMEMBERED + ask, details.trim());
+  } catch {
+    return;
+  }
+}
 
 /** What each ask's details field suggests typing. */
 const EXAMPLES: Readonly<Record<AiAsk, string>> = {
@@ -30,9 +48,11 @@ export function AiNotePanel({
   readonly onClose: () => void;
 }) {
   const id = useId();
-  const [offered, setOffered] = useState<readonly AiNote[] | undefined>(undefined);
+  const t = useWords();
+  const number = new Intl.NumberFormat(useFormattingLocale());
+  const [offered, setOffered] = useState<readonly AiNote[] | null | undefined>(undefined);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set());
-  const [details, setDetails] = useState(() => localStorage.getItem(REMEMBERED + ask) ?? "");
+  const [details, setDetails] = useState(() => rememberedDetails(ask));
   useEffect(() => {
     let shown = true;
     api.settings().then(
@@ -44,7 +64,7 @@ export function AiNotePanel({
       () => {
         // With the notes unread, the details can still be typed.
         if (shown) {
-          setOffered([]);
+          setOffered(null);
         }
       },
     );
@@ -56,12 +76,13 @@ export function AiNotePanel({
     (offered ?? []).filter((each) => ticked.has(each.text)).map((each) => each.text),
     details,
   );
-  const over = note.length > MAX_HINT;
+  const characters = Array.from(note).length;
+  const over = characters > MAX_HINT;
   const submit = () => {
     if (over) {
       return;
     }
-    localStorage.setItem(REMEMBERED + ask, details.trim());
+    rememberDetails(ask, details);
     onAsk(note);
   };
   return (
@@ -71,17 +92,29 @@ export function AiNotePanel({
       className="ai-note"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
-          event.preventDefault();
           event.stopPropagation();
+          if (composing(event.nativeEvent)) return;
+          event.preventDefault();
           onClose();
         }
       }}
     >
       <p id={`${id}-title`} className="ai-note-title">
-        Ask AI with a note
+        {t("Ask AI with a note")}
+      </p>
+      <p className="hint">
+        {t(
+          "The selected notes and any details you type go with this request. This browser can remember the details you submit.",
+        )}
       </p>
       {offered === undefined ? (
-        <p className="hint">Reading the household's notes…</p>
+        <p className="hint" aria-busy="true">
+          {t("Reading the household's notes…")}
+        </p>
+      ) : offered === null ? (
+        <p className="hint" role="status">
+          {t("Could not read the household's notes. You can still type details below.")}
+        </p>
       ) : (
         offered.map((each) => (
           <label key={each.text} className="ai-note-choice">
@@ -106,14 +139,14 @@ export function AiNotePanel({
         ))
       )}
       <label htmlFor={`${id}-details`} className="detail-label">
-        More details
+        {t("More details")}
       </label>
       <textarea
         id={`${id}-details`}
         className="detail-input ai-note-details"
         rows={2}
         value={details}
-        placeholder={EXAMPLES[ask]}
+        placeholder={t(EXAMPLES[ask])}
         aria-describedby={`${id}-count`}
         // The panel opens to type the note at once; the notes to tick are a Shift+Tab away.
         autoFocus
@@ -121,7 +154,7 @@ export function AiNotePanel({
           setDetails(event.currentTarget.value);
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+          if (event.key === "Enter" && !event.shiftKey && !composing(event.nativeEvent)) {
             event.preventDefault();
             submit();
           }
@@ -129,10 +162,13 @@ export function AiNotePanel({
       />
       <div className="ai-note-foot">
         <small id={`${id}-count`} className={over ? "ai-note-count over" : "ai-note-count"}>
-          {`${String(note.length)} of ${String(MAX_HINT)} characters`}
+          {t("{{used}} of {{limit}} characters", {
+            used: number.format(characters),
+            limit: number.format(MAX_HINT),
+          })}
         </small>
         <button type="button" className="ai-note-ask" disabled={over} onClick={submit}>
-          <SparkleIcon aria-hidden /> Ask AI
+          <SparkleIcon aria-hidden /> {t("Ask AI")}
         </button>
       </div>
     </div>

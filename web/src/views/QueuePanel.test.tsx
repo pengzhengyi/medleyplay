@@ -4,15 +4,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import { serve, signedIn, trackOf } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 /** A signed-in page whose Tracks Intro, Long Road, and Outro are ready to play. */
-async function playingIntro() {
+async function playingIntro(next = trackOf(2, "Long Road")) {
   serve({
-    ...signedIn([trackOf(1, "Intro"), trackOf(2, "Long Road"), trackOf(3, "Outro")]),
+    ...signedIn([trackOf(1, "Intro"), next, trackOf(3, "Outro")]),
     ...Object.fromEntries(
       [1, 2, 3].map((id) => [
         `POST /api/tracks/${String(id)}/playback`,
@@ -39,6 +40,29 @@ function upNext(): string[] {
 }
 
 describe("the queue", () => {
+  it("translates the drag help, names and empty queue explanation without changing song names", async () => {
+    await playingIntro();
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const queue = screen.getByRole("region", { name: "Up next" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const chinese = within(screen.getByRole("region", { name: "接下来播放" }));
+      expect(
+        chinese.getByRole("button", { name: "调整「Outro」的顺序" }),
+      ).toHaveAccessibleDescription(/按空格键/u);
+      expect(chinese.getByRole("button", { name: "立即播放「Long Road」" })).toBeVisible();
+      expect(chinese.getByText(/^2 首歌曲，6 分钟/u)).toBeVisible();
+      await user.click(chinese.getByRole("button", { name: "清空" }));
+      expect(within(queue).getByText("队列为空。可从列表中添加曲目，稍后播放。")).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("queues the Tracks after the one chosen", async () => {
     await playingIntro();
 
@@ -53,6 +77,14 @@ describe("the queue", () => {
 
     const queue = screen.getByRole("region", { name: "Up next" });
     expect(within(queue).getByText(/^2 songs, 6 min/u)).toBeInTheDocument();
+  });
+
+  it("shows only the count when the queue has a song of unknown length", async () => {
+    await playingIntro(trackOf(2, "Long Road", { duration_ms: null }));
+
+    const queue = within(screen.getByRole("region", { name: "Up next" }));
+    expect(queue.getByText("2 songs", { exact: true })).toBeVisible();
+    expect(queue.queryByText(/ending around/u)).not.toBeInTheDocument();
   });
 
   it("removes what plays next", async () => {

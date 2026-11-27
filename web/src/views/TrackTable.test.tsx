@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,7 @@ import type { CoverStatus } from "../library/lookups";
 import { albumUnit, songsByFile } from "../library/playOrder";
 import type { UnitOf } from "../player/usePlayer";
 import { downloadOf, downloadUnderWayOf, serve, trackOf } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** Intro, a Long Road that can't play, and Outro, listed in that order, as the server adds them. */
@@ -484,7 +485,11 @@ describe("a Track downloading", () => {
   /** What the row says of the Download in place of why it can't play, as heard and as seen. */
   const said = (row: HTMLElement) => {
     const words = row.querySelector(".why");
-    return { heard: words?.textContent, hover: words?.getAttribute("title") };
+    const heard = [...(words?.children ?? [])]
+      .filter((part) => part.getAttribute("aria-hidden") !== "true")
+      .map((part) => part.textContent)
+      .join("");
+    return { heard, hover: words?.getAttribute("title") };
   };
 
   it("says how far it has got where a Track that can't play says why, its cover spinning", () => {
@@ -492,7 +497,7 @@ describe("a Track downloading", () => {
 
     const row = rowOf(screen.getByRole("button", { name: "Night Drive" }));
     expect(said(row)).toEqual({ heard: "Downloading 42%", hover: "Downloading 42%" });
-    expect(row).toHaveTextContent("42%");
+    expect(row.querySelector(".download-note-label")).toHaveTextContent("42%");
     expect(row).not.toHaveTextContent("Unavailable");
     expect(within(row).getByRole("img", { name: "Downloading 42%" })).toHaveClass("looking");
   });
@@ -580,14 +585,16 @@ describe("a Track whose download failed", () => {
     expect(calls).toContain("POST /api/jobs/504/retry");
   });
 
-  it("says why the server refused a retry, staying open", async () => {
+  it("translates the retry refusal without closing the menu", async () => {
+    const detail = "Only the Account that asked for a Job, or an admin, can change it.";
     serve({
       "GET /api/tracks/4/download": { body: downloadOf(4, "failed", "Refused.") },
       "POST /api/jobs/504/retry": {
         status: 403,
-        body: { detail: "Only who asked for a Job, or an admin, may retry it." },
+        body: { detail },
       },
     });
+    render(<LanguageSelect />);
     renderTable([FAILED]);
     await userEvent.click(
       screen.getByRole("button", { name: "Download failed: why, and what to do, for Night Drive" }),
@@ -596,10 +603,60 @@ describe("a Track whose download failed", () => {
 
     await userEvent.click(screen.getByRole("menuitem", { name: "Retry download" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Only who asked for a Job, or an admin, may retry it.",
+    expect(await screen.findByRole("alert")).toHaveTextContent(detail);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "只有发起此任务的账号或管理员可以更改它。",
+      );
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
+  it("cannot retry an old job if the next status read fails", async () => {
+    let read = 0;
+    serve({
+      "GET /api/tracks/4/download": () =>
+        ++read === 1
+          ? { body: downloadOf(4, "failed", "Earlier failure.") }
+          : { status: 503, body: { detail: "Try again later." } },
+    });
+    renderTable([FAILED]);
+    const trigger = screen.getByRole("button", { name: /^Download failed/u });
+    await userEvent.click(trigger);
+    await screen.findByText("Earlier failure.");
+
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(trigger);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Try again later.");
+    expect(screen.queryByText("Reading why it failed…")).not.toBeInTheDocument();
+    expect(screen.queryByText("Earlier failure.")).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Retry download" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
     );
-    expect(screen.getByRole("menu")).toBeInTheDocument();
+  });
+
+  it("cannot retry an active download returned by the new status read", async () => {
+    serve({
+      "GET /api/tracks/4/download": {
+        body: { ...downloadOf(4, "downloading", ""), job_id: 505 },
+      },
+    });
+    renderTable([FAILED]);
+
+    await userEvent.click(screen.getByRole("button", { name: /^Download failed/u }));
+
+    expect(await screen.findByText("This download is already in progress.")).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Retry download" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
   });
 
   it("says nothing of a Track whose download did not fail", () => {
@@ -664,6 +721,33 @@ async function openFilters() {
 }
 
 describe("filtering", () => {
+  it("translates filter labels without translating the selected artist or changing the results", async () => {
+    renderTable([
+      trackOf(1, "First", { artist: "Search" }),
+      trackOf(2, "Second", { artist: "Other artist" }),
+    ]);
+    render(<LanguageSelect />);
+    const filters = await openFilters();
+    const user = userEvent.setup();
+    await user.selectOptions(within(filters).getByLabelText("Artist"), "Search");
+    const language = screen.getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const translated = within(screen.getByRole("group", { name: "筛选条件" }));
+      expect(translated.getByLabelText("艺人")).toHaveValue("Search");
+      expect(translated.getByRole("option", { name: "Search（1）" })).toBeInTheDocument();
+      expect(shownTitles()).toEqual(["First"]);
+      await user.click(screen.getByRole("button", { name: "移除筛选条件：艺人：Search" }));
+
+      expect(screen.getByRole("status")).toHaveTextContent("已移除筛选条件。");
+      expect(shownTitles()).toEqual(["First", "Second"]);
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("shows the rows before building the choices for the closed Filter", async () => {
     renderTable(LIBRARY);
     const filter = screen.getByText("Filter");
@@ -972,6 +1056,17 @@ describe("the Library", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual(["Songs and albums", "Songs (4)", "Albums (2)"]);
+  });
+
+  it("uses the same counted items for both sides of a grouped Library filter", async () => {
+    renderLibrary();
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Group by"), "Album");
+    const filters = await openFilters();
+
+    await user.selectOptions(within(filters).getByRole("combobox", { name: "Kind" }), "song");
+
+    expect(screen.getByRole("status")).toHaveTextContent("4 of 5 songs and albums");
   });
 
   it("plays the whole file when the Kind filter keeps the album", async () => {

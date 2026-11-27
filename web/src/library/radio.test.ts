@@ -407,6 +407,19 @@ describe("the album shelves", () => {
     expect(shelf(library, "just-added")?.albums[0]?.reason).toBe("Added today");
   });
 
+  it("calls an album added just before local midnight yesterday", () => {
+    const now = new Date(2026, 10, 7, 0, 5);
+    const added = new Date(2026, 10, 6, 23, 55).toISOString();
+    const tracks = [
+      trackOf(1, "First", { artist: "A", album: "Midnight", added_at: added }),
+      trackOf(2, "Second", { artist: "A", album: "Midnight", added_at: added }),
+    ];
+
+    const shelf = albumShelves(tracks, now, seeded(1)).find((each) => each.id === "just-added");
+
+    expect(shelf?.albums[0]?.reason).toBe("Added yesterday");
+  });
+
   it("never suggests a single, an album of songs that can't play, or a disliked album", () => {
     const library = [
       song(1, "A", "Single", { added_at: daysAgo(1) }),

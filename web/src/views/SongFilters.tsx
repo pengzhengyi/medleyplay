@@ -9,6 +9,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { afterNextPaint } from "../library/stages";
 import { type ChoiceField, type ChoiceRows, choicesFor } from "./filterChoices";
+import { type Words, useWords } from "../locale";
 
 /** A rating filter: at least so many stars, or no rating. */
 export type RatingFilter = 1 | 2 | 3 | 4 | 5 | "unrated";
@@ -50,20 +51,26 @@ const shownChoice = (value: string | readonly string[] | undefined): string =>
   typeof value === "string" ? value : (value?.[0] ?? "");
 
 /** How a filter on reads, as its chip says it: `Artist: 朴树`, `Favorites only`. */
-function describeFilter(field: FilterField, filters: Filters): string {
+function describeFilter(field: FilterField, filters: Filters, t: Words): string {
   switch (field) {
     case "rating":
-      return `Rating: ${RATINGS.find((each) => each.value === filters.rating)?.label ?? ""}`;
+      return t("{{field}}: {{value}}", {
+        field: t("Rating"),
+        value: t(RATINGS.find((each) => each.value === filters.rating)?.label ?? ""),
+      });
     case "favorite":
-      return "Favorites only";
+      return t("Favorites only");
     case "playable":
-      return "Only songs that play now";
+      return t("Only songs that play now");
     case "kind":
-      return filters.kind === "album" ? "Albums only" : "Songs only";
+      return t(filters.kind === "album" ? "Albums only" : "Songs only");
     default: {
       const value = filters[field] ?? "";
       const said = typeof value === "string" ? value : value.join(" / ");
-      return `${CHOICE_FIELDS.find((each) => each.field === field)?.label ?? ""}: ${said}`;
+      return t("{{field}}: {{value}}", {
+        field: t(CHOICE_FIELDS.find((each) => each.field === field)?.label ?? ""),
+        value: said,
+      });
     }
   }
 }
@@ -95,6 +102,7 @@ export function SongFilters({
   readonly prepare: boolean;
   readonly onChange: (field: FilterField, value: Filters[FilterField]) => void;
 }) {
+  const t = useWords();
   const on = filtersOn(filters).length;
   const [prepared, setPrepared] = useState(0);
   useEffect(() => {
@@ -112,23 +120,23 @@ export function SongFilters({
     >
       <summary
         className="filter-summary"
-        aria-label={on > 0 ? `Filter, ${String(on)} on` : undefined}
+        aria-label={on > 0 ? t("Filter, {{count}} on", { count: on }) : undefined}
       >
         <FunnelSimpleIcon weight={on > 0 ? "fill" : "regular"} aria-hidden />
-        Filter
+        {t("Filter")}
         {on > 0 && (
           <span className="filter-count" aria-hidden>
             {on}
           </span>
         )}
       </summary>
-      <div className="filter-panel" role="group" aria-label="Filters">
+      <div className="filter-panel" role="group" aria-label={t("Filters")}>
         {CHOICE_FIELDS.slice(0, prepared).map(({ field, label, any }) => (
           <ChoicePicker
             key={field}
             field={field}
-            label={label}
-            any={any}
+            label={t(label)}
+            any={t(any)}
             rows={choiceRows(field)}
             value={shownChoice(filters[field])}
             onChange={(value) => {
@@ -137,7 +145,7 @@ export function SongFilters({
           />
         ))}
         <label className="filter-field">
-          Rating
+          {t("Rating")}
           <select
             className="filter-select"
             value={filters.rating === undefined ? "" : String(filters.rating)}
@@ -153,10 +161,10 @@ export function SongFilters({
               );
             }}
           >
-            <option value="">Any rating</option>
+            <option value="">{t("Any rating")}</option>
             {RATINGS.map((rating) => (
               <option key={rating.value} value={String(rating.value)}>
-                {rating.label}
+                {t(rating.label)}
               </option>
             ))}
           </select>
@@ -170,7 +178,7 @@ export function SongFilters({
               onChange("favorite", event.target.checked ? true : undefined);
             }}
           />
-          Favorites only
+          {t("Favorites only")}
         </label>
         <label className="filter-check">
           <input
@@ -181,7 +189,7 @@ export function SongFilters({
               onChange("playable", event.target.checked ? true : undefined);
             }}
           />
-          Only songs that play now
+          {t("Only songs that play now")}
         </label>
       </div>
     </details>
@@ -203,6 +211,7 @@ function ChoicePicker({
   readonly value: string;
   readonly onChange: (value: string) => void;
 }) {
+  const t = useWords();
   const choices = useMemo(() => choicesFor(field, rows), [field, rows]);
   const select = useRef<HTMLSelectElement>(null);
   useLayoutEffect(() => {
@@ -211,12 +220,15 @@ function ChoicePicker({
     const options = picker.ownerDocument.createDocumentFragment();
     options.append(new Option(any, ""));
     for (const choice of choices) {
-      options.append(new Option(`${choice.label} (${String(choice.count)})`, choice.value));
+      const name = field === "kind" ? t(choice.label) : choice.label;
+      options.append(
+        new Option(t("{{name}} ({{count}})", { name, count: choice.count }), choice.value),
+      );
     }
     picker.replaceChildren(options);
     picker.value = value;
     if (picker.selectedIndex < 0) picker.selectedIndex = 0;
-  }, [any, choices, value]);
+  }, [any, choices, field, t, value]);
   return (
     <label className="filter-field">
       {label}
@@ -248,24 +260,28 @@ export function FiltersOn({
   readonly onRemove: (field: FilterField) => void;
   readonly onClear: () => void;
 }) {
+  const t = useWords();
   const on = filtersOn(filters);
-  if (on.length === 0) {
-    return null;
-  }
+  const [cleared, setCleared] = useState<"one" | "all">();
   return (
-    <div className="filters-on">
+    <div className={on.length === 0 ? "visually-hidden" : "filters-on"}>
       <span className="filtered-count" role="status">
-        {`${String(shown)} of ${String(total)} ${counted}`}
+        {on.length > 0
+          ? t("{{shown}} of {{total}} {{items}}", { shown, total, items: t(counted) })
+          : cleared === undefined
+            ? ""
+            : t(cleared === "all" ? "Filters cleared." : "Filter removed.")}
       </span>
       {on.map((field) => {
-        const label = describeFilter(field, filters);
+        const label = describeFilter(field, filters, t);
         return (
           <button
             key={field}
             type="button"
             className="chip"
-            aria-label={`Remove the filter ${label}`}
+            aria-label={t("Remove the filter {{label}}", { label })}
             onClick={() => {
+              setCleared("one");
               onRemove(field);
             }}
           >
@@ -274,9 +290,18 @@ export function FiltersOn({
           </button>
         );
       })}
-      <button type="button" className="clear-filters" onClick={onClear}>
-        Clear filters
-      </button>
+      {on.length > 0 && (
+        <button
+          type="button"
+          className="clear-filters"
+          onClick={() => {
+            setCleared("all");
+            onClear();
+          }}
+        >
+          {t("Clear filters")}
+        </button>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { HeartIcon } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { heartTitleOf } from "../heart";
+import { useWords } from "../locale";
 
 /** How long the note stays once nothing points at it. */
 const NOTE_MS = 6000;
@@ -53,6 +54,7 @@ export function FavoriteHeart({
   /** The Account and group, so each is suggested once, such as `7:artist:朴树`. */
   readonly suggestionKey: string;
 }) {
+  const t = useWords();
   const noteId = useId();
   // Decided on landing: a heart given later, or songs loved later, don't bring it up.
   const [suggesting] = useState(() => loved > 0 && !favorite && !suggestedBefore(suggestionKey));
@@ -94,10 +96,12 @@ export function FavoriteHeart({
           favorite ? "on" : "",
           suggesting && !favorite ? "beat" : "",
         ].join(" ")}
-        aria-label={`Favorite ${kind} ${name}`}
+        aria-label={t(kind === "album" ? "Favorite album {{name}}" : "Favorite artist {{name}}", {
+          name,
+        })}
         aria-pressed={favorite}
         aria-describedby={showNote ? noteId : undefined}
-        title={heartTitleOf(name, favorite)}
+        title={heartTitleOf(name, favorite, t)}
         onFocus={showNote ? keep : undefined}
         onBlur={showNote ? hideLater : undefined}
         onClick={() => {
@@ -107,7 +111,7 @@ export function FavoriteHeart({
         <HeartIcon weight={favorite ? "fill" : "regular"} aria-hidden />
       </button>
       <span role="status" className="favorite-note" id={noteId}>
-        {showNote && `${String(loved)} songs you love`}
+        {showNote && t("{{count}} songs you love", { count: loved })}
       </span>
     </span>
   );

@@ -21,8 +21,9 @@ import {
 } from "@phosphor-icons/react";
 import { type SubmitEvent, useId, useState } from "react";
 
-import { FAILURE_WORDS, agoOf, fixOf, isLocal } from "../aiProviders";
+import { FAILURE_WORDS, agoOf, fixOf, isLocal, providerError } from "../aiProviders";
 import { type AiProvider, api } from "../api";
+import { useFormattingLocale, useWords } from "../locale";
 import { classOf, useNote } from "../useNote";
 import { useNow } from "../useNow";
 
@@ -33,6 +34,7 @@ export function AiProviderCard({
   name,
   place,
   count,
+  enabledAfterRemoval,
   open,
   onToggle,
   onMove,
@@ -46,6 +48,7 @@ export function AiProviderCard({
   readonly place: number;
   /** How many providers there are. */
   readonly count: number;
+  readonly enabledAfterRemoval: boolean;
   readonly open: boolean;
   readonly onToggle: () => void;
   readonly onMove: (by: -1 | 1) => void;
@@ -54,43 +57,68 @@ export function AiProviderCard({
   readonly onRemoved: () => void;
 }) {
   const bodyId = useId();
+  const t = useWords();
+  const locale = useFormattingLocale();
   const now = useNow();
   const [editing, setEditing] = useState<Editing>(null);
   const [model, setModel] = useState(provider.model);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const notes = useNote();
-  const [error, setError] = useState("");
+  const [failureToReport, setFailureToReport] = useState<{
+    cause: unknown;
+    fallback: string | undefined;
+  }>();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition } =
     useSortable({ id: provider.id });
 
   const local = isLocal(provider.base_url);
   const failure = provider.failure === null ? null : FAILURE_WORDS[provider.failure];
-  const failedAgo = provider.failed_at === null ? "" : agoOf(provider.failed_at, now);
+  const failedAgo = provider.failed_at === null ? "" : agoOf(provider.failed_at, now, locale);
   const sortable = count > 1;
-  const keyWords = provider.has_key ? ", has a key" : local ? ", on this Mac" : "";
-  const failureWords = failure === null ? "" : `, ${failure.label} ${failedAgo}`;
-  const heading = `${name}, ${provider.model}${keyWords}${failureWords}${provider.enabled ? "" : ", off"}`;
+  const failureWords =
+    failure === null
+      ? ""
+      : failedAgo === ""
+        ? t(failure.label)
+        : t("{{failure}} {{age}}", { failure: t(failure.label), age: failedAgo });
+  const failureHelp =
+    failure === null
+      ? ""
+      : t("{{failure}}. {{advice}}", { failure: failureWords, advice: fixOf(provider, t) });
+  const heading = [
+    name,
+    provider.model,
+    provider.has_key ? t("has a key") : local ? t("on this Mac") : "",
+    failureWords,
+    provider.enabled ? "" : t("off"),
+  ]
+    .filter(Boolean)
+    .join(t(", "));
   const FailureIcon = provider.failure === "unreachable" ? WifiSlashIcon : WarningCircleIcon;
 
   const edit = (next: Editing) => {
     setEditing(next);
     setModel(provider.model);
     setKey("");
-    setError("");
+    setFailureToReport(undefined);
     notes.tell("");
   };
-  const run = (call: Promise<AiProvider | undefined>, then: (saved?: AiProvider) => void) => {
+  const run = (
+    call: Promise<AiProvider | undefined>,
+    then: (saved?: AiProvider) => void,
+    fallback?: string,
+  ) => {
     setBusy(true);
-    setError("");
+    setFailureToReport(undefined);
     call.then(
       (saved) => {
         setBusy(false);
         then(saved);
       },
-      (failure: unknown) => {
+      (cause: unknown) => {
         setBusy(false);
-        setError(failure instanceof Error ? failure.message : String(failure));
+        setFailureToReport({ cause, fallback });
       },
     );
   };
@@ -106,14 +134,18 @@ export function AiProviderCard({
   };
   const saveKey = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    run(api.replaceAiKey(provider.id, key.trim()), (saved) => {
-      if (saved !== undefined) {
-        onChanged(saved);
-      }
-      setKey("");
-      setEditing(null);
-      notes.confirm("Key saved.");
-    });
+    run(
+      api.replaceAiKey(provider.id, key.trim()),
+      (saved) => {
+        if (saved !== undefined) {
+          onChanged(saved);
+        }
+        setKey("");
+        setEditing(null);
+        notes.confirm("Key saved.");
+      },
+      "Could not change the key. Try again.",
+    );
   };
   const remove = () => {
     run(api.removeAiProvider(provider.id), onRemoved);
@@ -126,9 +158,29 @@ export function AiProviderCard({
     });
   };
 
-  const removal =
-    (provider.has_key ? `Remove ${name} and delete its key from this Mac?` : `Remove ${name}?`) +
-    (count === 1 ? " Suggestions stop until another provider is added." : "");
+  const removal = t(
+    provider.has_key ? "Remove {{name}} and delete its key from this Mac?" : "Remove {{name}}?",
+    { name },
+  );
+  const removalWarning = enabledAfterRemoval
+    ? removal
+    : count === 1
+      ? t(
+          provider.enabled
+            ? "{{removal}} Suggestions stop until another provider is added."
+            : "{{removal}} Suggestions remain off until another provider is added.",
+          { removal },
+        )
+      : t(
+          provider.enabled
+            ? "{{removal}} Suggestions stop unless you enable another provider."
+            : "{{removal}} Suggestions remain off unless you enable another provider.",
+          { removal },
+        );
+  const error =
+    failureToReport === undefined
+      ? ""
+      : providerError(failureToReport.cause, failureToReport.fallback, t);
 
   return (
     <li
@@ -144,10 +196,12 @@ export function AiProviderCard({
             type="button"
             className="icon ai-provider-handle"
             ref={setActivatorNodeRef}
-            aria-label={`Reorder ${name}`}
-            title="Drag to reorder"
+            aria-label={t("Reorder {{name}}", { name })}
+            title={t("Drag to reorder")}
             {...attributes}
             {...listeners}
+            aria-roledescription={t("sortable")}
+            data-sortable-handle=""
           >
             <DotsSixVerticalIcon weight="bold" aria-hidden />
           </button>
@@ -166,21 +220,18 @@ export function AiProviderCard({
           <strong className="ai-provider-name">{name}</strong>
           <span className="ai-provider-model">{provider.model}</span>
           {provider.has_key ? (
-            <span className="ai-provider-mark" title="Has a key, kept in the Keychain">
+            <span className="ai-provider-mark" title={t("Has a key, kept in the Keychain")}>
               <KeyIcon weight="fill" aria-hidden />
             </span>
           ) : (
             local && (
-              <span className="ai-provider-mark" title="On this Mac, so it needs no key">
+              <span className="ai-provider-mark" title={t("On this Mac, so it needs no key")}>
                 <HouseLineIcon aria-hidden />
               </span>
             )
           )}
           {failure !== null && (
-            <span
-              className="ai-provider-failure"
-              title={`${failure.label} ${failedAgo}. ${fixOf(provider)}`}
-            >
+            <span className="ai-provider-failure" title={failureHelp}>
               <FailureIcon weight="bold" aria-hidden />
             </span>
           )}
@@ -190,10 +241,13 @@ export function AiProviderCard({
           type="checkbox"
           role="switch"
           className="ai-provider-switch"
-          aria-label={`Ask ${name}`}
-          title={
-            provider.enabled ? `Asked; turn off to skip ${name}` : `Skipped; turn on to ask ${name}`
-          }
+          aria-label={t("Ask {{name}}", { name })}
+          title={t(
+            provider.enabled
+              ? "Asked; turn off to skip {{name}}"
+              : "Skipped; turn on to ask {{name}}",
+            { name },
+          )}
           checked={provider.enabled}
           disabled={busy}
           onChange={(event) => {
@@ -205,8 +259,8 @@ export function AiProviderCard({
             <button
               type="button"
               className="icon"
-              aria-label={`Move ${name} up`}
-              title="Ask earlier"
+              aria-label={t("Move {{name}} up", { name })}
+              title={t("Ask earlier")}
               disabled={place === 1}
               onClick={() => {
                 onMove(-1);
@@ -217,8 +271,8 @@ export function AiProviderCard({
             <button
               type="button"
               className="icon"
-              aria-label={`Move ${name} down`}
-              title="Ask later"
+              aria-label={t("Move {{name}} down", { name })}
+              title={t("Ask later")}
               disabled={place === count}
               onClick={() => {
                 onMove(1);
@@ -230,20 +284,16 @@ export function AiProviderCard({
         )}
       </div>
       <div id={bodyId} className="ai-provider-body" hidden={!open}>
-        {failure !== null && (
-          <p className="ai-provider-why">
-            {failure.label} {failedAgo}. {fixOf(provider)}
-          </p>
-        )}
+        {failure !== null && <p className="ai-provider-why">{failureHelp}</p>}
         <div className="ai-provider-row">
           <label className="mark-name">
-            Base URL
+            {t("Base URL")}
             <input type="url" readOnly value={provider.base_url} />
           </label>
         </div>
         <form className="ai-provider-row" onSubmit={saveModel}>
           <label className="mark-name">
-            Model
+            {t("Model")}
             <input
               type="text"
               autoComplete="off"
@@ -261,10 +311,10 @@ export function AiProviderCard({
               <>
                 <button
                   type="submit"
-                  aria-label="Save model"
+                  aria-label={t("Save model")}
                   disabled={busy || model.trim() === ""}
                 >
-                  Save
+                  {t("Save")}
                 </button>
                 <button
                   type="button"
@@ -273,7 +323,7 @@ export function AiProviderCard({
                     edit(null);
                   }}
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </>
             ) : (
@@ -284,7 +334,7 @@ export function AiProviderCard({
                   edit("model");
                 }}
               >
-                Change model
+                {t("Change model")}
               </button>
             )}
           </span>
@@ -293,7 +343,7 @@ export function AiProviderCard({
           {editing === "key" ? (
             <>
               <label className="mark-name">
-                New key
+                {t("New key")}
                 <input
                   type="password"
                   autoComplete="off"
@@ -306,8 +356,12 @@ export function AiProviderCard({
                 />
               </label>
               <span className="ai-provider-actions">
-                <button type="submit" aria-label="Save key" disabled={busy || key.trim() === ""}>
-                  Save
+                <button
+                  type="submit"
+                  aria-label={t("Save key")}
+                  disabled={busy || key.trim() === ""}
+                >
+                  {t("Save")}
                 </button>
                 <button
                   type="button"
@@ -316,18 +370,20 @@ export function AiProviderCard({
                     edit(null);
                   }}
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </span>
             </>
           ) : (
             <>
               <label className="mark-name">
-                Key
+                {t("Key")}
                 <input
                   type="text"
                   readOnly
-                  value={provider.has_key ? "Kept in the Keychain" : local ? "None needed" : "None"}
+                  value={t(
+                    provider.has_key ? "Kept in the Keychain" : local ? "None needed" : "None",
+                  )}
                 />
               </label>
               <span className="ai-provider-actions">
@@ -338,22 +394,22 @@ export function AiProviderCard({
                     edit("key");
                   }}
                 >
-                  {provider.has_key ? "Replace key" : "Add a key"}
+                  {t(provider.has_key ? "Replace key" : "Add a key")}
                 </button>
               </span>
             </>
           )}
         </form>
         {editing === "remove" ? (
-          <p className="ai-provider-confirm" role="group" aria-label="Remove">
-            <span>{removal}</span>
+          <p className="ai-provider-confirm" role="group" aria-label={t("Remove")}>
+            <span>{removalWarning}</span>
             <button
               type="button"
               className="ai-provider-remove-now"
               disabled={busy}
               onClick={remove}
             >
-              Remove
+              {t("Remove")}
             </button>
             <button
               type="button"
@@ -362,7 +418,7 @@ export function AiProviderCard({
                 edit(null);
               }}
             >
-              Cancel
+              {t("Cancel")}
             </button>
           </p>
         ) : (
@@ -374,15 +430,15 @@ export function AiProviderCard({
                 edit("remove");
               }}
             >
-              Remove
+              {t("Remove")}
             </button>
           </p>
         )}
-        {error !== "" && <p role="alert">{error}</p>}
         <p className={classOf(notes.note)} role="status">
-          {notes.note.text}
+          {notes.note.text === "" ? "" : t(notes.note.text)}
         </p>
       </div>
+      {error !== "" && <p role="alert">{error}</p>}
     </li>
   );
 }

@@ -331,7 +331,9 @@ describe("asking the AI about an artist", () => {
     await userEvent.click(button);
 
     expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(button).toHaveAccessibleDescription("No AI provider is set up; set one up in Settings");
+    expect(button).toHaveAccessibleDescription(
+      "No AI provider is enabled. Add or enable one in Settings.",
+    );
     expect(calls).not.toContain(`POST ${SUGGESTION}`);
     expect(screen.getByRole("link", { name: "Set up AI" })).toHaveAttribute(
       "href",

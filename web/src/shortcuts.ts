@@ -15,6 +15,7 @@
 import { useSyncExternalStore } from "react";
 
 import { ApiError, type Preferences, api } from "./api";
+import type { Words } from "./locale";
 
 /** Something a shortcut does. */
 export type Command =
@@ -143,8 +144,16 @@ function printedBy(part: string): string | undefined {
 }
 
 /** Return one binding as people read it, such as `Shift + →`. */
-export function labelOf(keys: string): string {
-  return keyCapsOf(keys, false).join(" + ");
+export function labelOf(keys: string, t?: Words): string {
+  return t === undefined
+    ? keyCapsOf(keys, false).join(" + ")
+    : keys
+        .split("+")
+        .map((part) => {
+          const label = MODIFIER_NAMES[part]?.[0] ?? KEY_NAMES[part]?.[0];
+          return label === undefined ? (printedBy(part) ?? part.toUpperCase()) : t(label);
+        })
+        .join(" + ");
 }
 
 /**
@@ -170,8 +179,10 @@ function onApple(): boolean {
 }
 
 /** Return a command's bindings as people read them, such as `Space or K`. */
-export function labelsOf(keys: readonly string[]): string {
-  return keys.length === 0 ? "None" : keys.map(labelOf).join(" or ");
+export function labelsOf(keys: readonly string[], t?: Words): string {
+  return keys.length === 0
+    ? (t?.("None") ?? "None")
+    : keys.map((keys) => labelOf(keys, t)).join(t?.(" or ") ?? " or ");
 }
 
 /** Return one binding as `aria-keyshortcuts` writes it, such as `Shift+ArrowRight`. */
@@ -186,8 +197,10 @@ export function ariaKeysOf(keys: string): string {
 }
 
 /** Return what a control named `name` does and its keys, such as `Next song (Shift + →)`. */
-export function hintTextOf(name: string, keys: readonly string[]): string {
-  return keys.length === 0 ? name : `${name} (${labelsOf(keys)})`;
+export function hintTextOf(name: string, keys: readonly string[], t?: Words): string {
+  if (keys.length === 0) return name;
+  const bindings = labelsOf(keys, t);
+  return t?.("{{name}} ({{keys}})", { name, keys: bindings }) ?? `${name} (${bindings})`;
 }
 
 /** Return a command's keys as `aria-keyshortcuts` writes them, or `undefined` for none. */
@@ -358,8 +371,8 @@ function keepCopy(account: number | undefined, bindings: Bindings): void {
 }
 
 let held = NOBODY;
-/** Saves under way; while one is, an older answer from the server doesn't replace what is shown. */
-let saving = 0;
+const pendingSaves = new Map<number | undefined, number>();
+let lastSave = Promise.resolve();
 const listeners = new Set<() => void>();
 
 function show(next: Held): void {
@@ -378,7 +391,7 @@ export async function openAccount(account: number): Promise<void> {
   const now = held;
   if (
     now.account !== account ||
-    saving > 0 ||
+    pendingSaves.has(account) ||
     (now.revision !== undefined && preferences.revision < now.revision)
   ) {
     return;
@@ -398,28 +411,38 @@ export async function saveBindings(bindings: Bindings): Promise<void> {
   const { account } = held;
   show({ ...held, bindings });
   keepCopy(account, bindings);
-  saving += 1;
-  try {
-    const shortcuts = changesOf(bindings);
-    let saved: Preferences;
-    try {
-      saved = await api.savePreferences({
-        shortcuts,
-        revision: held.revision ?? (await api.preferences()).revision,
-      });
-    } catch (error) {
-      if (!(error instanceof ApiError && error.status === 409)) {
-        throw error;
+  pendingSaves.set(account, (pendingSaves.get(account) ?? 0) + 1);
+  const save = lastSave
+    .then(async () => {
+      if (held.account !== account) return;
+      const shortcuts = changesOf(bindings);
+      let saved: Preferences;
+      try {
+        const revision = held.revision ?? (await api.preferences()).revision;
+        if (held.account !== account) return;
+        saved = await api.savePreferences({
+          shortcuts,
+          revision,
+        });
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 409)) {
+          throw error;
+        }
+        const { revision } = await api.preferences();
+        if (held.account !== account) return;
+        saved = await api.savePreferences({ shortcuts, revision });
       }
-      const { revision } = await api.preferences();
-      saved = await api.savePreferences({ shortcuts, revision });
-    }
-    if (held.account === account && held.bindings === bindings) {
-      show({ ...held, revision: saved.revision });
-    }
-  } finally {
-    saving -= 1;
-  }
+      if (held.account === account) {
+        show({ ...held, revision: saved.revision });
+      }
+    })
+    .finally(() => {
+      const pending = pendingSaves.get(account) ?? 0;
+      if (pending <= 1) pendingSaves.delete(account);
+      else pendingSaves.set(account, pending - 1);
+    });
+  lastSave = save.catch(() => undefined);
+  return save;
 }
 
 function subscribe(listener: () => void): () => void {
@@ -467,7 +490,8 @@ export function learnLayout(): void {
 export function forgetBindings(): void {
   held = NOBODY;
   layout = undefined;
-  saving = 0;
+  pendingSaves.clear();
+  lastSave = Promise.resolve();
 }
 
 /** Name keys as a keyboard printing `map` would: for tests, since jsdom has no layout. */

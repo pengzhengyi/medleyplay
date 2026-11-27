@@ -33,6 +33,7 @@ function cleanUp(artists: readonly MissingPhoto[]) {
   const reload = vi.fn();
   const view = (answered: number) => (
     <CleanUpView
+      admin
       tidy={{ names: [], reload: vi.fn() }}
       artistNames={undefined}
       missingPhotos={{ artists, reload, answered }}
@@ -234,7 +235,7 @@ describe("finding artist photos in Clean up", () => {
 
     expect(
       section().getByText(
-        /^1 artist has no picture on Deezer that fits; 2 artists aren't looked up yet\./u,
+        /^1 artist has no current photo suggestion; 2 artists aren't looked up yet\./u,
       ),
     ).toBeVisible();
     expect(section().getByRole("link", { name: "Settings → Deezer" })).toHaveAttribute(

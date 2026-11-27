@@ -47,6 +47,7 @@ interface Read<T> {
 
 /** The names to tidy and to link. */
 export function CleanUpView({
+  admin = false,
   tidy,
   artistNames,
   tracks = [],
@@ -59,6 +60,7 @@ export function CleanUpView({
   missingDetails,
   onEditSongs,
 }: {
+  readonly admin?: boolean;
   readonly tidy: Read<readonly NameToTidy[]>;
   readonly artistNames: Read<ArtistNames> | undefined;
   /** The Library's Tracks, split files too, to show and rename the songs of each name to link. */
@@ -170,6 +172,7 @@ export function CleanUpView({
             artwork: true,
             body: (
               <FindPhotos
+                admin={admin}
                 artists={missingPhotos.artists}
                 answered={missingPhotos.answered}
                 onChanged={missingPhotos.reload}
@@ -187,6 +190,7 @@ export function CleanUpView({
             artwork: true,
             body: (
               <FindAlbumCovers
+                admin={admin}
                 albums={missingCovers.albums}
                 answered={missingCovers.answered}
                 tracks={tracks}

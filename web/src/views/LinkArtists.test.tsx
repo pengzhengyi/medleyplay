@@ -485,8 +485,8 @@ describe("a name MusicBrainz knows no artist by", () => {
     });
     const { list } = openList(namesOf(UNKNOWN, artistNameOf("告五人")), [
       trackOf(5, "唯一", {
-        artist: "告五人2019超强音质的/周杰伦",
-        artists: ["告五人2019超强音质的", "周杰伦"],
+        artist: "告五人2019超强音质的乐团/告五人2019超强音质的",
+        artists: ["告五人2019超强音质的乐团", "告五人2019超强音质的"],
       }),
     ]);
 
@@ -496,7 +496,9 @@ describe("a name MusicBrainz knows no artist by", () => {
       }),
     );
 
-    expect(sent).toEqual([{ track_ids: [5], values: { artist: "告五人/周杰伦" } }]);
+    expect(sent).toEqual([
+      { track_ids: [5], values: { artist: "告五人2019超强音质的乐团/告五人" } },
+    ]);
   });
 
   it("offers no name where none it starts with is in the Library", () => {
@@ -507,5 +509,43 @@ describe("a name MusicBrainz knows no artist by", () => {
         name: /^Show the songs of/,
       }),
     ).not.toBeInTheDocument();
+  });
+
+  it("does not write a guessed replacement when the saved credit has more than one matching span", async () => {
+    const { calls } = serve({ "POST /api/tracks/details": { body: { changed: 1 } } });
+    const { list } = openList(namesOf(UNKNOWN, artistNameOf("告五人")), [
+      trackOf(5, "唯一", {
+        artist: "告五人2019超强音质的乐团/告五人2019超强音质的/周杰伦",
+        artists: ["告五人2019超强音质的", "周杰伦"],
+      }),
+    ]);
+
+    await userEvent.click(
+      within(rowOf(list, "告五人2019超强音质的")).getByRole("button", {
+        name: /^Show the songs of/u,
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not find the exact credit");
+    expect(calls).not.toContain("POST /api/tracks/details");
+  });
+
+  it("refuses to replace a unique substring that is not a complete artist credit", async () => {
+    const { calls } = serve({ "POST /api/tracks/details": { body: { changed: 1 } } });
+    const { list } = openList(namesOf(UNKNOWN, artistNameOf("告五人")), [
+      trackOf(5, "唯一", {
+        artist: "告五人2019超强音质的乐团 & 周杰伦",
+        artists: ["告五人2019超强音质的", "周杰伦"],
+      }),
+    ]);
+
+    await userEvent.click(
+      within(rowOf(list, "告五人2019超强音质的")).getByRole("button", {
+        name: /^Show the songs of/u,
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not find the exact credit");
+    expect(calls).not.toContain("POST /api/tracks/details");
   });
 });

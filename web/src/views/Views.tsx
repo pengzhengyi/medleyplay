@@ -490,6 +490,7 @@ function viewOf(
       return (
         <LazyPart doing="Loading…">
           <CleanUpView.Component
+            admin={props.admin}
             tidy={props.namesToTidy ?? { names: [], reload: () => undefined }}
             artistNames={props.artistNames}
             // A split file may be all that writes a name, so its songs' names are tidied through it.

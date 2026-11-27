@@ -62,5 +62,5 @@ export function suggestedArtists(
   links?: ArtistLinks,
 ): readonly Artist[] {
   const asked = artistAskedOf(text);
-  return asked === "" ? [] : search(tracks, asked, links).artists.slice(0, MOST);
+  return asked === "" ? [] : search(tracks, asked, links, ["artists"]).artists.slice(0, MOST);
 }

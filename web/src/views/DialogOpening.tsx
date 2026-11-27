@@ -6,6 +6,7 @@
 
 import { type ReactNode, useId, useLayoutEffect, useRef } from "react";
 
+import { useWords } from "../locale";
 import { Modal } from "./Modal";
 
 /** The dialog `title`, of the look `className`, showing `children`: what it does first. */
@@ -20,6 +21,7 @@ export function DialogOpening({
   readonly children: ReactNode;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   // Replaced by the dialog itself, the frame closes as it goes; only a person's close counts.
@@ -42,7 +44,7 @@ export function DialogOpening({
       }}
     >
       <div className="card">
-        <h2 id={titleId}>{title}</h2>
+        <h2 id={titleId}>{t(title)}</h2>
         {children}
       </div>
     </Modal>

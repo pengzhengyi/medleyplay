@@ -159,7 +159,12 @@ export function EditAlbum({
                 setReplacingCover(true);
               }}
             >
-              <Cover size="original" cover={cover ?? null} className="edit-album-cover-image" />
+              <Cover
+                size="original"
+                cover={cover ?? null}
+                className="edit-album-cover-image"
+                lyrics={{ artist: shared.album_artist ?? "", album: shared.album }}
+              />
             </PictureFrame>
           </div>
         )}

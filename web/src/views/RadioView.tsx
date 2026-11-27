@@ -120,11 +120,19 @@ export function RadioView({
           <ul className="shelf-albums">
             {shelf.albums.map((album) => {
               const first = mostPlayed(album);
+              const fileId = album.tracks[0]?.segment_of;
+              const lyrics =
+                fileId == null ? { artist: album.artist, album: album.album } : { file: fileId };
               return (
                 <li key={album.key} className="shelf-album">
                   {album.album === "" ? (
                     <div className="shelf-link">
-                      <Cover size="medium" cover={album.cover} className="cover-tile" />
+                      <Cover
+                        size="medium"
+                        cover={album.cover}
+                        className="cover-tile"
+                        lyrics={lyrics}
+                      />
                       <span className="group-name">{album.name}</span>
                       <span className="group-meta">{album.artist || "Unknown artist"}</span>
                     </div>
@@ -133,7 +141,12 @@ export function RadioView({
                       className="shelf-link"
                       href={hrefOf({ view: "album", artist: album.artist, name: album.album })}
                     >
-                      <Cover size="medium" cover={album.cover} className="cover-tile" />
+                      <Cover
+                        size="medium"
+                        cover={album.cover}
+                        className="cover-tile"
+                        lyrics={lyrics}
+                      />
                       <span className="group-name">{album.name}</span>
                       <span className="group-meta">{album.artist || "Unknown artist"}</span>
                     </a>

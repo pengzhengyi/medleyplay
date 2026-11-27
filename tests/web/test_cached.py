@@ -14,9 +14,12 @@ from pydantic import TypeAdapter
 from sqlalchemy import Engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.lyrics import MAX_LYRICS, LyricsOrigin
 from medleyplay.persistence.revision import DatabaseRevision
-from medleyplay.persistence.schema import DeviceRow, SessionRow, SourceRow
+from medleyplay.persistence.schema import DeviceRow, SessionRow, SourceRow, TrackLyricsRow
 from medleyplay.web.cached import (
     AnswerKey,
     CachedAnswer,
@@ -26,7 +29,7 @@ from medleyplay.web.cached import (
 )
 from medleyplay.web.deps import Services
 from tests.support.api import set_up_as_alice
-from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
+from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock
 
 NUMBERS = TypeAdapter(list[int])
@@ -367,6 +370,79 @@ def test_a_cold_song_list_uses_fewer_source_reads_without_losing_video_links(
         statement for statement in ran if SourceRow.__tablename__ in _tables([statement])
     ]
     assert len(source_reads) <= 3, source_reads
+
+
+def test_catalog_lyrics_reads_are_bounded_batches_of_selected_sources(
+    units: sessionmaker[Session],
+    catalog: CatalogService,
+    accounts: AccountService,
+    clock: FakeClock,
+) -> None:
+    alice = accounts.create_first_admin(NewAccountFactory.admin()).account
+    with units.begin() as db:
+        for index in range(501):
+            source = catalog.insert_in(
+                db,
+                SourceKeyFactory.library_file(f"3/song-{index}.m4a"),
+                TrackDetailsFactory.song(f"Song {index}"),
+            )
+            db.add_all(
+                [
+                    TrackLyricsRow(
+                        track_id=source.track_id,
+                        origin=origin,
+                        text=text,
+                        found_at=clock.now,
+                    )
+                    for origin, text in (
+                        (LyricsOrigin.HOUSEHOLD, "Sing with me"),
+                        (LyricsOrigin.LRCLIB, "x" * (MAX_LYRICS + 1)),
+                    )
+                ]
+            )
+
+    with _statements(units) as ran:
+        tracks = catalog.list_tracks(alice.id)
+
+    assert len(tracks) == 501
+    assert all(track.has_lyrics for track in tracks)
+    lyrics_reads = [statement for statement in ran if "track_lyrics" in _tables([statement])]
+    assert len(lyrics_reads) == 2
+
+    with _statements(units) as ran:
+        fetched = catalog.get_track(alice.id, tracks[-1].id)
+
+    assert fetched.has_lyrics
+    lyrics_reads = [statement for statement in ran if "track_lyrics" in _tables([statement])]
+    assert len(lyrics_reads) == 1
+
+
+def test_an_individual_track_does_not_parse_another_tracks_lyrics(
+    units: sessionmaker[Session],
+    catalog: CatalogService,
+    accounts: AccountService,
+    clock: FakeClock,
+) -> None:
+    alice = accounts.create_first_admin(NewAccountFactory.admin()).account
+    track_ids: list[TrackId] = []
+    with units.begin() as db:
+        for index, text in enumerate(("Sing with me", "x" * (MAX_LYRICS + 1))):
+            source = catalog.insert_in(
+                db,
+                SourceKeyFactory.library_file(f"3/song-{index}.m4a"),
+                TrackDetailsFactory.song(f"Song {index}"),
+            )
+            track_ids.append(TrackId(source.track_id))
+            db.add(
+                TrackLyricsRow(
+                    track_id=source.track_id,
+                    origin=LyricsOrigin.HOUSEHOLD,
+                    text=text,
+                    found_at=clock.now,
+                )
+            )
+
+    assert catalog.get_track(alice.id, track_ids[0]).has_lyrics
 
 
 @pytest.mark.parametrize("path", CACHED_PATHS)

@@ -40,7 +40,12 @@ export function Downloading({
           const status = downloadStateOf(download);
           return (
             <li key={download.job.id} className="downloading-row">
-              <Cover size="small" cover={track.cover} className="downloading-cover" />
+              <Cover
+                size="small"
+                cover={track.cover}
+                className="downloading-cover"
+                lyrics={track}
+              />
               <span className="downloading-names">
                 <span className="downloading-title">{track.title}</span>
                 <span className="downloading-artist">{track.artist}</span>

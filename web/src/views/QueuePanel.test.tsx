@@ -132,13 +132,33 @@ describe("the queue", () => {
  * A signed-in page playing Melt from the Library, so the songs of 生如夏花, a file
  * split into three songs, and Bremen, an album in one file, play next.
  */
-async function playingMelt() {
+async function playingMelt(lyrics: "none" | "partial" | "complete" = "none") {
   const tracks = [
     trackOf(1, "Melt"),
-    trackOf(9, "生如夏花", { artist: "朴树", kind: "album", split: true }),
-    trackOf(11, "傲慢的上校", { artist: "朴树", segment_of: 9, track_number: 1 }),
-    trackOf(12, "浮游", { artist: "朴树", segment_of: 9, track_number: 2 }),
-    trackOf(13, "生如夏花", { artist: "朴树", segment_of: 9, track_number: 3 }),
+    trackOf(9, "生如夏花", {
+      artist: "朴树",
+      kind: "album",
+      split: true,
+      has_lyrics: lyrics === "complete",
+    }),
+    trackOf(11, "傲慢的上校", {
+      artist: "朴树",
+      segment_of: 9,
+      track_number: 1,
+      has_lyrics: lyrics !== "none",
+    }),
+    trackOf(12, "浮游", {
+      artist: "朴树",
+      segment_of: 9,
+      track_number: 2,
+      has_lyrics: lyrics !== "none",
+    }),
+    trackOf(13, "生如夏花", {
+      artist: "朴树",
+      segment_of: 9,
+      track_number: 3,
+      has_lyrics: lyrics === "complete",
+    }),
     trackOf(20, "Bremen", { artist: "ハチ", kind: "album", duration_ms: 3_600_000 }),
   ];
   serve({
@@ -163,6 +183,27 @@ async function playingMelt() {
 }
 
 describe("an album in the queue", () => {
+  it("does not claim complete album lyrics when the only missing song leaves the queue", async () => {
+    const queue = await playingMelt("partial");
+
+    await userEvent.click(within(queue).getByRole("button", { name: "Remove 生如夏花" }));
+
+    const album = within(queue).getByRole("listitem", { name: "生如夏花, 1 of 3" });
+    expect(within(album).getByRole("img", { name: "Album" })).toBeVisible();
+    expect(
+      within(queue).queryByRole("img", { name: /All songs have lyrics/ }),
+    ).not.toBeInTheDocument();
+    expect(within(queue).getAllByRole("img", { name: "Lyrics available" })).toHaveLength(2);
+  });
+
+  it("marks complete album lyrics once on the queue's record icon", async () => {
+    const queue = await playingMelt("complete");
+
+    const album = within(queue).getByRole("listitem", { name: "生如夏花, 1 of 3" });
+    expect(within(album).getByRole("img", { name: "Album, All songs have lyrics" })).toBeVisible();
+    expect(album.querySelectorAll(".lyrics-badge")).toHaveLength(1);
+  });
+
   it("shows the songs of one file under its name, saying where they start", async () => {
     const queue = await playingMelt();
 

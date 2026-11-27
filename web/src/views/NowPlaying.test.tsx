@@ -54,6 +54,20 @@ async function runOutTheQueue(nowPlaying: HTMLElement) {
 }
 
 describe("Now Playing", () => {
+  it("shows song lyrics availability on the player and large cover without marking an incomplete album", async () => {
+    await playingIntro({}, trackOf(1, "Intro", { has_lyrics: true, cover: "blue" }));
+    const player = screen.getByRole("region", { name: "Player" });
+
+    expect(within(player).getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
+    const nowPlaying = await openNowPlaying();
+
+    expect(within(nowPlaying).getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
+    expect(
+      within(nowPlaying).queryByRole("img", { name: "All songs have lyrics" }),
+    ).not.toBeInTheDocument();
+    expect(nowPlaying.querySelector(".np-art .lyrics-badge")).not.toBeNull();
+  });
+
   it("shows the song favorited from the player's heart, in the player and in Now Playing", async () => {
     const { calls } = await playingIntro();
     const player = screen.getByRole("region", { name: "Player" });

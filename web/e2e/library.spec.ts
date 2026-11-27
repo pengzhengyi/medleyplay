@@ -131,6 +131,7 @@ function manySongs(count: number): Track[] {
     cover: null,
     community: null,
     album_rating: null,
+    has_lyrics: false,
   }));
 }
 

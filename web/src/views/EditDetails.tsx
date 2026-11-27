@@ -22,7 +22,6 @@ import {
   CaretDownIcon,
   CaretRightIcon,
   MusicNoteSimpleIcon,
-  MusicNotesIcon,
   PlusIcon,
   QuotesIcon,
   ScissorsIcon,
@@ -82,6 +81,7 @@ import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { type CoverAlbum, PictureEditor } from "./PictureEditor";
 import { PictureFrame } from "./PictureFrame";
+import { Cover } from "./Cover";
 import { ORIGIN_TAGS } from "./originTags";
 import { type SongsControls, SongsControlsContext } from "./songsControls";
 import { STATUS_ICONS } from "./statusIcons";
@@ -509,6 +509,7 @@ export function EditDetails({
           <div className="edit-details-body">
             <div className="edit-details-side">
               <CoverBox
+                track={track}
                 title={track.title}
                 details={details}
                 busy={saving || reading || covering}
@@ -749,6 +750,7 @@ function picturedOf(album: CoverAlbum | undefined): Pictured | undefined {
  * remove the household's own.
  */
 function CoverBox({
+  track,
   title,
   details,
   busy,
@@ -757,6 +759,7 @@ function CoverBox({
   onReplace,
   onRemove,
 }: {
+  readonly track: Track;
   /** The song's title, which names a saved image. */
   readonly title: string;
   readonly details: Details;
@@ -781,13 +784,13 @@ function CoverBox({
         onReplace={onReplace}
         onRemove={yours ? onRemove : undefined}
       >
-        <span className="cover cover-box-image">
-          {cover === undefined ? (
-            <MusicNotesIcon weight="duotone" aria-hidden />
-          ) : (
-            <img src={coverUrl(cover, "original")} alt="Cover" />
-          )}
-        </span>
+        <Cover
+          cover={cover ?? null}
+          size="original"
+          className="cover-box-image"
+          lyrics={track}
+          alt="Cover"
+        />
       </PictureFrame>
       {shown === undefined ? (
         <small className="detail-origin">No cover</small>

@@ -929,7 +929,12 @@ function AlbumList({
           <li key={`${album.artist}\n${album.name}`} className={favorite ? "favorite" : ""}>
             <a href={hrefOf({ view: "album", artist: album.artist, name: album.name })}>
               <span className="tile-frame">
-                <Cover size="medium" cover={album.cover} className="cover-tile">
+                <Cover
+                  size="medium"
+                  cover={album.cover}
+                  className="cover-tile"
+                  lyrics={{ artist: album.artist, album: album.name }}
+                >
                   {initialOf(album.name)}
                 </Cover>
                 {favorite && <FavoriteBadge />}

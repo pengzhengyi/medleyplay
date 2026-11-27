@@ -156,6 +156,8 @@ class Track:
     """The artists its artist names, as written: each one, if the name was split, or the name."""
     artist_ids: tuple[str, ...] = ()
     """The id of the Library's artist each of `artists` is bound to, in the same order."""
+    has_lyrics: bool = False
+    """Whether this song, or every song of this split album, has readable selected lyrics."""
 
 
 @dataclass(frozen=True)

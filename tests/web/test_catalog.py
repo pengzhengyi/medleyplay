@@ -9,14 +9,16 @@ from pydantic import TypeAdapter
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.lyrics import record_lyrics
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.lyrics import LyricsOrigin
 from medleyplay.persistence.schema import CommunityRatingRow
 from medleyplay.web.catalog import TrackOut
 from medleyplay.web.deps import Services
 from tests.support.api import add_bob, set_up_as_alice, sign_in
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
-from tests.support.fakes import OnlineSwitch
+from tests.support.fakes import FakeClock, OnlineSwitch
 
 MORNING = uuid.UUID("00000000-0000-4000-8000-000000000001")
 
@@ -36,6 +38,50 @@ def test_tracks_are_listed_with_your_own_state(client: TestClient, catalog: Cata
     assert [(t["id"], t["title"], t["artist"], t["favorite"]) for t in tracks] == [
         (track_id, "Intro", "The Band", True)
     ]
+
+
+def test_lyrics_save_and_remove_refresh_cached_and_individual_tracks(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    before = client.get("/api/tracks")
+    assert before.json()[0]["has_lyrics"] is False
+
+    saved = client.put(f"/api/tracks/{track_id}/lyrics", json={"text": "Sing with me"})
+    after = client.get("/api/tracks", headers={"If-None-Match": before.headers["etag"]})
+
+    assert saved.status_code == 200
+    assert after.status_code == 200
+    assert after.json()[0]["has_lyrics"] is True
+    assert client.get(f"/api/tracks/{track_id}").json()["has_lyrics"] is True
+
+    removed = client.delete(f"/api/tracks/{track_id}/lyrics")
+    cleared = client.get("/api/tracks", headers={"If-None-Match": after.headers["etag"]})
+
+    assert removed.status_code == 200
+    assert cleared.status_code == 200
+    assert cleared.json()[0]["has_lyrics"] is False
+    assert client.get(f"/api/tracks/{track_id}").json()["has_lyrics"] is False
+
+
+def test_a_background_lyrics_write_invalidates_the_catalog_answer(
+    client: TestClient,
+    catalog: CatalogService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    before = client.get("/api/tracks")
+    with units.begin() as db:
+        record_lyrics(db, track_id, LyricsOrigin.LRCLIB, "Sing with me", clock.now)
+
+    after = client.get("/api/tracks", headers={"If-None-Match": before.headers["etag"]})
+
+    assert after.status_code == 200
+    assert after.json()[0]["has_lyrics"] is True
+    assert client.get(f"/api/tracks/{track_id}").json()["has_lyrics"] is True
 
 
 def test_a_track_names_the_page_of_the_video_it_came_from(

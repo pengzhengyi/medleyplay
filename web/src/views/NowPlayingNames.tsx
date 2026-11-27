@@ -34,9 +34,12 @@ import { FavoriteHeart } from "./FavoriteHeart";
 import { PlayingKind } from "./PlayingKind";
 import { SiteMark } from "./SiteMark";
 import { FavoriteButton } from "./Transport";
+import { LyricsBadge } from "./LyricsBadge";
+import { albumLyricsSubject, useLyricsLabel } from "./lyricsAvailability";
 
 export function NowPlayingNames({
   track,
+  coverVisible = true,
   playing,
   position,
   moving,
@@ -50,6 +53,7 @@ export function NowPlayingNames({
 }: {
   /** The Track playing. */
   readonly track: Track;
+  readonly coverVisible?: boolean;
   readonly playing: Playing;
   /** How far into the Track playing, in seconds. */
   readonly position: number;
@@ -67,10 +71,13 @@ export function NowPlayingNames({
   const song = songPlaying(track, playing);
   const album = track.album !== "" ? track.album : track.kind === "album" ? track.title : "";
   const albumArtist = albumArtistOf(track);
+  const albumLyrics = useLyricsLabel(albumLyricsSubject(track));
+  const songLyrics = useLyricsLabel(track.kind === "album" || !coverVisible ? song : undefined);
   const mark = (
     <PlayingKind
       playing={playing}
       track={track}
+      coverVisible={coverVisible}
       position={position}
       moving={moving}
       opens="below"
@@ -87,8 +94,9 @@ export function NowPlayingNames({
             {playing.kind === "album" ? (
               mark
             ) : (
-              <span className="np-mark" title="Album">
+              <span className="np-mark" title={albumLyrics ?? "Album"}>
                 <VinylRecordIcon weight="fill" aria-hidden />
+                <LyricsBadge label={albumLyrics} />
               </span>
             )}
             {song === undefined ? (
@@ -128,8 +136,9 @@ export function NowPlayingNames({
             {playing.kind === "song" ? (
               mark
             ) : (
-              <span className="np-mark" title="Song">
+              <span className="np-mark" title={songLyrics ?? "Song"}>
                 <MusicNoteSimpleIcon weight="fill" aria-hidden />
+                <LyricsBadge label={songLyrics} />
               </span>
             )}
             <h2>{song.title}</h2>

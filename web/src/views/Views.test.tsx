@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
 import { App } from "../App";
+import { albumKey } from "../library/favoriteGroups";
+import { albumUnit } from "../library/playOrder";
 import { hrefOf } from "../routes";
 import {
   ALICE,
@@ -25,8 +27,11 @@ import {
   twoJaysNames,
   twoJaysSongs,
 } from "../testing/server";
+import { trackActionsOf, viewPropsOf } from "../testing/views";
 import { LanguageSelect } from "./LanguageSelect";
+import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 import { SettingsView as SettingsPart } from "./parts";
+import { CurrentView } from "./Views";
 
 /**
  * A Library of three Tracks and one Playlist:
@@ -95,6 +100,148 @@ afterEach(() => {
   history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+describe("album contents stay current", () => {
+  it.each(["albums", "search"] as const)(
+    "updates metadata, covers and favorites in the mounted %s gallery",
+    async (view) => {
+      const props = viewPropsOf({
+        route: view === "albums" ? { view } : { view, query: "kind:albums" },
+        tracks: LIBRARY,
+      });
+      const { rerender } = render(<CurrentView {...props} />);
+      const gallery = await screen.findByRole("list", { name: "Albums" });
+      expect(within(gallery).getByRole("link", { name: /Supercell/ })).toBeVisible();
+      const updated = LIBRARY.map((track) =>
+        track.album === "Supercell"
+          ? { ...track, album: "New record", album_artist: "New artist", cover: "new-cover" }
+          : track,
+      );
+
+      rerender(<CurrentView {...props} tracks={updated} />);
+
+      const album = await within(gallery).findByRole("link", { name: /New record/ });
+      expect(album).toHaveAttribute(
+        "href",
+        hrefOf({ view: "album", artist: "New artist", name: "New record" }),
+      );
+      expect(album.querySelector(".cover img")).toHaveAttribute(
+        "src",
+        "/api/covers/new-cover?size=medium&recipe=1",
+      );
+      expect(album.closest("li")).not.toHaveClass("favorite");
+      expect(within(gallery).queryByRole("link", { name: /Supercell/ })).not.toBeInTheDocument();
+      expect(within(gallery).getAllByRole("link")).toHaveLength(2);
+
+      rerender(
+        <CurrentView
+          {...props}
+          tracks={updated}
+          favorites={{
+            ...props.favorites,
+            albums: new Set([albumKey("New artist", "New record")]),
+          }}
+        />,
+      );
+
+      expect(album.closest("li")).toHaveClass("favorite");
+      expect(within(album).getByTitle("Favorite")).toBeVisible();
+      rerender(<CurrentView {...props} tracks={updated} />);
+      expect(album.closest("li")).not.toHaveClass("favorite");
+      expect(within(album).queryByTitle("Favorite")).not.toBeInTheDocument();
+    },
+  );
+
+  it("refreshes album lyrics through context while the view props stay unchanged", () => {
+    const props = viewPropsOf({ route: { view: "albums" }, tracks: LIBRARY });
+    const shown = <CurrentView {...props} />;
+    const { rerender } = render(
+      <LyricsAvailabilityProvider tracks={LIBRARY}>{shown}</LyricsAvailabilityProvider>,
+    );
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
+    const complete = LIBRARY.map((track) => ({
+      ...track,
+      has_lyrics: track.album === "Supercell",
+    }));
+
+    rerender(<LyricsAvailabilityProvider tracks={complete}>{shown}</LyricsAvailabilityProvider>);
+
+    expect(screen.getByRole("img", { name: "Album, All songs have lyrics" })).toBeVisible();
+    rerender(<LyricsAvailabilityProvider tracks={LIBRARY}>{shown}</LyricsAvailabilityProvider>);
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
+  });
+
+  it("uses current actions and availability for Play and Shuffle without hiding albums", async () => {
+    const props = viewPropsOf({ route: { view: "albums" }, tracks: LIBRARY });
+    const { rerender } = render(<CurrentView {...props} />);
+    const current = trackActionsOf();
+
+    rerender(<CurrentView {...props} actions={current} />);
+    await userEvent.click(screen.getByRole("button", { name: "Play every album" }));
+
+    expect(current.onPlayAll).toHaveBeenLastCalledWith(LIBRARY, false, albumUnit);
+    expect(props.actions.onPlayAll).not.toHaveBeenCalled();
+    const available = LIBRARY.map((track) => ({
+      ...track,
+      availability: track.id === 2 ? ("ok" as const) : ("missing" as const),
+    }));
+    rerender(<CurrentView {...props} actions={current} tracks={available} />);
+    await userEvent.click(screen.getByRole("button", { name: "Shuffle the albums" }));
+    expect(current.onPlayAll).toHaveBeenLastCalledWith([available[1]], true, albumUnit);
+    rerender(
+      <CurrentView
+        {...props}
+        actions={current}
+        tracks={available.map((track) => ({ ...track, availability: "missing" }))}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Play every album" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Shuffle the albums" })).toBeDisabled();
+    expect(within(screen.getByRole("list", { name: "Albums" })).getAllByRole("link")).toHaveLength(
+      2,
+    );
+  });
+
+  it("updates the mounted album list for changing and cleared search terms", async () => {
+    const props = viewPropsOf({
+      route: { view: "search", query: "kind:albums album:Supercell" },
+      tracks: LIBRARY,
+    });
+    const { rerender } = render(<CurrentView {...props} />);
+    const gallery = await screen.findByRole("list", { name: "Albums" });
+    expect(within(gallery).getByRole("link", { name: /Supercell/ })).toBeVisible();
+
+    rerender(
+      <CurrentView {...props} route={{ view: "search", query: "kind:albums album:空想" }} />,
+    );
+    await within(gallery).findByRole("link", { name: /空想/ });
+
+    expect(within(gallery).queryByRole("link", { name: /Supercell/ })).not.toBeInTheDocument();
+    rerender(<CurrentView {...props} route={{ view: "search", query: "kind:albums" }} />);
+    await waitFor(() => {
+      expect(within(gallery).getAllByRole("link")).toHaveLength(2);
+    });
+  });
+
+  it("translates the mounted album list without changing its titles or links", async () => {
+    const props = viewPropsOf({ route: { view: "albums" }, tracks: LIBRARY });
+    render(<CurrentView {...props} />);
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const href = screen.getByRole("link", { name: /Supercell/ }).getAttribute("href");
+
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+
+      const gallery = screen.getByRole("list", { name: "专辑" });
+      const album = within(gallery).getByRole("link", { name: /Supercell.*2 首歌曲/u });
+      expect(album).toHaveAttribute("href", href);
+      expect(within(album).getByRole("img", { name: "专辑" })).toBeVisible();
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
 });
 
 describe("the views", () => {

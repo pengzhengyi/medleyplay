@@ -657,6 +657,12 @@ button[aria-disabled="true"] {
   flex: none;
   margin: 0 0.45rem 0 0;
   color: var(--muted);
+  outline: none;
+}
+
+.search-field .search-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
 }
 
 .search-words {

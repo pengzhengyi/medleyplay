@@ -946,6 +946,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The search clear button keeps its keyboard-focus ring inside the search
+  field, with only a hover highlight for pointer use.
 - Lyrics quotation marks decorate the small song and album indicators, not
   covers, including when phone lyrics hide the artwork.
 - In Songs, manually saved lyrics show a solid border instead of the previous

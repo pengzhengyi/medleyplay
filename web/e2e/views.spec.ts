@@ -262,6 +262,61 @@ test("startup reads neither the account nor tracks on a device waiting for appro
   expect(requests).not.toContain("/api/tracks");
 });
 
+for (const width of [390, 1280]) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`search clear keyboard focus stays inside the field at ${String(width)}px in ${colorScheme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+      await page.goto("/");
+      const search = page.getByRole("combobox", { name: "Search" });
+      await search.fill("unmatched search");
+      const clear = page.getByRole("button", { name: "Clear search" });
+
+      await page.keyboard.press("Tab");
+
+      await expect(clear).toBeFocused();
+      const focus = await clear.evaluate((button) => {
+        const style = getComputedStyle(button);
+        const bounds = button.getBoundingClientRect();
+        const field = button.closest(".search-field")?.getBoundingClientRect();
+        if (field === undefined) throw new Error("Search field missing");
+        const outset = Math.max(
+          0,
+          Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset),
+        );
+        return {
+          visible: button.matches(":focus-visible") && style.outlineStyle === "solid",
+          width: Number.parseFloat(style.outlineWidth),
+          inside:
+            bounds.top - outset >= field.top &&
+            bounds.bottom + outset <= field.bottom &&
+            bounds.left - outset >= field.left &&
+            bounds.right + outset <= field.right,
+        };
+      });
+      expect(focus.visible).toBe(true);
+      expect(focus.width).toBeGreaterThanOrEqual(2);
+      expect(focus.inside).toBe(true);
+
+      await page.keyboard.press("Space");
+      await expect(search).toHaveValue("");
+      await expect(search).toBeFocused();
+
+      await search.fill("unmatched search");
+      await search.click();
+      const resting = await clear.evaluate((button) => getComputedStyle(button).backgroundColor);
+      await clear.hover();
+      await expect(clear).toHaveCSS("outline-style", "none");
+      await expect(clear).not.toHaveCSS("background-color", resting);
+      await clear.click();
+      await expect(search).toHaveValue("");
+      await expect(search).toBeFocused();
+    });
+  }
+}
+
 test("a row previews its favorite action without marking the song as a favorite", async ({
   page,
 }) => {

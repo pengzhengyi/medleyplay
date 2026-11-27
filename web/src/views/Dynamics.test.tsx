@@ -7,15 +7,21 @@ import { Dynamics } from "./Dynamics";
 /** What the renderer was asked to do, in order. */
 const calls: string[] = [];
 let drawn: ((drawn: boolean) => void) | undefined;
+let slow: (() => void) | undefined;
 
 vi.mock("./dynamics/renderer", () => ({
   run: (
     _host: HTMLElement,
     effect: string,
-    { still, onDrawn }: { still: boolean; onDrawn: (drawn: boolean) => void },
+    {
+      still,
+      onDrawn,
+      onSlow,
+    }: { still: boolean; onDrawn: (drawn: boolean) => void; onSlow: () => void },
   ) => {
     calls.push(`run ${effect}${still ? " still" : ""}`);
     drawn = onDrawn;
+    slow = onSlow;
     return {
       show: (url: string | null) => calls.push(`show ${String(url)}`),
       stop: () => calls.push("stop"),
@@ -29,6 +35,7 @@ const loaded = () => act(() => vi.dynamicImportSettled());
 beforeEach(() => {
   calls.length = 0;
   drawn = undefined;
+  slow = undefined;
   // jsdom draws nothing, so these tests stand in a browser with WebGL 2.
   vi.stubGlobal("WebGL2RenderingContext", vi.fn());
 });
@@ -103,6 +110,64 @@ describe("Dynamics behind Now Playing", () => {
     await loaded();
 
     expect(calls).toEqual([]);
+  });
+
+  it("keeps the light fallback after the cover changes or reduced motion is toggled", async () => {
+    const motion = Object.assign(new EventTarget(), { matches: false });
+    vi.stubGlobal("matchMedia", () => motion);
+    const { container, rerender } = render(<Dynamics cover="/api/covers/a" />);
+    await loaded();
+    const layer = container.querySelector(".np-dynamics");
+    const lateDraw = drawn;
+
+    act(() => slow?.());
+    rerender(<Dynamics cover="/api/covers/b" />);
+    act(() => lateDraw?.(true));
+    act(() => {
+      motion.matches = true;
+      motion.dispatchEvent(new Event("change"));
+    });
+    await loaded();
+    expect(layer).not.toHaveClass("np-dynamics-slow");
+    act(() => {
+      motion.matches = false;
+      motion.dispatchEvent(new Event("change"));
+    });
+    await loaded();
+
+    expect(layer).toHaveClass("np-dynamics-slow");
+    expect(layer).not.toHaveClass("np-dynamics-drawn");
+    expect(calls).toEqual(["run flow", "show /api/covers/a", "stop"]);
+  });
+
+  it("pauses fallback motion when hidden and tries WebGL again after a different effect is chosen", async () => {
+    let hidden = false;
+    const visibility = vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
+    try {
+      const { container } = render(<Dynamics cover="/api/covers/a" />);
+      await loaded();
+      const layer = container.querySelector(".np-dynamics");
+      act(() => slow?.());
+
+      act(() => {
+        hidden = true;
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(layer).toHaveAttribute("data-paused", "true");
+      act(() => {
+        hidden = false;
+        document.dispatchEvent(new Event("visibilitychange"));
+        chooseDynamics("mesh");
+      });
+      await loaded();
+
+      expect(layer).not.toHaveAttribute("data-paused");
+      expect(layer).not.toHaveClass("np-dynamics-slow");
+      expect(calls.slice(-2)).toEqual(["run mesh", "show /api/covers/a"]);
+    } finally {
+      visibility.mockRestore();
+    }
   });
 
   it("stops when Now Playing closes", async () => {

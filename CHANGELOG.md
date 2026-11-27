@@ -750,6 +750,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Edit details has a compact cross beside the album fold arrow to mark a song
+  as a single. It asks for confirmation and leaves the change unsaved until
+  **Save**; stored metadata and files are not deleted.
 - Large album galleries open faster while keeping every album and the same
   keyboard navigation.
 - The Library/Bilibili toggle sits to the left of the search field.

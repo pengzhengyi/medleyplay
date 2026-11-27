@@ -4,6 +4,7 @@
 > **Implemented.** The Albums gallery skips
 > offscreen rendering while keeping its complete list and existing controls.
 > Artists and the first Library load are unchanged.
+> Reusing album contents during playback is approved and in progress below.
 
 ## Contents
 
@@ -12,6 +13,7 @@
 - [Measured improvement](#measured-improvement)
 - [Validation and limits](#validation-and-limits)
 - [Crosscheck](#crosscheck)
+- [Album contents during playback](#album-contents-during-playback)
 - [Further investigations](#further-investigations)
 - [References](#references)
 
@@ -140,8 +142,107 @@ paired comparisons, with its controls and list intact.
 **Changed:** Only Albums uses containment. The candidate for Artists does not
 meet the requirement to retain demonstrated latency gains.
 
-**Not implemented:** The startup, search-computation, and playback-update
-optimizations below remain separate investigations.
+**Outside offscreen rendering:** First-Library startup and playback-update
+rendering are separate concerns.
+
+## Album contents during playback
+
+> [!IMPORTANT]
+> **Approved; implementation in progress.** Reuse unchanged album cards while keeping
+> playback controls and changing Library data current.
+
+### Measured target
+
+After the [queue-rendering change](Playback.md#queue-rendering-during-playback),
+the largest recurring scripting cost among the measured Library, Albums,
+and Artists views is Albums. The diagnostic uses 1,906 synthetic tracks,
+**890 album cards**, 382 artist cards, and two Up next entries. The catalog
+is album-dense; its cost should not be attributed to every Library with
+1,906 tracks.
+
+Local silent WAV files really play. Headless Chrome uses a 1280 by 800
+viewport with no artificial CPU slowdown. Each view is measured in three
+approximately three-second paused/playing pairs. View order rotates across
+rounds, and pause/play order alternates. The shared Mac's one-minute load
+average ranges from 7.5 to 8.6.
+
+| View | Playing scripting per elapsed second, median | Paused scripting, median |
+| --- | ---: | ---: |
+| Library | 154 ms | 11 ms |
+| Albums | 490 ms | 0 ms |
+| Artists | 138 ms | 0 ms |
+
+Albums layout costs only about 4 ms per elapsed second. Its separate
+3.33-second CPU profile attributes about 827 ms to `AlbumList`, including
+482 ms in `formatLength`, and 413 ms to separate `KindMark` renders.
+Those figures are not all additive: formatting is included in the list's
+time. Sorting the playable album order costs another 46 ms.
+
+This identifies work to avoid, **not an achieved time saving**. Other views,
+real cover images, and physical phones are not measured. A separate startup
+check uses a warm server, 60 ms of simulated latency, and 1,048,576 bytes
+per second. In cold browser contexts, the first enabled Library title
+enters the DOM in 1.22–1.64 seconds, with 173–183 ms between track JSON completion and title
+insertion. Reusing a mounted album list does not improve its initial mount
+or the first Library load.
+
+### Proposed boundary
+
+Keep the change local to `Views.tsx`:
+
+| Part | Proposed change | What stays live |
+| --- | --- | --- |
+| `AlbumList` | Wrap the shared card list in React `memo`, using its default comparison. | Changed albums, favorites, language, and lyrics context. |
+| `Albums` | Cache the filtered, sorted `playable` array with `useMemo` on `tracks`. | The existing Play/Shuffle callbacks and their current playable order. |
+
+The list already receives only album data, favorites, and the offscreen
+rendering flag. Its inputs come from existing cached derivations.
+There are no action callbacks to stabilize or ignore in a comparison.
+The Albums shell continues rendering its current controls.
+
+```mermaid
+flowchart LR
+  P["Playback progress"] --> S["Albums shell and current controls"]
+  T["Tracks"] --> O["Cached playable order"]
+  O --> S
+  A["Albums and favorites"] --> C["Memoized album cards"]
+  L["Language and lyrics context"] --> C
+```
+
+Language is read inside the list, and lyrics inside its marks. Their
+subscriptions must continue updating through `memo`. Metadata and favorite
+updates replace their input data rather than mutating it. Changes to the
+current or next track may still rebuild the derived album list; removing
+that occasional work is outside this component.
+
+Keep every card and the existing CSS containment. Do not virtualize,
+paginate, cache translated strings, wrap the whole `CurrentView` in `memo`,
+or change player state ownership. Leave `ArtistList` unchanged to keep this
+step focused on the largest measured target.
+
+### Acceptance before retention
+
+- [ ] Preserve mounted-card updates for favorites, titles, artist names,
+      covers, language, and complete/incomplete album lyrics.
+- [ ] Check lyrics-context updates with unchanged album-list props.
+- [ ] Preserve artist filtering and changing or clearing search queries;
+      search also uses the shared album list.
+- [ ] Keep Play and Shuffle bound to current actions and playable tracks,
+      including availability changes and an empty playable set.
+- [ ] Preserve complete card counts, links, keyboard focus, and responsive
+      layout in light/dark and desktop/phone views.
+- [ ] Compare baseline and candidate in seven alternating pairs for large
+      and small galleries, recording actual card counts and host load.
+- [ ] Measure scripting and foreground input-to-next-paint during real silent
+      playback. Treat DOM/frame readiness as a proxy, not a paint timestamp.
+- [ ] Check navigation and the unchanged Library/Artists views for regressions.
+- [ ] Verify the candidate profile removes repeated card work, rather than
+      hiding cards or reducing playback updates.
+- [ ] Obtain independent implementation review and retain only demonstrated
+      benefit; do not add timing thresholds to required unit tests.
+
+Use the existing component and browser suites for behavior, not private
+render-call counts. This adds no dependency or required CI category.
 
 ## Further investigations
 
@@ -149,13 +250,11 @@ Investigate browser work between the track response and the first playable
 song before assuming bundle size is the largest startup opportunity.
 Existing unfinished bundle work must not be overwritten.
 
-Artist suggestions currently compute a complete search and discard its
-songs and albums. A function-level experiment shows less computation when
-only artists are requested, but it is not an implemented UI improvement.
-Preserve query interpretation, aliases, ordering, and quoted-tag edge cases.
-Do not inject query syntax to select which results to compute.
+Artist suggestions use selected search groups; the behavior and measurements
+belong to [Web client](Web%20client.md#selective-search-computation). Unchanged queue contents are
+handled by [Playback](Playback.md#queue-rendering-during-playback).
 
-Profile repeated playback and scrolling updates before adding result
+Further playback and scrolling work needs its own profile before adding
 caches or changing state ownership. Preserve current values and callbacks.
 Keep the startup event stream connected: delaying subscription can miss
 catalog changes between the initial read and subscription.

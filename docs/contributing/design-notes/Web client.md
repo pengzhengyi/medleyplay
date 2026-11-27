@@ -796,8 +796,13 @@ and its last button folds or opens them all. A link that names a section, such a
   the names it answers to that another device can open, its IPv4 addresses
   first, then dotted names such as `mac-mini.local`, all on this page's port.
   Where the page itself was opened comes first when that is not this machine
-  alone, since it already works. With several, each can be chosen; with none,
-  the guide says to connect the computer to the phone's Wi-Fi.
+  alone, since it already works for that browser. **Connection info** shows
+  the selected URL, protocol, and TCP port, without claiming another device
+  can reach them. With several addresses, each can be chosen; with none, the
+  guide explains how to get a local address.
+- **Connection help** distinguishes a page that never loads from a device
+  waiting for approval. Admins can see the number of waiting devices and
+  open Devices settings from the guide to match the code.
 - **The QR code is drawn as one SVG path,** dark on light in either theme, from
   [uqr](https://github.com/unjs/uqr)'s matrix, which only `qr.ts` imports. It
   was chosen over lean-qr and `qrcode-generator`, which encoded as well in a

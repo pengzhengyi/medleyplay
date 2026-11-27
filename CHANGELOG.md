@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Listen on your device** shows the share URL, protocol, and TCP port, with
+  help for network failures and a shortcut to device approvals for admins.
 - Now Playing offers Palette Glow and Soft Pan in place of Flow and Drift.
   Existing selections carry over; Mesh and Off stay as they are.
 - When the animated background in Now Playing repeatedly misses frames, it
@@ -90,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for that ask to tick, such as *One song per track of the album's standard edition.*,
   and more details typed, which this browser remembers. An admin adds, rewords, and
   removes the notes in Settings → AI.
+- **Clear** beside **More details** forgets the previous AI prompt in this browser
+  without clearing selected notes.
 - **Ask the AI about a song with no video text** — from its details, someone may now ask
   the AI about any song or album, by the title, artist, album, and length it shows and
   what the model knows; only songs with a video's text are asked about on their own.

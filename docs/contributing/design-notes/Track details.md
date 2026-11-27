@@ -682,6 +682,8 @@ songs editor.
   is, and may use what it knows for the songs it names, such as a concert's
   songs the text doesn't list; it never changes the answer's shape. The note is
   kept in the Job's request, as the text is, and sent to the provider.
+- **Clearing More details** empties the note field and forgets its saved text in
+  this browser. It leaves the selected notes and past requests unchanged.
 - **What comes back** is a JSON object whose fields are all optional: a title,
   artist, album, year, and a song list of start, title, and artist. It is checked
   as the household's input is: text of at most 512 characters, a year from 1000 to

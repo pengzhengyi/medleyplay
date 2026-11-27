@@ -6718,6 +6718,17 @@ button.songs-back:hover {
   border-radius: 0.3rem;
 }
 
+.ai-note-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ai-note-clear {
+  margin: 0;
+}
+
 .ai-note .ai-note-details {
   margin: 0;
   resize: vertical;
@@ -7520,6 +7531,49 @@ button.enricher-reset {
   width: min(40rem, calc(100vw - 2rem));
 }
 
+.listen-connection {
+  margin-block-end: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--raised);
+}
+
+.listen-connection h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.listen-connection-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+}
+
+.listen-connection-facts div {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.listen-connection-facts dt {
+  color: var(--muted);
+}
+
+.listen-connection-facts dd,
+.listen-help-steps {
+  margin: 0;
+}
+
+.listen-connection .hint {
+  margin: 0.35rem 0;
+}
+
+.listen-help {
+  font-size: 0.85rem;
+}
+
 .listen-body {
   display: grid;
   grid-template-columns: 12rem minmax(0, 1fr);
@@ -7582,6 +7636,7 @@ button.enricher-reset {
 
 .listen-address {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
   margin-top: 0.35rem;

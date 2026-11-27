@@ -5,7 +5,7 @@
  */
 
 import { SparkleIcon } from "@phosphor-icons/react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { type AiAsk, type AiNote, MAX_HINT, api } from "../api";
 import { composing } from "../ime";
@@ -23,11 +23,16 @@ function rememberedDetails(ask: AiAsk): string {
   }
 }
 
-function rememberDetails(ask: AiAsk, details: string): void {
+function saveDetails(ask: AiAsk, details: string): boolean {
   try {
-    localStorage.setItem(REMEMBERED + ask, details.trim());
+    if (details === "") {
+      localStorage.removeItem(REMEMBERED + ask);
+    } else {
+      localStorage.setItem(REMEMBERED + ask, details);
+    }
+    return true;
   } catch {
-    return;
+    return false;
   }
 }
 
@@ -48,11 +53,14 @@ export function AiNotePanel({
   readonly onClose: () => void;
 }) {
   const id = useId();
+  const field = useRef<HTMLTextAreaElement>(null);
   const t = useWords();
   const number = new Intl.NumberFormat(useFormattingLocale());
   const [offered, setOffered] = useState<readonly AiNote[] | null | undefined>(undefined);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set());
   const [details, setDetails] = useState(() => rememberedDetails(ask));
+  const [hasRemembered, setHasRemembered] = useState(details !== "");
+  const [forgetFailed, setForgetFailed] = useState(false);
   useEffect(() => {
     let shown = true;
     api.settings().then(
@@ -82,8 +90,19 @@ export function AiNotePanel({
     if (over) {
       return;
     }
-    rememberDetails(ask, details);
+    const saved = details.trim();
+    if (saveDetails(ask, saved)) {
+      setHasRemembered(saved !== "");
+      setForgetFailed(false);
+    }
     onAsk(note);
+  };
+  const clear = () => {
+    setDetails("");
+    const forgotten = saveDetails(ask, "");
+    if (forgotten) setHasRemembered(false);
+    setForgetFailed(!forgotten && hasRemembered);
+    field.current?.focus();
   };
   return (
     <div
@@ -138,17 +157,28 @@ export function AiNotePanel({
           </label>
         ))
       )}
-      <label htmlFor={`${id}-details`} className="detail-label">
-        {t("More details")}
-      </label>
+      <div className="ai-note-field-heading">
+        <label htmlFor={`${id}-details`} className="detail-label">
+          {t("More details")}
+        </label>
+        <button
+          type="button"
+          className="text ai-note-clear"
+          aria-label={t("Clear details")}
+          disabled={details === "" && !hasRemembered}
+          onClick={clear}
+        >
+          {t("Clear")}
+        </button>
+      </div>
       <textarea
+        ref={field}
         id={`${id}-details`}
         className="detail-input ai-note-details"
         rows={2}
         value={details}
         placeholder={t(EXAMPLES[ask])}
         aria-describedby={`${id}-count`}
-        // The panel opens to type the note at once; the notes to tick are a Shift+Tab away.
         autoFocus
         onChange={(event) => {
           setDetails(event.currentTarget.value);
@@ -160,6 +190,11 @@ export function AiNotePanel({
           }
         }}
       />
+      {forgetFailed && (
+        <p className="hint" role="alert">
+          {t("Cleared here, but this browser did not forget the saved details.")}
+        </p>
+      )}
       <div className="ai-note-foot">
         <small id={`${id}-count`} className={over ? "ai-note-count over" : "ai-note-count"}>
           {t("{{used}} of {{limit}} characters", {

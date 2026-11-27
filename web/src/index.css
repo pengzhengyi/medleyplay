@@ -6718,6 +6718,17 @@ button.songs-back:hover {
   border-radius: 0.3rem;
 }
 
+.ai-note-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ai-note-clear {
+  margin: 0;
+}
+
 .ai-note .ai-note-details {
   margin: 0;
   resize: vertical;

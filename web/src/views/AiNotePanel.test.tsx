@@ -103,6 +103,62 @@ describe("the note to ask the AI with", () => {
     expect(within(second.panel).getByRole("textbox", { name: "More details" })).toHaveValue("1989");
   });
 
+  it.each([false, true])(
+    "clears and forgets the previous prompt without sending it (field already empty: %s)",
+    async (empty) => {
+      const first = await opened("songs");
+      const user = userEvent.setup();
+      await user.type(
+        within(first.panel).getByRole("textbox", { name: "More details" }),
+        "22 songs",
+      );
+      await user.click(within(first.panel).getByRole("button", { name: "Ask AI" }));
+      first.unmount();
+      const second = await opened("songs");
+      const panel = within(second.panel);
+      const details = panel.getByRole("textbox", { name: "More details" });
+      const note = panel.getByRole("checkbox", { name: /live album/u });
+      expect(details).toHaveValue("22 songs");
+      await user.click(note);
+      if (empty) await user.clear(details);
+
+      await user.click(panel.getByRole("button", { name: "Clear details" }));
+
+      expect(details).toHaveValue("");
+      expect(details).toHaveFocus();
+      expect(note).toBeChecked();
+      expect(second.onAsk).not.toHaveBeenCalled();
+      second.unmount();
+      const reopened = await opened("songs");
+      expect(within(reopened.panel).getByRole("textbox", { name: "More details" })).toHaveValue("");
+    },
+  );
+
+  it("clears the field and explains when the browser refuses to forget the saved prompt", async () => {
+    const first = await opened("details");
+    const user = userEvent.setup();
+    await user.type(within(first.panel).getByRole("textbox", { name: "More details" }), "1989");
+    await user.click(within(first.panel).getByRole("button", { name: "Ask AI" }));
+    first.unmount();
+    const second = await opened("details");
+    const panel = within(second.panel);
+    const forget = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new DOMException("Storage unavailable.", "SecurityError");
+    });
+
+    try {
+      await user.click(panel.getByRole("button", { name: "Clear details" }));
+      expect(panel.getByRole("textbox", { name: "More details" })).toHaveValue("");
+      expect(panel.getByRole("alert")).toHaveTextContent(
+        "Cleared here, but this browser did not forget the saved details.",
+      );
+      expect(panel.getByRole("button", { name: "Clear details" })).toBeEnabled();
+      expect(second.onAsk).not.toHaveBeenCalled();
+    } finally {
+      forget.mockRestore();
+    }
+  });
+
   it("counts the characters sent, and asks nothing over the limit", async () => {
     const { panel, onAsk } = await opened("details");
     const user = userEvent.setup();

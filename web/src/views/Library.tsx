@@ -28,9 +28,10 @@ import { useLibrary } from "../library/useLibrary";
 import { useLookAhead } from "../library/useLookAhead";
 import { useLyrics } from "../library/useLyrics";
 import { songTimeOf } from "../lyrics";
-import { type StepCommand, albumSteps, playingOf, stepFor } from "../player/albumNow";
+import { type StepCommand, albumSteps, playingOf, songPlaying, stepFor } from "../player/albumNow";
 import { useStation } from "../library/useStation";
 import { linksOf, withLinkedFavorites } from "../library/artistLinks";
+import { playingFavorite } from "../library/favoriteGroups";
 import { useArtistNames } from "../library/useArtistNames";
 import { useNamesToTidy } from "../library/useNamesToTidy";
 import { useArtistSplits } from "../library/useArtistSplits";
@@ -89,7 +90,11 @@ const NOTICE_MS = 4000;
 const SEEK_SECONDS = 5;
 /** Where the queue can close, as the page's styles have it; wider, it is always open. */
 const NARROW = "(width <= 64rem)";
-type LibraryNotice = string | { readonly title: string; readonly playlists: readonly string[] };
+type LibraryNotice =
+  | string
+  | { readonly kind: "playlist"; readonly title: string; readonly playlists: readonly string[] }
+  | { readonly kind: "favorite"; readonly key: string; readonly title: string }
+  | { readonly kind: "playback"; readonly key: string };
 
 /** Everything a signed-in Account sees. */
 
@@ -545,7 +550,7 @@ export function Library({
   };
   const addTo = async (track: Track, ids: readonly string[], newNames: readonly string[]) => {
     const playlists = await library.addToPlaylists(track, ids, newNames);
-    if (playlists.length > 0) setNotice({ title: track.title, playlists });
+    if (playlists.length > 0) setNotice({ kind: "playlist", title: track.title, playlists });
   };
 
   /**
@@ -600,25 +605,43 @@ export function Library({
     },
     mute: () => {
       player.setMuted(!player.muted);
-      setNotice(player.muted ? "Sound on." : "Muted.");
+      setNotice({ kind: "playback", key: player.muted ? "Sound on." : "Muted." });
     },
     shuffle: () => {
       player.shuffle(!player.shuffled);
-      setNotice(shuffleSaid(!player.shuffled));
+      setNotice({ kind: "playback", key: shuffleSaid(!player.shuffled) });
     },
     repeat: () => {
       const then = repeatAfter(player.repeat);
       player.setRepeat(then);
-      setNotice(REPEATS[then].said);
+      setNotice({ kind: "playback", key: REPEATS[then].said });
     },
     favorite: () => {
       if (playing !== undefined) {
-        actions.onFavorite(playing, !playing.favorite);
-        setNotice(
-          playing.favorite
-            ? `Removed “${playing.title}” from Favorites.`
-            : `Added “${playing.title}” to Favorites.`,
+        const target = playingFavorite(
+          playing,
+          songPlaying(playing, playingOf(player.queue, byId, player.position)),
+          favorites,
         );
+        if (target.kind === "track") {
+          actions.onFavorite(target.track, !target.track.favorite);
+          setNotice({
+            kind: "favorite",
+            title: target.track.title,
+            key: target.track.favorite
+              ? "Removed “{{title}}” from Favorites."
+              : "Added “{{title}}” to Favorites.",
+          });
+        } else {
+          library.setAlbumFavorite(target.artist, target.name, !target.favorite);
+          setNotice({
+            kind: "favorite",
+            title: target.name,
+            key: target.favorite
+              ? "Unfavorited the album “{{title}}”."
+              : "Favorited the album “{{title}}”.",
+          });
+        }
       }
     },
     search: () => {
@@ -1032,10 +1055,14 @@ export function Library({
       <p className="notice" role="status">
         {typeof notice === "string"
           ? notice
-          : t("Added “{{title}}” to {{playlists}}.", {
-              title: notice.title,
-              playlists: listFormat.format(notice.playlists),
-            })}
+          : notice.kind === "playlist"
+            ? t("Added “{{title}}” to {{playlists}}.", {
+                title: notice.title,
+                playlists: listFormat.format(notice.playlists),
+              })
+            : notice.kind === "favorite"
+              ? t(notice.key, { title: notice.title })
+              : t(notice.key)}
       </p>
       <p className="visually-hidden" role="status">
         {said}

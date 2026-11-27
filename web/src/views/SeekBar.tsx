@@ -23,6 +23,7 @@ import {
 } from "react";
 
 import { formatTime } from "../format";
+import { useWords } from "../locale";
 
 /** How far an arrow key moves, in seconds. */
 const ARROW_SECONDS = 5;
@@ -58,6 +59,7 @@ export function SeekBar({
   /** What to show over the pointer for the time under it, while it hovers. */
   readonly preview?: ((seconds: number) => ReactNode) | undefined;
 }) {
+  const words = useWords();
   const bar = useRef<HTMLDivElement>(null);
   // Where a pressed pointer holds the bar, and where a hovering one points.
   const [held, setHeld] = useState<number | undefined>(undefined);
@@ -155,20 +157,27 @@ export function SeekBar({
   const share = movable ? shown / length : 0;
   const songAtTime = (seconds: number) => songOf(marks, seconds);
   const shownSong = songAtTime(shown);
+  const elapsed = formatTime(shown);
+  const total = formatTime(duration);
   return (
     <div
       ref={bar}
       className="seek"
       role="slider"
       tabIndex={0}
-      aria-label="Position"
+      aria-label={words("Position")}
       aria-valuemin={0}
       aria-valuemax={Math.round(length)}
       aria-valuenow={Math.round(shown)}
       aria-valuetext={
         shownSong === undefined
-          ? `${formatTime(shown)} of ${formatTime(duration)}`
-          : `${shownSong.title}, ${formatTime(shownSong.within)}; ${formatTime(shown)} of ${formatTime(duration)}`
+          ? words("{{elapsed}} of {{total}}", { elapsed, total })
+          : words("{{title}}, {{within}}; {{elapsed}} of {{total}}", {
+              title: shownSong.title,
+              within: formatTime(shownSong.within),
+              elapsed,
+              total,
+            })
       }
       aria-disabled={!movable}
       data-held={held === undefined ? undefined : ""}

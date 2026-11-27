@@ -9,7 +9,7 @@
  */
 
 import type { FavoritesRead, Track } from "../api";
-import { fold, songsOf } from "./views";
+import { albumArtistOf, fold, songsOf } from "./views";
 
 /** The favorite artists and albums. */
 export interface FavoriteGroups {
@@ -62,6 +62,27 @@ const UNNAMED = /^BV[0-9A-Za-z]{10}$/u;
 /** Whether an artist or album named `name` can be a favorite: it has a name of its own. */
 export const canFavorite = (name: string): boolean =>
   name.trim() !== "" && !UNNAMED.test(name.trim());
+
+type PlayingFavorite =
+  | { readonly kind: "track"; readonly track: Track }
+  | {
+      readonly kind: "album";
+      readonly artist: string;
+      readonly name: string;
+      readonly favorite: boolean;
+    };
+
+export function playingFavorite(
+  track: Track,
+  song: Track | undefined,
+  favorites: FavoriteGroups,
+): PlayingFavorite {
+  if (song !== undefined) return { kind: "track", track: song };
+  const name = track.album;
+  if (!canFavorite(name)) return { kind: "track", track };
+  const artist = albumArtistOf(track);
+  return { kind: "album", artist, name, favorite: isFavoriteAlbum(favorites, artist, name) };
+}
 
 /**
  * How many favorite songs suggest favoriting the artist or album of `tracks`, or 0

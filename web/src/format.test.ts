@@ -110,7 +110,7 @@ describe("formatLibraryLength", () => {
 
 describe("formatMinutes", () => {
   it("writes a sleep timer's choice in words", () => {
-    expect([15, 30, 45, 60, 90, 120].map(formatMinutes)).toEqual([
+    expect([15, 30, 45, 60, 90, 120].map((minutes) => formatMinutes(minutes))).toEqual([
       "15 minutes",
       "30 minutes",
       "45 minutes",

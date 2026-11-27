@@ -24,6 +24,7 @@ import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 import type { Track } from "../api";
 import { formatTime } from "../format";
 import { heartTitleOf } from "../heart";
+import { useWords } from "../locale";
 import { type AlbumSong, type Playing, songAt } from "../player/albumNow";
 import { PlayTime } from "./PlayTime";
 
@@ -55,10 +56,11 @@ export function PlayingKind({
   /** Favorite a song of the album, or not; without it, the songs show no hearts. */
   readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
+  const t = useWords();
   const motion = moving ? "moving" : "still";
   if (playing.kind === "song") {
     return (
-      <span className="playing-kind" role="img" aria-label="Playing a song" title="Song">
+      <span className="playing-kind" role="img" aria-label={t("Playing a song")} title={t("Song")}>
         <MusicNoteSimpleIcon
           className={`playing-kind-icon song ${motion}`}
           weight="fill"
@@ -103,6 +105,7 @@ function AlbumMark({
 }) {
   // Pointing opens the songs, and a press keeps them open while the pointer stays or
   // focus is in them; leaving with the mouse closes them either way.
+  const t = useWords();
   const [shown, setShown] = useState<"closed" | "pointed" | "kept">("closed");
   const open = shown !== "closed";
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -132,8 +135,12 @@ function AlbumMark({
   const { songs } = playing;
   const label =
     songs.length === 0
-      ? `Album: ${name}`
-      : `Album: ${name}, song ${String(playing.current + 1)} of ${String(songs.length)}`;
+      ? t("Album: {{album}}", { album: name })
+      : t("Album: {{album}}, song {{current}} of {{total}}", {
+          album: name,
+          current: playing.current + 1,
+          total: songs.length,
+        });
   return (
     <span
       className="playing-kind-frame"

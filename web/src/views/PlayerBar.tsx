@@ -11,8 +11,8 @@ import type { ReactNode } from "react";
 
 import type { Lyrics, Track } from "../api";
 import { useWords } from "../locale";
-import { type FavoriteGroups, canFavorite, isFavoriteAlbum } from "../library/favoriteGroups";
-import { albumArtistOf } from "../library/views";
+import { playbackMessage } from "./unplayable";
+import { type FavoriteGroups, playingFavorite } from "../library/favoriteGroups";
 import { songTimeOf, useLyricsHidden } from "../lyrics";
 import { albumSteps, albumTimeline, playingOf, songPlaying } from "../player/albumNow";
 import type { Player } from "../player/usePlayer";
@@ -169,11 +169,13 @@ export function PlayerBar({
         </Hint>
         {playOn}
         {status.kind === "preparing" && <span className="note">{t("Preparing…")}</span>}
-        {status.kind === "blocked" && <span className="note">{status.message}</span>}
+        {status.kind === "blocked" && (
+          <span className="note">{playbackMessage(status.message, t)}</span>
+        )}
         {status.kind === "failed" && (
           <span className="note failed" role="alert">
             <WarningCircleIcon weight="fill" aria-hidden />
-            {status.message}
+            {playbackMessage(status.message, t)}
           </span>
         )}
         {canSetVolume() && (
@@ -207,20 +209,17 @@ function PlayingHeart({
   readonly onFavorite: (track: Track, favorite: boolean) => void;
   readonly onFavoriteAlbum: (artist: string, name: string, favorite: boolean) => void;
 }) {
-  if (song !== undefined) {
-    return <FavoriteButton track={song} onFavorite={onFavorite} />;
-  }
-  const artist = albumArtistOf(track);
-  if (track.album === "" || !canFavorite(track.album)) {
-    return <FavoriteButton track={track} onFavorite={onFavorite} />;
+  const target = playingFavorite(track, song, favorites);
+  if (target.kind === "track") {
+    return <FavoriteButton track={target.track} onFavorite={onFavorite} />;
   }
   return (
     <FavoriteHeart
       kind="album"
-      name={track.album}
-      favorite={isFavoriteAlbum(favorites, artist, track.album)}
+      name={target.name}
+      favorite={target.favorite}
       onChange={(favorite) => {
-        onFavoriteAlbum(artist, track.album, favorite);
+        onFavoriteAlbum(target.artist, target.name, favorite);
       }}
       loved={0}
       suggestionKey=""

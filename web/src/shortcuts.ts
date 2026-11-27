@@ -15,6 +15,7 @@
 import { useSyncExternalStore } from "react";
 
 import { ApiError, type Preferences, api } from "./api";
+import type { Words } from "./locale";
 
 /** Something a shortcut does. */
 export type Command =
@@ -143,8 +144,16 @@ function printedBy(part: string): string | undefined {
 }
 
 /** Return one binding as people read it, such as `Shift + →`. */
-export function labelOf(keys: string): string {
-  return keyCapsOf(keys, false).join(" + ");
+export function labelOf(keys: string, t?: Words): string {
+  return t === undefined
+    ? keyCapsOf(keys, false).join(" + ")
+    : keys
+        .split("+")
+        .map((part) => {
+          const label = MODIFIER_NAMES[part]?.[0] ?? KEY_NAMES[part]?.[0];
+          return label === undefined ? (printedBy(part) ?? part.toUpperCase()) : t(label);
+        })
+        .join(" + ");
 }
 
 /**
@@ -170,8 +179,10 @@ function onApple(): boolean {
 }
 
 /** Return a command's bindings as people read them, such as `Space or K`. */
-export function labelsOf(keys: readonly string[]): string {
-  return keys.length === 0 ? "None" : keys.map(labelOf).join(" or ");
+export function labelsOf(keys: readonly string[], t?: Words): string {
+  return keys.length === 0
+    ? (t?.("None") ?? "None")
+    : keys.map((keys) => labelOf(keys, t)).join(t?.(" or ") ?? " or ");
 }
 
 /** Return one binding as `aria-keyshortcuts` writes it, such as `Shift+ArrowRight`. */
@@ -186,8 +197,10 @@ export function ariaKeysOf(keys: string): string {
 }
 
 /** Return what a control named `name` does and its keys, such as `Next song (Shift + →)`. */
-export function hintTextOf(name: string, keys: readonly string[]): string {
-  return keys.length === 0 ? name : `${name} (${labelsOf(keys)})`;
+export function hintTextOf(name: string, keys: readonly string[], t?: Words): string {
+  if (keys.length === 0) return name;
+  const bindings = labelsOf(keys, t);
+  return t?.("{{name}} ({{keys}})", { name, keys: bindings }) ?? `${name} (${bindings})`;
 }
 
 /** Return a command's keys as `aria-keyshortcuts` writes them, or `undefined` for none. */

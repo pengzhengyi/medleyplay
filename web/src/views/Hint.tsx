@@ -26,6 +26,7 @@ import {
 } from "react";
 
 import { hintTextOf, keyCapsOf, keyshortcutsOf } from "../shortcuts";
+import { useWords } from "../locale";
 
 /** How long the pointer rests on a control before its hint shows, in milliseconds. */
 const DELAY_MS = 400;
@@ -44,11 +45,12 @@ export function Hints({ children }: { readonly children: ReactNode }) {
 
 /** The key caps of a command's `keys`, such as `⇧ →`, several bindings joined by *or*. */
 export function Keys({ keys }: { readonly keys: readonly string[] }) {
+  const t = useWords();
   return (
     <span className="keys" aria-hidden>
       {keys.map((binding, at) => (
         <Fragment key={binding}>
-          {at > 0 && <span className="keys-or">or</span>}
+          {at > 0 && <span className="keys-or">{t("or")}</span>}
           {keyCapsOf(binding).map((cap, place) => (
             // A binding names each key once, so its place tells the caps apart.
             <kbd key={place}>{cap}</kbd>
@@ -77,6 +79,7 @@ export function Hint({
   readonly openOnPress?: boolean;
   readonly children: ReactElement;
 }) {
+  const t = useWords();
   // Typed as Radix types its trigger; the search box's is an input, which `closest` reads alike.
   const trigger = useRef<HTMLButtonElement>(null);
   const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -116,7 +119,7 @@ export function Hint({
           side="top"
           sideOffset={6}
           collisionPadding={8}
-          aria-label={hintTextOf(name, keys)}
+          aria-label={hintTextOf(name, keys, t)}
         >
           {name}
           {keys.length > 0 && <Keys keys={keys} />}

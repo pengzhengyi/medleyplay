@@ -20,15 +20,7 @@ export function formatLength(count: number, durationMs: number, t?: Words): stri
   if (minutes === 0) {
     return songs;
   }
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  const length =
-    hours === 0
-      ? (t?.("{{minutes}} min", { minutes }) ?? `${String(minutes)} min`)
-      : rest === 0
-        ? (t?.("{{hours}} hr", { hours }) ?? `${String(hours)} hr`)
-        : (t?.("{{hours}} hr {{minutes}} min", { hours, minutes: rest }) ??
-          `${String(hours)} hr ${String(rest)} min`);
+  const length = shortMinutes(minutes, t);
   return t?.("{{counted}}, {{length}}", { counted: songs, length }) ?? `${songs}, ${length}`;
 }
 
@@ -53,9 +45,19 @@ export function formatLibraryLength(
 }
 
 /** Write a length of minutes in words, such as `30 minutes` or `1 hour 30 minutes`. */
-export function formatMinutes(minutes: number): string {
+export function formatMinutes(minutes: number, t?: Words): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
+  if (t !== undefined) {
+    if (hours === 0) return rest === 0 ? "" : t("minute_count", { count: rest });
+    const duration = t("hour_count", { count: hours });
+    return rest === 0
+      ? duration
+      : t("{{hours}} {{minutes}}", {
+          hours: duration,
+          minutes: t("minute_count", { count: rest }),
+        });
+  }
   const inHours = hours === 0 ? "" : hours === 1 ? "1 hour" : `${String(hours)} hours`;
   const inMinutes = rest === 0 ? "" : rest === 1 ? "1 minute" : `${String(rest)} minutes`;
   return [inHours, inMinutes].filter(Boolean).join(" ");
@@ -83,15 +85,20 @@ export function formatListened(ms: number): string {
 }
 
 /** Write the time left, rounded up to whole minutes, such as `29 min` or `1 hr 30 min`. */
-export function formatTimeLeft(ms: number): string {
-  const minutes = Math.max(1, Math.ceil(ms / 60_000));
+export function formatTimeLeft(ms: number, t?: Words): string {
+  return shortMinutes(Math.max(1, Math.ceil(ms / 60_000)), t);
+}
+
+function shortMinutes(minutes: number, t?: Words): string {
   const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
   if (hours === 0) {
-    return `${String(minutes)} min`;
+    return t?.("{{minutes}} min", { minutes }) ?? `${String(minutes)} min`;
   }
-  return minutes % 60 === 0
-    ? `${String(hours)} hr`
-    : `${String(hours)} hr ${String(minutes % 60)} min`;
+  return rest === 0
+    ? (t?.("{{hours}} hr", { hours }) ?? `${String(hours)} hr`)
+    : (t?.("{{hours}} hr {{minutes}} min", { hours, minutes: rest }) ??
+        `${String(hours)} hr ${String(rest)} min`);
 }
 
 const dayOptions = { month: "short", day: "numeric" } as const;

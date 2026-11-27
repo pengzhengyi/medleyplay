@@ -25,6 +25,8 @@ import {
   twoJaysNames,
   twoJaysSongs,
 } from "../testing/server";
+import { LanguageSelect } from "./LanguageSelect";
+import { SettingsView as SettingsPart } from "./parts";
 
 /**
  * A Library of three Tracks and one Playlist:
@@ -440,19 +442,23 @@ describe("Settings search", () => {
   });
 
   it("matches a translated title on Settings and keeps the section ID in the URL", async () => {
+    await SettingsPart.preload();
     open("#/settings");
     const language = await screen.findByLabelText("Language");
     await userEvent.selectOptions(language, "zh-Hans");
     try {
-      await userEvent.click(screen.getByRole("combobox", { name: "Search" }));
+      await userEvent.click(screen.getByRole("combobox", { name: "搜索" }));
       await userEvent.paste("settings: 评分");
-      await userEvent.click(screen.getByRole("option", { name: "我的评分" }));
+      expect(screen.getByRole("option", { name: "我的评分" })).toBeVisible();
+      await userEvent.selectOptions(language, "en");
+      await userEvent.click(screen.getByRole("combobox", { name: "Search" }));
+      await userEvent.click(screen.getByRole("option", { name: "Your ratings" }));
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: "我的评分" })).toHaveFocus();
+        expect(screen.getByRole("button", { name: "Your ratings" })).toHaveFocus();
       });
       expect(location.hash).toBe("#/settings?section=ratings");
     } finally {
-      await userEvent.selectOptions(await screen.findByLabelText("语言"), "auto");
+      await userEvent.selectOptions(language, "auto");
     }
   });
 
@@ -605,6 +611,29 @@ describe("search suggestions", () => {
 
     expect(box).toHaveAccessibleDescription("Artist:");
     expect(box).toHaveFocus();
+  });
+
+  it("shows translated search help with values the parser accepts", async () => {
+    open("");
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    await screen.findByRole("button", { name: "Melt" });
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+      await user.click(screen.getByRole("combobox", { name: "搜索" }));
+      await user.keyboard("{ArrowDown}");
+
+      const tags = screen.getByRole("listbox", { name: "搜索标签" });
+      expect(within(tags).getByRole("option", { name: /^favorite:/u })).toHaveTextContent(
+        "填 yes（仅收藏）或 no（仅未收藏）",
+      );
+      expect(within(tags).getByRole("option", { name: /^kind:/u })).toHaveTextContent(
+        "填 songs（歌曲）、albums（专辑）或 artists（艺人）",
+      );
+    } finally {
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
   });
 
   it("completes a site's name being typed, and searches it when chosen", async () => {
@@ -786,6 +815,31 @@ describe("keeping a Playlist downloaded", () => {
 });
 
 describe("search", () => {
+  it("keeps a tagged search and its matches when the interface language changes", async () => {
+    const route = hrefOf({ view: "search", query: "favorite:yes" });
+    open(route, signedIn([trackOf(1, "Search", { favorite: true }), trackOf(2, "Another song")]));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    expect(await screen.findByRole("button", { name: "Search" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Search" })).toHaveAccessibleDescription(
+      "Favorite: yes",
+    );
+
+    try {
+      const language = screen.getByRole("combobox", { name: "Language" });
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByRole("combobox", { name: "搜索" })).toHaveAccessibleDescription(
+        "收藏：yes",
+      );
+      expect(location.hash).toBe(route);
+      expect(songs()).toEqual(["Search"]);
+    } finally {
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("finds songs, artists, and albums as you type, ignoring hiragana or katakana", async () => {
     open("");
     await screen.findByRole("button", { name: "Melt" });

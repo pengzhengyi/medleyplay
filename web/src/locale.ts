@@ -56,6 +56,8 @@ void words.use(initReactI18next).init({
         downloading_other: "{{count}} songs downloading",
         devices_waiting_one: "{{count}} device waiting",
         devices_waiting_other: "{{count}} devices waiting",
+        song_count_one: "{{count}} song",
+        song_count_other: "{{count}} songs",
       },
     },
     "zh-Hans": { translation: zh },
@@ -118,5 +120,7 @@ export function useFormattingLocale(): string {
 export function useWords() {
   return useTranslation("translation", { i18n: words }).t;
 }
+
+export const simplifiedChineseWords = words.getFixedT("zh-Hans", "translation");
 
 export type Words = ReturnType<typeof useWords>;

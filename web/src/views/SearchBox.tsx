@@ -22,7 +22,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { initialOf } from "../format";
-import { useWords } from "../locale";
+import { simplifiedChineseWords, useWords } from "../locale";
 import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
 import {
   FIELDS,
@@ -64,12 +64,13 @@ function sectionOptions(
   t: (title: string) => string,
 ): PanelOption[] {
   return visibleSettingsSections(admin)
-    .map(({ id, title }) => ({ id, title: t(title) }))
-    .filter(({ id, title }) => id.includes(words) || title.toLowerCase().includes(words))
+    .filter(({ id, title }) =>
+      [id, title, simplifiedChineseWords(title)].some((name) => name.toLowerCase().includes(words)),
+    )
     .map(({ id, title }) => ({
       key: id,
       className: "suggest-action",
-      content: title,
+      content: t(title),
       does: { go: { view: "settings", section: id } },
     }));
 }
@@ -83,6 +84,11 @@ const VALUE_HINTS: Readonly<Record<Field, string>> = {
   rating: "at least so many stars, 1 to 5",
   favorite: "yes or no",
 };
+
+type SearchNotice =
+  | { readonly kind: "clear" | "library" }
+  | { readonly kind: "site"; readonly site: string }
+  | { readonly kind: "remove"; readonly field: Field; readonly value?: string };
 
 /** A tag in the box, or plain words typed before one. */
 interface Token {
@@ -114,8 +120,6 @@ function tokensOf(text: string): { readonly tokens: readonly Token[]; readonly w
   return { tokens: tags.filter((tag) => tag.value !== ""), words };
 }
 
-const songCount = (count: number) => (count === 1 ? "1 song" : `${String(count)} songs`);
-
 /**
  * Search the Library as you type, showing what it found and suggesting the artists of
  * `tracks` it names, by any name `links` know; with a site chosen, `onLookUp` hears the
@@ -144,7 +148,7 @@ export function SearchBox({
   // The tag the first Backspace chose, which a second removes.
   const [picked, setPicked] = useState(false);
   // What the box last said to a screen reader: a tag removed, or the search cleared.
-  const [said, setSaid] = useState("");
+  const [notice, setNotice] = useState<SearchNotice>();
   const box = useRef<HTMLInputElement>(null);
   const [seen, setSeen] = useState(shown);
   const settling = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -202,7 +206,7 @@ export function SearchBox({
     setField(next.field);
     setQuery(next.query);
     setPicked(false);
-    setSaid("");
+    setNotice(undefined);
     setSuggesting(true);
     setHelping(false);
     setActive(-1);
@@ -225,7 +229,7 @@ export function SearchBox({
     const token = tokens[at];
     change({ tokens: tokens.filter((_, each) => each !== at), field, query });
     if (token?.field !== undefined) {
-      setSaid(`${FIELD_LABELS[token.field]}: ${token.value} removed.`);
+      setNotice({ kind: "remove", field: token.field, value: token.value });
     }
   };
 
@@ -237,7 +241,7 @@ export function SearchBox({
     } else {
       change({ tokens: [], field: undefined, query: "" });
     }
-    setSaid("Search cleared.");
+    setNotice({ kind: "clear" });
   };
 
   /** Backspace at the start: choose the tag before the caret, then remove it. */
@@ -245,7 +249,7 @@ export function SearchBox({
     if (field !== undefined) {
       if (picked) {
         change({ tokens, field: undefined, query });
-        setSaid(`${FIELD_LABELS[field]} removed.`);
+        setNotice({ kind: "remove", field });
       } else {
         setPicked(true);
       }
@@ -297,7 +301,7 @@ export function SearchBox({
     setField(undefined);
     setQuery("");
     setPicked(false);
-    setSaid("");
+    setNotice(undefined);
     navigate(to, { replace: to.view === "settings" && hrefOf(to) === location.hash });
   };
 
@@ -306,8 +310,8 @@ export function SearchBox({
     setChosen(place);
     change({ tokens: [], field: undefined, query: typed });
     close();
-    setSaid(
-      place === LIBRARY ? "Searching the Library." : `Searching ${SITE_NAMES[place] ?? place}.`,
+    setNotice(
+      place === LIBRARY ? { kind: "library" } : { kind: "site", site: SITE_NAMES[place] ?? place },
     );
   };
 
@@ -318,7 +322,7 @@ export function SearchBox({
     content: (
       <>
         <code>{tag}:</code>
-        <span className="suggest-meta">{VALUE_HINTS[tag]}</span>
+        <span className="suggest-meta">{t(VALUE_HINTS[tag])}</span>
       </>
     ),
     does: before === undefined ? { tag } : { tag, before },
@@ -331,7 +335,9 @@ export function SearchBox({
     content: (
       <>
         <code>{site}:</code>
-        <span className="suggest-meta">{`search ${SITE_NAMES[site] ?? site}`}</span>
+        <span className="suggest-meta">
+          {t("search {{site}}", { site: SITE_NAMES[site] ?? site })}
+        </span>
       </>
     ),
     does: rest === undefined ? { site } : { site, rest },
@@ -361,14 +367,17 @@ export function SearchBox({
               key: `${artist.link}-page`,
               row: artist.link,
               className: "suggest-artist",
-              title: `Go to ${artist.name || "the songs with no artist"}`,
+              title:
+                artist.name === ""
+                  ? t("Go to the songs with no artist")
+                  : t("Go to {{artist}}", { artist: artist.name }),
               content: (
                 <>
                   <Cover size="small" cover={photoOf(artist.link)} className="suggest-initial">
                     {initialOf(artist.name)}
                   </Cover>
-                  <span className="suggest-name">{artist.name || "No artist"}</span>{" "}
-                  <span className="suggest-meta">{songCount(artist.count)}</span>
+                  <span className="suggest-name">{artist.name || t("No artist")}</span>{" "}
+                  <span className="suggest-meta">{t("song_count", { count: artist.count })}</span>
                 </>
               ),
               does: {
@@ -383,11 +392,11 @@ export function SearchBox({
               key: `${artist.link}-songs`,
               row: artist.link,
               className: "suggest-chip",
-              title: `Only ${artist.name}'s songs in the Library`,
+              title: t("Only {{artist}}'s songs in the Library", { artist: artist.name }),
               content: (
                 <>
                   <MusicNotesIcon aria-hidden />
-                  <span className="suggest-chip-label">Songs</span>
+                  <span className="suggest-chip-label">{t("Songs")}</span>
                 </>
               ),
               does: { go: { view: "library", artist: artist.link } },
@@ -396,11 +405,11 @@ export function SearchBox({
               key: `${artist.link}-albums`,
               row: artist.link,
               className: "suggest-chip",
-              title: `Only the albums ${artist.name} sings on`,
+              title: t("Only the albums {{artist}} sings on", { artist: artist.name }),
               content: (
                 <>
                   <VinylRecordIcon aria-hidden />
-                  <span className="suggest-chip-label">Albums</span>
+                  <span className="suggest-chip-label">{t("Albums")}</span>
                 </>
               ),
               does: { go: { view: "albums", artist: artist.link } },
@@ -412,7 +421,7 @@ export function SearchBox({
             content: (
               <>
                 <UsersThreeIcon aria-hidden />
-                Group the Library by artist
+                {t("Group the Library by artist")}
               </>
             ),
             does: { go: { view: "library", group: "artist" } },
@@ -449,17 +458,40 @@ export function SearchBox({
       box.current?.focus();
     }
   };
-  const rows = new Map(artists.map((artist) => [artist.link, artist.name || "No artist"]));
+  const rows = new Map(artists.map((artist) => [artist.link, artist.name || t("No artist")]));
+  const fieldName = (field: Field) => t(FIELD_LABELS[field]);
+  const tagName = (field: Field, value: string) =>
+    t("{{field}}: {{value}}", {
+      field: fieldName(field),
+      value,
+    });
+  const fieldLabel = (field: Field) => t("{{field}}:", { field: fieldName(field) });
+  const noticeText = () => {
+    switch (notice?.kind) {
+      case "clear":
+        return t("Search cleared.");
+      case "library":
+        return t("Searching the Library.");
+      case "site":
+        return t("Searching {{site}}.", { site: notice.site });
+      case "remove":
+        return notice.value === undefined
+          ? t("{{field}} removed.", { field: fieldName(notice.field) })
+          : t("{{tag}} removed.", { tag: tagName(notice.field, notice.value) });
+      default:
+        return "";
+    }
+  };
   const pickedTag =
     !picked || !tagging ? undefined : field !== undefined ? "typing" : tokens.length - 1;
   const placeholder =
     site !== undefined
-      ? `Paste a ${site} link or a BV or av code`
+      ? t("Paste a {{site}} link or a BV or av code", { site })
       : field !== undefined
-        ? VALUE_HINTS[field]
+        ? t(VALUE_HINTS[field])
         : tokens.length > 0
-          ? "More words, or a tag"
-          : "Search songs, artists, albums";
+          ? t("More words, or a tag")
+          : t("Search songs, artists, albums");
 
   return (
     <search
@@ -484,7 +516,7 @@ export function SearchBox({
       >
         <MagnifyingGlassIcon className="search-glass" weight="regular" aria-hidden />
         <span className="visually-hidden" id={nameId}>
-          Search
+          {t("Search")}
         </span>
         {tagged && (
           <span className="search-tags">
@@ -498,15 +530,14 @@ export function SearchBox({
                   key={at}
                   className="search-tag"
                   data-picked={pickedTag === at ? "true" : undefined}
-                  title={pickedTag === at ? "Press Backspace again to remove" : undefined}
+                  title={pickedTag === at ? t("Press Backspace again to remove") : undefined}
                 >
-                  <span className="search-tag-field">{FIELD_LABELS[token.field]}:</span>{" "}
-                  {token.value}
+                  <span className="search-tag-field">{fieldLabel(token.field)}</span> {token.value}
                   <button
                     type="button"
                     className="search-tag-remove"
-                    aria-label={`Remove ${FIELD_LABELS[token.field]}: ${token.value}`}
-                    title="Remove"
+                    aria-label={t("Remove {{tag}}", { tag: tagName(token.field, token.value) })}
+                    title={t("Remove")}
                     onClick={(event) => {
                       event.preventDefault();
                       remove(at);
@@ -522,9 +553,9 @@ export function SearchBox({
               <span
                 className="search-tag typing"
                 data-picked={pickedTag === "typing" ? "true" : undefined}
-                title={pickedTag === "typing" ? "Press Backspace again to remove" : undefined}
+                title={pickedTag === "typing" ? t("Press Backspace again to remove") : undefined}
               >
-                <span className="search-tag-field">{FIELD_LABELS[field]}:</span>
+                <span className="search-tag-field">{fieldLabel(field)}</span>
               </span>
             )}
           </span>
@@ -534,15 +565,13 @@ export function SearchBox({
           <span className="visually-hidden" id={tagsId}>
             {[
               ...tokens.map((token) =>
-                token.field === undefined
-                  ? token.value
-                  : `${FIELD_LABELS[token.field]}: ${token.value}`,
+                token.field === undefined ? token.value : tagName(token.field, token.value),
               ),
-              ...(field === undefined ? [] : [`${FIELD_LABELS[field]}:`]),
+              ...(field === undefined ? [] : [fieldLabel(field)]),
             ].join(" ")}
           </span>
         )}
-        <Hint name="Search" keys={keys.search} showOnFocus={false}>
+        <Hint name={t("Search")} keys={keys.search} showOnFocus={false}>
           <input
             ref={box}
             id="search"
@@ -711,8 +740,8 @@ export function SearchBox({
           <button
             type="button"
             className="icon search-clear"
-            aria-label="Clear search"
-            title="Clear search (Esc)"
+            aria-label={t("Clear search")}
+            title={t("Clear search (Esc)")}
             onClick={(event) => {
               event.preventDefault();
               clear();
@@ -723,13 +752,15 @@ export function SearchBox({
           </button>
         )}
         <span className="visually-hidden" aria-live="polite">
-          {pickedTag === undefined ? said : "Tag chosen. Press Backspace again to remove it."}
+          {pickedTag === undefined
+            ? noticeText()
+            : t("Tag chosen. Press Backspace again to remove it.")}
         </span>
       </label>
       {open && (
         <SearchPanel
           id={panelId}
-          label={helping && empty ? "Search by" : "Suggestions"}
+          label={t(helping && empty ? "Search by" : "Suggestions")}
           options={options}
           active={pointed}
           rows={rows}
@@ -742,8 +773,8 @@ export function SearchBox({
         </div>
       )}
       {providers.length > 0 && (
-        <div className="scope" role="radiogroup" aria-label="Search in">
-          <label title="Library">
+        <div className="scope" role="radiogroup" aria-label={t("Search in")}>
+          <label title={t("Library")}>
             <input
               type="radio"
               name="scope"
@@ -753,7 +784,7 @@ export function SearchBox({
               }}
             />
             <MusicNotesSimpleIcon className="site-mark" weight="bold" aria-hidden />
-            <span className="visually-hidden">Library</span>
+            <span className="visually-hidden">{t("Library")}</span>
           </label>
           {providers.map((provider) => (
             <label key={provider} title={SITE_NAMES[provider] ?? provider}>

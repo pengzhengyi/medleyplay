@@ -6349,6 +6349,9 @@ dialog.modal::backdrop {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+
+  /* Each button has its own focus ring. */
+  box-shadow: none;
 }
 
 .detail-alternatives:empty {
@@ -6374,6 +6377,7 @@ dialog.modal::backdrop {
   max-width: 100%;
   margin: 0;
   padding: 0.15rem 0.6rem;
+  scroll-margin-block: 0.5rem;
   overflow: hidden;
   border: 1px dashed var(--line);
   border-radius: 999px;

@@ -5,6 +5,8 @@
   "Dismissing…": "正在忽略…",
   "Songs stay in your Library.": "歌曲仍会保留在音乐库中。",
   "Missing artist or album": "缺少艺人或专辑",
+  "No album (single)": "无专辑（单曲）",
+  "Unknown": "未知",
   "Skip keeps this field blank. To undo, remove the blank override in Edit details.": "跳过会将此字段留空。如需撤销，请在「编辑详情」中取消留空设置。",
   "Suggest missing details with AI": "使用 AI 建议缺失详情",
   "Lets listeners ask AI about one track at a time in Clean up. Nothing is sent until someone asks.": "允许听众在「整理」中逐首询问 AI。发起请求前不会发送任何内容。",

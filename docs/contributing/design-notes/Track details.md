@@ -145,10 +145,16 @@ values.
   tag, a mark and a word such as *BV* or *MB*, which says *From the video* in
   full in its tooltip and to screen readers. Each other origin's value carries
   its origin's mark.
-- **A song's album is folded:** many songs are singles, on no album, so for a
-  song the *Album* fields fold to one line saying its album, or *None, a
-  single*, and open when it is pressed. An album in one file shows them open,
-  being its own album.
+- **A song's album is folded:** the *Album* fields fold to one line saying
+  its album, *Unknown* for an unreviewed blank, or *No album (single)* for a
+  household blank. Open the fields and choose **No album (single)** to keep
+  an intentional blank, even when no origin names an album. **Save** records
+  it; **Remove blank override** restores the next origin's value, or unknown
+  when none names an album. Choosing the **Song** kind alone does not mean a
+  single. The single choice is not offered for songs inside an album file.
+  It is also hidden while **Guess again** waits for Save to resolve the kind.
+  Changing the kind after choosing a single restores the preceding album draft.
+  An album in one file shows its fields open, being its own album.
 - **Looking the song up from the dialog:** a button for each lookup the song
   may be asked about, as in its menu, sits under the cover, and how the one
   asked goes shows beside them. Once it is done, the dialog reads the details
@@ -157,7 +163,8 @@ values.
   one field never overwrites another made meanwhile on another device. A value
   the household types or chooses that reads as what would show anyway, such as
   `03` over the file's track 3, is dropped rather than saved, so the found value
-  still follows the file.
+  still follows the file. The explicit single choice keeps its blank album;
+  typing a different album cancels that choice.
 - **Saving keeps the dialog open,** on the details read again as saved, with
   *Saved* beside the heading for a moment; closing is the household's choice, so an album's songs can be split
   next without opening it again. *Save* waits for a change; the ✕ at the top
@@ -734,7 +741,9 @@ songs editor.
 
 **Clean up → Missing artist or album** lists songs and whole album files
 with missing details. Songs need an artist or album title; a whole album
-file needs an album title or credit. An artist already credited on a whole
+file needs an album title or credit. A household blank album means no album
+is needed, so a confirmed single is not offered an album suggestion. Its
+artist can still be missing. An artist already credited on a whole
 file satisfies the credit. Individual songs, not album groupings, are
 the records the household changes.
 

@@ -750,6 +750,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Large album galleries open faster while keeping every album and the same
+  keyboard navigation.
 - The Library/Bilibili toggle sits to the left of the search field.
 - In **Clean up → Missing artist or album**, **Ask AI** and **Ask again**
   now sit alongside **Use**, **Edit**, and **Skip**.

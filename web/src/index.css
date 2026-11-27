@@ -2773,6 +2773,11 @@ button[aria-disabled="true"] {
 
 /* Artists, albums, and Playlists: tiles, each lifting when pointed at. */
 .groups {
+  --gallery-padding: 0.75rem;
+  --gallery-gap: 0.3rem;
+  --gallery-cover-gap: 0.35rem;
+  --gallery-meta-size: 0.82rem;
+
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
   gap: 0.75rem;
@@ -2788,8 +2793,8 @@ button[aria-disabled="true"] {
 
 .groups a {
   display: grid;
-  gap: 0.3rem;
-  padding: 0.75rem;
+  gap: var(--gallery-gap);
+  padding: var(--gallery-padding);
   border-radius: 1rem;
   color: inherit;
   text-decoration: none;
@@ -2801,6 +2806,22 @@ button[aria-disabled="true"] {
 .groups a:hover {
   background: var(--surface);
   box-shadow: var(--lift);
+}
+
+@supports (content-visibility: auto) and (contain-intrinsic-block-size: calc(100cqi + 1lh)) {
+  .deferred-gallery > li {
+    container-type: inline-size;
+  }
+
+  .deferred-gallery > li > a {
+    content-visibility: auto;
+
+    /* The skipped content holds a square cover, one title line, and one metadata line. */
+    contain-intrinsic-block-size: calc(
+      100cqi - var(--gallery-padding) * 2 + var(--gallery-cover-gap) + 1lh +
+        var(--gallery-meta-size) * var(--pico-line-height) + 2 * var(--gallery-gap)
+    );
+  }
 }
 
 /* Pointed at, a credit link takes the ink and a full underline. */
@@ -2824,7 +2845,7 @@ button[aria-disabled="true"] {
   place-items: center;
   overflow: hidden;
   aspect-ratio: 1;
-  margin-bottom: 0.35rem;
+  margin-bottom: var(--gallery-cover-gap, 0.35rem);
   border-radius: 0.9rem;
   background: var(--accent-soft);
   color: var(--accent);
@@ -2882,7 +2903,7 @@ button[aria-disabled="true"] {
 
 .group-meta {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--gallery-meta-size, 0.82rem);
 }
 
 /* The Radio tab: the stations, side by side when there is room, then shelves of albums. */

@@ -11,7 +11,7 @@
 import { type RefObject, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
-import { COMMANDS, type Command, useBindings } from "../shortcuts";
+import { belongsToQuickFind, COMMANDS, type Command, useBindings } from "../shortcuts";
 
 /** What each command does. */
 export type ShortcutHandlers = Readonly<Record<Command, () => void>>;
@@ -118,7 +118,8 @@ function useFocusByPointer(): RefObject<boolean> {
 export function Shortcuts({ on }: { readonly on: ShortcutHandlers }) {
   const bindings = useBindings();
   const byPointer = useFocusByPointer();
-  const ignored = (event: KeyboardEvent) => belongsToWidget(event, byPointer.current);
+  const ignored = (event: KeyboardEvent) =>
+    belongsToQuickFind(event) || belongsToWidget(event, byPointer.current);
   return COMMANDS.map(({ command }) => (
     <Shortcut
       key={command}

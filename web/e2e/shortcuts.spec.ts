@@ -14,15 +14,15 @@ async function play(page: Page, title: string) {
   await expect(player(page).getByRole("button", { name: "Pause" })).toBeVisible();
 }
 
-test("Space pauses the song just clicked, and plays it again", async ({ page }) => {
+test("K pauses the song just clicked, and plays it again", async ({ page }) => {
   await play(page, "Alpha");
 
-  await page.keyboard.press("Space");
+  await page.keyboard.press("KeyK");
 
   await expect(player(page).getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await expect.poll(() => paused(page)).toBe(true);
 
-  await page.keyboard.press("Space");
+  await page.keyboard.press("KeyK");
 
   await expect.poll(() => paused(page)).toBe(false);
   await expect(player(page).getByText("Alpha", { exact: true })).toBeVisible();
@@ -49,13 +49,16 @@ test("Shift and → skips to the next song even after the position was clicked, 
   await expect(player(page).getByText("Bravo", { exact: true })).toBeVisible();
 });
 
-test("/ goes to the search box, where the keys type", async ({ page }) => {
+test("G goes to the search box while slash stays available to the browser", async ({ page }) => {
   await play(page, "Alpha");
+  const search = page.getByRole("combobox", { name: "Search" });
 
   await page.keyboard.press("Slash");
+  await expect(search).not.toBeFocused();
+  await page.keyboard.press("KeyG");
   await page.keyboard.type("s ");
 
-  await expect(page.getByRole("combobox", { name: "Search" })).toHaveValue("s ");
+  await expect(search).toHaveValue("s ");
   await expect(player(page).getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
@@ -123,24 +126,23 @@ test("keys added in Settings work from then on, in any browser the Account signs
   }
 });
 
-test("Space taken in Settings keeps waiting for other keys", async ({ page }) => {
+test("K taken in Settings keeps waiting for other keys", async ({ page }) => {
   await page.goto("/#/settings");
   const status = page.getByRole("region", { name: "Keyboard shortcuts" }).getByRole("status");
 
   await page.getByRole("button", { name: "Add keys to Shuffle" }).click();
-  await page.keyboard.press("Space");
+  await page.keyboard.press("KeyK");
 
-  await expect(status).toHaveText("Space is already Play or pause. Press other keys.");
+  await expect(status).toHaveText("K is already Play or pause. Press other keys.");
   await expect(page.getByRole("button", { name: "Press keys to add to Shuffle" })).toBeFocused();
 });
 
-test("K plays or pauses too, and M mutes", async ({ page }) => {
+test("M mutes without pausing", async ({ page }) => {
   await play(page, "Alpha");
 
-  await page.keyboard.press("KeyK");
-  await expect.poll(() => paused(page)).toBe(true);
   await page.keyboard.press("KeyM");
 
+  await expect.poll(() => paused(page)).toBe(false);
   await expect(page.locator("audio")).toHaveJSProperty("muted", true);
   await expect(page.getByRole("slider", { name: "Volume" })).toHaveAttribute(
     "aria-valuetext",

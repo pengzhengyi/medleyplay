@@ -3,7 +3,7 @@
  *
  * ```text
  * ┌──────────────────────┐
- * │ Next album  ⌥ ⇧ →    │
+ * │ Next song  ⇧ →       │
  * └──────────┬───────────┘
  *            ▾
  *        [ ⏭ ]
@@ -11,7 +11,7 @@
  *
  * It shows after a short hover or when the control is reached with the keyboard, and
  * Escape hides it; a text box's shows on hover alone, so it never covers what is typed. The control keeps `aria-keyshortcuts`, and the tooltip says its keys in
- * words to assistive technology, such as *Next album (Alt + Shift + →)*.
+ * words to assistive technology, such as *Next song (Shift + →)*.
  */
 
 import * as Tooltip from "@radix-ui/react-tooltip";

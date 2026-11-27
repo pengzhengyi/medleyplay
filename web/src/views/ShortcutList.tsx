@@ -9,7 +9,7 @@ import { useRef } from "react";
 
 import { hrefOf } from "../routes";
 import { useHoldForShortcuts } from "../holdForShortcuts";
-import { COMMANDS, labelOf, useBindings } from "../shortcuts";
+import { COMMANDS, isFirefox, labelOf, useBindings } from "../shortcuts";
 import { useWords } from "../locale";
 import { HOLD_LABEL, useHeldModifier } from "../useHeldModifier";
 import { Modal } from "./Modal";
@@ -31,6 +31,9 @@ export function ShortcutList({ onClose }: { readonly onClose: () => void }) {
       <div className="card">
         <h2 id="shortcut-list-title">{t("Keyboard shortcuts")}</h2>
         <ShortcutTable />
+        {isFirefox() && (
+          <p className="hint">{t("In Firefox, keys that type / or ' open Quick Find instead.")}</p>
+        )}
         <footer className="dialog-buttons">
           <a className="change-keys" href={hrefOf({ view: "settings" })} onClick={close}>
             {t("Change them in Settings")}

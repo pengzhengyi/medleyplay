@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { openWithShortcuts } from "../testing/server";
 import { type ShortcutHandlers, Shortcuts } from "./Shortcuts";
@@ -41,21 +41,29 @@ function listening(page?: ReactNode) {
   return on;
 }
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("the keyboard shortcuts", () => {
-  it("play or pause with Space", async () => {
+  it("play or pause with K", async () => {
     const on = listening();
 
-    await userEvent.keyboard(" ");
+    await userEvent.keyboard("k");
 
     expect(on.toggle).toHaveBeenCalledOnce();
   });
 
-  it("keep Space from scrolling the page when it plays or pauses", () => {
-    listening();
+  it("leave browser scrolling and Quick Find keys alone by default", () => {
+    const on = listening();
 
     const scrolled = fireEvent.keyDown(document.body, { code: "Space", key: " " });
+    const found = fireEvent.keyDown(document.body, { code: "Slash", key: "/" });
 
-    expect(scrolled).toBe(false);
+    expect(scrolled).toBe(true);
+    expect(found).toBe(true);
+    expect(on.toggle).not.toHaveBeenCalled();
+    expect(on.search).not.toHaveBeenCalled();
   });
 
   it("tell a key from the same key with Shift", async () => {
@@ -76,11 +84,11 @@ describe("the keyboard shortcuts", () => {
     expect(on.shuffle).not.toHaveBeenCalled();
   });
 
-  it("play or pause once while Space is held", () => {
+  it("play or pause once while K is held", () => {
     const on = listening();
 
-    fireEvent.keyDown(document.body, { code: "Space", key: " " });
-    fireEvent.keyDown(document.body, { code: "Space", key: " ", repeat: true });
+    fireEvent.keyDown(document.body, { code: "KeyK", key: "k" });
+    fireEvent.keyDown(document.body, { code: "KeyK", key: "k", repeat: true });
 
     expect(on.toggle).toHaveBeenCalledOnce();
   });
@@ -95,6 +103,7 @@ describe("the keyboard shortcuts", () => {
   });
 
   it("leave Space to a focused button, which it presses", async () => {
+    await openWithShortcuts({ toggle: ["space"] });
     const pressed = vi.fn();
     const on = listening(
       <button type="button" onClick={pressed}>
@@ -110,6 +119,7 @@ describe("the keyboard shortcuts", () => {
   });
 
   it("play or pause with Space after a button is clicked, rather than click it again", async () => {
+    await openWithShortcuts({ toggle: ["space"] });
     const pressed = vi.fn();
     const on = listening(
       <button type="button" onClick={pressed}>
@@ -124,11 +134,11 @@ describe("the keyboard shortcuts", () => {
     expect(pressed).toHaveBeenCalledOnce();
   });
 
-  it("leave the arrows to a focused slider, but still play or pause with Space", async () => {
+  it("leave the arrows to a focused slider, but still play or pause with K", async () => {
     const on = listening(<input type="range" aria-label="Volume" />);
     screen.getByRole("slider", { name: "Volume" }).focus();
 
-    await userEvent.keyboard("{ArrowRight} ");
+    await userEvent.keyboard("{ArrowRight}k");
 
     expect(on.forward).not.toHaveBeenCalled();
     expect(on.toggle).toHaveBeenCalledOnce();
@@ -165,38 +175,80 @@ describe("the keyboard shortcuts", () => {
     expect(on.forward).not.toHaveBeenCalled();
   });
 
-  it("go to the next album with Alt + Shift + →, not to the next song", async () => {
+  it("go to the next album with ], not to the next song", async () => {
     const on = listening();
 
-    await userEvent.keyboard("{Alt>}{Shift>}{ArrowRight}{/Shift}{/Alt}");
+    await userEvent.keyboard("[BracketRight]");
 
     expect(on.nextAlbum).toHaveBeenCalledOnce();
     expect(on.next).not.toHaveBeenCalled();
   });
 
-  it("go to the previous album with Alt + Shift + ←", async () => {
+  it("go to the previous album with [", async () => {
     const on = listening();
 
-    await userEvent.keyboard("{Alt>}{Shift>}{ArrowLeft}{/Shift}{/Alt}");
+    await userEvent.keyboard("[BracketLeft]");
 
     expect(on.previousAlbum).toHaveBeenCalledOnce();
     expect(on.previous).not.toHaveBeenCalled();
   });
 
+  it("leave browser tab switching alone even when it was saved as a shortcut", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    await openWithShortcuts({ nextAlbum: ["alt+meta+right"] });
+    const on = listening();
+
+    const switched = fireEvent.keyDown(document.body, {
+      code: "ArrowRight",
+      key: "ArrowRight",
+      altKey: true,
+      metaKey: true,
+    });
+
+    expect(switched).toBe(true);
+    expect(on.nextAlbum).not.toHaveBeenCalled();
+  });
+
+  it("leave Firefox Quick Find alone when another physical key types slash", () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 Firefox/144.0");
+    const on = listening();
+
+    const found = fireEvent.keyDown(document.body, { code: "BracketLeft", key: "/" });
+    fireEvent.keyDown(document.body, { code: "Slash", key: "?", shiftKey: true });
+
+    expect(found).toBe(true);
+    expect(on.previousAlbum).not.toHaveBeenCalled();
+    expect(on.help).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a saved physical Slash key when it types a different character in Firefox", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 Firefox/144.0");
+    await openWithShortcuts({ search: ["slash"] });
+    const on = listening();
+
+    fireEvent.keyDown(document.body, { code: "Slash", key: "z" });
+
+    expect(on.search).toHaveBeenCalledOnce();
+  });
+
   it("leave typing to a text box", async () => {
     const on = listening(<input type="search" aria-label="Search" />);
 
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "s /");
+    const search = screen.getByRole("searchbox", { name: "Search" });
+    await userEvent.type(search, "s kg[BracketLeft][BracketRight]");
 
+    expect(search).toHaveValue("s kg[]");
     expect(on.shuffle).not.toHaveBeenCalled();
     expect(on.toggle).not.toHaveBeenCalled();
     expect(on.search).not.toHaveBeenCalled();
+    expect(on.previousAlbum).not.toHaveBeenCalled();
+    expect(on.nextAlbum).not.toHaveBeenCalled();
   });
 
   it("leave every key to an open dialog", async () => {
     const on = listening(<dialog open>Add to playlists</dialog>);
 
-    await userEvent.keyboard(" s");
+    await userEvent.keyboard("ks");
 
     expect(on.toggle).not.toHaveBeenCalled();
     expect(on.shuffle).not.toHaveBeenCalled();
@@ -209,7 +261,7 @@ describe("the keyboard shortcuts", () => {
       </dialog>,
     );
 
-    await userEvent.keyboard(" s");
+    await userEvent.keyboard("ks");
 
     expect(on.toggle).toHaveBeenCalledOnce();
     expect(on.shuffle).toHaveBeenCalledOnce();
@@ -225,7 +277,7 @@ describe("the keyboard shortcuts", () => {
       </>,
     );
 
-    await userEvent.keyboard(" s");
+    await userEvent.keyboard("ks");
 
     expect(on.toggle).not.toHaveBeenCalled();
     expect(on.shuffle).not.toHaveBeenCalled();
@@ -255,6 +307,7 @@ describe("the keyboard shortcuts", () => {
   });
 
   it("play or pause with either of its keys", async () => {
+    await openWithShortcuts({ toggle: ["space", "k"] });
     const on = listening();
 
     await userEvent.keyboard(" k");

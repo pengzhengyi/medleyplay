@@ -89,9 +89,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the AI about any song or album, by the title, artist, album, and length it shows and
   what the model knows; only songs with a video's text are asked about on their own.
 
-- **Previous album and Next album shortcuts** — Alt + Shift + ← and Alt + Shift + →
-  step past the album playing, like the player's outer buttons; change them in
-  Settings like any shortcut.
+- **Keyboard shortcuts** — `[` and `]` step between albums, G focuses search, and
+  K plays or pauses. New defaults leave existing custom keys in place. Known
+  browser and system combinations, such as Command + Option + Arrow for switching
+  tabs, are not used by the player.
 
 - **Keep a Playlist downloaded** — a *Keep downloaded* switch on each Playlist's page,
   Favorites too, downloads every song it holds and never removes them to make room. In

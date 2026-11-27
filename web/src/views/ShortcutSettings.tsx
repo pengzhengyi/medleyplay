@@ -18,12 +18,12 @@ import {
   MAX_KEYS,
   addKeys,
   belongsToBrowser,
+  belongsToQuickFind,
   bindingOf,
-  changesOf,
   labelOf,
   removeKeys,
   saveBindings,
-  useBindings,
+  useEditableBindings,
 } from "../shortcuts";
 import { setHoldForShortcuts, useHoldForShortcuts } from "../holdForShortcuts";
 import { type Words, useWords } from "../locale";
@@ -81,14 +81,14 @@ function wordsOf(notice: ShortcutNotice, t: Words): string {
 /** What the Settings section for the keyboard shortcuts holds. */
 export function ShortcutSettings() {
   const t = useWords();
-  const bindings = useBindings();
+  const { bindings, shortcuts } = useEditableBindings();
   const holding = useHoldForShortcuts();
   const [recording, setRecording] = useState<Command | undefined>(undefined);
   const notes = useNoteOf<ShortcutNotice | null>(null);
   // Some browsers click a button as Space comes up, so the release of a press taken is kept too.
   const taken = useRef<string | undefined>(undefined);
   const lastSave = useRef(0);
-  const defaults = changesOf(bindings) === null;
+  const defaults = shortcuts === null;
 
   /** Use `next` from now on, saying `said`, or why the server didn't keep it. */
   const save = (next: Bindings, said: ShortcutNotice) => {
@@ -115,14 +115,14 @@ export function ShortcutSettings() {
       // A modifier on its own waits for its key; Tab moves on, as it always does.
       return;
     }
+    if (belongsToBrowser(keys) || belongsToQuickFind(event.nativeEvent)) {
+      notes.refuse({ kind: "browser", binding: keys });
+      return;
+    }
     // The press is the new keys, not a press of the button or a shortcut.
     event.preventDefault();
     event.stopPropagation();
     taken.current = event.code;
-    if (belongsToBrowser(keys)) {
-      notes.refuse({ kind: "browser", binding: keys });
-      return;
-    }
     const added = addKeys(bindings, command, keys);
     if ("taken" in added) {
       notes.refuse({ kind: "conflict", command: added.taken, binding: keys });
@@ -143,6 +143,13 @@ export function ShortcutSettings() {
   return (
     <>
       <p className="hint">{t("Keys for the player, kept with your account.")}</p>
+      {COMMANDS.some(({ command }) => bindings[command].some((keys) => belongsToBrowser(keys))) && (
+        <p className="hint">
+          {t(
+            "Some saved shortcuts belong to the browser or system and will not run here. Choose other keys for them.",
+          )}
+        </p>
+      )}
       <label className="hold-setting">
         <input
           type="checkbox"

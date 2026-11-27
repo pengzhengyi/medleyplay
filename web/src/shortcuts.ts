@@ -12,7 +12,7 @@
 
 // cspell:ignore backquote bracketleft bracketright
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 
 import { ApiError, type Preferences, api } from "./api";
 import type { Words } from "./locale";
@@ -65,20 +65,20 @@ export const COMMANDS: readonly { readonly command: Command; readonly name: stri
 ];
 
 export const DEFAULT_BINDINGS: Bindings = {
-  toggle: ["space", "k"],
+  toggle: ["k"],
   back: ["left"],
   forward: ["right"],
   previous: ["shift+left"],
   next: ["shift+right"],
-  previousAlbum: ["alt+shift+left"],
-  nextAlbum: ["alt+shift+right"],
+  previousAlbum: ["bracketleft"],
+  nextAlbum: ["bracketright"],
   volumeDown: ["minus"],
   volumeUp: ["equal"],
   mute: ["m"],
   shuffle: ["s"],
   repeat: ["r"],
   favorite: ["l"],
-  search: ["slash"],
+  search: ["g"],
   queue: ["q"],
   nowPlaying: ["f"],
   help: ["shift+slash"],
@@ -132,15 +132,22 @@ const NOT_ALONE = new Set(["Escape", "Tab"]);
 /** What each key prints on this keyboard, by code, once the browser says. */
 let layout: ReadonlyMap<string, string> | undefined;
 
-/** Return what the key named `part` prints on this keyboard, or `undefined` if it prints nothing. */
-function printedBy(part: string): string | undefined {
+function layoutKeyOf(part: string): string | undefined {
   const code = /^[a-z]$/.test(part)
     ? `Key${part.toUpperCase()}`
     : /^\d$/.test(part)
       ? `Digit${part}`
       : PRINTED[part]?.[1];
-  const printed = code === undefined ? undefined : layout?.get(code);
-  return (printed ?? PRINTED[part]?.[0] ?? (part.length === 1 ? part : undefined))?.toUpperCase();
+  return code === undefined ? undefined : layout?.get(code);
+}
+
+/** Return the label for a key, using the US keyboard when the layout is not reported. */
+function printedBy(part: string): string | undefined {
+  return (
+    layoutKeyOf(part) ??
+    PRINTED[part]?.[0] ??
+    (part.length === 1 ? part : undefined)
+  )?.toUpperCase();
 }
 
 /** Return one binding as people read it, such as `Shift + →`. */
@@ -241,15 +248,120 @@ function keyOf(code: string): string | undefined {
 }
 
 /** Keys the browser or the system keeps, which a page never sees or shouldn't take. */
-const BROWSERS = new Set(["f5", "f11", "f12"]);
-const BROWSER_LETTERS = new Set(["l", "n", "q", "r", "t", "w"]);
+const BROWSER_KEYS = new Set(["f1", "f3", "f5", "f6", "f7", "f10", "f11", "f12"]);
+const PRIMARY_KEYS = new Set([
+  "d",
+  "f",
+  "g",
+  "l",
+  "n",
+  "o",
+  "p",
+  "r",
+  "s",
+  "t",
+  "w",
+  "minus",
+  "equal",
+]);
+const APPLE_CHORDS = new Set([
+  "meta+h",
+  "meta+m",
+  "meta+q",
+  "meta+y",
+  "meta+comma",
+  "meta+backquote",
+  "meta+left",
+  "meta+right",
+  "meta+bracketleft",
+  "meta+bracketright",
+  "shift+meta+bracketleft",
+  "shift+meta+bracketright",
+  "shift+meta+j",
+  "alt+meta+left",
+  "alt+meta+right",
+  "alt+meta+up",
+  "alt+meta+down",
+  "alt+meta+i",
+  "alt+meta+j",
+  "alt+meta+f",
+  "alt+meta+u",
+  "ctrl+left",
+  "ctrl+right",
+  "ctrl+up",
+  "ctrl+down",
+  "ctrl+meta+space",
+]);
+const OTHER_CHORDS = new Set([
+  "alt+left",
+  "alt+right",
+  "alt+home",
+  "alt+d",
+  "alt+e",
+  "alt+f",
+  "alt+space",
+  "alt+f4",
+  "ctrl+e",
+  "ctrl+h",
+  "ctrl+j",
+  "ctrl+k",
+  "ctrl+u",
+  "ctrl+f4",
+  "ctrl+f5",
+  "ctrl+pageup",
+  "ctrl+pagedown",
+  "ctrl+shift+pageup",
+  "ctrl+shift+pagedown",
+  "ctrl+shift+i",
+  "ctrl+shift+j",
+  "ctrl+shift+c",
+]);
 
 /** Whether the browser or the system keeps `keys`, such as ⌘ + W, which closes the tab. */
-export function belongsToBrowser(keys: string): boolean {
-  const parts = keys.split("+");
-  const key = parts.at(-1) ?? "";
-  const held = parts.includes("ctrl") || parts.includes("meta");
-  return BROWSERS.has(key) || (held && BROWSER_LETTERS.has(key));
+export function belongsToBrowser(keys: string, apple = onApple()): boolean {
+  const primary = apple ? "meta" : "ctrl";
+  const [modifier, key] = keys.split("+");
+  const shiftsPrimary = apple ? "shift+meta+" : "ctrl+shift+";
+  const firefox = isFirefox();
+  const firefoxOnLinux = firefox && !apple && navigator.platform.includes("Linux");
+  const numberedTabs = apple || !firefoxOnLinux;
+  return (
+    keys === "meta+space" ||
+    /(?:^|\+)(?:escape|tab)$/u.test(keys) ||
+    BROWSER_KEYS.has(keys) ||
+    /^shift\+(?:f3|f5|f10|f12)$/u.test(keys) ||
+    (modifier === primary &&
+      key !== undefined &&
+      keys === `${primary}+${key}` &&
+      (PRIMARY_KEYS.has(key) || key === "0" || (numberedTabs && /^[1-9]$/u.test(key)))) ||
+    (keys.startsWith(shiftsPrimary) && /^(?:g|n|r|t|w)$/u.test(keys.slice(shiftsPrimary.length))) ||
+    (apple ? APPLE_CHORDS : OTHER_CHORDS).has(keys) ||
+    (firefox &&
+      ((!keys.includes("+") && quickFindCharacter(layoutKeyOf(keys))) ||
+        (apple && keys === "meta+k") ||
+        (firefoxOnLinux && (keys === "ctrl+q" || /^alt\+[1-9]$/u.test(keys))) ||
+        (!apple && !firefoxOnLinux && keys === "ctrl+shift+q")))
+  );
+}
+
+/** Whether the current browser is Firefox, which has its own Quick Find keys. */
+export function isFirefox(): boolean {
+  return navigator.userAgent.includes("Firefox/");
+}
+
+function quickFindCharacter(key: string | undefined): boolean {
+  return key === "/" || key === "'";
+}
+
+/** Whether Firefox uses the typed character to open Quick Find, regardless of its physical key. */
+export function belongsToQuickFind(event: KeyboardEvent): boolean {
+  return (
+    isFirefox() &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    quickFindCharacter(event.key)
+  );
 }
 
 /**
@@ -289,17 +401,16 @@ export function changesOf(bindings: Bindings): SavedShortcuts {
   return changed.length === 0 ? null : Object.fromEntries(changed);
 }
 
-/**
- * Return the bindings `saved` gives: each command it names on its keys, and
- * every other on its defaults.
- *
- * Two commands on the same keys would leave one unreachable, as when a new
- * command's default is keys already saved for another. A saved command that
- * shares keys goes back to its default, until no two share.
- */
-export function bindingsOf(saved: unknown): Bindings {
+interface Resolved {
+  readonly bindings: Bindings;
+  readonly shortcuts: SavedShortcuts;
+}
+
+const USUAL: Resolved = { bindings: DEFAULT_BINDINGS, shortcuts: null };
+
+function resolveBindings(saved: unknown): Resolved {
   if (typeof saved !== "object" || saved === null || Array.isArray(saved)) {
-    return DEFAULT_BINDINGS;
+    return USUAL;
   }
   const kept = new Map(
     Object.entries(saved).flatMap(([command, keys]): [Command, readonly string[]][] =>
@@ -316,7 +427,12 @@ export function bindingsOf(saved: unknown): Bindings {
     ),
   );
   for (;;) {
-    const bindings: Bindings = { ...DEFAULT_BINDINGS, ...Object.fromEntries(kept) };
+    const claimed = new Set([...kept.values()].flat());
+    const defaults = { ...DEFAULT_BINDINGS };
+    for (const command of ["previousAlbum", "nextAlbum", "search"] as const) {
+      defaults[command] = defaults[command].filter((keys) => !claimed.has(keys));
+    }
+    const bindings: Bindings = { ...defaults, ...Object.fromEntries(kept) };
     const clashing = [...kept.keys()].filter((command) =>
       COMMANDS.some(
         (other) =>
@@ -325,7 +441,7 @@ export function bindingsOf(saved: unknown): Bindings {
       ),
     );
     if (clashing.length === 0) {
-      return bindings;
+      return { bindings, shortcuts: kept.size === 0 ? null : Object.fromEntries(kept) };
     }
     for (const command of clashing) {
       kept.delete(command);
@@ -333,38 +449,42 @@ export function bindingsOf(saved: unknown): Bindings {
   }
 }
 
+/** Return the effective bindings, including defaults not claimed by saved keys. */
+export function bindingsOf(saved: unknown): Bindings {
+  return resolveBindings(saved).bindings;
+}
+
 /** What this page holds: the bindings, whose they are, and the revision they came from. */
-interface Held {
-  readonly bindings: Bindings;
+interface Held extends Resolved {
   /** The Account signed in; `undefined` before one is. */
   readonly account: number | undefined;
   /** The revision the server last answered; `undefined` until it has. */
   readonly revision: number | undefined;
 }
 
-const NOBODY: Held = { bindings: DEFAULT_BINDINGS, account: undefined, revision: undefined };
+const NOBODY: Held = { ...USUAL, account: undefined, revision: undefined };
 
 /** Where this browser keeps its copy of an Account's shortcuts. */
 const copyKey = (account: number) => `${KEY}.${String(account)}`;
 
 /** Return the copy of `account`'s shortcuts this browser kept, or the defaults. */
-function loadCopy(account: number): Bindings {
+function loadCopy(account: number): Resolved {
   try {
     const copy: unknown = JSON.parse(localStorage.getItem(copyKey(account)) ?? "null");
-    return bindingsOf(
+    return resolveBindings(
       typeof copy === "object" && copy !== null ? Reflect.get(copy, "shortcuts") : null,
     );
   } catch {
-    return DEFAULT_BINDINGS;
+    return USUAL;
   }
 }
 
-function keepCopy(account: number | undefined, bindings: Bindings): void {
+function keepCopy(account: number | undefined, shortcuts: SavedShortcuts): void {
   if (account === undefined) {
     return;
   }
   try {
-    localStorage.setItem(copyKey(account), JSON.stringify({ shortcuts: changesOf(bindings) }));
+    localStorage.setItem(copyKey(account), JSON.stringify({ shortcuts }));
   } catch {
     // A browser that keeps nothing waits for the server's on the next visit.
   }
@@ -385,7 +505,7 @@ function show(next: Held): void {
 /** Show `account`'s shortcuts: this browser's copy at once, then the server's. */
 export async function openAccount(account: number): Promise<void> {
   if (held.account !== account) {
-    show({ bindings: loadCopy(account), account, revision: undefined });
+    show({ ...loadCopy(account), account, revision: undefined });
   }
   const preferences = await api.preferences();
   const now = held;
@@ -396,9 +516,22 @@ export async function openAccount(account: number): Promise<void> {
   ) {
     return;
   }
-  const bindings = bindingsOf(preferences.shortcuts);
-  keepCopy(account, bindings);
-  show({ bindings, account, revision: preferences.revision });
+  const resolved = resolveBindings(preferences.shortcuts);
+  keepCopy(account, resolved.shortcuts);
+  show({ ...resolved, account, revision: preferences.revision });
+}
+
+function applyChanges(next: Bindings, previous: Resolved): Resolved {
+  if (next === DEFAULT_BINDINGS) return USUAL;
+  const changed = changesOf(next);
+  const shortcuts = new Map(Object.entries(previous.shortcuts ?? {}));
+  for (const { command } of COMMANDS) {
+    if (next[command].join(",") === previous.bindings[command].join(",")) continue;
+    const keys = changed?.[command];
+    if (keys === undefined) shortcuts.delete(command);
+    else shortcuts.set(command, keys);
+  }
+  return resolveBindings(Object.fromEntries(shortcuts));
 }
 
 /**
@@ -409,13 +542,14 @@ export async function openAccount(account: number): Promise<void> {
  */
 export async function saveBindings(bindings: Bindings): Promise<void> {
   const { account } = held;
-  show({ ...held, bindings });
-  keepCopy(account, bindings);
+  const resolved = applyChanges(bindings, held);
+  const { shortcuts } = resolved;
+  show({ ...held, ...resolved });
+  keepCopy(account, shortcuts);
   pendingSaves.set(account, (pendingSaves.get(account) ?? 0) + 1);
   const save = lastSave
     .then(async () => {
       if (held.account !== account) return;
-      const shortcuts = changesOf(bindings);
       let saved: Preferences;
       try {
         const revision = held.revision ?? (await api.preferences()).revision;
@@ -450,7 +584,7 @@ function subscribe(listener: () => void): () => void {
   const onStorage = (event: StorageEvent) => {
     const { account } = held;
     if (account !== undefined && event.key === copyKey(account)) {
-      show({ ...held, bindings: loadCopy(account) });
+      show({ ...held, ...loadCopy(account) });
     }
   };
   listeners.add(listener);
@@ -463,7 +597,19 @@ function subscribe(listener: () => void): () => void {
 
 /** The bindings in use; every part of the page reads the same ones. */
 export function useBindings(): Bindings {
-  return useSyncExternalStore(subscribe, () => held.bindings);
+  const { bindings } = useEditableBindings();
+  return useMemo(() => {
+    const allowed = { ...bindings };
+    for (const { command } of COMMANDS) {
+      allowed[command] = bindings[command].filter((keys) => !belongsToBrowser(keys));
+    }
+    return allowed;
+  }, [bindings]);
+}
+
+/** The bindings Settings can edit, including saved keys the browser keeps. */
+export function useEditableBindings(): Resolved {
+  return useSyncExternalStore(subscribe, () => held);
 }
 
 /** The part of `navigator.keyboard` some browsers have, which says what each key prints. */

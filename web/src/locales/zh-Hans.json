@@ -713,6 +713,8 @@
   "{{command}} no longer has {{keys}}.": "已从「{{command}}」移除 {{keys}}。",
   "Back to the usual keys.": "已恢复默认快捷键。",
   "Keys for the player, kept with your account.": "播放器的快捷键保存在你的账号中。",
+  "Some saved shortcuts belong to the browser or system and will not run here. Choose other keys for them.": "有些已保存的快捷键被浏览器或系统占用，无法在这里使用。请为它们选择其他按键。",
+  "In Firefox, keys that type / or ' open Quick Find instead.": "在 Firefox 中，输入 / 或 ' 会打开快速查找。",
   "Show them while {{key}} is held, in this browser": "在此浏览器中，按住 {{key}} 时显示快捷键",
   "Remove {{keys}} from {{command}}": "从「{{command}}」移除 {{keys}}",
   "Remove {{keys}}": "移除 {{keys}}",

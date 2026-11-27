@@ -4978,6 +4978,11 @@ button.icon.heart.on:hover,
   transition: transform 260ms linear;
 }
 
+.seek-thumb-clip,
+.seek-thumb-position {
+  display: contents;
+}
+
 .seek-thumb {
   position: absolute;
   top: 50%;
@@ -4994,9 +4999,41 @@ button.icon.heart.on:hover,
     opacity 120ms;
 }
 
+@supports (overflow: clip) and (overflow-clip-margin: 3rem) {
+  /* The clip bounds scroll overflow; its margin leaves room for the thumb's shadow. */
+  .seek-thumb-clip {
+    display: block;
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    overflow-clip-margin: 3rem;
+  }
+
+  .seek-thumb-position {
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 0;
+    transform: translateX(calc(var(--played) * 100%));
+    transition: transform 260ms linear;
+  }
+
+  .seek-thumb {
+    top: 0;
+    left: 0;
+    transition: opacity 120ms;
+  }
+}
+
 .seek[data-held] .seek-fill,
 .seek[data-held] .seek-thumb {
   transition: opacity 120ms;
+}
+
+.seek[data-held] .seek-thumb-position {
+  transition: none;
 }
 
 .seek:hover .seek-thumb,
@@ -5304,6 +5341,7 @@ button.icon.heart.on:hover,
   }
 
   .seek-fill,
+  .seek-thumb-position,
   .seek-thumb {
     transition: none;
   }

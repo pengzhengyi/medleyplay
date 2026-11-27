@@ -772,6 +772,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The seek thumb animates a transform instead of its layout position in browsers
+  that support its clipping rules. Motion and seeking controls stay the same.
 - Albums stays more responsive during playback by reusing unchanged cards
   and their playback order. All albums and controls remain available.
 - Long **Up next** queues stay more responsive during playback without hiding

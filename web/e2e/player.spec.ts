@@ -262,6 +262,270 @@ test("dragging the seek bar moves the audio only once let go", async ({ page }) 
   expect((await audioState(page)).playing).toBe(true);
 });
 
+/** Alpha paused, with its seek bar in the regular player or Now Playing. */
+async function pausedSeek(page: Page, inDialog: boolean) {
+  await play(page, "Alpha");
+  await player(page).getByRole("button", { name: "Pause" }).click();
+  if (inDialog) {
+    await player(page).getByRole("button", { name: "Open Now Playing" }).click();
+  }
+  const scope = inDialog ? page.getByRole("dialog", { name: "Now Playing" }) : player(page);
+  const bar = scope.getByRole("slider", { name: "Position" });
+  await expect(bar).toHaveAttribute("aria-disabled", "false");
+  await bar.focus();
+  await page.keyboard.press("Home");
+  await expect(bar).toHaveAttribute("aria-valuenow", "0");
+  await expect
+    .poll(() =>
+      bar.evaluate(
+        (element) =>
+          element
+            .getAnimations({ subtree: true })
+            .filter(
+              (animation) =>
+                animation instanceof CSSTransition &&
+                ["left", "transform"].includes(animation.transitionProperty),
+            ).length,
+      ),
+    )
+    .toBe(0);
+  return bar;
+}
+
+async function thumbGeometry(bar: Locator) {
+  return bar.evaluate((element) => {
+    const thumb = element.querySelector<HTMLElement>(".seek-thumb");
+    if (thumb === null) throw new Error("The seek bar has no thumb.");
+    const box = element.getBoundingClientRect();
+    const dot = thumb.getBoundingClientRect();
+    const scroll = element.closest("dialog") ?? document.documentElement;
+    return {
+      left: box.left,
+      width: box.width,
+      center: dot.left + dot.width / 2,
+      layoutLeft: thumb.offsetLeft,
+      fill: element.querySelector(".seek-fill")?.getBoundingClientRect().right,
+      overflow: scroll.scrollWidth - scroll.clientWidth,
+    };
+  });
+}
+
+for (const inDialog of [false, true]) {
+  const layout = inDialog ? "Now Playing" : "the regular player";
+  test(`the seek thumb moves without changing layout position in ${layout}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const bar = await pausedSeek(page, inDialog);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const initialPhoneOverflow = (await thumbGeometry(bar)).overflow;
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await bar.evaluate((element) => {
+      const onTransition = (event: Event) => {
+        if (
+          !(event instanceof TransitionEvent) ||
+          !["left", "transform"].includes(event.propertyName)
+        )
+          return;
+        for (const animation of element.getAnimations({ subtree: true })) {
+          if (
+            animation instanceof CSSTransition &&
+            ["left", "transform"].includes(animation.transitionProperty)
+          ) {
+            animation.pause();
+            animation.currentTime = 0;
+          }
+        }
+        element.setAttribute("data-motion-ready", "");
+        element.removeEventListener("transitionrun", onTransition);
+      };
+      element.addEventListener("transitionrun", onTransition);
+    });
+
+    await page.keyboard.press("ArrowRight");
+    await expect(bar).toHaveAttribute("data-motion-ready");
+    expect(
+      await bar.locator(".seek-thumb-position").evaluate((element) =>
+        element
+          .getAnimations()
+          .filter((animation) => animation instanceof CSSTransition)
+          .map((animation) => animation.transitionProperty),
+      ),
+    ).toEqual(["transform"]);
+    const positions = [];
+    for (const time of [0, 130]) {
+      const durations = await bar.evaluate((element, at) => {
+        return element.getAnimations({ subtree: true }).flatMap((animation) => {
+          if (
+            !(animation instanceof CSSTransition) ||
+            !["left", "transform"].includes(animation.transitionProperty)
+          )
+            return [];
+          animation.currentTime = at;
+          return animation.effect?.getTiming().duration ?? [];
+        });
+      }, time);
+      expect(durations.length).toBeGreaterThanOrEqual(2);
+      expect(durations.every((duration) => duration === 260)).toBe(true);
+      positions.push(await thumbGeometry(bar));
+    }
+
+    const [start, middle] = positions;
+    if (!start || !middle) throw new Error("Missing motion samples.");
+    const target = start.left + start.width * (5 / 60);
+    expect(middle.center).toBeGreaterThan(start.center + 1);
+    expect(middle.center).toBeLessThan(target - 1);
+    expect(Math.abs(middle.center - (start.center + target) / 2)).toBeLessThan(0.75);
+    for (const position of positions) {
+      expect(position.layoutLeft).toBe(start.layoutLeft);
+      expect(Math.abs(position.center - (position.fill ?? NaN))).toBeLessThan(0.75);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    const resized = await thumbGeometry(bar);
+    expect(Math.abs(resized.center - (resized.left + resized.width * (2.5 / 60)))).toBeLessThan(
+      0.75,
+    );
+    expect(Math.abs(resized.center - (resized.fill ?? NaN))).toBeLessThan(0.75);
+    expect(resized.overflow).toBeLessThanOrEqual(initialPhoneOverflow + 1);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await bar.evaluate((element) => {
+      for (const animation of element.getAnimations({ subtree: true })) {
+        if (animation instanceof CSSTransition) animation.currentTime = 260;
+      }
+    });
+    const end = await thumbGeometry(bar);
+    expect(Math.abs(end.center - (end.left + end.width * (5 / 60)))).toBeLessThan(0.75);
+    expect(end.layoutLeft).toBe(start.layoutLeft);
+  });
+
+  test(`the seek thumb follows held and reduced-motion positions immediately in ${layout}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
+    const bar = await pausedSeek(page, inDialog);
+
+    await page.keyboard.press("PageUp");
+
+    const reduced = await thumbGeometry(bar);
+    expect(Math.abs(reduced.center - (reduced.left + reduced.width * 0.1))).toBeLessThan(0.75);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const box = await bar.boundingBox();
+    if (box === null) throw new Error("The seek bar is missing.");
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width * 0.2, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.7, y);
+
+    const held = await thumbGeometry(bar);
+    expect(Math.abs(held.center - (held.left + held.width * 0.7))).toBeLessThan(0.75);
+    expect((await audioState(page)).position).toBeLessThan(7);
+    await page.mouse.up();
+    await expect.poll(async () => (await audioState(page)).position).toBeCloseTo(42, 0);
+  });
+
+  test(`the seek thumb keeps its endpoint hit targets without widening ${layout}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const bar = await pausedSeek(page, inDialog);
+    for (const fallback of [false, true]) {
+      if (fallback) {
+        const removed = await page.evaluate(() => {
+          let count = 0;
+          for (const sheet of document.styleSheets) {
+            for (let index = sheet.cssRules.length - 1; index >= 0; index--) {
+              const rule = sheet.cssRules[index];
+              if (
+                rule instanceof CSSSupportsRule &&
+                rule.conditionText.includes("overflow-clip-margin")
+              ) {
+                sheet.deleteRule(index);
+                count++;
+              }
+            }
+          }
+          return count;
+        });
+        expect(removed).toBe(1);
+      }
+      for (const width of [1280, 768, 390]) {
+        await page.setViewportSize({ width, height: 844 });
+        await bar.evaluate((element) => {
+          (element as HTMLElement).style.setProperty("--played", "0");
+        });
+        const initialOverflow = (await thumbGeometry(bar)).overflow;
+        for (const share of [0, 0.5, 1]) {
+          // These are the renderer's position inputs; seeking behavior is checked separately.
+          await bar.evaluate((element, at) => {
+            (element as HTMLElement).style.setProperty("--played", String(at));
+          }, share);
+          const geometry = await thumbGeometry(bar);
+          expect(Math.abs(geometry.center - (geometry.left + geometry.width * share))).toBeLessThan(
+            0.75,
+          );
+          expect(geometry.overflow).toBeLessThanOrEqual(initialOverflow + 1);
+          expect(
+            await bar.evaluate((element, at) => {
+              const thumb = element.querySelector(".seek-thumb");
+              if (thumb === null) throw new Error("Missing thumb.");
+              const box = thumb.getBoundingClientRect();
+              const x =
+                at === 0 ? box.left + 2 : at === 1 ? box.right - 2 : box.left + box.width / 2;
+              return (
+                document.elementFromPoint(x, box.top + box.height / 2)?.closest(".seek") === element
+              );
+            }, share),
+          ).toBe(true);
+        }
+      }
+    }
+  });
+}
+
+test.describe("touch seek visibility", () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test("the thumb stays visible and taps seek in both player layouts", async ({ page }) => {
+    await page.goto("/");
+    expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true);
+    const idle = player(page).getByRole("slider", { name: "Position" });
+    await expect(idle).toHaveAttribute("aria-disabled", "true");
+    await expect(idle.locator(".seek-thumb")).toHaveCSS("opacity", "0");
+    await page.getByRole("button", { name: "Alpha", exact: true }).tap();
+    await player(page).getByRole("button", { name: "Pause" }).tap();
+
+    for (const inDialog of [false, true]) {
+      if (inDialog) await player(page).getByRole("button", { name: "Open Now Playing" }).tap();
+      const scope = inDialog ? page.getByRole("dialog", { name: "Now Playing" }) : player(page);
+      const bar = scope.getByRole("slider", { name: "Position" });
+      await expect(bar.locator(".seek-thumb")).toHaveCSS("opacity", "1");
+      const box = await bar.boundingBox();
+      if (box === null) throw new Error("Missing seek bar.");
+      const share = inDialog ? 0.65 : 0.25;
+
+      await page.touchscreen.tap(box.x + box.width * share, box.y + box.height / 2);
+
+      await expect.poll(async () => (await audioState(page)).position).toBeCloseTo(60 * share, 0);
+    }
+  });
+});
+
+test("the seek thumb stays hidden with unknown duration in both player layouts", async ({
+  page,
+}) => {
+  await page.route("**/api/sources/*/audio", (route) => route.fulfill({ status: 204 }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Alpha", exact: true }).click();
+
+  for (const inDialog of [false, true]) {
+    if (inDialog) await player(page).getByRole("button", { name: "Open Now Playing" }).click();
+    const scope = inDialog ? page.getByRole("dialog", { name: "Now Playing" }) : player(page);
+    const bar = scope.getByRole("slider", { name: "Position" });
+    await bar.focus();
+
+    await expect(bar).toHaveAttribute("aria-disabled", "true");
+    await expect(bar.locator(".seek-thumb")).toHaveCSS("opacity", "0");
+  }
+});
+
 test("pausing stops the audio, and playing goes on", async ({ page }) => {
   await play(page, "Alpha");
 

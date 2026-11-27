@@ -62,6 +62,36 @@ void words.use(initReactI18next).init({
         album_count_other: "{{count}} albums",
         star_count_one: "{{count}} star",
         star_count_other: "{{count}} stars",
+        ratings_replaces_one: "It replaces your earlier import of {{amount}} album.",
+        ratings_replaces_other: "It replaces your earlier import of {{amount}} albums.",
+        ratings_previously_imported_one:
+          "The incoming entries replace {{amount}} previously imported album entry.",
+        ratings_previously_imported_other:
+          "The incoming entries replace {{amount}} previously imported album entries.",
+        ratings_total_after_import_one: "Your import will have {{amount}} album.",
+        ratings_total_after_import_other: "Your import will have {{amount}} albums.",
+        ratings_discard_one:
+          "Discard the {{amount}} album you imported? Songs you rated yourself keep their ratings.",
+        ratings_discard_other:
+          "Discard the {{amount}} albums you imported? Songs you rated yourself keep their ratings.",
+        ratings_earlier_import_one: "Your earlier import of {{amount}} album",
+        ratings_earlier_import_other: "Your earlier import of {{amount}} albums",
+        ratings_preview_albums_one:
+          "{{amount}} album rated or reviewed; your Library has {{matched}} of them.",
+        ratings_preview_albums_other:
+          "{{amount}} albums rated or reviewed; your Library has {{matched}} of them.",
+        ratings_changed_songs_one: "{{amount}} song takes a new rating.",
+        ratings_changed_songs_other: "{{amount}} songs take a new rating.",
+        ratings_joining_one: "{{amount}} song joins",
+        ratings_joining_other: "{{amount}} songs join",
+        ratings_leaving_one: "{{amount}} song leaves",
+        ratings_leaving_other: "{{amount}} songs leave",
+        ratings_unmatched_one: "{{amount}} album isn't in your Library",
+        ratings_unmatched_other: "{{amount}} albums aren't in your Library",
+        ratings_imported_one: "Imported {{amount}} album.",
+        ratings_imported_other: "Imported {{amount}} albums.",
+        ratings_imported_heading_one: "Your imported ratings ({{amount}} album)",
+        ratings_imported_heading_other: "Your imported ratings ({{amount}} albums)",
         add_to_playlists_one: "Add to {{count}} playlist",
         add_to_playlists_other: "Add to {{count}} playlists",
         hour_count_one: "{{count}} hour",

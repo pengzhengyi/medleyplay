@@ -752,6 +752,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Artist suggestions respond faster while typing in a large Library; search
   results and navigation stay the same.
+- Edit details has a compact cross beside the album fold arrow to mark a song
+  as a single. It asks for confirmation and leaves the change unsaved until
+  **Save**; stored metadata and files are not deleted.
 - Large album galleries open faster while keeping every album and the same
   keyboard navigation.
 - The Library/Bilibili toggle sits to the left of the search field.
@@ -948,6 +951,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Lyrics notation stays beneath the search bar and table headings when songs
+  scroll behind them.
 - Mark a song as **No album (single)** in Edit details to stop album suggestions
   in Clean up. Unknown albums are no longer labeled as singles.
 

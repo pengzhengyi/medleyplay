@@ -54,6 +54,84 @@ async function expectIndicatorBadge(badge: Locator) {
 
 for (const width of [390, 1280]) {
   for (const colorScheme of ["light", "dark"] as const) {
+    test(`lyrics badges stay below sticky headings at ${String(width)}px in ${colorScheme}`, async ({
+      page,
+      request,
+      baseURL,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+      const response = await request.get("/api/tracks");
+      expect(response.ok()).toBe(true);
+      const catalog = (await response.json()) as Track[];
+      const source = catalog[0];
+      expect(source).toBeDefined();
+      if (source === undefined) return;
+      const tracks = Array.from({ length: 80 }, (_, index): Track => ({
+        ...source,
+        id: index + 90000,
+        title: `Layer song ${String(index).padStart(3, "0")}`,
+        artist: "Layer artist",
+        artists: ["Layer artist"],
+        album: "",
+        album_artist: "",
+        kind: "song",
+        kind_reason: "named",
+        split: false,
+        segment_of: null,
+        cover: null,
+        has_lyrics: true,
+      }));
+      await page.route("**/*", (route) =>
+        route.request().method() === "GET" &&
+        new URL(route.request().url()).origin === new URL(baseURL ?? "").origin
+          ? route.continue()
+          : route.abort(),
+      );
+      await page.route("**/api/tracks", (route) => route.fulfill({ json: tracks }));
+      await page.route("**/api/events?*", (route) =>
+        route.fulfill({ contentType: "text/event-stream", body: "event: ready\ndata: {}\n\n" }),
+      );
+      await page.goto("/#/library");
+      const row = page.getByRole("row").filter({
+        has: page.getByRole("button", { name: "Layer song 000", exact: true }),
+      });
+      const badge = row.locator(".lyrics-badge");
+      await expectIndicatorBadge(badge);
+
+      for (const selector of [".tracks thead th", ".top"]) {
+        await badge.evaluate((mark, layerSelector) => {
+          const layer = document.querySelector(layerSelector);
+          if (layer === null) throw new Error("Sticky layer missing");
+          const box = layer.getBoundingClientRect();
+          const badge = mark.getBoundingClientRect();
+          const stickyTop = Number.parseFloat(getComputedStyle(layer).top);
+          window.scrollBy(0, badge.top + badge.height / 2 - stickyTop - box.height / 2);
+        }, selector);
+        await expect
+          .poll(async () =>
+            badge.evaluate((mark, layerSelector) => {
+              const box = mark.getBoundingClientRect();
+              const previous = mark.style.pointerEvents;
+              mark.style.pointerEvents = "auto";
+              const layers = document.elementsFromPoint(
+                box.left + box.width / 2,
+                box.top + box.height / 2,
+              );
+              mark.style.pointerEvents = previous;
+              const heading = layers.findIndex((element) => element.matches(layerSelector));
+              const notation = layers.indexOf(mark);
+              return { headingPresent: heading >= 0, badgeBeneath: notation > heading };
+            }, selector),
+          )
+          .toEqual({ headingPresent: true, badgeBeneath: true });
+      }
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+      await expectIndicatorBadge(badge);
+    });
+
     test(`lyrics badges anchor to small indicators at ${String(width)}px in ${colorScheme}`, async ({
       page,
       request,

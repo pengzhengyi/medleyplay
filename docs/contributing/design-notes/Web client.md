@@ -11,6 +11,7 @@
 ## Contents
 
 - [Data](#data)
+- [Interface language](#interface-language)
 - [Views](#views)
 - [The song table](#the-song-table)
 - [A song's menu](#a-songs-menu)
@@ -29,9 +30,8 @@
 **Interface language belongs to the device.** The page follows the browser's
 language preferences until someone chooses English or Simplified Chinese at
 sign-in or in Settings → Appearance. The choice updates the page without
-reloading the player. The HTML language matches the active translation.
-Interface messages use i18next; names, lyrics, and text entered by the
-household are not translation keys. Screens without a translation use English.
+reloading the player. The HTML language matches the active translation. See
+[Interface language](#interface-language) for what the client translates.
 
 - **The client loads the whole Library once:** `GET /api/tracks` when the page
   opens, keyed by id. Every view, sort, and search is worked out in the browser
@@ -78,6 +78,60 @@ household are not translation keys. Screens without a translation use English.
   for it and the next queue entry. It asks the browser to prefetch their local
   heading pictures. Preparing the pages does not open them, ask an outside
   site, or start a Job to search for artwork.
+
+## Interface language
+
+> [!NOTE]
+> **Status: proposed.** Extend the Simplified Chinese interface from the
+> existing labels to the copy that explains what to do on each screen.
+
+The language applies to the app's own copy, including help, placeholders,
+tooltips, accessible names, and loading, empty, success, and error states.
+Keep the existing English interface, the device preference, and navigation
+behavior. The library's names, lyrics, notes, search input, identifiers, and
+provider-supplied content stay as written.
+
+| Screen group | Copy to check |
+| --- | --- |
+| Sign-in and the app around every view | First account, device approval, loading, recovery, rail, and shared dialogs |
+| Library and search | Songs, filters and sorting, Artists, Albums, Playlists, search suggestions, Downloaded, and upload and download flows |
+| Playback | Player, Now Playing, queue, radio, history, shortcuts, and listening on another device |
+| Editors and organizers | Song, lyrics, album, artist, image, and playlist editors; Clean up and Insights |
+| Settings | Every section for listeners and administrators, including explanations, validation, and dependent controls |
+
+The view calls `useWords` at render time for labels, or passes the translator
+to a formatter that needs to assemble a message. Keep message keys as the
+English text where that already works. Use a whole message with named
+placeholders when it contains a name, a count, or another value: the Chinese
+sentence can then put it where it belongs. Use existing i18next plural rules
+when a single key needs different English singular and plural forms. Pass
+stable route IDs and option values separately from their translated labels.
+Translate search explanations and suggestions, but keep the supported search
+syntax and values in executable examples, such as `favorite:yes` and
+`kind:albums`. A language switch leaves the query, URL, and results unchanged.
+
+Select translations where the source of a message is known. Use an app status,
+reason code, or field-specific mapping for app-defined text; pass server
+details, provider content, and household names through as values, even if they
+match translation keys. Keep app message keys and arguments in view state, not
+their translated results. Use the active interface language for formatters that
+produce words, even when the browser prefers a different language. Missing
+translations still fall back to English, but fallback does not replace a
+translation of app copy. Reuse the current catalog and tooling; no new
+dependency, storage key, or server-side locale is needed.
+
+For each increment, record the screens, dialogs, states, and shared formatters
+it covers. Classify its source audit candidates as translated, deliberately
+preserved, or not shown. Check the rendered states alongside the source audit;
+no screen or outstanding candidate should be left unreviewed in the final pass.
+
+Check source messages and finite label maps against the Chinese resource
+without English fallback. Match named placeholders to the English message,
+allowing reordering. Exercise counts of zero, one, and two in both languages
+instead of requiring the same plural suffixes. In React tests, switch language
+with an existing refusal displayed, keep a title that matches a catalog key
+unchanged, and exercise a tagged search. Check representative desktop and phone
+layouts using a test Library, never the household's data.
 
 ## Views
 

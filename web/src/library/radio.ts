@@ -16,6 +16,7 @@
  */
 
 import type { Track } from "../api";
+import type { Words } from "../locale";
 import {
   type FavoriteGroups,
   NO_FAVORITES,
@@ -611,11 +612,17 @@ function albumLikeness(a: Album, b: Album): number {
 
 const coverOf = (album: Album) => album.tracks.find((track) => track.cover !== null)?.cover ?? null;
 
-function daysAgoText(days: number): string {
+const calendarDay = (date: Date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+
+function daysAgoText(added: number, now: Date, t?: Words): string {
+  const days = (calendarDay(now) - calendarDay(new Date(added))) / DAY_MS;
   if (days < 1) {
-    return "Added today";
+    return t?.("Added today") ?? "Added today";
   }
-  return days < 2 ? "Added yesterday" : `Added ${String(Math.floor(days))} days ago`;
+  const whole = Math.floor(days);
+  return days < 2
+    ? (t?.("Added yesterday") ?? "Added yesterday")
+    : (t?.("Added {{days}} days ago", { days: whole }) ?? `Added ${String(whole)} days ago`);
 }
 
 /**
@@ -629,7 +636,13 @@ export function albumShelves(
   now: Date,
   random: Random,
   favorites: FavoriteGroups = NO_FAVORITES,
+  presentation?: { readonly locale: string; readonly t: Words },
 ): Shelf[] {
+  const t = presentation?.t;
+  const month =
+    presentation === undefined
+      ? months
+      : new Intl.DateTimeFormat(presentation.locale, { month: "long", year: "numeric" });
   const albums = albumsOf(tracks, favorites);
   // Ties break the same way for the same generator: a random order, kept stably.
   const order = new Map(albums.map((album) => [album.key, random()]));
@@ -679,17 +692,18 @@ export function albumShelves(
     taken.add(anchor.key);
     shelf(
       "more-like",
-      `More like ${anchor.name}`,
+      t?.("More like {{album}}", { album: anchor.name }) ?? `More like ${anchor.name}`,
       albums.flatMap((album) => {
         const like = albumLikeness(anchor, album);
-        return like > 0 ? [{ album, score: like, reason: `Like ${anchor.name}` }] : [];
+        const reason = t?.("Like {{album}}", { album: anchor.name }) ?? `Like ${anchor.name}`;
+        return like > 0 ? [{ album, score: like, reason }] : [];
       }),
     );
   }
 
   shelf(
     "not-played",
-    "Not played yet",
+    t?.("Not played yet") ?? "Not played yet",
     albums.flatMap((album) => {
       if (album.anyPlayed) {
         return [];
@@ -701,14 +715,17 @@ export function albumShelves(
         return [];
       }
       const reason =
-        artist > 0 ? `New to you, from ${album.artist}` : "New to you, in a genre you play";
+        artist > 0
+          ? (t?.("New to you, from {{artist}}", { artist: album.artist }) ??
+            `New to you, from ${album.artist}`)
+          : (t?.("New to you, in a genre you play") ?? "New to you, in a genre you play");
       return [{ album, score, reason }];
     }),
   );
 
   shelf(
     "rediscover",
-    "Rediscover",
+    t?.("Rediscover") ?? "Rediscover",
     albums.flatMap((album) => {
       if (album.lastPlayed === undefined || album.taste < 0.75) {
         return [];
@@ -719,18 +736,19 @@ export function albumShelves(
       }
       // Up to a year away counts: a loved album gone two years is no likelier than one.
       const score = album.taste * Math.min(since / 30, 12);
-      const reason = `Not played since ${months.format(album.lastPlayed)}`;
+      const date = month.format(album.lastPlayed);
+      const reason = t?.("Not played since {{date}}", { date }) ?? `Not played since ${date}`;
       return [{ album, score, reason }];
     }),
   );
 
   shelf(
     "just-added",
-    "Just added",
+    t?.("Just added") ?? "Just added",
     albums.flatMap((album) => {
       const since = (time - album.added) / DAY_MS;
       return since <= 30 && !album.allPlayed
-        ? [{ album, score: -since, reason: daysAgoText(since) }]
+        ? [{ album, score: -since, reason: daysAgoText(album.added, now, t) }]
         : [];
     }),
   );
@@ -739,11 +757,11 @@ export function albumShelves(
   if (!anything) {
     shelf(
       "library",
-      "From your Library",
+      t?.("From your Library") ?? "From your Library",
       albums.map((album) => ({
         album,
         score: album.added,
-        reason: daysAgoText((time - album.added) / DAY_MS),
+        reason: daysAgoText(album.added, now, t),
       })),
     );
   }

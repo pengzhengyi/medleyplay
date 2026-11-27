@@ -68,6 +68,8 @@ void words.use(initReactI18next).init({
         hour_count_other: "{{count}} hours",
         minute_count_one: "{{count}} minute",
         minute_count_other: "{{count}} minutes",
+        radio_favorites_one: "Your {{count}} favorite song, every one before any again.",
+        radio_favorites_other: "Your {{count}} favorite songs, every one before any again.",
       },
     },
     "zh-Hans": { translation: zh },

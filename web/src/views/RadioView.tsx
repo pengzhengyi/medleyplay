@@ -4,12 +4,13 @@
  */
 
 import { HeartIcon, PlayIcon, RadioIcon } from "@phosphor-icons/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { Track } from "../api";
 import { type FavoriteGroups, NO_FAVORITES } from "../library/favoriteGroups";
 import { type AlbumCard, albumShelves, favoriteSongsOf, seedOf, seeded } from "../library/radio";
 import type { Station } from "../library/useStation";
+import { useFormattingLocale, useWords } from "../locale";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
 
@@ -38,12 +39,25 @@ export function RadioView({
   /** The time the shelves are for; the clock's by default. */
   readonly now?: Date;
 }) {
+  const t = useWords();
+  const locale = useFormattingLocale();
   const day = dayOf(now);
+  const [rankingTime, setRankingTime] = useState(() => ({ day, at: now }));
+  if (rankingTime.day !== day) setRankingTime({ day, at: now });
+  const [couldNotStart, setCouldNotStart] = useState(false);
   const shelves = useMemo(
-    () => albumShelves(tracks, now, seeded(seedOf(`${String(accountId)}:${day}`)), favorites),
-    // The shelves change with the Tracks and the day, not with every moment of it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tracks, accountId, day, favorites],
+    () =>
+      albumShelves(
+        tracks,
+        rankingTime.at,
+        seeded(seedOf(`${String(accountId)}:${rankingTime.day}`)),
+        favorites,
+        {
+          locale,
+          t,
+        },
+      ),
+    [tracks, accountId, rankingTime, favorites, locale, t],
   );
   const favoriteCount = useMemo(
     () => favoriteSongsOf(tracks, favorites).length,
@@ -54,45 +68,55 @@ export function RadioView({
     <>
       <header className="view-heading">
         <h2 className="section" data-rail-named>
-          Radio
+          {t("Radio")}
         </h2>
       </header>
       <div className="stations">
-        <section className="station" aria-label="My station">
+        <section className="station" aria-label={t("My station")}>
           <span className="station-icon" aria-hidden>
             <RadioIcon weight="duotone" />
           </span>
           <div className="station-text">
-            <h3>My station</h3>
+            <h3>{t("My station")}</h3>
             <p>
               {station.playing === "mine" && seed !== undefined
-                ? `Playing from ${seed.title} by ${seed.artist}`
-                : "Songs you like, and more like them, for as long as you listen."}
+                ? t("Started from {{title}} by {{artist}}", {
+                    title: seed.title,
+                    artist: seed.artist,
+                  })
+                : t("Songs you like, and more like them, for as long as you listen.")}
             </p>
           </div>
           <button
             type="button"
             className="station-play"
             onClick={() => {
-              station.start();
+              setCouldNotStart(!station.start());
             }}
           >
             <PlayIcon weight="fill" aria-hidden />
-            Play my station
+            {t("Play my station")}
           </button>
+          {couldNotStart && (
+            <p role="status" className="hint">
+              {t(
+                "No songs can start your station right now. Add a song that can play and try again.",
+              )}
+            </p>
+          )}
         </section>
-        <section className="station favorites" aria-label="Favorites">
+        <section className="station favorites" aria-label={t("Favorites")}>
           <span className="station-icon" aria-hidden>
             <HeartIcon weight="duotone" />
           </span>
           <div className="station-text">
-            <h3>Favorites</h3>
+            <h3>{t("Favorites")}</h3>
             <p>
               {station.playing === "favorites"
-                ? "Playing now"
+                ? t("Current station")
                 : favoriteCount === 0
-                  ? "Heart a song, or favorite an artist or album, to fill it."
-                  : `Your ${favoriteCount === 1 ? "1 favorite song" : `${String(favoriteCount)} favorite songs`}, every one before any again.`}
+                  ? t("Heart a song, or favorite an artist or album, to fill it.")
+                  : t("radio_favorites", { count: favoriteCount })}
             </p>
           </div>
           <button
@@ -104,14 +128,15 @@ export function RadioView({
             }}
           >
             <PlayIcon weight="fill" aria-hidden />
-            Play favorites
+            {t("Play favorites")}
           </button>
         </section>
       </div>
       {shelves.length === 0 && (
         <p className="empty">
-          Play, rate, and add some albums, and albums for you show here. An album here has at least
-          two songs that play now.
+          {t(
+            "Play, rate, and add some albums, and albums for you show here. An album here has at least two songs that play now.",
+          )}
         </p>
       )}
       {shelves.map((shelf) => (
@@ -126,7 +151,7 @@ export function RadioView({
                     <div className="shelf-link">
                       <Cover size="medium" cover={album.cover} className="cover-tile" />
                       <span className="group-name">{album.name}</span>
-                      <span className="group-meta">{album.artist || "Unknown artist"}</span>
+                      <span className="group-meta">{album.artist || t("Unknown artist")}</span>
                     </div>
                   ) : (
                     <a
@@ -135,7 +160,7 @@ export function RadioView({
                     >
                       <Cover size="medium" cover={album.cover} className="cover-tile" />
                       <span className="group-name">{album.name}</span>
-                      <span className="group-meta">{album.artist || "Unknown artist"}</span>
+                      <span className="group-meta">{album.artist || t("Unknown artist")}</span>
                     </a>
                   )}
                   <span className="shelf-reason">{album.reason}</span>
@@ -143,8 +168,8 @@ export function RadioView({
                     <button
                       type="button"
                       className="shelf-button"
-                      aria-label={`Play ${album.name}`}
-                      title="Play"
+                      aria-label={t("Play {{title}}", { title: album.name })}
+                      title={t("Play")}
                       onClick={() => {
                         onPlayAll(album.tracks, false);
                       }}
@@ -155,8 +180,8 @@ export function RadioView({
                       <button
                         type="button"
                         className="shelf-button"
-                        aria-label={`Start a station from ${album.name}`}
-                        title="Start a station"
+                        aria-label={t("Start a station from {{album}}", { album: album.name })}
+                        title={t("Start a station")}
                         onClick={() => {
                           station.start(first);
                         }}

@@ -238,6 +238,18 @@ the household looks for the lyrics itself, by a title and artist of its own.
   With **Search directly**, one click finds candidates, asks AI to choose, and
   keeps the progress and picks. Once submitted, Auto-Match runs even when Songs
   or the browser is closed; it does not save unsaved song-list edits.
+- **The default choice prompt** looks for the same recording and exact or close
+  duration, then favors timed lyrics in the original sung language. When that
+  language differs from the interface language at the start of Auto-Match, it
+  prefers an existing translation paired with the original, provided the recording
+  and timing fit just as well. The server sends only recognizable language hints,
+  not the lyrics. Unknown languages do not earn a translation preference, and
+  Auto-Match never generates a translation.
+- **Ambiguous recordings stay unmatched.** When two candidates have the same
+  recording details, a pick is ready only if it can be identified on its own and
+  is the only one with the preferred paired translation. Conflicting versions,
+  uncertain original languages, or paired text of unknown language leave the
+  match unresolved.
 - **A clear pick is ready to save, not playable lyrics.** The Lyrics button
   opens the song's editor for review. The count above **Save** covers ready
   picks for songs the submitted list keeps unchanged, including both ends of
@@ -252,7 +264,8 @@ the household looks for the lyrics itself, by a title and artist of its own.
   pick works Offline and does not call the finder or AI again.
 - **Jobs keep the work.** Auto-Match uses the same finder and chooser in their
   existing [lanes](Jobs.md#job-kinds-and-programs). A second request reuses a
-  compatible active match for the song; it never takes over a manual lookup.
+  compatible active match for the song only when the interface language agrees.
+  It never takes over a manual lookup.
   Finding commits the candidates and queues the choice together. Choosing
   records the pick with its choice Job, without writing lyrics. Network work
   waits while Offline. A [restart](Jobs.md#recovery-after-a-restart) can repeat an interrupted
@@ -285,7 +298,7 @@ the household looks for the lyrics itself, by a title and artist of its own.
 | `POST /api/tracks/{id}/lyrics/find` | Signed in | Finds the songs titled `{title, artist}` on the lyrics sites, for the song; 202, 409 while the lyrics plugin is off |
 | `GET /api/tracks/{id}/lyrics/found` | Signed in | What was last found: the title and artist asked, each song found with its site, album, length, and lyrics, an AI model's pick and why, whether either is being asked, why either failed, and whether a model may be asked |
 | `POST /api/tracks/{id}/lyrics/choose` | Signed in | Asks an AI model which song found is the song; 202, 409 with no songs found, no model set up, or the `ai-details` plugin off |
-| `POST /api/tracks/{id}/songs/lyrics-match` | Signed in | Starts Auto-Match for one or more saved rows of this album; 202 with a Job ID or a skip reason and the previous Job ID, if any, per song |
+| `POST /api/tracks/{id}/songs/lyrics-match` | Signed in | Starts Auto-Match for saved rows, using `Accept-Language: en` or `zh-Hans` when sent; 202 with a Job ID or an optional previous Job ID and a skip reason per song |
 | `GET /api/tracks/{id}/songs/lyrics-match` | Signed in | Reads manual lyrics selections and the latest Auto-Match for other songs in this album; failure details show only to the requester or an admin |
 | `PUT /api/tracks/{id}/songs` | Signed in | Saves the song list and any exact ready picks named by `lyric_picks`, in one transaction; 409 if a named pick is stale |
 | `POST /api/tracks/{id}/lyrics/match/find` | Signed in | Starts only the search stage for a saved song, without automatic saving |

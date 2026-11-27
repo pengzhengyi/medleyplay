@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- When the animated background in Now Playing repeatedly misses frames, it
+  switches to a gently moving cover without changing your Dynamics setting.
 - A quotation-mark badge on song and album icons shows when lyrics are
   available. Albums are marked only when every song has lyrics. The Songs editor
   uses the same quotation mark for its Lyrics buttons, keeping match progress
@@ -45,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and prepares clear picks to review and save, without replacing existing lyrics.
   Reopen Songs to see each Job's result beside its song. In Settings → Lyrics,
   choose whether to confirm first (the default) or search directly.
+- **Auto-Match lyrics** looks for the same recording and duration, keeps the
+  original sung language, and prefers an available paired translation in your
+  interface language when the recording and timing fit equally well.
 - **Resume a Bilibili video lookup** — close the add dialog, refresh, or restart
   the server without losing the result. In *Downloaded*, select *Choose parts*
   to finish or *Dismiss* to discard it. Nothing is added until you confirm.

@@ -41,10 +41,13 @@ export function browserLanguage(languages: readonly string[]): Language {
 
 let choice = saved();
 const listeners = new Set<() => void>();
-const effective = () => (choice === "auto" ? browserLanguage(navigator.languages) : choice);
+export function interfaceLanguage(): Language {
+  return choice === "auto" ? browserLanguage(navigator.languages) : choice;
+}
+
 const words = createInstance();
 void words.use(initReactI18next).init({
-  lng: effective(),
+  lng: interfaceLanguage(),
   initAsync: false,
   fallbackLng: "en",
   keySeparator: false,
@@ -181,7 +184,7 @@ void words.use(initReactI18next).init({
 });
 
 function apply(): void {
-  const language = effective();
+  const language = interfaceLanguage();
   document.documentElement.lang = language;
   void words.changeLanguage(language);
   for (const listener of listeners) listener();
@@ -227,7 +230,7 @@ export function useLanguageChoice() {
 
 export function useFormattingLocale(): string {
   return useSyncExternalStore(subscribe, () => {
-    const language = effective();
+    const language = interfaceLanguage();
     return navigator.languages.find((tag) => supportedLanguage(tag) === language) ?? language;
   });
 }

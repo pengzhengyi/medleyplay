@@ -20,7 +20,7 @@ from tests.support.api import set_up_as_alice
 from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock
-from tests.support.plugins.reader import lyrics_of
+from tests.support.plugins.reader import LANTERN_WALTZ, LANTERN_WALTZ_TRANSLATION, lyrics_of
 
 MELT = """\
 [00:12.34]朝目が覚めて
@@ -122,6 +122,72 @@ def test_one_batch_finds_and_chooses_then_another_page_saves_every_ready_song(
         "saved",
         "skipped",
     ]
+
+
+@pytest.mark.parametrize(
+    ("title", "language", "state"),
+    [
+        ("Lantern Waltz", "en", "ready"),
+        ("Lantern Waltz", "zh-Hans", "skipped"),
+        ("Lantern Waltz (Instrumental Candidate)", "en", "skipped"),
+        ("Lantern Waltz (Unclassified Translation)", "en", "skipped"),
+    ],
+    ids=["available-translation", "wrong-language", "conflicting-version", "unclassified-pair"],
+)
+def test_auto_match_saves_original_and_paired_translation_when_it_resolves_a_tie(
+    matching: tuple[TestClient, Enriching], title: str, language: str, state: str
+) -> None:
+    client, running = matching
+    set_up_as_alice(client)
+    assert client.post(
+        "/api/ai/providers", json={"base_url": OLLAMA, "model": "synthetic"}
+    ).is_success
+    assert client.put(
+        "/api/settings", json={"storage_limit": None, "lyrics_sites": ["netease"], "revision": 0}
+    ).is_success
+    album = running.add_song("Instrument Test Album")
+    route = f"/api/tracks/{album}/songs"
+    rows = [
+        {"start_ms": 0, "title": title, "artist": "Test Band"},
+        {"start_ms": 180_000, "title": "Closing Track", "artist": "Test Band"},
+    ]
+    saved = client.put(route, json={"rows": rows})
+    assert saved.is_success
+    first, last = saved.json()["songs"]
+    start = client.post(
+        f"{route}/lyrics-match",
+        headers={"Accept-Language": language},
+        json=[rows[0] | {"segment_id": first["id"], "track_id": first["track_id"]}],
+    )
+
+    assert start.is_success
+    running.finish_every_job()
+    (match,) = client.get(f"{route}/lyrics-match").json()
+    assert match["state"] == state
+    lyric_route = f"/api/tracks/{first['track_id']}/lyrics"
+    assert client.get(lyric_route).json() is None
+    if state == "ready":
+        kept = client.put(
+            route,
+            json={
+                "rows": [
+                    row | {"id": saved_row["id"]}
+                    for row, saved_row in zip(rows, (first, last), strict=True)
+                ],
+                "known": [first["id"], last["id"]],
+                "lyric_picks": [match["choice_job_id"]],
+            },
+        )
+        assert kept.is_success, kept.text
+        lyrics = client.get(lyric_route).json()
+        assert (lyrics["origin"], lyrics["text"]) == (
+            "netease",
+            LANTERN_WALTZ + LANTERN_WALTZ_TRANSLATION,
+        )
+        assert (lyrics["lines"][0]["text"], lyrics["lines"][0]["translation"]) == (
+            "あおい空",
+            "I see the sky",
+        )
 
 
 def test_a_song_with_no_lyrics_shows_none(client: TestClient, catalog: CatalogService) -> None:

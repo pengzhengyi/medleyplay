@@ -20,15 +20,21 @@ function saved(): LanguageChoice {
   }
 }
 
+function supportedLanguage(tag: string): Language | undefined {
+  try {
+    const locale = new Intl.Locale(tag).maximize();
+    if (locale.language === "zh" && locale.script === "Hans") return "zh-Hans";
+    if (locale.language === "en") return "en";
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 export function browserLanguage(languages: readonly string[]): Language {
   for (const tag of languages) {
-    try {
-      const locale = new Intl.Locale(tag).maximize();
-      if (locale.language === "zh" && locale.script === "Hans") return "zh-Hans";
-      if (locale.language === "en") return "en";
-    } catch {
-      continue;
-    }
+    const language = supportedLanguage(tag);
+    if (language !== undefined) return language;
   }
   return "en";
 }
@@ -100,6 +106,15 @@ export function useLanguageChoice() {
   return [useSyncExternalStore(subscribe, () => choice), choose] as const;
 }
 
+export function useFormattingLocale(): string {
+  return useSyncExternalStore(subscribe, () => {
+    const language = effective();
+    return navigator.languages.find((tag) => supportedLanguage(tag) === language) ?? language;
+  });
+}
+
 export function useWords() {
   return useTranslation("translation", { i18n: words }).t;
 }
+
+export type Words = ReturnType<typeof useWords>;

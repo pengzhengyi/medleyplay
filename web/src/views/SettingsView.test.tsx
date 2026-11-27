@@ -1051,6 +1051,36 @@ describe("the Network section", () => {
     expect(network().getByText("On Wi-Fi, marked metered as “iPhone hotspot”.")).toBeVisible();
   });
 
+  it("translates the network status but keeps the name of a metered network as entered", async () => {
+    const browser = vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-US"]);
+    const checkedAt = "2026-10-27T19:05:06Z";
+    const mode = modeOf({
+      online: false,
+      reason: "metered",
+      network: { kind: "wifi", metered_as: "Search", hotspot_like: true },
+      checked_at: checkedAt,
+    });
+    const user = userEvent.setup();
+    try {
+      open(false, {}, mode);
+      expect(await network().findByText("Offline: on a metered network.")).toBeVisible();
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(screen.getByText("离线：当前网络按流量计费。")).toBeVisible();
+      expect(screen.getByText("已连接 Wi-Fi，计费网络名称为「Search」。")).toBeVisible();
+      const time = new Intl.DateTimeFormat("zh-Hans", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(new Date(checkedAt));
+      expect(screen.getByText(`上次检查互联网连接的时间：${time}。`)).toBeVisible();
+    } finally {
+      browser.mockRestore();
+      const language = screen.queryByRole("combobox", { name: "语言" });
+      if (language !== null) await user.selectOptions(language, "auto");
+    }
+  });
+
   it("says when the internet was last checked, and checks it now when asked", async () => {
     const unreachable = modeOf({ online: false, reason: "unreachable" });
     const checked = vi.fn();
@@ -1062,6 +1092,23 @@ describe("the Network section", () => {
     await waitFor(() => {
       expect(checked).toHaveBeenCalledWith(modeOf());
     });
+  });
+
+  it("keeps the British clock format when the device follows British English", async () => {
+    const browser = vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-GB"]);
+    const checkedAt = "2026-10-27T19:05:06Z";
+    const localTime = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(checkedAt));
+    try {
+      open(false, {}, modeOf({ checked_at: checkedAt }));
+
+      expect(await network().findByText(`Internet last checked at ${localTime}.`)).toBeVisible();
+    } finally {
+      browser.mockRestore();
+    }
   });
 
   it("says when a settling Mode goes Online, and how many downloads wait", async () => {
@@ -1112,6 +1159,30 @@ describe("the Network section", () => {
     await waitFor(() => {
       expect(network().queryByText("Office")).not.toBeInTheDocument();
     });
+  });
+
+  it.each([
+    {
+      detail: "The server can't tell which network it is on now, so it can't mark it.",
+      shown: "服务器无法识别当前网络，因此无法为其添加标记。",
+    },
+    { detail: "Search", shown: "Search" },
+  ])("translates only the known metered-network refusal: $detail", async ({ detail, shown }) => {
+    open(true, { "POST /api/mode/metered": { status: 409, body: { detail } } });
+    const user = userEvent.setup();
+    await user.type(await network().findByRole("textbox", { name: /Mark this network/ }), "Office");
+    await user.click(network().getByRole("button", { name: "Mark metered" }));
+    expect(await network().findByRole("alert")).toHaveTextContent(detail);
+
+    try {
+      await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+      expect(
+        within(screen.getByRole("region", { name: "网络" })).getByRole("alert").textContent,
+      ).toBe(shown);
+    } finally {
+      await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+    }
   });
 
   it("says a network on a phone hotspot's usual subnet looks like one", async () => {

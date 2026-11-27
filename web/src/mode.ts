@@ -3,6 +3,7 @@
  */
 
 import type { Mode, ModeSetting } from "./api";
+import type { Words } from "./locale";
 
 /** Return why the Mode is Offline, such as "on a metered network", or `null` while Online. */
 export function offlineBecause(mode: Mode): string | null {
@@ -36,15 +37,17 @@ export function checkable(mode: Mode): boolean {
 }
 
 /** Return the network the server is on, in a sentence. */
-export function networkSaid(mode: Mode): string {
+export function networkSaid(mode: Mode, t: Words): string {
   const { network } = mode;
   if (network === null) {
-    return mode.reason === "no_network" ? "No network." : "The network can't be read here.";
+    return t(mode.reason === "no_network" ? "No network." : "The network can't be read here.");
   }
-  const on = { wifi: "On Wi-Fi", wired: "On a cable", unknown: "On a network" }[network.kind];
+  const connection = t(
+    { wifi: "On Wi-Fi", wired: "On a cable", unknown: "On a network" }[network.kind],
+  );
   return network.metered_as === null
-    ? `${on}.`
-    : `${on}, marked metered as “${network.metered_as}”.`;
+    ? t("{{connection}}.", { connection })
+    : t("{{connection}}, marked metered as “{{name}}”.", { connection, name: network.metered_as });
 }
 
 /** Each setting, as Settings offers it. */

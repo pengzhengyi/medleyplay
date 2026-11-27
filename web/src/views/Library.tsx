@@ -686,12 +686,14 @@ export function Library({
             <a
               className="mode-note-link"
               href={hrefOf({ view: "settings" })}
-              title="See the network in Settings"
+              title={t("See the network in Settings")}
             >
               <CloudSlashIcon weight="bold" aria-hidden />
               <span>
-                {stillSince === library.mode.since ? "Still offline" : "Offline"}
-                <span className="why">: {offlineBecause(library.mode)}</span>
+                {t(stillSince === library.mode.since ? "Still offline" : "Offline")}
+                <span className="why">
+                  {t(": {{reason}}", { reason: t(offlineBecause(library.mode) ?? "") })}
+                </span>
               </span>
             </a>
             {checkable(library.mode) && (

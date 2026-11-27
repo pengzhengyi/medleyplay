@@ -183,6 +183,7 @@ export function usePlayer(
   const stretch = useRef<Stretch>(WHOLE);
   const ending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ended = useRef<string | undefined>(undefined);
+  const followingBoundary = useRef<{ key: string; end: number } | undefined>(undefined);
   const [volume, setVolume] = useState(loadVolume);
   const [muted, setMuted] = useState(false);
 
@@ -277,6 +278,8 @@ export function usePlayer(
   // Load the current entry whenever it changes; a later load supersedes an earlier one.
   useEffect(() => {
     const element = audio.current;
+    const boundary = followingBoundary.current;
+    followingBoundary.current = undefined;
     playingKey.current = key;
     if (element === null) {
       return;
@@ -337,13 +340,22 @@ export function usePlayer(
           // A song of the file already loaded: play on, from its start or the second taken.
           const from =
             restoring === undefined ? song.start : fileTimeOf(song, restoring, element.duration);
+          const at = element.currentTime;
+          const alreadyInNext =
+            boundary !== undefined &&
+            boundary.key === key &&
+            Math.abs(song.start - boundary.end) <= IN_PLACE &&
+            restoring === undefined &&
+            at >= song.start &&
+            (song.end === undefined || at < song.end);
           resumeAt.current = undefined;
-          if (Math.abs(element.currentTime - from) > IN_PLACE) {
+          if (!alreadyInNext && Math.abs(at - from) > IN_PLACE) {
             element.currentTime = from;
           }
           // Playing on fires no `play` event, so the new entry says it is playing itself.
           show(key, {
             duration: lengthOf(song, element.duration),
+            ...(alreadyInNext ? { position: positionIn(song, at) } : {}),
             ...(element.paused ? {} : { status: { kind: "playing" } }),
           });
           if (element.paused && playOn) {
@@ -464,6 +476,8 @@ export function usePlayer(
       playsFrom(element, early.audio_url) &&
       end !== undefined &&
       Math.abs(stretchOf(early).start - end) <= IN_PLACE;
+    followingBoundary.current =
+      coming === undefined || end === undefined ? undefined : { key: coming.key, end };
     if (end !== undefined && !flowsOn) {
       element.pause();
     }

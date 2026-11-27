@@ -132,6 +132,87 @@ describe("playing songs inside one file", () => {
     expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([154, 155]);
   });
 
+  it.each([
+    { prefetched: true, pauses: 0 },
+    { prefetched: false, pauses: 1 },
+  ])(
+    "keeps the audio position after a late contiguous transition (prefetched: $prefetched)",
+    async ({ prefetched, pauses }) => {
+      let finish: () => void = () => undefined;
+      const after = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      serve(
+        prefetched
+          ? ANSWERS
+          : {
+              ...ANSWERS,
+              "POST /api/tracks/155/playback": {
+                ...ANSWERS["POST /api/tracks/155/playback"],
+                after,
+              },
+            },
+      );
+      const { element, media, player } = renderPlayer([FIRST, SECOND]);
+      act(() => {
+        player().playList([FIRST, SECOND], 0);
+      });
+      await playing(player, FIRST);
+      act(() => {
+        media.playTo(10);
+      });
+
+      act(() => {
+        media.playTo(32);
+      });
+      finish();
+      await playing(player, SECOND);
+
+      expect(media.loads).toBe(1);
+      expect(media.pauses).toBe(pauses);
+      expect(element.currentTime).toBe(32);
+      expect(player().position).toBe(2);
+    },
+  );
+
+  it("seeks to the next song when it does not follow the current song in the file", async () => {
+    serve({
+      ...ANSWERS,
+      "POST /api/tracks/155/playback": { body: ready(104, 40_000, 70_000) },
+    });
+    const { element, media, player } = renderPlayer([FIRST, SECOND]);
+    act(() => {
+      player().playList([FIRST, SECOND], 0);
+    });
+    await playing(player, FIRST);
+
+    act(() => {
+      media.playTo(42);
+    });
+    await playing(player, SECOND);
+
+    expect(media.loads).toBe(1);
+    expect(element.currentTime).toBe(40);
+  });
+
+  it("starts the next song at its beginning when Next is pressed before the boundary is handled", async () => {
+    serve(ANSWERS);
+    const { element, media, player } = renderPlayer([FIRST, SECOND]);
+    act(() => {
+      player().playList([FIRST, SECOND], 0);
+    });
+    await playing(player, FIRST);
+    element.currentTime = 32;
+
+    act(() => {
+      player().next();
+    });
+    await playing(player, SECOND);
+
+    expect(media.loads).toBe(1);
+    expect(element.currentTime).toBe(30);
+  });
+
   it("ends a song at its end, and plays on into the next song of its file without loading it again", async () => {
     serve(ANSWERS);
     const { element, media, player } = renderPlayer([FIRST, SECOND]);

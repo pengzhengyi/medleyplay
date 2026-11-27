@@ -351,7 +351,12 @@ and the full views are in [Web client](Web%20client.md).
     and again whenever what plays next changes, so the `ended` event only swaps
     `src` and plays: iOS may suspend a locked page during a network round trip.
     Asking ahead also starts preparing a compressed next Track.
-  - **The queue advances on the `ended` event,** never on a timer.
+  - **Whole files advance on the `ended` event.** A song inside a split file
+    advances at its own end. If playback is already inside the next contiguous
+    song by the time the player handles the boundary, it keeps that
+    position instead of repeating the opening, even if it paused to wait for
+    the playback answer. Pressing **Next** still starts the queued song from its
+    beginning.
   - **The seek bar is the client's own slider,** not a range input, whose
     thumb width shifts where a click lands. The time comes from where the pointer
     is on the bar. Hovering shows that time over the pointer; a click seeks there

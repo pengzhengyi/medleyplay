@@ -358,7 +358,7 @@ Track's kind is decided.
 ### Dynamics frame pacing
 
 > [!NOTE]
-> **Status: proposed.** Keep the existing shaders when they can animate
+> **Status: implemented.** Keep the existing shaders when they can animate
 > smoothly. Fall back to gentle cover motion when drawing stays slow.
 
 On a 1440 × 900 viewport with device pixel ratio 2, the steady-state renderer
@@ -386,12 +386,15 @@ motion; its use does not change the setting.
   or prepare an additional image. Pause while hidden and remove the effect
   when Now Playing closes. Keep the existing still blur without WebGL 2 or
   when the listener turns Dynamics off.
-- Replay healthy and slow frame intervals in deterministic tests, including
-  recovery, gaps between samples, late decodes, resize, and changes in reduced
-  motion. In production Now Playing with a synthetic cover, compare healthy
-  and software rendering against Dynamics Off. Check that input still
-  responds during fallback, and that the cover fills the backdrop and
-  controls stay legible on desktop and phone.
+- Deterministic tests replay healthy and slow intervals, cover changes, late
+  decodes, resize, and changes in reduced motion. In the production player
+  with a synthetic Library, a 55 ms delay on each WebGL draw reproduces slow
+  Dynamics without slowing the browser compositor. At desktop and phone
+  widths, fallback matched the roughly 17 ms Off cadence, and queue and close
+  actions stayed responsive. Healthy hardware kept the Mesh shader.
+- A fully software-rendered production browser stuttered substantially even
+  with Dynamics Off. The fallback removes repeated WebGL draws; it cannot
+  fix slow compositing elsewhere in the page.
 
 ## Keyboard shortcuts
 

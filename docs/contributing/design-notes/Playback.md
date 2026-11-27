@@ -397,6 +397,146 @@ and the full views are in [Web client](Web%20client.md).
   restored position is applied, paused, once the Track's metadata loads; when the
   browser can't save, or has cleared it, the page starts with an empty queue.
 
+### Queue rendering during playback
+
+> [!NOTE]
+> **Implemented.** Keep the queue header current without
+> rendering every unchanged queued item on each progress update.
+
+`QueuePanel` reads elapsed playback time to show when the queue ends.
+Its `QueueContents` child reuses unchanged draggable contents through
+React's `memo`. Sortable state, kind marks, translated labels, and controls
+do not need rebuilding just because the audio clock advances.
+
+#### Queue-rendering evidence
+
+A disposable catalog contains 1,906 tracks backed by local silent WAV files.
+Only the local-file plugin is enabled; no outside site or household data
+is used. Foreground Chrome at 1280 by 800 compares the complete baseline
+and candidate with Library and Up next visible during playback. Seven
+pairs alternate which build runs first for each queue size.
+
+Scripting is measured over three-second windows, divided by the recorded
+elapsed time; actual windows range from 3.001 to 3.034 seconds. Each sample
+then measures three Enter presses on **Volume down**, checking the audio
+volume and displayed value. The browser's Event Timing measures each
+`keydown` through its next paint. Each sample contributes the median of its
+three interactions.
+
+| Queue | Measure | Baseline median | Candidate median | Median paired saving |
+| --- | --- | ---: | ---: | ---: |
+| 1,905 entries | Scripting per elapsed second | 963 ms | 149 ms | 815 ms (84.6%) |
+| 1,905 entries | Keydown to next paint | 1,112 ms | 168 ms | 952 ms (87.6%) |
+| 2 entries | Scripting per elapsed second | 139 ms | 127 ms | 7 ms (5.6%) |
+| 2 entries | Keydown to next paint | 88 ms | 80 ms | 8 ms later |
+
+The before/after columns are medians across samples; paired savings and
+percentages are medians of the differences within each pair. Both
+long-queue measures improve in every pair. All expected rows remain in the
+DOM, audio continues, and each input occurs in a focused, visible page.
+Each long-queue window delivers 2–6 progress events with the baseline and
+10–11 with the candidate. The saving does not come from delivering fewer
+updates.
+
+These are measurements on a **busy, shared Mac**, without artificial CPU
+throttling. Its one-minute load average ranges from 10.9 to 71.0 during
+the long-queue pairs. Absolute times are not a quiet-machine estimate,
+a first-load improvement, or field INP. Scripting time is a renderer
+measurement, not whole-machine CPU utilization.
+
+Short-queue latency is inconclusive: four pairs are slower, two tie, and
+one improves. The largest paired delay is 56 ms. A secondary DOM-change
+and following-frame proxy stays near 49 ms; it is not a paint timestamp.
+Do not claim a short-queue latency improvement or proof of no regression.
+The repeatable long-queue gain supports retaining the change.
+
+#### Queue-rendering boundary
+
+The clock-dependent header is separate from queue contents wrapped in
+`memo`. Every expanded row stays in the DOM;
+folded groups retain their current behavior. This component does not
+virtualize or truncate the list.
+
+```mermaid
+flowchart LR
+  P["Elapsed time, duration, clock"] --> H["Queue header"]
+  Q["Queue, tracks, folds"] --> C["Queue contents"]
+  A["Current queue commands"] --> C
+  L["Language"] --> H
+  L --> C
+  D["Drag state"] --> C
+```
+
+| Part | Responsibility |
+| --- | --- |
+| `QueuePanel` | Tabs, sleep timer, clear and fold-all controls, duration and ending-time display. |
+| `QueueContents` | Sortable context, rows, group controls, and drag announcements. |
+| Local and remote player hooks | Queue command callbacks whose identities stay stable across elapsed-time updates, with current behavior when their real dependencies change. |
+
+Queue-derived arrays are reused while their queue, track map, and folded-file
+set are unchanged. The cache uses the queue snapshot, not just its entries array:
+advancing the current entry changes Up next even when entries are reused.
+The contents receive only the data and commands they need, not the whole
+changing `Player` object. The header responds to elapsed time, duration,
+repeat mode, playback state, the clock, and formatting locale. An unknown
+duration remains unknown; no cached total may invent an ending time.
+The total duration itself is cached, so clock updates do not rescan every
+queued entry.
+
+The required commands, `playAt`, `move`, and `remove`, pass through as stable
+references without fresh wrappers. Local seeking reads the current audio
+and segment refs; `playAt` depends on the current entry key and seek callback.
+Remote commands keep their delivery order and error reporting, and new
+commands bind to the current sign-out callback. Ordinary callback
+dependencies keep these bindings current; there is no comparator that
+ignores functions or mutable callback cache.
+
+The contents update for queue edits, changed track metadata,
+folding, language changes, drag state, and a changed announcement
+container. The contents read language themselves, so `memo` cannot freeze
+translated controls or drag messages. The regular panel and the Now Playing
+panel keep separate folded state. Modal announcements belong inside the
+dialog, not necessarily inside its queue section.
+
+New remote reports may replace the queue object. That invalidates the
+cache; there is no deep comparison or remote protocol change. Not every
+remote report becomes cheap.
+
+#### Queue-rendering acceptance
+
+- [x] Command identities remain stable across elapsed-time-only updates,
+      preserving seeking, moving, removing, and command order.
+- [x] Commands use the current entry, queue, audio
+      segment, authentication callback, and selected local or remote player.
+- [x] Queue a remote command behind a pending one, change the sign-out
+      callback, then send another command. A rejection must not stop later
+      delivery, and a new 401 must use the new callback binding.
+- [x] Preserve queue changes, duplicates, missing tracks, unknown durations,
+      grouping, folding, and the existing row/control click behavior.
+- [x] Keep duration, ending time, sleep timer, and playback controls live.
+- [x] Exercise pointer and keyboard dragging during playback, including
+      removal, queue changes, and resizing, in regular and Now Playing panels.
+- [x] Drop an entry past a folded album using the keyboard. Its destination
+      and translated announcement must use the full Up next order, not
+      just the visible rows.
+- [x] Verify metadata, lyrics availability, and English/Simplified Chinese
+      changes reach the list and announcements while playback continues.
+- [x] Compare actual baseline and candidate with the same short and long
+      queues, real silent playback, and recorded sample durations/events.
+      Confirm all expected entries remain present.
+- [x] Measure foreground interaction-to-next-paint as well as scripting.
+      Keep timing comparisons out of required unit-test thresholds.
+- [x] Obtain independent implementation review and retain the change only
+      when the candidate demonstrates repeatable benefit.
+
+Hook and component tests check command and data correctness. Browser tests
+cover dragging, folding, resizing, removal, and a live language change in
+the mounted modal. Local benchmarks measure rendering cost without counting
+private render calls.
+
+Queue virtualization, initial queue-mount cost, gallery rendering changes,
+backend changes, and new dependencies are outside this component.
+
 ## What the API shows
 
 | Route | Who | Does |

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Now Playing offers Palette Glow and Soft Pan in place of Flow and Drift.
+  Existing selections carry over; Mesh and Off stay as they are.
 - When the animated background in Now Playing repeatedly misses frames, it
   switches to a gently moving cover without changing your Dynamics setting.
 - A quotation-mark badge on song and album icons shows when lyrics are

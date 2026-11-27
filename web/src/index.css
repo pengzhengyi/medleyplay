@@ -4252,7 +4252,7 @@ button.icon.heart.on:hover,
   align-items: center;
   justify-content: space-between;
   gap: 0.25rem;
-  padding: 0 0.5rem 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 .queue-actions {
@@ -4434,7 +4434,7 @@ button.icon.heart.on:hover,
 
 .queue-tabs [role="tab"] {
   margin: 0;
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.4rem;
   border: none;
   border-radius: 999px;
   background: transparent;

@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When finding lyrics, compare the Library song's album and length with the
   results.
 - In **Up next**, one button expands or collapses all album
-  groups without changing what plays.
+  groups without changing what plays. A compact **Clear Up next** icon keeps
+  the header on one line.
 - Dismiss a failed download from its warning menu in *Downloaded*, or dismiss
   them all at once. Songs and audio files stay in your Library.
 - **Clean up → Missing artist or album** offers Library matches for missing

@@ -80,13 +80,18 @@ describe("the queue", () => {
     expect(upNext()).toEqual(["Outro", "Long Road", "Outro"]);
   });
 
-  it("clears what plays next", async () => {
+  it("clears what plays next without removing the current track", async () => {
     await playingIntro();
+    const clear = screen.getByRole("button", { name: "Clear Up next" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    await userEvent.click(clear);
 
     expect(
       screen.getByText("Nothing queued. Add a Track from the list to play it later."),
+    ).toBeInTheDocument();
+    expect(clear).toBeDisabled();
+    expect(
+      within(screen.getByRole("region", { name: "Player" })).getByText("Intro"),
     ).toBeInTheDocument();
   });
 

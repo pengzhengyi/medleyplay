@@ -284,7 +284,9 @@ and the full views are in [Web client](Web%20client.md).
 - **In every Up next panel,** one icon expands or collapses every
   album group without changing playback. It appears only when the queue has
   an album group. If any group is collapsed, the icon expands all groups.
-  In a narrow panel, the header actions wrap together below the tabs.
+  Beside it, the **Clear Up next** icon removes upcoming songs without
+  stopping the current song. The controls fit beside the tabs and wrap together
+  if there is not enough room.
 - **Play modes** are two controls, as in most players: *Shuffle*, on or off,
   and *Repeat*, which cycles through off, all, and one. In order is both off.
   - **Turning shuffle on** puts what plays next in random order. What played and

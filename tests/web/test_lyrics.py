@@ -1,15 +1,26 @@
 """The lyrics API: what a song shows, line by line, and the household's own."""
 
+from collections.abc import Iterator
+from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.catalog import TrackId
 from medleyplay.persistence.schema import LyricsSearchRow
+from medleyplay.web.app import create_app
+from medleyplay.web.deps import Services
+from tests.conftest import TEST_HOST
+from tests.support.ai import OLLAMA
 from tests.support.api import set_up_as_alice
+from tests.support.enrichment import Enriching, running_enrichment
 from tests.support.factories import SourceKeyFactory, TrackDetailsFactory
+from tests.support.fakes import FakeClock
+from tests.support.plugins.reader import lyrics_of
 
 MELT = """\
 [00:12.34]朝目が覚めて
@@ -20,6 +31,97 @@ MELT = """\
 
 def _song(catalog: CatalogService) -> TrackId:
     return catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song())
+
+
+@pytest.fixture
+def matching(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path, services: Services
+) -> Iterator[tuple[TestClient, Enriching]]:
+    """Serve real match Jobs with a finder and chooser that answer without a network."""
+    with running_enrichment(units, clock, tmp_path / "data") as running:
+        app = create_app(
+            replace(
+                services,
+                plugins=running.plugins,
+                jobs=running.jobs,
+                ai=running.ai,
+                lyrics=running.lyrics,
+                lyrics_search=running.lyrics_search,
+                lyrics_match=running.lyrics_match,
+            ),
+            allowed_hosts=[TEST_HOST],
+            client_dir=tmp_path / "client",
+        )
+        with TestClient(app, base_url=f"http://{TEST_HOST}") as client:
+            yield client, running
+
+
+def test_one_batch_finds_and_chooses_then_another_page_saves_every_ready_song(
+    matching: tuple[TestClient, Enriching],
+) -> None:
+    client, running = matching
+    set_up_as_alice(client)
+    provider = client.post("/api/ai/providers", json={"base_url": OLLAMA, "model": "synthetic"})
+    assert provider.status_code == 201, provider.text
+    album = running.add_song("Album")
+    route = f"/api/tracks/{album}/songs"
+    saved = client.put(
+        route,
+        json={
+            "rows": [
+                {"start_ms": 0, "title": "Melt", "artist": "ryo"},
+                {"start_ms": 100_000, "title": "Encore", "artist": "ryo"},
+                {"start_ms": 200_000, "title": "Silence", "artist": "ryo"},
+            ]
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    songs = saved.json()["songs"]
+
+    started = client.post(
+        f"{route}/lyrics-match",
+        json=[
+            {key: row[key] for key in ("track_id", "start_ms", "title", "artist")}
+            | {"segment_id": row["id"]}
+            for row in songs
+        ],
+    )
+    assert started.status_code == 202, started.text
+    running.finish_every_job()
+    running.online.online = False
+
+    with TestClient(client.app, base_url=f"http://{TEST_HOST}") as reopened:
+        reopened.cookies.update(client.cookies)
+        matches = reopened.get(f"{route}/lyrics-match").json()
+        assert [match["state"] for match in matches] == ["ready", "ready", "skipped"]
+        assert matches[2]["note"] == "No clear match."
+        for song in songs:
+            assert reopened.get(f"/api/tracks/{song['track_id']}/lyrics").json() is None
+        kept = reopened.put(
+            route,
+            json={
+                "rows": [
+                    {key: row[key] for key in ("id", "start_ms", "title", "artist")}
+                    for row in songs
+                ],
+                "known": [row["id"] for row in songs],
+                "lyric_picks": [
+                    match["choice_job_id"] for match in matches if match["state"] == "ready"
+                ],
+            },
+        )
+        assert kept.status_code == 200, kept.text
+        assert kept.json()["songs"] == songs
+        for song in songs[:2]:
+            lyrics = reopened.get(f"/api/tracks/{song['track_id']}/lyrics").json()
+            assert lyrics is not None, song["title"]
+            assert (lyrics["origin"], lyrics["text"]) == ("lrclib", lyrics_of(song["title"]))
+        assert reopened.get(f"/api/tracks/{songs[2]['track_id']}/lyrics").json() is None
+    assert [match["state"] for match in client.get(f"{route}/lyrics-match").json()] == [
+        "saved",
+        "saved",
+        "skipped",
+    ]
 
 
 def test_a_song_with_no_lyrics_shows_none(client: TestClient, catalog: CatalogService) -> None:

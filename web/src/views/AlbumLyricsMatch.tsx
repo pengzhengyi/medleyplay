@@ -1,6 +1,6 @@
 /** @file Album lyrics matching controls and the feedback on each song's Lyrics button. */
 
-import { MagicWandIcon, MicrophoneStageIcon } from "@phosphor-icons/react";
+import { MagicWandIcon, QuotesIcon } from "@phosphor-icons/react";
 import { useId } from "react";
 
 import { useWords } from "../locale";
@@ -96,7 +96,7 @@ export function SongLyricsButton({
           onOpen(event.currentTarget);
         }}
       >
-        <MicrophoneStageIcon
+        <QuotesIcon
           weight={
             match?.state === "saved"
               ? "fill"

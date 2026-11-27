@@ -1,4 +1,5 @@
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { downloadUnderWayOf, trackOf } from "../testing/server";
@@ -7,8 +8,36 @@ import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
 import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 import { Downloading } from "./Downloading";
+import { SongLyricsButton } from "./AlbumLyricsMatch";
+import { LyricsBadge } from "./LyricsBadge";
 
 describe("lyrics availability marks", () => {
+  it("uses the same quotation for saved song lyrics and opens it from the keyboard", async () => {
+    const onOpen = vi.fn();
+    const { container } = render(
+      <>
+        <LyricsBadge label="Lyrics available" />
+        <SongLyricsButton
+          song="First light"
+          saved
+          match={{ state: "saved", note: "Saved lyrics." }}
+          onOpen={onOpen}
+        />
+      </>,
+    );
+    const button = screen.getByRole("button", { name: "Lyrics for First light" });
+    const quotation = container.querySelector(".lyrics-badge svg");
+
+    expect(quotation).not.toBeNull();
+    expect(button.querySelector("svg")?.innerHTML).toBe(quotation?.innerHTML);
+    expect(button).toHaveAccessibleDescription("Saved lyrics.");
+    expect(button).toHaveAttribute("title", "Edit lyrics for First light — Saved lyrics.");
+    await userEvent.tab();
+    expect(button).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith(button);
+  });
+
   it("announces availability once on the kind indicator, not again on its quotation", () => {
     const song = trackOf(1, "First light", { kind_reason: "named", has_lyrics: true });
     const { container } = render(<KindMark kind="song" reason="named" lyrics={song} />);

@@ -15,6 +15,26 @@ import { SettingsView } from "./SettingsView";
 
 const GB = 1_000_000_000;
 
+it("translates appearance help and controls without changing the selected theme", async () => {
+  open(false);
+  const user = userEvent.setup();
+  const theme = await screen.findByRole("radio", { name: "Match the system" });
+  const checked = theme.getAttribute("aria-checked");
+
+  try {
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-Hans");
+
+    expect(screen.getByText("跟随设备的浅色或深色设置，也可以固定使用一种。")).toBeVisible();
+    expect(screen.getByRole("radio", { name: "跟随系统" })).toHaveAttribute(
+      "aria-checked",
+      checked,
+    );
+    expect(screen.getByRole("button", { name: "将音乐库下移" })).toHaveAttribute("title", "下移");
+  } finally {
+    await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "auto");
+  }
+});
+
 /** A limit of 20 GB, saved twice before, so at revision 2. */
 const LIMIT_20: Settings = settingsOf({ storage_limit: 20 * GB, revision: 2 });
 

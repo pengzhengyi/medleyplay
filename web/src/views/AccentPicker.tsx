@@ -14,9 +14,11 @@ import { HexColorInput, HexColorPicker } from "react-colorful";
 
 import { DEFAULT_ACCENT, forgetColor, saveColor, useAccent, useSavedColors } from "../accent";
 import { inkFor, randomAccent } from "../color";
+import { useWords } from "../locale";
 
 /** Choose the accent color; `random` rolls the dice. */
 export function AccentPicker({ random = Math.random }: { readonly random?: () => number }) {
+  const t = useWords();
   const [accent, setAccent] = useAccent();
   const [open, setOpen] = useState(false);
   const square = useId();
@@ -30,8 +32,8 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
           type="button"
           className="accent-swatch"
           style={{ background: shown }}
-          aria-label="Pick the accent color"
-          title="Pick the accent color"
+          aria-label={t("Pick the accent color")}
+          title={t("Pick the accent color")}
           aria-expanded={open}
           aria-controls={square}
           onClick={() => {
@@ -42,14 +44,14 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
           className="accent-hex"
           prefixed
           color={shown}
-          aria-label="Accent color"
+          aria-label={t("Accent color")}
           onChange={setAccent}
         />
         <button
           type="button"
           className="accent-tool"
-          aria-label="Random color"
-          title="Random color"
+          aria-label={t("Random color")}
+          title={t("Random color")}
           onClick={() => {
             setAccent(randomAccent(random));
           }}
@@ -59,9 +61,9 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
         <button
           type="button"
           className={saved ? "accent-tool on" : "accent-tool"}
-          aria-label="Save this color"
+          aria-label={t("Save this color")}
           aria-pressed={saved}
-          title={saved ? "Forget this color" : "Save this color to choose again"}
+          title={saved ? t("Forget this color") : t("Save this color to choose again")}
           onClick={() => {
             if (saved) {
               forgetColor(shown);
@@ -76,8 +78,8 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
           <button
             type="button"
             className="accent-tool"
-            aria-label="Back to jade"
-            title="Back to jade"
+            aria-label={t("Back to jade")}
+            title={t("Back to jade")}
             onClick={() => {
               setAccent(undefined);
             }}
@@ -87,13 +89,13 @@ export function AccentPicker({ random = Math.random }: { readonly random?: () =>
         )}
       </div>
       {colors.length > 0 && (
-        <ul className="accent-saved" aria-label="Saved colors">
+        <ul className="accent-saved" aria-label={t("Saved colors")}>
           {colors.map((color) => (
             <li key={color}>
               <button
                 type="button"
                 className={color === shown ? "accent-tile on" : "accent-tile"}
-                aria-label={`Use ${color}`}
+                aria-label={t("Use {{color}}", { color })}
                 aria-pressed={color === shown}
                 data-hex={color}
                 style={{ "--tile": color, "--tile-ink": inkFor(color) } as CSSProperties}

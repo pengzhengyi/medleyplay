@@ -33,11 +33,13 @@ import {
   useRailOrder,
 } from "../railOrder";
 import { RAIL_ENTRIES } from "./railViews";
+import { useWords } from "../locale";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 
 /** The rail's views in this browser's order, each movable, and a way back to the default. */
 export function RailOrderSettings() {
+  const t = useWords();
   const order = useRailOrder();
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
@@ -61,7 +63,7 @@ export function RailOrderSettings() {
         onDragEnd={drop}
       >
         <SortableContext items={[...order]} strategy={verticalListSortingStrategy}>
-          <ol className="rail-order-list" aria-label="Views in the rail">
+          <ol className="rail-order-list" aria-label={t("Views in the rail")}>
             {order.map((view, index) => (
               <RailOrderRow
                 key={view}
@@ -77,7 +79,7 @@ export function RailOrderSettings() {
         </SortableContext>
       </DndContext>
       <button type="button" className="secondary" disabled={isDefault} onClick={resetRailOrder}>
-        Reset order
+        {t("Reset order")}
       </button>
     </div>
   );
@@ -95,7 +97,9 @@ function RailOrderRow({
   readonly last: boolean;
   readonly onMove: (by: -1 | 1) => void;
 }) {
+  const t = useWords();
   const { label, icon: ViewIcon } = RAIL_ENTRIES[view];
+  const name = t(label);
   const {
     attributes,
     listeners,
@@ -116,20 +120,20 @@ function RailOrderRow({
         type="button"
         className="icon rail-order-handle"
         ref={setActivatorNodeRef}
-        aria-label={`Reorder ${label}`}
-        title="Drag to reorder"
+        aria-label={t("Reorder {{view}}", { view: name })}
+        title={t("Drag to reorder")}
         {...attributes}
         {...listeners}
       >
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
       <ViewIcon aria-hidden />
-      <span className="rail-order-name">{label}</span>
+      <span className="rail-order-name">{name}</span>
       <button
         type="button"
         className="icon"
-        aria-label={`Move ${label} up`}
-        title="Move up"
+        aria-label={t("Move {{view}} up", { view: name })}
+        title={t("Move up")}
         disabled={first}
         onClick={() => {
           onMove(-1);
@@ -140,8 +144,8 @@ function RailOrderRow({
       <button
         type="button"
         className="icon"
-        aria-label={`Move ${label} down`}
-        title="Move down"
+        aria-label={t("Move {{view}} down", { view: name })}
+        title={t("Move down")}
         disabled={last}
         onClick={() => {
           onMove(1);

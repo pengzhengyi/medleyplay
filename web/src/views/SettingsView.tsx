@@ -193,16 +193,18 @@ export function SettingsView({
     appearance: (
       <>
         <LanguageSelect />
-        <p className="hint">Follow this device's light or dark setting, or keep one.</p>
+        <p className="hint">{t("Follow this device's light or dark setting, or keep one.")}</p>
         <ThemeSwitch />
-        <p className="hint">The color of buttons, links, and what's playing.</p>
+        <p className="hint">{t("The color of buttons, links, and what's playing.")}</p>
         <AccentPicker />
         <p className="hint">
-          What moves behind Now Playing. Still when this device asks for less motion.
+          {t("What moves behind Now Playing. Still when this device asks for less motion.")}
         </p>
         <DynamicsSwitch />
         <p className="hint">
-          The order of the views in the rail on this device. Drag a view there, or move it here.
+          {t(
+            "The order of the views in the rail on this device. Drag a view there, or move it here.",
+          )}
         </p>
         <RailOrderSettings />
       </>

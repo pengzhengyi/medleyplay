@@ -6,7 +6,7 @@ export function LanguageSelect() {
   const [choice, choose] = useLanguageChoice();
   const t = useWords();
   return (
-    <label>
+    <label className="language-select">
       {t("Language")}
       <select
         value={choice}

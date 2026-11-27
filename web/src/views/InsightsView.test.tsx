@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlayCount, Track } from "../api";
 import { serve, trackOf } from "../testing/server";
 import { InsightsView } from "./InsightsView";
+import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -107,6 +108,23 @@ describe("the way to Clean up", () => {
 });
 
 describe("InsightsView", () => {
+  it("marks lyrics on song and album indicators while keeping artist art unmarked", async () => {
+    const tracks = LIBRARY.map((track) => ({ ...track, has_lyrics: true }));
+    servingPlays([earlier(1, 3)]);
+    const { container } = render(
+      <LyricsAvailabilityProvider tracks={tracks}>
+        <InsightsView tracks={tracks} onPlay={vi.fn()} toDo={0} />
+      </LyricsAvailabilityProvider>,
+    );
+
+    const album = await screen.findByRole("link", { name: /Top album/ });
+    expect(album.querySelector(".kind-mark .lyrics-badge")).not.toBeNull();
+    const artist = screen.getByRole("link", { name: /Top artist/ });
+    expect(artist.querySelector(".kind-mark")).toBeNull();
+    const song = screen.getByRole("button", { name: /Play Colorful Days/ });
+    expect(song.querySelector(".entry-title .kind-mark .lyrics-badge")).not.toBeNull();
+    expect(container.querySelector(".cover .lyrics-badge")).toBeNull();
+  });
   it("opens on the last 30 days, with the time, plays, and songs listened to", async () => {
     servingPlays([earlier(1, 3), earlier(2, 2)]);
 

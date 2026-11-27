@@ -141,7 +141,7 @@ export function SuggestedCover({
         onDismiss={dismiss}
         onChange={onChange}
       >
-        <Cover size="medium" cover={suggested} lyrics={{ artist, album }} />
+        <Cover size="medium" cover={suggested} />
       </SuggestedFrame>
       {problem}
     </div>

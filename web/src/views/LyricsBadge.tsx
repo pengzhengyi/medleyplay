@@ -4,7 +4,7 @@ import { QuotesIcon } from "@phosphor-icons/react";
 
 export function LyricsBadge({ label }: { readonly label: string | undefined }) {
   return label === undefined ? null : (
-    <span className="lyrics-badge" role="img" aria-label={label} title={label}>
+    <span className="lyrics-badge" aria-hidden>
       <QuotesIcon weight="fill" aria-hidden />
     </span>
   );

@@ -12,12 +12,7 @@
  * file names only the album, or, once it is split, also the song the position is in.
  */
 
-import {
-  ArrowSquareOutIcon,
-  MicrophoneStageIcon,
-  MusicNoteSimpleIcon,
-  VinylRecordIcon,
-} from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, MicrophoneStageIcon } from "@phosphor-icons/react";
 
 import type { Track } from "../api";
 import {
@@ -34,12 +29,11 @@ import { FavoriteHeart } from "./FavoriteHeart";
 import { PlayingKind } from "./PlayingKind";
 import { SiteMark } from "./SiteMark";
 import { FavoriteButton } from "./Transport";
-import { LyricsBadge } from "./LyricsBadge";
-import { albumLyricsSubject, useLyricsLabel } from "./lyricsAvailability";
+import { KindMark } from "./KindMark";
+import { albumLyricsSubject } from "./lyricsAvailability";
 
 export function NowPlayingNames({
   track,
-  coverVisible = true,
   playing,
   position,
   moving,
@@ -53,7 +47,6 @@ export function NowPlayingNames({
 }: {
   /** The Track playing. */
   readonly track: Track;
-  readonly coverVisible?: boolean;
   readonly playing: Playing;
   /** How far into the Track playing, in seconds. */
   readonly position: number;
@@ -71,13 +64,10 @@ export function NowPlayingNames({
   const song = songPlaying(track, playing);
   const album = track.album !== "" ? track.album : track.kind === "album" ? track.title : "";
   const albumArtist = albumArtistOf(track);
-  const albumLyrics = useLyricsLabel(albumLyricsSubject(track));
-  const songLyrics = useLyricsLabel(track.kind === "album" || !coverVisible ? song : undefined);
   const mark = (
     <PlayingKind
       playing={playing}
       track={track}
-      coverVisible={coverVisible}
       position={position}
       moving={moving}
       opens="below"
@@ -94,9 +84,8 @@ export function NowPlayingNames({
             {playing.kind === "album" ? (
               mark
             ) : (
-              <span className="np-mark" title={albumLyrics ?? "Album"}>
-                <VinylRecordIcon weight="fill" aria-hidden />
-                <LyricsBadge label={albumLyrics} />
+              <span className="np-mark">
+                <KindMark kind="album" reason="named" lyrics={albumLyricsSubject(track)} />
               </span>
             )}
             {song === undefined ? (
@@ -136,9 +125,8 @@ export function NowPlayingNames({
             {playing.kind === "song" ? (
               mark
             ) : (
-              <span className="np-mark" title={songLyrics ?? "Song"}>
-                <MusicNoteSimpleIcon weight="fill" aria-hidden />
-                <LyricsBadge label={songLyrics} />
+              <span className="np-mark">
+                <KindMark kind={song.kind} reason={song.kind_reason} lyrics={song} />
               </span>
             )}
             <h2>{song.title}</h2>

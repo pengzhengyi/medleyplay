@@ -193,7 +193,9 @@ describe("an album in the queue", () => {
     expect(
       within(queue).queryByRole("img", { name: /All songs have lyrics/ }),
     ).not.toBeInTheDocument();
-    expect(within(queue).getAllByRole("img", { name: "Lyrics available" })).toHaveLength(2);
+    expect(within(queue).getAllByRole("img", { name: /Lyrics available/ })).toHaveLength(2);
+    expect(queue.querySelectorAll(".kind-mark .lyrics-badge")).toHaveLength(2);
+    expect(queue.querySelector(".cover .lyrics-badge")).toBeNull();
   });
 
   it("marks complete album lyrics once on the queue's record icon", async () => {

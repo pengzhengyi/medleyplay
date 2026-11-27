@@ -2,10 +2,11 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { MissingCover } from "../api";
+import type { MissingCover, Track } from "../api";
 import { toDoOf } from "../library/cleanUp";
 import { UNKNOWN_COVERS, serve, trackOf } from "../testing/server";
 import { CleanUpView } from "./CleanUpView";
+import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 
 const USE = "POST /api/album-covers/use";
 const DISMISS = "POST /api/album-covers/dismiss";
@@ -41,17 +42,23 @@ const HELP_SONGS = [
   }),
 ];
 
-function cleanUp(albums: readonly MissingCover[], onUse = vi.fn(() => Promise.resolve())) {
+function cleanUp(
+  albums: readonly MissingCover[],
+  onUse = vi.fn(() => Promise.resolve()),
+  tracks: readonly Track[] = HELP_SONGS,
+) {
   const reload = vi.fn();
   const onUsed = vi.fn();
   const view = (answered: number, shown: readonly MissingCover[]) => (
-    <CleanUpView
-      tidy={{ names: [], reload: vi.fn() }}
-      artistNames={undefined}
-      tracks={HELP_SONGS}
-      missingCovers={{ albums: shown, reload, answered, onUsed }}
-      albumCovers={{ onUse, onUpload: vi.fn(() => Promise.resolve("uploaded")) }}
-    />
+    <LyricsAvailabilityProvider tracks={tracks}>
+      <CleanUpView
+        tidy={{ names: [], reload: vi.fn() }}
+        artistNames={undefined}
+        tracks={tracks}
+        missingCovers={{ albums: shown, reload, answered, onUsed }}
+        albumCovers={{ onUse, onUpload: vi.fn(() => Promise.resolve("uploaded")) }}
+      />
+    </LyricsAvailabilityProvider>
   );
   const { rerender } = render(view(0, albums));
   return {
@@ -71,13 +78,26 @@ const section = () => within(screen.getByRole("region", { name: /^Find album cov
 const tileOf = (name: string) =>
   section()
     .getAllByRole("listitem")
-    .find((tile) => within(tile).queryByRole("link", { name }) !== null) ?? document.body;
+    .find((tile) => within(tile).queryByRole("link", { name: `Album${name}` }) !== null) ??
+  document.body;
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("finding album covers in Clean up", () => {
+  it("marks available album lyrics beside the suggestion name without covering its image", () => {
+    cleanUp(
+      SUGGESTED,
+      undefined,
+      HELP_SONGS.map((track) => ({ ...track, has_lyrics: true })),
+    );
+
+    const mark = screen.getByRole("img", { name: "Album, All songs have lyrics" });
+    expect(mark.closest(".photo-suggestion-name")).not.toBeNull();
+    expect(document.querySelector(".photo-suggestion-art .lyrics-badge")).toBeNull();
+    expect(screen.getByRole("button", { name: "Use the suggested cover of Help!" })).toBeEnabled();
+  });
   it("counts each cover suggested", () => {
     const albums = [...SUGGESTED, missing("Rubber Soul", "The Beatles")];
 
@@ -94,7 +114,9 @@ describe("finding album covers in Clean up", () => {
     expect(within(help ?? document.body).getByText("Suggested")).toBeVisible();
     expect(within(help ?? document.body).getByText("The Beatles, 3 songs")).toBeVisible();
     expect(within(fantasy ?? document.body).getByText("AI pick")).toBeVisible();
-    expect(within(fantasy ?? document.body).getByRole("link", { name: "范特西" })).toHaveAttribute(
+    expect(
+      within(fantasy ?? document.body).getByRole("link", { name: "Album范特西" }),
+    ).toHaveAttribute(
       "href",
       `#/album?${new URLSearchParams({ artist: "周杰伦", name: "范特西" }).toString()}`,
     );

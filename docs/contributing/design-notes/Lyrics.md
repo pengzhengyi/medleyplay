@@ -53,13 +53,18 @@ never a source of lyrics: it would make them up.
   complete Library membership, not the filtered list or the songs left in Up next.
   Empty or unknown album membership is not complete.
 - **One visual vocabulary:** a small quotation-mark badge sits at the top right
-  of the song or album's representative icon or cover, without adding a duplicate
-  badge to its title. Shared rendering covers song lists, Up next, album pages,
-  and other existing song or album representations. Artist icons are unchanged.
+  of the small music-note or record kind indicator, never on artwork. A view with
+  only a cover adds the same compact kind indicator beside its title. Existing
+  indicators are reused, with their settled or guessed glyph intact. Shared
+  rendering covers song lists, Up next, album pages, and other song or album
+  representations, including previews. Now Playing keeps each song and album
+  mark beside its name whether the cover is visible or replaced by lyrics on a
+  phone. Artist icons and artwork are unchanged.
 - **Accessible and quiet:** the existing accent palette supplies contrast in
   light and dark themes. The badge does not animate or add a new action. Its
-  containing representation exposes "Lyrics available" or "All songs have lyrics"
-  to assistive technology and on hover without changing play or menu behavior.
+  containing indicator combines its kind with "Lyrics available" or "All songs
+  have lyrics" in the device's language for assistive technology and on hover,
+  without changing play or menu behavior.
 - **Current after changes:** saving, removing, scanning, and matching lyrics
   invalidate cached catalog answers. Existing change events also tell each open
   Library to reread Tracks: cache invalidation alone does not refresh a page.

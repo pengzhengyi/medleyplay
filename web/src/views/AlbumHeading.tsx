@@ -7,10 +7,13 @@ import type { ReactNode, Ref } from "react";
 
 import type { Route } from "../routes";
 import { PictureHeading } from "./PictureHeading";
+import { KindMark } from "./KindMark";
+import type { LyricsSubject } from "./lyricsAvailability";
 
 /** The heading of the album `title` and its artist credit. */
 export function AlbumHeading({
   title,
+  lyrics,
   artist,
   year,
   back,
@@ -22,6 +25,7 @@ export function AlbumHeading({
   playPlace,
 }: {
   readonly title: string;
+  readonly lyrics?: LyricsSubject;
   readonly artist: ReactNode;
   /** The year it came out, if known. */
   readonly year: number | null;
@@ -39,6 +43,7 @@ export function AlbumHeading({
   return (
     <PictureHeading
       title={title}
+      mark={<KindMark kind="album" reason="named" lyrics={lyrics} />}
       back={back}
       backLabel={backLabel}
       picture={cover}

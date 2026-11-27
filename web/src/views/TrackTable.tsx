@@ -987,13 +987,13 @@ const COLUMNS: Column[] = [
             </span>
           )}
           <span className="thumb-frame">
-            <Cover size="small" cover={track.cover} className="thumb" lyrics={track} />
+            <Cover size="small" cover={track.cover} className="thumb" />
             <CoverBadge
               status={download === undefined ? actions.statusOf(track) : downloadStatusOf(download)}
               playing={track.id === playingId}
             />
           </span>
-          <KindMark kind={track.kind} reason={track.kind_reason} />
+          <KindMark kind={track.kind} reason={track.kind_reason} lyrics={track} />
           <button
             type="button"
             className="title"

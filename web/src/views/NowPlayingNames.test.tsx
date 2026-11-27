@@ -27,7 +27,6 @@ function renderNames(
   playing: Playing,
   favorites: FavoriteGroups = NO_FAVORITES,
   catalog: readonly Track[] = [track],
-  coverVisible = true,
 ) {
   const handlers = {
     onFavorite: vi.fn(),
@@ -38,7 +37,6 @@ function renderNames(
     <LyricsAvailabilityProvider tracks={catalog}>
       <NowPlayingNames
         track={track}
-        coverVisible={coverVisible}
         playing={playing}
         position={0}
         moving
@@ -55,7 +53,7 @@ function renderNames(
 
 describe("what Now Playing names", () => {
   it.each(["song", "group", "file"] as const)(
-    "moves %s lyrics availability to its mark while the cover is hidden",
+    "keeps %s lyrics availability on its kind marks independently of artwork",
     (shape) => {
       const file = { ...ONE, has_lyrics: true };
       const first = trackOf(40, "Opening", {
@@ -81,17 +79,11 @@ describe("what Now Playing names", () => {
               })),
             };
 
-      renderNames(
-        shape === "file" ? file : first,
-        playing,
-        NO_FAVORITES,
-        [file, first, last],
-        false,
-      );
+      renderNames(shape === "file" ? file : first, playing, NO_FAVORITES, [file, first, last]);
 
       expect(
         screen.getByRole("img", {
-          name: shape === "song" ? "Playing a song, Lyrics available" : "Lyrics available",
+          name: shape === "song" ? "Playing a song, Lyrics available" : "Song, Lyrics available",
         }),
       ).toBeInTheDocument();
       if (shape === "file") {
@@ -107,8 +99,10 @@ describe("what Now Playing names", () => {
     const other = { ...song, id: 8, title: "Second song" };
     renderNames(song, { kind: "song" }, NO_FAVORITES, [song, other]);
 
-    expect(screen.getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: "Lyrics available" })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Album, All songs have lyrics" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Playing a song, Lyrics available" }),
+    ).toBeInTheDocument();
   });
 
   it("does not derive album lyrics from only the songs in the playing group", () => {
@@ -133,7 +127,7 @@ describe("what Now Playing names", () => {
       [song, other, missing],
     );
 
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Album: Jay, song 1 of 2" })).toBeInTheDocument();
   });
 

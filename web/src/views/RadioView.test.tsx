@@ -72,8 +72,10 @@ describe("the Radio tab", () => {
 
     renderRadio(tracks);
 
-    expect(screen.getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Album, All songs have lyrics" })).toBeInTheDocument();
     expect(screen.getByText("One file", { selector: ".group-name" })).toBeInTheDocument();
+    expect(document.querySelector(".group-name .kind-mark .lyrics-badge")).not.toBeNull();
+    expect(document.querySelector(".cover .lyrics-badge")).toBeNull();
   });
 
   it("does not mark incomplete split-file lyrics from only the children with matching tags", () => {
@@ -87,7 +89,7 @@ describe("the Radio tab", () => {
     renderRadio(tracks);
 
     expect(screen.getByRole("link", { name: /First tag/ })).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
   });
 
   it("plays the Account's own station", async () => {

@@ -9,7 +9,7 @@
  */
 
 import { CaretDownIcon, QueueIcon, QuotesIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { type Lyrics, type Track, coverUrl } from "../api";
 import { formatTime } from "../format";
@@ -33,22 +33,6 @@ import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { Transport } from "./Transport";
 import { VolumeControl } from "./VolumeControl";
 import { Hint } from "./Hint";
-
-const narrowNowPlaying = () =>
-  typeof window.matchMedia === "function" ? window.matchMedia("(width <= 48rem)") : undefined;
-
-function useNarrowNowPlaying(): boolean {
-  return useSyncExternalStore(
-    (changed) => {
-      const query = narrowNowPlaying();
-      query?.addEventListener("change", changed);
-      return () => {
-        query?.removeEventListener("change", changed);
-      };
-    },
-    () => narrowNowPlaying()?.matches ?? false,
-  );
-}
 
 /**
  * `track`, playing in `player`, over the whole screen, with the song's `lyrics` beside
@@ -121,7 +105,6 @@ export function NowPlaying({
     shownDuration === undefined ? undefined : Math.max(0, shownDuration - shownPosition);
   const lyricsHidden = useLyricsHidden();
   const lyricsOpen = !lyricsHidden;
-  const narrow = useNarrowNowPlaying();
   // Closing Up next from inside it gives focus back to its button, not to the page.
   const closeUpNext = () => {
     if (upNext.current?.contains(document.activeElement) === true) {
@@ -132,7 +115,7 @@ export function NowPlaying({
   const song = songTimeOf(track, nowPlaying, position);
   const album = { view: "album", artist: albumArtistOf(track), name: track.album } as const;
   const editCover = { ...album, editCover: true } as const;
-  const cover = <Cover size="original" cover={track.cover} lyrics={track} />;
+  const cover = <Cover size="original" cover={track.cover} />;
   const coverLabel = `Edit album cover for ${track.album}`;
   return (
     <dialog
@@ -225,7 +208,6 @@ export function NowPlaying({
             </div>
             <NowPlayingNames
               track={track}
-              coverVisible={!lyricsOpen || !narrow}
               playing={nowPlaying}
               position={position}
               moving={status.kind === "playing"}

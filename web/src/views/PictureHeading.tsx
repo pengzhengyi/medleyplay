@@ -13,6 +13,7 @@ import { type Route, hrefOf } from "../routes";
 /** The heading `title` of a page, beside its `picture`, with `children` under the title. */
 export function PictureHeading({
   title,
+  mark,
   back,
   backLabel,
   picture,
@@ -23,6 +24,7 @@ export function PictureHeading({
   children,
 }: {
   readonly title: string;
+  readonly mark?: ReactNode;
   readonly back: Route;
   readonly backLabel: string;
   /** The album's cover or the artist's photo, shown large. */
@@ -52,7 +54,14 @@ export function PictureHeading({
         {picture}
         <div className="picture-side">
           <div className="picture-names">
-            <h2 className="section">{title}</h2>
+            {mark === undefined ? (
+              <h2 className="section">{title}</h2>
+            ) : (
+              <div className="picture-title">
+                {mark}
+                <h2 className="section">{title}</h2>
+              </div>
+            )}
             {children}
           </div>
           <div className="picture-actions">

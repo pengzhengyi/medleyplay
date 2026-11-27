@@ -212,5 +212,10 @@
   "Previous album": "上一张专辑",
   "Next album": "下一张专辑",
   "Lyrics available": "有歌词",
-  "All songs have lyrics": "所有歌曲都有歌词"
+  "All songs have lyrics": "所有歌曲都有歌词",
+  "guessed from its length": "根据时长推测",
+  "as no one named it": "尚未指定类型",
+  "Playing a song": "正在播放歌曲",
+  "Album: {{name}}": "专辑：{{name}}",
+  "Album: {{name}}, song {{current}} of {{count}}": "专辑：{{name}}，第 {{current}} 首，共 {{count}} 首"
 }

@@ -12,6 +12,7 @@ import { type AlbumCard, albumShelves, favoriteSongsOf, seedOf, seeded } from ".
 import type { Station } from "../library/useStation";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 
 /** The day `now` falls on here, as `2026-11-06`: the shelves keep their order for it. */
 const dayOf = (now: Date) =>
@@ -127,13 +128,11 @@ export function RadioView({
                 <li key={album.key} className="shelf-album">
                   {album.album === "" ? (
                     <div className="shelf-link">
-                      <Cover
-                        size="medium"
-                        cover={album.cover}
-                        className="cover-tile"
-                        lyrics={lyrics}
-                      />
-                      <span className="group-name">{album.name}</span>
+                      <Cover size="medium" cover={album.cover} className="cover-tile" />
+                      <span className="group-name">
+                        <KindMark kind="album" reason="named" lyrics={lyrics} besideTitle />
+                        {album.name}
+                      </span>
                       <span className="group-meta">{album.artist || "Unknown artist"}</span>
                     </div>
                   ) : (
@@ -141,13 +140,11 @@ export function RadioView({
                       className="shelf-link"
                       href={hrefOf({ view: "album", artist: album.artist, name: album.album })}
                     >
-                      <Cover
-                        size="medium"
-                        cover={album.cover}
-                        className="cover-tile"
-                        lyrics={lyrics}
-                      />
-                      <span className="group-name">{album.name}</span>
+                      <Cover size="medium" cover={album.cover} className="cover-tile" />
+                      <span className="group-name">
+                        <KindMark kind="album" reason="named" lyrics={lyrics} besideTitle />
+                        {album.name}
+                      </span>
                       <span className="group-meta">{album.artist || "Unknown artist"}</span>
                     </a>
                   )}

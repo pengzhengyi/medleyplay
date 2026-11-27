@@ -3539,6 +3539,19 @@ button[aria-disabled="true"] {
   place-items: center;
   color: var(--muted);
   font-size: 0.85rem;
+  width: 1em;
+  height: 1em;
+}
+
+.kind-mark.title-kind {
+  margin-inline-end: 0.4rem;
+  vertical-align: -0.1em;
+}
+
+.picture-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
 }
 
 .kind-mark.kind-album {
@@ -4548,7 +4561,7 @@ button.icon.heart.on:hover,
   font-weight: 600;
 }
 
-.player .names span {
+.player .names > span {
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -6196,12 +6209,11 @@ dialog.modal::backdrop {
   object-fit: cover;
 }
 
-.cover.has-lyrics,
 .kind-mark:has(.lyrics-badge) {
   position: relative;
 }
 
-.photo-suggestion-art > .cover.has-lyrics {
+.photo-suggestion-art > .cover {
   display: block;
   width: 100%;
   height: 100%;
@@ -6210,44 +6222,20 @@ dialog.modal::backdrop {
 .lyrics-badge {
   position: absolute;
   z-index: 2;
-  top: 0.08rem;
-  right: 0.08rem;
+  top: -0.25rem;
+  right: -0.25rem;
   display: inline-grid;
-  width: 0.85rem;
-  height: 0.85rem;
+  width: 0.65rem;
+  height: 0.65rem;
   place-items: center;
   border: 1px solid var(--surface);
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
   color: var(--accent-ink);
-  font-size: 0.6rem;
+  font-size: 0.45rem;
   line-height: 1;
   pointer-events: none;
-}
-
-.lyrics-medium .lyrics-badge {
-  width: 1.15rem;
-  height: 1.15rem;
-  font-size: 0.8rem;
-}
-
-.lyrics-original .lyrics-badge {
-  top: 0.35rem;
-  right: 0.35rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  font-size: 1.05rem;
-}
-
-.kind-mark > .lyrics-badge,
-.playing-kind > .lyrics-badge,
-.np-mark > .lyrics-badge {
-  top: -0.25rem;
-  right: -0.25rem;
-  width: 0.65rem;
-  height: 0.65rem;
-  font-size: 0.45rem;
 }
 
 .kind-mark.guessed:has(.lyrics-badge) {
@@ -8029,6 +8017,11 @@ kbd {
   background: rgb(255 255 255 / 12%);
   color: var(--ink);
   font-size: 1rem;
+}
+
+.np-mark > .kind-mark {
+  color: inherit;
+  font-size: inherit;
 }
 
 /* The album, then the song in it: the slash reads as a path, album to song. */
@@ -10744,6 +10737,10 @@ button.rail-order-handle {
 
   .picture-names .section {
     font-size: 1.6rem;
+  }
+
+  .picture-title {
+    justify-content: center;
   }
 
   .picture-heading .picture-names .subtitle {

@@ -103,14 +103,14 @@ describe("the views", () => {
 
     expect(await screen.findByRole("button", { name: "First light" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Last train" })).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Lyrics available/ })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("link", { name: "Albums" }));
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Albums" })).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
   });
 
   it("marks complete album lyrics on its tile and heading without decorating its artist", async () => {
@@ -118,15 +118,16 @@ describe("the views", () => {
     open("#/albums", signedIn(tracks));
     const album = await screen.findByRole("link", { name: /Supercell/ });
 
-    expect(within(album).getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    expect(
+      within(album).getByRole("img", { name: "Album, All songs have lyrics" }),
+    ).toBeInTheDocument();
+    expect(album.querySelector(".group-name .kind-mark .lyrics-badge")).not.toBeNull();
+    expect(album.querySelector(".cover .lyrics-badge")).toBeNull();
     await userEvent.click(album);
 
     expect(await screen.findByRole("heading", { name: "Supercell" })).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("region", { name: "About the album" })).getByRole("img", {
-        name: "All songs have lyrics",
-      }),
-    ).toBeInTheDocument();
+    expect(document.querySelector(".album-heading .kind-mark .lyrics-badge")).not.toBeNull();
+    expect(document.querySelector(".album-heading .cover .lyrics-badge")).toBeNull();
 
     await userEvent.click(screen.getByRole("link", { name: "Artists" }));
 
@@ -262,30 +263,44 @@ describe("the views", () => {
   });
 
   it("links stored performers separately without waiting for artist metadata or splitting a name", async () => {
+    let finishMetadata!: () => void;
+    const metadata = new Promise<void>((resolve) => {
+      finishMetadata = resolve;
+    });
     open("#/library", {
       ...signedIn([
         trackOf(1, "Duet", { artist: "AC/DC & Sia", artists: ["AC/DC", "Sia"] }),
         trackOf(2, "Compilation", { artist: "群星" }),
       ]),
-      "GET /api/artist-names": { after: new Promise(() => undefined) },
+      "GET /api/artist-names": { after: metadata, body: { names: [], artists: [] } },
     });
 
-    const duet = within(await screen.findByRole("row", { name: /Duet/u }));
-    const artist = duet.getByRole("cell", { name: "AC/DC, Sia" });
-    const links = within(artist).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["AC/DC", "Sia"]);
-    expect(links[0]).toHaveAttribute(
-      "href",
-      hrefOf({ view: "artist", name: "AC/DC", id: artistIdOf("AC/DC") }),
-    );
-    const compilation = within(screen.getByRole("row", { name: /Compilation/u }));
-    expect(within(compilation.getByRole("cell", { name: "群星" })).queryByRole("link")).toBeNull();
+    try {
+      const duet = within(await screen.findByRole("row", { name: /Duet/u }));
+      const artist = duet.getByRole("cell", { name: "AC/DC, Sia" });
+      const links = within(artist).getAllByRole("link");
+      expect(links.map((link) => link.textContent)).toEqual(["AC/DC", "Sia"]);
+      expect(links[0]).toHaveAttribute(
+        "href",
+        hrefOf({ view: "artist", name: "AC/DC", id: artistIdOf("AC/DC") }),
+      );
+      const compilation = within(screen.getByRole("row", { name: /Compilation/u }));
+      expect(
+        within(compilation.getByRole("cell", { name: "群星" })).queryByRole("link"),
+      ).toBeNull();
 
-    await userEvent.click(within(artist).getByRole("link", { name: "Sia" }));
+      await userEvent.click(within(artist).getByRole("link", { name: "Sia" }));
 
-    expect(await screen.findByRole("heading", { name: "Sia" })).toBeVisible();
-    expect(songs()).toEqual(["Duet"]);
-    expect(screen.getByText("Nothing playing")).toBeVisible();
+      expect(await screen.findByRole("heading", { name: "Sia" })).toBeVisible();
+      expect(songs()).toEqual(["Duet"]);
+      expect(screen.getByText("Nothing playing")).toBeVisible();
+    } finally {
+      cleanup();
+      await act(async () => {
+        finishMetadata();
+        await metadata;
+      });
+    }
   });
 
   it("links an album credit to songs elsewhere in the Library but not to a search-only alias", async () => {

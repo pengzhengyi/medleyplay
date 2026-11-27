@@ -83,7 +83,7 @@ describe("what Now Playing names", () => {
 
       expect(
         screen.getByRole("img", {
-          name: shape === "song" ? "Playing a song, Lyrics available" : "Lyrics available",
+          name: shape === "song" ? "Playing a song, Lyrics available" : "Song, Lyrics available",
         }),
       ).toBeInTheDocument();
       if (shape === "file") {
@@ -99,7 +99,7 @@ describe("what Now Playing names", () => {
     const other = { ...song, id: 8, title: "Second song" };
     renderNames(song, { kind: "song" }, NO_FAVORITES, [song, other]);
 
-    expect(screen.getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Album, All songs have lyrics" })).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: "Playing a song, Lyrics available" }),
     ).toBeInTheDocument();
@@ -127,7 +127,7 @@ describe("what Now Playing names", () => {
       [song, other, missing],
     );
 
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Album: Jay, song 1 of 2" })).toBeInTheDocument();
   });
 

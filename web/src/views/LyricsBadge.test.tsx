@@ -9,6 +9,17 @@ import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 import { Downloading } from "./Downloading";
 
 describe("lyrics availability marks", () => {
+  it("announces availability once on the kind indicator, not again on its quotation", () => {
+    const song = trackOf(1, "First light", { kind_reason: "named", has_lyrics: true });
+    const { container } = render(<KindMark kind="song" reason="named" lyrics={song} />);
+
+    expect(screen.getAllByRole("img")).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Song, Lyrics available" })).toHaveAttribute(
+      "title",
+      "Song, Lyrics available",
+    );
+    expect(container.querySelector(".lyrics-badge")).toHaveAttribute("aria-hidden", "true");
+  });
   it("marks the downloading song next to its title, not on its artwork or progress", () => {
     const track = trackOf(1, "First light", { has_lyrics: true });
     const { container } = render(
@@ -34,7 +45,7 @@ describe("lyrics availability marks", () => {
         />,
       );
 
-      expect(screen.getByRole("img", { name: "有歌词" })).toHaveAttribute("title", "有歌词");
+      expect(screen.queryByRole("img", { name: "有歌词" })).not.toBeInTheDocument();
       expect(screen.getByRole("img", { name: "歌曲, 有歌词" })).toHaveAttribute(
         "title",
         "歌曲, 有歌词",
@@ -58,11 +69,11 @@ describe("lyrics availability marks", () => {
         </button>,
       );
 
-      expect(screen.getByRole("img", { name: "Lyrics available" })).toHaveAttribute(
+      expect(screen.getByRole("img", { name: /Lyrics available/ })).toHaveAttribute(
         "title",
-        "Lyrics available",
+        "Song, guessed from its length, Lyrics available",
       );
-      fireEvent.click(screen.getByRole("img", { name: "Lyrics available" }));
+      fireEvent.click(screen.getByRole("img", { name: /Lyrics available/ }));
       expect(onPlay).toHaveBeenCalledOnce();
       expect(container.querySelector("[tabindex]")).toBeNull();
       expect(container.querySelector(".cover")).toHaveAttribute("aria-hidden", "true");
@@ -77,7 +88,7 @@ describe("lyrics availability marks", () => {
         />,
       );
 
-      expect(screen.queryByRole("img", { name: "Lyrics available" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: /Lyrics available/ })).not.toBeInTheDocument();
     },
   );
 
@@ -90,7 +101,7 @@ describe("lyrics availability marks", () => {
       <LyricsAvailabilityProvider tracks={[first, last]}>{shown}</LyricsAvailabilityProvider>,
     );
 
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
 
     rerender(
       <LyricsAvailabilityProvider tracks={[first, { ...last, has_lyrics: true }]}>
@@ -98,7 +109,7 @@ describe("lyrics availability marks", () => {
       </LyricsAvailabilityProvider>,
     );
 
-    expect(screen.getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Album, All songs have lyrics" })).toBeInTheDocument();
   });
 
   it("does not count a split file twice or infer children from its cover or lyrics", () => {
@@ -112,7 +123,7 @@ describe("lyrics availability marks", () => {
       <LyricsAvailabilityProvider tracks={[file, first, last]}>{shown}</LyricsAvailabilityProvider>,
     );
 
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
 
     rerender(
       <LyricsAvailabilityProvider
@@ -122,11 +133,11 @@ describe("lyrics availability marks", () => {
       </LyricsAvailabilityProvider>,
     );
 
-    expect(screen.getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Album, All songs have lyrics" })).toBeInTheDocument();
 
     rerender(<LyricsAvailabilityProvider tracks={[]}>{shown}</LyricsAvailabilityProvider>);
 
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
   });
 
   it("refreshes a retained song representation from the current catalog", () => {
@@ -137,7 +148,7 @@ describe("lyrics availability marks", () => {
       </LyricsAvailabilityProvider>,
     );
 
-    expect(screen.getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Lyrics available/ })).toBeInTheDocument();
   });
 
   it("preserves a guessed song mark and names its available lyrics", () => {

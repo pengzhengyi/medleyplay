@@ -103,14 +103,14 @@ describe("the views", () => {
 
     expect(await screen.findByRole("button", { name: "First light" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Last train" })).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Lyrics available/ })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("link", { name: "Albums" }));
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Albums" })).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /All songs have lyrics/ })).not.toBeInTheDocument();
   });
 
   it("marks complete album lyrics on its tile and heading without decorating its artist", async () => {
@@ -118,7 +118,9 @@ describe("the views", () => {
     open("#/albums", signedIn(tracks));
     const album = await screen.findByRole("link", { name: /Supercell/ });
 
-    expect(within(album).getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    expect(
+      within(album).getByRole("img", { name: "Album, All songs have lyrics" }),
+    ).toBeInTheDocument();
     expect(album.querySelector(".group-name .kind-mark .lyrics-badge")).not.toBeNull();
     expect(album.querySelector(".cover .lyrics-badge")).toBeNull();
     await userEvent.click(album);
@@ -975,6 +977,28 @@ describe("search", () => {
       expect(place?.querySelector("svg")).not.toBeNull();
     }
   });
+
+  it.each(["Library", "Bilibili"])(
+    "tabs from the selected %s scope to the search field without moving focus on selection",
+    async (name) => {
+      open("", withBilibili());
+      const scope = await screen.findByRole("radio", { name });
+      const box = screen.getByRole("combobox", { name: "Search" });
+
+      await userEvent.click(scope);
+
+      expect(scope).toBeChecked();
+      expect(scope).toHaveFocus();
+
+      await userEvent.tab();
+
+      expect(box).toHaveFocus();
+
+      await userEvent.tab({ shift: true });
+
+      expect(scope).toHaveFocus();
+    },
+  );
 
   it("resumes a saved result from Downloaded without asking the site or adding a song", async () => {
     const saved = { id: 8, state: "succeeded", label: "Night Drive", message: "", result: null };

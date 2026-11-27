@@ -58,14 +58,18 @@ describe("Now Playing", () => {
     await playingIntro({}, trackOf(1, "Intro", { has_lyrics: true, cover: "blue" }));
     const player = screen.getByRole("region", { name: "Player" });
 
-    expect(within(player).getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
+    expect(
+      within(player).getByRole("img", { name: "Playing a song, Lyrics available" }),
+    ).toBeInTheDocument();
     expect(player.querySelector(".playing-kind .lyrics-badge")).not.toBeNull();
     expect(player.querySelector(".cover .lyrics-badge")).toBeNull();
     const nowPlaying = await openNowPlaying();
 
-    expect(within(nowPlaying).getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
     expect(
-      within(nowPlaying).queryByRole("img", { name: "All songs have lyrics" }),
+      within(nowPlaying).getByRole("img", { name: "Playing a song, Lyrics available" }),
+    ).toBeInTheDocument();
+    expect(
+      within(nowPlaying).queryByRole("img", { name: /All songs have lyrics/ }),
     ).not.toBeInTheDocument();
     expect(nowPlaying.querySelector(".np-song .playing-kind .lyrics-badge")).not.toBeNull();
     expect(nowPlaying.querySelector(".np-art .lyrics-badge")).toBeNull();

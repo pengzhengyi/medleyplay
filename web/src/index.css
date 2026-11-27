@@ -4561,7 +4561,7 @@ button.icon.heart.on:hover,
   font-weight: 600;
 }
 
-.player .names span {
+.player .names > span {
   color: var(--muted);
   font-size: 0.85rem;
 }

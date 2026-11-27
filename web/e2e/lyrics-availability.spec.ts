@@ -31,6 +31,25 @@ async function expectIndicatorBadge(badge: Locator) {
     pointerEvents: "none",
     focusable: false,
   });
+  const glyph = await badge.evaluate((mark) => {
+    const svg = mark.querySelector("svg");
+    if (svg === null) throw new Error("The quotation SVG is missing");
+    const style = getComputedStyle(svg);
+    const color = style.color;
+    const size = Number.parseFloat(style.fontSize);
+    const palette = document.createElement("span");
+    palette.style.color = "var(--accent-ink)";
+    mark.append(palette);
+    const ink = getComputedStyle(palette).color;
+    palette.remove();
+    return { size, color, ink };
+  });
+  expect(glyph.size).toBeCloseTo(7.2);
+  expect(glyph.color).toBe(glyph.ink);
+  const indicator = badge.locator("..");
+  const accessible = await indicator.ariaSnapshot();
+  expect(accessible).not.toContain("\n  - img");
+  await expect(badge).toHaveAttribute("aria-hidden", "true");
 }
 
 for (const width of [390, 1280]) {
@@ -86,7 +105,7 @@ for (const width of [390, 1280]) {
       const absent = page
         .getByRole("row")
         .filter({ has: page.getByRole("button", { name: "Last train", exact: true }) });
-      const badge = first.getByRole("img", { name: "Lyrics available" });
+      const badge = first.locator(".kind-mark .lyrics-badge");
       await expectIndicatorBadge(badge);
       await expect(first.locator(".lyrics-badge")).toHaveCount(1);
       await expect(absent.locator(".lyrics-badge")).toHaveCount(0);
@@ -199,23 +218,20 @@ for (const shape of ["song", "group", "file"] as const) {
         HTMLMediaElement.prototype.play = () => Promise.resolve();
         HTMLMediaElement.prototype.pause = () => undefined;
       });
-      await page.goto(
-        shape === "group"
-          ? `/#/album?${new URLSearchParams({ artist: file.artist, name: file.album }).toString()}`
-          : "/#/library",
-      );
+      await page.goto(shape === "group" ? "/#/albums" : "/#/library");
       await page
         .getByRole("button", {
-          name: shape === "group" ? "Play all" : shape === "file" ? file.title : first.title,
+          name:
+            shape === "group" ? "Play every album" : shape === "file" ? file.title : first.title,
           exact: true,
         })
         .click();
       const player = page.getByRole("region", { name: "Player" });
-      await expectIndicatorBadge(player.locator(".playing-kind .lyrics-badge"));
-      await expect(player.locator(".cover .lyrics-badge")).toHaveCount(0);
       if (shape !== "song") {
         await expectIndicatorBadge(player.locator(".names .kind-mark .lyrics-badge"));
       }
+      await expectIndicatorBadge(player.locator(".playing-kind .lyrics-badge"));
+      await expect(player.locator(".cover .lyrics-badge")).toHaveCount(0);
       if (shape === "group") {
         await player.getByRole("button", { name: "Up next", exact: true }).click();
         const queue = page.getByRole("region", { name: "Up next", exact: true });
@@ -233,10 +249,13 @@ for (const shape of ["song", "group", "file"] as const) {
       const albumBadge = now.locator(".np-album .lyrics-badge");
       await expect(art).toBeHidden();
       await expectIndicatorBadge(songBadge);
-      await expect(songBadge).toHaveAttribute("aria-label", "Lyrics available");
+      await expect(songBadge.locator("..")).toHaveAttribute("aria-label", /Lyrics available/);
       if (shape !== "song") {
         await expectIndicatorBadge(albumBadge);
-        await expect(albumBadge).toHaveAttribute("aria-label", "All songs have lyrics");
+        await expect(albumBadge.locator("..")).toHaveAttribute(
+          "aria-label",
+          /All songs have lyrics/,
+        );
       }
       await expect(now.locator(".lyrics-badge:visible")).toHaveCount(shape === "song" ? 1 : 2);
 

@@ -1,7 +1,7 @@
 // cspell:ignore charl
 import { type Page, expect, test } from "@playwright/test";
 
-import type { Mode, Track, WaitingDevice } from "../src/api";
+import type { Features, Mode, Track, WaitingDevice } from "../src/api";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Views" });
 
@@ -31,6 +31,17 @@ for (const width of [320, 390, 1280]) {
             ? route.continue()
             : route.abort();
         });
+        const featuresResponse = await page.request.get("/api/features");
+        expect(featuresResponse.ok()).toBe(true);
+        const features = (await featuresResponse.json()) as Features;
+        await page.route("**/api/features", (route) =>
+          route.fulfill({
+            json: {
+              ...features,
+              providers: { ...features.providers, source_resolver: ["bilibili"] },
+            },
+          }),
+        );
         const response = await page.request.get("/api/mode");
         expect(response.ok()).toBe(true);
         const mode = (await response.json()) as Mode;
@@ -95,6 +106,35 @@ for (const width of [320, 390, 1280]) {
             button.after(failure);
           });
           await expect(page.getByRole("alert")).toBeVisible();
+        }
+
+        const scope = page.getByRole("radiogroup", { name: "Search in" });
+        const search = page.getByRole("combobox", { name: "Search" });
+        for (const name of ["Library", "Bilibili"]) {
+          const radio = scope.getByRole("radio", { name, exact: true });
+          await radio.locator("..").click();
+          await expect(radio).toBeChecked();
+          await expect(radio).toBeFocused();
+          await page.keyboard.press("Tab");
+          await expect(search).toBeFocused();
+          await search.fill(name === "Library" ? "layout" : "BV1Xx41117Tz");
+
+          const scopeBox = await scope.boundingBox();
+          const fieldBox = await page.locator(".search-field").boundingBox();
+          expect(scopeBox).not.toBeNull();
+          expect(fieldBox).not.toBeNull();
+          if (scopeBox === null || fieldBox === null) throw new Error("Search is not visible.");
+          expect(scopeBox.x + scopeBox.width).toBeLessThanOrEqual(fieldBox.x);
+          expect(scopeBox.y + scopeBox.height / 2).toBeCloseTo(fieldBox.y + fieldBox.height / 2, 0);
+          expect(fieldBox.x + fieldBox.width).toBeLessThanOrEqual(width);
+
+          if (name === "Library") {
+            await page.getByRole("button", { name: "Clear search" }).click();
+            await expect(search).toHaveValue("");
+            await expect(search).toBeFocused();
+          } else {
+            await expect(search).toHaveValue("BV1Xx41117Tz");
+          }
         }
 
         const layout = await page.locator(".top").evaluate((header) => {

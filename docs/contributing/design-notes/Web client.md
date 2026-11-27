@@ -389,7 +389,7 @@ Track's kind is decided.
 <!-- cspell:ignore ｍｅｌｔ beatls -->
 
 - **One search box in the header,** taking its room as on an iPad, with a scope
-  toggle at its end: *Library*, shown as its icon in the rail, or Bilibili, shown
+  toggle to the left of its text field: *Library*, shown as its icon in the rail, or Bilibili, shown
   as its mark, each named on hover and to a screen reader. Bilibili shows only while the `bilibili` plugin is
   on. With it
   chosen, the box takes a link or a bare video code and *Enter* opens the add

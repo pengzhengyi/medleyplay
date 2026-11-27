@@ -2,13 +2,24 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
+import { fileUnit } from "../library/playOrder";
 import { fakeMedia, fakeSystemMedia } from "../testing/media";
 import { serve, trackOf } from "../testing/server";
+import { playingOf } from "./albumNow";
+import * as storage from "./storage";
 import { type Player, usePlayer } from "./usePlayer";
 
 /** *Bremen*, one album file, split into songs from 0:00 to 0:30 and from 0:30 to 1:00. */
-const FIRST = trackOf(154, "アイネクライネ", { duration_ms: 30_000, segment_of: 104 });
-const SECOND = trackOf(155, "ゴーゴー幽霊船", { duration_ms: 30_000, segment_of: 104 });
+const FIRST = trackOf(154, "アイネクライネ", {
+  duration_ms: 30_000,
+  segment_of: 104,
+  segment_start_ms: 0,
+});
+const SECOND = trackOf(155, "ゴーゴー幽霊船", {
+  duration_ms: 30_000,
+  segment_of: 104,
+  segment_start_ms: 30_000,
+});
 /** A song of another file. */
 const OTHER = trackOf(7, "Melt", { duration_ms: 240_000 });
 
@@ -32,14 +43,15 @@ function ready(source: number, start: number | null, end: number | null) {
 
 function renderPlayer(tracks: readonly Track[]) {
   const shown: { player?: Player } = {};
-  function Page() {
-    const [player, audio] = usePlayer(new Map(tracks.map((track) => [track.id, track])), () => {
+  function Page({ catalog }: { readonly catalog: ReadonlyMap<number, Track> }) {
+    const [player, audio] = usePlayer(catalog, () => {
       throw new Error("Signed out.");
     });
     shown.player = player;
     return <audio ref={audio} />;
   }
-  const { container, unmount } = render(<Page />);
+  const index = (list: readonly Track[]) => new Map(list.map((track) => [track.id, track]));
+  const { container, unmount, rerender } = render(<Page catalog={index(tracks)} />);
   const element = container.querySelector("audio");
   if (element === null) {
     throw new Error("The player rendered no audio element.");
@@ -51,7 +63,15 @@ function renderPlayer(tracks: readonly Track[]) {
     }
     return shown.player;
   };
-  return { element, media, player, unmount };
+  return {
+    element,
+    media,
+    player,
+    unmount,
+    replaceCatalog: (next: readonly Track[]) => {
+      rerender(<Page catalog={index(next)} />);
+    },
+  };
 }
 
 const playing = (player: () => Player, track: Track) =>
@@ -62,6 +82,260 @@ const playing = (player: () => Player, track: Track) =>
   });
 
 describe("playing songs inside one file", () => {
+  it("updates the playing album and next song after a split edit without restarting the current song", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    const bridge = trackOf(156, "Bridge", {
+      segment_of: 104,
+      segment_start_ms: 20_000,
+      track_number: 2,
+      duration_ms: 10_000,
+    });
+
+    const first = { ...FIRST, track_number: 1 };
+    const second = { ...SECOND, track_number: 2 };
+    const editedFirst = { ...first, duration_ms: 20_000 };
+    const editedSecond = { ...second, track_number: 3 };
+    const after = [file, editedFirst, bridge, editedSecond, OTHER];
+    let edited = false;
+    serve({
+      ...ANSWERS,
+      "POST /api/tracks/154/playback": () => ({
+        body: ready(104, 0, edited ? 20_000 : 30_000),
+      }),
+      "POST /api/tracks/156/playback": { body: ready(104, 20_000, 30_000) },
+    });
+    const { element, media, player, replaceCatalog } = renderPlayer([file, first, second, OTHER]);
+    act(() => {
+      player().playList([first, second, OTHER], 0, fileUnit);
+    });
+    await playing(player, first);
+    act(() => {
+      media.playTo(8);
+    });
+    const before = player().queue.entries[0]?.key;
+
+    edited = true;
+    replaceCatalog(after);
+
+    await waitFor(() => {
+      expect(player().duration).toBe(20);
+      expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([154, 156, 155, 7]);
+    });
+    expect(player().queue.entries[0]?.key).toBe(before);
+    expect(player().position).toBe(8);
+    expect(element.currentTime).toBe(8);
+    expect(player().status.kind).toBe("playing");
+    const now = playingOf(player().queue, new Map(after.map((track) => [track.id, track])), 8);
+    expect(now.kind === "album" && now.songs.map((song) => song.track?.title)).toEqual([
+      FIRST.title,
+      bridge.title,
+      SECOND.title,
+    ]);
+  });
+
+  it("keeps the file position and pause when an edited boundary changes which song is playing", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    const first = { ...FIRST, track_number: 1 };
+    const second = { ...SECOND, track_number: 2 };
+    let edited = false;
+    serve({
+      ...ANSWERS,
+      "POST /api/tracks/154/playback": () => ({
+        body: ready(104, 0, edited ? 40_000 : 30_000),
+      }),
+    });
+    const { element, media, player, replaceCatalog } = renderPlayer([file, first, second]);
+    act(() => {
+      player().playList([first, second], 1);
+    });
+    await playing(player, second);
+    act(() => {
+      media.playTo(32);
+      player().pause();
+    });
+
+    edited = true;
+    replaceCatalog([
+      file,
+      { ...first, duration_ms: 40_000 },
+      { ...second, duration_ms: 20_000, segment_start_ms: 40_000 },
+    ]);
+
+    await waitFor(() => {
+      const { queue, status, position, duration } = player();
+      expect(queue.entries[queue.position]?.trackId).toBe(first.id);
+      expect(status.kind).toBe("paused");
+      expect(duration).toBe(40);
+      expect(position).toBe(32);
+    });
+    expect(element.currentTime).toBe(32);
+  });
+
+  it("uses the shortened boundary without restoring a song removed from Up next", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    serve(ANSWERS);
+    const { media, player, replaceCatalog } = renderPlayer([file, FIRST, SECOND, OTHER]);
+    act(() => {
+      player().playList([FIRST, OTHER], 0);
+    });
+    await playing(player, FIRST);
+
+    replaceCatalog([
+      file,
+      { ...FIRST, duration_ms: 20_000 },
+      { ...SECOND, duration_ms: 40_000, segment_start_ms: 20_000 },
+      OTHER,
+    ]);
+
+    expect(player().duration).toBe(20);
+    expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([FIRST.id, OTHER.id]);
+    act(() => {
+      media.playTo(20.1);
+    });
+    await playing(player, OTHER);
+  });
+
+  it("updates a pending song load without reading the previous file position", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    let release: () => void = () => undefined;
+    const loading = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    serve({
+      ...ANSWERS,
+      "POST /api/tracks/154/playback": {
+        ...ANSWERS["POST /api/tracks/154/playback"],
+        after: loading,
+      },
+    });
+    const { element, media, player, replaceCatalog } = renderPlayer([file, FIRST, SECOND, OTHER]);
+    act(() => {
+      player().playList([OTHER], 0);
+    });
+    await playing(player, OTHER);
+    act(() => {
+      media.playTo(45);
+      player().playList([FIRST, SECOND], 0, fileUnit);
+    });
+
+    replaceCatalog([
+      file,
+      { ...FIRST, duration_ms: 20_000 },
+      { ...SECOND, duration_ms: 40_000, segment_start_ms: 20_000 },
+      OTHER,
+    ]);
+    release();
+
+    await playing(player, FIRST);
+    expect(player().duration).toBe(20);
+    expect(element.currentTime).toBe(0);
+  });
+
+  it("uses a newer playback answer while the catalog still shows the old start", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    const latest = { ...SECOND, duration_ms: 20_000, segment_start_ms: 40_000 };
+    serve({ ...ANSWERS, "POST /api/tracks/155/playback": { body: ready(104, 40_000, 60_000) } });
+    const { element, player, replaceCatalog } = renderPlayer([file, FIRST, SECOND]);
+    act(() => {
+      player().playList([FIRST, SECOND], 1, fileUnit);
+    });
+    await playing(player, SECOND);
+
+    replaceCatalog([file, { ...FIRST, duration_ms: 40_000 }, latest]);
+
+    expect(player().queue.entries[player().queue.position]?.trackId).toBe(SECOND.id);
+    expect(element.currentTime).toBe(40);
+  });
+
+  it("keeps a paused restored song and its offset while metadata is loading during an edit", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    serve(ANSWERS);
+    const { element, player, replaceCatalog } = renderPlayer([file, FIRST, SECOND]);
+    const deferMetadata = (event: Event) => {
+      event.stopImmediatePropagation();
+    };
+    element.addEventListener("loadedmetadata", deferMetadata, true);
+    act(() => {
+      player().take(
+        {
+          queue: {
+            entries: [
+              { key: "first", trackId: FIRST.id },
+              { key: "second", trackId: SECOND.id },
+            ],
+            position: 1,
+            order: undefined,
+            repeat: "off",
+          },
+          seconds: 5,
+          counted: false,
+        },
+        false,
+      );
+    });
+    await waitFor(() => {
+      expect(player().status.kind).toBe("paused");
+    });
+
+    replaceCatalog([
+      file,
+      { ...FIRST, duration_ms: 20_000 },
+      { ...SECOND, duration_ms: 40_000, segment_start_ms: 20_000 },
+    ]);
+    element.removeEventListener("loadedmetadata", deferMetadata, true);
+    act(() => {
+      element.dispatchEvent(new Event("loadedmetadata"));
+    });
+
+    expect(player().queue.entries[player().queue.position]?.trackId).toBe(SECOND.id);
+    expect(player().status.kind).toBe("paused");
+    expect(element.currentTime).toBe(25);
+  });
+
+  it("skips deleted entries in a curated queue and keeps playback paused", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    serve(ANSWERS);
+    const { element, player, replaceCatalog } = renderPlayer([file, FIRST, SECOND, OTHER]);
+    act(() => {
+      player().playList([FIRST, OTHER, SECOND], 0);
+    });
+    await playing(player, FIRST);
+    act(() => {
+      player().pause();
+    });
+
+    replaceCatalog([{ ...file, split: false }, OTHER]);
+
+    await waitFor(() => {
+      expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([OTHER.id]);
+      expect(player().status.kind).toBe("paused");
+    });
+    expect(element.currentTime).toBe(0);
+  });
+
+  it("keeps the saved position when a queued song is deleted while another track is paused", async () => {
+    serve(ANSWERS);
+    const saved = vi.spyOn(storage, "saveQueue");
+    try {
+      const { media, player, replaceCatalog } = renderPlayer([OTHER, FIRST]);
+      act(() => {
+        player().playList([OTHER, FIRST], 0);
+      });
+      await playing(player, OTHER);
+      act(() => {
+        media.playTo(12);
+        player().pause();
+      });
+
+      replaceCatalog([OTHER]);
+
+      expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([OTHER.id]);
+      expect(saved).toHaveBeenLastCalledWith({ queue: player().queue, seconds: 12 });
+    } finally {
+      saved.mockRestore();
+    }
+  });
+
   it("keeps queue commands stable while elapsed time changes", async () => {
     serve(ANSWERS);
     const { media, player } = renderPlayer([FIRST, SECOND, OTHER]);
@@ -176,20 +450,21 @@ describe("playing songs inside one file", () => {
   );
 
   it("seeks to the next song when it does not follow the current song in the file", async () => {
+    const later = { ...SECOND, segment_start_ms: 40_000 };
     serve({
       ...ANSWERS,
       "POST /api/tracks/155/playback": { body: ready(104, 40_000, 70_000) },
     });
-    const { element, media, player } = renderPlayer([FIRST, SECOND]);
+    const { element, media, player } = renderPlayer([FIRST, later]);
     act(() => {
-      player().playList([FIRST, SECOND], 0);
+      player().playList([FIRST, later], 0);
     });
     await playing(player, FIRST);
 
     act(() => {
       media.playTo(42);
     });
-    await playing(player, SECOND);
+    await playing(player, later);
 
     expect(media.loads).toBe(1);
     expect(element.currentTime).toBe(40);

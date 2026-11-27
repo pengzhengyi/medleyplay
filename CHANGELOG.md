@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Saving an album's song list updates the open album page and the playing
+  timeline on other open devices, without restarting playback.
+
 ### Added
 
 - Now Playing offers Palette Glow and Soft Pan in place of Flow and Drift.

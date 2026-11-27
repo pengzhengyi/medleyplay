@@ -20,7 +20,7 @@ from medleyplay.application.changes import OnChange
 from medleyplay.application.details import record as record_details
 from medleyplay.application.lyrics_availability import with_lyrics_availability
 from medleyplay.application.rule_schema import read_rules, rules_document
-from medleyplay.application.segments import album_file_of
+from medleyplay.application.segments import album_song_locations
 from medleyplay.application.settings import read_settings
 from medleyplay.application.track_artists import artist_names_of
 from medleyplay.application.track_facts import track_facts
@@ -187,7 +187,8 @@ class CatalogService:
             downloaded = {source.track_id for source in sources if source.id in held}
             sites = _site_sources(db)
             failed = _download_failures(db, sites, downloaded)
-            segment_of = album_file_of(db)
+            locations = album_song_locations(db)
+            segment_of = {song: album for song, (album, _) in locations.items()}
             split = set(segment_of.values())
             videos = _videos_of(
                 (source.track_id, source.kind, source.locator) for source in sources
@@ -213,7 +214,7 @@ class CatalogService:
                     joined=_is_joined(sites.get(track.id)),
                     # A song came from the video its album file did.
                     video=videos.get(segment_of.get(TrackId(track.id), track.id)),
-                    segment_of=segment_of.get(TrackId(track.id)),
+                    segment_location=locations.get(TrackId(track.id)),
                     split=track.id in split,
                     album_from_ms=album_from_ms,
                     community=community.get(TrackId(track.id)),
@@ -234,7 +235,8 @@ class CatalogService:
             sources = _source_reads(db, SourceRow.track_id == track_id)
             held = set(db.scalars(select(DownloadRow.source_id)))
             available = _availability(db, sources, held, online=self._online())
-            segment_of = album_file_of(db)
+            locations = album_song_locations(db)
+            segment_of = {song: album for song, (album, _) in locations.items()}
             looked_at = segment_of.get(track_id, track_id)
             downloaded = _downloaded(
                 db, select(SourceRow.track_id).where(SourceRow.track_id == looked_at)
@@ -258,7 +260,7 @@ class CatalogService:
                 site=sites[track_id].kind if track_id in sites else None,
                 joined=_is_joined(sites.get(track_id)),
                 video=videos.get(looked_at),
-                segment_of=segment_of.get(track_id),
+                segment_location=locations.get(track_id),
                 split=track_id in segment_of.values(),
                 album_from_ms=album_from_ms,
                 community=community.get(track_id),
@@ -868,7 +870,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     site: str | None = None,
     joined: bool = False,
     video: str | None = None,
-    segment_of: int | None = None,
+    segment_location: tuple[TrackId, int] | None = None,
     split: bool = False,
     album_from_ms: int | None = LONGEST_SONG_MS,
     community: CommunityRating | None = None,
@@ -876,6 +878,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     artists: tuple[str, ...] = (),
     artist_ids: tuple[str, ...] = (),
 ) -> Track:
+    segment_of, segment_start_ms = segment_location or (None, None)
     kind = kind_of(
         None if track.kind is None else Kind(track.kind),
         duration_ms=track.duration_ms,
@@ -909,7 +912,8 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         site=site,
         joined=joined,
         video=video,
-        segment_of=None if segment_of is None else TrackId(segment_of),
+        segment_of=segment_of,
+        segment_start_ms=segment_start_ms,
         split=split,
         kind=kind.kind,
         kind_reason=kind.reason,

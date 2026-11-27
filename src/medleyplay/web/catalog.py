@@ -90,6 +90,9 @@ class TrackOut(BaseModel):
         description="The page of the video the Track's audio came from, if known.",
     )
     segment_of: int | None = Field(description="The album file this Track is a song of, if any.")
+    segment_start_ms: int | None = Field(
+        description="Where this song starts in its album file, in milliseconds."
+    )
     split: bool = Field(description="Whether this Track's file is split into songs.")
     kind: Kind = Field(description="Whether the Track is a song or a whole album in one file.")
     kind_reason: KindReason = Field(
@@ -140,6 +143,7 @@ class TrackOut(BaseModel):
             joined=track.joined,
             video=track.video,
             segment_of=track.segment_of,
+            segment_start_ms=track.segment_start_ms,
             split=track.split,
             kind=track.kind,
             kind_reason=track.kind_reason,

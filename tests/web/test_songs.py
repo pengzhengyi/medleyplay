@@ -63,6 +63,11 @@ def test_track_lists_say_which_file_is_split_and_which_file_a_song_is_of(
         "アイネクライネ",
         "song",
     )
+    second = next(
+        track for track in tracks.values() if track["segment_of"] == album and track != song
+    )
+    assert (song["segment_start_ms"], second["segment_start_ms"]) == (0, 252_000)
+    assert client.get(f"/api/tracks/{second['id']}").json()["segment_start_ms"] == 252_000
 
 
 def test_songs_save_rejects_an_unknown_pick_without_changing_the_list(

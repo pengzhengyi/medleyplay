@@ -133,8 +133,11 @@ class Events:
 
     def hear_change(self, what: str) -> None:
         """Tell every subscriber to reread Tracks after settings or lyrics change."""
-        if what not in {"settings", "lyrics"}:
-            return
+        if what in {"settings", "lyrics"}:
+            self.publish_tracks()
+
+    def publish_tracks(self) -> None:
+        """Tell every subscriber to reread Tracks."""
         with self._lock:
             subscriptions = tuple(self._subscriptions)
         self._offer(subscriptions, TRACKS, progress=False)

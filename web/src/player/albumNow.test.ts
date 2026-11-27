@@ -233,6 +233,38 @@ describe("albumTimeline", () => {
     expect(playSong).toHaveBeenCalledWith(now.kind === "album" ? now.songs[2] : undefined, 600);
   });
 
+  it("keeps the lead-in and seeks to the saved starts when a split file plays whole", () => {
+    const file = trackOf(40, "Suite", { kind: "album", split: true, duration_ms: 60_000 });
+    const first = trackOf(41, "Opening", {
+      segment_of: 40,
+      segment_start_ms: 10_000,
+      duration_ms: 20_000,
+    });
+    const second = trackOf(42, "Closing", {
+      segment_of: 40,
+      segment_start_ms: 30_000,
+      duration_ms: 30_000,
+    });
+    const queue = playing(0, [{ key: "whole", trackId: file.id }]);
+    const catalog = new Map([file, second, first].map((track) => [track.id, track]));
+    const now = playingOf(queue, catalog, 25);
+    const playSong = vi.fn();
+
+    const timeline = albumTimeline(now, 25, playSong);
+    timeline?.seek(30);
+    timeline?.seek(5);
+
+    expect(now.kind === "album" && now.songs[now.current]?.track).toBe(first);
+    expect(timeline?.position).toBe(25);
+    expect(timeline?.length).toBe(60);
+    expect(timeline?.marks).toEqual([
+      { start: 10, title: first.title },
+      { start: 30, title: second.title },
+    ]);
+    expect(playSong).toHaveBeenNthCalledWith(1, expect.objectContaining({ track: second }), 30);
+    expect(playSong).toHaveBeenNthCalledWith(2, expect.objectContaining({ track: first }), 5);
+  });
+
   it("is nothing while a song of its own plays", () => {
     expect(albumTimeline(playingOf(playing(3), BY_ID), 10, vi.fn())).toBeUndefined();
   });

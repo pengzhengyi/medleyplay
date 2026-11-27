@@ -169,6 +169,7 @@ def save_songs(
     saved = service.save(
         TrackId(track_id), rows, known, lyric_picks=tuple(map(JobId, body.lyric_picks))
     )
+    events.publish_tracks()
     if saved.lyrics_saved:
         events.publish_lyrics_saved(saved.lyrics_saved)
     return SongsOut.of(saved)
@@ -205,11 +206,18 @@ class UnsplitIn(BaseModel):
 
 @router.delete("/{track_id}/songs")
 def unsplit(
-    track_id: RowId, _: SignedInAccount, service: SongsDep, body: UnsplitIn | None = None
+    track_id: RowId,
+    _: SignedInAccount,
+    service: SongsDep,
+    events: EventsDep,
+    body: UnsplitIn | None = None,
 ) -> RemovedOut:
     """Remove every song of the file, with its Track."""
     known = None if body is None else [SegmentId(song) for song in body.known]
-    return RemovedOut(removed=service.unsplit(TrackId(track_id), known))
+    removed = service.unsplit(TrackId(track_id), known)
+    if removed:
+        events.publish_tracks()
+    return RemovedOut(removed=removed)
 
 
 class SilenceOut(BaseModel):

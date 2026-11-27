@@ -941,6 +941,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Lyrics quotation marks decorate the small song and album indicators, not
+  covers, including when phone lyrics hide the artwork.
 - In Songs, manually saved lyrics show a solid border instead of the previous
   Auto-Match result.
 - **Auto-Match lyrics** leaves picks unsaved until you select **Save** in the

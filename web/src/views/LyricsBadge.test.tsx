@@ -1,13 +1,24 @@
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { trackOf } from "../testing/server";
+import { downloadUnderWayOf, trackOf } from "../testing/server";
 import { useLanguageChoice } from "../locale";
 import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
 import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
+import { Downloading } from "./Downloading";
 
 describe("lyrics availability marks", () => {
+  it("marks the downloading song next to its title, not on its artwork or progress", () => {
+    const track = trackOf(1, "First light", { has_lyrics: true });
+    const { container } = render(
+      <Downloading tracks={[track]} downloads={[downloadUnderWayOf(track.id)]} />,
+    );
+
+    expect(container.querySelector(".downloading-title .kind-mark .lyrics-badge")).not.toBeNull();
+    expect(container.querySelector(".cover .lyrics-badge")).toBeNull();
+    expect(screen.getByRole("progressbar", { name: track.title })).toBeInTheDocument();
+  });
   it("names lyrics availability in Simplified Chinese", () => {
     const { result } = renderHook(() => useLanguageChoice());
     const original = result.current[0];
@@ -16,14 +27,18 @@ describe("lyrics availability marks", () => {
     });
     try {
       render(
-        <Cover
-          cover={null}
-          size="small"
+        <KindMark
+          kind="song"
+          reason="named"
           lyrics={trackOf(1, "First light", { has_lyrics: true })}
         />,
       );
 
       expect(screen.getByRole("img", { name: "有歌词" })).toHaveAttribute("title", "有歌词");
+      expect(screen.getByRole("img", { name: "歌曲, 有歌词" })).toHaveAttribute(
+        "title",
+        "歌曲, 有歌词",
+      );
     } finally {
       act(() => {
         result.current[1](original);
@@ -32,13 +47,14 @@ describe("lyrics availability marks", () => {
   });
 
   it.each([null, "saved-cover"])(
-    "marks a song's cover %s without taking its click or focus",
+    "marks the song note beside cover %s without taking its click or focus",
     (cover) => {
       const onPlay = vi.fn();
       const track = trackOf(1, "First light", { has_lyrics: true });
       const { container, rerender } = render(
         <button onClick={onPlay}>
-          <Cover cover={cover} size="small" lyrics={track} />
+          <Cover cover={cover} size="small" />
+          <KindMark kind={track.kind} reason={track.kind_reason} lyrics={track} />
         </button>,
       );
 
@@ -49,8 +65,17 @@ describe("lyrics availability marks", () => {
       fireEvent.click(screen.getByRole("img", { name: "Lyrics available" }));
       expect(onPlay).toHaveBeenCalledOnce();
       expect(container.querySelector("[tabindex]")).toBeNull();
+      expect(container.querySelector(".cover")).toHaveAttribute("aria-hidden", "true");
+      expect(container.querySelector(".cover .lyrics-badge")).toBeNull();
+      expect(container.querySelector(".kind-mark .lyrics-badge")).not.toBeNull();
 
-      rerender(<Cover cover={cover} size="small" lyrics={{ ...track, has_lyrics: false }} />);
+      rerender(
+        <KindMark
+          kind={track.kind}
+          reason={track.kind_reason}
+          lyrics={{ ...track, has_lyrics: false }}
+        />,
+      );
 
       expect(screen.queryByRole("img", { name: "Lyrics available" })).not.toBeInTheDocument();
     },
@@ -60,7 +85,7 @@ describe("lyrics availability marks", () => {
     const first = trackOf(1, "First light", { has_lyrics: true });
     const last = trackOf(2, "Last train");
     const album = { artist: first.artist, album: first.album };
-    const shown = <Cover cover={null} size="medium" lyrics={album} />;
+    const shown = <KindMark kind="album" reason="named" lyrics={album} />;
     const { rerender } = render(
       <LyricsAvailabilityProvider tracks={[first, last]}>{shown}</LyricsAvailabilityProvider>,
     );
@@ -81,7 +106,7 @@ describe("lyrics availability marks", () => {
     const first = trackOf(2, "First light", { segment_of: 1, has_lyrics: true });
     const last = trackOf(3, "Last train", { segment_of: 1 });
     const shown = (
-      <Cover cover={null} size="medium" lyrics={{ artist: "The Band", album: "Blue" }} />
+      <KindMark kind="album" reason="named" lyrics={{ artist: "The Band", album: "Blue" }} />
     );
     const { rerender } = render(
       <LyricsAvailabilityProvider tracks={[file, first, last]}>{shown}</LyricsAvailabilityProvider>,
@@ -108,7 +133,7 @@ describe("lyrics availability marks", () => {
     const old = trackOf(1, "First light");
     render(
       <LyricsAvailabilityProvider tracks={[{ ...old, has_lyrics: true }]}>
-        <Cover cover={null} size="small" lyrics={old} />
+        <KindMark kind={old.kind} reason={old.kind_reason} lyrics={old} />
       </LyricsAvailabilityProvider>,
     );
 
@@ -124,5 +149,22 @@ describe("lyrics availability marks", () => {
     ).toBeInTheDocument();
     expect(container.querySelector(".kind-mark")).toHaveClass("guessed");
     expect(container.querySelectorAll(".lyrics-badge")).toHaveLength(1);
+  });
+
+  it.each([
+    ["song", "length"],
+    ["song", "named"],
+    ["album", "default"],
+    ["album", "split"],
+  ] as const)("keeps the %s glyph for reason %s when lyrics become available", (kind, reason) => {
+    const track = trackOf(1, "First light", { kind, kind_reason: reason });
+    const { container, rerender } = render(<KindMark kind={kind} reason={reason} lyrics={track} />);
+    const glyph = container.querySelector(".kind-mark > svg")?.outerHTML;
+    expect(glyph).toBeDefined();
+
+    rerender(<KindMark kind={kind} reason={reason} lyrics={{ ...track, has_lyrics: true }} />);
+
+    expect(container.querySelector(".kind-mark > svg")?.outerHTML).toBe(glyph);
+    expect(container.querySelector(".kind-mark .lyrics-badge")).not.toBeNull();
   });
 });

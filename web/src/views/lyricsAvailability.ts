@@ -1,4 +1,4 @@
-/** @file Lyrics availability from the complete Library, shared by covers and kind marks. */
+/** @file Lyrics availability from the complete Library for song and album kind marks. */
 
 import { createContext, use } from "react";
 

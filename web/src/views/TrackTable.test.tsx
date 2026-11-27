@@ -68,14 +68,15 @@ beforeEach(() => {
 });
 
 describe("the song table", () => {
-  it("shows lyrics once on the cover alongside the playing indicator", async () => {
+  it("shows lyrics once on the kind mark while keeping the artwork playing indicator", async () => {
     const song = trackOf(1, "Intro", { has_lyrics: true, cover: "blue" });
     const { actions, container } = renderTable([song], song.id);
 
     expect(screen.getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
     expect(container.querySelectorAll(".lyrics-badge")).toHaveLength(1);
     expect(container.querySelector(".cover-badge")).not.toBeNull();
-    expect(container.querySelector(".kind-mark .lyrics-badge")).toBeNull();
+    expect(container.querySelector(".kind-mark .lyrics-badge")).not.toBeNull();
+    expect(container.querySelector(".cover .lyrics-badge")).toBeNull();
 
     await userEvent.click(screen.getByRole("img", { name: "Lyrics available" }));
 

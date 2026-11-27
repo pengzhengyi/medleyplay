@@ -74,6 +74,8 @@ describe("the Radio tab", () => {
 
     expect(screen.getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
     expect(screen.getByText("One file", { selector: ".group-name" })).toBeInTheDocument();
+    expect(document.querySelector(".group-name .kind-mark .lyrics-badge")).not.toBeNull();
+    expect(document.querySelector(".cover .lyrics-badge")).toBeNull();
   });
 
   it("does not mark incomplete split-file lyrics from only the children with matching tags", () => {

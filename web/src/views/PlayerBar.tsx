@@ -19,6 +19,7 @@ import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { useBindings } from "../shortcuts";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 import { FavoriteHeart } from "./FavoriteHeart";
 import { LyricNow } from "./LyricsPanel";
 import { AlbumCard, PlayingKind } from "./PlayingKind";
@@ -112,7 +113,7 @@ export function PlayerBar({
               aria-label={t("Open Now Playing")}
               onClick={onOpenNowPlaying}
             >
-              <Cover size="small" cover={track.cover} lyrics={track} />
+              <Cover size="small" cover={track.cover} />
             </button>
           </Hint>
         )}
@@ -131,7 +132,12 @@ export function PlayerBar({
           />
         )}
         <div className="names">
-          <strong>{named?.title ?? t("Nothing playing")}</strong>
+          <strong>
+            {nowPlaying.kind === "album" && named?.kind === "song" && (
+              <KindMark kind={named.kind} reason={named.kind_reason} lyrics={named} besideTitle />
+            )}
+            {named?.title ?? t("Nothing playing")}
+          </strong>
           {named === undefined ? (
             <span>{t("Choose a Track to play it")}</span>
           ) : (

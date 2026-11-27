@@ -82,6 +82,7 @@ import { OriginTag } from "./OriginTag";
 import { type CoverAlbum, PictureEditor } from "./PictureEditor";
 import { PictureFrame } from "./PictureFrame";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 import { ORIGIN_TAGS } from "./originTags";
 import { type SongsControls, SongsControlsContext } from "./songsControls";
 import { STATUS_ICONS } from "./statusIcons";
@@ -484,6 +485,7 @@ export function EditDetails({
           )}
         </div>
         <p id="edit-details-song" className="edit-details-song">
+          <KindMark kind={track.kind} reason={track.kind_reason} lyrics={track} besideTitle />
           {track.title}
         </p>
         {reviewState === "stale" && (
@@ -509,7 +511,6 @@ export function EditDetails({
           <div className="edit-details-body">
             <div className="edit-details-side">
               <CoverBox
-                track={track}
                 title={track.title}
                 details={details}
                 busy={saving || reading || covering}
@@ -750,7 +751,6 @@ function picturedOf(album: CoverAlbum | undefined): Pictured | undefined {
  * remove the household's own.
  */
 function CoverBox({
-  track,
   title,
   details,
   busy,
@@ -759,7 +759,6 @@ function CoverBox({
   onReplace,
   onRemove,
 }: {
-  readonly track: Track;
   /** The song's title, which names a saved image. */
   readonly title: string;
   readonly details: Details;
@@ -784,13 +783,7 @@ function CoverBox({
         onReplace={onReplace}
         onRemove={yours ? onRemove : undefined}
       >
-        <Cover
-          cover={cover ?? null}
-          size="original"
-          className="cover-box-image"
-          lyrics={track}
-          alt="Cover"
-        />
+        <Cover cover={cover ?? null} size="original" className="cover-box-image" alt="Cover" />
       </PictureFrame>
       {shown === undefined ? (
         <small className="detail-origin">No cover</small>

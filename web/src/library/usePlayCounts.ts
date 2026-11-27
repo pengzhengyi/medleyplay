@@ -25,7 +25,7 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 /** How often and how long the Account played each Track over `period`. */
 export function usePlayCounts(period: Period): PeriodPlays {
   const [loaded, setLoaded] = useState<{ period: Period; counts: PlayCounts } | undefined>();
-  const [failure, setFailure] = useState("");
+  const [failure, setFailure] = useState<{ readonly period: Period; readonly detail: string }>();
   // The latest load asked, so an older answer can't land after it.
   const asked = useRef(0);
 
@@ -35,7 +35,7 @@ export function usePlayCounts(period: Period): PeriodPlays {
       api.playCounts(period === "all" ? undefined : period).then(
         (answer) => {
           if (ask === asked.current) {
-            setFailure("");
+            setFailure(undefined);
             const counts = new Map(
               answer.map((row) => [
                 row.track_id,
@@ -47,7 +47,7 @@ export function usePlayCounts(period: Period): PeriodPlays {
         },
         (error: unknown) => {
           if (ask === asked.current) {
-            setFailure(messageOf(error));
+            setFailure({ period, detail: messageOf(error) });
           }
         },
       );
@@ -67,5 +67,8 @@ export function usePlayCounts(period: Period): PeriodPlays {
     };
   }, [period]);
 
-  return { counts: loaded?.period === period ? loaded.counts : undefined, failure };
+  return {
+    counts: loaded?.period === period ? loaded.counts : undefined,
+    failure: failure?.period === period ? failure.detail : "",
+  };
 }

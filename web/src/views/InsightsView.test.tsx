@@ -1,10 +1,11 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PlayCount, Track } from "../api";
 import { serve, trackOf } from "../testing/server";
 import { InsightsView } from "./InsightsView";
+import { LanguageSelect } from "./LanguageSelect";
 import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 
 afterEach(() => {
@@ -92,7 +93,7 @@ describe("the way to Clean up", () => {
 
     renderInsights(LIBRARY, 37);
 
-    expect(screen.getByRole("link", { name: "Clean up 37 names" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Clean up 37 items" })).toHaveAttribute(
       "href",
       "#/clean-up",
     );
@@ -108,6 +109,53 @@ describe("the way to Clean up", () => {
 });
 
 describe("InsightsView", () => {
+  it("shows loading for the selected period rather than an error from another period", async () => {
+    let finish: () => void = () => undefined;
+    const after = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    serve({
+      "GET /api/plays/counts?days=30": {
+        status: 503,
+        body: { detail: "30-day counts unavailable." },
+      },
+      "GET /api/plays/counts?days=7": { after, body: [] },
+    });
+    renderInsights();
+    expect(await screen.findByRole("alert")).toHaveTextContent("30-day counts unavailable.");
+
+    await userEvent.click(screen.getByRole("radio", { name: "Last 7 days" }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Loading…")).toHaveAttribute("aria-busy", "true");
+    await act(async () => {
+      finish();
+      await after;
+    });
+    expect(screen.getByText("Nothing played in the last 7 days.")).toBeVisible();
+  });
+
+  it("explains estimated time and history in Chinese without changing the ranking or title", async () => {
+    servingPlays([earlier(1, 3), earlier(2, 2)]);
+    renderInsights();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    const top = await screen.findByRole("button", { name: "Play Colorful Days, 3 plays" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByRole("radiogroup", { name: "统计时段" })).toBeVisible();
+      expect(top).toHaveAccessibleName("播放「Colorful Days」，播放 3 次");
+      expect(screen.getByText("约 22 分钟")).toBeVisible();
+      expect(screen.getByText(/开始记录收听时长前的播放按整首歌曲计时/u)).toHaveTextContent(
+        "清除播放记录不会影响统计。",
+      );
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("marks lyrics on song and album indicators while keeping artist art unmarked", async () => {
     const tracks = LIBRARY.map((track) => ({ ...track, has_lyrics: true }));
     servingPlays([earlier(1, 3)]);

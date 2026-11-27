@@ -9,6 +9,7 @@
  */
 
 import { endOf } from "./songList";
+import type { Words } from "../locale";
 
 /** A song this long is likely two. */
 export const LONG_SONG_MS = 15 * 60_000;
@@ -49,12 +50,22 @@ export interface FoundCount {
 }
 
 /** Say how the lists found count differently, as *The video lists 12 songs, the AI 4.*; or `null`. */
-export function countsDisagree(found: readonly FoundCount[]): string | null {
+export function countsDisagree(found: readonly FoundCount[], t?: Words): string | null {
   const [first, ...rest] = found;
   if (first === undefined || rest.every((each) => each.count === first.count)) {
     return null;
   }
   const lead = `${first.name.charAt(0).toUpperCase()}${first.name.slice(1)}`;
+  if (t !== undefined) {
+    const others = rest
+      .map(({ name, count }) => t("{{name}} {{count}}", { name, count }))
+      .join(t(", "));
+    return t("{{first}} lists {{count}} songs, {{others}}.", {
+      first: lead,
+      count: first.count,
+      others,
+    });
+  }
   const others = rest.map((each) => `${each.name} ${String(each.count)}`).join(", ");
   return `${lead} lists ${String(first.count)} songs, ${others}.`;
 }

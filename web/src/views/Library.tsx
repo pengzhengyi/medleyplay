@@ -667,8 +667,8 @@ export function Library({
                 values: { title: file.title },
               });
             }}
-            onUnsplit={async () => {
-              await library.unsplit(file.id);
+            onUnsplit={async (known) => {
+              await library.unsplit(file.id, known);
               setNotice({
                 kind: "message",
                 key: "“{{title}}” plays whole again.",

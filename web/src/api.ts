@@ -1977,8 +1977,12 @@ export const api = {
   checkSongList: (trackId: number, text: string) =>
     call<ListCheck>("POST", `/api/tracks/${String(trackId)}/songs/check`, { text }),
   /** Remove every song of the file, with its Track. */
-  unsplit: (trackId: number) =>
-    call<{ removed: number }>("DELETE", `/api/tracks/${String(trackId)}/songs`),
+  unsplit: (trackId: number, known?: readonly number[]) =>
+    call<{ removed: number }>(
+      "DELETE",
+      `/api/tracks/${String(trackId)}/songs`,
+      known === undefined ? undefined : { known },
+    ),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
   /** Create or replace a plain Playlist under an id the client chose. */
   putPlaylist: (id: string, playlist: PlainPlaylist) =>

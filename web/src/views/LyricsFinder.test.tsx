@@ -170,7 +170,9 @@ describe("finding a song's lyrics", () => {
   it("says why looking failed", async () => {
     finding(lyricsFoundOf([], { failure: "LRCLIB refused the request (HTTP 403)." }));
 
-    expect(await screen.findByText("LRCLIB refused the request (HTTP 403).")).toBeVisible();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not look for lyrics: LRCLIB refused the request (HTTP 403).",
+    );
   });
 });
 
@@ -216,7 +218,9 @@ describe("asking an AI model which song found is the song", () => {
   it("says why asking the AI failed, offering the songs all the same", async () => {
     finding(lyricsFoundOf(found, { choice_failure: "DeepSeek refused the request." }));
 
-    expect(await screen.findByText("DeepSeek refused the request.")).toBeVisible();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not get the AI's lyric suggestion: DeepSeek refused the request.",
+    );
     expect(screen.getAllByRole("button", { name: "Use" })).toHaveLength(2);
   });
 });

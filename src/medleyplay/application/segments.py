@@ -191,14 +191,21 @@ class SongsService:
             length_ms = _album_file(db, track_id).duration_ms
         return check_song_list(text, length_ms=length_ms)
 
-    def unsplit(self, track_id: TrackId) -> int:
+    def unsplit(self, track_id: TrackId, known: Collection[SegmentId] | None = None) -> int:
         """Remove every song of the file, with its Track; return how many there were.
 
         The file is kept as one from then on: no song list is offered for it again.
+        When `known` is given, remove only if it identifies all current songs.
         """
         with self._units.begin() as db:
+            if known is not None:
+                db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             _album_file(db, track_id)
-            removed = [song.track_id for song in songs_of(db, track_id)]
+            songs = songs_of(db, track_id)
+            if known is not None and set(known) != {SegmentId(song.id) for song in songs}:
+                message = "The songs changed since they were opened; open them again."
+                raise ConflictError(message)
+            removed = [song.track_id for song in songs]
             db.execute(delete(TrackRow).where(TrackRow.id.in_(removed)))
             if removed:
                 keep_as_one(db, track_id, self._clock())

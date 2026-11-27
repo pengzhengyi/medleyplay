@@ -196,10 +196,20 @@ def check_list(
     )
 
 
+class UnsplitIn(BaseModel):
+    """The songs reviewed before undoing a split."""
+
+    model_config = ConfigDict(extra="forbid")
+    known: Annotated[list[SongId], Field(max_length=MAX_SONGS)]
+
+
 @router.delete("/{track_id}/songs")
-def unsplit(track_id: RowId, _: SignedInAccount, service: SongsDep) -> RemovedOut:
+def unsplit(
+    track_id: RowId, _: SignedInAccount, service: SongsDep, body: UnsplitIn | None = None
+) -> RemovedOut:
     """Remove every song of the file, with its Track."""
-    return RemovedOut(removed=service.unsplit(TrackId(track_id)))
+    known = None if body is None else [SegmentId(song) for song in body.known]
+    return RemovedOut(removed=service.unsplit(TrackId(track_id), known))
 
 
 class SilenceOut(BaseModel):

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,7 @@ import {
 import { fakeMedia } from "../testing/media";
 import { detailsOf, serve, splitSongsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
+import { LanguageSelect } from "./LanguageSelect";
 import { LyricsEditor } from "./LyricsEditor";
 import { type AiAsk, type SilenceFinder, SongsEditor } from "./EditSongs";
 import { type AiSetUp, AiSetUpContext } from "./aiSetUp";
@@ -628,9 +629,10 @@ describe("editing a file's songs", () => {
 
   it("stops asking the AI from its button, keeping the songs as they are", async () => {
     const ai = { ...AI_UNASKED, stop: vi.fn() };
-    const { dialog } = await renderEditor(SPLIT, { ai });
+    const { dialog, answerAi } = await renderEditor(SPLIT, { ai });
 
     await press(dialog, "Fill with AI");
+    answerAi({ ...ai, state: "running" });
     await press(dialog, "Stop asking the AI");
 
     expect(ai.stop).toHaveBeenCalledOnce();
@@ -640,9 +642,10 @@ describe("editing a file's songs", () => {
 
   it("stops asking the AI when the editor closes while it asks", async () => {
     const ai = { ...AI_UNASKED, stop: vi.fn() };
-    const { dialog, unmount } = await renderEditor(SPLIT, { ai });
+    const { dialog, answerAi, unmount } = await renderEditor(SPLIT, { ai });
 
     await press(dialog, "Fill with AI");
+    answerAi({ ...ai, state: "running" });
     // Closed, the page takes the editor away.
     unmount();
 
@@ -656,6 +659,22 @@ describe("editing a file's songs", () => {
     unmount();
 
     expect(ai.stop).not.toHaveBeenCalled();
+  });
+
+  it("lets manual edits save if an AI request does not start or is canceled", async () => {
+    const ai = { ...AI_UNASKED, ask: vi.fn() };
+    const { dialog, onSave, answerAi } = await renderEditor(SPLIT, { ai });
+    fireEvent.change(box(dialog, "Title of song 1"), { target: { value: "New opening" } });
+    await press(dialog, "Fill with AI");
+    expect(ai.ask).toHaveBeenCalledOnce();
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeEnabled();
+    answerAi({ ...ai, state: "running" });
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    answerAi(ai);
+
+    await press(dialog, "Save");
+
+    expect(onSave.mock.calls[0]?.[0][0]?.title).toBe("New opening");
   });
 
   it("says which model suggested the songs, once it is known", async () => {
@@ -762,7 +781,7 @@ describe("editing a file's songs", () => {
 
   it("asks the AI again with a note once its songs are in", async () => {
     const askAgain = vi.fn();
-    const { dialog } = await renderEditor(splitSongsOf(104, [], [], LISTED), {
+    const { dialog, answerAi } = await renderEditor(splitSongsOf(104, [], [], LISTED), {
       ai: { ...AI_UNASKED, askAgain },
     });
     await press(dialog, "Fill with AI");
@@ -772,6 +791,7 @@ describe("editing a file's songs", () => {
       within(dialog).getByRole("textbox", { name: "More details" }),
       "It's the 2007 concert, with 22 songs{Enter}",
     );
+    answerAi({ ...AI_UNASKED, askAgain, state: "running" });
 
     expect(askAgain).toHaveBeenCalledExactlyOnceWith("It's the 2007 concert, with 22 songs");
     expect(within(dialog).getByText("Asking the AI…")).toHaveRole("status");
@@ -942,7 +962,9 @@ describe("editing a file's songs", () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(
-      within(dialog).getByText("Saving removes 1 song, with their ratings and plays."),
+      within(dialog).getByText(
+        "Saving removes 1 song, with their ratings, plays, and saved lyrics.",
+      ),
     ).toHaveRole("status");
     await press(dialog, "Save and remove 1 song");
     expect(onSave).toHaveBeenCalledOnce();
@@ -955,7 +977,7 @@ describe("editing a file's songs", () => {
 
     expect(onUnsplit).not.toHaveBeenCalled();
     await press(dialog, "Unsplit and remove 3 songs");
-    expect(onUnsplit).toHaveBeenCalledOnce();
+    expect(onUnsplit).toHaveBeenCalledExactlyOnceWith(SPLIT.songs.map((song) => song.id));
   });
 
   it("says which song starts at no time, saving nothing", async () => {
@@ -986,6 +1008,85 @@ describe("editing a file's songs", () => {
 });
 
 describe("the songs editor's guards", () => {
+  it.each([
+    ["A song list has at least 2 songs.", "歌曲列表至少需要 2 首歌曲。"],
+    ["A song list has at most 100 songs.", "歌曲列表最多可有 100 首歌曲。"],
+    ["The title of song 2 is blank, untrimmed, or too long.", "第 2 首歌曲的标题为空"],
+    [
+      "Each song starts at least a second before the file ends.",
+      "每首歌曲的起始位置必须至少早于文件结尾一秒。",
+    ],
+    ["Unexpected server detail.", "Unexpected server detail."],
+  ])("shows localized recovery instructions for %s", async (detail, expected) => {
+    const { dialog, onClose } = await renderEditor(SPLIT, {
+      onSave: vi.fn(() => Promise.reject(new ApiError(422, detail))),
+    });
+    const user = userEvent.setup();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+      await press(dialog, "保存");
+
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(expected);
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("locks navigation and editable rows while the submitted song list is saving", async () => {
+    let finish: () => void = () => undefined;
+    const saving = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const onSave = vi.fn(() => saving);
+    const { dialog } = await renderEditor(SPLIT, { onSave });
+    const editor = within(dialog);
+    const first = editor.getByRole("textbox", { name: "Title of song 1" });
+    await userEvent.clear(first);
+    await userEvent.type(first, "New opening");
+
+    await press(dialog, "Save");
+
+    expect(first).toBeDisabled();
+    expect(editor.getByRole("button", { name: "Details" })).toBeDisabled();
+    expect(editor.getByRole("button", { name: "Add a song" })).toBeDisabled();
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      SPLIT.songs.map(({ id, start_ms, title, artist }, index) => ({
+        id,
+        start_ms,
+        title: index === 0 ? "New opening" : title,
+        artist,
+      })),
+      SPLIT.songs.map(({ id }) => id),
+    );
+    finish();
+  });
+
+  it("updates the destructive warning and keyboard help without changing the song data", async () => {
+    const { dialog, onUnsplit } = await renderEditor();
+    const entries = within(dialog);
+    const user = userEvent.setup();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const title = entries.getByRole("textbox", { name: "Title of song 1" });
+    await press(dialog, "Unsplit");
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(entries.getByRole("textbox", { name: "第 1 首歌曲的标题" })).toBe(title);
+      expect(
+        entries.getByText("取消拆分会移除 3 首歌曲及其评分、播放记录和已保存的歌词。"),
+      ).toBeVisible();
+      const handle = entries.getAllByRole("button", { name: /^调整/u })[0];
+      expect(handle).toHaveAccessibleDescription(/按空格键/u);
+      expect(onUnsplit).not.toHaveBeenCalled();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("takes a start typed with a colon, as a phone's keyboard offers it", async () => {
     const { dialog } = await renderEditor();
 
@@ -1266,6 +1367,35 @@ const startOfSong = (dialog: HTMLElement, place: number) =>
   within(dialog).getByRole("textbox", { name: `Start of song ${String(place)}` });
 
 describe("snapping the starts to the gaps in the audio", () => {
+  it.each([false, true])(
+    "does not overwrite newer row edits when delayed snapping can move a start: %s",
+    async (foundGaps) => {
+      let finish: (answer: Awaited<ReturnType<SilenceFinder["read"]>>) => void = () => undefined;
+      const response = new Promise<Awaited<ReturnType<SilenceFinder["read"]>>>((resolve) => {
+        finish = resolve;
+      });
+      const { dialog } = await renderEditor(SPLIT, {
+        silences: { read: () => response, find: BREMEN_GAPS.find },
+      });
+      await press(dialog, "Snap the starts to the gaps in the audio");
+      const title = within(dialog).getByRole("textbox", { name: "Title of song 2" });
+      fireEvent.change(title, { target: { value: "New title" } });
+      const gaps = foundGaps
+        ? await BREMEN_GAPS.read(104)
+        : { state: "found" as const, silences: [] };
+
+      finish(gaps);
+
+      expect(
+        await within(dialog).findByText(
+          "The song list changed while finding gaps. Try aligning again.",
+        ),
+      ).toBeVisible();
+      expect(title).toHaveValue("New title");
+      expect(startOfSong(dialog, 2)).toHaveValue("4:12");
+    },
+  );
+
   it("can't snap fewer than two songs, and says on hover why", async () => {
     const { dialog } = await renderEditor(splitSongsOf(104, []), { silences: BREMEN_GAPS });
     const button = within(dialog).getByRole("button", {
@@ -1347,6 +1477,17 @@ const artistOfSong = (dialog: HTMLElement, place: number) =>
   within(dialog).getByRole("textbox", { name: `Artist of song ${String(place)}` });
 
 describe("filling one artist into every song", () => {
+  it("does not copy an artist to other rows when Tab confirms an IME candidate", async () => {
+    const { dialog } = await renderEditor(SPLIT);
+    const first = artistOfSong(dialog, 1);
+    await userEvent.type(first, "合奏");
+
+    fireEvent.keyDown(first, { key: "Tab", isComposing: true, keyCode: 229 });
+
+    expect(artistOfSong(dialog, 2)).toHaveValue("");
+    expect(artistOfSong(dialog, 3)).toHaveValue("");
+  });
+
   it("offers the artist typed to the songs with none, and Tab fills them", async () => {
     const { dialog } = await renderEditor(SPLIT);
 

@@ -123,6 +123,28 @@ def test_rows_that_are_not_a_song_list_are_refused(
     assert response.status_code == 422
 
 
+def test_unsplitting_refuses_to_remove_a_song_not_in_the_confirmation(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+    path = f"/api/tracks/{album}/songs"
+    seen = client.put(path, json={"rows": TWO_SONGS}).json()["songs"]
+    known = [song["id"] for song in seen]
+    rows = [
+        {"id": song["id"], "start_ms": song["start_ms"], "title": song["title"]} for song in seen
+    ]
+    client.put(path, json={"rows": [*rows, {"start_ms": 600_000, "title": "Encore"}]})
+
+    response = client.request("DELETE", path, json={"known": known})
+
+    assert response.status_code == 409
+    assert [song["title"] for song in client.get(path).json()["songs"]] == [
+        *(song["title"] for song in seen),
+        "Encore",
+    ]
+
+
 def test_a_start_before_the_file_begins_is_refused(
     client: TestClient, catalog: CatalogService
 ) -> None:

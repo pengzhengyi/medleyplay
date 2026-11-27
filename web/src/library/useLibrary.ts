@@ -157,7 +157,7 @@ export interface Library {
     lyricPicks?: readonly number[],
   ) => Promise<void>;
   /** Remove every song of the file `id`; the Tracks then show the file whole again. */
-  readonly unsplit: (id: number) => Promise<void>;
+  readonly unsplit: (id: number, known: readonly number[]) => Promise<void>;
   /**
    * Set the household's values on every Track of `ids`, `null` dropping one; all change
    * or none, and the Tracks then show what was saved.
@@ -821,8 +821,8 @@ export function useLibrary(onSignedOut: () => void): Library {
     saveSongs: async (id, rows, known, lyricPicks) => {
       await changeTracks(api.saveSongs(id, rows, known, lyricPicks));
     },
-    unsplit: async (id) => {
-      await changeTracks(api.unsplit(id));
+    unsplit: async (id, known) => {
+      await changeTracks(api.unsplit(id, known));
     },
     setDetailsOn: async (ids, values) => {
       await changeTracks(api.setDetails(ids, values));

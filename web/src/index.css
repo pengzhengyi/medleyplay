@@ -6290,6 +6290,7 @@ dialog.modal::backdrop {
 
 .kind-mark:has(.lyrics-badge) {
   position: relative;
+  isolation: isolate;
 }
 
 .photo-suggestion-art > .cover {
@@ -8776,6 +8777,7 @@ kbd {
 
 .playing-kind {
   position: relative;
+  isolation: isolate;
   display: inline-grid;
   flex: none;
   place-items: center;

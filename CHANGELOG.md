@@ -949,6 +949,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Lyrics notation stays beneath the search bar and table headings when songs
+  scroll behind them.
 - Mark a song as **No album (single)** in Edit details to stop album suggestions
   in Clean up. Unknown albums are no longer labeled as singles.
 

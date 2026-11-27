@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A quotation-mark badge on song and album icons shows when lyrics are
+  available. Albums are marked only when every song has lyrics. The Songs editor
+  uses the same quotation mark for its Lyrics buttons, keeping match progress
+  beside each song.
+- Open the medleyplay GitHub repository from the icon at the top right.
 - When finding lyrics, compare the Library song's album and length with the
   results.
 - In the floating **Up next** panel, one button expands or collapses all album
@@ -745,6 +750,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Library/Bilibili toggle sits to the left of the search field.
 - In **Clean up → Missing artist or album**, **Ask AI** and **Ask again**
   now sit alongside **Use**, **Edit**, and **Skip**.
 - Open the album page after adding grouped Bilibili songs. When joining parts
@@ -938,6 +944,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Lyrics quotation marks decorate the small song and album indicators, not
+  covers, including when phone lyrics hide the artwork.
 - In Songs, manually saved lyrics show a solid border instead of the previous
   Auto-Match result.
 - **Auto-Match lyrics** leaves picks unsaved until you select **Save** in the

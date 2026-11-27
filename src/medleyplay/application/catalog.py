@@ -18,6 +18,7 @@ from medleyplay.application.album_ratings import album_ratings_of, library_album
 from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
 from medleyplay.application.details import record as record_details
+from medleyplay.application.lyrics_availability import with_lyrics_availability
 from medleyplay.application.rule_schema import read_rules, rules_document
 from medleyplay.application.segments import album_file_of
 from medleyplay.application.settings import read_settings
@@ -200,7 +201,7 @@ class CatalogService:
             failed.update(
                 {song: failed[album] for song, album in segment_of.items() if album in failed}
             )
-            return [
+            tracks = [
                 _to_track(
                     track,
                     state,
@@ -222,6 +223,7 @@ class CatalogService:
                 )
                 for track, state in rows
             ]
+            return with_lyrics_availability(db, tracks, segment_of)
 
     def get_track(self, account_id: AccountId, track_id: TrackId) -> Track:
         """Return one Track with `account_id`'s own state."""
@@ -247,23 +249,24 @@ class CatalogService:
             community = _community_ratings(db, rated, segment_of)
             album_rating = album_ratings_of(db, account_id).stars_of(*library_album_of(found[0]))
             artists = artist_names_of(db, track_id).get(track_id, ())
-        return _to_track(
-            *found,
-            available[track_id],
-            downloaded=looked_at in downloaded,
-            download_failed=looked_at in failed,
-            download_failure_job_id=failed.get(looked_at),
-            site=sites[track_id].kind if track_id in sites else None,
-            joined=_is_joined(sites.get(track_id)),
-            video=videos.get(looked_at),
-            segment_of=segment_of.get(track_id),
-            split=track_id in segment_of.values(),
-            album_from_ms=album_from_ms,
-            community=community.get(track_id),
-            album_rating=album_rating,
-            artists=tuple(written for written, _ in artists),
-            artist_ids=tuple(artist_id for _, artist_id in artists),
-        )
+            track = _to_track(
+                *found,
+                available[track_id],
+                downloaded=looked_at in downloaded,
+                download_failed=looked_at in failed,
+                download_failure_job_id=failed.get(looked_at),
+                site=sites[track_id].kind if track_id in sites else None,
+                joined=_is_joined(sites.get(track_id)),
+                video=videos.get(looked_at),
+                segment_of=segment_of.get(track_id),
+                split=track_id in segment_of.values(),
+                album_from_ms=album_from_ms,
+                community=community.get(track_id),
+                album_rating=album_rating,
+                artists=tuple(written for written, _ in artists),
+                artist_ids=tuple(artist_id for _, artist_id in artists),
+            )
+            return with_lyrics_availability(db, [track], segment_of)[0]
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
         """Mark or unmark a Track as one of `account_id`'s favorites."""

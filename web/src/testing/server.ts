@@ -115,6 +115,7 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     video: null,
     segment_of: null,
     split: false,
+    has_lyrics: false,
     kind: "song",
     kind_reason:
       change.segment_of !== undefined && change.segment_of !== null

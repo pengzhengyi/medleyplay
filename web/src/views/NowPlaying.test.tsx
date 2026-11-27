@@ -130,7 +130,7 @@ describe("Now Playing", () => {
   });
 
   it("changes Now Playing help and accessible controls without closing the player", async () => {
-    await playingIntro();
+    await playingIntro({}, trackOf(1, "Intro", { has_lyrics: true }));
     render(<LanguageSelect />);
     const language = screen.getByRole("combobox", { name: "Language" });
     const dialog = await openNowPlaying();
@@ -140,6 +140,7 @@ describe("Now Playing", () => {
 
       expect(screen.getByRole("dialog", { name: "正在播放" })).toBe(dialog);
       expect(within(dialog).getByRole("button", { name: "关闭正在播放" })).toBeVisible();
+      expect(within(dialog).getByRole("img", { name: "正在播放歌曲，有歌词" })).toBeVisible();
       expect(within(dialog).getByRole("button", { name: "歌词" })).toHaveAttribute(
         "title",
         "隐藏歌词",
@@ -152,6 +153,27 @@ describe("Now Playing", () => {
     } finally {
       fireEvent.change(language, { target: { value: "auto" } });
     }
+  });
+
+  it("shows song lyrics on the player and Now Playing note without marking artwork or an incomplete album", async () => {
+    await playingIntro({}, trackOf(1, "Intro", { has_lyrics: true, cover: "blue" }));
+    const player = screen.getByRole("region", { name: "Player" });
+
+    expect(
+      within(player).getByRole("img", { name: "Playing a song, Lyrics available" }),
+    ).toBeInTheDocument();
+    expect(player.querySelector(".playing-kind .lyrics-badge")).not.toBeNull();
+    expect(player.querySelector(".cover .lyrics-badge")).toBeNull();
+    const nowPlaying = await openNowPlaying();
+
+    expect(
+      within(nowPlaying).getByRole("img", { name: "Playing a song, Lyrics available" }),
+    ).toBeInTheDocument();
+    expect(
+      within(nowPlaying).queryByRole("img", { name: /All songs have lyrics/ }),
+    ).not.toBeInTheDocument();
+    expect(nowPlaying.querySelector(".np-song .playing-kind .lyrics-badge")).not.toBeNull();
+    expect(nowPlaying.querySelector(".np-art .lyrics-badge")).toBeNull();
   });
 
   it("shows the song favorited from the player's heart, in the player and in Now Playing", async () => {

@@ -16,6 +16,7 @@ import { coversToUseOf } from "../library/cleanUp";
 import { albumFileOf, songsOf, tracksOfAlbum } from "../library/views";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 import { PictureEditor } from "./PictureEditor";
 import { SuggestedFrame } from "./SuggestedFrame";
 
@@ -202,6 +203,12 @@ export function FindAlbumCovers({
                 className="photo-suggestion-name"
                 href={hrefOf({ view: "album", artist: each.artist, name: each.album })}
               >
+                <KindMark
+                  kind="album"
+                  reason="named"
+                  lyrics={{ artist: each.artist, album: each.album }}
+                  besideTitle
+                />
                 {each.album}
               </a>
               <span className="tidy-meta">

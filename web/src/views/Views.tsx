@@ -61,6 +61,7 @@ import { querySaid } from "../library/query";
 import { type Words, useWords } from "../locale";
 import { type Route, hrefOf, navigate } from "../routes";
 import { AlbumAbout } from "./AlbumAbout";
+import { KindMark } from "./KindMark";
 import { AlbumHeading } from "./AlbumHeading";
 import { PictureHeading } from "./PictureHeading";
 import { AlbumRatingNote } from "./AlbumRatingNote";
@@ -356,6 +357,7 @@ function viewOf(
           heading={(playPlace) => (
             <AlbumHeading
               title={route.name || t(UNKNOWN_ALBUM)}
+              lyrics={{ artist: route.artist, album: route.name }}
               artist={
                 route.artist.trim() === "" ? (
                   t(UNKNOWN_ARTIST)
@@ -962,7 +964,15 @@ function AlbumList({
                 </Cover>
                 {favorite && <FavoriteBadge />}
               </span>
-              <span className="group-name">{album.name || t(UNKNOWN_ALBUM)}</span>
+              <span className="group-name">
+                <KindMark
+                  kind="album"
+                  reason="named"
+                  lyrics={{ artist: album.artist, album: album.name }}
+                  besideTitle
+                />
+                {album.name || t(UNKNOWN_ALBUM)}
+              </span>
               <span className="group-meta">
                 {t("{{artist}}, {{length}}", {
                   artist: album.artist || t(UNKNOWN_ARTIST),

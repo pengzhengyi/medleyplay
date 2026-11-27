@@ -64,6 +64,22 @@ def test_a_second_line_at_the_same_time_is_the_firsts_translation() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("spoken", "words"), [("Hello", ()), ("<00:04>Hello", (Word(4_000, "Hello"),))]
+)
+def test_a_translation_keeps_text_before_word_timestamps_and_the_spoken_words(
+    spoken: str, words: tuple[Word, ...]
+) -> None:
+    text = f"""\
+[00:04]{spoken}
+[00:04]Bonjour <00:05>monde
+"""
+
+    assert parse_lyrics(text).lines == (
+        Line(4_000, "Hello", translation="Bonjour monde", words=words),
+    )
+
+
 def test_word_times_are_kept_with_each_word() -> None:
     text = "[00:01.00]<00:01.00>Hello <00:01.50>world\n"
 
@@ -82,6 +98,16 @@ def test_an_empty_timed_line_is_a_pause_in_the_singing() -> None:
 """
 
     assert [line.text for line in parse_lyrics(text).lines] == ["Sung", "", "Sung again"]
+
+
+def test_word_timestamps_without_words_are_not_readable_lines_or_translations() -> None:
+    text = """\
+[00:10.00]<00:10.00>
+[00:10.00]<00:10.50>
+[00:20.00]<00:20.00>
+"""
+
+    assert parse_lyrics(text).lines == (Line(10_000, ""), Line(20_000, ""))
 
 
 def test_text_with_no_times_is_plain_lyrics() -> None:

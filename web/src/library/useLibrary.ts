@@ -208,7 +208,12 @@ export interface Library {
 }
 
 /** The Jobs whose end can change the Tracks. */
-const CHANGES_TRACKS = new Set(["scan_library", "download_source", "enrich_track"]);
+const CHANGES_TRACKS = new Set([
+  "scan_library",
+  "download_source",
+  "enrich_track",
+  "auto_match_choose",
+]);
 /** The Jobs whose end changes nothing the Library reads: thumbnails are found by URL. */
 const CHANGES_NOTHING = new Set(["make_thumbnails", "lookup_video"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
@@ -960,6 +965,7 @@ function listen(
   events.addEventListener("lyrics-saved", (event: MessageEvent<string>) => {
     const { track_ids: trackIds } = JSON.parse(event.data) as { track_ids: readonly number[] };
     onLyricsSaved(trackIds);
+    load();
   });
   events.addEventListener("devices", (event: MessageEvent<string>) => {
     const { waiting } = JSON.parse(event.data) as { waiting: readonly WaitingDevice[] };

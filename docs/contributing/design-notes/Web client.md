@@ -443,7 +443,7 @@ Track's kind is decided.
 <!-- cspell:ignore ｍｅｌｔ beatls -->
 
 - **One search box in the header,** taking its room as on an iPad, with a scope
-  toggle at its end: *Library*, shown as its icon in the rail, or Bilibili, shown
+  toggle to the left of its text field: *Library*, shown as its icon in the rail, or Bilibili, shown
   as its mark, each named on hover and to a screen reader. Bilibili shows only while the `bilibili` plugin is
   on. With it
   chosen, the box takes a link or a bare video code and *Enter* opens the add
@@ -680,6 +680,16 @@ Who is signed in sits at the rail's foot, as a round initial and the name,
 opening a menu with *Sign out*; the header leaves them out. Narrower, where
 there is no rail, the same menu sits in the header instead, as only the initial
 on a phone.
+
+The GitHub icon is the header's rightmost control, after keyboard shortcuts
+and the account menu when shown. It opens the project repository in a new tab
+without interrupting playback; its accessible name and tooltip follow the
+device's interface language.
+On narrow phones, the wordmark shows only its waveform so the header controls
+fit together on the first row; the home link keeps the name *medleyplay* for
+screen readers. Search keeps its own row. On phones, conditional notices share
+a separate wrapping region: Offline, devices waiting for approval, and any
+device-answer error stay below the header controls, without hiding their actions.
 
 A touch screen, which can't point, shows a row's actions all the time. The
 page sizes itself to the dynamic viewport (`dvh`) and keeps the player and the

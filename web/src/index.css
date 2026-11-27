@@ -167,9 +167,10 @@ h2 {
   color: #d1495b;
 }
 
-/* Icon buttons: quiet until pointed at. */
+/* Icon controls: quiet until pointed at. */
 
-button.icon {
+button.icon,
+a.icon {
   display: inline-grid;
   place-items: center;
   width: 2.25rem;
@@ -192,7 +193,13 @@ button.icon:disabled {
   opacity: 0.35;
 }
 
-button.icon:hover:not(:disabled) {
+a.icon {
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+button.icon:hover:not(:disabled),
+a.icon:hover {
   background: var(--accent-soft);
   color: var(--ink);
 }
@@ -377,6 +384,10 @@ button[aria-disabled="true"] {
   gap: 0.4rem;
   color: inherit;
   text-decoration: none;
+}
+
+.header-notices {
+  display: contents;
 }
 
 /* The search: a rounded field, and where to look when there is a choice. */
@@ -3528,6 +3539,19 @@ button[aria-disabled="true"] {
   place-items: center;
   color: var(--muted);
   font-size: 0.85rem;
+  width: 1em;
+  height: 1em;
+}
+
+.kind-mark.title-kind {
+  margin-inline-end: 0.4rem;
+  vertical-align: -0.1em;
+}
+
+.picture-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
 }
 
 .kind-mark.kind-album {
@@ -4537,7 +4561,7 @@ button.icon.heart.on:hover,
   font-weight: 600;
 }
 
-.player .names span {
+.player .names > span {
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -5019,6 +5043,21 @@ button.icon.heart.on:hover,
     order: 5;
   }
 
+  .top h1 {
+    margin-right: auto;
+  }
+
+  .top .header-notices:not(:empty) {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    order: 1;
+    overflow-wrap: anywhere;
+  }
+
   /* The views as a tab bar along the bottom, clear of the home indicator. */
   .views {
     position: fixed;
@@ -5063,6 +5102,7 @@ button.icon.heart.on:hover,
 
   .top {
     flex-wrap: wrap;
+    gap: 0.5rem;
     padding: 0.6rem 1rem;
   }
 
@@ -6167,6 +6207,43 @@ dialog.modal::backdrop {
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+}
+
+.kind-mark:has(.lyrics-badge) {
+  position: relative;
+}
+
+.photo-suggestion-art > .cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.lyrics-badge {
+  position: absolute;
+  z-index: 2;
+  top: -0.25rem;
+  right: -0.25rem;
+  display: inline-grid;
+  width: 0.65rem;
+  height: 0.65rem;
+  place-items: center;
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
+  color: var(--accent-ink);
+  font-size: 0.45rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.kind-mark.guessed:has(.lyrics-badge) {
+  opacity: 1;
+}
+
+.kind-mark.guessed:has(.lyrics-badge) > svg {
+  opacity: 0.75;
 }
 
 /* Pasting a video's title and description, folded away until wanted. */
@@ -7647,6 +7724,12 @@ kbd {
   color: #d1495b;
 }
 
+@media (width <= 30rem) {
+  .top .wordmark-name {
+    display: none;
+  }
+}
+
 /* Without a keyboard, as on a phone, there are no shortcuts to list. */
 @media (hover: none), (width <= 48rem) {
   .top .keys-button {
@@ -7924,6 +8007,7 @@ kbd {
 
 /* A still mark beside a name, sized as the moving one is. */
 .np-mark {
+  position: relative;
   display: inline-grid;
   flex: none;
   place-items: center;
@@ -7933,6 +8017,11 @@ kbd {
   background: rgb(255 255 255 / 12%);
   color: var(--ink);
   font-size: 1rem;
+}
+
+.np-mark > .kind-mark {
+  color: inherit;
+  font-size: inherit;
 }
 
 /* The album, then the song in it: the slash reads as a path, album to song. */
@@ -8603,6 +8692,7 @@ kbd {
  */
 
 .playing-kind {
+  position: relative;
   display: inline-grid;
   flex: none;
   place-items: center;
@@ -10647,6 +10737,10 @@ button.rail-order-handle {
 
   .picture-names .section {
     font-size: 1.6rem;
+  }
+
+  .picture-title {
+    justify-content: center;
   }
 
   .picture-heading .picture-names .subtitle {

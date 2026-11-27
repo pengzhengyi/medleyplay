@@ -15,6 +15,7 @@ import { type Listened, insightsOf } from "../library/insights";
 import { type Period, usePlayCounts } from "../library/usePlayCounts";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 import { WHY } from "./unplayable";
 
 const PERIODS: readonly { readonly period: Period; readonly label: string }[] = [
@@ -145,7 +146,15 @@ export function InsightsView({
                         }}
                       >
                         <Cover size="small" cover={track.cover} className="thumb" />
-                        <span className="entry-title">{track.title}</span>
+                        <span className="entry-title">
+                          <KindMark
+                            kind={track.kind}
+                            reason={track.kind_reason}
+                            lyrics={track}
+                            besideTitle
+                          />
+                          {track.title}
+                        </span>
                         <span className="entry-artist">{track.artist}</span>
                         <span className="insights-plays">{playsOf(plays)}</span>
                       </button>
@@ -180,7 +189,17 @@ function TopCard({ of, listened }: { readonly of: Of; readonly listened: Listene
       <Cover size="medium" cover={listened.cover} className="cover-tile insights-cover" />
       <span className="insights-top-text">
         <span className="insights-top-label">{of === "artist" ? "Top artist" : "Top album"}</span>
-        <span className="insights-top-name">{listened.name}</span>
+        <span className="insights-top-name">
+          {of === "album" && (
+            <KindMark
+              kind="album"
+              reason="named"
+              lyrics={{ artist: listened.artist, album: listened.name }}
+              besideTitle
+            />
+          )}
+          {listened.name}
+        </span>
         {of === "album" && (
           <span className="group-meta">{listened.artist || "Unknown artist"}</span>
         )}
@@ -216,6 +235,14 @@ function Ranking({
           <li key={`${item.artist}\n${item.name}`} className="insights-row">
             <a className="insights-bar-link" href={hrefTo(of, item)}>
               <span className="insights-bar-name">
+                {of === "album" && (
+                  <KindMark
+                    kind="album"
+                    reason="named"
+                    lyrics={{ artist: item.artist, album: item.name }}
+                    besideTitle
+                  />
+                )}
                 {item.name}
                 {of === "album" && (
                   <span className="insights-bar-artist">{item.artist || "Unknown artist"}</span>

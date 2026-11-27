@@ -27,6 +27,9 @@ import { heartTitleOf } from "../heart";
 import { useWords } from "../locale";
 import { type AlbumSong, type Playing, songAt } from "../player/albumNow";
 import { PlayTime } from "./PlayTime";
+import { LyricsBadge } from "./LyricsBadge";
+import { KindMark } from "./KindMark";
+import { albumLyricsSubject, useLyricsLabel } from "./lyricsAvailability";
 
 /** How long the songs stay open after the pointer leaves, so it can cross the gap to them. */
 const CLOSE_AFTER_MS = 150;
@@ -58,14 +61,26 @@ export function PlayingKind({
 }) {
   const t = useWords();
   const motion = moving ? "moving" : "still";
+  const songLyrics = useLyricsLabel(playing.kind === "song" ? track : undefined);
+  const songLabel = songLyrics === undefined ? t("Song") : [t("Song"), songLyrics].join(t(", "));
   if (playing.kind === "song") {
     return (
-      <span className="playing-kind" role="img" aria-label={t("Playing a song")} title={t("Song")}>
+      <span
+        className="playing-kind"
+        role="img"
+        aria-label={
+          songLyrics === undefined
+            ? t("Playing a song")
+            : [t("Playing a song"), songLyrics].join(t(", "))
+        }
+        title={songLabel}
+      >
         <MusicNoteSimpleIcon
           className={`playing-kind-icon song ${motion}`}
           weight="fill"
           aria-hidden
         />
+        <LyricsBadge label={songLyrics} />
       </span>
     );
   }
@@ -103,6 +118,7 @@ function AlbumMark({
   /** Favorite a song of the album, or not; without it, the songs show no hearts. */
   readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
+  const lyricsLabel = useLyricsLabel(track.kind === "song" ? albumLyricsSubject(track) : track);
   // Pointing opens the songs, and a press keeps them open while the pointer stays or
   // focus is in them; leaving with the mouse closes them either way.
   const t = useWords();
@@ -133,7 +149,7 @@ function AlbumMark({
   };
   const name = track.album === "" ? track.title : track.album;
   const { songs } = playing;
-  const label =
+  const albumLabel =
     songs.length === 0
       ? t("Album: {{album}}", { album: name })
       : t("Album: {{album}}, song {{current}} of {{total}}", {
@@ -141,6 +157,7 @@ function AlbumMark({
           current: playing.current + 1,
           total: songs.length,
         });
+  const label = lyricsLabel === undefined ? albumLabel : [albumLabel, lyricsLabel].join(t(", "));
   return (
     <span
       className="playing-kind-frame"
@@ -190,6 +207,7 @@ function AlbumMark({
           weight="fill"
           aria-hidden
         />
+        <LyricsBadge label={lyricsLabel} />
       </button>
       {open && (
         <section
@@ -350,7 +368,17 @@ function AlbumSongs({
                 <span className="album-song-place" aria-hidden>
                   {state === "played" ? <CheckIcon weight="bold" /> : index + 1}
                 </span>
-                <span className="album-song-title">{title}</span>
+                <span className="album-song-title">
+                  {song.track !== undefined && (
+                    <KindMark
+                      kind={song.track.kind}
+                      reason={song.track.kind_reason}
+                      lyrics={song.track}
+                      besideTitle
+                    />
+                  )}
+                  {title}
+                </span>
                 <span className="album-song-length">
                   {pointedHere ? (
                     <PlayTime at={pointed.within} length={song.length} />

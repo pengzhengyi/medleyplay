@@ -1,4 +1,5 @@
 {
+  "View medleyplay on GitHub (opens in a new tab)": "在 GitHub 上查看 medleyplay（在新标签页中打开）",
   "Close": "关闭",
   "Close (Esc)": "关闭 (Esc)",
   "Loading…": "正在加载…",
@@ -1150,5 +1151,7 @@
   "Try this first. Put your own proxy's address in place of the example.": "可以先尝试此方式。请将示例地址替换为你自己的代理地址。",
   "For a video that needs a login. Use the browser you are signed in to Bilibili with.": "适用于需要登录的视频。请使用已登录 Bilibili 的浏览器。",
   "Saves the audio under the video's title.": "以视频标题命名并保存音频文件。",
-  "Saves the whole video; medleyplay accepts it when it is an .mp4 file.": "保存整个视频。如果文件扩展名为 .mp4，medleyplay 可以使用它。"
+  "Saves the whole video; medleyplay accepts it when it is an .mp4 file.": "保存整个视频。如果文件扩展名为 .mp4，medleyplay 可以使用它。",
+  "Lyrics available": "有歌词",
+  "All songs have lyrics": "所有歌曲都有歌词"
 }

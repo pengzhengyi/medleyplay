@@ -13,6 +13,7 @@ import type { Station } from "../library/useStation";
 import { useFormattingLocale, useWords } from "../locale";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 
 /** The day `now` falls on here, as `2026-11-06`: the shelves keep their order for it. */
 const dayOf = (now: Date) =>
@@ -145,12 +146,18 @@ export function RadioView({
           <ul className="shelf-albums">
             {shelf.albums.map((album) => {
               const first = mostPlayed(album);
+              const fileId = album.tracks[0]?.segment_of;
+              const lyrics =
+                fileId == null ? { artist: album.artist, album: album.album } : { file: fileId };
               return (
                 <li key={album.key} className="shelf-album">
                   {album.album === "" ? (
                     <div className="shelf-link">
                       <Cover size="medium" cover={album.cover} className="cover-tile" />
-                      <span className="group-name">{album.name}</span>
+                      <span className="group-name">
+                        <KindMark kind="album" reason="named" lyrics={lyrics} besideTitle />
+                        {album.name}
+                      </span>
                       <span className="group-meta">{album.artist || t("Unknown artist")}</span>
                     </div>
                   ) : (
@@ -159,7 +166,10 @@ export function RadioView({
                       href={hrefOf({ view: "album", artist: album.artist, name: album.album })}
                     >
                       <Cover size="medium" cover={album.cover} className="cover-tile" />
-                      <span className="group-name">{album.name}</span>
+                      <span className="group-name">
+                        <KindMark kind="album" reason="named" lyrics={lyrics} besideTitle />
+                        {album.name}
+                      </span>
                       <span className="group-meta">{album.artist || t("Unknown artist")}</span>
                     </a>
                   )}

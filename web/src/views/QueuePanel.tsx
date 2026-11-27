@@ -393,7 +393,7 @@ function AlbumRow({
       >
         <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
       </button>
-      <KindMark kind="album" reason="split" />
+      <KindMark kind="album" reason="split" lyrics={file} />
       <button
         type="button"
         className="album-title"
@@ -476,7 +476,9 @@ function QueueItem({
         <DotsSixVerticalIcon weight="bold" aria-hidden />
       </button>
       <Cover size="small" cover={track?.cover ?? null} className="thumb" />
-      {track !== undefined && <KindMark kind={track.kind} reason={track.kind_reason} />}
+      {track !== undefined && (
+        <KindMark kind={track.kind} reason={track.kind_reason} lyrics={track} />
+      )}
       <button
         type="button"
         className="entry-title"

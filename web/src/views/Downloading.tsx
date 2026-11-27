@@ -9,6 +9,7 @@ import type { DownloadUnderWay, Track } from "../api";
 import { downloadDetailOf, downloadStateOf } from "../library/downloading";
 import { useFormattingLocale, useWords } from "../locale";
 import { Cover } from "./Cover";
+import { KindMark } from "./KindMark";
 
 /** List the songs of `tracks` that `downloads` get, or nothing while none is under way. */
 export function Downloading({
@@ -46,7 +47,15 @@ export function Downloading({
             <li key={download.job.id} className="downloading-row">
               <Cover size="small" cover={track.cover} className="downloading-cover" />
               <span className="downloading-names">
-                <span className="downloading-title">{track.title}</span>
+                <span className="downloading-title">
+                  <KindMark
+                    kind={track.kind}
+                    reason={track.kind_reason}
+                    lyrics={track}
+                    besideTitle
+                  />
+                  {track.title}
+                </span>
                 <span className="downloading-artist">{track.artist}</span>
               </span>
               <span className="downloading-state" title={detail}>

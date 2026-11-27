@@ -7,20 +7,21 @@ import { type CoverSize, coverUrl } from "../api";
 
 /**
  * The image `cover` names at `size`, or `children` (a note by default) when it names
- * none or the image can't be loaded. It is decoration: the title beside it says what
- * it is.
+ * none or the image can't be loaded. The image is decorative unless `alt` names it.
  */
 export function Cover({
   cover,
   size,
   className,
   children,
+  alt = "",
 }: {
   readonly cover: string | null;
   /** A `small` thumbnail for a row, a `medium` one for a tile, or the `original`. */
   readonly size: CoverSize;
   readonly className?: string;
   readonly children?: ReactNode;
+  readonly alt?: string;
 }) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const [named, setNamed] = useState(cover);
@@ -31,13 +32,16 @@ export function Cover({
   }
   const shown = cover !== null && cover !== "" && cover !== failed ? cover : undefined;
   return (
-    <span className={className === undefined ? "cover" : `cover ${className}`} aria-hidden>
+    <span
+      className={className === undefined ? "cover" : `cover ${className}`}
+      aria-hidden={alt === "" ? true : undefined}
+    >
       {shown === undefined ? (
-        (children ?? <MusicNotesIcon weight="duotone" />)
+        (children ?? <MusicNotesIcon weight="duotone" aria-hidden />)
       ) : (
         <img
           src={coverUrl(shown, size)}
-          alt=""
+          alt={alt}
           loading="lazy"
           decoding="async"
           onError={() => {

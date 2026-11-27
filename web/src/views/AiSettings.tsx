@@ -26,15 +26,15 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { PlusIcon } from "@phosphor-icons/react";
-import { type SubmitEvent, useEffect, useEffectEvent, useState } from "react";
+import { type SubmitEvent, useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { isCopilot, movedOrder, providerNameOf } from "../aiProviders";
 import { AI_ENRICHER, type AiPreset, type AiProvider, type AiSetting, api } from "../api";
+import { useFormattingLocale, useWords } from "../locale";
 import { classOf, useNote } from "../useNote";
 import { AiProviderCard } from "./AiProviderCard";
 import { EnricherSettings, type EnricherWords } from "./EnricherSettings";
 
-const number = new Intl.NumberFormat("en-US");
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 const INSTRUCTIONS = {
   draggable:
@@ -46,18 +46,11 @@ const WORDS: EnricherWords = {
   enricher: AI_ENRICHER,
   site: "the AI provider",
   heading: "Suggestions",
-  description: (
-    <>
-      Suggest details with AI asks the providers for a song&apos;s title, artist, album, year, and
-      song list. What it says is only a suggestion: it shows beside each detail in Edit details and
-      changes nothing until someone uses it. It asks about one Track at a time, at most once every
-      two seconds, and never about the same text twice in a day.
-    </>
-  ),
-  count: (tracks) =>
-    tracks === 1
-      ? "1 Track can be given suggestions."
-      : `${String(tracks)} Tracks can be given suggestions.`,
+  description:
+    "AI can suggest titles, artists, albums, and years in Edit details. These suggestions change nothing until used. If Split albums is set to Auto, medleyplay also asks for missing song lists in the background and can apply trusted lists automatically. Automatic requests wait at least two seconds between tracks and do not repeat the same text within a day. Ask again sends another request.",
+  manualHelp:
+    "Track details are requested when someone chooses to ask. Auto splitting can still request missing song lists in the background.",
+  count: (count, t) => t("ai_details_eligible", { count }),
   off: "Suggesting details with AI is turned off.",
 };
 
@@ -67,6 +60,9 @@ const WORDS: EnricherWords = {
  * Tracks can be suggested for.
  */
 export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
+  const t = useWords();
+  const locale = useFormattingLocale();
+  const number = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const [setting, setSetting] = useState<AiSetting | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [adding, setAdding] = useState<AiPreset | null>(null);
@@ -192,12 +188,15 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
       ) : (
         <>
           <p className="hint">
-            A video&apos;s title, description, and chapters are sent to the providers you set here,
-            with the file&apos;s name, the Track&apos;s length, and the details it shows. Only the
-            first {number.format(setting.max_description)} characters of the description are sent.
+            {t(
+              "A video's title, description, and chapters are sent to the providers you set here, with the file's name, the Track's length, and the details it shows. Only the first {{limit}} characters of the description are sent.",
+              {
+                limit: number.format(setting.max_description),
+              },
+            )}
           </p>
           {providers.length === 0 ? (
-            <p>No AI provider is set up.</p>
+            <p>{t("No AI provider is set up.")}</p>
           ) : (
             <>
               {providers.length > 1 && (

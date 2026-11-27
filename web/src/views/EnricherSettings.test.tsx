@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Enricher } from "../api";
 import { type Routes, enricherOf, serve } from "../testing/server";
 import { EnricherSettings, type EnricherWords } from "./EnricherSettings";
+import { LanguageSelect } from "./LanguageSelect";
 
 /** An enricher of a made-up site, worded as each enricher's part words itself. */
 const WORDS: EnricherWords = {
@@ -29,6 +30,25 @@ afterEach(() => {
 });
 
 describe("when an enricher is asked", () => {
+  it("translates the mode instructions without changing the provider label or selection", async () => {
+    open(enricherOf("example", [1], { mode: "next" }));
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const language = screen.getByRole("combobox", { name: "Language" });
+    await screen.findByRole("radio", { name: "Next to play" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByRole("radio", { name: "即将播放" })).toBeChecked();
+      expect(screen.getByRole("group", { name: "查询 Example" })).toHaveAccessibleDescription(
+        "当前歌曲及下一首歌曲轮到播放时分别查询。",
+      );
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("shows the mode the household keeps, with what it does", async () => {
     open(enricherOf("example", [1], { mode: "next" }));
 

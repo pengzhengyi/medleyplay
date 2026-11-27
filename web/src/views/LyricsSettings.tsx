@@ -16,25 +16,16 @@ import {
   type Preferences,
 } from "../api";
 import { useWords } from "../locale";
-import { classOf, useNote } from "../useNote";
+import { classOf, useNoteOf } from "../useNote";
 import { EnricherSettings, type EnricherWords } from "./EnricherSettings";
 
 const WORDS: EnricherWords = {
   enricher: LYRICS_ENRICHER,
   site: "LRCLIB",
   heading: "Song lyrics",
-  description: (
-    <>
-      Looks up a song&apos;s lyrics on LRCLIB (lrclib.net), an open lyrics database, sending its
-      title, artist, album, and length, at most once a second. A song whose lyrics you entered, or
-      whose files hold them, is never looked up; one LRCLIB does not know is asked again a month
-      later.
-    </>
-  ),
-  count: (tracks) =>
-    tracks === 1
-      ? "1 song's lyrics can be looked up."
-      : `${String(tracks)} songs' lyrics can be looked up.`,
+  description:
+    "Looks up a song's lyrics on LRCLIB (lrclib.net), an open lyrics database, sending its title, artist, album, and length, at most once a second. A song whose lyrics you entered, or whose files hold them, is never looked up; one LRCLIB does not know is asked again a month later.",
+  count: (count, t) => t("lyrics_eligible", { count }),
   off: "Looking up lyrics is turned off.",
   modes: ["next", "manual"],
 };
@@ -48,7 +39,7 @@ export function LyricsSettings({ onChanged }: { readonly onChanged?: (() => void
 export function LyricsMatchSettings() {
   const t = useWords();
   const hint = useId();
-  const notes = useNote();
+  const notes = useNoteOf<string | { readonly reason: string }>("");
   const [preferences, setPreferences] = useState<Preferences>();
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,23 +61,23 @@ export function LyricsMatchSettings() {
   const save = async (choice: LyricsMatchConfirmation) => {
     if (preferences === undefined || saving) return;
     setSaving(true);
-    notes.tell(t("Saving…"));
+    notes.tell("Saving…");
     try {
       const saved = await api.savePreferences({
         lyrics_match_confirmation: choice,
         revision: preferences.revision,
       });
       setPreferences(saved);
-      notes.confirm(t("Saved."));
+      notes.confirm("Saved.");
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 409) {
         const latest = await api.preferences().catch(() => undefined);
         setPreferences(latest);
         setLoadFailed(latest === undefined);
-        notes.refuse(t("Your preferences changed before this was saved. Choose again."));
+        notes.refuse("Your preferences changed before this was saved. Choose again.");
       } else {
         const reason = failure instanceof Error ? failure.message : String(failure);
-        notes.refuse(t("Not saved: {{reason}}", { reason }));
+        notes.refuse({ reason });
       }
     } finally {
       setSaving(false);
@@ -113,7 +104,9 @@ export function LyricsMatchSettings() {
       <p className={classOf(notes.note, "hint saved")} role="status">
         {loadFailed
           ? t("Could not load your preference. Reopen Settings to try again.")
-          : notes.note.text}
+          : typeof notes.note.text === "string"
+            ? t(notes.note.text)
+            : t("Not saved: {{reason}}", notes.note.text)}
       </p>
     </div>
   );

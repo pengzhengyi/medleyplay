@@ -9,21 +9,52 @@
 
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { type ProxySetting, api } from "../api";
+import { ApiError, type ProxySetting, api } from "../api";
 import { classOf, useNote } from "../useNote";
+import { type Words, useWords } from "../locale";
 
 const SITE = "bilibili";
+const PROXY_SHAPE =
+  "A proxy is written like socks5h://127.0.0.1:7890, or http://user:password@host:3128.";
+const INVALID_PROXY: ReadonlySet<string> = new Set([
+  PROXY_SHAPE,
+  `A proxy is http, https, or socks5h. ${PROXY_SHAPE}`,
+  `A proxy needs a host. ${PROXY_SHAPE}`,
+  "A proxy has no path.",
+  "A proxy is at most 512 characters long.",
+  "A proxy is at most 512 characters, its login written as %XX for each byte outside ASCII.",
+  "A proxy has no spaces or control characters.",
+  "A proxy has no query or fragment; write ? and # in a password as %3F and %23.",
+  "Use socks5h, which looks names up through the proxy.",
+  "A proxy's port is a number from 1 to 65535.",
+  "A proxy needs a port from 1 to 65535.",
+  "A proxy's login needs a user name.",
+  "A proxy's login has no control characters.",
+]);
+
+function proxyError(failure: unknown, saving: boolean, t: Words): string {
+  const detail = failure instanceof Error ? failure.message : String(failure);
+  if (
+    failure instanceof ApiError &&
+    ((failure.status === 403 && detail === "Only an admin can manage proxies.") ||
+      (saving && failure.status === 422 && INVALID_PROXY.has(detail)))
+  )
+    return t(detail);
+  return detail;
+}
 
 /** The proxy for Bilibili now, a field to set another, and a button to remove it. */
 export function BilibiliSettings() {
+  const t = useWords();
   const [loaded, setLoaded] = useState(false);
   const [proxy, setProxy] = useState<ProxySetting | null>(null);
   const [url, setUrl] = useState("");
   const notes = useNote();
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{ readonly cause: unknown; readonly saving: boolean }>();
+  const error = failure === undefined ? "" : proxyError(failure.cause, failure.saving, t);
 
-  const failed = (failure: unknown) => {
-    setError(failure instanceof Error ? failure.message : String(failure));
+  const failed = (cause: unknown) => {
+    setFailure({ cause, saving: false });
   };
   const reload = (
     then = () => {
@@ -44,16 +75,21 @@ export function BilibiliSettings() {
   }, []);
 
   const save = () => {
-    setError("");
-    api.saveProxy(SITE, url.trim()).then(() => {
-      setUrl("");
-      reload(() => {
-        notes.confirm("Saved.");
-      });
-    }, failed);
+    setFailure(undefined);
+    api.saveProxy(SITE, url.trim()).then(
+      () => {
+        setUrl("");
+        reload(() => {
+          notes.confirm("Saved.");
+        });
+      },
+      (cause: unknown) => {
+        setFailure({ cause, saving: true });
+      },
+    );
   };
   const remove = () => {
-    setError("");
+    setFailure(undefined);
     api.removeProxy(SITE).then(() => {
       reload(() => {
         notes.confirm("Removed.");
@@ -63,23 +99,23 @@ export function BilibiliSettings() {
 
   return (
     <>
-      <h4>Proxy</h4>
+      <h4>{t("Proxy")}</h4>
       {error !== "" && <p role="alert">{error}</p>}
       {!loaded ? (
         error === "" && (
           <p className="hint" aria-busy="true">
-            Reading the proxy…
+            {t("Reading the proxy…")}
           </p>
         )
       ) : (
         <>
           <p>
             {proxy === null ? (
-              "No proxy is set, so Bilibili is reached directly."
+              t("No proxy is set, so Bilibili is reached directly.")
             ) : (
               <>
                 <code>{proxy.display}</code>
-                {proxy.has_login && " with a login"}
+                {proxy.has_login && t(" with a login")}
               </>
             )}
           </p>
@@ -91,7 +127,7 @@ export function BilibiliSettings() {
             }}
           >
             <label className="mark-name">
-              {proxy === null ? "Proxy URL" : "New proxy URL"}
+              {t(proxy === null ? "Proxy URL" : "New proxy URL")}
               <input
                 type="password"
                 autoComplete="off"
@@ -105,20 +141,21 @@ export function BilibiliSettings() {
               />
             </label>
             <button type="submit" disabled={url.trim() === ""}>
-              Save proxy
+              {t("Save proxy")}
             </button>
             {proxy !== null && (
               <button type="button" className="secondary outline" onClick={remove}>
-                Remove proxy
+                {t("Remove proxy")}
               </button>
             )}
             <p className="hint">
-              The URL is kept in the Keychain and never shown again. Use http, https, or socks5h.
-              Every request to Bilibili goes through it.
+              {t(
+                "The URL is kept in the Keychain and never shown again. Use http, https, or socks5h. Every request to Bilibili goes through it.",
+              )}
             </p>
           </form>
           <p className={classOf(notes.note)} role="status">
-            {notes.note.text}
+            {t(notes.note.text)}
           </p>
         </>
       )}

@@ -10,17 +10,9 @@ const WORDS: EnricherWords = {
   enricher: MUSICBRAINZ_ENRICHER,
   site: "MusicBrainz",
   heading: "Release and cover",
-  description: (
-    <>
-      Find on MusicBrainz asks MusicBrainz for a song&apos;s album, track number, year, and cover,
-      and for a long file&apos;s album, one Track at a time, at most once a second, and never the
-      same Track twice in a day.
-    </>
-  ),
-  count: (tracks) =>
-    tracks === 1
-      ? "1 Track can be found on MusicBrainz."
-      : `${String(tracks)} Tracks can be found on MusicBrainz.`,
+  description:
+    "Find on MusicBrainz asks MusicBrainz for a song's album, track number, year, and cover, and for a long file's album, one Track at a time, at most once a second, and never the same Track twice in a day.",
+  count: (count, t) => t("musicbrainz_eligible", { count }),
   off: "Finding Tracks on MusicBrainz is turned off.",
 };
 

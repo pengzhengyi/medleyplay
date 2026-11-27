@@ -254,8 +254,12 @@ export function SettingsView({
     lyrics: (
       <>
         <LyricsMatchSettings />
-        <LyricsSettings onChanged={onEnrichersChanged} />
-        <LyricsSites settings={household} onSettings={keepNewest} />
+        {admin && (
+          <>
+            <LyricsSettings onChanged={onEnrichersChanged} />
+            <LyricsSites settings={household} onSettings={keepNewest} />
+          </>
+        )}
       </>
     ),
     ai: (

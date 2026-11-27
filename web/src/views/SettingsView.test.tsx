@@ -8,6 +8,7 @@ import {
   enricherOf,
   modeOf,
   modeSettingsOf,
+  preferencesOf,
   serve,
   settingsOf,
 } from "../testing/server";
@@ -159,6 +160,31 @@ afterEach(() => {
 });
 
 describe("the image search section", () => {
+  it.each([
+    ["A provider key must contain only ASCII characters.", "服务密钥只能包含 ASCII 字符。"],
+    ["Unexpected refusal for sample-key", "无法更改密钥。请重试。"],
+  ])(
+    "explains safe key refusals in Chinese without echoing the key: %s",
+    async (detail, expected) => {
+      open(true, { "PUT /api/image-search/key": { status: 422, body: { detail } } });
+      const section = within(screen.getByRole("region", { name: "Image search" }));
+      const user = userEvent.setup();
+      const language = screen.getByRole("combobox", { name: "Language" });
+      await user.type(await section.findByLabelText("Tavily API key"), "sample-key");
+      await user.click(section.getByRole("button", { name: "Save key" }));
+      const alert = await section.findByRole("alert");
+
+      try {
+        await user.selectOptions(language, "zh-Hans");
+
+        expect(alert).toHaveTextContent(expected);
+        expect(alert).not.toHaveTextContent("sample-key");
+      } finally {
+        await user.selectOptions(language, "auto");
+      }
+    },
+  );
+
   it("lets an admin save, replace, and remove the key without showing it again", async () => {
     let saved: unknown;
     const { calls } = open(true, {
@@ -271,6 +297,23 @@ describe("the Other devices section", () => {
 });
 
 describe("the AI section", () => {
+  it("discloses AI data and automatic album list behavior even before a provider is configured", async () => {
+    open(true);
+    const user = userEvent.setup();
+    const language = await screen.findByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const ai = within(screen.getByRole("region", { name: "AI" }));
+      expect(await ai.findByText("尚未设置 AI 服务。")).toBeVisible();
+      expect(ai.getByText(/只发送简介的前 6,000 个字符/u)).toBeVisible();
+      expect(ai.getByText(/可自动采用可信的列表/u)).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("is the admin's, with the providers and the suggestion for every Track", async () => {
     open(true);
 
@@ -423,6 +466,21 @@ describe("the MusicBrainz section", () => {
 
 describe("the Lyrics section", () => {
   const lyrics = () => within(screen.getByRole("region", { name: "Lyrics" }));
+
+  it("lets a member save Auto-Match without exposing household lyrics writes", async () => {
+    const { calls } = open(false, preferencesOf());
+    const user = userEvent.setup();
+    const preference = await lyrics().findByRole("combobox", { name: "Auto-Match lyrics" });
+
+    await user.selectOptions(preference, "direct");
+
+    expect(await lyrics().findByText("Saved.")).toBeVisible();
+    expect(lyrics().queryByRole("switch")).not.toBeInTheDocument();
+    expect(lyrics().queryByRole("radio")).not.toBeInTheDocument();
+    expect(calls).toContain("PUT /api/me/preferences");
+    expect(calls).not.toContain("GET /api/enrichers/lyrics");
+    expect(calls).not.toContain("PUT /api/settings");
+  });
 
   it("turns NetEase on at once, to be asked for the lyrics LRCLIB lacks", async () => {
     const sent: unknown[] = [];

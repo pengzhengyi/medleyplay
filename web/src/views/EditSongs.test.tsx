@@ -802,7 +802,9 @@ describe("editing a file's songs", () => {
 
     const button = within(dialog).getByRole("button", { name: "Fill with AI" });
 
-    expect(button).toHaveAccessibleDescription("No AI provider is set up; set one up in Settings");
+    expect(button).toHaveAccessibleDescription(
+      "No AI provider is enabled. Add or enable one in Settings.",
+    );
     expect(within(dialog).getByRole("link", { name: "Set up AI" })).toHaveAttribute(
       "href",
       "#/settings?section=ai",

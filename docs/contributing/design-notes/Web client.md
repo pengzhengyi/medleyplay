@@ -516,6 +516,134 @@ Track's kind is decided.
   counts; under `artist:`, only the artists the tag names are listed. A `kind:`
   value it doesn't know, as one still being typed, is ignored.
 
+### Selective search computation
+
+> [!NOTE]
+> **Implemented.** Typing suggestions compute only artist results.
+> The complete search and its existing match rules are unchanged.
+
+The suggestions need at most three artists and do not compute unused song
+or album results. They share the complete search's matching code, without
+a persistent index or another delay before results appear. This component
+targets typing responsiveness, not the first Library load.
+
+| Interface | Responsibility |
+| --- | --- |
+| `search` in `library/views.ts` | Keep parsing and filtering in one place; accept optional requested result groups, defaulting to all three. |
+| `suggestedArtists` | Keep extracting the artist phrase and taking at most three results; request only the artist group. |
+| `SearchBox` and the results view | Keep their current timing, navigation, accessible names, and keyboard behavior. |
+
+**Result groups select computation, not query meaning.** The call is
+`search(tracks, asked, links, ["artists"])`. Requested groups intersect with
+the groups allowed by the existing `kind:` tags; they never override those
+tags. Keep the same result object shape, with empty arrays for groups not
+requested. Omitted groups mean the current complete search.
+
+Each group's expensive preparation follows its group check. Artist-only
+suggestions do not rank every song, group albums, or build the
+album-membership set. Artist-membership and artist-tag checks remain in
+place. Existing callers that request all results retain their behavior,
+including the tag-only shortcut.
+
+The shortcut is part of the contract: if every track credits Ada and Bea,
+`artist:Ada` can include both artists in the current complete search.
+Requesting only artists must preserve that answer, not narrow it to Ada.
+
+Do not select results by adding `kind:artists` to the user's text. In the
+existing flow, a quoted artist value is parsed again as the artist phrase.
+For example, `artist:"kind:albums"` and `artist:"album:"` currently suggest
+no artists; an unguarded prefix changes both answers. The optional result
+groups preserve those cases without special query rewriting.
+
+#### Search-computation evidence
+
+Production baseline and candidate builds use the same synthetic catalog in
+foreground Chrome 158 on an Intel Core i9 Mac, at native CPU speed and a
+1280 by 800 viewport, with 60 ms network latency and 1,048,576 bytes per
+second. Artist names change every five tracks; album titles every three.
+Each fresh context finishes loading Library before typing `beatls`.
+Chrome's debugging protocol sends key events at a scheduled 60 ms cadence
+without waiting for the renderer to acknowledge each key; actual send and
+event timestamps are retained. Every prefix has a distinct expected
+suggestion list.
+
+Seven alternating pairs per catalog measure all six `keydown` events with
+the browser's Event Timing API. The final key's next-paint response is:
+
+| Synthetic tracks | Baseline median | Candidate median | Paired median saved | Paired reduction | Improved pairs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1,906 | 48 ms | 48 ms | 8 ms | 12.5% | 4/7; three ties |
+| 7,000 | 424 ms | 208 ms | 216 ms | 54.7% | 7/7 |
+
+The small-catalog median is unchanged, and its paired savings are at the
+timing API's reporting granularity. Do not present that as a large visible
+improvement. The larger catalog saves 160 to 264 ms per pair. The paired
+saving need not equal the difference between standalone medians.
+
+Suggestion readiness is recorded separately: matching suggestion text in
+the DOM, followed by animation frames. It is not an exact paint timestamp.
+After the final key, its median changes from 32 to 24 ms at 1,906 tracks
+and from 392 to 174 ms at 7,000. Intermediate updates can be
+coalesced during fast typing; they are recorded, not counted as displayed.
+
+As a secondary per-burst measure, the slowest of all six key paints falls
+from a median 208 to 176 ms at 1,906 tracks and from 592 to 376 ms at 7,000.
+Paired savings are 24 ms and 200 ms; every pair improves. These are
+scenario-specific browser measurements, not field INP or a guarantee for
+every device and query.
+
+Complete results arrive a paired median 4 ms later at 1,906 tracks, with
+the largest observed delay of 13 ms, and 156 ms sooner at 7,000 tracks.
+Scripting through settled results falls by paired medians of 54 and
+202 ms. Thus, the improvement is not solely work postponed until the full
+results appear; the small-catalog timing tradeoff remains visible.
+
+Headless paint timings were less consistent, so foreground measurements
+are reported. The benchmark checks focus, the latest suggestion list,
+complete results, and keyboard navigation. It uses only disposable local
+data. No first-Library-load improvement is claimed.
+
+#### Search-computation acceptance
+
+- [x] Test projection equivalence: requested groups equal their groups in
+      default search, and groups not requested are empty. Cover an empty
+      request, disjoint groups, multiple recognized kinds, and unknown-only
+      kinds. No recognized kind means unrestricted; an empty intersection
+      means no results.
+- [x] Preserve default search results, complete artist and album counts,
+      ordering, aliases, namesakes, and fuzzy matching.
+- [x] Preserve empty input, non-artist tags, quoted tag-like values,
+      the tag-only shortcut with co-credited artists, the three-artist
+      limit, and current catalog data.
+- [x] Keep search syntax, result navigation, typing delay, and dependencies
+      unchanged.
+- [x] Run the existing search, suggestion, and search-box behavior tests.
+- [x] Compare baseline and production candidate in alternating browser
+      pairs with the same catalog, CPU, network, and cache state. Measure
+      a declared typing sequence scheduled 60 ms between keys, and record
+      actual event times. For prefixes with distinct expected suggestions,
+      measure input-to-visible-suggestions separately from the next paint
+      reported for that `keydown`. Also measure settled full results.
+- [x] Preserve keyboard selection, clearing, tags, and complete results.
+      Record the small-catalog timing tradeoff rather than claiming no
+      regression in every metric.
+- [x] Obtain independent design and implementation reviews. Retain the
+      optimization only with repeatable browser benefit, not just faster
+      function calls. Report the suggestion and event-to-next-paint measurements
+      separately.
+
+**Achieved:** result-group selection avoids unused computation and preserves
+query behavior. The larger catalog improves both final-key paint and
+settled results in every pair.
+
+**Changed:** the smaller catalog's complete results are a paired 4 ms later,
+even though its worst-key paint improves. This measured tradeoff is
+retained explicitly; not every timing metric improves.
+
+**Not implemented:** a persistent search index, changes to typing delay,
+server APIs, pagination, and first-Library-load optimization are outside
+this component.
+
 ## Favorites and ratings
 
 - **A filled heart** marks a favorite, in a row and in the player. Hovering over

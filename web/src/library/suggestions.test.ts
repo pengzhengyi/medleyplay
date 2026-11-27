@@ -30,6 +30,32 @@ describe("the artists suggested", () => {
   it("are none for a search that asks about no artist", () => {
     expect(suggestedArtists(TRACKS, "album:Supercell")).toEqual([]);
   });
+
+  it.each(['artist:"kind:albums"', 'artist:"album:"'])(
+    "preserves the empty artist answer for the quoted phrase %j",
+    (text) => {
+      expect(suggestedArtists(TRACKS, text)).toEqual([]);
+    },
+  );
+
+  it("uses the artist phrase without restricting suggestions to the outer kind tag", () => {
+    expect(suggestedArtists(TRACKS, "kind:albums 周").map((artist) => artist.name)).toEqual([
+      "周杰伦",
+      "周深",
+    ]);
+  });
+
+  it("keeps only the first three matching artists", () => {
+    const tracks = ["Alice A", "Alice B", "Alice C", "Alice D"].map((artist, index) =>
+      trackOf(index + 1, `Song ${String(index + 1)}`, { artist }),
+    );
+
+    expect(suggestedArtists(tracks, "Alice").map((artist) => artist.name)).toEqual([
+      "Alice A",
+      "Alice B",
+      "Alice C",
+    ]);
+  });
 });
 
 describe("the tags and sites a word being typed completes", () => {

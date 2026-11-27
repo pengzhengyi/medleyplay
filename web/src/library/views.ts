@@ -403,8 +403,14 @@ const KINDS: Readonly<Record<string, keyof Found>> = {
  * artists, and albums whose names hold them, side by side first and then loosely, and
  * no words find all. `kind:` keeps only songs, albums, or artists. An artist is found
  * by any name it goes by, as `links` know them. A search asking nothing finds none.
+ * `groups` limits which results are computed, intersecting with `kind:`.
  */
-export function search(tracks: readonly Track[], query: string, links?: ArtistLinks): Found {
+export function search(
+  tracks: readonly Track[],
+  query: string,
+  links?: ArtistLinks,
+  groups?: readonly (keyof Found)[],
+): Found {
   const { tags, words } = parseQuery(query);
   const asked = tags.filter((tag) => tag.value.trim() !== "");
   const folded = fold(words).trim();
@@ -418,7 +424,8 @@ export function search(tracks: readonly Track[], query: string, links?: ArtistLi
       return kind === undefined ? [] : [kind];
     }),
   );
-  const shows = (kind: keyof Found) => kinds.size === 0 || kinds.has(kind);
+  const shows = (kind: keyof Found) =>
+    (groups === undefined || groups.includes(kind)) && (kinds.size === 0 || kinds.has(kind));
   if (kept.length === tracks.length && folded === "") {
     // Only tags that keep every Track, such as kind:albums, list them all.
     return {
@@ -428,10 +435,23 @@ export function search(tracks: readonly Track[], query: string, links?: ArtistLi
     };
   }
   // An artist or album is listed whole, with all its songs, when a song the tags keep is its.
+  return {
+    tracks: shows("tracks") ? ranked(kept, folded, haystackOf) : [],
+    artists: shows("artists") ? matchingArtists(tracks, kept, asked, folded, links) : [],
+    albums: shows("albums") ? matchingAlbums(tracks, kept, folded) : [],
+  };
+}
+
+function matchingArtists(
+  tracks: readonly Track[],
+  kept: readonly Track[],
+  asked: readonly Tag[],
+  folded: string,
+  links?: ArtistLinks,
+): Artist[] {
   const keptArtists = new Set(
     kept.flatMap((track) => artistNamesOf(track).map((name) => artistKeyOf(name, links))),
   );
-  const keptAlbums = new Set(kept.map(albumKeyOf));
   const artistTags = asked.filter((tag) => tag.field === "artist");
   const artists = artistsOf(tracks, links).filter(
     (artist) =>
@@ -442,19 +462,16 @@ export function search(tracks: readonly Track[], query: string, links?: ArtistLi
           0,
       ),
   );
-  return {
-    tracks: shows("tracks") ? ranked(kept, folded, haystackOf) : [],
-    artists: shows("artists")
-      ? ranked(artists, folded, (artist) => namesOf(artist.link, links))
-      : [],
-    albums: shows("albums")
-      ? ranked(
-          albumsOf(tracks).filter((album) => keptAlbums.has(albumKeyOf(album))),
-          folded,
-          (album) => fold(album.name),
-        )
-      : [],
-  };
+  return ranked(artists, folded, (artist) => namesOf(artist.link, links));
+}
+
+function matchingAlbums(tracks: readonly Track[], kept: readonly Track[], folded: string): Album[] {
+  const keptAlbums = new Set(kept.map(albumKeyOf));
+  return ranked(
+    albumsOf(tracks).filter((album) => keptAlbums.has(albumKeyOf(album))),
+    folded,
+    (album) => fold(album.name),
+  );
 }
 
 /** Return the key an artist's songs are grouped by: its linked artist's, or its name's. */

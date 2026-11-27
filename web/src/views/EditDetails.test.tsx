@@ -1,4 +1,5 @@
 import {
+  act,
   type BoundFunctions,
   fireEvent,
   type queries,
@@ -31,6 +32,7 @@ import {
   trackOf,
 } from "../testing/server";
 import { EditDetails } from "./EditDetails";
+import { LanguageSelect } from "./LanguageSelect";
 import { SongsControlsContext } from "./songsControls";
 
 const ALBUM_FILE = trackOf(7, "ケビョウニンゲン");
@@ -157,6 +159,53 @@ const useSuggested = (dialog: HTMLElement, value: string) =>
   );
 
 describe("editing a song's details", () => {
+  it("locks the fields and suggestions until the submitted save finishes", async () => {
+    let finish: () => void = () => undefined;
+    const saving = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const submit = vi.fn(() => saving);
+    const { dialog } = await renderDialog(SUGGESTED, submit);
+    const title = box(dialog, "Title");
+    await userEvent.clear(title);
+    await userEvent.type(title, "Night Drive");
+
+    await save(dialog);
+
+    expect(title).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: /^Use “Sick Human”, suggested by/u }),
+    ).toBeDisabled();
+    expect(submit).toHaveBeenCalledExactlyOnceWith({ title: "Night Drive" });
+    await act(async () => {
+      finish();
+      await saving;
+    });
+    expect(title).toBeEnabled();
+  });
+
+  it("keeps the draft while translating the field, provenance, and pasted-video guidance", async () => {
+    const { dialog } = await renderDialog(detailsOf(7, {}, TAGGED_ORIGINS));
+    const words = within(dialog);
+    const input = words.getByRole("textbox", { name: "Title" });
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    const user = userEvent.setup();
+    await user.clear(input);
+    await user.type(input, "Night Drive");
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(dialog).toHaveAccessibleName("编辑详情");
+      expect(words.getByRole("textbox", { name: "标题" })).toHaveValue("Night Drive");
+      expect(input).toHaveAccessibleDescription("手动设置");
+      await user.click(words.getByText("粘贴视频详情"));
+      expect(words.getByText(/保留你手动设置的值/u)).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("prefills a Cleanup suggestion, explains the impact, and keeps the year only if entered", async () => {
     const details: Details = {
       ...detailsOf(7, {}, { video: { title: "Live at Home", year: 1974 } }),
@@ -188,6 +237,27 @@ describe("editing a song's details", () => {
     expect(warning).not.toHaveTextContent("11 split songs would also change");
     await save(dialog);
     expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "Live at Home", year: 1974 });
+  });
+
+  it("preserves the household cover when previewing and saving an artist suggestion", async () => {
+    const { dialog, onSave } = await renderDialog(
+      detailsOf(7, { cover: "custom-cover" }, { video: { title: "Night Drive" } }),
+      undefined,
+      undefined,
+      {
+        review: {
+          field: "artist",
+          value: "Trio",
+          impact: { details: [], split_songs: 0, affected_songs: 0, song_fields: [] },
+        },
+      },
+    );
+
+    const warning = within(dialog).getByRole("region", { name: "Review before saving" });
+    expect(warning).not.toHaveTextContent(/cover would/u);
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ artist: "Trio" });
   });
 
   it("does not prefill a Cleanup suggestion after someone else fills that field", async () => {
@@ -1031,6 +1101,22 @@ describe("looking a song up from its details", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
+  it("saves only the edited title after the lookup refresh adds a household genre", async () => {
+    const { dialog, lookUp, onSave } = await renderDialog(detailsOf(7), undefined, undefined, {
+      findable: [MUSICBRAINZ],
+      reloaded: detailsOf(7, { genre: "Jazz" }),
+    });
+    const title = box(dialog, "Title");
+    await userEvent.clear(title);
+    await userEvent.type(title, "Night Drive");
+    lookUp({ enricher: "musicbrainz", state: "succeeded", message: "" });
+    await within(dialog).findByDisplayValue("Jazz");
+
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ title: "Night Drive" });
+  });
+
   it("says why a lookup failed beside it", async () => {
     const { dialog } = await renderDialog(detailsOf(7), undefined, undefined, {
       findable: [MUSICBRAINZ],
@@ -1263,6 +1349,7 @@ describe("a song's artists, one chip each", () => {
 
     const featured = within(dialog).getByRole("button", { name: "GUMI, featured" });
     await userEvent.click(featured);
+    expect(box(dialog, "Title")).toHaveAccessibleDescription("From the video");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(featured).toHaveAttribute("aria-pressed", "true");

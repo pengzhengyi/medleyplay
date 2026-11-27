@@ -23,6 +23,7 @@ import {
 } from "../api";
 import { initialOf } from "../format";
 import { aiNameOf, answeredOf } from "../library/aiAnswer";
+import { useWords } from "../locale";
 import { AiSetUpHint } from "./AiSetUpHint";
 import { useAiSetUp } from "./aiSetUp";
 import { Hint } from "./Hint";
@@ -122,6 +123,7 @@ function Suggested({
   why,
   by,
   onUse,
+  disabled,
 }: {
   readonly field: string;
   readonly value: string;
@@ -129,7 +131,9 @@ function Suggested({
   readonly why: string;
   readonly by: AnsweredBy;
   readonly onUse: () => void;
+  readonly disabled: boolean;
 }) {
+  const t = useWords();
   if (value === "" || value === typed.trim()) {
     return null;
   }
@@ -137,21 +141,32 @@ function Suggested({
     <div
       className="detail-suggestion"
       role="group"
-      aria-label={`${aiNameOf(by, true)}'s suggestion for ${field}`}
+      aria-label={t("{{model}}'s suggestion for {{field}}", {
+        model: aiNameOf(by, true),
+        field: t(field),
+      })}
     >
       <small
         className="detail-origin"
-        title={[why, answeredOf(by)].filter((line) => line !== undefined && line !== "").join("\n")}
+        title={[why, answeredOf(by, t)]
+          .filter((line) => line !== undefined && line !== "")
+          .join("\n")}
       >
-        {aiNameOf(by, true)} suggests “{value}”
+        {t("{{model}} suggests “{{value}}”", { model: aiNameOf(by, true), value })}
       </small>
       <button
         type="button"
         className="detail-alternative"
-        aria-label={`Use “${value}”, suggested by ${aiNameOf(by)}${why === "" ? "" : `: ${why}`}`}
+        disabled={disabled}
+        aria-label={t(
+          why === ""
+            ? "Use “{{value}}”, suggested by {{model}}"
+            : "Use “{{value}}”, suggested by {{model}}: {{reason}}",
+          { value, model: aiNameOf(by), reason: why },
+        )}
         onClick={onUse}
       >
-        Use
+        {t("Use")}
       </button>
     </div>
   );
@@ -172,6 +187,7 @@ export function EditArtist({
   readonly onChanged: () => void;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const namesId = useId();
   const [shownAs, setShownAs] = useState(artist.shown_as ?? "");
@@ -193,6 +209,7 @@ export function EditArtist({
 
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!changed || saving || picturing) return;
     setSaving(true);
     setError("");
     try {
@@ -231,7 +248,7 @@ export function EditArtist({
       onClose={onClose}
     >
       <form className="card" onSubmit={(event) => void save(event)}>
-        <h2 id="edit-artist-title">Edit artist</h2>
+        <h2 id="edit-artist-title">{t("Edit artist")}</h2>
         <p id="edit-artist-name" className="edit-details-song">
           {artist.shown_as ?? written}
         </p>
@@ -264,17 +281,17 @@ export function EditArtist({
                   <img
                     className="edit-artist-picture"
                     src={coverUrl(artist.photo, "original")}
-                    alt={`Photo of ${name}`}
+                    alt={t("Photo of {{name}}", { name })}
                   />
                 )}
               </span>
             </PictureFrame>
             <small className={artist.own_photo ? "detail-origin yours" : "detail-origin"}>
-              {artist.photo === null ? "No photo" : artist.own_photo ? "Yours" : "From Wikidata"}
+              {t(artist.photo === null ? "No photo" : artist.own_photo ? "Yours" : "From Wikidata")}
             </small>
             {photoError !== "" && (
               <p className="error" role="alert">
-                {photoError}
+                {t("Could not change the artist photo: {{detail}}", { detail: photoError })}
               </p>
             )}
           </div>
@@ -282,19 +299,19 @@ export function EditArtist({
             <div className="edit-artist-ask">
               {ai.failure !== "" && (
                 <p className="error" role="alert">
-                  {ai.failure}
+                  {t("Could not get artist suggestions: {{detail}}", { detail: ai.failure })}
                 </p>
               )}
               <button
                 type="button"
                 className="secondary outline edit-artist-ask-button"
-                disabled={ai.asking}
+                disabled={ai.asking || busy}
                 aria-busy={ai.asking}
                 aria-disabled={noAi.missing}
                 title={
                   noAi.missing
                     ? noAi.why
-                    : "Ask the AI to suggest a name and a note; nothing changes until you save"
+                    : t("Ask the AI to suggest a name and a note; nothing changes until you save")
                 }
                 onClick={() => {
                   noAi.whenSetUp(() => void ai.ask());
@@ -305,22 +322,25 @@ export function EditArtist({
                 ) : (
                   <SparkleIcon aria-hidden />
                 )}
-                {ai.waiting
-                  ? "Asking the AI once medleyplay is Online"
-                  : ai.asking
-                    ? "Asking the AI…"
-                    : "Ask AI"}
+                {t(
+                  ai.waiting
+                    ? "Asking the AI once medleyplay is Online"
+                    : ai.asking
+                      ? "Asking the AI…"
+                      : "Ask AI",
+                )}
               </button>
               <AiSetUpHint newTab />
             </div>
             <label className="edit-album-field">
-              Shown as
+              {t("Shown as")}
               <input
                 className="edit-album-box"
                 type="text"
                 list={namesId}
                 maxLength={MAX_SHOWN_AS}
                 value={shownAs}
+                disabled={busy}
                 placeholder={written}
                 onChange={(event) => {
                   setShownAs(event.currentTarget.value);
@@ -331,7 +351,9 @@ export function EditArtist({
                   <option key={name} value={name} />
                 ))}
               </datalist>
-              <small className="edit-artist-hint">Its songs keep their names as written.</small>
+              <small className="edit-artist-hint">
+                {t("Its songs keep their names as written.")}
+              </small>
             </label>
             {suggested !== null && (
               <Suggested
@@ -340,18 +362,20 @@ export function EditArtist({
                 typed={shownAs}
                 why={suggested.why}
                 by={suggested}
+                disabled={busy}
                 onUse={() => {
                   setShownAs(suggested.shown_as ?? "");
                 }}
               />
             )}
             <label className="edit-album-field">
-              About
+              {t("About")}
               <textarea
                 className="edit-artist-about"
                 rows={4}
                 maxLength={MAX_ABOUT}
                 value={about}
+                disabled={busy}
                 onChange={(event) => {
                   setAbout(event.currentTarget.value);
                 }}
@@ -364,6 +388,7 @@ export function EditArtist({
                 typed={about}
                 why=""
                 by={suggested}
+                disabled={busy}
                 onUse={() => {
                   setAbout(suggested.about);
                 }}
@@ -384,7 +409,7 @@ export function EditArtist({
         )}
         {error !== "" && (
           <p className="error" role="alert">
-            {error}
+            {t("Could not save the artist details: {{detail}}", { detail: error })}
           </p>
         )}
         <footer className="dialog-buttons">
@@ -394,7 +419,7 @@ export function EditArtist({
             disabled={!changed || busy}
             aria-busy={saving}
           >
-            Save
+            {t("Save")}
           </button>
         </footer>
       </form>
@@ -412,14 +437,15 @@ export function EditArtistButton({
   readonly written: string;
   readonly onChanged: () => void;
 }) {
+  const t = useWords();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Hint name="Edit details" keys={[]}>
+      <Hint name={t("Edit details")} keys={[]}>
         <button
           type="button"
           className="secondary outline edit-heading"
-          aria-label="Edit details"
+          aria-label={t("Edit details")}
           onClick={() => {
             setOpen(true);
           }}

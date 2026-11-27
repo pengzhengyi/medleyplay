@@ -22,6 +22,8 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { type FileRejection, useDropzone } from "react-dropzone";
 
 import { api, type Pictured } from "../api";
+import { CoverScopeError } from "../library/views";
+import { useWords } from "../locale";
 import { ArtistPictureFinder } from "./ArtistPictureFinder";
 import { GoogleImagesLink, TavilySearch } from "./AlbumImageSearch";
 import { CoverFinder } from "./CoverFinder";
@@ -88,7 +90,8 @@ export function PictureEditor({
   const dialog = useRef<HTMLDialogElement>(null);
   const id = useId();
   const [using, setUsing] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ readonly cause: unknown }>();
+  const t = useWords();
   const { kind, of, shown, album, artistId, pictured } = sources;
   const noun = kind === "cover" ? "cover" : "photo";
   const hasAlbum = kind === "cover" && album !== undefined;
@@ -127,12 +130,12 @@ export function PictureEditor({
   /** Make the change `change` makes, and close once it is made. */
   const change = async (made: () => Promise<void>) => {
     setUsing(true);
-    setError("");
+    setError(undefined);
     try {
       await made();
       dialog.current?.close();
     } catch (failure) {
-      setError(messageOf(failure));
+      setError({ cause: failure });
     } finally {
       setUsing(false);
     }
@@ -286,9 +289,11 @@ export function PictureEditor({
             <CircleNotchIcon weight="bold" className="spin" aria-hidden /> Saving the {noun}…
           </p>
         )}
-        {error !== "" && (
+        {error !== undefined && (
           <p className="error" role="alert">
-            {error}
+            {error.cause instanceof CoverScopeError
+              ? t(error.cause.reason)
+              : messageOf(error.cause)}
           </p>
         )}
       </div>

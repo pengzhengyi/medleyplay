@@ -291,6 +291,24 @@ export type CoverPlace =
   | { readonly kind: "file"; readonly id: number }
   | { readonly kind: "songs"; readonly ids: readonly number[] };
 
+export class CoverScopeError extends Error {
+  constructor(
+    readonly reason:
+      | "This track is no longer in the Library."
+      | "The cover target changed. Review the updated scope and try again."
+      | "The image was uploaded to one track, but it was not applied to the rest of the album. Review the updated scope before trying again.",
+  ) {
+    super(reason);
+  }
+}
+
+export function sameCoverPlace(shown: CoverPlace, current: CoverPlace): boolean {
+  if (shown.kind === "file") return current.kind === "file" && shown.id === current.id;
+  if (current.kind === "file" || shown.ids.length !== current.ids.length) return false;
+  const ids = new Set(current.ids);
+  return shown.ids.every((id) => ids.has(id));
+}
+
 /** Return where a cover chosen for `track`, one of `tracks`, is kept. */
 export function coverPlaceOf(track: Track, tracks: readonly Track[]): CoverPlace {
   if (track.segment_of !== null) {

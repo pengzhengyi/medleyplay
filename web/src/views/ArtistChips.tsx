@@ -14,6 +14,7 @@ import { XIcon } from "@phosphor-icons/react";
 import { useEffect, useRef } from "react";
 
 import { type Credit, type TrackArtist, coverUrl } from "../api";
+import { useWords } from "../locale";
 
 /** Fold a name as the server does, to find the artist a chip names among those it showed. */
 function keyOf(written: string): string {
@@ -37,6 +38,7 @@ export function ArtistChips({
   /** Focus the box an artist is added in. */
   readonly onFocusAdd: () => void;
 }) {
+  const t = useWords();
   const list = useRef<HTMLUListElement>(null);
   // The chip whose remove button takes focus once the chip before it has gone.
   const focusAt = useRef<number | undefined>(undefined);
@@ -55,7 +57,7 @@ export function ArtistChips({
   });
 
   return (
-    <ul ref={list} className="artist-chips" aria-label="Artists">
+    <ul ref={list} className="artist-chips" aria-label={t("Artists")}>
       {credits.map((credit, index) => {
         const linked = shown.find((each) => keyOf(each.written) === keyOf(credit.written))?.linked;
         const featured = credit.role === "featured";
@@ -71,27 +73,27 @@ export function ArtistChips({
             <span className="artist-chip-name">{credit.written}</span>
             <span className="visually-hidden">
               {linked === null || linked === undefined
-                ? ", not linked to an artist yet"
-                : `, linked to ${linked.name}`}
+                ? t(", not linked to an artist yet")
+                : t(", linked to {{name}}", { name: linked.name })}
             </span>
             <button
               type="button"
               className="artist-chip-role"
               aria-pressed={featured}
-              aria-label={`${credit.written}, featured`}
-              title={featured ? "Credit as a main artist" : "Credit as featured"}
+              aria-label={t("{{name}}, featured", { name: credit.written })}
+              title={t(featured ? "Credit as a main artist" : "Credit as featured")}
               disabled={disabled}
               onClick={() => {
                 onToggle(index);
               }}
             >
-              {featured ? "feat." : "+ feat."}
+              {t(featured ? "feat." : "+ feat.")}
             </button>
             <button
               type="button"
               className="artist-chip-remove"
-              aria-label={`Remove ${credit.written}`}
-              title="Remove"
+              aria-label={t("Remove {{name}}", { name: credit.written })}
+              title={t("Remove")}
               disabled={disabled}
               onClick={() => {
                 focusAt.current = index;

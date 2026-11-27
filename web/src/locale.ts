@@ -62,6 +62,13 @@ void words.use(initReactI18next).init({
         album_count_other: "{{count}} albums",
         star_count_one: "{{count}} star",
         star_count_other: "{{count}} stars",
+        album_edit_scope_one: "{{count}} song of its own. What you type here is set on it.",
+        album_edit_scope_other:
+          "{{count}} songs of their own. What you type here is set on each of them.",
+        album_edit_saves_one: "Saves to the {{count}} song",
+        album_edit_saves_other: "Saves to each of the {{count}} songs",
+        video_songs_one: "It lists {{count}} song.",
+        video_songs_other: "It lists {{count}} songs.",
         cleanup_tidy_one: "{{count}} name to tidy",
         cleanup_tidy_other: "{{count}} names to tidy",
         cleanup_split_artist_one: "{{count}} artist name to split",

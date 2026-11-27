@@ -88,7 +88,7 @@ describe("an album's cover on its page", () => {
     await userEvent.upload(within(editor).getByLabelText("Choose a cover file"), IMAGE);
     await userEvent.click(within(editor).getByRole("button", { name: "Use this cover" }));
 
-    expect(onUpload).toHaveBeenCalledWith(FANTASY, IMAGE);
+    expect(onUpload).toHaveBeenCalledWith(FANTASY, IMAGE, { album: "范特西", artist: "周杰伦" });
   });
 
   it("only shows the cover when it can't be changed here", () => {
@@ -144,7 +144,10 @@ describe("a cover suggested for an album without one", () => {
       await screen.findByRole("button", { name: "Use the suggested cover of Help!" }),
     );
 
-    expect(onUse).toHaveBeenCalledWith(HELP, "cover-1965");
+    expect(onUse).toHaveBeenCalledWith(HELP, "cover-1965", {
+      album: "Help!",
+      artist: "The Beatles",
+    });
   });
 
   it("is dismissed in one click, and the empty cover stands again", async () => {

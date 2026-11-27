@@ -40,6 +40,7 @@ import {
 
 import {
   AI_ENRICHER,
+  ApiError,
   type Credit,
   type Detail,
   type Details,
@@ -70,10 +71,12 @@ import {
   suggestionOf,
 } from "../library/details";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
-import { useWords } from "../locale";
+import { type Words, useFormattingLocale, useWords } from "../locale";
+import { composing } from "../ime";
+import { CoverScopeError } from "../library/views";
 import { AiNotePanel } from "./AiNotePanel";
 import type { TrackLookup } from "../library/useLibrary";
-import { aiNameOf, answeredOf } from "../library/aiAnswer";
+import { answeredOf } from "../library/aiAnswer";
 import { onlyArtist, sameCredits, toggled, withCredit, withoutCredit } from "../library/credits";
 import { ArtistChips } from "./ArtistChips";
 import { DetailReviewNote } from "./DetailReviewNote";
@@ -122,6 +125,7 @@ export function EditDetails({
   load,
   onSave,
   onReadVideo,
+  coverHelp,
   onSetCover,
   onRemoveCover,
   onUseCover,
@@ -145,6 +149,7 @@ export function EditDetails({
     artists?: readonly Credit[],
   ) => Promise<void>;
   readonly onReadVideo: (text: VideoText) => Promise<VideoRead>;
+  readonly coverHelp?: string | undefined;
   readonly onSetCover: (image: Blob) => Promise<Details>;
   readonly onRemoveCover: () => Promise<Details>;
   /** Make the cover `cover`, one found for the song's album, the household's own. */
@@ -168,12 +173,38 @@ export function EditDetails({
   const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const [details, setDetails] = useState<Details | undefined>(undefined);
-  const [own, setOwn] = useState<Own>({});
+  const [edits, setEdits] = useState<Partial<Record<Detail, string | null | undefined>>>({});
+  const held = details === undefined ? {} : ownOf(details);
+  const merged = new Map<string, string>(Object.entries(held));
+  for (const [field, value] of Object.entries(edits)) {
+    if (value === null) merged.delete(field);
+    else if (value !== undefined) merged.set(field, value);
+  }
+  const own: Own = Object.fromEntries(merged);
+  const setOwn = (next: Own) => {
+    setEdits((before) => {
+      const after = { ...before };
+      for (const { name } of DETAIL_FIELDS) {
+        if (own[name] === next[name]) continue;
+        after[name] = held[name] === next[name] ? undefined : (next[name] ?? null);
+      }
+      return after;
+    });
+  };
   // The song's artists as chips, or `undefined` while it has one artist in a box.
-  const [credits, setCredits] = useState<readonly Credit[] | undefined>(undefined);
+  const [creditEdit, setCreditEdit] = useState<readonly Credit[] | null>();
+  const credits =
+    creditEdit === undefined
+      ? details === undefined
+        ? undefined
+        : chipsOf(details)
+      : (creditEdit ?? undefined);
+  const setCredits = (value: readonly Credit[] | undefined) => {
+    setCreditEdit(value ?? null);
+  };
   // An artist typed among the chips, not added yet.
   const [draft, setDraft] = useState("");
-  const [artistSaid, setArtistSaid] = useState("");
+  const [removedArtist, setRemovedArtist] = useState<string>();
   const artistBox = useRef<HTMLInputElement>(null);
   // The kind chosen, `null` to guess it again, or `undefined` while unchanged.
   const [kind, setKind] = useState<Kind | null | undefined>(undefined);
@@ -181,13 +212,14 @@ export function EditDetails({
   const [albumOpen, setAlbumOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
-  const [readNote, setReadNote] = useState("");
+  const [readNote, setReadNote] = useState<VideoRead>();
   const [readError, setReadError] = useState("");
   const [covering, setCovering] = useState(false);
-  const [coverError, setCoverError] = useState("");
+  const [coverError, setCoverError] = useState<{ readonly cause: unknown }>();
   const [choosingArtist, setChoosingArtist] = useState(false);
   const [replacingCover, setReplacingCover] = useState(false);
   const [error, setError] = useState("");
+  const [readFailure, setReadFailure] = useState<{ readonly cause: unknown }>();
   const [reviewState, setReviewState] = useState<"prefilled" | "stale">();
   const [saved, setSaved] = useState(false);
   // Saying it saved is enough for a moment; the details shown are what was kept.
@@ -227,7 +259,7 @@ export function EditDetails({
   const backFromSongs = useCallback(() => {
     setSongsLocked(false);
     setPanel("details");
-  }, []);
+  }, [setPanel]);
   // Songs saved return to the details, or close a dialog opened on them.
   const songsSaved = useCallback(() => {
     if (startOnSongs) {
@@ -248,7 +280,7 @@ export function EditDetails({
   const leaveLyrics = useCallback(() => {
     setSongsLocked(false);
     setPanel("details");
-  }, []);
+  }, [setPanel]);
   const lyricsControls = useMemo<SongsControls>(
     () => ({
       headingId: LYRICS_TITLE,
@@ -266,15 +298,16 @@ export function EditDetails({
         if (open) {
           setDetails(loaded);
           const canPrefill = review !== undefined && canPrefillMissingDetail(loaded, review.field);
-          setOwn(canPrefill ? { ...ownOf(loaded), [review.field]: review.value } : ownOf(loaded));
-          setCredits(chipsOf(loaded));
+          setEdits(canPrefill ? { [review.field]: review.value } : {});
+          setCreditEdit(undefined);
+          setReadFailure(undefined);
           setReviewState(review === undefined ? undefined : canPrefill ? "prefilled" : "stale");
           if (canPrefill && review.field !== "artist") setAlbumOpen(true);
         }
       },
       (failure: unknown) => {
         if (open) {
-          setError(messageOf(failure));
+          setReadFailure({ cause: failure });
         }
       },
     );
@@ -321,7 +354,7 @@ export function EditDetails({
   const changed = Object.keys(changes).length > 0 || artists !== undefined;
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!changed) {
+    if (!changed || saving || reading || covering) {
       return;
     }
     setSaving(true);
@@ -332,8 +365,8 @@ export function EditDetails({
       const fresh = await load(track.id).catch(() => undefined);
       if (fresh !== undefined) {
         setDetails(fresh);
-        setOwn(ownOf(fresh));
-        setCredits(chipsOf(fresh));
+        setEdits({});
+        setCreditEdit(undefined);
         setDraft("");
         setKind(undefined);
       }
@@ -348,11 +381,11 @@ export function EditDetails({
   const readVideo = async (text: VideoText) => {
     setReading(true);
     setReadError("");
-    setReadNote("");
+    setReadNote(undefined);
     try {
       const read = await onReadVideo(text);
       setDetails(read.details);
-      setReadNote(noteOf(read));
+      setReadNote(read);
     } catch (failure) {
       setReadError(messageOf(failure));
     } finally {
@@ -377,11 +410,11 @@ export function EditDetails({
   /** Save the cover change `change` makes at once, and show the details it answers. */
   const changeCover = async (change: () => Promise<Details>) => {
     setCovering(true);
-    setCoverError("");
+    setCoverError(undefined);
     try {
       setDetails(await change());
     } catch (failure) {
-      setCoverError(messageOf(failure));
+      setCoverError({ cause: failure });
     } finally {
       setCovering(false);
     }
@@ -406,7 +439,7 @@ export function EditDetails({
       : {
           credits,
           draft,
-          said: artistSaid,
+          said: removedArtist === undefined ? "" : t("Removed {{name}}", { name: removedArtist }),
           box: artistBox,
           disabled: saving || choosingArtist,
           ...(onChooseArtist !== undefined && {
@@ -429,7 +462,7 @@ export function EditDetails({
           onRemove: (index) => {
             if (credits !== undefined) {
               const gone = credits[index];
-              setArtistSaid(gone === undefined ? "" : `Removed ${gone.written}`);
+              setRemovedArtist(gone?.written);
               showCredits(withoutCredit(credits, index));
             }
           },
@@ -449,8 +482,9 @@ export function EditDetails({
         details={details}
         own={own}
         onChange={setOwn}
+        disabled={saving || reading || covering}
         chips={field.name === "artist" ? artistChips : undefined}
-        chipsChanged={artists !== undefined}
+        chipsChanged={field.name === "artist" && artists !== undefined}
       />
     ));
 
@@ -477,10 +511,10 @@ export function EditDetails({
       )}
       <form className="card" hidden={panel !== "details"} onSubmit={(event) => void save(event)}>
         <div className="edit-details-head">
-          <h2 id="edit-details-title">Edit details</h2>
+          <h2 id="edit-details-title">{t("Edit details")}</h2>
           {saved && !changed && !saving && (
             <span className="edit-details-saved" role="status">
-              Saved
+              {t("Saved")}
             </span>
           )}
         </div>
@@ -502,9 +536,14 @@ export function EditDetails({
             artistsChanged={artists !== undefined}
           />
         )}
-        {details === undefined && error === "" && (
+        {details === undefined && readFailure === undefined && (
           <p className="empty" role="status">
-            Reading the details…
+            {t("Reading the details…")}
+          </p>
+        )}
+        {readFailure !== undefined && (
+          <p className="error" role="alert">
+            {readDetailsError(readFailure.cause, t)}
           </p>
         )}
         {details !== undefined && (
@@ -515,6 +554,7 @@ export function EditDetails({
                 details={details}
                 busy={saving || reading || covering}
                 covering={covering}
+                help={coverHelp}
                 error={coverError}
                 onReplace={() => {
                   setReplacingCover(true);
@@ -559,7 +599,7 @@ export function EditDetails({
                   }}
                 >
                   <ScissorsIcon aria-hidden />
-                  <span className="songs-entry-label">{songs.label}</span>
+                  <span className="songs-entry-label">{t(songs.label)}</span>
                   <CaretRightIcon aria-hidden />
                 </button>
               )}
@@ -574,7 +614,7 @@ export function EditDetails({
                   }}
                 >
                   <QuotesIcon aria-hidden />
-                  <span className="songs-entry-label">{lyrics.label}</span>
+                  <span className="songs-entry-label">{t(lyrics.label)}</span>
                   <CaretRightIcon aria-hidden />
                 </button>
               )}
@@ -585,21 +625,26 @@ export function EditDetails({
                 note={readNote}
                 error={readError}
                 onEdit={() => {
-                  setReadNote("");
+                  setReadNote(undefined);
                   setReadError("");
                 }}
                 onRead={(text) => void readVideo(text)}
               />
             </div>
             <div className="edit-details-fields">
-              <KindChoice details={details} chosen={kind} onChoose={setKind} />
+              <KindChoice
+                details={details}
+                chosen={kind}
+                onChoose={setKind}
+                disabled={saving || reading || covering}
+              />
               <fieldset className="detail-group">
-                <legend>Song</legend>
+                <legend>{t("Song")}</legend>
                 {boxes("song")}
               </fieldset>
               {(kind ?? details.kind.value) === "album" ? (
                 <fieldset className="detail-group">
-                  <legend>Album</legend>
+                  <legend>{t("Album")}</legend>
                   {boxes("album")}
                 </fieldset>
               ) : (
@@ -611,15 +656,15 @@ export function EditDetails({
                   }}
                 >
                   <summary className="detail-fold-summary">
-                    <span className="detail-fold-title">Album</span>
+                    <span className="detail-fold-title">{t("Album")}</span>
                     <span className="detail-fold-value">
                       {boxText(details, own, "album").trim() === ""
-                        ? "None, a single"
+                        ? t("None, a single")
                         : boxText(details, own, "album")}
                     </span>
                   </summary>
                   <fieldset className="detail-group">
-                    <legend className="visually-hidden">Album</legend>
+                    <legend className="visually-hidden">{t("Album")}</legend>
                     {boxes("album")}
                   </fieldset>
                 </details>
@@ -629,7 +674,7 @@ export function EditDetails({
         )}
         {error !== "" && (
           <p className="error" role="alert">
-            {error}
+            {t("Could not update the track details: {{detail}}", { detail: error })}
           </p>
         )}
         <footer className="dialog-buttons">
@@ -639,7 +684,7 @@ export function EditDetails({
             disabled={!changed || saving || reading || covering}
             aria-busy={saving}
           >
-            Save
+            {t("Save")}
           </button>
         </footer>
       </form>
@@ -669,18 +714,26 @@ function KindChoice({
   details,
   chosen,
   onChoose,
+  disabled,
 }: {
   readonly details: Details;
   readonly chosen: Kind | null | undefined;
   readonly onChoose: (kind: Kind | null) => void;
+  readonly disabled: boolean;
 }) {
+  const t = useWords();
   const fixed = details.kind.reason === "split" || details.kind.reason === "segment";
   const shown = chosen ?? details.kind.value;
   // Whether the household's word will be kept, so it can be dropped for the guess again.
   const named =
     chosen === undefined ? details.origins.household?.kind !== undefined : chosen !== null;
   return (
-    <fieldset className="kind-choice" role="radiogroup" aria-label="Kind" disabled={fixed}>
+    <fieldset
+      className="kind-choice"
+      role="radiogroup"
+      aria-label={t("Kind")}
+      disabled={fixed || disabled}
+    >
       {(["song", "album"] as const).map((each) => (
         <label key={each} className={shown === each ? "kind-option on" : "kind-option"}>
           <input
@@ -698,7 +751,7 @@ function KindChoice({
           ) : (
             <VinylRecordIcon weight="fill" aria-hidden />
           )}
-          {each === "song" ? "Song" : "Album"}
+          {t(each === "song" ? "Song" : "Album")}
         </label>
       ))}
       {named && !fixed ? (
@@ -709,11 +762,11 @@ function KindChoice({
             onChoose(null);
           }}
         >
-          Guess again
+          {t("Guess again")}
         </button>
       ) : (
         <span className="hint">
-          {chosen === null ? "Guessed when saved" : KIND_WHY[details.kind.reason]}
+          {t(chosen === null ? "Guessed when saved" : KIND_WHY[details.kind.reason])}
         </span>
       )}
     </fieldset>
@@ -758,6 +811,7 @@ function CoverBox({
   error,
   onReplace,
   onRemove,
+  help,
 }: {
   /** The song's title, which names a saved image. */
   readonly title: string;
@@ -765,10 +819,12 @@ function CoverBox({
   readonly busy: boolean;
   /** Whether the household's cover is being removed. */
   readonly covering: boolean;
-  readonly error: string;
+  readonly error: { readonly cause: unknown } | undefined;
   readonly onReplace: () => void;
   readonly onRemove: () => void;
+  readonly help: string | undefined;
 }) {
+  const t = useWords();
   const shown = details.shown.cover;
   const yours = details.origins.household?.cover !== undefined;
   const cover = shownCoverOf(details);
@@ -783,21 +839,29 @@ function CoverBox({
         onReplace={onReplace}
         onRemove={yours ? onRemove : undefined}
       >
-        <Cover cover={cover ?? null} size="original" className="cover-box-image" alt="Cover" />
+        <Cover cover={cover ?? null} size="original" className="cover-box-image" alt={t("Cover")} />
       </PictureFrame>
+      {help !== undefined && <p className="hint">{help}</p>}
       {shown === undefined ? (
-        <small className="detail-origin">No cover</small>
+        <small className="detail-origin">{t("No cover")}</small>
       ) : yours && cover === undefined ? (
-        <small className="detail-origin yours">None, as you chose</small>
+        <small className="detail-origin yours">{t("None, as you chose")}</small>
       ) : (
         <OriginTag
           origin={yours ? "household" : shown.origin}
-          full={yours ? "Yours" : `From ${ORIGIN_LABELS[shown.origin]}`}
+          full={
+            yours ? t("Yours") : t("From {{source}}", { source: t(ORIGIN_LABELS[shown.origin]) })
+          }
         />
       )}
-      {error !== "" && (
+      {error !== undefined && (
         <p className="error" role="alert">
-          {error}
+          {t("Could not change the cover: {{detail}}", {
+            detail:
+              error.cause instanceof CoverScopeError
+                ? t(error.cause.reason)
+                : messageOf(error.cause),
+          })}
         </p>
       )}
     </div>
@@ -821,6 +885,7 @@ function LookupBar({
   readonly onFind: (lookup: Lookup) => void;
   readonly onAskAi: ((note: string) => void) | undefined;
 }) {
+  const t = useWords();
   // The note to ask the AI with: opened by ▾ beside its button, or a right-click on it.
   const [noting, setNoting] = useState(false);
   const noteToggle = useRef<HTMLButtonElement>(null);
@@ -829,7 +894,7 @@ function LookupBar({
   const offered = LOOKUPS.filter(
     (each) => findable.includes(each) || each.enricher === lookup?.enricher,
   );
-  const status = coverStatusOf(lookup, online);
+  const status = coverStatusOf(lookup, online, t);
   const running = status?.kind === "looking" || status?.kind === "waiting";
   if (offered.length === 0) {
     return null;
@@ -843,8 +908,8 @@ function LookupBar({
             <button
               type="button"
               className="lookup-button"
-              title={each.label}
-              aria-label={each.label}
+              title={t(each.label)}
+              aria-label={t(each.label)}
               aria-busy={running && each.enricher === lookup?.enricher}
               disabled={running}
               onClick={() => {
@@ -858,15 +923,15 @@ function LookupBar({
               }}
             >
               <each.icon weight="bold" aria-hidden />
-              <span aria-hidden>{each.short}</span>
+              <span aria-hidden>{t(each.short)}</span>
             </button>
             {noted(each) && (
               <button
                 ref={noteToggle}
                 type="button"
                 className="lookup-button ai-note-toggle"
-                aria-label="Ask AI with a note"
-                title="Ask AI with a note"
+                aria-label={t("Ask AI with a note")}
+                title={t("Ask AI with a note")}
                 aria-expanded={noting}
                 aria-controls={notePanel}
                 disabled={running}
@@ -928,11 +993,13 @@ function PasteVideo({
   readonly read: VideoText | null;
   readonly busy: boolean;
   readonly reading: boolean;
-  readonly note: string;
+  readonly note: VideoRead | undefined;
   readonly error: string;
   readonly onEdit: () => void;
   readonly onRead: (text: VideoText) => void;
 }) {
+  const t = useWords();
+  const locale = useFormattingLocale();
   const [title, setTitle] = useState(read?.title ?? "");
   const [description, setDescription] = useState(read?.description ?? "");
   const empty = title.trim() === "" && description.trim() === "";
@@ -943,15 +1010,16 @@ function PasteVideo({
   };
   return (
     <details className="paste-video">
-      <summary className="paste-video-summary">Paste the video's details</summary>
+      <summary className="paste-video-summary">{t("Paste the video's details")}</summary>
       <div className="paste-video-body">
         <label htmlFor="paste-video-title" className="detail-label">
-          Video title
+          {t("Video title")}
         </label>
         <input
           id="paste-video-title"
           className="detail-input"
           maxLength={MAX_VIDEO_TITLE}
+          disabled={busy}
           value={title}
           onChange={(event) => {
             setTitle(event.currentTarget.value);
@@ -960,20 +1028,21 @@ function PasteVideo({
           onKeyDown={(event) => {
             // Enter reads the video's details here, rather than saving the dialog; an
             // Enter that ends composing a word, as in Japanese, only ends it.
-            if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+            if (event.key === "Enter" && !composing(event.nativeEvent)) {
               event.preventDefault();
               submit();
             }
           }}
         />
         <label htmlFor="paste-video-description" className="detail-label">
-          Description
+          {t("Description")}
         </label>
         <textarea
           id="paste-video-description"
           className="detail-input"
           rows={5}
           maxLength={MAX_DESCRIPTION}
+          disabled={busy}
           value={description}
           onChange={(event) => {
             setDescription(event.currentTarget.value);
@@ -981,7 +1050,7 @@ function PasteVideo({
           }}
         />
         <small className="paste-video-hint">
-          Reading replaces what the video said before; your own values stay.
+          {t("Reading replaces what the video said before; your own values stay.")}
         </small>
         <button
           type="button"
@@ -990,14 +1059,14 @@ function PasteVideo({
           aria-busy={reading}
           onClick={submit}
         >
-          Read details
+          {t("Read details")}
         </button>
         <p className="paste-video-note" role="status">
-          {note}
+          {note === undefined ? "" : noteOf(note, t, locale)}
         </p>
         {error !== "" && (
           <p className="error" role="alert">
-            {error}
+            {t("Could not read the video details: {{detail}}", { detail: error })}
           </p>
         )}
       </div>
@@ -1005,18 +1074,23 @@ function PasteVideo({
   );
 }
 
-const LIST = new Intl.ListFormat("en", { style: "long", type: "conjunction" });
-
 /** Say what reading a video's text found: the details it gave, and how many songs it lists. */
-function noteOf(read: VideoRead): string {
+function noteOf(read: VideoRead, t: Words, locale: string): string {
   const video = read.details.origins.video ?? {};
   const found = DETAIL_FIELDS.filter(({ name }) => video[name] !== undefined).map(({ label }) =>
-    label.toLowerCase(),
+    t(label).toLocaleLowerCase(locale),
   );
-  const songs = read.songs.length > 0 ? ` It lists ${String(read.songs.length)} songs.` : "";
-  return found.length > 0
-    ? `Read the video's details: ${LIST.format(found)}.${songs}`
-    : `Read the video's details, but found no details in them.${songs}`;
+  const detail =
+    found.length > 0
+      ? t("Read the video's details: {{fields}}.", {
+          fields: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(found),
+        })
+      : t("Read the video's details, but found no details in them.");
+  return read.songs.length === 0
+    ? detail
+    : [detail, t("video_songs", { count: read.songs.length })].join(
+        t("Sentence separator", { defaultValue: " " }),
+      );
 }
 
 /** The song's artists as chips in its Artist box, and what changes them. */
@@ -1049,6 +1123,7 @@ function DetailBox({
   onChange,
   chips,
   chipsChanged = false,
+  disabled,
 }: {
   readonly field: DetailField;
   readonly details: Details;
@@ -1057,6 +1132,7 @@ function DetailBox({
   /** For the artist: its chips, which take the box's place once there are several. */
   readonly chips?: ArtistChipsProps | undefined;
   readonly chipsChanged?: boolean;
+  readonly disabled: boolean;
 }) {
   const t = useWords();
   const { name, label, kind } = field;
@@ -1064,8 +1140,8 @@ function DetailBox({
   const typed = boxText(details, own, name);
   const yours = name in settle(details, own);
   const origin = chipsChanged
-    ? ({ text: "Yours", from: "household" } as const)
-    : originOf(details, own, field);
+    ? ({ text: t("Yours"), from: "household" } as const)
+    : originOf(details, own, field, t);
   const described = origin === undefined ? undefined : `${id}-origin`;
   const range = RANGES[name];
   const suggestion = suggestionOf(details, name);
@@ -1091,7 +1167,7 @@ function DetailBox({
     <div className={`detail detail-${kind} detail-${name}`}>
       <div className="detail-label-row">
         <label id={`${id}-label`} htmlFor={id} className="detail-label">
-          {credits === undefined ? label : `${label}s`}
+          {t(credits === undefined ? label : "Artists")}
         </label>
       </div>
       {chips !== undefined && credits !== undefined && (
@@ -1115,8 +1191,8 @@ function DetailBox({
             <button
               type="button"
               className="artist-tag-name"
-              aria-label={`Edit the artist ${typed}`}
-              title="Edit the artist"
+              aria-label={t("Edit the artist {{name}}", { name: typed })}
+              title={t("Edit the artist")}
               aria-describedby={described}
               disabled={chips.disabled}
               onClick={() => {
@@ -1144,7 +1220,8 @@ function DetailBox({
             min={range?.[0]}
             max={range?.[1]}
             maxLength={kind === "text" ? MAX_TEXT : undefined}
-            placeholder={credits === undefined ? undefined : "Add an artist"}
+            disabled={disabled}
+            placeholder={credits === undefined ? undefined : t("Add an artist")}
             value={credits === undefined || chips === undefined ? typed : chips.draft}
             aria-describedby={described}
             onChange={(event) => {
@@ -1160,7 +1237,7 @@ function DetailBox({
                 chips !== undefined &&
                 credits !== undefined &&
                 event.key === "Enter" &&
-                !event.nativeEvent.isComposing &&
+                !composing(event.nativeEvent) &&
                 chips.draft.trim() !== ""
               ) {
                 event.preventDefault();
@@ -1179,9 +1256,9 @@ function DetailBox({
           <button
             type="button"
             className="detail-add-icon"
-            aria-label="More artists"
+            aria-label={t("More artists")}
             disabled={chips.disabled}
-            title="This song is by more than one artist: add each one"
+            title={t("This song is by more than one artist: add each one")}
             onClick={chips.onAdd}
           >
             <PlusIcon weight="bold" aria-hidden />
@@ -1196,11 +1273,16 @@ function DetailBox({
         ) : (
           <OriginTag id={described} origin={origin.from} full={origin.text} />
         ))}
-      <div className="detail-alternatives" role="group" aria-label={`Other values for ${label}`}>
+      <div
+        className="detail-alternatives"
+        role="group"
+        aria-label={t("Other values for {{field}}", { field: t(label) })}
+      >
         {canRemoveBlank && (
           <button
             type="button"
             className="detail-alternative"
+            disabled={disabled}
             onClick={() => {
               use(Object.fromEntries(Object.entries(own).filter(([field]) => field !== name)));
             }}
@@ -1215,8 +1297,12 @@ function DetailBox({
               key={from}
               type="button"
               className="detail-alternative"
-              aria-label={`Use “${value}”, from ${ORIGIN_LABELS[from]}`}
-              title={`From ${ORIGIN_LABELS[from]}`}
+              disabled={disabled}
+              aria-label={t("Use “{{value}}”, from {{source}}", {
+                value,
+                source: t(ORIGIN_LABELS[from]),
+              })}
+              title={t("From {{source}}", { source: t(ORIGIN_LABELS[from]) })}
               onClick={() => {
                 use({ ...own, [name]: value });
               }}
@@ -1231,20 +1317,30 @@ function DetailBox({
         <div
           className="detail-suggestion"
           role="group"
-          aria-label={`${aiNameOf(details.ai_answered_by, true)}'s suggestion for ${label}`}
+          aria-label={t("{{model}}'s suggestion for {{field}}", {
+            model: details.ai_answered_by?.model ?? t("The AI"),
+            field: t(label),
+          })}
         >
-          <small className="detail-origin" title={answeredOf(details.ai_answered_by)}>
-            {aiNameOf(details.ai_answered_by, true)} suggests “{suggestion}”
+          <small className="detail-origin" title={answeredOf(details.ai_answered_by, t)}>
+            {t("{{model}} suggests “{{value}}”", {
+              model: details.ai_answered_by?.model ?? t("The AI"),
+              value: suggestion,
+            })}
           </small>
           <button
             type="button"
             className="detail-alternative"
-            aria-label={`Use “${suggestion}”, suggested by ${aiNameOf(details.ai_answered_by)}`}
+            disabled={disabled}
+            aria-label={t("Use “{{value}}”, suggested by {{model}}", {
+              value: suggestion,
+              model: details.ai_answered_by?.model ?? t("the AI"),
+            })}
             onClick={() => {
               use({ ...own, [name]: suggestion });
             }}
           >
-            Use
+            {t("Use")}
           </button>
         </div>
       )}
@@ -1260,6 +1356,7 @@ function originOf(
   details: Details,
   own: Own,
   field: DetailField,
+  t: Words,
 ): { readonly text: string; readonly from?: Origin } | undefined {
   const { name, kind } = field;
   const shows = previewOf(details, own)[name];
@@ -1268,19 +1365,25 @@ function originOf(
       return {
         text:
           shows === undefined
-            ? "Left empty"
-            : `Left empty, so ${String(shows.value)} from ${ORIGIN_LABELS[shows.origin]} shows`,
+            ? t("Left empty")
+            : t("Left empty, so {{value}} from {{source}} shows", {
+                value: shows.value,
+                source: t(ORIGIN_LABELS[shows.origin]),
+              }),
       };
     }
-    return { text: "Yours", from: "household" };
+    return { text: t("Yours"), from: "household" };
   }
   if (shows !== undefined) {
-    return { text: `From ${ORIGIN_LABELS[shows.origin]}`, from: shows.origin };
+    return {
+      text: t("From {{source}}", { source: t(ORIGIN_LABELS[shows.origin]) }),
+      from: shows.origin,
+    };
   }
   // An album field another origin gives, hidden because the household's album differs.
   return shownOf(foundOf(details))[name] === undefined
     ? undefined
-    : { text: "Hidden, as your album differs" };
+    : { text: t("Hidden, as your album differs") };
 }
 
 /** Return the song's artists as chips when it shows several, else `undefined` for one box. */
@@ -1303,4 +1406,15 @@ function withoutArtist(
 
 function messageOf(failure: unknown): string {
   return failure instanceof Error ? failure.message : String(failure);
+}
+
+function readDetailsError(failure: unknown, t: Words): string {
+  const detail = messageOf(failure);
+  const id =
+    failure instanceof ApiError && failure.status === 404
+      ? /^There is no Track (\d+)\.$/u.exec(detail)?.[1]
+      : undefined;
+  return t("Could not read the track details: {{detail}}", {
+    detail: id === undefined ? detail : t("There is no Track {{id}}.", { id }),
+  });
 }

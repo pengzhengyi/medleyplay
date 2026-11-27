@@ -1833,10 +1833,190 @@ describe("editing an album from its page", () => {
     });
   });
 
+  it("targets the current album when replacing a cover after saving track details", async () => {
+    const song = trackOf(1, "Night Drive", { artist: "Trio", album: "Old Album" });
+    const stayed = trackOf(2, "Old Song", { artist: "Trio", album: "Old Album" });
+    const newAlbum = trackOf(3, "New Song", { artist: "Trio", album: "New Album" });
+    let current = song;
+    const sent: unknown[] = [];
+    open("#/library", {
+      ...signedIn([song, stayed, newAlbum]),
+      "GET /api/tracks/1": () => ({ body: current }),
+      "GET /api/tracks": () => ({ body: [current, stayed, newAlbum] }),
+      "GET /api/tracks/1/details": () => ({
+        body: detailsOf(1, {
+          title: song.title,
+          album: current.album,
+          artist: song.artist,
+          cover: "original-cover",
+        }),
+      }),
+      "PUT /api/tracks/1/cover": { body: detailsOf(1, { cover: "new-cover" }) },
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        current = { ...song, album: "New Album" };
+        return { body: { changed: 1 } };
+      },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit details…" }));
+    const details = within(await screen.findByRole("dialog", { name: "Edit details" }));
+    await user.click(await details.findByText("Album", { selector: ".detail-fold-title" }));
+    const album = details.getByRole("textbox", { name: "Album" });
+    await user.clear(album);
+    await user.type(album, "New Album");
+    await user.click(details.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Saved the details of “Night Drive”.")).toBeInTheDocument();
+    expect(
+      await details.findByText("Cover changes apply immediately to the 2 songs of “New Album”."),
+    ).toBeVisible();
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      expect(screen.getByText("已保存「Night Drive」的详情。")).toBeInTheDocument();
+      expect(details.getByText("封面更改会立即应用到「New Album」的 2 首歌曲。")).toBeVisible();
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+
+    await user.click(details.getByRole("button", { name: "Replace the cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Replace the cover" }));
+    await user.upload(
+      picture.getByLabelText("Choose a cover file"),
+      new File(["png"], "cover.png", { type: "image/png" }),
+    );
+    await user.click(await picture.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([
+        { track_ids: [1], values: { album: "New Album" } },
+        { track_ids: [1, 3], values: { cover: "new-cover" } },
+      ]);
+    });
+  });
+
+  it("refuses a cover change when different songs now share the album", async () => {
+    const song = trackOf(1, "Night Drive", { artist: "Trio", album: "Home" });
+    const second = trackOf(2, "Second", { artist: "Trio", album: "Home" });
+    const third = trackOf(3, "Third", { artist: "Trio", album: "Away" });
+    let moved = false;
+    const { calls } = open("#/library", {
+      ...signedIn([song, second, third]),
+      "GET /api/tracks": () => ({
+        body: moved
+          ? [song, { ...second, album: "Away" }, { ...third, album: "Home" }]
+          : [song, second, third],
+      }),
+      "GET /api/tracks/1/details": {
+        body: detailsOf(1, { title: song.title, album: song.album, cover: "original-cover" }),
+      },
+      "POST /api/tracks/details": { body: { changed: 2 } },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit details…" }));
+    const details = within(await screen.findByRole("dialog", { name: "Edit details" }));
+    const remove = await details.findByRole("button", { name: "Remove your cover" });
+    const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
+    moved = true;
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+      await user.click(remove);
+
+      expect(await details.findByRole("alert")).toHaveTextContent(
+        "封面的应用范围已更改。请查看最新范围后重试。",
+      );
+      expect(calls).not.toContain("POST /api/tracks/details");
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
+  it("does not apply an uploaded image to old album members when membership changes during upload", async () => {
+    const first = trackOf(1, "First", { artist: "Trio", album: "Home" });
+    const second = trackOf(2, "Second", { artist: "Trio", album: "Home" });
+    const third = trackOf(3, "Third", { artist: "Trio", album: "Away" });
+    let finishUpload: () => void = () => undefined;
+    const after = new Promise<void>((resolve) => {
+      finishUpload = resolve;
+    });
+    let moved = false;
+    const { calls } = open(hrefOf({ view: "album", artist: "Trio", name: "Home" }), {
+      ...signedIn([first, second, third]),
+      "GET /api/tracks": () => ({
+        body: moved
+          ? [first, { ...second, album: "Away" }, { ...third, album: "Home" }]
+          : [first, second, third],
+      }),
+      "PUT /api/tracks/1/cover": { after, body: detailsOf(1, { cover: "uploaded" }) },
+      "POST /api/tracks/details": { body: { changed: 2 } },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Edit details" }));
+    const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
+    await user.click(album.getByRole("button", { name: "Add a cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await user.upload(
+      picture.getByLabelText("Choose a cover file"),
+      new File(["png"], "cover.png", { type: "image/png" }),
+    );
+    await user.click(await picture.findByRole("button", { name: "Use this cover" }));
+    await waitFor(() => {
+      expect(calls).toContain("PUT /api/tracks/1/cover");
+    });
+
+    moved = true;
+    finishUpload();
+
+    expect(await picture.findByRole("alert")).toHaveTextContent(
+      "The image was uploaded to one track, but it was not applied to the rest of the album.",
+    );
+    expect(calls).not.toContain("POST /api/tracks/details");
+  });
+
+  it("lets a mixed album update its cover on just its listed songs", async () => {
+    const tracks = [
+      trackOf(9, "Home file", { artist: "Trio", album: "Home", kind: "album", split: true }),
+      trackOf(11, "Opening", { artist: "Trio", album: "Home", segment_of: 9 }),
+      trackOf(12, "Closing", { artist: "Trio", album: "Home", segment_of: 9 }),
+      trackOf(30, "Encore", { artist: "Trio", album: "Home" }),
+    ];
+    const sent: unknown[] = [];
+    const cover = { body: detailsOf(11, { cover: "new-cover" }) };
+    open(hrefOf({ view: "album", artist: "Trio", name: "Home" }), {
+      ...signedIn(tracks),
+      "PUT /api/tracks/11/cover": cover,
+      "PUT /api/tracks/12/cover": cover,
+      "PUT /api/tracks/30/cover": cover,
+      "POST /api/tracks/details": (body) => {
+        sent.push(body);
+        return { body: { changed: 3 } };
+      },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Edit details" }));
+    const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
+    await user.click(album.getByRole("button", { name: "Add a cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await user.upload(
+      picture.getByLabelText("Choose a cover file"),
+      new File(["png"], "cover.png", { type: "image/png" }),
+    );
+
+    await user.click(await picture.findByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => {
+      expect(sent).toEqual([{ track_ids: [11, 12, 30], values: { cover: "new-cover" } }]);
+    });
+  });
+
   it("gives a cover from the page of an album that is one split file to that file", async () => {
     const sent: unknown[] = [];
     const jay = [
-      trackOf(9, "Jay", { artist: "周杰伦", album: "Jay", kind: "album", split: true }),
+      trackOf(9, "Jay", { artist: "周杰伦", album: "Original title", kind: "album", split: true }),
       trackOf(11, "可爱女人", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
       trackOf(12, "完美主义", { artist: "周杰伦", album: "Jay", segment_of: 9 }),
     ];

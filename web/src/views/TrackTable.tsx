@@ -69,6 +69,7 @@ import { albumArtistOf } from "../library/views";
 import type { UnitOf } from "../player/usePlayer";
 import { type LibraryGroup, hrefOf } from "../routes";
 import { Cover } from "./Cover";
+import type { CoverAlbum } from "./PictureEditor";
 import { TrackArtistCredit } from "./ArtistCreditLinks";
 import { type ChoiceField, genresOf } from "./filterChoices";
 import { WHY } from "./unplayable";
@@ -229,9 +230,17 @@ export interface TrackActions extends TrackMenuActions {
   /** Edit the album `songs`, songs of their own, make up; an album that is one file is edited as it. */
   readonly onEditAlbum?: (songs: readonly Track[]) => void;
   /** Make `cover`, a cover kept already, the cover of `songs`: an album's songs, or its one file. */
-  readonly onUseAlbumCover?: (songs: readonly Track[], cover: string) => Promise<void>;
+  readonly onUseAlbumCover?: (
+    songs: readonly Track[],
+    cover: string,
+    subject: CoverAlbum,
+  ) => Promise<void>;
   /** Make the image `image` the cover of `songs`, answering the cover it became. */
-  readonly onUploadAlbumCover?: (songs: readonly Track[], image: File) => Promise<string>;
+  readonly onUploadAlbumCover?: (
+    songs: readonly Track[],
+    image: File,
+    subject: CoverAlbum,
+  ) => Promise<string>;
   /** Switch whether a Playlist keeps its songs downloaded. */
   readonly onKeepDownloaded?: (playlist: Playlist, keep: boolean) => Promise<void>;
 }

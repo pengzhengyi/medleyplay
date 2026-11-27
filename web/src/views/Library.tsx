@@ -25,6 +25,8 @@ import {
 } from "../api";
 import { preloadWhenIdle } from "../lazyPart";
 import { LOOKUPS, type Lookup, coverStatusOf } from "../library/lookups";
+import { playingPages } from "../library/playingPages";
+import type { CoverAlbum } from "./PictureEditor";
 import { afterNextPaint } from "../library/stages";
 import { useLibrary } from "../library/useLibrary";
 import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
@@ -45,7 +47,13 @@ import { usePhotoLookAhead } from "../library/usePhotoLookAhead";
 import { useSharedNames } from "../library/useSharedNames";
 import { useSplitOffers } from "../library/useSplitOffers";
 import { toDoOf } from "../library/cleanUp";
-import { albumArtistOf, coverPlaceOf } from "../library/views";
+import {
+  CoverScopeError,
+  type CoverPlace,
+  albumArtistOf,
+  coverPlaceOf,
+  sameCoverPlace,
+} from "../library/views";
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
@@ -97,7 +105,19 @@ type LibraryNotice =
   | string
   | { readonly kind: "playlist"; readonly title: string; readonly playlists: readonly string[] }
   | { readonly kind: "favorite"; readonly key: string; readonly title: string }
-  | { readonly kind: "playback"; readonly key: string };
+  | { readonly kind: "playback"; readonly key: string }
+  | {
+      readonly kind: "message";
+      readonly key: string;
+      readonly values?: Readonly<Record<string, string | number>>;
+    }
+  | { readonly kind: "adding"; readonly count: number; readonly offline: boolean };
+type LibrarySpeech =
+  string | { readonly key: string; readonly title: string; readonly offline: boolean };
+interface CoverCheck {
+  readonly album?: CoverAlbum;
+  readonly uploaded?: true;
+}
 
 /** Everything a signed-in Account sees. */
 
@@ -328,7 +348,7 @@ export function Library({
   >(undefined);
   const [notice, setNotice] = useFading<LibraryNotice>("");
   // Said to screen readers only: what the page shows where it happens, such as a lookup.
-  const [said, setSaid] = useFading("");
+  const [said, setSaid] = useFading<LibrarySpeech>("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
   // Whether the guide to listening on another device is open.
   const [listening, setListening] = useState(false);
@@ -376,8 +396,11 @@ export function Library({
   const find = (lookup: Lookup, track: Track, again = false) => {
     library.find(lookup.enricher, track.id, again ? { hint: "" } : undefined).then(
       () => {
-        const wait = library.mode?.online === false ? " It waits until medleyplay is Online." : "";
-        setSaid(`${lookup.notice(track.title)}${wait}`);
+        setSaid({
+          key: lookup.notice,
+          title: track.title,
+          offline: library.mode?.online === false,
+        });
       },
       (failure: unknown) => {
         if (failure instanceof ApiError && failure.code === "asked_recently") {
@@ -389,40 +412,124 @@ export function Library({
     );
   };
   /** Use `cover` on every song of `songs`. */
-  const setAlbumCover = async (songs: readonly Track[], cover: string) => {
-    await library.setDetailsOn(
-      songs.map(({ id }) => id),
-      { cover },
-    );
-    setNotice(`Used the cover on ${String(songs.length)} songs.`);
+  const setAlbumCover = async (songs: readonly Track[], cover: string, album?: CoverAlbum) => {
+    const [first] = songs;
+    if (first === undefined) throw new CoverScopeError("This track is no longer in the Library.");
+    await coverAlbumOf(first, { kind: "songs", ids: songs.map(({ id }) => id) }, cover, {
+      album: album ?? { album: first.album, artist: albumArtistOf(first) },
+    });
+    noteAlbumCover(songs.length);
+  };
+  const noteAlbumCover = (count: number) => {
+    setNotice({
+      kind: "message",
+      key: "Used the cover on {{count}} songs.",
+      values: { count },
+    });
   };
   // The image becomes the first song's cover, then every song's.
-  const uploadAlbumCover = async (songs: readonly Track[], image: File) => {
+  const uploadAlbumCover = async (songs: readonly Track[], image: File, subject?: CoverAlbum) => {
     const [first] = songs;
-    const cover =
-      first === undefined
-        ? undefined
-        : (await library.setCover(first.id, image)).origins.household?.cover;
+    if (first === undefined) throw new CoverScopeError("This track is no longer in the Library.");
+    const place: CoverPlace = { kind: "songs", ids: songs.map(({ id }) => id) };
+    const album = subject ?? { album: first.album, artist: albumArtistOf(first) };
+    await checkCoverTarget(first, place, { album });
+    const cover = (await library.setCover(first.id, image)).origins.household?.cover;
     if (typeof cover !== "string") {
       throw new Error("The cover could not be kept.");
     }
-    await setAlbumCover(songs, cover);
+    await coverAlbumOf(first, place, cover, { album, uploaded: true });
+    noteAlbumCover(songs.length);
     return cover;
   };
   /**
    * Make `cover` the cover of `track`'s album, or drop the album's with `null`: on its split
    * file, dropping the song's own so it shows the file's, or on every song of its album.
    */
-  const coverAlbumOf = async (track: Track, cover: string | null) => {
-    const place = coverPlaceOf(track, tracks);
+  async function coverAlbumOf(
+    track: Track,
+    place: CoverPlace,
+    cover: string | null,
+    check: CoverCheck = {},
+  ) {
+    await checkCoverTarget(track, place, check);
+    const { id } = track;
     if (place.kind === "songs") {
       await library.setDetailsOn(place.ids, { cover });
       return;
     }
-    await library.setDetailsOn(cover === null ? [place.id, track.id] : [place.id], { cover });
+    await library.setDetailsOn(cover === null ? [place.id, id] : [place.id], { cover });
     if (cover !== null) {
-      await library.setDetailsOn([track.id], { cover: null });
+      await library.setDetailsOn([id], { cover: null });
     }
+  }
+  function trackForCover(id: number) {
+    const shown = byId.get(id);
+    if (shown === undefined) throw new CoverScopeError("This track is no longer in the Library.");
+    return { shown, place: coverPlaceOf(shown, tracks) };
+  }
+  async function checkCoverTarget(
+    shown: Track,
+    expected: CoverPlace,
+    { album, uploaded }: CoverCheck = {},
+  ) {
+    const partial =
+      "The image was uploaded to one track, but it was not applied to the rest of the album. Review the updated scope before trying again.";
+    const latest = await api.tracks().catch((failure: unknown) => {
+      if (uploaded) throw new CoverScopeError(partial);
+      throw failure;
+    });
+    const current = latest.find((track) => track.id === shown.id);
+    if (current === undefined) {
+      library.reloadTracks();
+      throw new CoverScopeError(uploaded ? partial : "This track is no longer in the Library.");
+    }
+    const page =
+      album !== undefined
+        ? playingPages(latest, undefined).album(album.artist, album.album)
+        : undefined;
+    const target: CoverPlace =
+      page === undefined
+        ? coverPlaceOf(current, latest)
+        : {
+            kind: "songs",
+            ids: page.file === undefined ? page.songs.map(({ id }) => id) : [page.file.id],
+          };
+    if (
+      (album === undefined &&
+        (current.album !== shown.album ||
+          albumArtistOf(current) !== albumArtistOf(shown) ||
+          current.segment_of !== shown.segment_of ||
+          current.split !== shown.split)) ||
+      !sameCoverPlace(expected, target)
+    ) {
+      library.reloadTracks();
+      throw new CoverScopeError(
+        uploaded ? partial : "The cover target changed. Review the updated scope and try again.",
+      );
+    }
+  }
+  const coverHelpOf = (id: number) => {
+    const track = byId.get(id);
+    if (track === undefined) return t("This track is no longer in the Library.");
+    const place = coverPlaceOf(track, tracks);
+    if (place.kind === "file") {
+      return t(
+        "Cover changes apply immediately to the parent album file. Removing the cover also clears this song's override.",
+      );
+    }
+    if (track.split) {
+      return t(
+        "Cover changes apply immediately to this album file and songs that inherit its cover.",
+      );
+    }
+    if (place.ids.length > 1) {
+      return t("Cover changes apply immediately to the {{count}} songs of “{{album}}”.", {
+        count: place.ids.length,
+        album: track.album,
+      });
+    }
+    return t("Cover changes apply to this track immediately, without pressing Save.");
   };
   // Once the Library has drawn, the parts that load apart load while the browser is idle.
   useEffect(() => {
@@ -468,7 +575,7 @@ export function Library({
       (library.askedRecently.get(lookup.enricher)?.has(track.id) ?? false),
     // The song's cover shows the lookup as it goes; screen readers hear it asked.
     statusOf: (track: Track) =>
-      coverStatusOf(library.lookups.get(track.id), library.mode?.online !== false),
+      coverStatusOf(library.lookups.get(track.id), library.mode?.online !== false, t),
     downloadOf: (track: Track) => downloadsByTrack.get(track.id),
     onFind: (lookup: Lookup, track: Track) => {
       if (library.askedRecently.get(lookup.enricher)?.has(track.id) ?? false) {
@@ -482,7 +589,11 @@ export function Library({
     onSetKind: (track: Track, kind: Kind) => {
       library.saveDetails(track.id, { kind }).then(
         () => {
-          setNotice(`“${track.title}” is now ${kind === "album" ? "an album" : "a song"}.`);
+          setNotice({
+            kind: "message",
+            key: kind === "album" ? "“{{title}}” is now an album." : "“{{title}}” is now a song.",
+            values: { title: track.title },
+          });
         },
         (failure: unknown) => {
           setNotice(failure instanceof Error ? failure.message : String(failure));
@@ -529,7 +640,7 @@ export function Library({
       },
     };
     return {
-      label: file.split && count > 0 ? `${String(count)} songs` : "Split into songs",
+      label: file.split && count > 0 ? t("song_count", { count }) : t("Split into songs"),
       editor: (
         <LazyPart doing="Opening the songs…">
           <SongsEditor.Component
@@ -550,11 +661,19 @@ export function Library({
             onSave={async (rows, known, lyricPicks) => {
               await library.saveSongs(file.id, rows, known, lyricPicks);
               if (lyricPicks?.length) setLyricsEdits((count) => count + 1);
-              setNotice(`Saved the songs of “${file.title}”.`);
+              setNotice({
+                kind: "message",
+                key: "Saved the songs of “{{title}}”.",
+                values: { title: file.title },
+              });
             }}
             onUnsplit={async () => {
               await library.unsplit(file.id);
-              setNotice(`“${file.title}” plays whole again.`);
+              setNotice({
+                kind: "message",
+                key: "“{{title}}” plays whole again.",
+                values: { title: file.title },
+              });
             }}
           />
         </LazyPart>
@@ -883,14 +1002,14 @@ export function Library({
           add={library.addLink}
           onAdded={(count, destination) => {
             if (destination !== undefined) {
-              setNotice(t("The album is in the Library. Check Downloaded for its status."));
+              setNotice({
+                kind: "message",
+                key: "The album is in the Library. Check Downloaded for its status.",
+              });
               navigate(destination);
               return;
             }
-            const songs = count === 1 ? "1 song" : `${String(count)} songs`;
-            const wait =
-              library.mode?.online === false ? " They wait until medleyplay is Online." : "";
-            setNotice(`Added ${songs}. They are downloading.${wait}`);
+            setNotice({ kind: "adding", count, offline: library.mode?.online === false });
           }}
           onClose={() => {
             setLinking(undefined);
@@ -903,7 +1022,11 @@ export function Library({
           load={library.download}
           upload={library.addFile}
           onAdded={() => {
-            setNotice(`Added the file for “${filing.title}”.`);
+            setNotice({
+              kind: "message",
+              key: "Added the file for “{{title}}”.",
+              values: { title: filing.title },
+            });
           }}
           onClose={() => {
             setFiling(undefined);
@@ -974,7 +1097,11 @@ export function Library({
               editingAlbum.map(({ id }) => id),
               changes,
             );
-            setNotice(`Saved the album of ${String(editingAlbum.length)} songs.`);
+            setNotice({
+              kind: "message",
+              key: "Saved the album of {{count}} songs.",
+              values: { count: editingAlbum.length },
+            });
             // A renamed album is found under its new name; one whose name was emptied, in Albums.
             if (first !== undefined && ("album" in changes || "album_artist" in changes)) {
               const name = changes.album === undefined ? first.album : changes.album;
@@ -994,28 +1121,38 @@ export function Library({
       )}
       {editing !== undefined && (
         <EditDetails
-          track={editing.track}
+          key={editing.track.id}
+          track={byId.get(editing.track.id) ?? editing.track}
           review={editing.review}
           load={api.details}
           onSave={async (values, artists) => {
             await library.saveDetails(editing.track.id, values, artists);
-            setNotice(`Saved the details of “${editing.track.title}”.`);
+            setNotice({
+              kind: "message",
+              key: "Saved the details of “{{title}}”.",
+              values: { title: editing.track.title },
+            });
           }}
           onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
+          coverHelp={coverHelpOf(editing.track.id)}
           onSetCover={async (image) => {
+            const { shown, place } = trackForCover(editing.track.id);
+            await checkCoverTarget(shown, place);
             const kept = (await library.setCover(editing.track.id, image)).origins.household?.cover;
             if (typeof kept !== "string") {
               throw new Error("The cover could not be kept.");
             }
-            await coverAlbumOf(editing.track, kept);
+            await coverAlbumOf(shown, place, kept, { uploaded: true });
             return api.details(editing.track.id);
           }}
           onRemoveCover={async () => {
-            await coverAlbumOf(editing.track, null);
+            const { shown, place } = trackForCover(editing.track.id);
+            await coverAlbumOf(shown, place, null);
             return api.details(editing.track.id);
           }}
           onUseCover={async (cover) => {
-            await coverAlbumOf(editing.track, cover);
+            const { shown, place } = trackForCover(editing.track.id);
+            await coverAlbumOf(shown, place, cover);
             return api.details(editing.track.id);
           }}
           onChooseArtist={async (written, id) => {
@@ -1049,7 +1186,7 @@ export function Library({
           frame={(shown) => (
             <DialogOpening
               className="listen"
-              title="Listen on your device"
+              title={t("Listen on your device")}
               onClose={() => {
                 setListening(false);
               }}
@@ -1086,10 +1223,24 @@ export function Library({
               })
             : notice.kind === "favorite"
               ? t(notice.key, { title: notice.title })
-              : t(notice.key)}
+              : notice.kind === "message"
+                ? t(notice.key, notice.values ?? {})
+                : notice.kind === "adding"
+                  ? t(
+                      notice.offline
+                        ? "Added {{songs}}. They are downloading. They wait until medleyplay is Online."
+                        : "Added {{songs}}. They are downloading.",
+                      { songs: t("song_count", { count: notice.count }) },
+                    )
+                  : t(notice.key)}
       </p>
       <p className="visually-hidden" role="status">
-        {said}
+        {typeof said === "string"
+          ? said
+          : [
+              t(said.key, { title: said.title }),
+              ...(said.offline ? [t("It waits until medleyplay is Online.")] : []),
+            ].join(t("Sentence separator", { defaultValue: " " }))}
       </p>
       <audio ref={audio} preload="auto" />
     </div>

@@ -11,7 +11,7 @@ import { type ReactNode, useRef, useState } from "react";
 
 import { type Track, coverUrl } from "../api";
 import { Cover } from "./Cover";
-import { PictureEditor } from "./PictureEditor";
+import { type CoverAlbum, PictureEditor } from "./PictureEditor";
 import { PictureFrame } from "./PictureFrame";
 import { SuggestedCover } from "./SuggestedCover";
 
@@ -33,8 +33,10 @@ export function AlbumAbout({
   readonly artist: string;
   readonly songs: readonly Track[];
   readonly cover: string | null;
-  readonly onUse?: ((songs: readonly Track[], cover: string) => Promise<void>) | undefined;
-  readonly onUpload?: ((songs: readonly Track[], image: File) => Promise<string>) | undefined;
+  readonly onUse?:
+    ((songs: readonly Track[], cover: string, subject: CoverAlbum) => Promise<void>) | undefined;
+  readonly onUpload?:
+    ((songs: readonly Track[], image: File, subject: CoverAlbum) => Promise<string>) | undefined;
   readonly onCloseRequestedEditor?: (() => void) | undefined;
   /** Shown beside the cover, as your rating of the album. */
   readonly children?: ReactNode;
@@ -65,7 +67,7 @@ export function AlbumAbout({
           album={album}
           artist={artist}
           fallback={framed}
-          onUse={(chosen) => onUse(songs, chosen)}
+          onUse={(chosen) => onUse(songs, chosen, { album, artist })}
           onChange={() => {
             setReplacing("musicbrainz");
           }}
@@ -84,9 +86,9 @@ export function AlbumAbout({
             album: { album, artist },
             pictured: { kind: "album", album, artist },
             upload: async (image) => {
-              await onUpload(songs, image);
+              await onUpload(songs, image, { album, artist });
             },
-            use: (chosen) => onUse(songs, chosen),
+            use: (chosen) => onUse(songs, chosen, { album, artist }),
           }}
           onClose={() => {
             setReplacing(undefined);

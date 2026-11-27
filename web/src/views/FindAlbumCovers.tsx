@@ -17,7 +17,7 @@ import { albumFileOf, songsOf, tracksOfAlbum } from "../library/views";
 import { hrefOf } from "../routes";
 import { Cover } from "./Cover";
 import { KindMark } from "./KindMark";
-import { PictureEditor } from "./PictureEditor";
+import { type CoverAlbum, PictureEditor } from "./PictureEditor";
 import { SuggestedFrame } from "./SuggestedFrame";
 import { Trans } from "react-i18next";
 import { useWords } from "../locale";
@@ -35,8 +35,8 @@ const suggestionKey = (album: Suggested) =>
 
 /** The ways to set an album's cover, as its page sets it: on its songs, or on its one file. */
 export interface AlbumCoverActions {
-  readonly onUse: (songs: readonly Track[], cover: string) => Promise<void>;
-  readonly onUpload: (songs: readonly Track[], image: File) => Promise<string>;
+  readonly onUse: (songs: readonly Track[], cover: string, subject: CoverAlbum) => Promise<void>;
+  readonly onUpload: (songs: readonly Track[], image: File, subject: CoverAlbum) => Promise<string>;
 }
 
 /** Return what an album's cover is set on: its one file, else its songs. */
@@ -280,11 +280,17 @@ export function FindAlbumCovers({
             album: { album: changing.album, artist: changing.artist },
             pictured: { kind: "album", album: changing.album, artist: changing.artist },
             upload: async (image) => {
-              await actions.onUpload(changingTarget, image);
+              await actions.onUpload(changingTarget, image, {
+                album: changing.album,
+                artist: changing.artist,
+              });
               onChanged();
             },
             use: async (cover) => {
-              await actions.onUse(changingTarget, cover);
+              await actions.onUse(changingTarget, cover, {
+                album: changing.album,
+                artist: changing.artist,
+              });
               onChanged();
             },
           }}

@@ -1185,12 +1185,163 @@ describe("the kind", () => {
 describe("a song's album", () => {
   const fold = (dialog: HTMLElement) =>
     within(dialog).getByText("Album", { selector: ".detail-fold-title" }).closest("details");
+  const summary = (dialog: HTMLElement) => fold(dialog)?.querySelector("summary");
 
-  it("is folded, saying a song on no album is a single", async () => {
-    const { dialog } = await renderDialog();
+  it("leaves an unreviewed blank album unknown, even when Song is chosen", async () => {
+    const { dialog, onSave } = await renderDialog();
 
     expect(fold(dialog)).not.toHaveAttribute("open");
-    expect(fold(dialog)).toHaveTextContent("AlbumNone, a single");
+    expect(summary(dialog)).toHaveTextContent("AlbumUnknown");
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Album" }));
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Song" }));
+    expect(summary(dialog)).not.toHaveTextContent("single");
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ kind: "song" });
+  });
+
+  it("saves a deliberate single on an unknown album and keeps it after reloading", async () => {
+    const { dialog, onSave, load } = await renderDialog();
+    await userEvent.click(within(dialog).getByText("Unknown"));
+
+    const albumChoices = within(dialog).getByRole("group", { name: "Other values for Album" });
+    await userEvent.click(within(albumChoices).getByRole("button", { name: "No album (single)" }));
+
+    expect(summary(dialog)).toHaveTextContent("No album (single)");
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeEnabled();
+    load.mockResolvedValue(detailsOf(7, { album: "" }));
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "" });
+    await waitFor(() => {
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    });
+    expect(summary(dialog)).toHaveTextContent("No album (single)");
+    expect(within(dialog).getByRole("button", { name: "Remove blank override" })).toBeVisible();
+  });
+
+  it("reopens a saved single and can remove its blank album override", async () => {
+    const { dialog, onSave, load } = await renderDialog(detailsOf(7, { album: "" }));
+    expect(summary(dialog)).toHaveTextContent("No album (single)");
+    await userEvent.click(within(dialog).getByText("No album (single)", { selector: "span" }));
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove blank override" }));
+    expect(summary(dialog)).toHaveTextContent("AlbumUnknown");
+    load.mockResolvedValue(detailsOf(7));
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: null });
+  });
+
+  it("can undo a draft single without saving a redundant blank", async () => {
+    const { dialog } = await renderDialog();
+    await userEvent.click(within(dialog).getByText("Unknown"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove blank override" }));
+
+    expect(summary(dialog)).toHaveTextContent("AlbumUnknown");
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("saves a later album edit rather than the earlier single choice", async () => {
+    const { dialog, onSave } = await renderDialog();
+    await userEvent.click(within(dialog).getByText("Unknown"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+
+    await userEvent.type(box(dialog, "Album"), "Sessions");
+    await save(dialog);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "Sessions" });
+  });
+
+  it("does not keep single intent after typing and then clearing an album", async () => {
+    const { dialog } = await renderDialog();
+    await userEvent.click(within(dialog).getByText("Unknown"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+
+    await userEvent.type(box(dialog, "Album"), "Sessions");
+    await userEvent.clear(box(dialog, "Album"));
+
+    expect(summary(dialog)).toHaveTextContent("AlbumUnknown");
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it.each([
+    ["the file", detailsOf(7, {}, { files: { title: "Album song", album: "Sessions" } })],
+    ["the household", detailsOf(7, { album: "Sessions" })],
+  ] as const)(
+    "restores the album from %s when changing a draft single to an album file",
+    async (_, details) => {
+      const { dialog, onSave } = await renderDialog(details);
+      await userEvent.click(
+        within(dialog).getByText("Sessions", { selector: ".detail-fold-value" }),
+      );
+      await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Album" }));
+
+      expect(box(dialog, "Album")).toHaveValue("Sessions");
+      await save(dialog);
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({ kind: "album" });
+    },
+  );
+
+  it("restores an unsaved album edit when changing a draft single to an album file", async () => {
+    const { dialog, onSave } = await renderDialog();
+    await userEvent.click(within(dialog).getByText("Unknown"));
+    await userEvent.type(box(dialog, "Album"), "Draft album");
+    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Album" }));
+
+    expect(box(dialog, "Album")).toHaveValue("Draft album");
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "Draft album", kind: "album" });
+  });
+
+  it("does not offer a single while the server has yet to guess the kind again", async () => {
+    const { dialog, onSave, load } = await renderDialog({
+      ...detailsOf(7, { kind: "song" }),
+      kind: { value: "song", reason: "named" },
+    });
+    await userEvent.click(within(dialog).getByText("Unknown"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "No album (single)" }));
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Guess again" }));
+
+    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+    expect(summary(dialog)).toHaveTextContent("AlbumUnknown");
+    load.mockResolvedValue({ ...detailsOf(7), kind: { value: "album", reason: "length" } });
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ kind: null });
+    await waitFor(() => {
+      expect(within(dialog).getByRole("radio", { name: "Album" })).toBeChecked();
+    });
+    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
+  });
+
+  it("labels a whitespace-only album edit as the single that Save records", async () => {
+    const { dialog, onSave } = await renderDialog(
+      detailsOf(7, {}, { files: { title: "Album song", album: "Sessions" } }),
+    );
+    await userEvent.click(within(dialog).getByText("Sessions", { selector: ".detail-fold-value" }));
+
+    await userEvent.clear(box(dialog, "Album"));
+    await userEvent.type(box(dialog, "Album"), "   ");
+
+    expect(summary(dialog)).toHaveTextContent("No album (single)");
+    await save(dialog);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ album: "" });
+  });
+
+  it("does not offer the single choice for a song inside an album file", async () => {
+    const { dialog } = await renderDialog({
+      ...detailsOf(7),
+      kind: { value: "song", reason: "segment" },
+    });
+    await userEvent.click(within(dialog).getByText("Unknown"));
+
+    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
   });
 
   it("is folded, saying the album a song is on", async () => {
@@ -1202,7 +1353,7 @@ describe("a song's album", () => {
   it("opens to be filled in when asked", async () => {
     const { dialog } = await renderDialog();
 
-    await userEvent.click(within(dialog).getByText("None, a single"));
+    await userEvent.click(within(dialog).getByText("Unknown"));
 
     expect(fold(dialog)).toHaveAttribute("open");
     expect(box(dialog, "Album")).toBeVisible();
@@ -1218,6 +1369,7 @@ describe("a song's album", () => {
     expect(within(dialog).getByRole("group", { name: "Album" })).toContainElement(
       box(dialog, "Album"),
     );
+    expect(within(dialog).queryByRole("button", { name: "No album (single)" })).toBeNull();
   });
 });
 

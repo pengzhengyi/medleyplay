@@ -164,15 +164,19 @@ export function foundOf(details: Details): Origins {
  * Return `own` without each value the household changed to what would show anyway,
  * read as saving reads it: so " Melt" over the file's "Melt", "03" over its 3, or an
  * emptied box where nothing is found. Saving those would only pin the found value. A
- * value the household already had stays.
+ * value the household already had stays. A confirmed single keeps its empty album.
  */
-export function settle(details: Details, own: Own): Own {
+export function settle(details: Details, own: Own, confirmedSingle = false): Own {
   const had = valuesOf(ownOf(details));
   let settled = own;
   for (const { name, kind } of DETAIL_FIELDS) {
     const typed = settled[name];
     const value = typed === undefined ? undefined : valuesOf({ [name]: typed })[name];
-    if (typed === undefined || value === had[name]) {
+    if (
+      typed === undefined ||
+      value === had[name] ||
+      (confirmedSingle && name === "album" && typed === "")
+    ) {
       continue;
     }
     const others = without(settled, name);
@@ -185,13 +189,13 @@ export function settle(details: Details, own: Own): Own {
 }
 
 /** Return what each field would show with the household's values `own`. */
-export function previewOf(details: Details, own: Own): Shown {
-  return shownWith(details, settle(details, own));
+export function previewOf(details: Details, own: Own, confirmedSingle = false): Shown {
+  return shownWith(details, settle(details, own, confirmedSingle));
 }
 
 /** Return the text of `name`'s box: the household's own, or what would show. */
-export function boxText(details: Details, own: Own, name: Detail): string {
-  return own[name] ?? String(previewOf(details, own)[name]?.value ?? "");
+export function boxText(details: Details, own: Own, name: Detail, confirmedSingle = false): string {
+  return own[name] ?? String(previewOf(details, own, confirmedSingle)[name]?.value ?? "");
 }
 
 /**
@@ -201,9 +205,10 @@ export function boxText(details: Details, own: Own, name: Detail): string {
 export function changesOf(
   details: Details,
   own: Own,
+  confirmedSingle = false,
 ): Partial<Record<Detail, string | number | null>> {
   const before = valuesOf(ownOf(details));
-  const after = valuesOf(settle(details, own));
+  const after = valuesOf(settle(details, own, confirmedSingle));
   const changes: Partial<Record<Detail, string | number | null>> = {};
   for (const { name } of DETAIL_FIELDS) {
     if (before[name] !== after[name]) {

@@ -3,7 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { type Origins, type Shown, shownOf } from "./details";
+import { detailsOf } from "../testing/server";
+import { type Origins, type Shown, changesOf, shownOf } from "./details";
 
 /** The cases the server's own rule is checked against too, in `tests/support`. */
 interface Shared {
@@ -21,4 +22,20 @@ describe("what a Track shows", () => {
       expect(shownOf(origins)).toEqual(shown);
     },
   );
+});
+
+describe("saving a confirmed single", () => {
+  it("keeps only the explicitly confirmed blank album", () => {
+    const details = detailsOf(7, {}, { files: { title: "Single" } });
+    const own = { album: "", artist: "", genre: "" };
+
+    expect(changesOf(details, own)).toEqual({});
+    expect(changesOf(details, own, true)).toEqual({ album: "" });
+  });
+
+  it("does not replace a later album edit with the single choice", () => {
+    const details = detailsOf(7, {}, { files: { title: "Single" } });
+
+    expect(changesOf(details, { album: "Sessions" }, true)).toEqual({ album: "Sessions" });
+  });
 });

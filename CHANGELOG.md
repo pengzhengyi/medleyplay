@@ -946,6 +946,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Mark a song as **No album (single)** in Edit details to stop album suggestions
+  in Clean up. Unknown albums are no longer labeled as singles.
+
 - The search clear button keeps its keyboard-focus ring inside the search
   field, with only a hover highlight for pointer use.
 - Lyrics quotation marks decorate the small song and album indicators, not

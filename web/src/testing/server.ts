@@ -625,7 +625,14 @@ export function downloadUnderWayOf(
 ): DownloadUnderWay {
   return {
     track_id: trackId,
-    job: { id: trackId + 500, state: "queued", progress: null, waits_for_online: false, ...job },
+    job: {
+      id: trackId + 500,
+      requested_by: null,
+      state: "queued",
+      progress: null,
+      waits_for_online: false,
+      ...job,
+    },
   };
 }
 

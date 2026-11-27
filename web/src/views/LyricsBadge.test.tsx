@@ -52,7 +52,13 @@ describe("lyrics availability marks", () => {
   it("marks the downloading song next to its title, not on its artwork or progress", () => {
     const track = trackOf(1, "First light", { has_lyrics: true });
     const { container } = render(
-      <Downloading tracks={[track]} downloads={[downloadUnderWayOf(track.id)]} />,
+      <Downloading
+        tracks={[track]}
+        downloads={[downloadUnderWayOf(track.id)]}
+        admin={false}
+        accountId={1}
+        cancelDownload={() => Promise.resolve()}
+      />,
     );
 
     expect(container.querySelector(".downloading-title .kind-mark .lyrics-badge")).not.toBeNull();

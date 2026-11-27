@@ -14,6 +14,7 @@ function downloadOf(
     track_id: 7,
     job: {
       id: 70,
+      requested_by: null,
       state,
       progress: state === "running" ? { fraction, message: "Downloading" } : null,
       waits_for_online: waits,

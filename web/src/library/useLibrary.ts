@@ -182,6 +182,7 @@ export interface Library {
   ) => Promise<readonly AddedPart[]>;
   /** Where a site Track's Download stands. */
   readonly download: (id: number) => Promise<TrackDownload>;
+  readonly cancelDownload: (jobId: number) => Promise<void>;
   readonly dismissFailedDownloads: (ids: readonly number[]) => Promise<void>;
   /**
    * Send `file` as the Track's Download, reporting how many bytes went as they do; the
@@ -392,6 +393,21 @@ export function useLibrary(onSignedOut: () => void): Library {
       },
     );
   }, []);
+  const applyDownloadJob = (job: JobEvent) => {
+    if (job.kind !== DOWNLOAD_KIND) return;
+    if (downloadEnded(job)) {
+      endedJobs.current.add(job.id);
+    }
+    const { next, reread } = followDownload(underWay.current, job);
+    if (next !== underWay.current) {
+      showDownloading(next);
+    }
+    if (reread && !askedJobs.current.has(job.id)) {
+      askedJobs.current.add(job.id);
+      loadDownloading();
+    }
+    downloadRead.current?.set(job.id, job);
+  };
   /** Follow a Download's or a lookup's Job as the event stream tells of it. */
   const onJob = useEffectEvent((job: JobEvent) => {
     if (job.kind === "lookup_video") loadVideoLookups();
@@ -409,18 +425,7 @@ export function useLibrary(onSignedOut: () => void): Library {
         }
       }
     }
-    if (downloadEnded(job)) {
-      endedJobs.current.add(job.id);
-    }
-    const { next, reread } = followDownload(underWay.current, job);
-    if (next !== underWay.current) {
-      showDownloading(next);
-    }
-    if (reread && !askedJobs.current.has(job.id)) {
-      askedJobs.current.add(job.id);
-      loadDownloading();
-    }
-    if (job.kind === DOWNLOAD_KIND) downloadRead.current?.set(job.id, job);
+    applyDownloadJob(job);
     const id = trackOfJob.current.get(job.id);
     const lookup = id === undefined ? undefined : lookups.get(id);
     if (id === undefined || lookup === undefined || jobOfTrack.current.get(id) !== job.id) {
@@ -846,6 +851,10 @@ export function useLibrary(onSignedOut: () => void): Library {
       return added;
     },
     download: (id) => signedOutOn401(api.download(id)),
+    cancelDownload: async (jobId) => {
+      const job = await signedOutOn401(api.cancelJob(jobId));
+      applyDownloadJob({ ...job, kind: DOWNLOAD_KIND });
+    },
     dismissFailedDownloads: (ids) => changeTracks(api.dismissFailedDownloads(ids)),
     addFile: async (id, file, onProgress, signal) => {
       await signedOutOn401(uploadFile(id, file, onProgress, signal));

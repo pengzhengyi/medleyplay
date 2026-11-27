@@ -743,19 +743,19 @@ export function Library({
         <button
           type="button"
           className="icon listen-button"
-          aria-label="Listen on your device"
-          title="Listen on your device"
+          aria-label={t("Listen on your device")}
+          title={t("Listen on your device")}
           onClick={() => {
             setListening(true);
           }}
         >
           <DeviceMobileSpeakerIcon weight="regular" aria-hidden />
         </button>
-        <Hint name={"Keyboard shortcuts"} keys={keys.help}>
+        <Hint name={t("Keyboard shortcuts")} keys={keys.help}>
           <button
             type="button"
             className="icon keys-button"
-            aria-label="Keyboard shortcuts"
+            aria-label={t("Keyboard shortcuts")}
             onClick={() => {
               setListingShortcuts(true);
             }}

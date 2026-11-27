@@ -25,10 +25,17 @@ const PLAYBACK_MESSAGES: ReadonlySet<string> = new Set([
   "Click once on the computer to let it play.",
   "The computer couldn't play this Track.",
   "The computer isn't responding.",
+  "The computer hasn't caught up yet; try again in a moment.",
   "Preparing this Track was failed.",
   "Preparing this Track was cancelled.",
 ]);
 
+export const COMPUTER_READY =
+  "Open medleyplay on the computer with the same account and queue or play a song.";
+
 export function playbackMessage(message: string, t: Words): string {
+  if (message === "Nothing is playing on the computer; open medleyplay there.") {
+    return t(COMPUTER_READY);
+  }
   return PLAYBACK_MESSAGES.has(message) ? t(message) : downloadFailureOf(message, t);
 }

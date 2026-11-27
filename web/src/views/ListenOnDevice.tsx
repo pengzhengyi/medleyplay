@@ -17,11 +17,20 @@ import {
   WifiHighIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Trans } from "react-i18next";
 
 import { copyText } from "../clipboard";
 import { type Here, listenAddressesOf } from "../listen";
+import { useWords } from "../locale";
 import { qrCodeOf } from "../qr";
 import { Modal } from "./Modal";
+import { COMPUTER_READY } from "./unplayable";
+
+const SIGN_IN = "Sign in as <account/>.";
+const HOME_SCREEN =
+  "Add it to the Home Screen: on an iPhone, <share/> then <item>Add to Home Screen</item>; on Android, <menu/> then <item>Add to Home screen</item>.";
+const PLAY_ON =
+  "The phone plays the music itself, or on this computer: choose <control>Play on</control> in its player. Either way, keep this computer on and on the network.";
 
 export function ListenOnDevice({
   username,
@@ -37,6 +46,7 @@ export function ListenOnDevice({
   readonly here?: Here;
   readonly onClose: () => void;
 }) {
+  const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
   const [hosts, setHosts] = useState<readonly string[] | undefined>(undefined);
   const [error, setError] = useState("");
@@ -72,17 +82,18 @@ export function ListenOnDevice({
   return (
     <Modal ref={dialog} className="listen" labelledBy="listen-title" onClose={onClose}>
       <div className="card">
-        <h2 id="listen-title">Listen on your device</h2>
+        <h2 id="listen-title">{t("Listen on your device")}</h2>
         {error !== "" && <p role="alert">{error}</p>}
         {hosts === undefined && error === "" && (
           <p className="empty" role="status">
-            Finding this computer's address…
+            {t("Finding this computer's address…")}
           </p>
         )}
         {hosts !== undefined && address === undefined && (
           <p className="empty">
-            Other devices can't reach this computer now. Connect it to the same Wi-Fi as your phone,
-            then open this again.
+            {t(
+              "Other devices can't reach this computer now. Connect the computer and phone to the same local network. If medleyplay started before the connection was available, restart it.",
+            )}
           </p>
         )}
         {address !== undefined && code !== undefined && (
@@ -92,30 +103,30 @@ export function ListenOnDevice({
                 className="listen-code-image"
                 viewBox={`0 0 ${String(code.size)} ${String(code.size)}`}
                 role="img"
-                aria-label={`QR code of ${address}`}
+                aria-label={t("QR code of {{address}}", { address })}
                 shapeRendering="crispEdges"
               >
                 <rect width={code.size} height={code.size} className="listen-code-light" />
                 <path d={code.path} className="listen-code-dark" />
               </svg>
-              <figcaption>Scan with the camera</figcaption>
+              <figcaption>{t("Scan with the camera")}</figcaption>
             </figure>
             <ol className="listen-steps">
               <li className="listen-step">
                 <WifiHighIcon className="listen-step-icon" aria-hidden />
-                <span>Join the same Wi-Fi as this computer.</span>
+                <span>{t("Join the same Wi-Fi as this computer.")}</span>
               </li>
               <li className="listen-step">
                 <QrCodeIcon className="listen-step-icon" aria-hidden />
                 <span>
-                  Scan the code, or open
+                  {t("Scan the code, or open")}
                   <span className="listen-address">
                     <code>{address}</code>
                     <button
                       type="button"
                       className="icon"
-                      aria-label={`Copy ${address}`}
-                      title="Copy"
+                      aria-label={t("Copy {{address}}", { address })}
+                      title={t("Copy")}
                       onClick={() => {
                         void copyText(address).then((worked) => {
                           setCopied(worked ? "yes" : "no");
@@ -126,29 +137,41 @@ export function ListenOnDevice({
                     </button>
                   </span>
                   <span className="listen-copied" role="status">
-                    {copied === "yes" ? "Copied" : copied === "no" ? "Couldn't copy" : ""}
+                    {copied === "yes" ? t("Copied") : copied === "no" ? t("Couldn't copy") : ""}
                   </span>
                 </span>
               </li>
               <li className="listen-step">
                 <SignInIcon className="listen-step-icon" aria-hidden />
                 <span>
-                  Sign in as <strong>{username}</strong>.
+                  <Trans
+                    t={t}
+                    i18nKey={SIGN_IN}
+                    defaults={SIGN_IN}
+                    components={{ account: <strong>{username}</strong> }}
+                  />
                 </span>
               </li>
               <li className="listen-step">
                 <DeviceMobileIcon className="listen-step-icon" aria-hidden />
                 <span>
-                  Add it to the Home Screen: on an iPhone, <ExportIcon aria-label="Share" /> then{" "}
-                  <em>Add to Home Screen</em>; on Android,{" "}
-                  <DotsThreeVerticalIcon aria-label="the menu" /> then <em>Add to Home screen</em>.
+                  <Trans
+                    t={t}
+                    i18nKey={HOME_SCREEN}
+                    defaults={HOME_SCREEN}
+                    components={{
+                      share: <ExportIcon aria-label={t("Share")} />,
+                      menu: <DotsThreeVerticalIcon aria-label={t("the menu")} />,
+                      item: <em />,
+                    }}
+                  />
                 </span>
               </li>
             </ol>
           </div>
         )}
         {addresses.length > 1 && (
-          <ul className="listen-others" aria-label="Addresses">
+          <ul className="listen-others" aria-label={t("Addresses")}>
             {addresses.map((each, index) => (
               <li key={each} className="listen-other">
                 <button
@@ -167,9 +190,9 @@ export function ListenOnDevice({
           </ul>
         )}
         <p className="hint">
-          The phone plays the music itself, or on this computer: choose <strong>Play on</strong> in
-          its player. Either way, keep this computer on and on the network.
+          <Trans t={t} i18nKey={PLAY_ON} defaults={PLAY_ON} components={{ control: <strong /> }} />
         </p>
+        {address !== undefined && <p className="hint">{t(COMPUTER_READY)}</p>}
       </div>
     </Modal>
   );

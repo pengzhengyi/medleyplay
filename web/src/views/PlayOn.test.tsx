@@ -116,6 +116,33 @@ describe("Play on", () => {
     expect(sent).toEqual([{ kind: "toggle" }]);
   });
 
+  it.each([
+    ["The computer hasn't caught up yet; try again in a moment.", "电脑仍在处理请求，请稍后重试。"],
+    ["Search", "Search"],
+  ])("keeps or translates the remote Pause refusal: %s", async (detail, shown) => {
+    serve(phone({ "POST /api/remote/commands": { status: 429, body: { detail } } }));
+    render(<App />);
+    render(<LanguageSelect />);
+    const user = userEvent.setup();
+    const choose = await screen.findByRole("button", { name: "Play on: this device" });
+    computerPlaysLemon();
+    await user.click(choose);
+    await user.click(screen.getByRole("menuitemradio", { name: /The computer/u }));
+    await user.click(within(player()).getByRole("button", { name: "Pause" }));
+    expect(await within(player()).findByRole("alert")).toHaveTextContent(detail);
+    const language = screen.getByRole("combobox", { name: "Language" });
+
+    try {
+      fireEvent.change(language, { target: { value: "zh-Hans" } });
+
+      expect(
+        within(screen.getByRole("region", { name: "播放器" })).getByRole("alert").textContent,
+      ).toBe(shown);
+    } finally {
+      fireEvent.change(language, { target: { value: "auto" } });
+    }
+  });
+
   it("says why the music couldn't move back here, and leaves it on the computer", async () => {
     serve(
       phone({

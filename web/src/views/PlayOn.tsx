@@ -5,6 +5,8 @@
 
 import { CheckIcon, DesktopIcon, DeviceMobileIcon, SpeakerHifiIcon } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
+import { useWords } from "../locale";
+import { COMPUTER_READY, playbackMessage } from "./unplayable";
 
 /** Where the music plays: on this device, or on the computer. */
 export type PlaysOn = "here" | "computer";
@@ -26,7 +28,8 @@ export function PlayOn({
   readonly failed: string;
   readonly onChoose: (where: PlaysOn) => void;
 }) {
-  const label = on === "computer" ? "Play on: the computer" : "Play on: this device";
+  const t = useWords();
+  const label = t(on === "computer" ? "Play on: the computer" : "Play on: this device");
   return (
     <>
       <Menu.Root modal={false}>
@@ -38,12 +41,12 @@ export function PlayOn({
             title={label}
           >
             <SpeakerHifiIcon weight={on === "computer" ? "fill" : "regular"} aria-hidden />
-            {on === "computer" && <span className="play-on-where">Computer</span>}
+            {on === "computer" && <span className="play-on-where">{t("Computer")}</span>}
           </button>
         </Menu.Trigger>
         <Menu.Portal>
           <Menu.Content className="track-menu" align="end" sideOffset={4} collisionPadding={8}>
-            <Menu.Label className="device-asking">Play on</Menu.Label>
+            <Menu.Label className="device-asking">{t("Play on")}</Menu.Label>
             <Menu.RadioGroup
               className="play-on-group"
               value={on}
@@ -53,7 +56,7 @@ export function PlayOn({
             >
               <Menu.RadioItem className="track-menu-item play-on-item" value="here">
                 <DeviceMobileIcon aria-hidden />
-                This device
+                {t("This device")}
                 <Menu.ItemIndicator className="play-on-mark">
                   <CheckIcon weight="bold" aria-hidden />
                 </Menu.ItemIndicator>
@@ -65,8 +68,8 @@ export function PlayOn({
               >
                 <DesktopIcon aria-hidden />
                 <span className="play-on-choice">
-                  The computer
-                  {!available && <span className="hint">Open medleyplay on the computer</span>}
+                  {t("The computer")}
+                  {!available && <span className="hint">{t(COMPUTER_READY)}</span>}
                 </span>
                 <Menu.ItemIndicator className="play-on-mark">
                   <CheckIcon weight="bold" aria-hidden />
@@ -78,7 +81,7 @@ export function PlayOn({
       </Menu.Root>
       {failed !== "" && (
         <span role="alert" className="note failed">
-          {failed}
+          {playbackMessage(failed, t)}
         </span>
       )}
     </>

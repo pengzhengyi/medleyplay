@@ -513,3 +513,251 @@ test("dragging a view to another place in the rail keeps it there after a reload
     localStorage.removeItem("medleyplay.rail-order");
   });
 });
+
+/**
+ * Intercept the catalog with 120 albums and 120 artists (118 unique plus two namesakes
+ * named Zoe at the end of the alphabet, carrying `on <Album>` metadata, and favorites on
+ * the first artist and album) so full gallery views extend far past one screen.
+ */
+async function serveLargeGallery(page: Page) {
+  const tracks: Track[] = Array.from({ length: 120 }, (_, index) => {
+    const number = index + 1;
+    const padded = String(number).padStart(3, "0");
+    const namesake = number === 119 ? "a" : number === 120 ? "b" : null;
+    const artist = namesake === null ? `Artist ${padded}` : "Zoe";
+    const artistId = namesake === null ? `artist-${padded}` : `artist-zoe-${namesake}`;
+    const album =
+      namesake === "a" ? "Zoe First" : namesake === "b" ? "Zoe Second" : `Album ${padded}`;
+    return {
+      id: number,
+      title: `Song ${padded}`,
+      artist,
+      artists: [artist],
+      artist_ids: [artistId],
+      album,
+      album_artist: "",
+      year: 2024,
+      genre: "Pop",
+      duration_ms: 180_000,
+      added_at: "2026-10-01T12:00:00Z",
+      favorite: false,
+      rating: null,
+      play_count: 0,
+      last_played_at: null,
+      availability: "ok",
+      downloaded: false,
+      download_failed: false,
+      download_failure_job_id: null,
+      track_number: 1,
+      disc_number: 1,
+      site: null,
+      video: null,
+      segment_of: null,
+      split: false,
+      kind: "song",
+      kind_reason: "named",
+      cover: null,
+      community: null,
+      album_rating: null,
+    };
+  });
+  await page.route("**/api/tracks", (route) => route.fulfill({ json: tracks }));
+  await page.route("**/api/artist-names", (route) =>
+    route.fulfill({
+      json: {
+        names: [
+          {
+            name: "Zoe",
+            tracks: 2,
+            look_up: "no",
+            artist_id: null,
+            artist_ids: ["artist-zoe-a", "artist-zoe-b"],
+            finding: false,
+          },
+        ],
+        artists: [],
+      },
+    }),
+  );
+  await page.route("**/api/favorites", (route) =>
+    route.fulfill({
+      json: {
+        artists: [{ id: "artist-001" }],
+        albums: [{ artist: "Artist 001", name: "Album 001" }],
+      },
+    }),
+  );
+}
+
+/** Check a descendant: the link's own box stays visible when its contents are skipped. */
+async function cardContentRendered(link: ReturnType<Page["locator"]>): Promise<boolean> {
+  return link.evaluate((anchor) => {
+    const name = anchor.querySelector(".group-name");
+    return name instanceof HTMLElement && name.checkVisibility({ contentVisibilityAuto: true });
+  });
+}
+
+test("large album galleries skip offscreen cards while keeping all links reachable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await serveLargeGallery(page);
+
+  await page.goto("/#/albums");
+  const albumList = page.getByRole("list", { name: "Albums" });
+  const albumLinks = albumList.getByRole("link");
+  await expect(albumLinks).toHaveCount(120);
+
+  const firstAlbum = albumLinks.first();
+  const lastAlbum = albumLinks.last();
+  await expect.poll(() => cardContentRendered(firstAlbum)).toBe(true);
+  await expect.poll(() => cardContentRendered(lastAlbum)).toBe(false);
+
+  const reservedAlbumHeight = await lastAlbum.evaluate(
+    (anchor) => anchor.getBoundingClientRect().height,
+  );
+  await lastAlbum.scrollIntoViewIfNeeded();
+  await expect.poll(() => cardContentRendered(lastAlbum)).toBe(true);
+  const renderedAlbumHeight = await lastAlbum.evaluate(
+    (anchor) => anchor.getBoundingClientRect().height,
+  );
+  expect(Math.abs(reservedAlbumHeight - renderedAlbumHeight)).toBeLessThanOrEqual(4);
+
+  await lastAlbum.click();
+  await expect(page.getByRole("heading", { name: "Zoe Second", exact: true })).toBeVisible();
+
+  // The link's shadow and focus outline extend outside its list item.
+  await page.goto("/#/albums");
+  await expect(albumLinks).toHaveCount(120);
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((chosen) => {
+      document.documentElement.dataset.theme = chosen;
+    }, theme);
+    await firstAlbum.hover();
+    const visual = await firstAlbum.evaluate((anchor) => {
+      const item = anchor.parentElement;
+      const itemStyle = item === null ? null : getComputedStyle(item);
+      const linkStyle = getComputedStyle(anchor);
+      return {
+        itemContentVisibility: itemStyle?.contentVisibility ?? "",
+        itemContain: itemStyle?.contain ?? "",
+        hoverShadow: linkStyle.boxShadow,
+      };
+    });
+    expect(visual.itemContentVisibility).toBe("visible");
+    expect(visual.itemContain).not.toContain("paint");
+    expect(visual.hoverShadow).not.toBe("none");
+
+    await firstAlbum.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(firstAlbum).toBeFocused();
+    await expect(firstAlbum).toHaveCSS("outline-style", "solid");
+  }
+
+  await expect.poll(() => cardContentRendered(lastAlbum)).toBe(false);
+  await lastAlbum.focus();
+
+  await expect(lastAlbum).toBeFocused();
+  await expect.poll(() => cardContentRendered(lastAlbum)).toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Zoe Second", exact: true })).toBeVisible();
+});
+
+test("Artists keep their existing rendering and namesake links", async ({ page }) => {
+  await serveLargeGallery(page);
+  await page.goto("/#/artists");
+  const artistList = page.getByRole("list", { name: "Artists" });
+  const artistLinks = artistList.getByRole("link");
+  await expect(artistLinks).toHaveCount(120);
+
+  const lastArtist = artistLinks.last();
+  await expect.poll(() => cardContentRendered(artistLinks.first())).toBe(true);
+  await expect.poll(() => cardContentRendered(lastArtist)).toBe(true);
+  await lastArtist.focus();
+  await expect(lastArtist).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Zoe", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Song 120", exact: true })).toBeVisible();
+});
+
+test("search result galleries do not apply offscreen gallery skipping", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await serveLargeGallery(page);
+
+  await page.goto("/#/search?q=Album");
+  const foundAlbums = page.getByRole("region", { name: "Albums found" }).getByRole("link");
+  await expect(foundAlbums).toHaveCount(118);
+  await expect.poll(() => cardContentRendered(foundAlbums.last())).toBe(true);
+});
+
+test("large albums keep their layout when resized and text is enlarged", async ({ page }) => {
+  await serveLargeGallery(page);
+  await page.goto("/#/albums");
+  const list = page.locator("ul.deferred-gallery");
+  const links = list.getByRole("link");
+  await expect(links).toHaveCount(120);
+
+  for (const width of [1280, 390, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const size of ["100%", "125%"]) {
+      await page.evaluate((fontSize) => {
+        document.documentElement.style.fontSize = fontSize;
+      }, size);
+      await expect.poll(() => cardContentRendered(links.last())).toBe(false);
+      const layout = await list.evaluate((gallery) => {
+        const measure = () => {
+          const links = gallery.querySelectorAll("li > a");
+          const first = links[0]?.getBoundingClientRect();
+          const last = links[links.length - 1]?.getBoundingClientRect();
+          return {
+            height: gallery.getBoundingClientRect().height,
+            first: first?.height ?? 0,
+            last: last?.height ?? 0,
+            fits: document.documentElement.scrollWidth <= window.innerWidth,
+          };
+        };
+        const skipped = measure();
+        gallery.classList.remove("deferred-gallery");
+        const rendered = measure();
+        gallery.classList.add("deferred-gallery");
+        return { skipped, rendered };
+      });
+
+      expect(layout.skipped.fits).toBe(true);
+      expect(layout.skipped.first).toBeCloseTo(layout.rendered.first, 1);
+      expect(Math.abs(layout.skipped.last - layout.rendered.last)).toBeLessThan(0.1);
+      expect(Math.abs(layout.skipped.height - layout.rendered.height)).toBeLessThan(4);
+    }
+  }
+});
+
+test.describe("large galleries on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("skip offscreen cards and match responsive card height", async ({ page }) => {
+    await serveLargeGallery(page);
+    await page.goto("/#/albums");
+
+    const albumLinks = page.getByRole("list", { name: "Albums" }).getByRole("link");
+    await expect(albumLinks).toHaveCount(120);
+
+    const lastAlbum = albumLinks.last();
+    await expect.poll(() => cardContentRendered(albumLinks.first())).toBe(true);
+    await expect.poll(() => cardContentRendered(lastAlbum)).toBe(false);
+
+    const reservedHeight = await lastAlbum.evaluate(
+      (anchor) => anchor.getBoundingClientRect().height,
+    );
+    await lastAlbum.scrollIntoViewIfNeeded();
+    await expect.poll(() => cardContentRendered(lastAlbum)).toBe(true);
+    const renderedHeight = await lastAlbum.evaluate(
+      (anchor) => anchor.getBoundingClientRect().height,
+    );
+    expect(Math.abs(reservedHeight - renderedHeight)).toBeLessThanOrEqual(4);
+
+    await lastAlbum.click();
+    await expect(page.getByRole("heading", { name: "Zoe Second", exact: true })).toBeVisible();
+  });
+});

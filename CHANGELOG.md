@@ -746,6 +746,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Large album galleries open faster while keeping every album and the same
+  keyboard navigation.
 - In **Clean up → Missing artist or album**, **Ask AI** and **Ask again**
   now sit alongside **Use**, **Edit**, and **Skip**.
 - Open the album page after adding grouped Bilibili songs. When joining parts

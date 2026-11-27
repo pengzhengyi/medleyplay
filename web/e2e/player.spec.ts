@@ -22,6 +22,72 @@ async function play(page: Page, title: string) {
   await expect(player(page).getByText(title, { exact: true })).toBeVisible();
 }
 
+for (const [effect, animation, width] of [
+  ["flow", "np-palette-glow", 1280],
+  ["drift", "np-soft-pan", 390],
+] as const) {
+  test(`saved ${effect} plays lightweight cover motion and respects reduced motion`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const response = await request.get("/api/tracks");
+    expect(response.ok()).toBe(true);
+    const tracks = (await response.json()) as Track[];
+    await page.route("**/api/tracks", (route) =>
+      route.fulfill({
+        json: tracks.map((track) =>
+          track.title === "Alpha" ? { ...track, cover: "motion-fixture" } : track,
+        ),
+      }),
+    );
+    await page.route("**/api/covers/motion-fixture*", (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="160" height="120" fill="#ec1c62"/><rect x="70" width="90" height="120" fill="#294ccc"/></svg>',
+      }),
+    );
+    await page.addInitScript((choice) => {
+      localStorage.setItem("medleyplay.dynamics", choice);
+    }, effect);
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Alpha", exact: true }).click();
+    await player(page).getByRole("button", { name: "Open Now Playing" }).click();
+    const dialog = page.getByRole("dialog", { name: "Now Playing" });
+    const layer = dialog.locator(".np-cover-motion-layer");
+    await expect(layer).toHaveCSS("animation-name", animation);
+    const backdrop = () =>
+      layer.evaluate((element, choice) => {
+        const style = getComputedStyle(element, choice === "drift" ? "::before" : null);
+        return { image: style.backgroundImage, filter: style.filter };
+      }, effect);
+    const active = await backdrop();
+    expect(active.image).not.toBe("none");
+    if (effect === "drift") expect(active.filter).toBe("blur(40px)");
+    await expect(dialog.locator("canvas")).toHaveCount(0);
+    expect(
+      await layer.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return (
+          bounds.left <= 0 &&
+          bounds.top <= 0 &&
+          bounds.right >= window.innerWidth &&
+          bounds.bottom >= window.innerHeight
+        );
+      }),
+    ).toBe(true);
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(layer).toHaveCSS("animation-name", "none");
+    expect(await backdrop()).toEqual(active);
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(layer).toHaveCount(0);
+  });
+}
+
 test("choosing a Track plays it and queues the Tracks after it", async ({ page }) => {
   await play(page, "Alpha");
 

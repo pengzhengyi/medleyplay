@@ -1,6 +1,45 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [390, 1280]) {
+  test(`the Language dropdown is compact with an inset keyboard focus ring at ${String(width)}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#/settings");
+    const appearance = page.getByRole("region", { name: "Appearance" });
+    const language = appearance.getByRole("combobox", { name: "Language" });
+
+    await appearance.getByRole("button", { name: "Appearance", exact: true }).focus();
+    await page.keyboard.press("Tab");
+
+    await expect(language).toBeFocused();
+    const layout = await language.evaluate((select: HTMLSelectElement) => {
+      const label = [...select.labels].at(0)?.firstChild;
+      if (label == null) throw new Error("The control has no visible label.");
+      const text = document.createRange();
+      text.selectNodeContents(label);
+      const box = select.getBoundingClientRect();
+      const focus = getComputedStyle(select);
+      return {
+        gap: box.left - text.getBoundingClientRect().right,
+        width: box.width,
+        height: box.height,
+        ringStyle: focus.outlineStyle,
+        ringWidth: Number.parseFloat(focus.outlineWidth),
+        ringOffset: Number.parseFloat(focus.outlineOffset),
+        shadow: focus.boxShadow,
+      };
+    });
+    expect(layout.gap).toBeGreaterThanOrEqual(8);
+    expect(layout.width).toBeLessThan(210);
+    expect(layout.height).toBeGreaterThanOrEqual(32);
+    expect(layout.height).toBeLessThanOrEqual(40);
+    expect(layout.ringStyle).toBe("solid");
+    expect(layout.ringWidth).toBeGreaterThanOrEqual(2);
+    expect(layout.ringOffset).toBeLessThan(0);
+    expect(layout.shadow).toBe("none");
+  });
+
   test(`the language switch translates help and controls without translating music at ${String(width)}px`, async ({
     page,
   }) => {

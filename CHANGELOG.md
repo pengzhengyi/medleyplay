@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Settings → Appearance. Simplified Chinese covers screen help, dialogs,
   accessibility labels, and feedback throughout the web app. Library titles,
   lyrics, and search syntax stay as written.
+- The **Language** dropdown fits beside its label, with a compact shape and an
+  inset keyboard focus ring.
 - Short Simplified Chinese status lines and confirmations omit unnecessary
   full stops.
 - Use **Google** to find an album cover on Google Images, then preview and use your

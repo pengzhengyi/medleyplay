@@ -1153,5 +1153,15 @@
   "Saves the audio under the video's title.": "以视频标题命名并保存音频文件。",
   "Saves the whole video; medleyplay accepts it when it is an .mp4 file.": "保存整个视频。如果文件扩展名为 .mp4，medleyplay 可以使用它。",
   "Lyrics available": "有歌词",
-  "All songs have lyrics": "所有歌曲都有歌词"
+  "All songs have lyrics": "所有歌曲都有歌词",
+  "Checking whether medleyplay is set up…": "正在检查 medleyplay 是否已设置…",
+  "Use 1 to 32 characters: letters (A–Z), digits, periods, underscores, or hyphens. Start with a letter or digit.": "请输入 1 至 32 个字符，可使用英文字母、数字、句点（.）、下划线（_）或连字符（-）。首字符须为字母或数字。",
+  "Use 1 to 64 characters. This is the name shown in the app.": "请输入 1 至 64 个字符。此名称会在应用中显示。",
+  "Use 8 to 256 characters.": "请输入 8 至 256 个字符。",
+  "A display name must be 1-64 characters.": "显示名称必须包含 1 至 64 个字符。",
+  "A password must be 8-256 characters.": "密码必须包含 8 至 256 个字符。",
+  "medleyplay is already set up. No account was created. If you already have an account, reload to sign in. Otherwise, ask the admin to create one.": "medleyplay 已设置，本次未创建账号。如果已有账号，请重新加载页面后登录；如果没有账号，请让管理员创建。",
+  "Retry setup check": "重新检查设置状态",
+  "Could not create the first account. Try again.": "无法创建第一个账号。请重试。",
+  "Could not sign in. Try again.": "无法登录。请重试。"
 }

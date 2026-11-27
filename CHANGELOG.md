@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In **Up next**, one button expands or collapses all album
   groups without changing what plays. A compact **Clear Up next** icon keeps
   the header on one line.
+- Playback keeps its position when a late transition moves between contiguous
+  songs in the same split album file, instead of repeating the opening.
 - Dismiss a failed download from its warning menu in *Downloaded*, or dismiss
   them all at once. Songs and audio files stay in your Library.
 - **Clean up → Missing artist or album** offers Library matches for missing

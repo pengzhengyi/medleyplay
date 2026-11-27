@@ -285,7 +285,7 @@ describe("Now Playing", () => {
     expect(within(queue).queryByRole("button", { name: /^(Expand|Collapse) all$/u })).toBeNull();
   });
 
-  it("folds or expands every album in the floating queue without hiding individual songs", async () => {
+  it("folds or expands every album in either queue without hiding individual songs", async () => {
     const tracks = [
       trackOf(1, "Intro"),
       trackOf(10, "Blue", { kind: "album", split: true }),
@@ -310,19 +310,36 @@ describe("Now Playing", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Intro" }));
     const sidebar = within(screen.getByRole("region", { name: "Up next" }));
+    const sidebarCollapse = sidebar.getByRole("button", { name: "Collapse all" });
+
+    await userEvent.click(sidebarCollapse);
+
+    expect(sidebar.queryByRole("button", { name: "Play First song now" })).toBeNull();
+    expect(sidebar.queryByRole("button", { name: "Play Third song now" })).toBeNull();
+    expect(sidebar.getByRole("button", { name: "Play Outro now" })).toBeVisible();
+    expect(sidebar.getByRole("button", { name: "Expand all" })).toBe(sidebarCollapse);
+    expect(sidebarCollapse).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+
+    expect(sidebar.getByRole("button", { name: "Play First song now" })).toBeVisible();
+    expect(sidebar.getByRole("button", { name: "Play Third song now" })).toBeVisible();
+    expect(sidebar.getByRole("button", { name: "Collapse all" })).toBe(sidebarCollapse);
+
     const nowPlaying = await openNowPlaying();
     await userEvent.click(within(nowPlaying).getByRole("button", { name: "Up next" }));
     const queue = within(within(nowPlaying).getByRole("region", { name: "Up next" }));
 
     const collapse = queue.getByRole("button", { name: "Collapse all" });
     expect(collapse).toHaveTextContent(/^$/u);
-    expect(sidebar.queryByRole("button", { name: "Collapse all" })).toBeNull();
+    expect(sidebarCollapse).toHaveAccessibleName("Collapse all");
     await userEvent.click(collapse);
 
     expect(queue.queryByRole("button", { name: "Play First song now" })).toBeNull();
     expect(queue.queryByRole("button", { name: "Play Third song now" })).toBeNull();
     expect(queue.getByRole("button", { name: "Play Outro now" })).toBeVisible();
     expect(queue.getByRole("button", { name: "Expand all" })).toBe(collapse);
+    expect(sidebarCollapse).toHaveAccessibleName("Collapse all");
 
     await userEvent.click(queue.getByRole("button", { name: "Show the songs of Blue" }));
     await userEvent.click(queue.getByRole("button", { name: "Expand all" }));

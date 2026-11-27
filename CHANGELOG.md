@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Open the medleyplay GitHub repository from the icon at the top right.
 - When finding lyrics, compare the Library song's album and length with the
   results.
-- In the floating **Up next** panel, one button expands or collapses all album
+- In **Up next**, one button expands or collapses all album
   groups without changing what plays.
 - Dismiss a failed download from its warning menu in *Downloaded*, or dismiss
   them all at once. Songs and audio files stay in your Library.

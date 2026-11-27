@@ -6,6 +6,7 @@ import { EditorView } from "@codemirror/view";
 
 import {
   ApiError,
+  api,
   type ListCheck,
   type PlaybackAnswer,
   type Song,
@@ -217,6 +218,75 @@ const lyricsButton = (dialog: HTMLElement, title: string) =>
 const MATCH_URL = "/api/tracks/104/songs/lyrics-match";
 
 describe("editing a file's songs", () => {
+  it("starts one direct batch and saves every ready pick after reopening without reviewing songs", async () => {
+    let started = false;
+    let finished = false;
+    const matches = SPLIT.songs.map(({ track_id }, index) => ({
+      track_id,
+      job_id: index + 21,
+      state: "searching",
+      note: "",
+    }));
+    const save = vi.fn(() => ({ body: SPLIT }));
+    const { calls } = serve({
+      "GET /api/me/preferences": { body: { lyrics_match_confirmation: "direct", revision: 1 } },
+      [`GET ${MATCH_URL}`]: () => ({
+        body: !started
+          ? []
+          : matches.map((match, index) =>
+              finished
+                ? { ...match, state: index === 2 ? "skipped" : "ready", choice_job_id: index + 25 }
+                : match,
+            ),
+      }),
+      [`POST ${MATCH_URL}`]: () => {
+        started = true;
+        return { status: 202, body: matches };
+      },
+      "PUT /api/tracks/104/songs": save,
+    });
+    const first = await renderEditor();
+
+    await press(first.dialog, "Auto-Match lyrics");
+    await waitFor(() => {
+      expect(lyricsButton(first.dialog, "アイネクライネ")).toHaveAttribute(
+        "data-match",
+        "searching",
+      );
+    });
+    expect(screen.queryByRole("button", { name: "Start matching" })).not.toBeInTheDocument();
+    expect(first.onSave).not.toHaveBeenCalled();
+    first.unmount();
+    finished = true;
+    const reopened = await renderEditor(SPLIT, {
+      onSave: vi.fn(async (rows, known, picks?: readonly number[]) => {
+        await api.saveSongs(104, rows, known, picks);
+      }),
+    });
+    expect(await within(reopened.dialog).findByText("2 lyric picks ready to save.")).toBeVisible();
+    expect(reopened.onSave).not.toHaveBeenCalled();
+    await press(reopened.dialog, "Save");
+
+    await waitFor(() => {
+      expect(calls.filter((call) => call.startsWith("PUT "))).toEqual([
+        "PUT /api/tracks/104/songs",
+      ]);
+    });
+    expect(calls.filter((call) => call.startsWith("POST "))).toEqual([`POST ${MATCH_URL}`]);
+    expect(save).toHaveBeenCalledExactlyOnceWith({
+      rows: SPLIT.songs.map(({ id, start_ms, title, artist }) => ({
+        id,
+        start_ms,
+        title,
+        artist,
+      })),
+      known: SPLIT.songs.map(({ id }) => id),
+      lyric_picks: [25, 26],
+    });
+    expect(first.loadLyrics).not.toHaveBeenCalled();
+    expect(reopened.loadLyrics).not.toHaveBeenCalled();
+  });
+
   it("confirms only saved rows and reopens to show an unsaved pick without resubmitting", async () => {
     let finished = false;
     let started = false;

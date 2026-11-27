@@ -80,12 +80,12 @@ those two ways of summarizing the data need not subtract to the same value.
 
 | Synthetic tracks | Album cards | Baseline median | Candidate median | Paired saving | Paired reduction | Improved pairs |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1,906 | 890 | 534 ms | 470 ms | 75 ms | 13.8% | 6/7 |
-| 7,000 | 3,267 | 1,280 ms | 1,081 ms | 208 ms | 16.6% | 7/7 |
+| 1,906 | 890 | 1,081 ms | 838 ms | 205 ms | 19.8% | 7/7 |
+| 7,000 | 3,267 | 4,877 ms | 3,335 ms | 1,543 ms | 31.6% | 7/7 |
 
-Paired savings range from a 10 ms regression to an 82 ms improvement
-in the smaller fixture, and from 173 to 695 ms in the larger fixture.
-Measured browser layout work falls by a paired median 87 ms and 366 ms,
+Paired savings range from 81 to 1,534 ms in the smaller fixture,
+and from 283 to 3,998 ms in the larger fixture.
+Measured browser layout work falls by a paired median 220 ms and 1,142 ms,
 respectively. Layout savings are not equal to end-to-end savings.
 The shared machine still varies in load; these figures are comparative
 lab results, not guarantees for every device.

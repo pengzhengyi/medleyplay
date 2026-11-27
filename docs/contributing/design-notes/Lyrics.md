@@ -235,14 +235,17 @@ the household looks for the lyrics itself, by a title and artist of its own.
 - **Auto-Match lyrics in Songs** submits the saved songs whose rows have not
   changed. In Settings → Lyrics, each Account can choose **Ask before searching**
   (the default) or **Search directly**. Opening Songs never starts a search.
-  Once submitted, Auto-Match runs even when Songs or the browser is closed.
+  With **Search directly**, one click finds candidates, asks AI to choose, and
+  keeps the progress and picks. Once submitted, Auto-Match runs even when Songs
+  or the browser is closed; it does not save unsaved song-list edits.
 - **A clear pick is ready to save, not playable lyrics.** The Lyrics button
   opens the song's editor for review. The count above **Save** covers ready
   picks for songs the submitted list keeps unchanged, including both ends of
   each song. Unfinished or unmatched songs are not included. Saving, removing,
   or dismissing lyrics, or starting a new search, invalidates a pending pick.
-- **Songs → Save confirms the ready picks.** The same transaction writes the
-  song list and the exact picks the editor confirmed, under the sites' names.
+- **Songs → Save confirms all unchanged ready picks.** Opening each song's lyrics
+  or pressing **Use** for each pick is not required. The same transaction writes
+  the song list and the exact picks the editor confirmed, under the sites' names.
   It checks song identity, timing, album, search, choice, enabled site, and the
   absence of any lyrics record before and after applying the list. A stale
   pick refuses the save without changing any songs or lyrics. Saving a ready
@@ -256,8 +259,10 @@ the household looks for the lyrics itself, by a title and artist of its own.
   stage but does not repeat one that committed. To try a finished match again,
   start Auto-Match from Songs so it checks the saved song again.
 - **Match feedback** stays with each saved song and returns when Songs reopens.
-  An arc rotates around its Lyrics icon while searching and stays still under
-  reduced motion. The icon fills partway while checking the AI pick or waiting.
+  Its Lyrics button uses the same quotation-mark glyph as the availability badge,
+  with the match state distinguished by its fill and border. An arc rotates around
+  the quotation while searching and stays still under reduced motion. The icon
+  fills partway while checking the AI pick or waiting.
   A ready pick has a colored outline and a saved pick has a filled icon.
   Manually saved lyrics show a solid border around the regular icon, replacing
   any older match status. A skipped or failed match has a dashed outline.

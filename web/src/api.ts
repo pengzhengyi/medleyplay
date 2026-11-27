@@ -409,6 +409,7 @@ export interface DownloadUnderWay {
   readonly track_id: number;
   readonly job: {
     readonly id: number;
+    readonly requested_by: number | null;
     readonly state: Job["state"];
     readonly progress: JobProgress | null;
     readonly waits_for_online: boolean;

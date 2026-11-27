@@ -706,6 +706,33 @@ async function openFilters() {
 }
 
 describe("filtering", () => {
+  it("translates filter labels without translating the selected artist or changing the results", async () => {
+    renderTable([
+      trackOf(1, "First", { artist: "Search" }),
+      trackOf(2, "Second", { artist: "Other artist" }),
+    ]);
+    render(<LanguageSelect />);
+    const filters = await openFilters();
+    const user = userEvent.setup();
+    await user.selectOptions(within(filters).getByLabelText("Artist"), "Search");
+    const language = screen.getByRole("combobox", { name: "Language" });
+
+    try {
+      await user.selectOptions(language, "zh-Hans");
+
+      const translated = within(screen.getByRole("group", { name: "筛选条件" }));
+      expect(translated.getByLabelText("艺人")).toHaveValue("Search");
+      expect(translated.getByRole("option", { name: "Search（1）" })).toBeInTheDocument();
+      expect(shownTitles()).toEqual(["First"]);
+      await user.click(screen.getByRole("button", { name: "移除筛选条件：艺人：Search" }));
+
+      expect(screen.getByRole("status")).toHaveTextContent("已移除筛选条件。");
+      expect(shownTitles()).toEqual(["First", "Second"]);
+    } finally {
+      await user.selectOptions(language, "auto");
+    }
+  });
+
   it("shows the rows before building the choices for the closed Filter", async () => {
     renderTable(LIBRARY);
     const filter = screen.getByText("Filter");
@@ -1014,6 +1041,17 @@ describe("the Library", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual(["Songs and albums", "Songs (4)", "Albums (2)"]);
+  });
+
+  it("uses the same counted items for both sides of a grouped Library filter", async () => {
+    renderLibrary();
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Group by"), "Album");
+    const filters = await openFilters();
+
+    await user.selectOptions(within(filters).getByRole("combobox", { name: "Kind" }), "song");
+
+    expect(screen.getByRole("status")).toHaveTextContent("4 of 5 songs and albums");
   });
 
   it("plays the whole file when the Kind filter keeps the album", async () => {

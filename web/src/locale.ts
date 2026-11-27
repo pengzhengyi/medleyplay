@@ -60,6 +60,8 @@ void words.use(initReactI18next).init({
         song_count_other: "{{count}} songs",
         album_count_one: "{{count}} album",
         album_count_other: "{{count}} albums",
+        star_count_one: "{{count}} star",
+        star_count_other: "{{count}} stars",
       },
     },
     "zh-Hans": { translation: zh },

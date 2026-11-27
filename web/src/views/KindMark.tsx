@@ -7,6 +7,7 @@
 import { MusicNoteSimpleIcon, VinylRecordIcon } from "@phosphor-icons/react";
 
 import { type Kind, type KindReason, kindSettled } from "../api";
+import { useWords } from "../locale";
 
 const UNSETTLED: Readonly<Partial<Record<KindReason, string>>> = {
   length: "guessed from its length",
@@ -15,10 +16,13 @@ const UNSETTLED: Readonly<Partial<Record<KindReason, string>>> = {
 
 /** A note for a song, a record for an album in one file; solid once settled. */
 export function KindMark({ kind, reason }: { readonly kind: Kind; readonly reason: KindReason }) {
+  const t = useWords();
   const album = kind === "album";
   const settled = kindSettled(reason);
-  const named = album ? "Album" : "Song";
-  const label = settled ? named : `${named}, ${UNSETTLED[reason] ?? ""}`;
+  const named = t(album ? "Album" : "Song");
+  const label = settled
+    ? named
+    : t("{{kind}}, {{reason}}", { kind: named, reason: t(UNSETTLED[reason] ?? "") });
   const weight = settled ? "fill" : "regular";
   return (
     <span

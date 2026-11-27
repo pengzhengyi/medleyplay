@@ -62,7 +62,7 @@ import { formatTime } from "../format";
 import { heartTitleOf } from "../heart";
 import type { CoverStatus } from "../library/lookups";
 import { downloadDetailOf, downloadStateOf } from "../library/downloading";
-import { useFormattingLocale, useWords } from "../locale";
+import { type Words, useFormattingLocale, useWords } from "../locale";
 import { albumUnit, byAlbum, bySong, fileUnit, inLibraryOrder } from "../library/playOrder";
 import { ratingOf } from "../library/ratings";
 import { albumArtistOf } from "../library/views";
@@ -79,6 +79,8 @@ import { STATUS_ICONS } from "./statusIcons";
 
 /** What every cell may need: the page's callbacks, which Track is playing, and the songs of files. */
 interface Meta {
+  readonly t: Words;
+  readonly added: Intl.DateTimeFormat;
   readonly actions: TrackActions;
   readonly playingId: number | undefined;
   /** In the Library, the songs of each split file; elsewhere none. */
@@ -129,15 +131,16 @@ const byRating = (a: Row<typeof features, Track>, b: Row<typeof features, Track>
 const SOURCES: Readonly<Record<string, string>> = { musicbrainz: "MusicBrainz" };
 
 /** How a rating from elsewhere reads: `MusicBrainz: 3.7 from 24 votes`, saying when it is the album's. */
-function heardFrom(community: CommunityRating): string {
+function heardFrom(community: CommunityRating, t: Words): string {
   const site = SOURCES[community.source] ?? community.source;
-  const who = community.of === "album" ? `${site}, the album` : site;
+  const who = community.of === "album" ? t("{{site}}, the album", { site }) : site;
   const rating = (Math.round(community.rating * 10) / 10).toFixed(1);
-  return `${who}: ${rating} from ${String(community.votes)} votes`;
+  return t("{{source}}: {{rating}} from {{count}} votes", {
+    source: who,
+    rating,
+    count: community.votes,
+  });
 }
-
-/** Say a number of stars: `1 star`, `4 stars`. */
-const starsOf = (stars: number) => (stars === 1 ? "1 star" : `${String(stars)} stars`);
 
 /** How much of the star `stars` a rating from elsewhere fills, to the nearest half. */
 function partOf(rating: number, stars: number): "full" | "half" | "none" {
@@ -185,22 +188,20 @@ const GROUP_BY: readonly { id: string; label: string }[] = [
 ];
 
 /** How a group's row names it, from its first song: `生如夏花 · 朴树`. */
-function groupName(by: string, track: Track): string {
+function groupName(by: string, track: Track, t: Words): string {
   switch (by) {
     case "album":
-      return `${track.album || "No album"} · ${albumArtistOf(track) || "No artist"}`;
+      return `${track.album || t("No album")} · ${albumArtistOf(track) || t("No artist")}`;
     case "artist":
-      return track.artist || "No artist";
+      return track.artist || t("No artist");
     case "album_artist":
-      return albumArtistOf(track) || "No artist";
+      return albumArtistOf(track) || t("No artist");
     case "year":
-      return track.year === null ? "No year" : String(track.year);
+      return track.year === null ? t("No year") : String(track.year);
     default:
-      return track.genre || "No genre";
+      return track.genre || t("No genre");
   }
 }
-
-const songs = (count: number) => (count === 1 ? "1 song" : `${String(count)} songs`);
 
 const filtersOf = (state: ColumnFiltersState): Filters =>
   Object.fromEntries(
@@ -367,6 +368,9 @@ export function TrackTable({
    */
   readonly playAllIn?: HTMLElement | null | undefined;
 }) {
+  const words = useWords();
+  const locale = useFormattingLocale();
+  const added = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: "medium" }), [locale]);
   const [layout, setLayout] = useState(savedLayout);
   useEffect(() => {
     saveLayout(layout);
@@ -418,7 +422,7 @@ export function TrackTable({
     features,
     columns: COLUMNS,
     // The columns stay put, so a new callback or Track playing doesn't sort again.
-    meta: { actions, playingId, songsIn: nested ? songsIn : undefined },
+    meta: { actions, playingId, songsIn: nested ? songsIn : undefined, t: words, added },
     data,
     // Grouped, `data` holds no split file, so no row has songs under it.
     getSubRows: (track) => (track.split ? songsIn?.get(track.id) : undefined),
@@ -544,17 +548,16 @@ export function TrackTable({
     }
   };
   const ways = (shuffled: boolean) => {
-    const verb = shuffled ? "Shuffle" : "Play";
     return [
       {
-        label: `${verb} by album`,
+        label: words(shuffled ? "Shuffle by album" : "Play by album"),
         icon: <VinylRecordIcon />,
         onSelect: () => {
           playAll(byAlbum(playable), shuffled, albumUnit);
         },
       },
       {
-        label: `${verb} by song`,
+        label: words(shuffled ? "Shuffle by song" : "Play by song"),
         icon: <MusicNoteSimpleIcon />,
         onSelect: () => {
           playAll(bySong(playable), shuffled);
@@ -577,35 +580,39 @@ export function TrackTable({
       <span className={songsIn === undefined ? undefined : "split-button"}>
         <button
           type="button"
-          aria-label="Play all"
+          aria-label={words("Play all")}
           disabled={playable.length === 0}
           onClick={() => {
             playAll(playable, false, unitOf);
           }}
         >
           <PlayIcon weight="fill" aria-hidden />
-          Play
+          {words("Play")}
         </button>
         {songsIn !== undefined && (
-          <MoreWays label="More ways to play" ways={ways(false)} disabled={playable.length === 0} />
+          <MoreWays
+            label={words("More ways to play")}
+            ways={ways(false)}
+            disabled={playable.length === 0}
+          />
         )}
       </span>
       <span className={songsIn === undefined ? undefined : "split-button secondary"}>
         <button
           type="button"
           className="secondary"
-          aria-label="Shuffle all"
+          aria-label={words("Shuffle all")}
           disabled={playable.length === 0}
           onClick={() => {
             playAll(playable, true, unitOf);
           }}
         >
           <ShuffleIcon weight="bold" aria-hidden />
-          Shuffle
+          {words("Shuffle")}
         </button>
         {songsIn !== undefined && (
           <MoreWays
-            label="More ways to shuffle"
+            label={words("More ways to shuffle")}
             ways={ways(true)}
             disabled={playable.length === 0}
           />
@@ -625,7 +632,7 @@ export function TrackTable({
         <details className="dropdown columns-menu">
           <summary>
             <SlidersHorizontalIcon weight="regular" aria-hidden />
-            Columns
+            {words("Columns")}
           </summary>
           <ul>
             {table
@@ -639,7 +646,7 @@ export function TrackTable({
                       checked={column.getIsVisible()}
                       onChange={column.getToggleVisibilityHandler()}
                     />
-                    {LABELS[column.id]}
+                    {words(LABELS[column.id] ?? "")}
                   </label>
                 </li>
               ))}
@@ -652,7 +659,7 @@ export function TrackTable({
           onChange={setFilter}
         />
         <label className="group-by">
-          Group by
+          {words("Group by")}
           <select
             className="group-by-select"
             value={by}
@@ -661,10 +668,10 @@ export function TrackTable({
               setGrouping(event.target.value === "" ? [] : [event.target.value]);
             }}
           >
-            <option value="">None</option>
+            <option value="">{words("None")}</option>
             {GROUP_BY.map((each) => (
               <option key={each.id} value={each.id}>
-                {each.label}
+                {words(each.label)}
               </option>
             ))}
           </select>
@@ -684,12 +691,12 @@ export function TrackTable({
             {table.getIsAllRowsExpanded() ? (
               <>
                 <ArrowsInLineVerticalIcon aria-hidden />
-                Collapse all
+                {words("Collapse all")}
               </>
             ) : (
               <>
                 <ArrowsOutLineVerticalIcon aria-hidden />
-                Expand all
+                {words("Expand all")}
               </>
             )}
           </button>
@@ -698,7 +705,7 @@ export function TrackTable({
       <FiltersOn
         filters={filters}
         shown={table.getFilteredRowModel().rows.length}
-        total={tracks.length}
+        total={data.length}
         counted={songsIn === undefined ? "songs" : "songs and albums"}
         onRemove={(field) => {
           setFilter(field, undefined);
@@ -714,7 +721,7 @@ export function TrackTable({
               {group.headers.map((header) => {
                 const { column } = header;
                 const sorted = column.getIsSorted();
-                const label = LABELS[column.id] ?? "";
+                const label = words(LABELS[column.id] ?? "");
                 return (
                   <th
                     key={header.id}
@@ -797,7 +804,7 @@ export function TrackTable({
                           ) : (
                             <CaretRightIcon weight="bold" aria-hidden />
                           )}
-                          {`${groupName(by, track)} · ${songs(row.getLeafRows().length)}`}
+                          {`${groupName(by, track, words)} · ${words("song_count", { count: row.getLeafRows().length })}`}
                         </button>
                       </th>
                     ) : (
@@ -884,8 +891,6 @@ const LABELS: Record<string, string> = {
 /** Columns whose header shows an icon's worth of room, so their name is for screen readers. */
 const HIDDEN_LABELS = new Set(["favorite"]);
 
-const added = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-
 const meta = (table: { readonly options: { readonly meta?: Meta } }): Meta => {
   const found = table.options.meta;
   if (found === undefined) {
@@ -964,9 +969,9 @@ const COLUMNS: Column[] = [
       <button
         type="button"
         className={track.favorite ? "icon heart on" : "icon heart"}
-        aria-label={`Favorite ${track.title}`}
+        aria-label={meta(table).t("Favorite {{title}}", { title: track.title })}
         aria-pressed={track.favorite}
-        title={heartTitleOf(track.title, track.favorite)}
+        title={heartTitleOf(track.title, track.favorite, meta(table).t)}
         onClick={() => {
           meta(table).actions.onFavorite(track, !track.favorite);
         }}
@@ -984,7 +989,7 @@ const COLUMNS: Column[] = [
     cell: ({ row, table }) => {
       const track = row.original;
       const playable = track.availability === "ok";
-      const { actions, playingId } = meta(table);
+      const { actions, playingId, t } = meta(table);
       const download = actions.downloadOf(track);
       const nestedHere = meta(table).songsIn !== undefined;
       return (
@@ -996,8 +1001,13 @@ const COLUMNS: Column[] = [
                   type="button"
                   className="icon fold"
                   aria-expanded={row.getIsExpanded()}
-                  aria-label={`${row.getIsExpanded() ? "Hide" : "Show"} the songs of ${track.title}`}
-                  title={row.getIsExpanded() ? "Hide its songs" : "Show its songs"}
+                  aria-label={t(
+                    row.getIsExpanded()
+                      ? "Hide the songs of {{title}}"
+                      : "Show the songs of {{title}}",
+                    { title: track.title },
+                  )}
+                  title={t(row.getIsExpanded() ? "Hide its songs" : "Show its songs")}
                   onClick={row.getToggleExpandedHandler()}
                 >
                   <CaretRightIcon className="fold-caret" weight="bold" aria-hidden />
@@ -1026,7 +1036,7 @@ const COLUMNS: Column[] = [
           </button>
           {!playable &&
             (download === undefined ? (
-              <span className="why">{WHY[track.availability]}</span>
+              <span className="why">{t(WHY[track.availability] ?? "")}</span>
             ) : (
               <DownloadNote download={download} />
             ))}
@@ -1124,7 +1134,7 @@ const COLUMNS: Column[] = [
     sortFn: byNumber,
     sortDescFirst: false,
     enableResizing: false,
-    cell: (info) => added.format(info.getValue<number>()),
+    cell: (info) => meta(info.table).added.format(info.getValue<number>()),
   },
   {
     id: "playable",
@@ -1147,7 +1157,7 @@ const COLUMNS: Column[] = [
     enableResizing: false,
     cell: ({ row: { original: track }, table }) => {
       const playable = track.availability === "ok";
-      const { actions } = meta(table);
+      const { actions, t } = meta(table);
       return (
         <>
           <button
@@ -1157,8 +1167,8 @@ const COLUMNS: Column[] = [
               actions.onPlayNext(track);
             }}
             disabled={!playable}
-            aria-label={`Play ${track.title} next`}
-            title="Play next"
+            aria-label={t("Play {{title}} next", { title: track.title })}
+            title={t("Play next")}
           >
             <QueueIcon weight="light" aria-hidden />
           </button>
@@ -1169,8 +1179,8 @@ const COLUMNS: Column[] = [
               actions.onAdd(track);
             }}
             disabled={!playable}
-            aria-label={`Add ${track.title} to the queue`}
-            title="Add to the queue"
+            aria-label={t("Add {{title}} to the queue", { title: track.title })}
+            title={t("Add to the queue")}
           >
             <ListPlusIcon weight="light" aria-hidden />
           </button>
@@ -1192,6 +1202,7 @@ function CoverBadge({
   readonly status: CoverStatus | undefined;
   readonly playing: boolean;
 }) {
+  const t = useWords();
   if (status !== undefined) {
     return (
       <span
@@ -1205,7 +1216,7 @@ function CoverBadge({
     );
   }
   return playing ? (
-    <span className="cover-badge" role="img" aria-label="Playing" title="Playing">
+    <span className="cover-badge" role="img" aria-label={t("Playing")} title={t("Playing")}>
       <span className="bars" aria-hidden />
     </span>
   ) : null;
@@ -1223,14 +1234,15 @@ function RatingStars({
   readonly track: Track;
   readonly onRate: (track: Track, rating: number | null) => void;
 }) {
+  const t = useWords();
   const album = track.rating === null ? track.album_rating : null;
   const heard = ratingOf(track) === null ? track.community : null;
   const said =
     album !== null
-      ? `From your album rating: ${starsOf(album)}`
+      ? t("From your album rating: {{rating}}", { rating: t("star_count", { count: album }) })
       : heard === null
         ? undefined
-        : heardFrom(heard);
+        : heardFrom(heard, t);
   const saying = useId();
   const shown = ratingOf(track);
   return (
@@ -1239,7 +1251,7 @@ function RatingStars({
       title={said}
       aria-describedby={said === undefined ? undefined : saying}
     >
-      <legend className="visually-hidden">Rate {track.title}</legend>
+      <legend className="visually-hidden">{t("Rate {{title}}", { title: track.title })}</legend>
       {said !== undefined && (
         <span id={saying} className="visually-hidden">
           {said}
@@ -1252,7 +1264,7 @@ function RatingStars({
             key={stars}
             type="button"
             className="icon star"
-            aria-label={starsOf(stars)}
+            aria-label={t("star_count", { count: stars })}
             aria-pressed={track.rating === stars}
             data-community={part}
             data-from-album={album !== null && stars <= album ? "true" : undefined}

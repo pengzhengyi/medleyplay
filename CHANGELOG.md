@@ -750,6 +750,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Artist suggestions respond faster while typing in a large Library; search
+  results and navigation stay the same.
 - Large album galleries open faster while keeping every album and the same
   keyboard navigation.
 - The Library/Bilibili toggle sits to the left of the search field.

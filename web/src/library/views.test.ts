@@ -192,6 +192,14 @@ describe("artists linked as one", () => {
     expect(search(SONGS, "甲壳虫", LINKS).artists.map((artist) => artist.name)).toEqual(["披头士"]);
   });
 
+  it("keeps alias matches and whole artist counts when only artists are requested", () => {
+    const found = search(SONGS, "甲壳虫", LINKS, ["artists"]);
+
+    expect(found.artists.map((artist) => [artist.name, artist.count])).toEqual([["披头士", 3]]);
+    expect(found.tracks).toEqual([]);
+    expect(found.albums).toEqual([]);
+  });
+
   describe("shown as the household chose", () => {
     /** The links above, with The Beatles shown as *甲壳虫乐队*. */
     const CHOSEN = linksOf({
@@ -258,6 +266,17 @@ describe("two artists of one name", () => {
   it("name no album for an artist no other one listed shares its name with", () => {
     expect(artistsOf(SONGS.slice(0, 1), LINKS)[0]?.onAlbum).toBeUndefined();
   });
+
+  it("keeps separate identities when only artist search results are requested", () => {
+    const found = search(SONGS, "Jay", LINKS, ["artists"]);
+
+    expect(found.artists.map((artist) => [artist.id, artist.count, artist.onAlbum])).toEqual([
+      [OTHER_JAY, 1, "Blue Night"],
+      [artistIdOf("Jay"), 2, "Jay"],
+    ]);
+    expect(found.tracks).toEqual([]);
+    expect(found.albums).toEqual([]);
+  });
 });
 
 describe("albums", () => {
@@ -313,6 +332,51 @@ describe("lists made from the Tracks", () => {
 });
 
 describe("search", () => {
+  describe("requested result groups", () => {
+    it.each<{ query: string; groups: readonly (keyof ReturnType<typeof search>)[] }>([
+      { query: "supercell", groups: ["artists"] },
+      { query: "supercell", groups: ["tracks", "albums"] },
+      { query: "supercell", groups: [] },
+      { query: "kind:albums", groups: ["artists"] },
+      { query: "kind:artists kind:albums", groups: ["artists", "tracks"] },
+      { query: "kind:ar", groups: ["artists"] },
+      { query: "artist:ryo melt", groups: ["albums"] },
+      { query: "artist: album:", groups: ["artists"] },
+    ])("projects $query onto $groups without changing matching", ({ query, groups }) => {
+      const complete = search(LIBRARY, query);
+
+      const selected = search(LIBRARY, query, undefined, groups);
+
+      expect(selected).toEqual({
+        tracks: groups.includes("tracks") ? complete.tracks : [],
+        artists: groups.includes("artists") ? complete.artists : [],
+        albums: groups.includes("albums") ? complete.albums : [],
+      });
+    });
+
+    it("can select the second recognized kind without returning the first", () => {
+      const selected = search(LIBRARY, "kind:artists kind:albums", undefined, ["albums"]);
+
+      expect(selected.albums).toContainEqual(
+        expect.objectContaining({ artist: "ryo", name: "Supercell", count: 1 }),
+      );
+      expect(selected.tracks).toEqual([]);
+      expect(selected.artists).toEqual([]);
+    });
+
+    it("keeps co-credited artists when an artist tag keeps every track", () => {
+      const tracks = [
+        trackOf(1, "Duet", { artist: "Ada/Bea", artists: ["Ada", "Bea"], album: "Together" }),
+      ];
+
+      const selected = search(tracks, "artist:Ada", undefined, ["artists"]);
+
+      expect(selected.artists.map((artist) => artist.name)).toEqual(["Ada", "Bea"]);
+      expect(selected.tracks).toEqual([]);
+      expect(selected.albums).toEqual([]);
+    });
+  });
+
   it("finds Tracks with every word typed in the title, artist, or album", () => {
     expect(titles(search(LIBRARY, "melt").tracks)).toEqual(["Melt", "Ｍｅｌｔ (live)"]);
     expect(titles(search(LIBRARY, "melt live").tracks)).toEqual(["Ｍｅｌｔ (live)"]);
@@ -352,6 +416,14 @@ describe("search", () => {
     it("finds names with the letters typed in order, when some are left out", () => {
       expect(titles(search(SONGS, "beatls").tracks)).toEqual(["Yesterday"]);
       expect(search(SONGS, "jch").artists.map((artist) => artist.name)).toEqual(["Jay Chou"]);
+    });
+
+    it("keeps loose artist matches when other result groups are not requested", () => {
+      const found = search(SONGS, "beatls", undefined, ["artists"]);
+
+      expect(found.artists.map((artist) => artist.name)).toEqual(["The Beatles"]);
+      expect(found.tracks).toEqual([]);
+      expect(found.albums).toEqual([]);
     });
 
     it("lists names holding the words side by side first, however close a loose one is", () => {

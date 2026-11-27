@@ -108,6 +108,9 @@ class TrackOut(BaseModel):
     artist_ids: list[str] = Field(
         description="The id of the Library's artist each of `artists` is, in the same order."
     )
+    has_lyrics: bool = Field(
+        description="Whether this song, or every song of this split album, has readable lyrics."
+    )
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -143,6 +146,7 @@ class TrackOut(BaseModel):
             cover=details.cover,
             artists=list(track.artists),
             artist_ids=list(track.artist_ids),
+            has_lyrics=track.has_lyrics,
             community=None
             if track.community is None
             else CommunityRatingOut.of_rating(track.community),

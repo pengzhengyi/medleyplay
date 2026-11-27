@@ -96,6 +96,44 @@ afterEach(() => {
 });
 
 describe("the views", () => {
+  it("uses every album member for its lyrics badge even when search shows only a matching song", async () => {
+    const first = trackOf(1, "First light", { has_lyrics: true });
+    const last = trackOf(2, "Last train");
+    open("#/search?q=First", signedIn([first, last]));
+
+    expect(await screen.findByRole("button", { name: "First light" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Last train" })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Lyrics available" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("link", { name: "Albums" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Albums" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+  });
+
+  it("marks complete album lyrics on its tile and heading without decorating its artist", async () => {
+    const tracks = LIBRARY.map((track) => ({ ...track, has_lyrics: track.album === "Supercell" }));
+    open("#/albums", signedIn(tracks));
+    const album = await screen.findByRole("link", { name: /Supercell/ });
+
+    expect(within(album).getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    await userEvent.click(album);
+
+    expect(await screen.findByRole("heading", { name: "Supercell" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "About the album" })).getByRole("img", {
+        name: "All songs have lyrics",
+      }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("link", { name: "Artists" }));
+
+    expect(await screen.findByRole("heading", { name: "Artists" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /lyrics/ })).not.toBeInTheDocument();
+  });
+
   it("opens a split file's editor from its Cleanup suggestion without saving", async () => {
     open("#/clean-up", {
       ...signedIn([

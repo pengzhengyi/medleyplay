@@ -112,7 +112,7 @@ export function PlayerBar({
               aria-label={t("Open Now Playing")}
               onClick={onOpenNowPlaying}
             >
-              <Cover size="small" cover={track.cover} />
+              <Cover size="small" cover={track.cover} lyrics={track} />
             </button>
           </Hint>
         )}

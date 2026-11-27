@@ -283,7 +283,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
     policy = PolicyService(units, clock, downloads, plugins, data_dir, online=mode.online)
     changes.listen(policy.request)
-    # A setting such as the album length changes how Tracks show on every open page.
+    # Settings and lyrics change how Tracks show on every open page.
     changes.listen(events.hear_change)
     events.listen(policy.request)
     # Each change of the Mode reaches the open browsers, the runner, and the policy.

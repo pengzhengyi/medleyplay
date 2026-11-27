@@ -124,12 +124,11 @@ def _lines(timed: list[tuple[int, str]], offset: int) -> tuple[Line, ...]:
     for at, written in timed:
         shifted = max(at - offset, 0)
         if lines and lines[-1].at_ms == shifted and not lines[-1].translation and written:
-            lines[-1] = Line(shifted, lines[-1].text, written, lines[-1].words)
+            lines[-1] = Line(shifted, lines[-1].text, _WORD.sub("", written), lines[-1].words)
             continue
         words = _words(written, offset)
-        lines.append(
-            Line(shifted, "".join(word.text for word in words) if words else written, "", words)
-        )
+        text = "".join(word.text for word in words) if words else _WORD.sub("", written)
+        lines.append(Line(shifted, text, "", words))
     return tuple(lines)
 
 

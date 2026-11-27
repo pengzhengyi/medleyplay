@@ -5,13 +5,18 @@ from dataclasses import replace
 from datetime import timedelta
 
 import pytest
+from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.lyrics import record_lyrics
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, PlaylistId, TrackId
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
+from medleyplay.domain.lyrics import LyricsOrigin
 from medleyplay.domain.playback import PlayId
+from medleyplay.persistence.schema import LyricsSearchRow, TrackLyricsRow
+from medleyplay.plugin_api.enrichers import FoundLyrics, LyricsProvider
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock, OnlineSwitch
 
@@ -45,6 +50,7 @@ def test_adding_a_source_creates_a_track_with_its_details(
     assert track.details == TrackDetailsFactory.song()
     assert track.added_at == clock.now
     assert (track.favorite, track.rating, track.play_count) == (False, None, 0)
+    assert not track.has_lyrics
 
 
 def test_a_new_track_keeps_every_detail_its_source_gives(
@@ -58,6 +64,142 @@ def test_a_new_track_keeps_every_detail_its_source_gives(
     track_id = catalog.add_track(SourceKeyFactory.bilibili(), details)
 
     assert catalog.get_track(alice.id, track_id).details == details
+
+
+@pytest.mark.parametrize(
+    "given",
+    [
+        (LyricsOrigin.HOUSEHOLD, "Sing with me", False, False, True),
+        (LyricsOrigin.SIDECAR, "[00:01.00]Sing with me", False, False, True),
+        (LyricsOrigin.TAG, "[00:01.00] \n[00:02.00]Sing", False, False, True),
+        (LyricsOrigin.LRCLIB, "[00:01.00]\n[00:01.00]Translation", False, False, True),
+        (LyricsOrigin.NETEASE, "Sing with me", False, False, True),
+        (LyricsOrigin.SUGGESTED, "Sing with me", False, False, False),
+        (LyricsOrigin.HOUSEHOLD, "Sing with me", False, True, False),
+        (LyricsOrigin.HOUSEHOLD, "", True, False, False),
+        (LyricsOrigin.LRCLIB, "", False, False, False),
+        (LyricsOrigin.TAG, " \n\t ", False, False, False),
+        (LyricsOrigin.SIDECAR, "[00:01.00]\n[00:02.00] ", False, False, False),
+        (LyricsOrigin.SIDECAR, "[00:01.00]<00:01.00>", False, False, False),
+    ],
+)
+def test_lyrics_availability_requires_a_confirmed_readable_winner(
+    catalog: CatalogService,
+    accounts: AccountService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    given: tuple[LyricsOrigin, str, bool, bool, bool],
+) -> None:
+    origin, text, instrumental, dismissed, available = given
+    alice, _ = _alice_and_bob(accounts)
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song())
+    with units.begin() as db:
+        db.add(
+            TrackLyricsRow(
+                track_id=track_id,
+                origin=origin,
+                text=text,
+                instrumental=instrumental,
+                dismissed=dismissed,
+                found_at=clock.now,
+            )
+        )
+
+    listed = catalog.list_tracks(alice.id)[0]
+    fetched = catalog.get_track(alice.id, track_id)
+
+    assert listed.has_lyrics is available
+    assert fetched.has_lyrics is available
+
+
+@pytest.mark.parametrize(
+    ("higher", "lower"),
+    list(zip(tuple(LyricsOrigin), tuple(LyricsOrigin)[1:], strict=False)),
+)
+def test_an_unreadable_winner_hides_lower_priority_readable_lyrics(
+    catalog: CatalogService,
+    accounts: AccountService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    higher: LyricsOrigin,
+    lower: LyricsOrigin,
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song())
+    with units.begin() as db:
+        record_lyrics(db, track_id, lower, "Sing with me", clock.now)
+        record_lyrics(db, track_id, higher, "", clock.now, instrumental=True)
+
+    assert not catalog.get_track(alice.id, track_id).has_lyrics
+    assert not catalog.list_tracks(alice.id)[0].has_lyrics
+
+
+def test_a_dismissed_source_does_not_hide_readable_lower_priority_lyrics(
+    catalog: CatalogService,
+    accounts: AccountService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song())
+    with units.begin() as db:
+        record_lyrics(db, track_id, LyricsOrigin.LRCLIB, "Sing with me", clock.now)
+        record_lyrics(db, track_id, LyricsOrigin.HOUSEHOLD, "", clock.now, instrumental=True)
+        row = db.get(TrackLyricsRow, (track_id, LyricsOrigin.HOUSEHOLD))
+        assert row is not None
+        row.dismissed = True
+
+    assert catalog.get_track(alice.id, track_id).has_lyrics
+    assert catalog.list_tracks(alice.id)[0].has_lyrics
+
+
+def test_invalid_provider_lyrics_are_unavailable_without_fallback_or_breaking_other_tracks(
+    catalog: CatalogService,
+    accounts: AccountService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    invalid, readable, *_ = _three_tracks(catalog)
+    provider_answer = FoundLyrics(provider=LyricsProvider.LRCLIB, text="[00:01]la\n" * 2_001)
+    with units.begin() as db:
+        record_lyrics(db, invalid, LyricsOrigin.LRCLIB, provider_answer.text, clock.now)
+        record_lyrics(db, invalid, LyricsOrigin.NETEASE, "Readable lower priority", clock.now)
+        record_lyrics(db, readable, LyricsOrigin.LRCLIB, "Sing with me", clock.now)
+
+    listed = {track.id: track for track in catalog.list_tracks(alice.id)}
+
+    assert not listed[invalid].has_lyrics
+    assert listed[readable].has_lyrics
+    assert not catalog.get_track(alice.id, invalid).has_lyrics
+    assert catalog.get_track(alice.id, readable).has_lyrics
+
+
+@pytest.mark.parametrize("picked", [False, True])
+def test_unsaved_search_candidates_and_picks_are_not_available_lyrics(
+    catalog: CatalogService,
+    accounts: AccountService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    *,
+    picked: bool,
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song())
+    with units.begin() as db:
+        db.add(
+            LyricsSearchRow(
+                track_id=track_id,
+                title="Intro",
+                artist="The Band",
+                options=[{"text": "Sing with me"}],
+                pick=0 if picked else None,
+                found_at=clock.now,
+            )
+        )
+
+    assert not catalog.get_track(alice.id, track_id).has_lyrics
+    assert not catalog.list_tracks(alice.id)[0].has_lyrics
 
 
 def test_a_track_links_to_the_video_its_file_came_from(

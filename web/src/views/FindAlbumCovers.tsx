@@ -196,7 +196,12 @@ export function FindAlbumCovers({
                   }
                 }}
               >
-                <Cover size="medium" cover={each.suggested} className="cover-suggestion-picture" />
+                <Cover
+                  size="medium"
+                  cover={each.suggested}
+                  className="cover-suggestion-picture"
+                  lyrics={{ artist: each.artist, album: each.album }}
+                />
               </SuggestedFrame>
               <a
                 className="photo-suggestion-name"

@@ -7,6 +7,7 @@ import type { FavoriteGroups } from "../library/favoriteGroups";
 import type { Station } from "../library/useStation";
 import { favoriteGroupsNaming, trackOf } from "../testing/server";
 import { RadioView } from "./RadioView";
+import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 
 const NOW = new Date("2026-11-06T12:00:00Z");
 const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000).toISOString();
@@ -46,19 +47,49 @@ function renderRadio(
   };
   const onPlayAll = vi.fn<(tracks: readonly Track[], shuffled: boolean) => void>();
   render(
-    <RadioView
-      tracks={tracks}
-      station={station}
-      onPlayAll={onPlayAll}
-      accountId={1}
-      now={NOW}
-      {...(favorites === undefined ? {} : { favorites })}
-    />,
+    <LyricsAvailabilityProvider tracks={tracks}>
+      <RadioView
+        tracks={tracks}
+        station={station}
+        onPlayAll={onPlayAll}
+        accountId={1}
+        now={NOW}
+        {...(favorites === undefined ? {} : { favorites })}
+      />
+    </LyricsAvailabilityProvider>,
   );
   return { station, onPlayAll };
 }
 
 describe("the Radio tab", () => {
+  it("marks complete split-file lyrics even when its children have no album tags", () => {
+    const file = trackOf(10, "One file", { kind: "album", split: true, has_lyrics: true });
+    const tracks = [
+      file,
+      trackOf(11, "Opening", { segment_of: 10, artist: "", album: "", has_lyrics: true }),
+      trackOf(12, "Closing", { segment_of: 10, artist: "", album: "", has_lyrics: true }),
+    ];
+
+    renderRadio(tracks);
+
+    expect(screen.getByRole("img", { name: "All songs have lyrics" })).toBeInTheDocument();
+    expect(screen.getByText("One file", { selector: ".group-name" })).toBeInTheDocument();
+  });
+
+  it("does not mark incomplete split-file lyrics from only the children with matching tags", () => {
+    const file = trackOf(10, "One file", { kind: "album", split: true });
+    const tracks = [
+      file,
+      trackOf(11, "Opening", { segment_of: 10, album: "First tag", has_lyrics: true }),
+      trackOf(12, "Closing", { segment_of: 10, album: "Different tag" }),
+    ];
+
+    renderRadio(tracks);
+
+    expect(screen.getByRole("link", { name: /First tag/ })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "All songs have lyrics" })).not.toBeInTheDocument();
+  });
+
   it("plays the Account's own station", async () => {
     const { station } = renderRadio();
 

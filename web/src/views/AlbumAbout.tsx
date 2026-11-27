@@ -42,7 +42,9 @@ export function AlbumAbout({
   const [replacing, setReplacing] = useState<"upload" | "musicbrainz">();
   const about = useRef<HTMLElement>(null);
   const editor = onCloseRequestedEditor === undefined ? replacing : "upload";
-  const art = <Cover size="medium" cover={cover} className="album-art" />;
+  const art = (
+    <Cover size="medium" cover={cover} className="album-art" lyrics={{ artist, album }} />
+  );
   const framed = (
     <PictureFrame
       className="album-frame"

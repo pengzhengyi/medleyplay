@@ -18,8 +18,10 @@ import {
   api,
 } from "../api";
 import { formatSeen } from "../format";
+import { useFormattingLocale, useWords } from "../locale";
 import { useNow } from "../useNow";
 import { classOf, useNote } from "../useNote";
+import { deviceError } from "./deviceError";
 
 /** The choices for new devices, in the order the section shows them. */
 const ADMISSIONS: readonly { readonly admission: Admission; readonly said: string }[] = [
@@ -34,20 +36,23 @@ const ADMISSIONS: readonly { readonly admission: Admission; readonly said: strin
  * follow it.
  */
 export function DeviceSettings({ waiting }: { readonly waiting: readonly WaitingDevice[] }) {
+  const t = useWords();
   const [devices, setDevices] = useState<Devices | undefined>(undefined);
   const [removingAll, setRemovingAll] = useState(false);
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{ readonly cause: unknown }>();
+  const error = failure === undefined ? "" : deviceError(failure.cause, t);
   const notes = useNote();
   const now = useNow();
+  const locale = useFormattingLocale();
 
   const failed = (failure: unknown) => {
-    setError(failure instanceof Error ? failure.message : String(failure));
+    setFailure({ cause: failure });
   };
   const reload = () => {
     api.devices().then(setDevices, failed);
   };
   const act = (request: Promise<unknown>, done = "") => {
-    setError("");
+    setFailure(undefined);
     request.then(() => {
       reload();
       if (done !== "") {
@@ -67,7 +72,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
     if (devices === undefined) {
       return;
     }
-    setError("");
+    setFailure(undefined);
     setDevices({ ...devices, admission });
     api.saveAdmission(admission, devices.revision).then(setDevices, (failure: unknown) => {
       reload();
@@ -82,7 +87,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
   if (devices === undefined) {
     return error === "" ? (
       <p className="hint" aria-busy="true">
-        Reading the devices…
+        {t("Reading the devices…")}
       </p>
     ) : (
       <p role="alert">{error}</p>
@@ -93,7 +98,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
     <>
       {error !== "" && <p role="alert">{error}</p>}
       <fieldset className="mode-setting">
-        <legend>New devices</legend>
+        <legend>{t("New devices")}</legend>
         {ADMISSIONS.map(({ admission, said }) => (
           <label key={admission} className="mode-choice">
             <input
@@ -104,20 +109,21 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                 choose(admission);
               }}
             />
-            {said}
+            {t(said)}
           </label>
         ))}
       </fieldset>
-      <p className="hint">The computer running medleyplay is always let in.</p>
+      <p className="hint">{t("The computer running medleyplay is always let in.")}</p>
       {devices.waiting.length > 0 && (
         <>
-          <h4 className="device-heading">Waiting</h4>
-          <ul className="device-list" aria-label="Waiting devices">
+          <h4 className="device-heading">{t("Waiting")}</h4>
+          <ul className="device-list" aria-label={t("Waiting devices")}>
             {devices.waiting.map((device) => (
               <li key={device.id}>
                 <span className="device-name">{device.label}</span>
                 <span className="hint">
-                  {device.address} · code <strong>{device.code}</strong>
+                  {t("{{address}} · code", { address: device.address })}{" "}
+                  <strong>{device.code}</strong>
                 </span>
                 <span className="device-actions">
                   <button
@@ -126,7 +132,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                       act(api.allowDevice(device.id));
                     }}
                   >
-                    Allow
+                    {t("Allow")}
                   </button>
                   <button
                     type="button"
@@ -135,7 +141,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                       act(api.turnAwayDevice(device.id));
                     }}
                   >
-                    Turn away
+                    {t("Turn away")}
                   </button>
                 </span>
               </li>
@@ -143,29 +149,32 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
           </ul>
         </>
       )}
-      <h4 className="device-heading">Allowed</h4>
+      <h4 className="device-heading">{t("Allowed")}</h4>
       {devices.allowed.length === 0 ? (
-        <p className="hint">No devices yet. A new device asks when it opens medleyplay.</p>
+        <p className="hint">{t("No devices yet.")}</p>
       ) : (
-        <ul className="device-list" aria-label="Allowed devices">
+        <ul className="device-list" aria-label={t("Allowed devices")}>
           {devices.allowed.map((device) => (
             <li key={device.id}>
               <DeviceName device={device} onRenamed={reload} />
               <span className="hint">
                 {device.name !== null && `${device.label} · `}
-                {device.address} · {formatSeen(Date.parse(device.last_seen_at), now)}
+                {device.address} · {formatSeen(Date.parse(device.last_seen_at), now, { locale, t })}
               </span>
               {!device.this_device && (
                 <span className="device-actions">
                   <button
                     type="button"
                     className="secondary outline"
-                    aria-label={`Remove ${device.name ?? device.label} at ${device.address}`}
+                    aria-label={t("Remove {{device}} at {{address}}", {
+                      device: device.name ?? device.label,
+                      address: device.address,
+                    })}
                     onClick={() => {
                       act(api.removeDevice(device.id), "Removed.");
                     }}
                   >
-                    Remove
+                    {t("Remove")}
                   </button>
                 </span>
               )}
@@ -175,9 +184,12 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
       )}
       {others.length > 1 &&
         (removingAll ? (
-          <p className="device-remove-all" role="group" aria-label="Remove all devices">
+          <p className="device-remove-all" role="group" aria-label={t("Remove all devices")}>
             <span>
-              Remove {String(others.length)} devices? They sign in again only once allowed.
+              {t(
+                "Remove {{count}} devices? This signs them out. The New devices setting determines whether they can reconnect.",
+                { count: others.length },
+              )}
             </span>
             <button
               type="button"
@@ -186,7 +198,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                 act(api.removeOtherDevices(), "Removed.");
               }}
             >
-              Remove all
+              {t("Remove all")}
             </button>
             <button
               type="button"
@@ -195,7 +207,7 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                 setRemovingAll(false);
               }}
             >
-              Keep them
+              {t("Keep them")}
             </button>
           </p>
         ) : (
@@ -206,11 +218,11 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
               setRemovingAll(true);
             }}
           >
-            Remove all
+            {t("Remove all")}
           </button>
         ))}
       <p className={classOf(notes.note)} role="status">
-        {notes.note.text}
+        {t(notes.note.text)}
       </p>
     </>
   );
@@ -228,9 +240,11 @@ function DeviceName({
   readonly device: AllowedDevice;
   readonly onRenamed: () => void;
 }) {
+  const t = useWords();
   const [typed, setTyped] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{ readonly cause: unknown }>();
+  const error = failure === undefined ? "" : deviceError(failure.cause, t);
   const pencil = useRef<HTMLButtonElement>(null);
   // Closing the field gives focus back to the pencil that opened it.
   const refocus = useRef(false);
@@ -245,20 +259,20 @@ function DeviceName({
   const stop = () => {
     refocus.current = true;
     setTyped(undefined);
-    setError("");
+    setFailure(undefined);
   };
 
   if (typed === undefined) {
     return (
       <span className="device-name">
         {shown}
-        {device.this_device && <span className="device-tag">This device</span>}
+        {device.this_device && <span className="device-tag">{t("This device")}</span>}
         <button
           ref={pencil}
           type="button"
           className="icon device-rename"
-          aria-label={`Rename ${shown}`}
-          title="Rename"
+          aria-label={t("Rename {{device}}", { device: shown })}
+          title={t("Rename")}
           onClick={() => {
             setTyped(device.name ?? "");
           }}
@@ -274,7 +288,7 @@ function DeviceName({
       onSubmit={(event) => {
         event.preventDefault();
         setSaving(true);
-        setError("");
+        setFailure(undefined);
         api.renameDevice(device.id, typed.trim() === "" ? null : typed).then(
           () => {
             setSaving(false);
@@ -283,7 +297,7 @@ function DeviceName({
           },
           (failure: unknown) => {
             setSaving(false);
-            setError(failure instanceof Error ? failure.message : String(failure));
+            setFailure({ cause: failure });
           },
         );
       }}
@@ -298,7 +312,7 @@ function DeviceName({
         ref={(input) => {
           input?.focus();
         }}
-        aria-label={`Name of ${device.label}`}
+        aria-label={t("Name of {{device}}", { device: device.label })}
         value={typed}
         placeholder={device.label}
         maxLength={40}
@@ -307,10 +321,10 @@ function DeviceName({
         }}
       />
       <button type="submit" aria-busy={saving} disabled={saving}>
-        Save
+        {t("Save")}
       </button>
       <button type="button" className="secondary outline" onClick={stop}>
-        Cancel
+        {t("Cancel")}
       </button>
       {error !== "" && (
         <span role="alert" className="note failed">

@@ -2,6 +2,8 @@
  * @file How the page writes times.
  */
 
+import type { Words } from "./locale";
+
 /** Write `seconds` as minutes and seconds, such as `3:07`; an unknown length is `–:––`. */
 export function formatTime(seconds: number | undefined): string {
   if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
@@ -82,22 +84,32 @@ export function formatTimeLeft(ms: number): string {
     : `${String(hours)} hr ${String(minutes % 60)} min`;
 }
 
-const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const dayOptions = { month: "short", day: "numeric" } as const;
+const day = new Intl.DateTimeFormat(undefined, dayOptions);
 
 /**
  * Write how long ago something was seen, `now` being the time to count from:
  * `Just now`, `5 min ago`, `3 hr ago`, or its day, such as `Nov 7`.
  */
-export function formatSeen(at: number, now: number): string {
+export function formatSeen(
+  at: number,
+  now: number,
+  presentation?: { readonly locale: string; readonly t: Words },
+): string {
   const minutes = Math.floor((now - at) / 60_000);
   if (minutes < 1) {
-    return "Just now";
+    return presentation?.t("Just now") ?? "Just now";
   }
   if (minutes < 60) {
-    return `${String(minutes)} min ago`;
+    return presentation?.t("{{minutes}} min ago", { minutes }) ?? `${String(minutes)} min ago`;
   }
   const hours = Math.floor(minutes / 60);
-  return hours < 24 ? `${String(hours)} hr ago` : day.format(at);
+  if (hours < 24) {
+    return presentation?.t("{{hours}} hr ago", { hours }) ?? `${String(hours)} hr ago`;
+  }
+  const formatter =
+    presentation === undefined ? day : new Intl.DateTimeFormat(presentation.locale, dayOptions);
+  return formatter.format(at);
 }
 
 const clock = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });

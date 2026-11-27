@@ -54,6 +54,8 @@ void words.use(initReactI18next).init({
       translation: {
         downloading_one: "{{count}} song downloading",
         downloading_other: "{{count}} songs downloading",
+        devices_waiting_one: "{{count}} device waiting",
+        devices_waiting_other: "{{count}} devices waiting",
       },
     },
     "zh-Hans": { translation: zh },

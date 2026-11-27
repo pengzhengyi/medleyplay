@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Open the medleyplay GitHub repository from the icon at the top right.
 - When finding lyrics, compare the Library song's album and length with the
   results.
 - In the floating **Up next** panel, one button expands or collapses all album

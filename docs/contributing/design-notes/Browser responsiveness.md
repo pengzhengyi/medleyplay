@@ -2,9 +2,9 @@
 
 > [!NOTE]
 > **Implemented.** The Albums gallery skips
-> offscreen rendering while keeping its complete list and existing controls.
+> offscreen rendering and reuses unchanged cards during playback,
+> keeping its complete list and existing controls.
 > Artists and the first Library load are unchanged.
-> Reusing album contents during playback is approved and in progress below.
 
 ## Contents
 
@@ -19,7 +19,7 @@
 
 ## Scope
 
-Reduce unnecessary layout and painting in the existing Albums view.
+Reduce unnecessary layout, painting, and repeated card rendering in Albums.
 Keep every album in the DOM, in the same order, with the same links,
 counts, favorites, and playback actions. Do not paginate the catalog,
 change its API, or introduce a rendering dependency.
@@ -147,53 +147,68 @@ rendering are separate concerns.
 
 ## Album contents during playback
 
-> [!IMPORTANT]
-> **Approved; implementation in progress.** Reuse unchanged album cards while keeping
+> [!NOTE]
+> **Implemented.** Reuse unchanged album cards while keeping
 > playback controls and changing Library data current.
 
-### Measured target
+### Playback measurements
 
-After the [queue-rendering change](Playback.md#queue-rendering-during-playback),
-the largest recurring scripting cost among the measured Library, Albums,
-and Artists views is Albums. The diagnostic uses 1,906 synthetic tracks,
-**890 album cards**, 382 artist cards, and two Up next entries. The catalog
-is album-dense; its cost should not be attributed to every Library with
-1,906 tracks.
+Foreground Chrome compares baseline and candidate production builds on a
+loopback server. Each fresh browser context plays local silent WAV audio
+with two Up next entries. Only the local-file plugin is enabled; neither
+household data nor outside sites are used. Both builds keep all album cards
+and the existing offscreen containment.
 
-Local silent WAV files really play. Headless Chrome uses a 1280 by 800
-viewport with no artificial CPU slowdown. Each view is measured in three
-approximately three-second paused/playing pairs. View order rotates across
-rounds, and pause/play order alternates. The shared Mac's one-minute load
-average ranges from 7.5 to 8.6.
+There are seven adjacent pairs per fixture, alternating which build runs
+first, at 1280 by 800 with no artificial CPU slowdown. Three-second windows
+are normalized by their recorded elapsed time, which ranges from 3.002 to
+3.020 seconds. Each sample then presses Enter on **Volume down** three times
+and verifies both the audio volume and its displayed value. Event Timing
+measures each `keydown` through its next paint; the sample contributes the
+median of those three interactions.
 
-| View | Playing scripting per elapsed second, median | Paused scripting, median |
-| --- | ---: | ---: |
-| Library | 154 ms | 11 ms |
-| Albums | 490 ms | 0 ms |
-| Artists | 138 ms | 0 ms |
+| Album cards (tracks) | Measure | Baseline median | Candidate median | Median paired saving |
+| --- | --- | ---: | ---: | ---: |
+| 890 (1,906) | Scripting per elapsed second | 678 ms | 43 ms | 635 ms (93.8%) |
+| 890 (1,906) | Keydown to next paint | 336 ms | 168 ms | 176 ms (51.2%) |
+| 98 (210) | Scripting per elapsed second | 170 ms | 62 ms | 103 ms (62.6%) |
+| 98 (210) | Keydown to next paint | 128 ms | 96 ms | 32 ms (25.0%) |
 
-Albums layout costs only about 4 ms per elapsed second. Its separate
-3.33-second CPU profile attributes about 827 ms to `AlbumList`, including
-482 ms in `formatLength`, and 413 ms to separate `KindMark` renders.
-Those figures are not all additive: formatting is included in the list's
-time. Sorting the playable album order costs another 46 ms.
+Columns are medians across samples; paired savings and percentages are
+medians of differences within each pair. Scripting improves in every pair.
+The large gallery's interaction measure improves in every pair; the small
+gallery improves in five pairs and ties in two. Playback keeps advancing,
+with 11–12 progress events per window and every expected card still present.
+Profiles shift from repeated `AlbumList`, `KindMark`, and playable-order
+work to small header and navigation work.
 
-This identifies work to avoid, **not an achieved time saving**. Other views,
-real cover images, and physical phones are not measured. A separate startup
-check uses a warm server, 60 ms of simulated latency, and 1,048,576 bytes
-per second. In cold browser contexts, the first enabled Library title
-enters the DOM in 1.22–1.64 seconds, with 173–183 ms between track JSON completion and title
-insertion. Reusing a mounted album list does not improve its initial mount
-or the first Library load.
+Both fixtures are album-dense. A Library with fewer album cards for the same
+number of tracks may see a different saving. This is a busy, shared Mac:
+its one-minute load average ranges from 7.2 to 30.9 during large-gallery pairs and 15.6 to
+85.1 during small-gallery pairs. These are comparative lab results, not
+quiet-machine estimates or field INP.
 
-### Proposed boundary
+Not every metric improves. Layout costs a paired median 3.3 ms more per
+elapsed second for the large gallery and 2.2 ms more for the small one.
+Paused Library-to-Albums navigation, measured by a DOM and following-frame
+proxy, has mixed results: paired medians are 3 ms later and 16 ms sooner,
+respectively. That proxy is not a paint timestamp. Three paired Library
+and Artists controls per fixture also vary; no gain is attributed to this
+change in those views.
 
-Keep the change local to `Views.tsx`:
+The worst of the three small-gallery key responses is slower in three
+pairs, by up to 128 ms. The samples therefore do not establish improved
+tail latency or prove the absence of regressions. **No startup or initial
+gallery-mount improvement is claimed.**
 
-| Part | Proposed change | What stays live |
+### Rendering boundary
+
+The implementation stays local to `Views.tsx`:
+
+| Part | Implementation | What stays live |
 | --- | --- | --- |
-| `AlbumList` | Wrap the shared card list in React `memo`, using its default comparison. | Changed albums, favorites, language, and lyrics context. |
-| `Albums` | Cache the filtered, sorted `playable` array with `useMemo` on `tracks`. | The existing Play/Shuffle callbacks and their current playable order. |
+| `AlbumList` | The shared card list uses React `memo` with its default comparison. | Changed albums, favorites, language, and lyrics context. |
+| `Albums` | The filtered, sorted `playable` array uses `useMemo` on `tracks`. | The existing Play/Shuffle callbacks and their current playable order. |
 
 The list already receives only album data, favorites, and the offscreen
 rendering flag. Its inputs come from existing cached derivations.
@@ -205,44 +220,47 @@ flowchart LR
   P["Playback progress"] --> S["Albums shell and current controls"]
   T["Tracks"] --> O["Cached playable order"]
   O --> S
-  A["Albums and favorites"] --> C["Memoized album cards"]
+  A["Albums and favorites"] --> C["Reused album cards"]
   L["Language and lyrics context"] --> C
 ```
 
 Language is read inside the list, and lyrics inside its marks. Their
-subscriptions must continue updating through `memo`. Metadata and favorite
+subscriptions continue updating through `memo`. Metadata and favorite
 updates replace their input data rather than mutating it. Changes to the
 current or next track may still rebuild the derived album list; removing
 that occasional work is outside this component.
 
-Keep every card and the existing CSS containment. Do not virtualize,
-paginate, cache translated strings, wrap the whole `CurrentView` in `memo`,
-or change player state ownership. Leave `ArtistList` unchanged to keep this
-step focused on the largest measured target.
+Every card and the existing CSS containment stay in place. There is no
+virtualization, pagination, translated-string cache, whole-`CurrentView`
+cache, or player state ownership change. `ArtistList` is unchanged.
 
-### Acceptance before retention
+### Playback validation
 
-- [ ] Preserve mounted-card updates for favorites, titles, artist names,
+- [x] Preserve mounted-card updates for favorites, titles, artist names,
       covers, language, and complete/incomplete album lyrics.
-- [ ] Check lyrics-context updates with unchanged album-list props.
-- [ ] Preserve artist filtering and changing or clearing search queries;
+- [x] Check lyrics-context updates with unchanged album-list props.
+- [x] Preserve artist filtering and changing or clearing search queries;
       search also uses the shared album list.
-- [ ] Keep Play and Shuffle bound to current actions and playable tracks,
+- [x] Keep Play and Shuffle bound to current actions and playable tracks,
       including availability changes and an empty playable set.
-- [ ] Preserve complete card counts, links, keyboard focus, and responsive
+- [x] Preserve complete card counts, links, keyboard focus, and responsive
       layout in light/dark and desktop/phone views.
-- [ ] Compare baseline and candidate in seven alternating pairs for large
+- [x] Compare baseline and candidate in seven alternating pairs for large
       and small galleries, recording actual card counts and host load.
-- [ ] Measure scripting and foreground input-to-next-paint during real silent
+- [x] Measure scripting and foreground input-to-next-paint during real silent
       playback. Treat DOM/frame readiness as a proxy, not a paint timestamp.
-- [ ] Check navigation and the unchanged Library/Artists views for regressions.
-- [ ] Verify the candidate profile removes repeated card work, rather than
+- [x] Check navigation and the unchanged Library/Artists views for regressions.
+- [x] Verify the candidate profile removes repeated card work, rather than
       hiding cards or reducing playback updates.
-- [ ] Obtain independent implementation review and retain only demonstrated
+- [x] Obtain independent implementation review and retain only demonstrated
       benefit; do not add timing thresholds to required unit tests.
 
-Use the existing component and browser suites for behavior, not private
-render-call counts. This adds no dependency or required CI category.
+The existing component and browser suites check behavior, not private
+render-call counts. Favorites-only changes update retained cards, and
+lyrics context updates pass through unchanged view props without exporting
+the private list for tests. Desktop and phone hover/focus captures in both
+themes show no pixels differing by more than 10 channel levels. This adds
+no dependency or required CI category.
 
 ## Further investigations
 

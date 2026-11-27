@@ -141,6 +141,7 @@ class Track:
     video: str | None = None
     """The page of the video the Track's audio came from, such as a Bilibili video's, if known."""
     segment_of: TrackId | None = None
+    segment_start_ms: int | None = None
     """The album file this Track is a song of, if it is one."""
     split: bool = False
     """Whether this Track's file is split into songs, which then stand for it."""

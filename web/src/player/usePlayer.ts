@@ -18,6 +18,7 @@ import {
 
 import { ApiError, type PlaybackAnswer, type Track, api, coverUrl } from "../api";
 import { newId } from "../ids";
+import { segmentStretch, splitChanged, updatePlayingAlbum, withoutDeletedSongs } from "./albumSync";
 import { PlayTime, reportOf } from "./playCount";
 import { recordPlay, sendPlays, updatePlay } from "./plays";
 import {
@@ -157,15 +158,20 @@ export function usePlayer(
 ): readonly [Player, RefObject<HTMLAudioElement | null>] {
   const audio = useRef<HTMLAudioElement>(null);
   const [queue, dispatch] = useReducer(reduce, EMPTY);
+  const [albumRevision, setAlbumRevision] = useState(0);
+  const previousTracks = useRef(tracks);
+  const updatedPosition = useRef<{ queue: Queue; seconds: number } | undefined>(undefined);
   const [view, setView] = useState<View>({
     key: undefined,
     status: { kind: "idle" },
     position: 0,
     duration: undefined,
   });
-  const ahead = useRef(new Map<number, PlaybackAnswer>());
+  const ahead = useRef(new Map<number, Prefetched>());
   const loads = useRef(0);
   const playingKey = useRef<string | undefined>(undefined);
+  const loadedKey = useRef<string | undefined>(undefined);
+  const waitingMetadata = useRef(false);
   // A restored queue starts paused at its saved position, once its Track's metadata loads.
   const restore = useRef<number | undefined>(undefined);
   const resumeAt = useRef<number | undefined>(undefined);
@@ -190,6 +196,7 @@ export function usePlayer(
   const playing = current(queue);
   const key = playing?.key;
   const trackId = playing?.trackId;
+  const trackFor = useEffectEvent((id: number) => tracks.get(id));
 
   /** Change what the page shows about the entry `forKey`, ignoring an entry since replaced. */
   const show = (forKey: string | undefined, change: Partial<View>) => {
@@ -278,9 +285,12 @@ export function usePlayer(
   // Load the current entry whenever it changes; a later load supersedes an earlier one.
   useEffect(() => {
     const element = audio.current;
+    if (key !== undefined && playingKey.current === key && loadedKey.current === key) return;
     const boundary = followingBoundary.current;
     followingBoundary.current = undefined;
     playingKey.current = key;
+    loadedKey.current = undefined;
+    waitingMetadata.current = false;
     if (element === null) {
       return;
     }
@@ -303,9 +313,10 @@ export function usePlayer(
     takenPlaying.current = false;
     takenCounted.current = false;
     takenPlay.current = undefined;
+    const requestedTrack = trackFor(trackId);
     void (async () => {
       try {
-        const answer = await answerFor(trackId, ahead.current, () => {
+        const answer = await answerFor(trackId, requestedTrack, ahead.current, () => {
           if (!stale()) {
             show(key, { status: { kind: "preparing" } });
           }
@@ -334,8 +345,12 @@ export function usePlayer(
             listening.current = { ...listening.current, play: carried, fromMs, sentMs: fromMs };
           }
         }
-        const song = stretchOf(answer);
+        const latestTrack = trackFor(trackId);
+        const song =
+          (splitChanged(requestedTrack, latestTrack) ? segmentStretch(latestTrack) : undefined) ??
+          stretchOf(answer);
         stretch.current = song;
+        loadedKey.current = key;
         if (playsFrom(element, answer.audio_url)) {
           // A song of the file already loaded: play on, from its start or the second taken.
           const from =
@@ -363,6 +378,7 @@ export function usePlayer(
           }
           return;
         }
+        waitingMetadata.current = true;
         element.src = answer.audio_url;
         if (playOn) {
           await element.play();
@@ -469,7 +485,10 @@ export function usePlayer(
       return;
     }
     const coming = following(queue);
-    const early = coming === undefined ? undefined : ahead.current.get(coming.trackId);
+    const early =
+      coming === undefined
+        ? undefined
+        : prefetchedAnswer(ahead.current.get(coming.trackId), trackFor(coming.trackId));
     const end = stretch.current.end;
     const flowsOn =
       early?.state === "ready" &&
@@ -483,6 +502,101 @@ export function usePlayer(
     }
     next();
   });
+
+  const refreshAlbum = useEffectEvent(() => {
+    const before = previousTracks.current;
+    previousTracks.current = tracks;
+    if (before === tracks || key === undefined || trackId === undefined) return;
+    const element = audio.current;
+    const loaded =
+      element !== null &&
+      loadedKey.current === key &&
+      view.key === key &&
+      (view.status.kind === "playing" ||
+        view.status.kind === "paused" ||
+        view.status.kind === "blocked");
+    const revised = updatePlayingAlbum(
+      queue,
+      before,
+      tracks,
+      loaded && !waitingMetadata.current ? element.currentTime : undefined,
+      newId,
+    );
+    const activeChanged = splitChanged(before.get(trackId), tracks.get(trackId));
+    const coming = following(queue)?.trackId;
+    if (
+      revised !== undefined ||
+      activeChanged ||
+      (coming !== undefined && splitChanged(before.get(coming), tracks.get(coming)))
+    ) {
+      ahead.current = new Map();
+      setAlbumRevision((revision) => revision + 1);
+    }
+
+    const nextQueue = withoutDeletedSongs(revised ?? queue, before, tracks);
+    const entry = current(nextQueue);
+    const track = entry === undefined ? undefined : tracks.get(entry.trackId);
+    const file = before.get(trackId)?.segment_of;
+    const sameFile = file != null && (track?.segment_of === file || track?.id === file);
+    const song = !sameFile ? undefined : track.id === file ? WHOLE : segmentStretch(track);
+    if (loaded && entry?.key === key && waitingMetadata.current && song !== undefined) {
+      if (activeChanged) stretch.current = song;
+    } else if (
+      loaded &&
+      !waitingMetadata.current &&
+      entry !== undefined &&
+      song !== undefined &&
+      (revised !== undefined || activeChanged)
+    ) {
+      if (entry.key !== key) {
+        ++loads.current;
+        listening.current?.time.update(element.currentTime);
+        listen(entry.trackId);
+      }
+      playingKey.current = loadedKey.current = entry.key;
+      stretch.current = song;
+      ended.current = undefined;
+      const start = Math.max(element.currentTime, song.start);
+      if (start !== element.currentTime) element.currentTime = start;
+      const left = remainingIn(song, start);
+      clearTimeout(ending.current);
+      if (left !== undefined && !element.paused) {
+        ending.current = setTimeout(finish, (Math.max(left, 0) * 1000) / element.playbackRate);
+      }
+      const seconds = positionIn(song, Math.min(start, song.end ?? start));
+      updatePositionState(element, song);
+      show(entry.key, {
+        duration: lengthOf(song, element.duration),
+        position: seconds,
+        status:
+          view.status.kind === "blocked"
+            ? view.status
+            : { kind: element.paused ? "paused" : "playing" },
+      });
+      if (nextQueue === queue) {
+        lastSaved.current = seconds;
+        void saveQueue({ queue, seconds });
+      } else {
+        updatedPosition.current = { queue: nextQueue, seconds };
+      }
+    } else if (loaded && entry !== undefined && entry.key !== key && element.paused) {
+      restore.current = 0;
+      takenPlaying.current = false;
+    }
+    if (nextQueue !== queue) {
+      if (entry?.key === key && updatedPosition.current?.queue !== nextQueue) {
+        const seconds =
+          loaded && !waitingMetadata.current
+            ? positionIn(stretch.current, element.currentTime)
+            : (resumeAt.current ?? 0);
+        updatedPosition.current = { queue: nextQueue, seconds };
+      }
+      dispatch({ type: "restore", queue: nextQueue });
+    }
+  });
+  useEffect(() => {
+    refreshAlbum();
+  }, [tracks]);
 
   const onTime = useEffectEvent((element: HTMLAudioElement) => {
     const position = positionIn(stretch.current, element.currentTime);
@@ -513,6 +627,7 @@ export function usePlayer(
       element.currentTime = fileTimeOf(song, resumeAt.current ?? 0, element.duration);
       resumeAt.current = undefined;
     }
+    waitingMetadata.current = false;
     show(playingKey.current, { duration: lengthOf(song, element.duration) });
     updatePositionState(element, song);
   });
@@ -608,8 +723,11 @@ export function usePlayer(
 
   // Save the queue whenever it changes.
   useEffect(() => {
-    lastSaved.current = 0;
-    void saveQueue({ queue, seconds: 0 });
+    const updated = updatedPosition.current;
+    const seconds = updated?.queue === queue ? updated.seconds : 0;
+    updatedPosition.current = undefined;
+    lastSaved.current = seconds;
+    void saveQueue({ queue, seconds });
   }, [queue]);
 
   // The lock screen: the Track's details, and only the controls iOS shows as buttons.
@@ -624,9 +742,9 @@ export function usePlayer(
   const comingTrack = coming?.trackId;
   useEffect(() => {
     if (loaded && comingTrack !== undefined && comingKey !== key) {
-      void lookAhead(comingTrack, ahead.current);
+      void lookAhead(comingTrack, trackFor(comingTrack), ahead.current);
     }
-  }, [loaded, key, comingKey, comingTrack]);
+  }, [albumRevision, loaded, key, comingKey, comingTrack]);
   useEffect(() => {
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata =
@@ -802,10 +920,11 @@ function failureOf(error: unknown): Status | undefined {
  */
 async function answerFor(
   trackId: number,
-  ahead: Map<number, PlaybackAnswer>,
+  track: Track | undefined,
+  ahead: Map<number, Prefetched>,
   onPreparing: () => void,
 ): Promise<PlaybackAnswer> {
-  const early = ahead.get(trackId);
+  const early = prefetchedAnswer(ahead.get(trackId), track);
   ahead.delete(trackId);
   let answer = early?.state === "ready" ? early : await api.playback(trackId);
   for (
@@ -834,15 +953,31 @@ async function finishedJob(jobId: number) {
 }
 
 /** Ask now how `trackId` plays, so `ended` only swaps the source; it starts preparing too. */
-async function lookAhead(trackId: number, ahead: Map<number, PlaybackAnswer>): Promise<void> {
-  if (ahead.has(trackId)) {
+async function lookAhead(
+  trackId: number,
+  track: Track | undefined,
+  ahead: Map<number, Prefetched>,
+): Promise<void> {
+  if (prefetchedAnswer(ahead.get(trackId), track) !== undefined) {
     return;
   }
   try {
-    ahead.set(trackId, await api.playback(trackId));
+    ahead.set(trackId, { answer: await api.playback(trackId), track });
   } catch {
     // The next Track asks again when its turn comes.
   }
+}
+
+interface Prefetched {
+  readonly answer: PlaybackAnswer;
+  readonly track: Track | undefined;
+}
+
+function prefetchedAnswer(
+  early: Prefetched | undefined,
+  track: Track | undefined,
+): PlaybackAnswer | undefined {
+  return early !== undefined && !splitChanged(early.track, track) ? early.answer : undefined;
 }
 
 /** Return the play of a counted `listen`, with how long it has been listened to, to hand on. */

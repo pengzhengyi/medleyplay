@@ -152,6 +152,11 @@ as one file.
 - **The seek bar, the times, the saved position, and the lock screen** use the
   segment's own position and length, and seeking stays within it.
 - **A play counts as for any Track,** by the segment's own length.
+- **Saving a song list or undoing a split** updates open albums and their
+  playback. A complete sequence of the file's songs in the playing queue
+  takes the saved list. A selection of songs keeps its order and only picks up
+  the new boundaries. Playback keeps its file position when it falls within a
+  song and does not change between playing and paused.
 - **The lock screen** shows each song's title and cover; an album played with
   the iPhone locked is checked by hand before this is done, since a locked
   screen may slow the page's timers.
@@ -271,7 +276,8 @@ Bad, 48 minutes, as the AI guessed     ↳ snapped
 | `GET /api/tracks/{id}/silences` | Signed in | What is known of the gaps in the file's audio: found, with each gap; being found; being prepared; not looked for; or not found, as ffmpeg is missing or couldn't read it |
 | `POST /api/tracks/{id}/silences/find` | Signed in | Finds them, unless known or being found; 409 while the `ffmpeg` plugin is off, 422 for a song of a split file |
 
-Tracks in every list gain `segment_of`, the album file's id, and `split`.
+Tracks in every list include `segment_of`, the album file's id, and
+`segment_start_ms`, the song's start in that file. `split` marks the album file.
 
 ## Testing
 

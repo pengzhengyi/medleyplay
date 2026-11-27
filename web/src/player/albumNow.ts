@@ -13,6 +13,7 @@
 
 import type { Track } from "../api";
 import { songsByFile } from "../library/playOrder";
+import { fileSongs, segmentStretch } from "./albumSync";
 import { type Entry, type Queue, RESTART_AFTER, current } from "./queue";
 
 /** A song of the album playing, and where it starts on the album's timeline. */
@@ -94,8 +95,7 @@ export function playingOf(queue: Queue, tracks: ReadonlyMap<number, Track>, posi
 }
 
 /**
- * Return a split file playing whole as an album of its songs, in their order, each
- * starting in the file where the lengths before it end; the song under `position` plays.
+ * Return the songs of a split file playing whole, using their starts in the file.
  */
 function wholeFileOf(
   entry: Entry,
@@ -103,7 +103,22 @@ function wholeFileOf(
   tracks: ReadonlyMap<number, Track>,
   position: number,
 ): Playing {
-  const ordered = songsByFile([...tracks.values()]).get(file.id) ?? [];
+  const saved = fileSongs(tracks, file.id);
+  if (saved.length > 0 && saved.every((track) => track.segment_start_ms != null)) {
+    const songs = saved.map((track) => {
+      const start = segmentStretch(track)?.start ?? 0;
+      const length = track.duration_ms === null ? undefined : track.duration_ms / 1000;
+      return { entry, track, start, from: start, length };
+    });
+    const at = songAt(songs, position);
+    return {
+      kind: "album",
+      songs,
+      current: at?.index ?? 0,
+      length: file.duration_ms === null ? undefined : file.duration_ms / 1000,
+    };
+  }
+  const ordered = songsByFile(saved).get(file.id) ?? [];
   let start: number | undefined = 0;
   const songs: AlbumSong[] = [];
   for (const track of ordered) {
@@ -196,11 +211,16 @@ export function albumTimeline(
   }
   // A song's real length can differ a little from its details', so it stays within its own.
   const within = Math.min(Math.max(position - now.from, 0), now.length ?? position);
+  const first = songs[0];
   return {
-    position: now.start + within,
+    position: first !== undefined && position < first.start ? position : now.start + within,
     length,
     marks: songs.map((song) => ({ start: song.start, title: song.track?.title ?? "" })),
     seek: (seconds) => {
+      if (first !== undefined && seconds >= 0 && seconds < first.start) {
+        playSong(first, seconds);
+        return;
+      }
       const at = songAt(songs, Math.min(Math.max(seconds, 0), length));
       const song = at === undefined ? undefined : songs[at.index];
       if (at !== undefined && song !== undefined) {

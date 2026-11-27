@@ -1,5 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 
+import type { Track } from "../src/api";
+
 // Both tests open Alpha's songs and the first splits it, so they run one after the other,
 // in a project of their own that waits for every other test (see playwright.config.ts).
 test.describe.configure({ mode: "default" });
@@ -57,4 +59,73 @@ test("an empty song list's caret is one line tall, not as tall as the two-line e
   const caret = await dialog.locator(".cm-cursor-primary").boundingBox();
 
   expect(caret?.height ?? Infinity).toBeLessThanOrEqual((example?.height ?? 0) / 2 + 1);
+});
+
+test("saving song boundaries updates the album and playing timeline in another tab", async ({
+  page,
+  request,
+}) => {
+  const tracks = (await (await request.get("/api/tracks")).json()) as Track[];
+  const file = tracks.find((track) => track.title === "Alpha");
+  if (file === undefined) throw new Error("Missing Alpha fixture.");
+  const details = `/api/tracks/${String(file.id)}/details`;
+  const songs = `/api/tracks/${String(file.id)}/songs`;
+  const album = "Boundary review album";
+  expect((await request.put(details, { data: { values: { album } } })).ok()).toBe(true);
+
+  const editing = await page.context().newPage();
+  try {
+    expect(
+      (
+        await request.put(songs, {
+          data: {
+            rows: [
+              { start_ms: 0, title: "Opening" },
+              { start_ms: 30_000, title: "Second half" },
+            ],
+          },
+        })
+      ).ok(),
+    ).toBe(true);
+    const url = `/#/album?artist=&name=${encodeURIComponent(album)}`;
+    await page.goto(url);
+    const opening = row(page, "Opening");
+    await expect(opening.getByRole("cell", { name: "0:30", exact: true })).toBeVisible();
+    await opening.getByRole("button", { name: "Opening", exact: true }).click();
+    const player = page.getByRole("region", { name: "Player" });
+    const parts = player.locator(".seek-segment");
+    await expect(parts).toHaveCount(2);
+    await expect(player.getByRole("button", { name: "Pause" })).toBeVisible();
+    await editing.goto(url);
+    await row(editing, "Opening").getByRole("button", { name: "More actions for Opening" }).click();
+    await editing.getByRole("menuitem", { name: "Edit songs…" }).click();
+    const editor = editing.getByRole("dialog");
+    await editor.getByRole("textbox", { name: "Start of song 2" }).fill("0:20");
+    await editor.getByRole("button", { name: "Add a song" }).click();
+    await editor.getByRole("textbox", { name: "Start of song 3" }).fill("0:40");
+    await editor.getByRole("textbox", { name: "Title of song 3" }).fill("Encore");
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(
+      row(editing, "Opening").getByRole("cell", { name: "0:20", exact: true }),
+    ).toBeVisible();
+    await expect(opening.getByRole("cell", { name: "0:20", exact: true })).toBeVisible();
+    await expect(row(page, "Encore")).toBeVisible();
+    await expect(parts).toHaveCount(3);
+    await expect(parts.first()).toHaveCSS("--width", String(20 / 60));
+    await expect(
+      player.getByRole("button", { name: `Album: ${album}, song 1 of 3` }),
+    ).toBeVisible();
+    await expect(player.getByRole("button", { name: "Pause" })).toBeVisible();
+  } finally {
+    await editing.close();
+    expect((await request.delete(songs)).ok()).toBe(true);
+    expect(
+      (
+        await request.post("/api/tracks/details", {
+          data: { track_ids: [file.id], values: { album: null } },
+        })
+      ).ok(),
+    ).toBe(true);
+  }
 });

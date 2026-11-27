@@ -41,6 +41,7 @@ export interface Track {
   readonly video: string | null;
   /** The album file this Track is a song of, if it is one. */
   readonly segment_of: number | null;
+  readonly segment_start_ms?: number | null;
   /** Whether this Track's file is split into songs, which then stand for it. */
   readonly split: boolean;
   /** Whether the Track is a song or a whole album in one file. */

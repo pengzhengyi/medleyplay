@@ -977,6 +977,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Saving an album's song list updates the open album page and the playing
+  timeline on other open devices, without restarting playback.
 - Lyrics notation stays beneath the search bar and table headings when songs
   scroll behind them.
 - Mark a song as **No album (single)** in Edit details to stop album suggestions

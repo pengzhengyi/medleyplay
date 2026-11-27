@@ -240,12 +240,17 @@ def keep_as_one(db: Session, track_id: TrackId, now: datetime) -> None:
 
 def album_file_of(db: Session) -> dict[TrackId, TrackId]:
     """Return the album file of every song, each song's Track to its file's."""
+    return {song: album for song, (album, _) in album_song_locations(db).items()}
+
+
+def album_song_locations(db: Session) -> dict[TrackId, tuple[TrackId, int]]:
+    """Return each song's album Track and start in milliseconds."""
     rows = db.execute(
-        select(SegmentRow.track_id, SourceRow.track_id).join(
+        select(SegmentRow.track_id, SourceRow.track_id, SegmentRow.start_ms).join(
             SourceRow, SourceRow.id == SegmentRow.album_source_id
         )
     )
-    return {TrackId(song): TrackId(album) for song, album in rows.all()}
+    return {TrackId(song): (TrackId(album), start) for song, album, start in rows.all()}
 
 
 def drop_songs(db: Session, source_ids: Select[tuple[int]]) -> None:

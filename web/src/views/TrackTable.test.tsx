@@ -741,7 +741,7 @@ describe("filtering", () => {
       expect(shownTitles()).toEqual(["First"]);
       await user.click(screen.getByRole("button", { name: "移除筛选条件：艺人：Search" }));
 
-      expect(screen.getByRole("status")).toHaveTextContent("已移除筛选条件。");
+      expect(screen.getByRole("status")).toHaveTextContent(/^已移除筛选条件$/u);
       expect(shownTitles()).toEqual(["First", "Second"]);
     } finally {
       await user.selectOptions(language, "auto");

@@ -6,8 +6,7 @@
 > read, and while a dialog, panel, or view waits for its code. It is the last of four
 > steps after [Cached reads](Cached%20reads.md), [Cheap reloads](Cheap%20reloads.md),
 > and [Cover thumbnails](Cover%20thumbnails.md).
-> Cold-part readiness is investigated below; its contained loading change is
-> proposed, not implemented.
+> Cold-part readiness covers the same boundary when its code is not ready yet.
 
 ## Contents
 
@@ -140,8 +139,8 @@ is the part's frame. The outer `fallback={null}` goes.
 | The list editor | `Opening the list…`, as today, now with its own boundary, so a failure leaves the Songs panel and its edits |
 | Settings, Clean up, Insights | `Loading…` in the view, as today |
 
-The frame of a dialog holds its place in the focus order: ✕ takes focus as the dialog
-would, and Escape closes it.
+The frame of a dialog holds its place in the focus order: the empty dialog
+itself takes focus, and Escape closes it.
 
 ## A part that fails to load
 
@@ -221,7 +220,7 @@ The duration is a framework detail, not an application timer to override.
 | Collaborator | Responsibility |
 | --- | --- |
 | `lazyPart` | Remembers the successfully loaded component as well as the shared promise |
-| The part's `Component` wrapper | Chooses the ready component or existing lazy component for this mount; keeps that choice stable after mounting |
+| The part's `Component` wrapper | Captures its rendering mode, load generation, and already-ready component once per mount |
 | `LazyPart` | Provides the loading frame, error messages, and keyed remount on retry |
 | `preloadWhenIdle` | Keeps the order, cancellation, and single-part loading policy |
 
@@ -233,7 +232,7 @@ tree from scratch; that is distinct from resetting an editor already in use.
 | State at opening | Behavior |
 | --- | --- |
 | Code already loaded | Render it directly, with no module-loading suspension |
-| Code absent or still loading | Use the existing lazy path and loading frame |
+| Code absent or still loading | Use the local frame described in [Cold-part readiness](#cold-part-readiness); plain Suspense callers keep the native lazy path |
 | Preload failed | Preserve the existing retry and failure-reset behavior |
 | Loaded component throws | Preserve the rendering-error boundary, not an upgrade warning |
 | Parent updates during editing | Preserve the component, draft, focus, and selection |
@@ -335,15 +334,15 @@ further attribution.
 ## Cold-part readiness
 
 > [!NOTE]
-> **In progress.** Show module-loading feedback through a local context and
+> **Implemented.** Show module-loading feedback through a local context and
 > React state, without changing the public part contract or its callers.
 
-A cold Songs editor can finish downloading its module and then wait
+Native module suspension can finish downloading the Songs editor and then wait
 roughly another quarter-second before mounting. Its song-data request
 starts only after that mount. This is separate from connection waiting
 and from the already-fixed preloaded case.
 
-Three paired diagnostic samples hold the Songs module until its loading
+Three paired diagnostic samples hold an in-flight Songs module until its loading
 frame is visible, then release it. The production baseline shows useful
 controls about 360 ms after the click, with about 285 ms between module
 response completion and controls. A build-only experiment removes
@@ -398,7 +397,8 @@ already presented by an opened part:
 | Try again or a new preload after failure | Reset the failed generation, preserving the existing retry interval and classification. |
 | Closed before completion | Ignore that instance's late result while keeping the shared module load. |
 
-The framed component observes its generation through an effect with
+The framed component is created once per `lazyPart` factory, not during
+rendering. It observes its generation through an effect with
 cleanup, using React state for pending, ready, and failed results.
 `StrictMode` effect replay still shares one load. No global subscription
 store, private React timer change, synchronous flush, or new preload
@@ -440,14 +440,83 @@ dependencies, or the set of eagerly loaded parts require a separate decision.
 - The set of eagerly loaded parts, preload order, Account behavior, server API, and
   unrelated dialogs remain unchanged.
 
-Approval requires focused tests for both rendering paths, failed preload
-versus failed opening, failed reopen and explicit retry, `StrictMode`,
-late resolution after unmount, nested contexts, and stable editing.
-Retention requires a supported-API implementation and
-paired production measurements for cold, pending, ready, and reopened
-parts. A smaller and larger song list, a non-editor part, slow/failing
-module loads, and phone/desktop keyboard behavior are controls.
-No improvement is claimed until that implementation passes review.
+Focused tests cover both paths, failed preload versus failed opening,
+failed reopen and explicit retry, `StrictMode`, late resolution after
+unmount, nested contexts, and stable editing. Renewal depends only on
+the current generation's opening failure: an old failed preload cannot
+cause a new, unfinished opening to be replaced.
+
+### Cold-part production measurements
+
+Separate production builds use the same disposable API, a 1,906-track
+catalog, and a 12-song album. Source maps verify that only `lazyPart`,
+`LazyPart`, and the new internal context differ; React's implementation
+is identical. Chrome runs silently at 1280 by 800, without CPU or
+network throttling. Each sample uses a fresh browser context, and pair
+order alternates. One-minute host load stays below five; no build or
+test runs during measurements.
+
+The primary comparison holds the target module response until its
+loading frame is visible, then releases it. This represents an absent
+or unfinished module at opening, not its frequency in normal use.
+Seven pairs per part measure useful-control DOM insertion and a
+subsequent frame opportunity. Visibility and enabled state are checked
+afterward; neither timing is an exact presentation timestamp or field INP.
+
+| Part | Useful controls, baseline → implementation | Frame opportunity, baseline → implementation | Median paired frame saving |
+| --- | --- | --- | --- |
+| Songs | 362 → 112 ms | 380 → 128 ms | 252 ms |
+| Fill from a list | 340 → 90 ms | 351 → 101 ms | 245 ms |
+| Settings | 392 → 140 ms | 448 → 194 ms | 254 ms |
+
+Every primary pair improves. After module response completion, median
+time to useful controls falls from 285 to 38 ms for Songs, 297 to 45 ms
+for the list, and 276 to 19 ms for Settings. These are separate medians;
+their differences need not equal median within-pair savings.
+
+Three additional cold pairs per part prevent idle callbacks in both
+builds so the module first loads on demand. This also postpones idle
+supporting reads, so it is a controlled cold case rather than a startup
+benchmark. Every pair improves; paired frame savings are about 266,
+250, and 186 ms for Songs, the list, and Settings.
+
+A 100-song control retains the benefit in every one of three held-module
+pairs: Songs controls move from 412 to 159 ms and the list from 371 to
+135 ms. Preloaded controls at both album sizes and reopening controls
+show only small, mixed paired changes, not another general gain.
+
+### Timing and focus tradeoffs
+
+Unrestricted early openings give the list less time to preload because
+Songs opens sooner. Its own click-to-controls interval is a median
+paired 30 ms longer in three pairs and 18 ms longer in a five-pair
+follow-up. In that follow-up, adding the two application waits gives
+401 → 156 ms, with a median paired 242 ms saving; four of five pairs improve.
+The pair where Songs is already preloaded is 16 ms slower overall.
+The raw scripted flow includes substantial Playwright waiting between
+the two clicks; that interval is excluded from the application timings.
+Both the List slowdown and the combined waits remain in the evidence.
+This does not mean every individual click becomes faster.
+
+Click Event Timing is separate from useful content. In the primary
+comparison its median is unchanged for Songs and rises by 8 ms for
+the list and Settings. The controlled cold list comparison has a
+40 ms median paired increase. Moving useful work earlier is not an
+INP-improvement claim.
+
+Cold Songs openings keep the native dialog itself focused, just as
+the baseline does; preloaded openings can focus the first control
+immediately. No new focus policy is introduced. Eight cold editor
+width/theme/motion checks preserve drafts, selection, validation,
+Escape, and reopening.
+
+Separate device-window checks compare baseline and implementation at
+phone and desktop widths: replacement, a slow module, closing before
+completion, and module failure. The empty frame keeps focus and remains
+closable; replacement does not act like a user close. These checks use
+fixed synthetic share metadata, not the Mac's changing network interfaces.
+They verify error display and closing in Chrome; deterministic component
+tests verify successful explicit retry and cached failure on reopening.
 
 ## Assets sent gzipped
 

@@ -10,6 +10,7 @@ import { Component, Fragment, type ReactNode, Suspense, useEffect, useState } fr
 
 import { PartLoadError, forgetFailedLoads } from "../lazyPart";
 import { useWords } from "../locale";
+import { PartFrame } from "../partFrame";
 
 /** Why a part isn't shown. */
 type Failure = "unreachable" | "updated" | "missed" | "broken";
@@ -28,17 +29,16 @@ export function LazyPart({
   readonly children: ReactNode;
 }) {
   const t = useWords();
+  const opening = frame(
+    <p className="empty" aria-busy="true">
+      {t(doing)}
+    </p>,
+  );
   return (
     <PartBoundary failed={(error, retry) => frame(<PartFailed error={error} retry={retry} />)}>
-      <Suspense
-        fallback={frame(
-          <p className="empty" aria-busy="true">
-            {t(doing)}
-          </p>,
-        )}
-      >
-        {children}
-      </Suspense>
+      <PartFrame value={opening}>
+        <Suspense fallback={opening}>{children}</Suspense>
+      </PartFrame>
     </PartBoundary>
   );
 }

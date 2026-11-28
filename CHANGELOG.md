@@ -787,8 +787,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supporting data can arrive later.
 - Albums and Artists open faster when many cards share the same song count
   and length. Every card remains available to navigation and browser search.
-- Preloaded editors and views open without an extra loading wait. Edit songs and
-  Fill from a list show useful controls sooner while keeping drafts and load recovery.
+- Lazy-loaded editors and views show useful controls sooner after their code
+  loads, whether preloaded or opened while loading. Drafts and load recovery
+  remain intact.
 - Artists stays more responsive during playback by reusing unchanged cards.
   Names, photos, favorites, and navigation remain current.
 - The Playing badge uses transformed bars to reduce repeated painting.

@@ -1,7 +1,5 @@
 /**
- * @file A note to ask the AI with, opened beside an *Ask AI* button: the household's notes
- * for that kind of ask, each ticked to send, and more details typed, which this browser
- * remembers for the next time. Each note sent is a line of its own.
+ * @file Combines selected household notes and typed details for one AI request.
  */
 
 import { SparkleIcon } from "@phosphor-icons/react";
@@ -11,30 +9,6 @@ import { type AiAsk, type AiNote, MAX_HINT, api } from "../api";
 import { composing } from "../ime";
 import { noteOf } from "../library/aiNote";
 import { useFormattingLocale, useWords } from "../locale";
-
-/** Where this browser keeps the details last typed for each ask. */
-const REMEMBERED = "medleyplay.aiNote.";
-
-function rememberedDetails(ask: AiAsk): string {
-  try {
-    return localStorage.getItem(REMEMBERED + ask) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function saveDetails(ask: AiAsk, details: string): boolean {
-  try {
-    if (details === "") {
-      localStorage.removeItem(REMEMBERED + ask);
-    } else {
-      localStorage.setItem(REMEMBERED + ask, details);
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /** What each ask's details field suggests typing. */
 const EXAMPLES: Readonly<Record<AiAsk, string>> = {
@@ -58,9 +32,7 @@ export function AiNotePanel({
   const number = new Intl.NumberFormat(useFormattingLocale());
   const [offered, setOffered] = useState<readonly AiNote[] | null | undefined>(undefined);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set());
-  const [details, setDetails] = useState(() => rememberedDetails(ask));
-  const [hasRemembered, setHasRemembered] = useState(details !== "");
-  const [forgetFailed, setForgetFailed] = useState(false);
+  const [details, setDetails] = useState("");
   useEffect(() => {
     let shown = true;
     api.settings().then(
@@ -90,18 +62,11 @@ export function AiNotePanel({
     if (over) {
       return;
     }
-    const saved = details.trim();
-    if (saveDetails(ask, saved)) {
-      setHasRemembered(saved !== "");
-      setForgetFailed(false);
-    }
     onAsk(note);
+    setDetails("");
   };
   const clear = () => {
     setDetails("");
-    const forgotten = saveDetails(ask, "");
-    if (forgotten) setHasRemembered(false);
-    setForgetFailed(!forgotten && hasRemembered);
     field.current?.focus();
   };
   return (
@@ -123,7 +88,7 @@ export function AiNotePanel({
       </p>
       <p className="hint">
         {t(
-          "The selected notes and any details you type go with this request. This browser can remember the details you submit.",
+          "The selected notes and any details you type go with this request. The details field clears after you send the request.",
         )}
       </p>
       {offered === undefined ? (
@@ -165,7 +130,7 @@ export function AiNotePanel({
           type="button"
           className="text ai-note-clear"
           aria-label={t("Clear details")}
-          disabled={details === "" && !hasRemembered}
+          disabled={details === ""}
           onClick={clear}
         >
           {t("Clear")}
@@ -190,11 +155,6 @@ export function AiNotePanel({
           }
         }}
       />
-      {forgetFailed && (
-        <p className="hint" role="alert">
-          {t("Cleared here, but this browser did not forget the saved details.")}
-        </p>
-      )}
       <div className="ai-note-foot">
         <small id={`${id}-count`} className={over ? "ai-note-count over" : "ai-note-count"}>
           {t("{{used}} of {{limit}} characters", {

@@ -39,7 +39,7 @@ describe("the note to ask the AI with", () => {
 
       expect(panel).toHaveAccessibleName("附带备注询问 AI");
       expect(details).toHaveAccessibleDescription(/将发送 \d+ 个字符，最多 500 个/u);
-      expect(within(panel).getByText(/此浏览器可记住提交的补充详情/u)).toBeVisible();
+      expect(within(panel).getByText(/发送后会清空补充详情/u)).toBeVisible();
       await user.click(within(panel).getByRole("button", { name: "询问 AI" }));
       expect(onAsk).toHaveBeenCalledWith(`${note}\n22 首歌`);
     } finally {
@@ -91,72 +91,48 @@ describe("the note to ask the AI with", () => {
     );
   });
 
-  it("remembers the details typed in this browser for the next time", async () => {
-    const first = await opened("details");
-    const user = userEvent.setup();
-    await user.type(within(first.panel).getByRole("textbox", { name: "More details" }), "1989");
-    await user.click(within(first.panel).getByRole("button", { name: "Ask AI" }));
-    first.unmount();
-
-    const second = await opened("details");
-
-    expect(within(second.panel).getByRole("textbox", { name: "More details" })).toHaveValue("1989");
-  });
-
-  it.each([false, true])(
-    "clears and forgets the previous prompt without sending it (field already empty: %s)",
-    async (empty) => {
-      const first = await opened("songs");
+  it.each(["details", "songs"] as const)(
+    "sends More details once and opens with an empty field next time (%s)",
+    async (ask) => {
+      const { panel, onAsk, unmount } = await opened(ask);
       const user = userEvent.setup();
-      await user.type(
-        within(first.panel).getByRole("textbox", { name: "More details" }),
-        "22 songs",
-      );
-      await user.click(within(first.panel).getByRole("button", { name: "Ask AI" }));
-      first.unmount();
-      const second = await opened("songs");
-      const panel = within(second.panel);
-      const details = panel.getByRole("textbox", { name: "More details" });
-      const note = panel.getByRole("checkbox", { name: /live album/u });
-      expect(details).toHaveValue("22 songs");
-      await user.click(note);
-      if (empty) await user.clear(details);
+      const details = within(panel).getByRole("textbox", { name: "More details" });
 
-      await user.click(panel.getByRole("button", { name: "Clear details" }));
+      await user.type(details, "The original 1989 release");
+      if (ask === "details") await user.keyboard("{Enter}");
+      else await user.click(within(panel).getByRole("button", { name: "Ask AI" }));
 
+      expect(onAsk).toHaveBeenCalledExactlyOnceWith("The original 1989 release");
       expect(details).toHaveValue("");
-      expect(details).toHaveFocus();
-      expect(note).toBeChecked();
-      expect(second.onAsk).not.toHaveBeenCalled();
-      second.unmount();
-      const reopened = await opened("songs");
+      unmount();
+      const reopened = await opened(ask);
       expect(within(reopened.panel).getByRole("textbox", { name: "More details" })).toHaveValue("");
     },
   );
 
-  it("clears the field and explains when the browser refuses to forget the saved prompt", async () => {
-    const first = await opened("details");
-    const user = userEvent.setup();
-    await user.type(within(first.panel).getByRole("textbox", { name: "More details" }), "1989");
-    await user.click(within(first.panel).getByRole("button", { name: "Ask AI" }));
-    first.unmount();
-    const second = await opened("details");
-    const panel = within(second.panel);
-    const forget = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
-      throw new DOMException("Storage unavailable.", "SecurityError");
-    });
+  it("does not reuse a previously saved prompt", async () => {
+    localStorage.setItem("medleyplay.aiNote.details", "Details from another song");
+    const { panel, onAsk } = await opened("details");
 
-    try {
-      await user.click(panel.getByRole("button", { name: "Clear details" }));
-      expect(panel.getByRole("textbox", { name: "More details" })).toHaveValue("");
-      expect(panel.getByRole("alert")).toHaveTextContent(
-        "Cleared here, but this browser did not forget the saved details.",
-      );
-      expect(panel.getByRole("button", { name: "Clear details" })).toBeEnabled();
-      expect(second.onAsk).not.toHaveBeenCalled();
-    } finally {
-      forget.mockRestore();
-    }
+    await userEvent.click(within(panel).getByRole("button", { name: "Ask AI" }));
+
+    expect(onAsk).toHaveBeenCalledExactlyOnceWith("");
+  });
+
+  it("clears the draft without sending it or unchecking household notes", async () => {
+    const { panel, onAsk } = await opened("songs");
+    const user = userEvent.setup();
+    const details = within(panel).getByRole("textbox", { name: "More details" });
+    const note = within(panel).getByRole("checkbox", { name: /live album/u });
+    await user.click(note);
+    await user.type(details, "22 songs");
+
+    await user.click(within(panel).getByRole("button", { name: "Clear details" }));
+
+    expect(details).toHaveValue("");
+    expect(details).toHaveFocus();
+    expect(note).toBeChecked();
+    expect(onAsk).not.toHaveBeenCalled();
   });
 
   it("counts the characters sent, and asks nothing over the limit", async () => {
@@ -171,7 +147,11 @@ describe("the note to ask the AI with", () => {
       "523 of 500 characters",
     );
     expect(within(panel).getByRole("button", { name: "Ask AI" })).toBeDisabled();
+    await user.keyboard("{Enter}");
     expect(onAsk).not.toHaveBeenCalled();
+    expect(within(panel).getByRole("textbox", { name: "More details" })).toHaveValue(
+      "x".repeat(480),
+    );
   });
 
   it("closes on Escape without asking", async () => {
@@ -194,29 +174,6 @@ describe("the note to ask the AI with", () => {
     expect(onAsk).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(field).toHaveValue("现场");
-  });
-
-  it("still submits details when this browser refuses to read and write its saved draft", async () => {
-    const read = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new DOMException("Storage unavailable.", "SecurityError");
-    });
-    const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new DOMException("Storage full.", "QuotaExceededError");
-    });
-
-    try {
-      const { panel, onAsk } = await opened("details");
-      const user = userEvent.setup();
-      const field = within(panel).getByRole("textbox", { name: "More details" });
-      expect(field).toHaveValue("");
-      await user.type(field, "1989");
-      await user.click(within(panel).getByRole("button", { name: "Ask AI" }));
-
-      expect(onAsk).toHaveBeenCalledWith("1989");
-    } finally {
-      read.mockRestore();
-      write.mockRestore();
-    }
   });
 
   it("allows 500 supplementary Chinese characters and refuses 501", async () => {

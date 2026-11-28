@@ -11,6 +11,7 @@
 - [Principles](#principles)
 - [Who is admitted](#who-is-admitted)
 - [The host](#the-host)
+- [macOS LAN sharing](#macos-lan-sharing)
 - [A device](#a-device)
 - [Asking and answering](#asking-and-answering)
 - [Settings and the API](#settings-and-the-api)
@@ -25,8 +26,8 @@
 - **A device is admitted before anyone signs in.** A device the household
   hasn't let in can't reach the sign-in form's API, so it can't guess passwords
   or lock an account out with wrong ones.
-- **The host is always admitted.** A request from the machine the server runs
-  on is never asked about.
+- **The host is always admitted.** A direct request from the machine the
+  server runs on is never asked about.
 - **One choice, for new devices:** *Ask first*, the default, *Allow all*, or
   *Block new devices*. Allowed devices keep their access under each; Remove is
   how one loses it. An admin makes the choice.
@@ -59,8 +60,9 @@ what is known of the device:
   change: it is allowed then, with its session, and given its cookie.
 - **A choice other than *Ask first* answers every waiting device.** The list
   of waiting devices empties; each is admitted or refused when it next asks.
-- **Before the first account exists there is nothing to protect**, and the
-  household may set up from a phone; the device that sets up is allowed.
+- **In standalone mode, the household may set up from a phone.** The device
+  that sets up is allowed. The macOS pilot requires setup on the Mac before
+  starting LAN sharing.
 - **Upgrading keeps everyone in.** The upgrade marks each session it finds, and
   a browser holding one is allowed the first time it asks, so a server with no
   screen isn't locked out by the upgrade. Sessions idle out after 30 days, so
@@ -91,6 +93,57 @@ a new interface or a new DHCP lease changes nothing.
   request carrying a header a proxy adds, as `Forwarded`, `X-Forwarded-For`,
   `X-Real-IP`, or `Via`, is never the host: behind a proxy on the host, every
   request would otherwise come from loopback.
+
+## macOS LAN sharing
+
+The pilot runs one Uvicorn process. It answers the Mac's browser on loopback.
+A separate, locally signed **Medleyplay Share** app owns the only LAN listener
+and forwards HTTP requests over a private Unix socket. The server verifies the
+bundle's signature at launch and checks the socket peer against the helper
+process it started. The helper supplies the address it observes for the waiting
+list and its per-address limit; that address never grants host privileges. A
+browser on the Mac must use the loopback URL to be the host speaker or show a
+folder in Finder.
+
+First [build the web player](../../../README.md#running-the-server) in this
+checkout. Build the helper with a supported Go toolchain and the macOS
+command-line tools:
+
+```bash
+mkdir -p "$HOME/Applications"
+share_app="$HOME/Applications/Medleyplay Share.app"
+sh tools/macos/share/build.sh "$share_app"
+```
+
+Authorize the new **Medleyplay Share.app**, not the earlier probe or Python,
+in **System Settings → Network → Firewall → Options**. Then start the server:
+
+```bash
+uv run medleyplay serve --share-app "$share_app"
+```
+
+Open `http://127.0.0.1:8000/` on the Mac and finish account setup. Sharing starts
+off. In another terminal, pass the Mac's private IPv4 address on the trusted
+LAN to `start`. If it is not already in the server's allowed hosts, add it
+to `MEDLEYPLAY_ALLOWED_HOSTS` when starting the server.
+
+```bash
+uv run medleyplay share start 192.168.1.20  # replace with the Mac's address
+uv run medleyplay share status
+uv run medleyplay share stop
+```
+
+For another data folder, pass it to both commands, for example
+`medleyplay share --data-dir "$data_dir" start 192.168.1.20`. Add `--port` to
+`share start` for a different LAN port. **Listen on your device** shows the
+running helper's URL instead of the Mac browser's address. The URL confirms
+the helper is listening; open it from a phone to verify access. `share stop`
+closes shared streams and keeps local playback and device approvals. Omit
+`--share-app` to use standalone behavior.
+
+This pilot sends HTTP without encryption. Use it on a trusted LAN only; do
+not forward its port through a router. A rebuilt app may need to be allowed
+again. The build refuses to replace an app that already exists.
 
 ## A device
 

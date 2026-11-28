@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from fastapi import FastAPI
 from pwdlib import PasswordHash
@@ -85,6 +85,9 @@ from medleyplay.web.app import create_app
 from medleyplay.web.cached import CachedAnswers
 from medleyplay.web.deps import Services
 
+if TYPE_CHECKING:
+    from medleyplay.lan_sharing import ShareControl
+
 DEFAULT_PORT: Final = 8000
 JOBS_FOLDER: Final = "jobs"
 INSTANCE_LOCK: Final = "server.lock"
@@ -104,6 +107,7 @@ class Settings:
     safe_mode: bool = False
     data_dir_chosen: bool = True
     """Whether someone chose the data folder, rather than it being the platform's default."""
+    share_app: Path | None = None
 
     @classmethod
     def from_environment(
@@ -418,7 +422,12 @@ def _remote(clock: Clock, events: Events) -> RemoteService:
     return remote
 
 
-def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:
+def build_app(
+    settings: Settings,
+    source: PluginSource = PluginSource(),
+    *,
+    sharing: "ShareControl | None" = None,
+) -> FastAPI:
     """Return the server's app for `settings`.
 
     The app starts deciding the Mode and the plugin host, removes stale cache
@@ -450,7 +459,12 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
                     services.thumbnail_sweeper.start()
                     services.cover_sweeper.start()
                     try:
-                        yield
+                        async with (
+                            sharing.serve(services.accounts.is_set_up)
+                            if sharing is not None
+                            else contextlib.nullcontext()
+                        ):
+                            yield
                     finally:
                         services.cover_sweeper.stop()
                         services.thumbnail_sweeper.stop()
@@ -463,7 +477,10 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
         finally:
             engine.dispose()
 
-    return create_app(services, settings.allowed_hosts, lifespan=run_in_background)
+    app = create_app(services, settings.allowed_hosts, lifespan=run_in_background)
+    if sharing is not None:
+        app.state.share_address = sharing.address
+    return app
 
 
 class AlreadyRunningError(Exception):

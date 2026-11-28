@@ -2,8 +2,7 @@
  * @file How to listen on a phone or another device: the address to open, as a code to
  * scan and as text to copy, and the few steps around it.
  *
- * The addresses are the server's on the network, on this page's port; with several,
- * each can be chosen, the surest first.
+ * Managed sharing publishes its own URL. Otherwise the addresses use this page's port.
  */
 
 import {
@@ -32,6 +31,11 @@ const HOME_SCREEN =
 const PLAY_ON =
   "The phone plays the music itself, or on this computer: choose <control>Play on</control> in its player. Either way, keep this computer on and on the network.";
 
+interface ShareAddresses {
+  readonly addresses: readonly string[];
+  readonly share_url?: string | null;
+}
+
 export function ListenOnDevice({
   username,
   load,
@@ -42,7 +46,7 @@ export function ListenOnDevice({
   /** The Account's username, which signs in there too. */
   readonly username: string;
   /** The server's addresses on the network. */
-  readonly load: () => Promise<{ readonly addresses: readonly string[] }>;
+  readonly load: () => Promise<ShareAddresses>;
   /** Where this page was opened; the page's own location by default. */
   readonly here?: Here;
   readonly waitingCount?: number | undefined;
@@ -50,50 +54,68 @@ export function ListenOnDevice({
 }) {
   const t = useWords();
   const dialog = useRef<HTMLDialogElement>(null);
-  const [hosts, setHosts] = useState<readonly string[] | undefined>(undefined);
+  const [published, setPublished] = useState<ShareAddresses | undefined>(undefined);
   const [error, setError] = useState("");
   const [chosen, setChosen] = useState(0);
   const [copied, setCopied] = useState<"yes" | "no" | undefined>(undefined);
 
   useEffect(() => {
     let open = true;
-    load().then(
-      (read) => {
-        if (open) {
-          setHosts(read.addresses);
-        }
-      },
-      (failure: unknown) => {
-        if (open) {
+    let managed = false;
+    let retry: number | undefined;
+    const refresh = () => {
+      void load().then(
+        (read) => {
+          if (!open) return;
+          managed = read.share_url !== undefined;
+          setPublished(read);
+          setError("");
+          if (managed) retry = window.setTimeout(refresh, 3000);
+        },
+        (failure: unknown) => {
+          if (!open) return;
           setError(failure instanceof Error ? failure.message : String(failure));
-        }
-      },
-    );
+          if (managed) {
+            setPublished({ addresses: [], share_url: null });
+            retry = window.setTimeout(refresh, 3000);
+          }
+        },
+      );
+    };
+    refresh();
     return () => {
       open = false;
+      window.clearTimeout(retry);
     };
   }, [load]);
 
-  const addresses = useMemo(
-    () => (hosts === undefined ? [] : listenAddressesOf(hosts, here)),
-    [hosts, here],
-  );
+  const addresses = useMemo(() => {
+    if (published === undefined || published.share_url === null) return [];
+    if (published.share_url !== undefined) return [published.share_url];
+    return listenAddressesOf(published.addresses, here);
+  }, [published, here]);
   const address = addresses[chosen] ?? addresses[0];
   const code = useMemo(() => (address === undefined ? undefined : qrCodeOf(address)), [address]);
-  const secure = here.protocol === "https:";
-  const port = here.port || (secure ? "443" : "80");
+  const endpoint = address === undefined ? here : new URL(address);
+  const secure = endpoint.protocol === "https:";
+  const port = endpoint.port || (secure ? "443" : "80");
 
   return (
     <Modal ref={dialog} className="listen" labelledBy="listen-title" onClose={onClose}>
       <div className="card">
         <h2 id="listen-title">{t("Listen on your device")}</h2>
         {error !== "" && <p role="alert">{error}</p>}
-        {hosts === undefined && error === "" && (
+        {published === undefined && error === "" && (
           <p className="empty" role="status">
             {t("Finding this computer's address…")}
           </p>
         )}
-        {hosts !== undefined && address === undefined && (
+        {published?.share_url === null && error === "" && (
+          <p className="empty" role="status">
+            {t("LAN sharing is off. Start it from Terminal.")}
+          </p>
+        )}
+        {published !== undefined && published.share_url === undefined && address === undefined && (
           <p className="empty">
             {t(
               "No local network address was found. Connect both devices to the same network. If medleyplay started before the connection was available, restart it.",

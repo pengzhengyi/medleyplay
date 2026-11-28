@@ -727,6 +727,7 @@
   "Let go of {{key}} to close.": "松开 {{key}} 即可关闭。",
   "Finding this computer's address…": "正在查找这台电脑的网络地址…",
   "No local network address was found. Connect both devices to the same network. If medleyplay started before the connection was available, restart it.": "未找到局域网地址。请将两台设备连接到同一网络。如果 medleyplay 在网络可用前已启动，请重新启动 medleyplay。",
+  "LAN sharing is off. Start it from Terminal.": "局域网共享未开启。请在终端中开启。",
   "Connection info": "连接信息",
   "Protocol": "协议",
   "TCP port": "TCP 端口",

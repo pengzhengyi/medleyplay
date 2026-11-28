@@ -102,6 +102,39 @@ def test_serve_listens_on_every_interface_at_port_8000_by_default() -> None:
     assert started == [("0.0.0.0", 8000)]  # noqa: S104 -- the default under test
 
 
+@pytest.mark.usefixtures("data_dir")
+def test_the_share_pilot_keeps_uvicorn_on_loopback(tmp_path: Path) -> None:
+    started: list[tuple[Settings, str]] = []
+    bundle = tmp_path / "Medleyplay Share.app"
+
+    exit_code = main(
+        ["serve", "--share-app", str(bundle)],
+        platform="darwin",
+        serve=lambda settings, host, _: started.append((settings, host)),
+    )
+
+    assert exit_code == 0
+    [(settings, host)] = started
+    assert (settings.share_app, host) == (bundle, "127.0.0.1")
+
+
+@pytest.mark.usefixtures("data_dir")
+def test_the_share_pilot_refuses_a_lan_facing_uvicorn_bind(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def do_not_serve(settings: Settings, host: str, port: int) -> None:
+        pytest.fail("The pilot accepted a LAN-facing Uvicorn address")
+
+    code = main(
+        ["serve", "--share-app", "Share.app", "--host", "192.168.4.30"],
+        platform="darwin",
+        serve=do_not_serve,
+    )
+
+    assert code == 1
+    assert "private host listener" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(("arguments", "safe_mode"), [([], False), (["--safe-mode"], True)])
 @pytest.mark.usefixtures("data_dir")
 def test_serve_starts_in_safe_mode_only_when_asked(

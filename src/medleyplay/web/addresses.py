@@ -1,7 +1,7 @@
 """Where a device on the network can reach this server, so a page can show the way there."""
 
 import ipaddress
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -15,11 +15,17 @@ class AddressesOut(BaseModel):
     """The names and addresses a phone on the same network may open, the surest first."""
 
     addresses: list[str]
+    share_url: str | None = None
 
 
-@router.get("/addresses")
+@router.get("/addresses", response_model_exclude_unset=True)
 def addresses(request: Request, _: SignedInAccount) -> AddressesOut:
     """Return the server's addresses on the network, then its names, such as `mac-mini.local`."""
+    share_address: Callable[[], str | None] | None = getattr(
+        request.app.state, "share_address", None
+    )
+    if share_address is not None:
+        return AddressesOut(addresses=[], share_url=share_address())
     hosts: tuple[str, ...] = request.app.state.allowed_hosts
     return AddressesOut(addresses=reachable_from_the_network(hosts))
 

@@ -78,7 +78,10 @@ def main(
             case "serve":
                 settings = _data_to_serve(settings, platform, ask, interactive=interactive())
                 settings = dataclasses.replace(settings, safe_mode=args.safe_mode)
-                (serve or _run_server)(settings, args.host, args.port)
+                settings, host = _listen_settings(settings, args.host, args.share_app, platform)
+                (serve or _run_server)(settings, host, args.port)
+            case "share":
+                return _share(settings, args, platform)
             case "reset-password":
                 return _reset_password(settings, args.username, read_password)
             case "devices":
@@ -106,9 +109,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command")
     serve = commands.add_parser("serve", help="run the server", parents=[folder])
-    # Every interface by default: devices on the LAN must reach it.
-    serve.add_argument("--host", default="0.0.0.0", help="address to listen on")  # noqa: S104  # nosec B104
+    serve.add_argument("--host", help="address to listen on (all interfaces by default)")
     serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="port to listen on")
+    serve.add_argument(
+        "--share-app", type=Path, help="use a locally signed Medleyplay Share.app (macOS pilot)"
+    )
     serve.add_argument(
         "--safe-mode", action="store_true", help="start with every plugin off, for this run"
     )
@@ -142,6 +147,15 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     move.add_argument("to", type=Path, nargs="?", help="where to move it")
+    sharing = commands.add_parser(
+        "share", help="control the Mac LAN sharing pilot", parents=[folder]
+    )
+    share_actions = sharing.add_subparsers(dest="action", required=True)
+    start = share_actions.add_parser("start", help="start sharing on the given Mac LAN address")
+    start.add_argument("address", help="private IPv4 address of the Mac")
+    start.add_argument("--port", type=int, default=DEFAULT_PORT, help="LAN port to listen on")
+    share_actions.add_parser("status", help="show the LAN URL or whether sharing is off")
+    share_actions.add_parser("stop", help="stop sharing without stopping the Mac browser")
     return parser
 
 
@@ -163,7 +177,67 @@ def server_config(app: "ASGIApp", host: str, port: int) -> "uvicorn.Config":
 def _run_server(settings: Settings, host: str, port: int) -> None:  # pragma: no cover
     import uvicorn  # noqa: PLC0415 -- only `serve` needs the server
 
-    uvicorn.Server(server_config(build_app(settings), host, port)).run()
+    if settings.share_app is None:
+        uvicorn.Server(server_config(build_app(settings), host, port)).run()
+        return
+    _run_managed(settings, host, port, settings.share_app)
+
+
+def _listen_settings(
+    settings: Settings,
+    host: str | None,
+    share_app: Path | None,
+    platform: str,
+) -> tuple[Settings, str]:
+    if share_app is None:
+        return settings, host if host is not None else "0.0.0.0"  # noqa: S104  # nosec B104
+    _require_mac_sharing(platform)
+    if host not in {None, "127.0.0.1"}:
+        message = "--share-app requires a private host listener at 127.0.0.1."
+        raise ConfigError(message)
+    return dataclasses.replace(settings, share_app=share_app), "127.0.0.1"
+
+
+def _require_mac_sharing(platform: str) -> None:
+    if platform != "darwin":
+        message = "The LAN sharing pilot runs only on macOS."
+        raise ConfigError(message)
+
+
+def _run_managed(
+    settings: Settings, host: str, port: int, share_app: Path
+) -> None:  # pragma: no cover
+    from medleyplay.lan_sharing import (  # noqa: PLC0415 -- macOS pilot only
+        ShareControl,
+        run_managed,
+        signed_executable,
+    )
+
+    executable = signed_executable(share_app)
+    control = ShareControl(settings.data_dir, executable, settings.allowed_hosts)
+    app = build_app(settings, sharing=control)
+    run_managed(server_config(app, host, port), app, control, port)
+
+
+def _share(settings: Settings, args: argparse.Namespace, platform: str) -> int:
+    from medleyplay.lan_sharing import (  # noqa: PLC0415 -- CLI only
+        MAX_LAN_PORT,
+        ShareRequest,
+        share_command,
+    )
+
+    _require_mac_sharing(platform)
+    port = getattr(args, "port", DEFAULT_PORT)
+    if not 1 <= port <= MAX_LAN_PORT:
+        message = f"The LAN port must be between 1 and {MAX_LAN_PORT}."
+        raise ConfigError(message)
+    data_dir = _former_with_data(settings, platform) or settings.data_dir
+    reply = share_command(
+        data_dir,
+        ShareRequest(action=args.action, address=getattr(args, "address", None), port=port),
+    )
+    (sys.stdout if reply.ok else sys.stderr).write(f"{reply.message}\n")
+    return 0 if reply.ok else 1
 
 
 def _former_with_data(settings: Settings, platform: str) -> Path | None:

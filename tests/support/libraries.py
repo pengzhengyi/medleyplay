@@ -78,7 +78,7 @@ def running_libraries(
     scan = scan_library_kind(clock, data_dir / "covers")
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / "jobs", clock)
-    find_silences = find_silences_kind(clock)
+    find_silences = find_silences_kind(clock, data_dir)
     kinds: dict[str, AnyJobKind] = {
         scan.name: scan,
         cache.name: cache,

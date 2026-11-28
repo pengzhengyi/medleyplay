@@ -19,6 +19,7 @@
 - [Adding from a link](#adding-from-a-link)
   - [One album file](#one-album-file)
 - [Downloads](#downloads)
+  - [Publishing a Download](#publishing-a-download)
 - [Playing a Download](#playing-a-download)
 - [Video details](#video-details)
 - [Progress over SSE](#progress-over-sse)
@@ -345,7 +346,7 @@ layouts preserves the selections for parts eligible in both.
 
 ## Downloads
 
-A *Download* is the one copy of a Bilibili Source on the server's disk.
+A *Download* points to a Bilibili Source's current saved audio file.
 
 - **A Download Job** has the kind `download_source` and the target
   `source:<id>`, so one Source has at most one active download.
@@ -353,16 +354,8 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   working folder, and the login file, if any. It then checks the file the plugin
   named: a bare name directly in the folder, opened without following links, a
   regular file, not empty, at most 1 GiB, and with an extension of an AAC audio
-  type (`m4a`). It fsyncs the file. A file that fails a check fails the attempt
-  as a plugin fault, which retries; it doesn't count toward the circuit breaker,
-  since the call itself succeeded.
-- **The completion** renames the file over `downloads/<source id>.<ext>` in the
-  data folder and records it in `download` with the quality it got, its backend,
-  size, and time, in the transaction that ends the Job. A Source has one file,
-  so a new Download replaces the old one in the same rename.
-- **A crash between the rename and the commit** leaves a file with no row. The
-  Job runs again and its file replaces that one, and at startup the core removes
-  every file in `downloads/` that no row names.
+  type (`m4a`). An unusable artifact fails the attempt without counting toward
+  the plugin circuit breaker.
 - **Failures** follow [Jobs](Jobs.md#failures-and-retries). The plugin sorts
   yt-dlp's errors by their types first: a connection error, a timeout, or
   an ordinary server outage is a `NetworkError`, which waits; a refused
@@ -385,6 +378,25 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
 - The [download policy](Download%20policy.md) tracks final Download reservations.
   Temporary space for joins is checked separately, not allocated in advance.
   A full disk fails the Job and its working folder is removed.
+
+### Publishing a Download
+
+The download Job and manual upload use the same path. After the writer stops,
+the core rechecks the staged file and links it to a new name, such as
+`downloads/7-<generation>.m4a`. It syncs the bytes and the directories before
+committing the Download pointer. A name collision fails rather than overwriting
+audio. Files with older names remain readable through their stored pointers.
+
+A rollback leaves the previous pointer and its bytes intact. The cancelled Job
+cannot publish after a manual replacement wins the same database write
+transaction. Play and storage policy also recheck the pointer when queuing work,
+so they cannot schedule a download over a file just added by hand.
+
+The server keeps replaced files until startup so a reader can finish. Startup
+reclaims unreferenced files, except inputs of active silence Jobs. It identifies
+the download directory by filesystem identity, not path capitalization. A
+silence result applies only to the same file it read; if the file changes or an
+old request lacks a verifiable identity, find the gaps again.
 
 ## Playing a Download
 

@@ -1000,6 +1000,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Replacing a download no longer overwrites the saved audio before the
+  replacement commits. A failed upload or download leaves the old file
+  playable.
 - When a cover change affects an album, the editor names the album and makes
   the scope clear, even when opened from a song's details.
 - On macOS, the share guide and LAN listener use the physical network address

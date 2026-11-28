@@ -142,6 +142,7 @@ class LocalAudio:
     path: str
     offset: int
     length: int
+    download_name: str | None = None
 
 
 def cache_source_kind(data_dir: Path) -> CacheKind:
@@ -304,11 +305,11 @@ class PlaybackService:
             bilibili = row.kind == BILIBILI_SOURCE
         if bilibili:
             name = self._download_name(source_id)
-            audio = None if name is None else self._open_download(source_id)
+            audio = None if name is None else self._open_named_download(source_id, name)
             if name is None or audio is None:
                 return None
             audio.close()
-            return LocalAudio(str(self._downloads.folder / name), 0, audio.length)
+            return LocalAudio(str(self._downloads.folder / name), 0, audio.length, name)
         opened = self._try_open(source)
         if not isinstance(opened, AudioFile):
             return None
@@ -360,6 +361,10 @@ class PlaybackService:
         if to_download is not None:
             job = self._downloads.start(caller, to_download.source_id)
             if job is None:
+                download = self._open_download(to_download.source_id)
+                if download is not None:
+                    download.close()
+                    return Ready(to_download.source_id, download.media_type, stretch)
                 found.append(Availability.UNAVAILABLE)
             elif not self._online() and job.state in {JobState.QUEUED, JobState.WAITING}:
                 found.append(Availability.WAITING_ONLINE)
@@ -383,11 +388,10 @@ class PlaybackService:
             return None if row is None else row.file_name
 
     def _open_download(self, source_id: SourceId) -> AudioFile | None:
-        # The name comes from the catalog, never a plugin, and the file must still
-        # be a regular file there, not a link.
         name = self._download_name(source_id)
-        if name is None:
-            return None
+        return None if name is None else self._open_named_download(source_id, name)
+
+    def _open_named_download(self, source_id: SourceId, name: str) -> AudioFile | None:
         try:
             descriptor = os.open(self._downloads.folder / name, _OPEN_FLAGS)
         except OSError:
@@ -402,7 +406,7 @@ class PlaybackService:
         return AudioFile(descriptor, 0, info.st_size, media_type(name))
 
     def sweep_downloads(self) -> None:
-        """Remove files in `downloads/` that no Download names, as a crash can leave."""
+        """Clean up unreferenced download files before playback and Jobs start."""
         self._downloads.sweep()
 
     def _try_open(self, source: _Source) -> AudioFile | _NeedsCopy | _Gone:

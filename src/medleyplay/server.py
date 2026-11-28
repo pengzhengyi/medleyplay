@@ -231,7 +231,7 @@ def build_services(  # noqa: PLR0913, PLR0915
     cover_jobs = album_cover_kinds(clock, data_dir / COVERS_FOLDER)
     link_jobs = image_link_kinds(clock, data_dir / COVERS_FOLDER)
     picture_jobs = artist_picture_kinds(clock, data_dir / COVERS_FOLDER)
-    find_silences = find_silences_kind(clock)
+    find_silences = find_silences_kind(clock, data_dir)
     lyrics_jobs = lyrics_search_kinds(clock)
     match_jobs = lyrics_match_kinds(clock, lyrics_jobs, plugins)
     make_thumbnails = make_thumbnails_kind(data_dir / THUMBNAILS_FOLDER, data_dir / JOBS_FOLDER)

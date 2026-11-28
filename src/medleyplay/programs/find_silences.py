@@ -1,6 +1,6 @@
 """The program that asks a silence finder where a file's audio falls quiet."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,6 +29,9 @@ class FindSilencesJob(_Model):
     offset: Annotated[int, Field(ge=0)] = 0
     length: Annotated[int, Field(gt=0)] | None = None
     finder: Annotated[str, Field(max_length=64)] = "ffmpeg"
+    audio_kind: Literal["download", "library"] | None = None
+    download_source_id: Annotated[int, Field(gt=0)] | None = None
+    download_name: Annotated[str, Field(max_length=255)] | None = None
 
 
 class FoundSilencesResult(_Model):

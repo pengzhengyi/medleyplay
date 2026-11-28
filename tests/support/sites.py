@@ -21,7 +21,9 @@ from medleyplay.application.plugins import PluginService
 from medleyplay.application.proxies import ProxyService
 from medleyplay.application.video_lookups import LOOKUP_KIND, VideoLookups
 from medleyplay.domain.accounts import Account
+from medleyplay.domain.catalog import SourceId
 from medleyplay.domain.jobs import JobId, JobState, JobView
+from medleyplay.persistence.schema import DownloadRow
 from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS, started_plugins
 
@@ -46,8 +48,14 @@ class Site:
     secrets: MemorySecrets
     data_dir: Path
     online: OnlineSwitch
+    units: sessionmaker[Session]
     changes: list[str] = field(default_factory=list)
     """What the services said changed, in order."""
+
+    def saved_file(self, source_id: SourceId) -> Path:
+        """Return the file the Source's Download names without counting a listen."""
+        with self.units() as db:
+            return self.downloads.folder / db.get_one(DownloadRow, source_id).file_name
 
     def wait_for(
         self, job_id: JobId, *states: JobState, until: Callable[[JobView], bool] | None = None
@@ -119,6 +127,7 @@ def running_site(
                 secrets=secrets,
                 data_dir=data_dir,
                 online=online,
+                units=units,
                 changes=changes,
             )
         finally:

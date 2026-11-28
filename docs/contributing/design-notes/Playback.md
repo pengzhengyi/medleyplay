@@ -402,6 +402,145 @@ and the full views are in [Web client](Web%20client.md).
   restored position is applied, paused, once the Track's metadata loads; when the
   browser can't save, or has cleared it, the page starts with an empty queue.
 
+### Seek-thumb rendering
+
+> [!NOTE]
+> **Implemented.** Keep the seek thumb's motion and interactions while
+> avoiding a layout-dependent transition in browsers that support the clipping rules.
+
+The fill and thumb move through transforms for 260 ms after each playback
+update. The thumb's motion continues while it is transparent, so avoiding
+layout work matters even when nobody is pointing at the bar.
+
+#### Positioning boundary
+
+`SeekBar`'s JavaScript state and event handling are unchanged. A decorative
+`seek-thumb-clip` span fills the seek bar and contains a full-width,
+zero-height `seek-thumb-position` span around the existing fixed-size thumb.
+The positioning box translates by
+`calc(var(--played) * 100%)`; its own width is the seek bar's width.
+The circle retains its color, shadow, size, horizontal centering margin,
+opacity, and accessible hiding.
+
+```mermaid
+flowchart LR
+  P["Position / duration"] --> V["--played"]
+  V --> F["Fill: scaleX"]
+  V --> T["Full-width positioner: translateX"]
+  T --> C["Fixed-size thumb"]
+  W["Seek bar width"] --> F
+  W --> T
+```
+
+The positioning box is at the bar's vertical center; the circle is at its origin.
+The stationary clipping span uses `overflow: clip` and a `3rem` clip margin
+to bound scrollable overflow while leaving room for the circle and its shadow.
+Only the decorative thumb is inside it; tooltips and previews remain outside.
+Percentages preserve alignment when the bar resizes, without JavaScript
+width measurement or containment on the interactive slider.
+Browser geometry checks cover 0%, 50%, and 100% at desktop and phone widths,
+including the first frame after resizing. Scroll extents match each layout's
+existing extent throughout that range; this does not repair pre-existing
+overflow in Now Playing.
+
+The positioning box has a 260 ms linear `transform` transition; the circle
+keeps its 120 ms opacity transition. Movement is immediate while held and
+when reduced motion is requested, matching the fill. No permanent
+`will-change` hint is needed.
+An `@supports` guard enables this path only when `overflow: clip` and
+`overflow-clip-margin: 3rem` are supported. Otherwise, both wrappers use
+`display: contents` and the circle keeps its `left` transition. No performance
+gain is claimed for that fallback.
+
+The slider, pointer capture, keyboard seeking, sent-position hold, segmented
+fills, tooltips, previews, playback state, and server protocol remain unchanged.
+The playing bars, note/record animation, Artists rendering, and startup are
+outside this component.
+
+#### Seek-rendering evidence
+
+A disposable Library contains 1,906 tracks, 890 album cards, and two queued
+entries, with real local silent audio. Headless Chrome at 1280 by 800 compares
+the compiled baseline and candidate while Albums is open and playback
+continues. Seven pairs alternate build order for each condition: the thumb
+hidden, and the thumb visible under the pointer. No household data or outside
+site is used.
+
+Each sample measures renderer task, scripting, and layout duration over about
+three seconds, divided by recorded elapsed time. Three Enter presses on
+**Volume down** then check both actual audio volume and its displayed value.
+Event Timing measures each `keydown` to its next browser paint; each sample
+contributes the median of its three interactions.
+
+| Thumb | Measure | Baseline median | Candidate median | Median paired saving |
+| --- | --- | ---: | ---: | ---: |
+| Hidden | Renderer task time per second | 494 ms | 178 ms | 329 ms (64.2%) |
+| Visible | Renderer task time per second | 526 ms | 170 ms | 355 ms (67.5%) |
+| Hidden | Layout time per second | 8.78 ms | 0.37 ms | 8.49 ms (96.4%) |
+| Visible | Layout time per second | 9.14 ms | 0.29 ms | 8.85 ms (96.7%) |
+| Hidden | Keydown to next paint | 48 ms | 48 ms | 8 ms (12.5%) |
+| Visible | Keydown to next paint | 64 ms | 48 ms | 16 ms (28.6%) |
+
+The before/after columns are medians across samples; paired savings and
+percentages are medians of each pair's differences. Task and layout time
+improve in every pair. Scripting stays similar: hidden-thumb medians are
+66.8 and 67.6 ms per second; visible-thumb medians are 63.7 and 62.4 ms.
+Next-paint results are less consistent. Hidden-thumb timing improves in four
+pairs, ties in two, and is 8 ms slower in one; visible-thumb timing improves
+in six and is 16 ms slower in one. This supports retaining the renderer
+saving, not a universal latency improvement.
+
+All final samples retain moving audio and a moving thumb. The measured windows
+last 3.002–3.066 seconds and contain 11–12 progress events in either build.
+Audio readings around those windows advance 3.051–3.192 seconds. All key events
+have an Event Timing entry; none is replaced with zero or an assumed
+below-threshold value. The final collection has no failed or replaced trials.
+Earlier incomplete diagnostic collections are not part of these results.
+
+Separate three-second traces with the thumb visible show 177 layout events
+and 352 paint events in the baseline, versus 3 and 6 in the candidate.
+These traces support the rendering explanation; they are not additional
+paired samples or proof of a particular GPU compositing path.
+
+The measurements run on a **busy, shared Mac**, without artificial CPU
+throttling; the one-minute load average ranges from 16.9 to 28.6.
+Headless paint timing is a laboratory measurement, not physical display
+latency, a whole keyboard interaction, or field INP. Renderer task time is
+not whole-machine CPU usage. No first-load improvement is claimed.
+
+#### Acceptance
+
+- [x] Add browser regression coverage that distinguishes transform-based
+      movement from the baseline `left` transition.
+- [x] Match thumb center to bar position at the endpoints and intermediate
+      values, including narrow widths and the first frame after resizing,
+      both during a transition and after it settles.
+- [x] Preserve the 260 ms linear interpolation and alignment with the fill;
+      held and reduced-motion updates must be immediate.
+- [x] Preserve clicks, drags, pointer cancellation, keyboard seeking, unknown
+      duration, and the sent-position hold until the player responds.
+- [x] Check segmented album bars and both the regular and Now Playing layouts.
+- [x] Keep endpoint hit targets, hover/focus visibility, shadow,
+      tooltip/preview layering, language, and slider accessibility without
+      adding horizontal scrolling to the document or modal container.
+      Paired light/dark image crops preserve the shadow and endpoints;
+      desktop modal edges differ by less than a pixel in rasterization.
+- [x] Compare scroll extents through the full range against the layout's
+      existing extent, including a modal with pre-existing overflow.
+      Verify the clipping-disabled fallback and shadow/endpoint hit areas.
+- [x] Compare real baseline and candidate in seven alternating headless
+      pairs during playback, with the thumb hidden and visible, and record
+      renderer task/layout time, actual audio progress, and time from `keydown`
+      to next paint.
+- [x] Verify that movement remains active; do not claim a saving from hiding
+      or stopping the indicator. Inspect compositing or rendering traces.
+- [x] Obtain independent implementation and retention review, then reconcile
+      this record with the actual result. No timing thresholds enter unit CI.
+
+The existing seek-bar unit and browser suites own interaction semantics.
+Use browser geometry and animation checks for the new positioning boundary.
+No dependency, animation clock, or public API is added.
+
 ### Queue rendering during playback
 
 > [!NOTE]

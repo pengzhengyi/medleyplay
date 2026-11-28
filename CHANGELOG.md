@@ -772,6 +772,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The seek thumb animates a transform instead of its layout position in browsers
+  that support its clipping rules. Motion and seeking controls stay the same.
 - Icon controls enlarge their glyph on hover instead of adding a background.
   Keyboard focus stays visible, and Reduce Motion keeps the icons still.
 

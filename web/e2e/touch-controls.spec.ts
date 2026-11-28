@@ -98,13 +98,18 @@ test.describe("coarse pointer on a wide screen", () => {
 
     await page.getByText("Columns", { exact: true }).tap();
     const width = page.getByRole("spinbutton", { name: "Artist width in pixels" });
+    const reset = page.getByRole("button", { name: "Reset Artist width" });
     await expectTouchTarget(width);
+    await expectTouchTarget(reset);
+    const [inputBox, resetBox] = await Promise.all([width.boundingBox(), reset.boundingBox()]);
+    if (!inputBox || !resetBox) throw new Error("Missing column controls.");
+    expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(resetBox.x);
     await width.tap();
     await width.fill("135");
     await page.getByRole("checkbox", { name: "Artist", exact: true }).focus();
     const artist = page.getByRole("columnheader", { name: "Artist", exact: true });
     await expect(artist).toHaveCSS("width", "135px");
-    await page.getByRole("button", { name: "Reset Artist width" }).tap();
+    await reset.tap();
     await expect(artist).not.toHaveCSS("width", "135px");
   });
 

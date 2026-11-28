@@ -1,10 +1,10 @@
 # Browser responsiveness
 
 > [!NOTE]
-> **Implemented.** The Albums gallery skips
-> offscreen rendering and reuses unchanged cards during playback,
-> keeping its complete list and existing controls.
-> Artists and the first Library load are unchanged.
+> **Implemented.** The Albums gallery skips offscreen rendering.
+> Albums and Artists reuse unchanged cards during playback, keeping
+> their complete lists and existing controls.
+> The first Library load is unchanged.
 
 ## Contents
 
@@ -14,14 +14,16 @@
 - [Validation and limits](#validation-and-limits)
 - [Crosscheck](#crosscheck)
 - [Album contents during playback](#album-contents-during-playback)
+- [Artist contents during playback](#artist-contents-during-playback)
 - [Further investigations](#further-investigations)
 - [References](#references)
 
 ## Scope
 
-Reduce unnecessary layout, painting, and repeated card rendering in Albums.
-Keep every album in the DOM, in the same order, with the same links,
-counts, favorites, and playback actions. Do not paginate the catalog,
+Reduce unnecessary layout and painting in Albums, and repeated card
+rendering in Albums and Artists. Keep every card in the DOM, in the same
+order, with the same links, counts, favorites, and playback actions.
+Do not paginate the catalog,
 change its API, or introduce a rendering dependency.
 
 [First Library load](First%20Library%20load.md) owns the startup sequence.
@@ -33,7 +35,7 @@ Those behaviors are not changed by this component.
 
 The Albums view opts its shared list component into deferred rendering.
 Search-result album lists do not opt in. Artists, artist-name choosers,
-Playlists, Radio, and the virtualized Songs table retain their rendering.
+Playlists, Radio, and the virtualized Songs table do not use this containment.
 The opt-in uses a CSS class, not translated labels.
 
 Each album's list item supplies an inline-size container. Its link uses
@@ -232,7 +234,8 @@ that occasional work is outside this component.
 
 Every card and the existing CSS containment stay in place. There is no
 virtualization, pagination, translated-string cache, whole-`CurrentView`
-cache, or player state ownership change. `ArtistList` is unchanged.
+cache, or player state ownership change. Artist-card reuse is described
+[separately](#artist-contents-during-playback).
 
 ### Playback validation
 
@@ -261,6 +264,127 @@ lyrics context updates pass through unchanged view props without exporting
 the private list for tests. Desktop and phone hover/focus captures in both
 themes show no pixels differing by more than 10 channel levels. This adds
 no dependency or required CI category.
+
+## Artist contents during playback
+
+> [!NOTE]
+> **Implemented.** Reuse unchanged artist cards during playback without
+> changing their contents, appearance, navigation, or update behavior.
+
+### Artist playback measurements
+
+Headless Chrome compares separate production builds on a loopback server
+with synthetic catalogs, real silent WAV playback, and two Up next entries.
+Only the local-file plugin is enabled. No household data or outside sites
+are used. Seven adjacent pairs per catalog alternate the build order and
+the paused/playing order, at 1280 by 800 without artificial CPU slowdown.
+
+Three-second observation windows are normalized by their actual elapsed
+time, 3.001–3.043 seconds. Every playing sample advances by about three
+seconds and reports 11–12 progress events. All artist-link counts, text,
+and destinations match between builds.
+
+| Artist cards (tracks) | Measure during playback | Baseline median | Candidate median | Median paired saving |
+| --- | --- | ---: | ---: | ---: |
+| 382 (1,906) | Scripting per elapsed second | 111 ms | 29 ms | 83 ms (74.4%) |
+| 382 (1,906) | Renderer task work per elapsed second | 127 ms | 46 ms | 81 ms (63.9%) |
+| 382 (1,906) | Keydown to next paint | 40 ms | 16 ms | 24 ms (50.0%) |
+| 42 (210) | Scripting per elapsed second | 59 ms | 45 ms | 14 ms (24.1%) |
+| 42 (210) | Renderer task work per elapsed second | 81 ms | 65 ms | 11 ms (12.5%) |
+| 42 (210) | Keydown to next paint | 40 ms | 24 ms | 8 ms (20.0%) |
+
+Columns are medians across samples; savings are medians of within-pair
+differences and percentages. Each interaction sample contributes the
+median of three Enter presses on **Volume down**, with both the audio
+volume and displayed value checked. All playing key events are observed
+through Event Timing. Missing paused events remain unobserved, not zero
+or assumed faster than the observer's 16 ms threshold.
+
+Scripting improves in every pair: 41–79% for the large catalog and 9–39%
+for the small one. The large catalog's renderer task work also improves
+in every pair. In the small catalog, one pair instead costs 7.6 ms more
+per elapsed second and its median key response is 16 ms slower.
+Large-catalog layout costs a paired median 0.052 ms more per elapsed
+second; small-catalog layout is nearly unchanged. Paused background
+scripting is zero in both builds; no idle CPU saving is claimed.
+
+The large baseline's separate CPU profile attributes 414 ms to
+`ArtistList`, including 294 ms in duration formatting. The candidate has
+no `ArtistList` samples; its remaining formatting sample is 1.375 ms in
+`QueuePanel`. Repeated artist-card work disappears without hiding cards
+or reducing playback updates.
+
+One-minute host load ranges from 4.1 to 10.3 for the large catalog and
+9.0 to 35.9 for the small one. These paired results on a shared Mac
+support retaining the scripting reduction, not a universal latency or
+tail-latency guarantee. **No startup or initial gallery-mount improvement
+is claimed.**
+
+### Artist rendering boundary
+
+The shared `ArtistList` uses React `memo` with its default comparison,
+as the album list does. The Artists view already derives its artist
+array with `useMemo`; no new cache or callback adapter is needed.
+
+| Input | Why a card may change |
+| --- | --- |
+| `artists` | Names, identities, counts, durations, ordering, or search results change. |
+| `favorites` | An artist is favorited or unfavorited. |
+| `links` | Artist bindings, chosen names, or photos change. |
+| `label` | An artist-name chooser or another caller changes its list label. |
+| Language subscription | Translated labels and counts change even when props do not. |
+
+All props participate in the comparison. The existing immutable data
+updates provide new references. `useWords` remains inside the list, so
+language changes still reach retained cards without caching translations.
+The list has no playback commands or position input.
+Current or next Track changes may rebuild the derived artist array; reuse
+is expected between progress updates, not across every Track transition.
+
+```mermaid
+flowchart LR
+  P["Playback progress"] --> S["Current view and player"]
+  A["Artist data, favorites, links, label"] --> C["ArtistList"]
+  L["Language subscription"] --> C
+  C --> G["Complete artist cards and links"]
+```
+
+The shared list also serves artist-name choosers and search results.
+Those callers may create new arrays and render normally; this component
+does not promise to optimize them. All cards remain in the DOM.
+No CSS, containment, virtualization, player state, public API, dependency,
+or startup behavior changes.
+
+### Artist acceptance
+
+- [x] Reuse artist cards for unchanged inputs during ordinary playback.
+- [x] Preserve mounted updates for metadata, counts, durations, favorites,
+      bindings, chosen names, and photos.
+- [x] Preserve language updates with unchanged list props and keep musical
+      names and navigation targets untranslated.
+- [x] Preserve search and artist-name chooser contents and links.
+- [x] Keep desktop and phone layout, light/dark appearance, keyboard focus,
+      and every artist link intact.
+- [x] Compare separate production builds in seven alternating pairs for a
+      representative and a smaller catalog, with real silent audio, current
+      controls, and recorded progress-event counts.
+- [x] Use CPU profiles to confirm repeated artist-card work disappears;
+      report scripting and renderer work separately from input timing.
+- [x] Obtain independent design and implementation review. Retain only a
+      demonstrated improvement; claim no startup or universal latency gain.
+
+View tests cover artist identity, navigation, search, and mounted updates
+for the inputs this boundary could retain incorrectly. Before/after
+production measurements establish the performance change; CI tests use
+neither timing thresholds nor private render counts.
+
+Headless desktop/phone checks in both themes retain every card, matching
+list and card geometry, visible keyboard focus, and Enter navigation to
+the final artist. Five of eight hover/focus image pairs are pixel-identical;
+the other three differ at eight pixels around the favorite icon, with a
+maximum channel difference of 36 out of 255. No CSS changes.
+The broader Library row boundary and remaining renderer work in Albums are
+separate candidates, not part of this change.
 
 ## Further investigations
 

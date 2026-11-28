@@ -57,6 +57,32 @@ beforeEach(() => {
 });
 
 describe("the song table", () => {
+  it("sets and resets a column width without dragging the heading", async () => {
+    const view = renderTable();
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Columns", { exact: true }));
+    const width = screen.getByRole("spinbutton", { name: "Artist width in pixels" });
+
+    await user.clear(width);
+    await user.type(width, "165{Enter}");
+
+    expect(screen.getByRole("columnheader", { name: "Artist" })).toHaveStyle({
+      width: "165px",
+    });
+    expect(width).toHaveFocus();
+    view.unmount();
+    renderTable();
+    expect(screen.getByRole("columnheader", { name: "Artist" })).toHaveStyle({
+      width: "165px",
+    });
+
+    await user.click(screen.getByText("Columns", { exact: true }));
+    await user.click(screen.getByRole("button", { name: "Reset Artist width" }));
+    expect(screen.getByRole("columnheader", { name: "Artist" })).not.toHaveStyle({
+      width: "165px",
+    });
+  });
+
   it("shows lyrics once on the kind mark while keeping the artwork playing indicator", async () => {
     const song = trackOf(1, "Intro", { has_lyrics: true, cover: "blue" });
     const { actions, container } = renderTable([song], song.id);

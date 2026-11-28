@@ -241,8 +241,10 @@ Track's kind is decided.
 - **The Album column** links to the album's page by album artist (or song artist
   when blank) and album name. A blank name or an album with no songs on its page
   stays plain text.
-- **Columns can be hidden and resized,** from a menu in the header row; the
-  choice is kept per browser, versioned, and ignored when it can't be read.
+- **Columns can be hidden and resized.** Where the full table fits, use
+  *Columns* to choose which columns to show. Enter a width in pixels or reset
+  it there instead of dragging a heading's resize handle. These choices are
+  kept per browser, versioned, and ignored when they can't be read.
 - **The header stays in view:** it sticks under the top bar while the songs
   scroll, on a solid band with a rule below it, its names in the ink color.
 - **Filters** are TanStack's own column filters, in a *Filter* panel of native
@@ -855,7 +857,7 @@ screen readers. Search keeps its own row. On phones, conditional notices share
 a separate wrapping region: Offline, devices waiting for approval, and any
 device-answer error stay below the header controls, without hiding their actions.
 
-A touch screen, which can't point, shows a row's actions all the time. The
+When a touch screen is available, the row's actions stay visible. The
 page sizes itself to the dynamic viewport (`dvh`) and keeps the player and the
 tab bar clear of the iPhone's home indicator (`env(safe-area-inset-bottom)`).
 

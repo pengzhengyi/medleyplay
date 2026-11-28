@@ -61,6 +61,7 @@ export function SeekBar({
 }) {
   const words = useWords();
   const bar = useRef<HTMLDivElement>(null);
+  const dragging = useRef<number | null>(null);
   // Where a pressed pointer holds the bar, and where a hovering one points.
   const [held, setHeld] = useState<number | undefined>(undefined);
   const [pointed, setPointed] = useState<number | undefined>(undefined);
@@ -120,11 +121,12 @@ export function SeekBar({
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!movable || event.button !== 0) {
+    if (!movable || event.button !== 0 || !event.isPrimary || dragging.current !== null) {
       return;
     }
     // The bar keeps the pointer while held, wherever it goes.
     event.currentTarget.setPointerCapture(event.pointerId);
+    dragging.current = event.pointerId;
     setHeld(timeAt(event.clientX));
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -132,19 +134,28 @@ export function SeekBar({
       return;
     }
     const time = timeAt(event.clientX);
-    setPointed(time);
-    clearTimeout(hiding.current);
-    setPreviewAt(time);
-    if (held !== undefined) {
+    if (dragging.current === event.pointerId) {
       setHeld(time);
+    }
+    if (event.pointerType !== "touch") {
+      setPointed(time);
+      clearTimeout(hiding.current);
+      setPreviewAt(time);
     }
   };
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    if (held === undefined) {
+    if (dragging.current !== event.pointerId) {
       return;
     }
-    seek(timeAt(event.clientX));
+    dragging.current = null;
+    if (movable) seek(timeAt(event.clientX));
     setHeld(undefined);
+  };
+  const cancel = (event: PointerEvent<HTMLDivElement>) => {
+    if (dragging.current === event.pointerId) {
+      dragging.current = null;
+      setHeld(undefined);
+    }
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const to = movable ? keyedTime(event.key, at, length) : undefined;
@@ -190,9 +201,8 @@ export function SeekBar({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={() => {
-        setHeld(undefined);
-      }}
+      onPointerCancel={cancel}
+      onLostPointerCapture={cancel}
       onPointerLeave={() => {
         setPointed(undefined);
         hidePreviewSoon();

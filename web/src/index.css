@@ -334,6 +334,8 @@ button[aria-disabled="true"] {
 /* The signed-in page: the views, the Library, and the queue; the player floats below. */
 
 .library {
+  --player-bottom: 1.25rem;
+
   /* The rail's width: its names, or only its icons once collapsed. */
   --rail-expanded: 13.25rem;
   --rail: var(--rail-expanded);
@@ -1114,6 +1116,12 @@ button[aria-disabled="true"] {
   cursor: progress;
 }
 
+.ratings-import-button input[type="file"] {
+  width: 1px;
+  margin: 0;
+  padding: 0;
+}
+
 .ratings-confirm {
   display: flex;
   flex-wrap: wrap;
@@ -1397,7 +1405,7 @@ button[aria-disabled="true"] {
   opacity: 1;
 }
 
-@media (hover: none) {
+@media (hover: none), (any-pointer: coarse) {
   .photo-suggestion-icon {
     opacity: 0.85;
   }
@@ -2503,7 +2511,6 @@ button[aria-disabled="true"] {
 .ai-provider-handle {
   cursor: grab;
   color: var(--muted);
-  touch-action: none;
 }
 
 .ai-provider-head {
@@ -3735,7 +3742,40 @@ details.dropdown.columns-menu > summary:not([role]):hover {
 details.dropdown.columns-menu > summary + ul {
   right: 0;
   left: auto;
-  min-width: 11rem;
+  min-width: 14rem;
+  max-height: 60dvh;
+  overflow: auto;
+}
+
+.columns-menu .column-visibility {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.column-width {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.columns-menu .column-width > .column-width-label {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+}
+
+.column-width input[type="number"],
+.columns-menu .column-width button {
+  width: 100%;
+  height: 2rem;
+  margin: 0;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.columns-menu .column-width button {
+  width: auto;
 }
 
 /* Filter: a panel of native controls, so a phone shows its own pickers. */
@@ -4428,7 +4468,6 @@ button.icon.heart.on:hover,
   grid-area: handle;
   width: 1.75rem;
   cursor: grab;
-  touch-action: none;
 }
 
 .queue li.dragging .handle {
@@ -4515,6 +4554,10 @@ button.icon.heart.on:hover,
   height: 1.9rem;
   font-size: 0.95rem;
   opacity: 0;
+}
+
+.queue .queue-more {
+  grid-area: remove;
 }
 
 .queue li:hover .remove,
@@ -4643,7 +4686,7 @@ button.icon.heart.on:hover,
 
 .player {
   position: fixed;
-  inset: auto 1.5rem 1.25rem;
+  inset: auto 1.5rem var(--player-bottom);
   z-index: 3;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -5117,10 +5160,8 @@ button.icon.heart.on:hover,
   transform: translateX(-50%);
 }
 
-/* A touch screen can't point at a row, so its actions and the thumb always show. */
-
-@media (hover: none) {
-  .tracks .actions button,
+@media (hover: none), (any-pointer: coarse) {
+  .tracks .actions button:not(:disabled),
   .tracks button.heart:not(.on),
   .tracks .stars:not(:has([aria-pressed="true"])) button.star,
   .queue .remove,
@@ -5204,6 +5245,10 @@ button.icon.heart.on:hover,
 }
 
 @media (width <= 48rem) {
+  .library {
+    --player-bottom: calc(4.1rem + env(safe-area-inset-bottom));
+  }
+
   /* The search takes a line of its own, with where to look at its end. */
   .search {
     flex-basis: 100%;
@@ -5231,7 +5276,7 @@ button.icon.heart.on:hover,
     inset: auto 0 0;
     z-index: 3;
     padding: 0.3rem 0.25rem calc(0.3rem + env(safe-area-inset-bottom));
-    overflow: visible;
+    overflow-x: auto;
     background: color-mix(in srgb, var(--surface) 96%, transparent);
     box-shadow: 0 -1px 0 var(--line);
   }
@@ -5362,7 +5407,7 @@ button.icon.heart.on:hover,
   }
 
   .player {
-    inset: auto 0.5rem calc(4.1rem + env(safe-area-inset-bottom));
+    inset-inline: 0.5rem;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.5rem 0.75rem;
     padding: 0.85rem 1rem 0.75rem;
@@ -6283,7 +6328,7 @@ dialog.modal::backdrop {
   opacity: 1;
 }
 
-@media (hover: none) {
+@media (hover: none), (any-pointer: coarse) {
   .cover-tools {
     opacity: 1;
   }
@@ -7062,7 +7107,6 @@ button.link-button {
 button.song-handle {
   width: 1.75rem;
   cursor: grab;
-  touch-action: none;
 }
 
 .song-row.dragging .song-handle {
@@ -8305,6 +8349,7 @@ kbd {
   --np-width: min(30rem, 100%, 48dvh);
 
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 1.1rem;
   width: 100%;
@@ -9697,6 +9742,229 @@ button.playing-kind[data-pinned] {
   }
 }
 
+@media (any-pointer: coarse) {
+  .dialog-button,
+  .track-menu-item,
+  .play-all button,
+  details.dropdown.columns-menu > summary:not([role]),
+  details.dropdown > summary.filter-summary,
+  .columns-menu .column-visibility,
+  .column-width input[type="number"],
+  .settings-toc button,
+  .settings-section .section-toggle,
+  .ratings-actions > :is(button, a, .ratings-import-button),
+  .device-actions button,
+  .device-remove-all button,
+  .rail-order-row button,
+  .columns-menu .column-width button,
+  .song-row-buttons .icon,
+  .ai-provider-moves .icon,
+  .queue-tabs [role="tab"],
+  .queue .history-length select {
+    min-height: 2.75rem;
+  }
+
+  .top :is(.wordmark, .listen-button, .views-account),
+  .device-name button.device-rename,
+  .modal-close,
+  .queue :is(.handle, .fold, .remove, .add, .queue-more, .queue-actions button),
+  .player :is(.open-now-playing, .queue-toggle),
+  .player .now button:is(.heart, .more),
+  .now-playing :is(.np-top, .np-extras) > button.icon,
+  .now-playing .np-actions button.icon,
+  :is(.player, .now-playing) .volume button.icon {
+    flex-shrink: 0;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .song-row-buttons .icon {
+    min-width: 2rem;
+  }
+
+  .top .wordmark {
+    justify-content: center;
+  }
+
+  .modal h2 {
+    padding-inline-end: 2.75rem;
+  }
+
+  .tracks .title-cell button.title,
+  .queue :is(.entry-title, .album-title) {
+    min-height: 1.75rem;
+  }
+
+  .tracks button.star {
+    min-width: 24px;
+  }
+
+  .tracks .actions button.more {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  @container (width >= 64rem) {
+    .tracks th.actions {
+      width: 9rem;
+    }
+  }
+
+  .player {
+    padding-block-start: 2.75rem;
+  }
+
+  .player .seek {
+    inset-block-start: 0;
+  }
+
+  .player .seek,
+  .now-playing .np-seek .seek {
+    height: 2.75rem;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .player .now {
+    gap: 0.4rem;
+  }
+
+  .player .open-now-playing {
+    justify-content: center;
+  }
+
+  .player .status {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  :is(.player, .now-playing) .controls {
+    flex-wrap: wrap;
+    gap: 0.1rem;
+  }
+
+  :is(.player, .now-playing) .controls button.icon:not(.mode, .song-step) {
+    flex-shrink: 0;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  :is(.player, .now-playing) .controls button:is(.mode, .song-step) {
+    flex-shrink: 0;
+    width: 2rem;
+    min-height: 2.75rem;
+  }
+
+  :is(.player, .now-playing) .volume {
+    min-width: 0;
+  }
+
+  :is(.player, .now-playing) .volume input {
+    flex: 1 1 4rem;
+    min-width: 3rem;
+    height: 2.75rem;
+  }
+
+  .library main {
+    padding-bottom: calc(var(--player-bottom) + var(--player-height, 10rem) + 1rem);
+  }
+}
+
+@media (any-pointer: coarse) and (width <= 64rem) {
+  .library.queue-open .queue {
+    bottom: calc(var(--player-bottom) + var(--player-height, 8rem) + 0.5rem);
+    max-height: min(60dvh, calc(100dvh - var(--player-bottom) - var(--player-height, 8rem) - 1rem));
+  }
+
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .player .status {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+}
+
+@media (any-pointer: coarse) and (width <= 48rem) {
+  .views .view-link {
+    align-items: center;
+    min-width: 2.75rem;
+  }
+
+  .player {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .player .controls {
+    justify-content: center;
+  }
+
+  .now-playing .np-main .controls button.play {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .np-extras {
+    gap: 0.4rem;
+  }
+
+  .np-main {
+    gap: 0.65rem;
+  }
+
+  .now-playing .np-main > .np-art {
+    width: min(var(--np-width), max(6rem, calc(100dvh - 25rem)));
+  }
+}
+
+@media (any-pointer: coarse) and (width <= 64rem) and (height <= 30rem) {
+  .top {
+    position: relative;
+  }
+
+  .library main {
+    --stick-top: 0px;
+  }
+}
+
+@media (any-pointer: coarse) and (32rem <= width <= 48rem) and (height <= 30rem) {
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+@media (any-pointer: coarse) and (48rem < width <= 64rem) and (height <= 30rem) {
+  .views {
+    position: relative;
+    top: auto;
+  }
+}
+
+@media (any-pointer: coarse) and (height <= 40rem) {
+  .np-body {
+    grid-template-rows: auto minmax(min-content, 1fr);
+    overflow-y: auto;
+  }
+
+  .np-stage {
+    align-items: safe center;
+  }
+}
+
+@media (any-pointer: coarse) and (width > 48rem) and (height <= 40rem) {
+  .np-stage {
+    --np-column: min(24rem, 42vw);
+  }
+
+  .np-main {
+    --np-width: min(22rem, 100%);
+  }
+
+  .now-playing .np-main > .np-art {
+    width: min(var(--np-width), 10rem);
+  }
+}
+
 .tidy-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -10971,7 +11239,6 @@ small.ai-set-up-hint {
 button.rail-order-handle {
   width: 1.75rem;
   cursor: grab;
-  touch-action: none;
 }
 
 .rail-order-row.dragging .rail-order-handle {

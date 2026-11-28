@@ -12,19 +12,11 @@ import {
   type Announcements,
   DndContext,
   type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
   type UniqueIdentifier,
   closestCenter,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { PlusIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { Trans } from "react-i18next";
@@ -35,6 +27,7 @@ import { useFormattingLocale, useWords } from "../locale";
 import { classOf, useNoteOf } from "../useNote";
 import { AiProviderCard } from "./AiProviderCard";
 import { EnricherSettings, type EnricherWords } from "./EnricherSettings";
+import { useReorderSensors } from "./useReorderSensors";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 const OTHER: AiPreset = { name: "Other", base_url: "", model: "" };
@@ -87,11 +80,7 @@ export function AiSettings({ onChanged }: { readonly onChanged: () => void }) {
           failureToReport.adding ? "Could not add the provider. Try again." : undefined,
           t,
         );
-  const sensors = useSensors(
-    // A few pixels of movement first, so a tap on the handle isn't a drag.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useReorderSensors();
 
   const failed = (cause: unknown) => {
     setFailureToReport({ cause, adding: false });

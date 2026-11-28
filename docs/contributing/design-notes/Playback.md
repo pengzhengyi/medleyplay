@@ -312,12 +312,16 @@ and the full views are in [Web client](Web%20client.md).
   - **Both modes are saved with the queue.** A queue saved before play modes
     existed restores in order; a saved order that doesn't hold exactly the
     queue's entries is dropped.
-- **The queue** lists what plays next; a Track is dragged by its handle into
-  another place, with a pointer or a finger, or moved from the keyboard (Space
-  picks it up, the arrow keys move it, Space drops it, and a screen reader hears
-  each step), and it can be removed, or the queue cleared. Dragging is dnd-kit's
-  sortable list. The queue is a pure reducer, so its rules are unit tested apart
-  from the page.
+- **The queue** lists what plays next. On touch screens, swiping over the
+  handle scrolls the queue. Hold the handle until the row lifts, then drag to
+  reorder. The mouse and pen can drag after four pixels of movement. From the
+  keyboard, Space picks up the Track, the arrow keys move it, and Space drops
+  it; a screen reader hears each step. A song's **More actions** menu also
+  moves it to the top, up or down a place, or to the end of *Up next*. A move
+  counts songs inside folded albums and leaves current playback alone. The
+  same menu removes an individual song; an album row can still remove all the
+  songs in its group at once. The queue uses dnd-kit's sortable list and keeps
+  its order in a pure reducer.
 - **How long the queue plays** shows under *Up next*, as *12 songs, 48 min*, in
   the words the views use for their length. While it plays on to its end, with
   repeat off, it adds when that is on the clock, with the day once it isn't
@@ -338,8 +342,12 @@ and the full views are in [Web client](Web%20client.md).
   Phosphor's icons in the weight each control's prominence calls for: filled for
   play and pause, regular for the rest, light for a row's actions. The page
   follows the system's light or dark scheme unless a browser chooses one in the
-  header's theme switch, which it remembers. On a touch screen, which can't
-  point at a row, a row's actions and the seek bar's thumb always show.
+  header's theme switch, which it remembers. When touch is available, even
+  with a mouse connected, row actions and the seek thumb stay visible. The
+  primary playback controls have larger targets without larger icons. The
+  open queue and the page's bottom padding follow the player's measured
+  height, including when its controls need another line. On a short touch
+  screen, Now Playing scrolls if its controls need more room.
 - **The player** shows the Track, shuffle, previous, play and pause, next,
   repeat, a seek bar, the volume, and the time.
   - **Under the title, the song's artists and its album are links** to their
@@ -361,8 +369,10 @@ and the full views are in [Web client](Web%20client.md).
     thumb width shifts where a click lands. The time comes from where the pointer
     is on the bar. Hovering shows that time over the pointer; a click seeks there
     at once; a drag follows the pointer, with the Track playing on undisturbed,
-    and seeks once where it is let go. The arrow keys move five seconds, Page Up
-    and Page Down a tenth of the Track, and Home and End to either end.
+    and seeks once where it is let go. A vertical swipe on a touch screen
+    can scroll rather than seek. An interrupted gesture or a second finger
+    does not commit a seek. The arrow keys move five seconds, Page Up and Page
+    Down a tenth of the Track, and Home and End to either end.
   - **The bar stays where it was sent** until the audio reports a position
     within a second of it, or for two seconds at most, so it never jumps back
     before moving on. Between the audio's few position updates a second the bar

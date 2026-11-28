@@ -77,6 +77,7 @@ class Failure:
     failed_at: datetime
     in_a_row: int
     cleared: bool = False
+    terminal: bool = False
 
 
 @dataclass(frozen=True)
@@ -314,6 +315,8 @@ def _join_shortfall(
 
 
 def _due(failure: Failure, now: datetime) -> bool:
+    if failure.terminal:
+        return False
     if failure.cleared:
         return True
     return failure.in_a_row <= MAX_FAILURES and now - failure.failed_at >= RETRY_AFTER

@@ -1032,8 +1032,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while searching. The arc stays still with reduced motion.
 - Downloaded distinguishes queued work, offline waits, and scheduled retries.
   It shows preparation, transfer progress, and the part being joined when known.
-- A Bilibili audio transfer that receives HTTP 567 waits to retry instead of
-  counting toward the downloader's plugin fault limit.
+- A rejected Bilibili download, including HTTP 567, stops without repeating
+  the request or invalidating the site's saved login.
 - Closing the cover editor no longer outlines the album artwork. The queue
   shortcut focuses the selected tab instead of the whole panel.
 - The Album column opens the song's album without starting playback.

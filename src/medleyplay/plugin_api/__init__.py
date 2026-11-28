@@ -130,7 +130,7 @@ from medleyplay.plugin_api.enrichers import (
     TrackEnricher,
     VideoText,
 )
-from medleyplay.plugin_api.errors import AuthError, NetworkError
+from medleyplay.plugin_api.errors import AuthError, DownloadRefusedError, NetworkError
 from medleyplay.plugin_api.extension import (
     API_VERSION,
     DEFAULT_DEADLINE,
@@ -342,6 +342,7 @@ __all__ = [
     "DescribeArtist",
     "DescribedArtist",
     "DownloadPart",
+    "DownloadRefusedError",
     "Downloaded",
     "EnrichStatus",
     "EnrichTrack",

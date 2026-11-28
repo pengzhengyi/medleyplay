@@ -39,6 +39,7 @@ from medleyplay.domain.catalog import SourceId, SourceState
 from medleyplay.domain.downloads import (
     DOWNLOAD_EXTENSIONS,
     DOWNLOAD_KIND,
+    DOWNLOAD_PROVIDER_REFUSED,
     DOWNLOADS_FOLDER,
     JOIN_ESTIMATE_DETAIL,
     JOIN_LANE,
@@ -136,6 +137,15 @@ def _admit(db: Session, job: Job, *, data_dir: Path) -> None:
     if source is None:
         message = "The Source is no longer in the Library."
         raise NotFoundError(message)
+    previous_failure = db.scalar(
+        select(JobRow.failure_kind)
+        .where(JobRow.kind == job.kind, JobRow.target == job.target, JobRow.id < job.id)
+        .order_by(JobRow.id.desc())
+        .limit(1)
+    )
+    if previous_failure == DOWNLOAD_PROVIDER_REFUSED:
+        message = "The provider rejected this download. Add a file you already have instead."
+        raise ConflictError(message)
     if not video_selection(source.locator).joined:
         return
     existing = db.get(DownloadRow, source.id)
@@ -307,7 +317,11 @@ class DownloadService:
             return None
         target = download_target(source_id)
         latest = self._jobs.latest(DOWNLOAD_KIND, target)
-        if not retry_failed and latest is not None and latest.state is JobState.FAILED:
+        if (
+            latest is not None
+            and latest.state is JobState.FAILED
+            and (not retry_failed or latest.failure_kind == DOWNLOAD_PROVIDER_REFUSED)
+        ):
             return latest
         login = account_id if self._linked.has_valid(account_id, site) else None
         return self._jobs.submit(self._kind, target, request, account_id, login_account=login)

@@ -11,18 +11,19 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.job_runner import NETWORK_RETRY
+from medleyplay.application.job_runner import NETWORK_RETRY, JobRunner, _Outcome, _Running
 from medleyplay.application.links import Added, PartChoice
 from medleyplay.application.playback import Preparing, Ready, Unplayable
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, SourceState
 from medleyplay.domain.downloads import DOWNLOAD_EXTENSIONS, download_target
-from medleyplay.domain.errors import NotFoundError
+from medleyplay.domain.errors import ConflictError, NotFoundError
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.linked_accounts import LinkState
 from medleyplay.domain.plugins import PluginState
 from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import DownloadRow, SourceRow
+from medleyplay.plugin_host.job_wire import JobFailed
 from medleyplay.programs.download_source import DownloadSource
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock, MemorySecrets
@@ -163,6 +164,38 @@ def test_a_login_the_site_refuses_needs_sign_in(site: Site, alice: Account) -> N
     _failed(site, _added(site, alice, "BVrefused"))
 
     assert [each.state for each in site.linked.list_linked(alice)] == [LinkState.NEEDS_SIGN_IN]
+
+
+@pytest.mark.parametrize("go_offline", [False, True], ids=["online", "offline-after-rejection"])
+def test_a_provider_rejection_does_not_spend_retries_or_revoke_a_valid_login(
+    site: Site, alice: Account, monkeypatch: pytest.MonkeyPatch, *, go_offline: bool
+) -> None:
+    watch = JobRunner._watch  # noqa: SLF001 -- hold the recovered outcome before it is saved
+
+    def watch_until_offline(runner: JobRunner, running: _Running) -> _Outcome:
+        outcome = watch(runner, running)
+        if go_offline and isinstance(outcome, JobFailed) and outcome.kind == "provider_refused":
+            site.online.online = False
+            runner.follow_mode()
+        return outcome
+
+    monkeypatch.setattr(JobRunner, "_watch", watch_until_offline)
+    site.linked.save(alice, "bilibili", COOKIES)
+    added = _added(site, alice, "BVProviderRefused")
+
+    failed = _failed(site, added).job
+
+    assert (failed.state, failed.failure_kind, failed.attempts) == (
+        JobState.FAILED,
+        "provider_refused",
+        0,
+    )
+    assert "HTTP 567" in failed.failure_message
+    with pytest.raises(ConflictError, match="provider rejected this download"):
+        site.jobs.retry(alice, failed.id)
+    assert site.downloads.start_for(alice.id, added.source_id) == failed
+    assert [each.state for each in site.linked.list_linked(alice)] == [LinkState.VALID]
+    assert not list(site.downloads.folder.glob("*.m4a"))
 
 
 def test_a_failure_message_never_keeps_the_login(site: Site, alice: Account) -> None:

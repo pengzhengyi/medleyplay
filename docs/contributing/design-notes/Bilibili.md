@@ -364,9 +364,10 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   Job runs again and its file replaces that one, and at startup the core removes
   every file in `downloads/` that no row names.
 - **Failures** follow [Jobs](Jobs.md#failures-and-retries). The plugin sorts
-  yt-dlp's errors by their types first: a connection error, a timeout, a 429,
-  or a 5xx is a `NetworkError`, which waits; a refused login is an `AuthError`;
-  and a 404, a 410, or a geo-restriction is the reply *gone*, which makes its
+  yt-dlp's errors by their types first: a connection error, a timeout, or
+  an ordinary server outage is a `NetworkError`, which waits; a refused
+  login is an `AuthError`; and a 404, a 410, or a geo-restriction is
+  *gone*, which makes its
   standalone Source *unavailable* for good. A missing part of a joined album
   fails its Job without marking the album unavailable. Other site errors,
   including ones the plugin doesn't recognize, are faults. A fault retries
@@ -374,10 +375,11 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
 - **A video for members** needs a login when none was sent. With a login it is
   a fault, not an `AuthError`, since the account may simply not be a member, and
   a working login shouldn't need signing in again.
-- **A 403 or a 412 is a fault,** since it is Bilibili refusing the request,
-  usually to a client it suspects. So it is never retried every minute: it uses
-  the Job's three attempts, and five in a row fault the plugin until an admin
-  resets it.
+- **A rejected download stops.** On HTTP 403, 412, 429, or 567, the downloader
+  stops without repeating the request. The Job records `provider_refused`
+  without revoking the login or counting a plugin fault. The policy and
+  **Retry download** do not reopen this failure. A listener can still add a
+  file they already have. Earlier jobs keep their original failure kind.
 - The [download policy](Download%20policy.md) tracks final Download reservations.
   Temporary space for joins is checked separately, not allocated in advance.
   A full disk fails the Job and its working folder is removed.
@@ -419,10 +421,9 @@ follows a refusal are in [Track details](Track%20details.md#enrichers).
   Bilibili's image hosts only. A cover that can't be fetched, or is longer than
   10 MiB, leaves the text without one.
 - **The site's refusals are told apart:** a 403 or 412, the rate limit, and the
-  risk-control codes 352, 401, and 412 in yt-dlp's error are a refusal. It still
-  fails a Download as a fault, with the same message. A video that is removed, or
-  that needs a login, is gone for that Track only; a lost connection waits, as a
-  Download's does.
+  risk-control codes 352, 401, and 412 in yt-dlp's error are a refusal to read
+  the video's details. A video that is removed or needs a login is gone for
+  that Track only; a lost connection waits, as a Download's does.
 
 ## Progress over SSE
 

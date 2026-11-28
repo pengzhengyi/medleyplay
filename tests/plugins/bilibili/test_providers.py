@@ -10,6 +10,7 @@ from medleyplay.plugin_api import (
     Canonicalize,
     CheckLogin,
     DownloadPart,
+    DownloadRefusedError,
     NetworkError,
     ReadVideo,
     VideoStatus,
@@ -225,6 +226,13 @@ def test_a_download_names_its_bare_file_and_the_quality_it_got(tmp_path: Path) -
         "30232",
         "yt-dlp",
     )
+
+
+def test_a_media_rejection_is_reported_as_a_download_refusal(tmp_path: Path) -> None:
+    downloader = BilibiliDownloader(Download(_ytdlp.RefusedError("The provider returned 567.")))
+
+    with pytest.raises(DownloadRefusedError, match="567"):
+        downloader.download(_part(tmp_path))
 
 
 def test_a_download_asks_for_its_quality_or_the_next_best_with_the_login(tmp_path: Path) -> None:

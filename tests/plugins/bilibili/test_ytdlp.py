@@ -309,20 +309,22 @@ def _synthetic_stream(monkeypatch: pytest.MonkeyPatch, protocol: str) -> None:
     monkeypatch.setattr(_ytdlp, "_extract", extract_stream)
 
 
-@refused_answers_are_left_to_the_collector
 @pytest.mark.parametrize("bounded_http", [False, True], ids=["separate", "joined"])
-def test_an_http_567_during_audio_transfer_is_not_a_plugin_fault(
+@pytest.mark.parametrize("status", [403, 412, 429, 567])
+@pytest.mark.usefixtures("collected")
+def test_a_rejected_media_request_is_sent_once_and_leaves_no_audio(
     no_outside_network: None,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    status: int,
     *,
     bounded_http: bool,
 ) -> None:
     _synthetic_stream(monkeypatch, "http")
 
     with (
-        running_http_proxy({_MEDIA: Answer(567)}) as proxy,
-        pytest.raises(NetworkError, match="567"),
+        running_http_proxy({_MEDIA: Answer(status)}) as proxy,
+        pytest.raises(RefusedError, match=str(status)),
     ):
         download(
             f"http://{VIDEO_PAGE}",
@@ -332,6 +334,29 @@ def test_an_http_567_during_audio_transfer_is_not_a_plugin_fault(
             on_progress=lambda *_: None,
             proxy=proxy.url,
             bounded_http=bounded_http,
+        )
+
+    assert proxy.requests == [f"GET {_MEDIA} HTTP/1.1"]
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.usefixtures("collected")
+def test_a_media_server_unavailable_response_remains_retryable(
+    no_outside_network: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _synthetic_stream(monkeypatch, "http")
+
+    with (
+        running_http_proxy({_MEDIA: Answer(503)}) as proxy,
+        pytest.raises(NetworkError, match="503"),
+    ):
+        download(
+            f"http://{VIDEO_PAGE}",
+            formats="30280",
+            folder=str(tmp_path),
+            cookie_file=None,
+            on_progress=lambda *_: None,
+            proxy=proxy.url,
         )
 
     assert proxy.requests

@@ -49,12 +49,13 @@ export interface CoverAlbum {
 export interface PictureSources {
   /** A cover, of a song or an album, or an artist's photo, which MusicBrainz has none of. */
   readonly kind: "cover" | "photo";
-  /** What it is of, as a song's title or an artist's name. */
+  /** What it is of, as an album's name, a song's title, or an artist's name. */
   readonly of: string;
   /** The picture shown now, if any. */
   readonly shown: string | null | undefined;
   /** The album to look up, for a cover; none for a song on no album. */
   readonly album?: CoverAlbum | undefined;
+  readonly scopeHelp?: string | undefined;
   /** The artist to find pictures of on Deezer, for a photo. */
   readonly artistId?: string | undefined;
   /** What a model is asked to picture; none when nothing can be asked. */
@@ -116,8 +117,20 @@ function PictureEditorForSubject({ sources, startOn = "upload", onClose }: Pictu
   const [using, setUsing] = useState(false);
   const [error, setError] = useState<{ readonly cause: unknown }>();
   const t = useWords();
-  const { kind, of, shown, album, artistId, pictured } = sources;
+  const { kind, of, shown, album, artistId, pictured, scopeHelp } = sources;
   const hasAlbum = kind === "cover" && album !== undefined;
+  const heading =
+    kind === "photo"
+      ? shown
+        ? "Replace the photo"
+        : "Add a photo"
+      : hasAlbum
+        ? shown
+          ? "Replace album cover"
+          : "Add album cover"
+        : shown
+          ? "Replace the cover"
+          : "Add a cover";
   const photoId = kind === "photo" ? artistId : undefined;
   const [searchSettings, setSearchSettings] = useState<{
     readonly photoId: string | undefined;
@@ -227,25 +240,20 @@ function PictureEditorForSubject({ sources, startOn = "upload", onClose }: Pictu
       ref={dialog}
       className="picture-editor"
       labelledBy={`${id}-title`}
-      describedBy={`${id}-of`}
+      describedBy={scopeHelp === undefined ? `${id}-of` : `${id}-of ${id}-scope`}
       locked={using}
       onClose={onClose}
     >
       <div className="card">
-        <h2 id={`${id}-title`}>
-          {t(
-            kind === "cover"
-              ? shown
-                ? "Replace the cover"
-                : "Add a cover"
-              : shown
-                ? "Replace the photo"
-                : "Add a photo",
-          )}
-        </h2>
+        <h2 id={`${id}-title`}>{t(heading)}</h2>
         <p id={`${id}-of`} className="picture-editor-of">
           {of}
         </p>
+        {scopeHelp !== undefined && (
+          <p id={`${id}-scope`} className="hint">
+            {scopeHelp}
+          </p>
+        )}
         {(hasAlbum || photoId !== undefined || pictured !== undefined) && (
           <p id={`${id}-sources-help`} className="hint">
             {t(

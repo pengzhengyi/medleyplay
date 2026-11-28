@@ -64,9 +64,9 @@ describe("an album's cover on its page", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Replace the cover…" }));
+    await userEvent.click(screen.getByRole("button", { name: "Replace album cover…" }));
 
-    expect(await screen.findByRole("dialog", { name: "Replace the cover" })).toBeVisible();
+    expect(await screen.findByRole("dialog", { name: "Replace album cover" })).toBeVisible();
   });
 
   it("sets an image uploaded on every song of the album", async () => {
@@ -83,8 +83,8 @@ describe("an album's cover on its page", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Add a cover…" }));
-    const editor = await screen.findByRole("dialog", { name: "Add a cover" });
+    await userEvent.click(screen.getByRole("button", { name: "Add album cover…" }));
+    const editor = await screen.findByRole("dialog", { name: "Add album cover" });
     await userEvent.upload(within(editor).getByLabelText("Choose a cover file"), IMAGE);
     await userEvent.click(within(editor).getByRole("button", { name: "Use this cover" }));
 
@@ -95,7 +95,7 @@ describe("an album's cover on its page", () => {
     render(<AlbumAbout album="范特西" artist="周杰伦" songs={FANTASY} cover="fantasy.jpg" />);
 
     expect(screen.getByRole("region", { name: "About the album" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Replace the cover…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Replace album cover…" })).toBeNull();
   });
 });
 
@@ -119,7 +119,7 @@ describe("a cover suggested for an album without one", () => {
 
     help();
 
-    expect(await screen.findByRole("button", { name: "Add a cover…" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Add album cover…" })).toBeVisible();
     expect(calls).not.toContain("POST /api/album-covers/find");
   });
 
@@ -165,7 +165,7 @@ describe("a cover suggested for an album without one", () => {
       await screen.findByRole("button", { name: "Dismiss the suggested cover of Help!" }),
     );
 
-    expect(await screen.findByRole("button", { name: "Add a cover…" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Add album cover…" })).toBeVisible();
     expect(sent).toEqual([{ album: "Help!", artist: "The Beatles", cover: "cover-1965" }]);
   });
 
@@ -177,7 +177,7 @@ describe("a cover suggested for an album without one", () => {
       await screen.findByRole("button", { name: "Choose another cover of Help!…" }),
     );
 
-    const editor = await screen.findByRole("dialog", { name: "Add a cover" });
+    const editor = await screen.findByRole("dialog", { name: "Add album cover" });
     expect(within(editor).getByText(/your provider may charge/u)).toBeVisible();
     expect(calls.filter((call) => call === HELP_COVERS)).toHaveLength(1);
     await userEvent.click(within(editor).getByRole("tab", { name: "MusicBrainz" }));

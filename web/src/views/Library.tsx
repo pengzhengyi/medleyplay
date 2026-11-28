@@ -504,27 +504,48 @@ export function Library({
       );
     }
   }
-  const coverHelpOf = (id: number) => {
+  const coverContextOf = (id: number) => {
     const track = byId.get(id);
-    if (track === undefined) return t("This track is no longer in the Library.");
+    if (track === undefined) {
+      return { album: undefined, help: t("This track is no longer in the Library.") };
+    }
     const place = coverPlaceOf(track, tracks);
+    const owner = place.kind === "file" ? (catalog.get(place.id) ?? track) : track;
+    const name = owner.album.trim() || (owner.split || owner.kind === "album" ? owner.title : "");
+    const album = name === "" ? undefined : { album: name, artist: albumArtistOf(owner) };
     if (place.kind === "file") {
-      return t(
-        "Cover changes apply immediately to the parent album file. Removing the cover also clears this song's override.",
-      );
+      return {
+        album,
+        help: t(
+          "Cover changes apply immediately to the parent album file. Removing the cover also clears this song's override.",
+        ),
+      };
     }
     if (track.split) {
-      return t(
-        "Cover changes apply immediately to this album file and songs that inherit its cover.",
-      );
+      return {
+        album,
+        help: t(
+          "Cover changes apply immediately to this album file and songs that inherit its cover.",
+        ),
+      };
     }
     if (place.ids.length > 1) {
-      return t("Cover changes apply immediately to the {{count}} songs of “{{album}}”.", {
-        count: place.ids.length,
-        album: track.album,
-      });
+      return {
+        album,
+        help: t("Cover changes apply immediately to the {{count}} songs of “{{album}}”.", {
+          count: place.ids.length,
+          album: track.album,
+        }),
+      };
     }
-    return t("Cover changes apply to this track immediately, without pressing Save.");
+    return {
+      album,
+      help: t(
+        album === undefined
+          ? "Cover changes apply to this track immediately, without pressing Save."
+          : "Cover changes apply to this album immediately, without pressing Save.",
+      ),
+    };
   };
   // Once the Library has drawn, the parts that load apart load while the browser is idle.
   useEffect(() => {
@@ -1128,7 +1149,7 @@ export function Library({
             });
           }}
           onReadVideo={(text) => library.readVideoText(editing.track.id, text)}
-          coverHelp={coverHelpOf(editing.track.id)}
+          coverContext={coverContextOf(editing.track.id)}
           onSetCover={async (image) => {
             const { shown, place } = trackForCover(editing.track.id);
             await checkCoverTarget(shown, place);

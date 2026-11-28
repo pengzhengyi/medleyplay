@@ -294,7 +294,8 @@ Songs' useful controls move from 429 to 176 ms, with the frame proxy moving from
 There are two important exclusions:
 
 - **A genuinely cold opening still waits.** With 40 ms network latency and a
-  10 Mbps limit, the Songs module request starts after the click in both builds.
+  limit of 10 megabits per second, the Songs module request starts after the click
+  in both builds.
   Three pairs put useful controls at 397 ms versus 407 ms, and the frame proxy
   at 413 ms versus 424 ms. Two pairs are slower; one baseline opening also waits
   behind startup work and takes about a second. This change does not remove the

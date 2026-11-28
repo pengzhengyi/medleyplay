@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   formatMinutes,
@@ -13,7 +13,9 @@ import {
   formatSeen,
   initialOf,
   formatTime,
+  lengthFormatter,
 } from "./format";
+import { simplifiedChineseWords } from "./locale";
 
 describe("formatTime", () => {
   it("writes minutes and two-digit seconds", () => {
@@ -49,6 +51,54 @@ describe("formatLength", () => {
 
   it("leaves the length out when it is unknown", () => {
     expect(formatLength(2, 0)).toBe("2 songs");
+  });
+});
+
+describe("lengthFormatter", () => {
+  it("translates a repeated count and rounded length only once", () => {
+    const words = { t: simplifiedChineseWords };
+    const translated = vi.spyOn(words, "t");
+    const lengthOf = lengthFormatter(words.t);
+
+    expect(lengthOf(3, 181_000)).toBe("3 首歌曲，3 分钟");
+    const firstTranslations = [...translated.mock.calls];
+    expect(lengthOf(3, 184_000)).toBe("3 首歌曲，3 分钟");
+
+    expect(translated.mock.calls).toEqual(firstTranslations);
+    expect(firstTranslations.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    [0, "2 songs"],
+    [-0, "2 songs"],
+    [29_999, "2 songs"],
+    [30_000, "2 songs, 1 min"],
+    [3_569_999, "2 songs, 59 min"],
+    [3_570_000, "2 songs, 1 hr"],
+    [3_630_000, "2 songs, 1 hr 1 min"],
+  ])("preserves the duration boundary at %s milliseconds", (duration, expected) => {
+    const lengthOf = lengthFormatter();
+
+    expect(lengthOf(2, duration)).toBe(expected);
+    expect(lengthOf(2, duration)).toBe(formatLength(2, duration));
+  });
+
+  it("keeps different counts and rounded lengths separate", () => {
+    const lengthOf = lengthFormatter();
+
+    expect(lengthOf(1, 181_000)).toBe("1 song, 3 min");
+    expect(lengthOf(3, 184_000)).toBe("3 songs, 3 min");
+    expect(lengthOf(3, 210_000)).toBe("3 songs, 4 min");
+    expect(lengthOf(1, 184_000)).toBe("1 song, 3 min");
+  });
+
+  it("keeps translations local to each formatter", () => {
+    const english = lengthFormatter();
+    const chinese = lengthFormatter(simplifiedChineseWords);
+
+    expect(english(3, 181_000)).toBe("3 songs, 3 min");
+    expect(chinese(3, 184_000)).toBe("3 首歌曲，3 分钟");
+    expect(english(3, 184_000)).toBe("3 songs, 3 min");
   });
 });
 

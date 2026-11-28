@@ -15,8 +15,33 @@ export function formatTime(seconds: number | undefined): string {
 
 /** Write how many songs there are and how long they play, such as `12 songs, 48 min`. */
 export function formatLength(count: number, durationMs: number, t?: Words): string {
+  return formatRoundedLength(count, roundedMinutes(durationMs), t);
+}
+
+/**
+ * Reuse count-and-duration labels within one render, such as `3 songs, 3 min`.
+ * Each formatter keeps its own labels and translator.
+ */
+export function lengthFormatter(t?: Words): (count: number, durationMs: number) => string {
+  const lengths = new Map<string, string>();
+  return (count, durationMs) => {
+    const minutes = roundedMinutes(durationMs);
+    const key = `${String(count)}:${String(minutes)}`;
+    let length = lengths.get(key);
+    if (length === undefined) {
+      length = formatRoundedLength(count, minutes, t);
+      lengths.set(key, length);
+    }
+    return length;
+  };
+}
+
+function roundedMinutes(durationMs: number): number {
+  return Math.round(durationMs / 60_000);
+}
+
+function formatRoundedLength(count: number, minutes: number, t?: Words): string {
   const songs = t?.("song_count", { count }) ?? (count === 1 ? "1 song" : `${String(count)} songs`);
-  const minutes = Math.round(durationMs / 60_000);
   if (minutes === 0) {
     return songs;
   }

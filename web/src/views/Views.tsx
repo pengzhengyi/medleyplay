@@ -33,7 +33,7 @@ import { type ArtistLinks, NO_LINKS } from "../library/artistLinks";
 import { type ArtistProfiles, artistProfiles } from "../library/artistProfileLinks";
 import { coverUrl } from "../api";
 import { playingPages } from "../library/playingPages";
-import { formatLength, formatLibraryLength, initialOf } from "../format";
+import { formatLength, formatLibraryLength, initialOf, lengthFormatter } from "../format";
 import {
   type FavoriteGroups,
   albumKey,
@@ -810,6 +810,7 @@ const ArtistList = memo(function ArtistList({
   readonly label?: string;
 }) {
   const t = useWords();
+  const lengthOf = lengthFormatter(t);
   return (
     <ul className="groups" aria-label={label ?? t("Artists")}>
       {artists.map((artist) => (
@@ -840,7 +841,7 @@ const ArtistList = memo(function ArtistList({
                 {t("on {{album}}", { album: artist.onAlbum })}
               </span>
             )}
-            <span className="group-meta">{formatLength(artist.count, artist.durationMs, t)}</span>
+            <span className="group-meta">{lengthOf(artist.count, artist.durationMs)}</span>
           </a>
         </li>
       ))}
@@ -964,6 +965,7 @@ const AlbumList = memo(function AlbumList({
   readonly deferOffscreen?: boolean;
 }) {
   const t = useWords();
+  const lengthOf = lengthFormatter(t);
   return (
     <ul className={deferOffscreen ? "groups deferred-gallery" : "groups"} aria-label={t("Albums")}>
       {albums.map((album) => {
@@ -989,7 +991,7 @@ const AlbumList = memo(function AlbumList({
               <span className="group-meta">
                 {t("{{artist}}, {{length}}", {
                   artist: album.artist || t(UNKNOWN_ARTIST),
-                  length: formatLength(album.count, album.durationMs, t),
+                  length: lengthOf(album.count, album.durationMs),
                 })}
               </span>
             </a>

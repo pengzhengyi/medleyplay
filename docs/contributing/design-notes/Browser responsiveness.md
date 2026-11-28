@@ -5,6 +5,7 @@
 > Albums and Artists reuse unchanged cards during playback, keeping
 > their complete lists and existing controls.
 > The first Library load is unchanged.
+> Render-local gallery formatting is in progress below.
 
 ## Contents
 
@@ -15,6 +16,7 @@
 - [Crosscheck](#crosscheck)
 - [Album contents during playback](#album-contents-during-playback)
 - [Artist contents during playback](#artist-contents-during-playback)
+- [Gallery first render](#gallery-first-render)
 - [Further investigations](#further-investigations)
 - [References](#references)
 
@@ -336,7 +338,8 @@ array with `useMemo`; no new cache or callback adapter is needed.
 
 All props participate in the comparison. The existing immutable data
 updates provide new references. `useWords` remains inside the list, so
-language changes still reach retained cards without caching translations.
+language changes still reach retained cards without retaining translations
+between renders.
 The list has no playback commands or position input.
 Current or next Track changes may rebuild the derived artist array; reuse
 is expected between progress updates, not across every Track transition.
@@ -385,6 +388,119 @@ the other three differ at eight pixels around the favorite icon, with a
 maximum channel difference of 36 out of 255. No CSS changes.
 The broader Library row boundary and remaining renderer work in Albums are
 separate candidates, not part of this change.
+
+## Gallery first render
+
+> [!NOTE]
+> **In progress.** Render-local labels are implemented, but performance
+> retention is not approved. Every card and its complete contents remain
+> in the first DOM update.
+
+The Albums and Artists galleries construct every card before showing the
+first one. Reusing lists avoids repeated work during playback, but does not
+avoid this first-mount cost. CSS containment skips browser rendering,
+not React element construction or text formatting.
+
+### Diagnosis and scope
+
+Three paired diagnostic samples on a disposable 1,906-track catalog compare
+the production baseline with a deliberately incomplete, first-24-card
+version. Median click-to-content times are 128 versus 32 ms for Albums
+and 60 versus 34 ms for Artists. The baseline has 885 album cards and
+381 artist cards. Individual album and artist pages take 57 and 52 ms.
+These samples start from a settled Library on headless Chrome at
+1280 by 844, without CPU or network throttling.
+Subsequent-frame medians are 214 versus 47 ms for Albums and 107 versus
+43 ms for Artists. This diagnostic uses identical song durations, so it
+does not establish a cache hit rate.
+
+The incomplete version is not a candidate: it removes access to the rest
+of the catalog. It establishes that gallery construction is worth
+investigating, not that all of its savings can be retained. A separate
+baseline CPU profile attributes approximately 26 ms in Albums and 11 ms
+in Artists to localized count-and-duration formatting.
+Albums also spends about 70 ms in style calculation and layout, and
+14 ms in `KindMark`. Reusing labels addresses a bounded part of readiness,
+not all card or browser work.
+
+The proposed change targets that repeated formatting. Individual pages,
+API request scheduling, startup, CSS, card geometry, and route transitions
+remain unchanged. Early navigation and direct gallery loads are separate
+controls; a settled-navigation result does not establish startup gains.
+
+### Render-local labels
+
+`lengthFormatter(t?: Words)` in `format.ts` creates a formatter for one render,
+sharing rounding and text construction with `formatLength` on the first occurrence of a song count
+and rounded minute value. Later occurrences reuse the resulting string.
+For example, two three-song albums lasting 181 and 184 seconds both say
+`3 songs, 3 min`; an album lasting 210 seconds needs a different label.
+Its returned function accepts a count and duration in milliseconds.
+Omitting the translator preserves the existing English fallback.
+
+`AlbumList` and `ArtistList` each create their formatter after `useWords`,
+inside the component render. The map is discarded after that render.
+It is not a module cache, a hook, or a cache keyed only by language.
+Memory is bounded by the distinct labels in the current list. Changed
+translations, data, or favorites cause the usual render with fresh labels.
+Search galleries and artist-name choosers use the same list components.
+
+| Boundary | Required behavior |
+| --- | --- |
+| Song count and rounded minutes | Both participate in reuse; different counts never share a label. |
+| Duration rounding to zero minutes | Preserve count-only text, including unknown durations supplied as `0`. |
+| Minute rounding and hour boundaries | Preserve `formatLength` output exactly. |
+| Language or metadata changes | Rebuild labels; never retain translated strings across renders. |
+| Empty or one-card lists | Keep existing empty-state and rendering behavior. |
+| Links, names, favorites, photos, lyrics, and playback | Keep the existing elements and update paths. |
+
+A render-local `Map` needs no dependency or persistent invalidation
+mechanism. Virtualization and progressive insertion would save more
+construction work, but would change initial browser search, keyboard
+access, or complete-list availability. Those are not part of this change.
+Artists containment is not justified by the earlier rendering comparison.
+
+### Retention requirements
+
+The production candidate has no accepted latency result: its comparison
+exceeds the host-stability limit. A quiet-host retention comparison is
+required before claiming faster page readiness.
+The real implementation must improve scripting and click-to-content in
+at least six of seven pairs for both large galleries, with a median
+paired content saving of at least 5%. Subsequent-frame medians must also
+improve. Smaller and startup controls must not show a repeatable
+regression exceeding both 10% and 5 ms; startup uses a 20 ms absolute
+floor because navigation includes more unrelated work.
+
+Use 1,906 tracks for the primary varied-duration catalog and 210 for
+the small control. Also check a 1,906-track catalog grouped into full
+albums of varying sizes. Report distinct count-and-minute labels beside
+card counts to make their repetition explicit. Record host load before
+and after samples; retention cohorts require one-minute load at most
+10 and baseline content times within 30% of a quiet reference for that
+catalog. Keep unstable cohorts as diagnostic evidence, not retained
+results. A failing cohort requires diagnosis rather than selective
+removal of unfavorable pairs.
+
+- [x] Specify distinct counts, rounding boundaries, unknown duration, and
+      render-local translation lifetime in focused tests.
+- [x] Preserve all gallery text and links, including mounted language and
+      metadata updates, search, and artist-name choosers.
+- [ ] Compare real baseline and implementation production builds in seven
+      alternating pairs with varied durations, at both catalog sizes;
+      check full-album grouping and capture a post-change CPU profile.
+- [ ] Report click-to-content and subsequent-frame measurements separately;
+      these are neither exact pixel-presentation timestamps nor field INP.
+- [ ] Establish stable direct gallery loads and early-navigation controls.
+- [x] Keep phone/desktop, light/dark, reduced-motion, last-card navigation,
+      browser search, and keyboard focus unchanged.
+- [ ] Obtain independent design and implementation critique. Retain only
+      demonstrated useful savings without a repeatable readiness regression.
+
+CI tests assert formatting and update behavior, not wall-clock thresholds.
+Performance claims require complete-card counts and matching contents in
+the compared builds. Synthetic repetition alone is insufficient evidence;
+varied-duration catalogs exercise both repeated and distinct labels.
 
 ## Further investigations
 

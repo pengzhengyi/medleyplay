@@ -14,11 +14,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import policy as policy_module
 from medleyplay.application import policy_snapshot
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.download_holds import record_hold
+from medleyplay.application.playback import Ready
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import PlaylistId, SourceId, SourceKey, SourceState, TrackId
+from medleyplay.domain.download_holds import DownloadHoldKey, HoldReason
 from medleyplay.domain.downloads import DOWNLOAD_KIND, download_target
 from medleyplay.domain.errors import ForbiddenError
 from medleyplay.domain.jobs import JobState
@@ -226,26 +229,35 @@ def test_a_download_served_within_the_day_stays_though_it_is_the_least_favorite(
     assert _stored(units) == {_source(units, played)}
 
 
-def test_the_download_of_a_video_gone_from_the_site_is_never_removed(
+@pytest.mark.parametrize("provider_state", ["gone", "held"])
+def test_a_download_the_provider_cannot_replace_is_kept_and_plays(
     site: Site,
     policy: PolicyService,
     units: sessionmaker[Session],
     clock: FakeClock,
     settings: SettingsService,
     alice: Account,
+    provider_state: str,
 ) -> None:
     [track] = _tracks(site, 1)
     _keep(site, alice, [track])
     _downloaded(site, policy, units, [track])
     _keep(site, alice, [track], keep=False)
     with units.begin() as db:
-        db.execute(update(SourceRow).values(state=SourceState.UNAVAILABLE))
+        if provider_state == "gone":
+            db.execute(update(SourceRow).values(state=SourceState.UNAVAILABLE))
+        else:
+            record_hold(
+                db, DownloadHoldKey(BILIBILI_SOURCE, video=MIXTAPE, part=1), HoldReason.UNKNOWN
+            )
     clock.advance(REST + timedelta(hours=1))
 
     _limit(settings, alice, 0)
     evaluation = policy.evaluate()
 
-    assert (evaluation.removed, _stored(units)) == (0, {_source(units, track)})
+    source_id = _source(units, track)
+    assert (evaluation.removed, _stored(units)) == (0, {source_id})
+    assert site.playback.play(alice, track) == Ready(source_id, "audio/mp4")
 
 
 def test_a_manual_download_is_never_removed_but_counts_toward_the_limit(

@@ -4,9 +4,15 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application.download_holds import record_hold, reserve_dispatch
+from medleyplay.domain.download_holds import DownloadHoldKey, DownloadSelection, HoldReason
+from medleyplay.domain.jobs import JobId, JobState
+from medleyplay.web.deps import Services
 from tests.support.api import set_up_as_alice
 from tests.support.fakes import OnlineSwitch
+from tests.support.sites import Site
 
 NIGHT_DRIVE = "https://www.bilibili.com/video/BV1Xx41117Tz"
 ADD = {"link": NIGHT_DRIVE, "parts": [{"part": 1, "title": "Night Drive", "artist": "Blue Room"}]}
@@ -91,12 +97,19 @@ def test_a_video_that_cannot_be_read_is_added_on_the_details_given(
 
 def test_adding_answers_the_tracks_and_their_downloads_and_again_the_same(
     site_client: TestClient,
+    site_services: tuple[Site, Services],
+    units: sessionmaker[Session],
 ) -> None:
     first = site_client.post("/api/links", json=ADD)
+    assert first.status_code == 200
+    added = first.json()[0]
+    site_services[0].wait_for(JobId(added["job"]["id"]), JobState.SUCCEEDED)
+    with units.begin() as db:
+        assert reserve_dispatch(db, DownloadSelection("bilibili", video="BVContender"), None)
+
     again = site_client.post("/api/links", json=ADD)
 
-    assert first.status_code == again.status_code == 200
-    added = first.json()[0]
+    assert again.status_code == 200
     assert (added["part"], added["job"]["kind"], added["job"]["target"]) == (
         1,
         "download_source",
@@ -105,6 +118,11 @@ def test_adding_answers_the_tracks_and_their_downloads_and_again_the_same(
     assert [(a["track_id"], a["source_id"]) for a in again.json()] == [
         (added["track_id"], added["source_id"])
     ]
+    with units.begin() as db:
+        record_hold(db, DownloadHoldKey("bilibili", video="BV1Xx41117Tz"), HoldReason.REFUSED)
+    blocked = site_client.post("/api/links", json=ADD)
+    assert blocked.status_code == 409
+    assert "held" in blocked.json()["detail"]
 
 
 def test_an_added_track_plays_once_its_download_finishes(site_client: TestClient) -> None:

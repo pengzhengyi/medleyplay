@@ -6,7 +6,7 @@
  * asks for the list again, since only the server knows which Track it is for.
  */
 
-import type { DownloadUnderWay, JobEvent } from "../api";
+import type { DownloadStage, DownloadUnderWay, JobEvent, JobProgress } from "../api";
 import type { Words } from "../locale";
 
 /** The kind of Job that downloads a Source. */
@@ -53,6 +53,7 @@ export function withDownloadEvent(download: DownloadUnderWay, event: JobEvent): 
       progress: event.progress ?? null,
       waits_for_online: event.waits_for_online ?? download.job.waits_for_online,
       retry_at: event.retry_at ?? null,
+      ...(event.failure_kind === undefined ? {} : { failure_kind: event.failure_kind }),
       failure_message: event.failure_message ?? "",
     },
   };
@@ -70,7 +71,10 @@ export function downloadStateOf(download: DownloadUnderWay, t?: Words): string {
     return t?.(key) ?? key;
   }
   if (progress === null) return t?.("Preparing download") ?? "Preparing download";
-  const stage = progress.message.trim() || "Downloading";
+  const stage =
+    progress.stage === undefined
+      ? progress.message.trim() || "Downloading"
+      : typedProgress(progress);
   const shown = t === undefined ? stage : stageWords(stage, t);
   if (progress.fraction === null || stage === "Checking audio") return shown;
   const percent = `${String(Math.round(progress.fraction * 100))}%`;
@@ -79,8 +83,18 @@ export function downloadStateOf(download: DownloadUnderWay, t?: Words): string {
     : (t?.("{{stage}} · {{percent}}", { stage: shown, percent }) ?? `${shown} · ${percent}`);
 }
 
+function typedProgress({ stage, part, current, total }: JobProgress): string {
+  if (stage === "resolve") return "Preparing download";
+  if (stage === "validate") return "Checking audio";
+  const action = stage === "join" ? "Joining" : "Downloading";
+  return part === undefined || current === undefined || total === undefined
+    ? action
+    : `${action} part ${String(part)} (${String(current)}/${String(total)})`;
+}
+
 function stageWords(stage: string, t: Words): string {
-  if (stage === "Downloading" || stage === "Checking audio") return t(stage);
+  if (stage === "Downloading" || stage === "Checking audio" || stage === "Preparing download")
+    return t(stage);
   const part = /^(Downloading|Joining) part (\d+)(?: \((\d+)\/(\d+)\))?$/u.exec(stage);
   if (part === null) return stage;
   const [, action, number, current, total] = part;
@@ -106,6 +120,52 @@ export function downloadFailureOf(detail: string, t: Words): string {
   return KNOWN_FAILURES.has(detail) ? t(detail) : detail;
 }
 
+export function diagnosticStage(stage: DownloadStage, t: Words): string {
+  return t(
+    {
+      resolve: "Resolving media",
+      transfer: "Downloading",
+      join: "Joining audio",
+      validate: "Checking audio",
+    }[stage],
+  );
+}
+
+export function diagnosticReason(reason: string, status: number | null, t: Words): string {
+  if (reason === "response_unknown" && status !== null) {
+    return t("The provider returned unexplained HTTP {{status}}. No retry scheduled.", { status });
+  }
+  if (reason === "provider_refused" && status !== null) {
+    return t("The provider refused the request (HTTP {{status}}). No retry scheduled.", { status });
+  }
+  if (reason === "network" && status !== null) {
+    return t("The provider returned a temporary HTTP error ({{status}}).", { status });
+  }
+  return t(REASONS.get(reason) ?? "The download could not be completed.");
+}
+
+const REASONS = new Map([
+  ["auth", "Bilibili refused the login."],
+  ["network", "The provider could not be reached."],
+  ["keychain", "The Keychain could not be read."],
+  ["plugin", "The download adapter failed."],
+  ["invalid", "The provider did not return usable audio."],
+  ["invalid_artifact", "The download did not produce a valid audio file."],
+  ["gone", "The site no longer has this video."],
+  ["refused", "The download could not start or finish locally."],
+  ["held", "Download held. Medleyplay will not ask the provider again."],
+  ["provider_refused", "The provider refused the request. No retry scheduled."],
+  ["response_unknown", "The provider returned an unclassified response. No retry scheduled."],
+  [
+    "attempt_uncertain",
+    "The provider attempt ended without a confirmed outcome. No retry scheduled.",
+  ],
+  ["retry_exhausted", "Download retry limit reached."],
+  ["route_changed", "The configured provider route changed. No retry scheduled."],
+  ["backend_changed", "The configured download backend changed. No retry scheduled."],
+  ["replaced", "A local file replaced this download."],
+]);
+
 /** Say the status in full and include any failure message the server lets this Account read. */
 export function downloadDetailOf(
   download: DownloadUnderWay,
@@ -128,8 +188,10 @@ export function downloadDetailOf(
     minute: "2-digit",
   });
   const retry = t?.("Retry scheduled at {{time}}", { time }) ?? `Retry scheduled at ${time}`;
-  if (!failure) return retry;
+  const reason = download.job.failure_kind;
+  const detail = t !== undefined && reason != null ? diagnosticReason(reason, null, t) : failure;
+  if (!detail) return retry;
   return t === undefined
-    ? `${retry}. ${failure}`
-    : t("{{status}}. {{detail}}", { status: retry, detail: downloadFailureOf(failure, t) });
+    ? `${retry}. ${detail}`
+    : t("{{status}}. {{detail}}", { status: retry, detail: downloadFailureOf(detail, t) });
 }

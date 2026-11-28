@@ -10,9 +10,10 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application import downloads as download_app
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.job_runner import NETWORK_RETRY, JobRunner, _Outcome, _Running
-from medleyplay.application.links import Added, PartChoice
+from medleyplay.application.links import Added, AlbumChoice, PartChoice
 from medleyplay.application.playback import Preparing, Ready, Unplayable
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, SourceState
@@ -22,7 +23,7 @@ from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.linked_accounts import LinkState
 from medleyplay.domain.plugins import PluginState
 from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
-from medleyplay.persistence.schema import DownloadRow, SourceRow
+from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow
 from medleyplay.plugin_host.job_wire import JobFailed
 from medleyplay.programs.download_source import DownloadSource
 from tests.support.factories import NewAccountFactory
@@ -66,21 +67,6 @@ def _failed(site: Site, added: Added) -> JobView:
         JobState.FAILED,
         until=lambda view: view.job.failure_kind is not None,
     )
-
-
-def _given_up(site: Site, clock: FakeClock, job_id: JobId) -> JobView:
-    """Wait for the Job to fail for good, moving the clock past each retry's delay."""
-    while True:
-        view = site.wait_for(
-            job_id,
-            JobState.QUEUED,
-            JobState.FAILED,
-            until=lambda each: each.job.failure_kind is not None,
-        )
-        if view.job.state is JobState.FAILED:
-            return view
-        clock.advance(timedelta(hours=1))
-        time.sleep(0.05)
 
 
 def _job_id(added: Added) -> JobId:
@@ -187,13 +173,13 @@ def test_a_provider_rejection_does_not_spend_retries_or_revoke_a_valid_login(
 
     assert (failed.state, failed.failure_kind, failed.attempts) == (
         JobState.FAILED,
-        "provider_refused",
+        "attempt_uncertain" if go_offline else "provider_refused",
         0,
     )
-    assert "HTTP 567" in failed.failure_message
-    with pytest.raises(ConflictError, match="provider rejected this download"):
+    assert site.jobs.download_diagnostics(alice, failed.id).hold == failed.failure_kind
+    with pytest.raises(ConflictError, match="held"):
         site.jobs.retry(alice, failed.id)
-    assert site.downloads.start_for(alice.id, added.source_id) == failed
+    assert site.downloads.start_for(alice.id, added.source_id) is None
     assert [each.state for each in site.linked.list_linked(alice)] == [LinkState.VALID]
     assert not list(site.downloads.folder.glob("*.m4a"))
 
@@ -203,8 +189,21 @@ def test_a_failure_message_never_keeps_the_login(site: Site, alice: Account) -> 
 
     view = _failed(site, _added(site, alice, "BVleaky"))
 
-    assert "secret-session" not in view.job.failure_message
-    assert "<redacted>" in view.job.failure_message
+    assert view.job.failure_message == "The download adapter failed."
+
+
+def test_a_long_plugin_error_keeps_its_typed_failure_without_placing_a_hold(
+    site: Site, alice: Account, units: sessionmaker[Session]
+) -> None:
+    added = _added(site, alice, "BVLongFault")
+
+    failed = site.wait_for(_job_id(added), JobState.FAILED)
+    trace = site.jobs.download_diagnostics(alice, failed.job.id)
+
+    assert (failed.job.failure_kind, trace.hold) == ("plugin", None)
+    assert trace.events[-1].reason == "plugin"
+    with units() as db:
+        assert db.get_one(JobRow, failed.job.id).failure_message == "The download adapter failed."
 
 
 def test_a_part_the_site_no_longer_has_makes_its_source_unavailable(
@@ -214,6 +213,7 @@ def test_a_part_the_site_no_longer_has_makes_its_source_unavailable(
 
     _finished(site, added)
 
+    assert site.manual.state(added.track_id).latest_job_id == _job_id(added)
     with units() as db:
         assert db.get_one(SourceRow, added.source_id).state == SourceState.UNAVAILABLE
     assert site.playback.play(alice, added.track_id) == Unplayable(Availability.UNAVAILABLE)
@@ -222,21 +222,21 @@ def test_a_part_the_site_no_longer_has_makes_its_source_unavailable(
 
 
 @pytest.mark.parametrize(
-    ("video", "why"),
+    "video",
     [
-        ("BVescape", "isn't a file directly in its folder"),
-        ("BVtext", "isn't an accepted type"),
-        ("BVempty", "0 bytes long"),
-        ("BVlink", "can't be opened"),
+        "BVescape",
+        "BVtext",
+        "BVempty",
+        "BVlink",
     ],
 )
-def test_a_file_the_core_cant_trust_fails_the_download_as_a_plugin_fault(
-    site: Site, alice: Account, video: str, why: str
+def test_a_file_the_core_cant_trust_fails_the_download_without_exposing_its_path(
+    site: Site, alice: Account, video: str
 ) -> None:
     view = _failed(site, _added(site, alice, video))
 
-    assert view.job.failure_kind == "plugin"
-    assert why in view.job.failure_message
+    assert view.job.failure_kind == "invalid_artifact"
+    assert view.job.failure_message == "The download did not produce a valid audio file."
     assert not list((site.data_dir / "downloads").glob("*"))
 
 
@@ -295,16 +295,126 @@ def test_the_sweep_removes_files_no_download_names(
     assert sorted(path.name for path in (site.data_dir / "downloads").iterdir()) == named
 
 
-def test_a_plugin_fault_never_keeps_the_login(site: Site, alice: Account, clock: FakeClock) -> None:
+def test_a_plugin_fault_never_keeps_the_login(site: Site, alice: Account) -> None:
     site.linked.save(alice, "bilibili", COOKIES)
-    first = _given_up(site, clock, _job_id(_added(site, alice, "BVleaky")))
+    first = site.wait_for(_job_id(_added(site, alice, "BVleaky")), JobState.FAILED)
+    failed = first
+    for _ in range(4):
+        failed = site.wait_for(site.jobs.retry(alice, failed.job.id).id, JobState.FAILED)
 
-    _given_up(site, clock, site.jobs.retry(alice, first.job.id).id)
+    assert first.job.failure_message == "The download adapter failed."
 
     [tube] = [each for each in site.plugins.statuses(alice) if each.name == "tube"]
     assert tube.state is PluginState.FAULTED
-    assert "secret-session" not in tube.reason
-    assert "<redacted>" in tube.reason
+    assert tube.reason == "The download adapter failed."
+
+
+def test_a_media_stop_blocks_an_overlapping_join_and_retries_but_not_other_parts(
+    site: Site, alice: Account, units: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    link = "https://www.bilibili.com/video/BVMediaStop"
+    lookup = site.video_lookups.start(alice, link)
+    site.wait_for(lookup.id, JobState.SUCCEEDED)
+    monkeypatch.setattr(download_app, "join_tools", lambda: ("ffmpeg", "ffprobe"))
+    resolve = site.links.require_online
+    monkeypatch.setattr(site.links, "require_online", lambda: None)
+    site.online.online = False
+    [part] = site.links.add(alice, link, "best", [PartChoice(1, "Opening", "")])
+    [joined] = site.video_lookups.import_parts(
+        alice, lookup.id, "best", AlbumChoice("Mixtape", "", joined=True), [1, 2]
+    )
+    monkeypatch.setattr(site.links, "require_online", resolve)
+    site.online.online = True
+
+    failed = site.wait_for(_job_id(part), JobState.FAILED).job
+    blocked = site.wait_for(_job_id(joined), JobState.FAILED).job
+
+    assert failed.failure_kind == "response_unknown"
+    assert "HTTP 567" in failed.failure_message
+    assert "held" in blocked.failure_message
+    with units() as db:
+        assert db.get_one(JobRow, failed.id).provider_attempts == 1
+        assert db.get_one(JobRow, blocked.id).provider_attempts == 0
+    with pytest.raises(ConflictError, match="held"):
+        site.jobs.retry(alice, failed.id)
+    assert site.downloads.start_for(alice.id, part.source_id) is None
+    assert site.playback.play(alice, part.track_id) == Unplayable(Availability.UNAVAILABLE)
+    with pytest.raises(ConflictError, match="held"):
+        site.links.add(alice, link, "best", [PartChoice(1, "Opening", "")])
+    [other] = site.links.add(alice, link, "best", [PartChoice(3, "Closing", "")])
+    _finished(site, other)
+
+
+@pytest.mark.parametrize("recovers", [False, True])
+def test_a_temporary_failure_uses_one_budget_for_the_same_job(
+    site: Site, alice: Account, units: sessionmaker[Session], clock: FakeClock, *, recovers: bool
+) -> None:
+    added = _added(site, alice, "BVMaintenance")
+    job_id = _job_id(added)
+
+    for attempt in (1, 2):
+        wait = site.wait_for(
+            job_id,
+            JobState.WAITING,
+            until=lambda view: view.job.started_at == clock(),
+        )
+        assert wait.job.failure_kind == "network"
+        assert wait.retry_at == clock() + NETWORK_RETRY * attempt
+        receipt = site.jobs.download_diagnostics(alice, job_id).events[-1]
+        assert (receipt.event, receipt.http_status) == ("waiting", 503)
+        with units() as db:
+            assert db.get_one(JobRow, job_id).provider_attempts == attempt
+        if recovers and attempt == 2:
+            (site.data_dir / "provider-ready").touch()
+        clock.advance(NETWORK_RETRY * attempt)
+
+    if recovers:
+        _finished(site, added)
+    else:
+        failed = site.wait_for(job_id, JobState.FAILED).job
+        assert failed.failure_kind == "retry_exhausted"
+        assert site.downloads.start_for(alice.id, added.source_id) is None
+    with units() as db:
+        assert db.get_one(JobRow, job_id).provider_attempts == 3
+
+
+def test_a_scheduled_retry_never_switches_to_a_new_proxy(
+    site: Site, alice: Account, units: sessionmaker[Session], clock: FakeClock
+) -> None:
+    site.proxies.save(alice, "bilibili", "http://first-proxy.test:8080")
+    added = _added(site, alice, "BVMaintenance")
+    job = _job_id(added)
+    site.wait_for(job, JobState.WAITING)
+
+    site.proxies.save(alice, "bilibili", "http://second-proxy.test:8080")
+    (site.data_dir / "provider-ready").touch()
+    clock.advance(NETWORK_RETRY)
+
+    stopped = site.wait_for(job, JobState.FAILED)
+    assert stopped.job.failure_kind == "route_changed"
+    assert site.downloads.start_for(alice.id, added.source_id) is None
+    with units() as db:
+        assert db.get_one(JobRow, job).provider_attempts == 1
+
+
+def test_an_outcome_received_after_going_offline_cannot_publish_audio(
+    site: Site,
+    alice: Account,
+) -> None:
+    added = _added(site, alice, "BVProxyProgress")
+    job = _job_id(added)
+    site.wait_for(job, JobState.RUNNING, until=lambda view: view.progress is not None)
+    with pytest.raises(ConflictError, match="busy"):
+        site.links.lookup(alice, "https://www.bilibili.com/video/BV1Xx41117Tz")
+
+    site.online.online = False
+    stopped = site.wait_for(job, JobState.FAILED)
+    site.online.online = True
+
+    assert stopped.job.failure_kind == "attempt_uncertain"
+    assert site.playback.play(alice, added.track_id) == Unplayable(Availability.UNAVAILABLE)
+    with pytest.raises(ConflictError, match="held"):
+        site.jobs.retry(alice, job)
 
 
 def test_retrying_a_download_uses_the_login_saved_since_it_failed(

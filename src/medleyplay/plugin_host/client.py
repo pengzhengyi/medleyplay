@@ -57,6 +57,10 @@ class CallFailedError(Exception):
         self.kind: FailureKind = kind
 
 
+class CallInterruptedError(CallFailedError):
+    """The host stopped after accepting a call but before returning its outcome."""
+
+
 class HostBusyError(Exception):
     """Another call held the host for longer than this call's deadline."""
 
@@ -171,11 +175,11 @@ class PluginHost:
         except ChildTimeoutError:
             self._discard(process)
             message_text = f"{call.point}.{call.operation} missed its deadline of {deadline:g} s."
-            raise CallFailedError(kind="plugin", message=message_text) from None
+            raise CallInterruptedError(kind="plugin", message=message_text) from None
         except ChildExitedError:
             self._discard(process)
             message_text = f"The plugin host exited during {call.point}.{call.operation}."
-            raise CallFailedError(kind="plugin", message=message_text) from None
+            raise CallInterruptedError(kind="plugin", message=message_text) from None
 
     def _discard(self, process: _Process) -> None:
         process.kill()

@@ -1,13 +1,18 @@
 """yt-dlp's failures are sorted by type, and it never runs on a URL it wasn't meant for."""
 
+# cspell:ignore pagelist playurl
+
 import gc
 import io
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Protocol, Self
 from urllib.error import URLError
+from urllib.parse import urlsplit
 
 import pytest
+import yt_dlp  # type: ignore[import-untyped]
+from yt_dlp.extractor.bilibili import BiliBiliIE  # type: ignore[import-untyped]
 from yt_dlp.networking import Response  # type: ignore[import-untyped]
 from yt_dlp.networking.common import _REQUEST_HANDLERS  # type: ignore[import-untyped]
 from yt_dlp.networking.exceptions import (  # type: ignore[import-untyped]
@@ -42,9 +47,12 @@ def _http(status: int) -> ExtractorError:
     return ExtractorError("Unable to download webpage", cause=HTTPError(response))
 
 
-@pytest.mark.parametrize("status", [429, 500, 503])
+@pytest.mark.parametrize("status", [500, 503])
 def test_a_busy_or_failing_site_is_a_network_failure(status: int) -> None:
-    assert isinstance(sort_failure(_http(status), signed_in=False), NetworkError)
+    failure = sort_failure(_http(status), signed_in=False)
+
+    assert isinstance(failure, NetworkError)
+    assert failure.http_status == status
 
 
 def test_a_connection_that_fails_is_a_network_failure() -> None:
@@ -75,11 +83,20 @@ def test_a_missing_page_is_gone() -> None:
     assert isinstance(sort_failure(_http(404), signed_in=False), GoneError)
 
 
-@pytest.mark.parametrize("status", [403, 412])
-def test_a_refusal_of_the_client_is_a_fault_not_a_wait(status: int) -> None:
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [
+        (403, "provider_refused"),
+        (412, "provider_refused"),
+        (429, "provider_refused"),
+        (567, "response_unknown"),
+    ],
+)
+def test_a_wrapped_stop_status_is_not_a_retryable_network_failure(status: int, reason: str) -> None:
     failure = sort_failure(_http(status), signed_in=True)
 
-    assert type(failure) is RuntimeError
+    assert isinstance(failure, RefusedError)
+    assert (failure.status, failure.reason) == (status, reason)
     assert str(status) in str(failure)
 
 
@@ -105,10 +122,50 @@ def test_a_video_for_members_needs_a_login_but_never_refuses_the_one_sent(messag
     assert type(sort_failure(error, signed_in=True)) is RuntimeError
 
 
-def test_an_expected_rate_limit_is_a_fault() -> None:
+def test_an_expected_rate_limit_stops_without_exposing_provider_text() -> None:
     error = ExtractorError("You have exceeded the rate limit. Try again later", expected=True)
 
-    assert type(sort_failure(error, signed_in=True)) is RuntimeError
+    failure = sort_failure(error, signed_in=True)
+
+    assert isinstance(failure, RefusedError)
+    assert str(failure) == "Bilibili refused the request."
+
+
+def test_a_successful_http_response_with_a_refusal_code_is_the_last_request(
+    no_outside_network: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    page = "/video/BV17x411w7KC"
+    play = "/x/player/wbi/playurl"
+    replies = {
+        page: b"""
+            <script>window.__INITIAL_STATE__={"videoData":{
+                "bvid":"BV17x411w7KC","aid":170001,"cid":1,"title":"Fixture"
+            }};</script>
+        """,
+        "/x/player/pagelist": b'{"data":[]}',
+        play: b'{"code":-352,"message":"synthetic refusal"}',
+        "/x/player/wbi/v2": b'{"data":{}}',
+    }
+    seen: list[str] = []
+
+    def reply(_ydl: object, request: _UrlRequest) -> Response:
+        path = urlsplit(request.url).path
+        seen.append(path)
+        return Response(io.BytesIO(replies[path]), request.url, {}, 200)
+
+    monkeypatch.setattr(yt_dlp.YoutubeDL, "urlopen", reply)
+    monkeypatch.setattr(BiliBiliIE, "_sign_wbi", lambda _, params, _video: params)
+
+    with pytest.raises(RefusedError, match=r"\b352\b") as stopped:
+        extract(f"https://www.bilibili.com{page}", playlist=False)
+
+    assert stopped.value.reason == "provider_refused"
+    assert seen == [page, "/x/player/pagelist", play]
+
+
+class _UrlRequest(Protocol):
+    @property
+    def url(self) -> str: ...
 
 
 @pytest.mark.parametrize(
@@ -309,14 +366,23 @@ def _synthetic_stream(monkeypatch: pytest.MonkeyPatch, protocol: str) -> None:
     monkeypatch.setattr(_ytdlp, "_extract", extract_stream)
 
 
+@refused_answers_are_left_to_the_collector
 @pytest.mark.parametrize("bounded_http", [False, True], ids=["separate", "joined"])
-@pytest.mark.parametrize("status", [403, 412, 429, 567])
-@pytest.mark.usefixtures("collected")
-def test_a_rejected_media_request_is_sent_once_and_leaves_no_audio(
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [
+        (403, "provider_refused"),
+        (412, "provider_refused"),
+        (429, "provider_refused"),
+        (567, "response_unknown"),
+    ],
+)
+def test_a_rejected_media_request_stops_with_typed_evidence(
     no_outside_network: None,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     status: int,
+    reason: str,
     *,
     bounded_http: bool,
 ) -> None:
@@ -324,7 +390,7 @@ def test_a_rejected_media_request_is_sent_once_and_leaves_no_audio(
 
     with (
         running_http_proxy({_MEDIA: Answer(status)}) as proxy,
-        pytest.raises(RefusedError, match=str(status)),
+        pytest.raises(RefusedError, match=str(status)) as failure,
     ):
         download(
             f"http://{VIDEO_PAGE}",
@@ -337,10 +403,13 @@ def test_a_rejected_media_request_is_sent_once_and_leaves_no_audio(
         )
 
     assert proxy.requests == [f"GET {_MEDIA} HTTP/1.1"]
+    assert failure.value.reason == reason
+    assert failure.value.status == status
+    assert failure.value.media
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.usefixtures("collected")
+@refused_answers_are_left_to_the_collector
 def test_a_media_server_unavailable_response_remains_retryable(
     no_outside_network: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -348,7 +417,7 @@ def test_a_media_server_unavailable_response_remains_retryable(
 
     with (
         running_http_proxy({_MEDIA: Answer(503)}) as proxy,
-        pytest.raises(NetworkError, match="503"),
+        pytest.raises(NetworkError, match="503") as transient,
     ):
         download(
             f"http://{VIDEO_PAGE}",
@@ -359,7 +428,8 @@ def test_a_media_server_unavailable_response_remains_retryable(
             proxy=proxy.url,
         )
 
-    assert proxy.requests
+    assert transient.value.http_status == 503
+    assert proxy.requests == [f"GET {_MEDIA} HTTP/1.1"]
     assert not (tmp_path / "audio.m4a").exists()
 
 
@@ -554,19 +624,23 @@ def test_the_thumbnail_is_fetched_through_the_proxy_over_the_environment_and_the
     assert environment_proxy.requests == []
 
 
-def test_a_thumbnail_the_site_refuses_is_no_cover_and_the_info_still_comes_back(
+@refused_answers_are_left_to_the_collector
+def test_a_refused_thumbnail_stops_details_lookup_without_replaying_the_request(
     no_outside_network: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _recorded_page(monkeypatch)
-    with running_http_proxy({COVER_URL: Answer(403)}) as proxy:
-        info, image = extract_with_image(
+    with (
+        running_http_proxy({COVER_URL: Answer(403)}) as proxy,
+        pytest.raises(RefusedError, match="403"),
+    ):
+        extract_with_image(
             f"http://{VIDEO_PAGE}",
             proxy=proxy.url,
             image_of=_cover_url_of_the_recording,
             max_bytes=1024,
         )
 
-    assert (image, info["id"]) == (None, "BV1AC4y1L7Yi")
+    assert [line.split()[:2] for line in proxy.requests] == [["GET", COVER_URL]]
 
 
 def test_a_thumbnail_longer_than_the_limit_is_no_cover(

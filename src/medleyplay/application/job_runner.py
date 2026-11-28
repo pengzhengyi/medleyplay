@@ -9,37 +9,70 @@ import fcntl
 import os
 import shutil
 import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Final, Protocol
 
 from pydantic import ValidationError
 from sqlalchemy import ColumnElement, and_, not_, or_, select, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay import __version__
 from medleyplay.application import Clock
+from medleyplay.application.download_diagnostics import Receipt, append_receipt, prune_receipts
+from medleyplay.application.download_holds import (
+    DIRECT_ROUTE,
+    HOLD_MESSAGE,
+    UNCERTAIN_MESSAGE,
+    classify_legacy_jobs,
+    held_videos,
+    hold_of,
+    job_selection,
+    provider_dispatch_exists,
+    provider_jobs,
+    provider_route,
+    record_hold,
+    recover_dispatches,
+    release_dispatch,
+    reserve_dispatch,
+)
 from medleyplay.application.events import Events
 from medleyplay.application.jobs import AnyJobKind, Lane, to_job
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.ai import redact_key
+from medleyplay.domain.download_holds import DownloadSelection, HoldReason
+from medleyplay.domain.downloads import DOWNLOAD_KIND
 from medleyplay.domain.errors import KeychainUnavailableError
 from medleyplay.domain.jobs import JobId, JobState, Progress
 from medleyplay.domain.linked_accounts import redact
-from medleyplay.persistence.schema import JobRow
-from medleyplay.plugin_api import AiEndpoint
+from medleyplay.download_receipts import (
+    DownloadEvent,
+    DownloadReason,
+    DownloadRoute,
+    DownloadStage,
+    reason_for,
+    reason_message,
+)
+from medleyplay.persistence.schema import JobRow, ProviderDispatchRow
+from medleyplay.plugin_api import API_VERSION, AiEndpoint
 from medleyplay.plugin_api.image_search import TAVILY
 from medleyplay.plugin_api.progress import MAX_MESSAGE as MAX_PROGRESS_MESSAGE
 from medleyplay.plugin_host.job_wire import (
     FROM_JOB,
     RESULT_FILE,
+    DownloadProgress,
     FromJob,
     JobFailed,
     JobFinished,
     JobProgress,
     JobStart,
+    KeyOutcome,
 )
 from medleyplay.plugin_host.loader import BUILT_IN_PLUGINS
 from medleyplay.plugin_host.process import (
@@ -57,6 +90,7 @@ FIRST_RETRY: Final = timedelta(seconds=30)
 NETWORK_RETRY: Final = timedelta(minutes=1)
 """How long a Job waits after a network failure, or a Keychain that didn't answer."""
 MAX_INTERRUPTIONS: Final = 3
+RECEIPT_SWEEP_INTERVAL: Final = timedelta(hours=1)
 JOB_MEMORY_LIMIT: Final = 2 * 1024**3
 LOCK_FILE: Final = "lock"
 LOGIN_FILE: Final = "login.txt"
@@ -81,6 +115,10 @@ class Logins(Protocol):
 
     def refused(self, account_id: AccountId, site: str, revision: int) -> None:
         """Mark the login refused, unless it was saved again since `revision`."""
+        ...
+
+    def refused_in(self, db: Session, account_id: AccountId, site: str, revision: int) -> None:
+        """Mark the lent login refused in the caller's transaction."""
         ...
 
 
@@ -117,10 +155,14 @@ class _Fault:
 
 @dataclass(frozen=True)
 class _Interrupted:
-    """The server is shutting down; the Job goes back in the queue."""
+    """The server interrupted the Job."""
 
 
 type _Outcome = JobFinished | JobFailed | _Fault | _Interrupted
+
+
+class _ProviderInterruptedError(Exception):
+    """A provider Job cannot publish after it was interrupted."""
 
 
 @dataclass(frozen=True)
@@ -143,9 +185,14 @@ class _Running:
     tavily_key: str | None = field(default=None, repr=False)
     thread: threading.Thread | None = None
     held: bool = False
-    """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
+    """Stopped because the Mode went Offline."""
     done: bool = False
-    """Its process has ended, so nothing is left to stop."""
+    """Its outcome has been read or the process stopped responding."""
+    provider: DownloadSelection | None = None
+    route: str | None = None
+    plugins: tuple[str, ...] = ()
+    progress_key: tuple[DownloadStage, int | None] | None = None
+    last_progress_at: float = 0.0
 
     def redact(self, message: str) -> str:
         if self.tavily_key and self.tavily_key in message:
@@ -214,7 +261,7 @@ class JobRunner:
         self._loop_thread.start()
 
     def stop(self) -> None:
-        """Stop starting Jobs, end the running ones, and put them back in the queue."""
+        """Stop starting Jobs and settle the ones in progress."""
         self._stopping.set()
         self._wake.set()
         if self._loop_thread is not None:
@@ -232,21 +279,22 @@ class JobRunner:
         self._wake.set()
 
     def follow_mode(self) -> None:
-        """Follow a change of the Mode: Offline, stop the Jobs that need the network.
+        """Stop network Jobs when the Mode goes Offline.
 
-        A stopped Job goes back to the queue without counting an attempt or an
-        interruption, since its process would otherwise keep contacting the site.
-        Online, the queued ones start, oldest first.
+        A dispatched provider Job needs a Hold before any overlapping request can start.
         """
         if not self._online():
             with self._lock:
                 held = [
-                    job for job in self._running.values() if job.kind.needs_network and not job.done
+                    job
+                    for job in self._running.values()
+                    if job.kind.needs_network and (not job.done or job.provider is not None)
                 ]
                 for job in held:
                     job.held = True
             for job in held:
-                job.process.kill()
+                if not job.done:
+                    job.process.kill()
         self._wake.set()
 
     def kill(self, job_id: JobId) -> None:
@@ -262,33 +310,78 @@ class JobRunner:
             return self._progress.get(job_id)
 
     def recover(self) -> None:
-        """Requeue Jobs left running, killing any process still alive, and clear working folders.
+        """Recover interrupted Jobs before claiming new work.
 
-        A Job interrupted `MAX_INTERRUPTIONS` times fails, so a Job that keeps
-        bringing the server down can't loop forever.
+        Keep the provider lane reserved if the previous writer might still be running.
         """
         with self._units() as db:
             running = db.scalars(select(JobRow).where(JobRow.state == JobState.RUNNING))
             stale = [(row.id, row.pid, row.interruptions) for row in running]
-        for job_id, pid, interruptions in stale:
+            dispatched = set(db.scalars(select(ProviderDispatchRow.job_id)))
+        stopped = self._stopped_dispatches(dispatched)
+        for job_id, pid, _ in stale:
+            if job_id in dispatched:
+                continue
             if pid is not None and lock_is_held(self._jobs_dir / str(job_id) / LOCK_FILE):
                 kill_group(pid)
+        with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            self._recover_provider_in(db, stopped)
+        for job_id, _, interruptions in stale:
             if interruptions + 1 >= MAX_INTERRUPTIONS:
                 message = f"A server restart interrupted it {interruptions + 1} times."
                 self._set(JobId(job_id), JobState.FAILED, failure=("program", message))
             else:
                 self._set(JobId(job_id), JobState.QUEUED, interruptions=interruptions + 1)
+        retained = {str(job_id) for job_id in dispatched - stopped}
         for entry in self._jobs_dir.iterdir():
-            shutil.rmtree(entry, ignore_errors=True)
+            if entry.name not in retained:
+                shutil.rmtree(entry, ignore_errors=True)
+
+    def _stopped_dispatches(self, dispatched: set[int | None]) -> set[int]:
+        stopped: set[int] = set()
+        for job_id in dispatched:
+            if job_id is None:
+                continue
+            lock = self._jobs_dir / str(job_id) / LOCK_FILE
+            if lock.is_file() and not lock_is_held(lock):
+                stopped.add(job_id)
+        return stopped
+
+    def _recover_provider_in(self, db: Session, stopped: set[int]) -> None:
+        now = self._clock()
+        for job in recover_dispatches(db, stopped, now):
+            if job.kind == DOWNLOAD_KIND:
+                append_receipt(
+                    db,
+                    job.id,
+                    now,
+                    Receipt(
+                        DownloadEvent.FAILED,
+                        attempt=job.provider_attempts,
+                        reason=DownloadReason.ATTEMPT_UNCERTAIN,
+                    ),
+                )
+        classify_legacy_jobs(db, now)
+        prune_receipts(db, now)
 
     def _loop(self) -> None:
+        sweep_at = self._clock() + RECEIPT_SWEEP_INTERVAL
         while not self._stopping.is_set():
+            now = self._clock()
+            if now >= sweep_at:
+                self._sweep_receipts(now)
+                sweep_at = now + RECEIPT_SWEEP_INTERVAL
             self._promote_waiting()
             while self._has_room() and not self._stopping.is_set():
                 if not self._start_next():
                     break
             self._wake.wait(self._poll.total_seconds())
             self._wake.clear()
+
+    def _sweep_receipts(self, now: datetime) -> None:
+        with contextlib.suppress(SQLAlchemyError), self._units.begin() as db:
+            prune_receipts(db, now)
 
     def _has_room(self) -> bool:
         with self._lock:
@@ -308,12 +401,15 @@ class JobRunner:
 
     def _start_next(self) -> bool:
         with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             now = self._clock()
             ready = (JobRow.state == JobState.QUEUED) & _due(now)
             if not self._online():
                 ready &= JobRow.kind.not_in(self._network_kinds)
             if (closed := self._closed_lanes(now)) is not None:
                 ready &= not_(closed)
+            if provider_dispatch_exists(db):
+                ready &= not_(provider_jobs())
             row = db.scalar(select(JobRow).where(ready).order_by(JobRow.id).limit(1))
             if row is None:
                 return False
@@ -382,12 +478,19 @@ class JobRunner:
         work_dir.mkdir(mode=0o700, exist_ok=True)
         lane = _lane_name(kind, request)
         lane_rules = kind.lanes.get(lane) if lane is not None else None
+        selection = job_selection(kind.name, request) if isinstance(request, dict) else None
+        with self._units() as db:
+            route = provider_route(db, selection.site) if selection is not None else None
         try:
             login = self._lend(kind, login_account, work_dir)
             proxy = self._proxy(kind, lane_rules)
             ai = self._ai_providers(lane_rules)
             plugins, tavily_key = self._job_plugins(kind)
-            process = self._spawn(work_dir)
+            process = (
+                self._spawn(work_dir, bounded_output=True)
+                if kind.name == DOWNLOAD_KIND
+                else self._spawn(work_dir)
+            )
         except KeychainUnavailableError as error:
             # The Keychain can be locked or prompting; it usually answers again soon.
             shutil.rmtree(work_dir, ignore_errors=True)
@@ -408,7 +511,19 @@ class JobRunner:
             self._settle_failure(job_id, "program", f"Its process didn't start: {error}")
             shutil.rmtree(work_dir, ignore_errors=True)
             return
-        running = _Running(job_id, kind, work_dir, process, login, proxy, lane, ai, tavily_key)
+        running = _Running(
+            job_id,
+            kind,
+            work_dir,
+            process,
+            login,
+            proxy,
+            lane,
+            ai,
+            tavily_key,
+            route=route,
+            plugins=plugins,
+        )
         with self._lock:
             self._running[job_id] = running
         # The Mode may have gone Offline since the claim, before `follow_mode` could
@@ -419,8 +534,9 @@ class JobRunner:
         # A cancel that landed while the process was starting found nothing to kill.
         if running.held or not self._set_pid(job_id, process.pid):
             process.kill()
-        with contextlib.suppress(ChildExitedError):
-            process.send(
+        else:
+            self._send_start(
+                running,
                 JobStart(
                     package=self._processes.package,
                     plugins=plugins,
@@ -431,10 +547,81 @@ class JobRunner:
                     proxy=proxy,
                     ai=ai,
                     tavily_key=tavily_key,
-                )
+                ),
+                selection,
             )
         running.thread = threading.Thread(target=self._supervise, args=(running,), daemon=True)
         running.thread.start()
+
+    def _send_start(
+        self, running: _Running, start: JobStart, selection: DownloadSelection | None
+    ) -> None:
+        if selection is not None:
+            backend = _backend_signature(start)
+            videos = self._reserve_provider(running, selection, backend)
+            if videos is None:
+                running.process.kill()
+                self._publish(running.job_id)
+                return
+            running.provider = selection
+            start = start.model_copy(update={"held_videos": videos})
+            if not self._may_dispatch(running):
+                running.process.kill()
+                return
+        with contextlib.suppress(ChildExitedError):
+            running.process.send(start)
+
+    def _may_dispatch(self, running: _Running) -> bool:
+        if running.held or self._stopping.is_set() or not self._online():
+            return False
+        with self._units() as db:
+            return _get(db, running.job_id).state == JobState.RUNNING and not self._route_changed(
+                running, db
+            )
+
+    def _reserve_provider(
+        self, running: _Running, selection: DownloadSelection, backend: str
+    ) -> tuple[str, ...] | None:
+        job_id = running.job_id
+        with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            row = _get(db, job_id)
+            if row.state != JobState.RUNNING:
+                return None
+            if hold_of(db, selection) is not None:
+                reason = "held" if running.kind.name == DOWNLOAD_KIND else "refused"
+                self._set_in(db, job_id, JobState.FAILED, failure=(reason, HOLD_MESSAGE))
+                return None
+            if refusal := _profile_refusal(
+                running, row, provider_route(db, selection.site), backend
+            ):
+                self._set_in(db, job_id, JobState.FAILED, failure=refusal)
+                return None
+            videos = held_videos(db, selection.site) if selection.short else ()
+            if videos is None:
+                message = "Short links are unavailable. Use the full video link."
+                self._set_in(db, job_id, JobState.FAILED, failure=("refused", message))
+                return None
+            if not reserve_dispatch(db, selection, job_id):
+                self._set_in(db, job_id, JobState.QUEUED)
+                return None
+            row.provider_attempts = (row.provider_attempts or 0) + 1
+            row.provider_route = running.route
+            row.provider_backend = backend
+            if row.kind == DOWNLOAD_KIND:
+                append_receipt(
+                    db,
+                    row.id,
+                    self._clock(),
+                    Receipt(
+                        DownloadEvent.DISPATCHED,
+                        attempt=row.provider_attempts,
+                        route=DownloadRoute.DIRECT
+                        if running.proxy is None
+                        else DownloadRoute.SITE_PROXY,
+                    ),
+                )
+            return videos
 
     def _job_plugins(self, kind: AnyJobKind) -> tuple[tuple[str, ...], str | None]:
         plugins = self._plugins.plugins_for(kind.points)
@@ -471,13 +658,19 @@ class JobRunner:
             file.write(lent.text)
         return _Login(account_id, kind.login_site, lent)
 
-    def _spawn(self, work_dir: Path) -> ChildProcess[FromJob]:
+    def _spawn(self, work_dir: Path, *, bounded_output: bool = False) -> ChildProcess[FromJob]:
         # The lock is taken before the process starts and handed to it, so it is
         # held from the first instant the process exists until its last copy closes.
         lock = os.open(work_dir / LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
         try:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            return ChildProcess(self._processes.command, FROM_JOB, args=("job",), pass_fds=(lock,))
+            return ChildProcess(
+                self._processes.command,
+                FROM_JOB,
+                args=("job",),
+                pass_fds=(lock,),
+                bounded_output=bounded_output,
+            )
         finally:
             os.close(lock)
 
@@ -512,23 +705,68 @@ class JobRunner:
                 if self._stopping.is_set():
                     return _Interrupted()
                 return _Fault("Its process exited without an outcome.")
-            match message:
-                case JobProgress(fraction=fraction, message=text, peak_memory=peak):
-                    if peak > self._memory_limit:
-                        return _Fault(f"It used {peak // 1024**2} MiB of memory.")
-                    shown = running.redact(text)[:MAX_PROGRESS_MESSAGE]
-                    with self._lock:
-                        self._progress[running.job_id] = Progress(fraction, shown)
-                    self._publish(running.job_id, progress=True)
-                case JobFinished() | JobFailed():
-                    return message
+            if isinstance(message, JobFinished | JobFailed):
+                return message
+            if message.peak_memory > self._memory_limit:
+                return _Fault(f"It used {message.peak_memory // 1024**2} MiB of memory.")
+            if running.kind.name == DOWNLOAD_KIND:
+                if isinstance(message, DownloadProgress):
+                    self._download_progress(running, message)
+            elif isinstance(message, JobProgress):
+                shown = running.redact(message.message)[:MAX_PROGRESS_MESSAGE]
+                with self._lock:
+                    self._progress[running.job_id] = Progress(message.fraction, shown)
+                self._publish(running.job_id, progress=True)
+
+    def _download_progress(self, running: _Running, frame: DownloadProgress) -> None:
+        selection = running.provider
+        if selection is None or (frame.part is not None and frame.part not in selection.parts):
+            return
+        key = (frame.stage, frame.part)
+        changed = key != running.progress_key
+        now = time.monotonic()
+        if not changed and now - running.last_progress_at < 1:
+            return
+        running.progress_key, running.last_progress_at = key, now
+        if changed:
+            self._record_download_stage(running.job_id, frame)
+        with self._lock:
+            self._progress[running.job_id] = _safe_download_progress(frame)
+        self._publish(running.job_id, progress=True)
+
+    def _record_download_stage(self, job_id: JobId, frame: DownloadProgress) -> None:
+        try:
+            with self._units.begin() as db:
+                db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                row = _get(db, job_id)
+                if row.state == JobState.RUNNING and row.provider_attempts:
+                    append_receipt(
+                        db,
+                        job_id,
+                        self._clock(),
+                        Receipt(
+                            DownloadEvent.STAGE,
+                            attempt=row.provider_attempts,
+                            stage=frame.stage,
+                            part=frame.part,
+                        ),
+                    )
+        except SQLAlchemyError:
+            return
 
     def _settle(self, running: _Running, outcome: _Outcome) -> None:
-        outcome = _redacted(running, outcome)
-        terminal = isinstance(outcome, JobFinished) or (
-            isinstance(outcome, JobFailed) and outcome.kind == "provider_refused"
+        outcome = (
+            _safe_download_outcome(running, outcome)
+            if running.kind.name == DOWNLOAD_KIND
+            else _redacted(running, outcome)
         )
-        if running.held and not terminal:
+        if running.provider is not None:
+            self._settle_provider(running, outcome, running.provider)
+        else:
+            self._settle_standard(running, outcome)
+
+    def _settle_standard(self, running: _Running, outcome: _Outcome) -> None:
+        if running.held and not isinstance(outcome, JobFinished):
             self._set(running.job_id, JobState.QUEUED)
             return
         login, refused = running.login, isinstance(outcome, JobFailed) and outcome.kind == "auth"
@@ -560,18 +798,104 @@ class JobRunner:
             case _Interrupted():
                 self._set(running.job_id, JobState.QUEUED)
 
-    def _complete(self, running: _Running) -> None:
+    def _settle_provider(
+        self, running: _Running, outcome: _Outcome, selection: DownloadSelection
+    ) -> None:
+        if isinstance(outcome, JobFinished) and not self._provider_interrupted(running):
+            if self._complete(running):
+                self._plugins.record_outcomes(outcome.outcomes)
+        else:
+            self._commit_provider_failure(running, outcome, selection)
+
+    def _provider_interrupted(self, running: _Running) -> bool:
+        return running.held or self._stopping.is_set() or not self._online()
+
+    def _route_changed(self, running: _Running, db: Session) -> bool:
+        return (
+            running.provider is not None
+            and provider_route(db, running.provider.site) != running.route
+        )
+
+    def _commit_provider_failure(
+        self, running: _Running, outcome: _Outcome, selection: DownloadSelection
+    ) -> None:
+        others: Sequence[JobId] = ()
+        with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            row = _get(db, running.job_id)
+            if row.state != JobState.RUNNING:
+                release_dispatch(db, selection.site, running.job_id)
+                return
+            if self._route_changed(running, db):
+                outcome = _Interrupted()
+            state, kind, message, retry_time = self._provider_disposition(running, outcome, row)
+            is_download = row.kind == DOWNLOAD_KIND
+            evidence = (
+                _download_failure_receipt(row, outcome, state, kind, retry_time)
+                if is_download
+                else None
+            )
+            self._set_in(
+                db,
+                running.job_id,
+                state,
+                failure=(kind, message),
+                not_before=retry_time,
+                evidence=evidence,
+            )
+            if kind == "refused" and not is_download:
+                _record_provider_hold(db, selection, outcome, HoldReason.REFUSED, row)
+            elif kind in HoldReason:
+                _record_provider_hold(db, selection, outcome, HoldReason(kind), row)
+            if state is JobState.FAILED and running.kind.on_failure is not None:
+                db.refresh(row)
+                reported_kind = "refused" if kind == HoldReason.REFUSED else kind
+                others = running.kind.on_failure(db, to_job(row), reported_kind, message)
+            if kind == "auth":
+                self._refuse_login_in(db, running, row)
+            release_dispatch(db, selection.site, running.job_id)
+        if isinstance(outcome, JobFailed) and kind != HoldReason.UNCERTAIN:
+            self._plugins.record_outcomes(outcome.outcomes)
+        if state is JobState.WAITING and self._network_failed is not None:
+            self._network_failed()
+        for job_id in (*others, running.job_id):
+            self._publish(job_id)
+
+    def _refuse_login_in(self, db: Session, running: _Running, row: JobRow) -> None:
+        login = running.login
+        if login is not None and self._logins is not None and row.requested_by == login.account_id:
+            self._logins.refused_in(db, login.account_id, login.site, login.lent.revision)
+
+    def _provider_disposition(
+        self, running: _Running, outcome: _Outcome, row: JobRow
+    ) -> tuple[JobState, str, str, datetime | None]:
+        if self._provider_interrupted(running) or not isinstance(outcome, JobFailed):
+            return JobState.FAILED, HoldReason.UNCERTAIN, UNCERTAIN_MESSAGE, None
+        if outcome.kind != "network":
+            return JobState.FAILED, outcome.kind, outcome.message, None
+        attempts = row.provider_attempts or 0
+        if attempts >= running.kind.max_attempts:
+            return JobState.FAILED, "retry_exhausted", "Download retry limit reached.", None
+        delay = NETWORK_RETRY * max(1, attempts)
+        return JobState.WAITING, outcome.kind, outcome.message, self._clock() + delay
+
+    def _complete(self, running: _Running) -> bool:
         kind = running.kind
         try:
             text = (running.work_dir / RESULT_FILE).read_text(encoding="utf-8")
             result = kind.result.model_validate_json(text)
-        except (OSError, ValidationError) as error:
-            self._settle_failure(running.job_id, "program", f"Its result is unreadable: {error}")
-            return
+        except (OSError, UnicodeError, ValidationError) as error:
+            self._reject_result(running, f"Its result is unreadable: {error}")
+            return False
         queued: tuple[JobId, ...] = ()
         try:
             with self._units.begin() as db:
-                if self._set_in(db, running.job_id, JobState.SUCCEEDED):
+                if running.provider is not None:
+                    db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                    self._require_provider_current(running, db)
+                    release_dispatch(db, running.provider.site, running.job_id)
+                changed = self._set_in(db, running.job_id, JobState.SUCCEEDED)
+                if changed:
                     row = _get(db, running.job_id)
                     completed = kind.complete(db, to_job(row), result)
                     if completed is not None:
@@ -580,13 +904,56 @@ class JobRunner:
                             row.state = JobState.FAILED
                             row.failure_kind, row.failure_message = completed.failure
                     row.finished_at = self._clock()
+                    self._record_completion(
+                        db,
+                        row,
+                        row.finished_at,
+                        completed.diagnostic_reason if completed is not None else None,
+                    )
+        except _ProviderInterruptedError:
+            if running.provider is not None:
+                self._commit_provider_failure(running, _Interrupted(), running.provider)
+            return False
         except Exception as error:  # noqa: BLE001 -- a failed completion fails its Job
             message = f"Its completion failed: {type(error).__name__}: {error}"
-            self._settle_failure(running.job_id, "program", message)
-            return
+            self._reject_result(running, message, confirmed=not isinstance(error, SQLAlchemyError))
+            return False
         self._publish(running.job_id)
         for job_id in queued:
             self._publish(job_id)
+        return changed
+
+    def _record_completion(
+        self, db: Session, row: JobRow, now: datetime, completion_reason: DownloadReason | None
+    ) -> None:
+        if row.kind == DOWNLOAD_KIND:
+            reason = reason_for(row.failure_kind)
+            row.failure_message = reason_message(reason)
+            append_receipt(
+                db,
+                row.id,
+                now,
+                Receipt(
+                    DownloadEvent(row.state),
+                    attempt=row.provider_attempts or None,
+                    reason=reason or completion_reason,
+                ),
+            )
+
+    def _require_provider_current(self, running: _Running, db: Session) -> None:
+        if self._provider_interrupted(running) or self._route_changed(running, db):
+            raise _ProviderInterruptedError
+
+    def _reject_result(self, running: _Running, message: str, *, confirmed: bool = False) -> None:
+        if running.provider is None:
+            self._settle_failure(running.job_id, "program", message)
+            return
+        outcome = (
+            JobFailed(kind="program", message=running.redact(message), peak_memory=0)
+            if confirmed
+            else _Fault(message)
+        )
+        self._commit_provider_failure(running, outcome, running.provider)
 
     def _retry_or_fail(self, running: _Running, message: str) -> None:
         with self._units() as db:
@@ -654,14 +1021,23 @@ class JobRunner:
         state: JobState,
         *,
         failure: tuple[str, str] | None = None,
+        evidence: Receipt | None = None,
         **changes: Any,  # noqa: ANN401 -- column values
     ) -> bool:
         # Only a running Job moves on; a cancel that got there first wins.
         values: dict[str, Any] = {"state": state, "pid": None, **changes}
+        is_download = _get(db, job_id).kind == DOWNLOAD_KIND
         if failure is not None:
-            values["failure_kind"], values["failure_message"] = failure[0], failure[1][:2048]
+            reason = reason_for(failure[0])
+            public = reason_message(reason, evidence.http_status if evidence else None)
+            values["failure_kind"] = reason if is_download else failure[0]
+            values["failure_message"] = public if is_download else failure[1][:2048]
+            if is_download:
+                values["provider_http_status"] = evidence.http_status if evidence else None
         elif state is JobState.SUCCEEDED:
             values["failure_kind"], values["failure_message"] = None, ""
+            if is_download:
+                values["provider_http_status"] = None
         if not state.is_active:
             values["finished_at"] = self._clock()
         changed = db.connection().execute(
@@ -669,7 +1045,16 @@ class JobRunner:
             .where(JobRow.id == job_id, JobRow.state == JobState.RUNNING)
             .values(**values)
         )
-        return changed.rowcount == 1
+        if changed.rowcount != 1:
+            return False
+        if is_download and state in {JobState.WAITING, JobState.FAILED}:
+            receipt = evidence or Receipt(
+                DownloadEvent(state),
+                reason=reason_for(failure[0]) if failure else None,
+                retry_at=changes.get("not_before"),
+            )
+            append_receipt(db, job_id, self._clock(), receipt)
+        return True
 
 
 def lock_is_held(path: Path) -> bool:
@@ -685,6 +1070,110 @@ def lock_is_held(path: Path) -> bool:
     finally:
         os.close(lock)
     return False
+
+
+def _backend_signature(start: JobStart) -> str:
+    identity = (__version__, API_VERSION, start.package, start.program, start.plugins)
+    return sha256(repr(identity).encode()).hexdigest()
+
+
+def _safe_download_progress(frame: DownloadProgress) -> Progress:
+    labels = {
+        DownloadStage.RESOLVE: "Preparing download",
+        DownloadStage.TRANSFER: "Downloading",
+        DownloadStage.JOIN: "Joining",
+        DownloadStage.VALIDATE: "Checking audio",
+    }
+    label = labels[frame.stage]
+    if frame.current and frame.total and frame.part and frame.current <= frame.total:
+        label = f"{label} part {frame.part} ({frame.current}/{frame.total})"
+    return Progress(frame.fraction, label, frame.stage, frame.part, frame.current, frame.total)
+
+
+def _download_failure_receipt(
+    row: JobRow, outcome: _Outcome, state: JobState, kind: str, retry_at: datetime | None
+) -> Receipt:
+    reason = reason_for(kind)
+    status = (
+        outcome.http_status
+        if isinstance(outcome, JobFailed)
+        and reason
+        in {
+            DownloadReason.PROVIDER_REFUSED,
+            DownloadReason.RESPONSE_UNKNOWN,
+            DownloadReason.NETWORK,
+            DownloadReason.RETRY_EXHAUSTED,
+        }
+        else None
+    )
+    part = outcome.provider_part if isinstance(outcome, JobFailed) else None
+    return Receipt(
+        DownloadEvent(state),
+        attempt=row.provider_attempts,
+        reason=reason,
+        http_status=status,
+        part=part,
+        retry_at=retry_at,
+    )
+
+
+def _safe_download_outcome(running: _Running, outcome: _Outcome) -> _Outcome:
+    if not isinstance(outcome, JobFinished | JobFailed):
+        return outcome
+    accepted = running.provider
+    outcomes = tuple(
+        KeyOutcome(
+            plugin=item.plugin,
+            key=item.key,
+            trailing_failures=min(1, item.trailing_failures),
+            succeeded=item.succeeded,
+            last_failure=reason_message(DownloadReason.PLUGIN),
+        )
+        for item in outcome.outcomes
+        if accepted is not None
+        and item.key == accepted.site
+        and item.plugin in running.plugins
+        and item.trailing_failures >= 0
+    )
+    if isinstance(outcome, JobFinished):
+        return outcome.model_copy(update={"outcomes": outcomes})
+    part = outcome.provider_part
+    return outcome.model_copy(
+        update={
+            "message": reason_message(reason_for(outcome.kind), outcome.http_status),
+            "outcomes": outcomes,
+            "provider_part": part if accepted is not None and part in accepted.parts else None,
+        }
+    )
+
+
+def _profile_refusal(
+    running: _Running, row: JobRow, current_route: str | None, backend: str
+) -> tuple[str, str] | None:
+    matches_config = (
+        current_route is not None
+        and current_route == running.route
+        and ((current_route == DIRECT_ROUTE) == (running.proxy is None))
+    )
+    if not matches_config or (row.provider_attempts and row.provider_route != running.route):
+        return "route_changed", "The configured provider route changed. No retry scheduled."
+    if row.provider_attempts and row.provider_backend != backend:
+        return "backend_changed", "The configured download backend changed. No retry scheduled."
+    return None
+
+
+def _record_provider_hold(
+    db: Session, selection: DownloadSelection, outcome: _Outcome, reason: HoldReason, row: JobRow
+) -> None:
+    part = 0
+    if reason is not HoldReason.UNCERTAIN and isinstance(outcome, JobFailed):
+        if outcome.provider_part is not None and outcome.provider_part in selection.parts:
+            part = outcome.provider_part
+        if selection.short and outcome.provider_video is not None:
+            record_hold(
+                db, DownloadSelection(selection.site, outcome.provider_video).key(), reason, row
+            )
+    record_hold(db, selection.key(part), reason, row)
 
 
 def _redacted(running: _Running, outcome: _Outcome) -> _Outcome:

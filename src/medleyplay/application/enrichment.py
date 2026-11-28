@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock, details
 from medleyplay.application.ai import is_set_up, record_answered_by, record_answers
+from medleyplay.application.download_holds import DownloadHeldError, hold_of
 from medleyplay.application.enrich_candidates import Candidate, candidates
 from medleyplay.application.jobs import JobKind, JobService, Lane
 from medleyplay.application.lyrics import forget_lyrics, lyrics_held, record_lyrics
@@ -48,8 +49,10 @@ from medleyplay.domain.ai import (
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.community import link_is_on
 from medleyplay.domain.details import Field, Origin, Shown, check_values, shown
+from medleyplay.domain.download_holds import DownloadSelection
 from medleyplay.domain.enrichers import (
     AI_DETAILS,
+    BILIBILI_DETAILS,
     ENRICHERS,
     LYRICS,
     MESSAGES,
@@ -72,6 +75,7 @@ from medleyplay.domain.errors import (
     PluginUnavailableError,
 )
 from medleyplay.domain.jobs import Job, JobId, JobState
+from medleyplay.domain.links import BILIBILI_SOURCE
 from medleyplay.domain.lyrics import LyricsOrigin
 from medleyplay.domain.settings import Settings
 from medleyplay.domain.video_text import Chapter, Song, VideoText
@@ -425,7 +429,11 @@ class EnrichmentService:
             if db.get(EnricherStopRow, enricher.name) is not None:
                 return []
             set_up = is_set_up(db)
-            eligible = candidates(db, enricher, None)
+            eligible = {
+                track_id: found
+                for track_id, found in candidates(db, enricher, None).items()
+                if not _details_held(db, enricher, found)
+            }
         return [
             track_id
             for track_id, found in eligible.items()
@@ -466,7 +474,11 @@ class EnrichmentService:
             if db.get(EnricherStopRow, enricher.name) is not None:
                 return Askable(eligible=(), waiting={})
             set_up = is_set_up(db)
-            found = candidates(db, enricher, None, by_hand=True)
+            found = {
+                track_id: candidate
+                for track_id, candidate in candidates(db, enricher, None, by_hand=True).items()
+                if not _details_held(db, enricher, candidate)
+            }
         eligible: list[TrackId] = []
         waiting: dict[TrackId, datetime] = {}
         for track_id, each in found.items():
@@ -619,7 +631,10 @@ class EnrichmentService:
         queued = 0
         for track_id in self.eligible(enricher.name):
             if self._jobs.active(ENRICH_KIND, enrich_target(track_id, enricher.name)) is None:
-                self._submit(enricher, track_id, requested_by)
+                try:
+                    self._submit(enricher, track_id, requested_by)
+                except DownloadHeldError:
+                    continue
                 queued += 1
         return queued
 
@@ -640,6 +655,14 @@ class EnrichmentService:
         if not self._available(enricher):
             message = f"{enricher.name} is turned off."
             raise PluginUnavailableError(message)
+
+
+def _details_held(db: Session, enricher: Enricher, candidate: Candidate) -> bool:
+    return (
+        enricher == BILIBILI_DETAILS
+        and candidate.video is not None
+        and hold_of(db, DownloadSelection(BILIBILI_SOURCE, candidate.video)) is not None
+    )
 
 
 def _request(

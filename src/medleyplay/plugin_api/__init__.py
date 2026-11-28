@@ -130,7 +130,13 @@ from medleyplay.plugin_api.enrichers import (
     TrackEnricher,
     VideoText,
 )
-from medleyplay.plugin_api.errors import AuthError, DownloadRefusedError, NetworkError
+from medleyplay.plugin_api.errors import (
+    AuthError,
+    DownloadRefusedError,
+    NetworkError,
+    ProviderStopError,
+    ProviderStopReason,
+)
 from medleyplay.plugin_api.extension import (
     API_VERSION,
     DEFAULT_DEADLINE,
@@ -405,6 +411,8 @@ __all__ = [
     "PictureFinder",
     "PictureOption",
     "Plugin",
+    "ProviderStopError",
+    "ProviderStopReason",
     "QualityId",
     "RatedAs",
     "ReadTags",

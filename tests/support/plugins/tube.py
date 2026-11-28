@@ -57,6 +57,7 @@ from medleyplay.plugin_api import (
     NetworkError,
     PartDetails,
     Plugin,
+    ProviderStopError,
     ReadVideo,
     Registry,
     VideoDetails,
@@ -80,6 +81,7 @@ _TITLES: Final = {
     MIXTAPE: ("Mixtape", 3),
     JOIN_RETRY: ("Mixtape", 3),
     LONG_VIDEO: ("Long Mixtape", LONG_PARTS),
+    "BVMediaStop": ("Mixtape", 3),
 }
 _VIDEO: Final = re.compile(r"/video/(?P<video>BV\w+)/?")
 _PART: Final = re.compile(r"[?&]p=(?P<part>\d+)")
@@ -155,8 +157,9 @@ class Downloader:
             message = "Bilibili returned HTTP 567. The download stopped."
             raise DownloadRefusedError(message)
         _fail_as(video)
+        _stop_download(video, folder, request.part)
         if video in {"BVgone", "BVremoved"}:
-            return Downloaded(file=None, gone=True, message="The video was removed.")
+            return Downloaded(file=None, gone=True, message="The video was removed: private-sample")
         if video == "BVleaky" and request.login is not None:
             message = f"Failed with {Path(request.login).read_text(encoding='utf-8')}"
             raise ValueError(message)
@@ -184,6 +187,18 @@ class Downloader:
             )
             (folder / name).write_text(said, encoding="utf-8")
         return Downloaded(file=name, quality=quality, backend="tube")
+
+
+def _stop_download(video: str, folder: Path, part: int) -> None:
+    if video == "BVMediaStop" and part == 1:
+        message = "Media endpoint returned HTTP 567. No retry scheduled."
+        raise ProviderStopError(message, reason="response_unknown", status=567, media=True)
+    if video == "BVMaintenance" and not (folder.parents[2] / "provider-ready").exists():
+        message = "Bilibili answered 503; trying again later."
+        raise NetworkError(message, http_status=503)
+    if video == "BVLongFault":
+        message = "provider-payload:" + "x" * 9_000
+        raise ValueError(message)
 
 
 def _joined_part(request: DownloadPart, folder: Path, quality: str) -> Downloaded:

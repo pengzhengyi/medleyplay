@@ -24,11 +24,14 @@ from medleyplay.domain.errors import (
     PluginCallError,
     PluginUnavailableError,
 )
+from medleyplay.domain.links import BILIBILI_SOURCE
 from medleyplay.domain.plugins import PluginState, PluginStatus
+from medleyplay.download_receipts import DownloadReason, reason_message
 from medleyplay.persistence.schema import PluginStateRow
-from medleyplay.plugin_api import Operation
+from medleyplay.plugin_api import SOURCE_DOWNLOADER, SOURCE_RESOLVER, Operation
 from medleyplay.plugin_host.client import (
     CallFailedError,
+    CallInterruptedError,
     HostBusyError,
     HostStartError,
     LoadReport,
@@ -170,7 +173,15 @@ class PluginService:
             # A request that carried a proxy has its login out of the message, and
             # the original error, which still holds it, is not chained.
             proxy = getattr(request, "proxy", None)
-            failure = self._failed(owner, key, error, proxy)
+            failure: Exception
+            if (
+                isinstance(error, CallInterruptedError)
+                and operation.point.name == SOURCE_RESOLVER.name
+                and key == BILIBILI_SOURCE
+            ):
+                failure = PluginCallError("attempt_uncertain", "The provider call was interrupted.")
+            else:
+                failure = self._failed(owner, key, error, proxy)
             raise failure from (None if proxy else error)
         with self._lock:
             self._failures.pop((owner, key), None)
@@ -182,7 +193,7 @@ class PluginService:
             case "request":
                 # The core sent a request its own models refuse: a bug in the core.
                 return RuntimeError(f"The plugin host refused a request: {said}")
-            case "network" | "auth":
+            case "network" | "auth" | "provider_refused" | "response_unknown":
                 return PluginCallError(error.kind, f"{owner}: {said}")
             case "plugin":
                 self._count_faults(owner, key, 1, said)
@@ -241,7 +252,12 @@ class PluginService:
             return PluginStatus(name, PluginState.QUARANTINED, report.quarantined[name])
         keys: Mapping[str, tuple[str, ...]] = report.loaded.get(name, {})
         if name in self._faults:
-            return PluginStatus(name, PluginState.FAULTED, self._faults[name], keys)
+            reason = (
+                reason_message(DownloadReason.PLUGIN)
+                if SOURCE_DOWNLOADER.name in keys
+                else self._faults[name]
+            )
+            return PluginStatus(name, PluginState.FAULTED, reason, keys)
         if name not in report.loaded:
             reason = self._start_failure or "The plugin host hasn't loaded it."
             return PluginStatus(name, PluginState.QUARANTINED, reason)

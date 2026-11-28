@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Final, NewType
 
 from medleyplay.domain.accounts import Account, AccountId
+from medleyplay.download_receipts import DownloadStage
 
 JobId = NewType("JobId", int)
 VIDEO_LOOKUP: Final = "lookup_video"
@@ -53,6 +54,7 @@ class Job:
     started_at: datetime | None
     finished_at: datetime | None
     not_before: datetime | None = None
+    provider_http_status: int | None = None
 
     def visible_to(self, viewer: Account) -> bool:
         """Keep a lookup private even from another Account's administrator."""
@@ -75,6 +77,10 @@ class Progress:
 
     fraction: float | None = None
     message: str = ""
+    stage: DownloadStage | None = None
+    part: int | None = None
+    current: int | None = None
+    total: int | None = None
 
 
 @dataclass(frozen=True)

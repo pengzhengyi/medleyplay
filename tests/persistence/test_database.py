@@ -1,5 +1,7 @@
 """The database: migrations match the schema, and every connection is configured."""
 
+# cspell:ignore addfinalizer
+
 import hashlib
 import json
 import uuid
@@ -64,6 +66,73 @@ def test_migrating_a_current_database_again_changes_nothing(
     engine = units.kw["bind"]
 
     migrate(engine)
+
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == _head()
+
+
+def test_downgrading_does_not_discard_a_download_hold(units: sessionmaker[Session]) -> None:
+    engine = units.kw["bind"]
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO download_hold (site, subject, part, reason)"
+            " VALUES ('bilibili', 'video:BVHeld', 0, 'response_unknown')"
+        )
+
+    with pytest.raises(RuntimeError, match="while download Holds"):
+        _migrate_to(engine, "0065", down=True)
+
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == _head()
+        assert connection.scalar(text("SELECT reason FROM download_hold")) == "response_unknown"
+        assert connection.scalar(text("SELECT count(*) FROM download_receipt")) == 0
+        assert connection.scalar(text("SELECT count(provider_http_status) FROM job")) == 0
+
+
+@pytest.mark.parametrize(
+    ("job_kind", "status", "state", "kind"),
+    [
+        ("download_source", 403, "queued", "plugin"),
+        ("download_source", 412, "queued", "plugin"),
+        ("download_source", 429, "waiting", "network"),
+        ("lookup_video", 429, "waiting", "network"),
+    ],
+)
+def test_rollback_before_recovery_cannot_reawaken_an_old_provider_attempt(
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+    job_kind: str,
+    status: int,
+    state: str,
+    kind: str,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    request.addfinalizer(engine.dispose)
+    _migrate_to(engine, "0065")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO job (kind, target, request, state, attempts, interruptions,"
+                " failure_kind, failure_message, created_at, started_at)"
+                " VALUES (:job_kind, 'legacy:1', :request, :state, 1, 0,"
+                " :kind, :failure, '2026-10-01', '2026-10-01')"
+            ),
+            {
+                "job_kind": job_kind,
+                "request": json.dumps(
+                    {"site": "bilibili", "video": "BV1Xx41117Tz", "part": 1}
+                    if job_kind == "download_source"
+                    else {"site": "bilibili", "link": "https://b23.tv/night"}
+                ),
+                "state": state,
+                "kind": kind,
+                "failure": f"HTTP {status}",
+            },
+        )
+    migrate(engine)
+
+    with pytest.raises(RuntimeError, match="unresolved provider"):
+        _migrate_to(engine, "0065", down=True)
 
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == _head()

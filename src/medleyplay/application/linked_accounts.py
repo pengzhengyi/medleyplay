@@ -164,15 +164,19 @@ class LinkedAccountService:
     def refused(self, account_id: AccountId, site: str, revision: int) -> None:
         """Mark the login *needs sign-in*, unless it was saved again since `revision`."""
         with self._units.begin() as db:
-            db.execute(
-                update(LinkedAccountRow)
-                .where(
-                    LinkedAccountRow.account_id == account_id,
-                    LinkedAccountRow.site == site,
-                    LinkedAccountRow.revision == revision,
-                )
-                .values(state=LinkState.NEEDS_SIGN_IN)
+            self.refused_in(db, account_id, site, revision)
+
+    def refused_in(self, db: Session, account_id: AccountId, site: str, revision: int) -> None:
+        """Mark the lent login refused in the transaction settling its Job."""
+        db.execute(
+            update(LinkedAccountRow)
+            .where(
+                LinkedAccountRow.account_id == account_id,
+                LinkedAccountRow.site == site,
+                LinkedAccountRow.revision == revision,
             )
+            .values(state=LinkState.NEEDS_SIGN_IN)
+        )
 
 
 def _to_linked(row: LinkedAccountRow) -> LinkedAccount:

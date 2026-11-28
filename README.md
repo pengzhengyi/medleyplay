@@ -44,6 +44,10 @@ controls work through the Media Session API. Add a host name the server should
 answer to, such as a router's DNS name, with
 `MEDLEYPLAY_ALLOWED_HOSTS=music.home`.
 
+On macOS, the opt-in [LAN sharing pilot](docs/contributing/design-notes/Devices.md#macos-lan-sharing)
+keeps the server private to the Mac and lets you authorize **Medleyplay Share**
+separately in the firewall.
+
 To add music from Bilibili, turn its plugin on in `medleyplay.toml`, as below.
 It is off by default because yt-dlp
 can't read Bilibili until an upstream fix ships. Then save your Bilibili login

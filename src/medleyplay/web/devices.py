@@ -32,6 +32,7 @@ from medleyplay.web.deps import (
     ThisDevice,
     services_of,
 )
+from medleyplay.web.share_ingress import sharing_peer
 
 router = APIRouter(prefix="/api", tags=["devices"])
 
@@ -153,6 +154,9 @@ class AdmissionIn(BaseModel):
 
 def visit_of(request: Request, token: str | None) -> Visit:
     """Return the request as the device check sees it."""
+    shared = sharing_peer(request)
+    if shared is not None:
+        return Visit(token=token, address=shared, host=False)
     peer = "" if request.client is None else request.client.host
     server = request.scope.get("server")
     local = "" if not server else str(server[0])

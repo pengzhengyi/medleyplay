@@ -1,5 +1,7 @@
 """The database: migrations match the schema, and every connection is configured."""
 
+# cspell:ignore addfinalizer
+
 import hashlib
 import json
 import uuid

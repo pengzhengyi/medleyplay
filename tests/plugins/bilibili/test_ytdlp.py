@@ -1,5 +1,7 @@
 """yt-dlp's failures are sorted by type, and it never runs on a URL it wasn't meant for."""
 
+# cspell:ignore pagelist playurl
+
 import gc
 import io
 from collections.abc import Callable, Iterator, Mapping

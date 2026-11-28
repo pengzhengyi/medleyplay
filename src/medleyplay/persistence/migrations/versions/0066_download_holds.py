@@ -1,5 +1,7 @@
 """Persist provider Holds and admitted download attempts."""
 
+# cspell:ignore randomblob
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa

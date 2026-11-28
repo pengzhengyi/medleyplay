@@ -1,5 +1,7 @@
 """The download pipe accepts bounded frames without copying child stderr to the server."""
 
+# cspell:ignore capfd
+
 import sys
 
 import pytest
@@ -34,7 +36,7 @@ print("x" * 100_000, flush=True)
     assert capfd.readouterr().err == ""
 
 
-def test_backpressure_keeps_the_terminal_frame_after_a_burst_of_progress() -> None:
+def test_a_full_queue_keeps_the_terminal_frame_after_a_burst_of_progress() -> None:
     command = HostCommand(
         (
             sys.executable,

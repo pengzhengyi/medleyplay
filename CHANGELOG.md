@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Reopen a saved Bilibili video lookup after signing in again to retry a
+  dismissed sign-in failure without adding the song twice.
 - Open **Devices** to approve, rename, or remove devices without leaving the
   current page. On another device, choose **Client** for an independent queue
   or **Remote** to control the computer, and see the connection in use.

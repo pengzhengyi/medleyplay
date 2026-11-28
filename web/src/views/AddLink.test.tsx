@@ -28,12 +28,14 @@ function renderDialog(lookup: LinkLookup | Error) {
   );
   const onAdded = vi.fn();
   const onClose = vi.fn();
+  const retry = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   render(
     <AddLink
       opening={opening}
       listed={[]}
       load={load}
       add={add}
+      retry={retry}
       onAdded={onAdded}
       onClose={onClose}
     />,
@@ -41,6 +43,7 @@ function renderDialog(lookup: LinkLookup | Error) {
   return {
     load,
     add,
+    retry,
     onAdded,
     onClose,
     dialog: screen.getByRole("dialog", { name: "Add from Bilibili" }),
@@ -284,6 +287,56 @@ describe("adding a video that was read", () => {
     expect(within(dialog).getByRole("checkbox", { name: /Part 1/ })).toBeDisabled();
     expect(within(dialog).getByText("Already added")).toBeVisible();
     expect(within(dialog).getByRole("button", { name: "Add" })).toBeEnabled();
+  });
+
+  it("retries a dismissed part without selecting it or closing the lookup", async () => {
+    const lookup = lookupOf(2);
+    const { add, retry, onClose, dialog } = renderDialog({
+      ...lookup,
+      parts: lookup.parts.map((part) =>
+        part.part === 1 ? { ...part, track_id: 4, retry_job_id: 19 } : part,
+      ),
+    });
+    let queued: () => void = () => undefined;
+    retry.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        queued = resolve;
+      }),
+    );
+    const form = within(dialog);
+    const action = await form.findByRole("button", { name: "Retry download for part 1" });
+
+    await userEvent.click(action);
+
+    expect(action).toBeDisabled();
+    expect(action).toHaveAttribute("aria-busy", "true");
+    const download = form.getByRole("button", { name: "Download 1 file" });
+    expect(download).toBeDisabled();
+    expect(retry).toHaveBeenCalledExactlyOnceWith(8, 1, 19);
+    expect(add).not.toHaveBeenCalled();
+    queued();
+    expect(await form.findByText("Download queued.")).toBeVisible();
+    expect(download).toBeEnabled();
+    expect(form.getByRole("checkbox", { name: "Part 1: Mixtape 1" })).toBeDisabled();
+    expect(form.getByRole("checkbox", { name: "Part 2: Mixtape 2" })).toBeChecked();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("shows a retry refusal beside the dismissed part", async () => {
+    const lookup = lookupOf(1);
+    const { retry, dialog } = renderDialog({
+      ...lookup,
+      parts: lookup.parts.map((part) => ({ ...part, track_id: 4, retry_job_id: 19 })),
+    });
+    retry.mockRejectedValueOnce(new Error("This download can no longer be retried."));
+    const action = await within(dialog).findByRole("button", { name: "Retry download for part 1" });
+
+    await userEvent.click(action);
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "This download can no longer be retried.",
+    );
+    expect(action).toBeEnabled();
   });
 
   it("names the fields above the first part that has them, the parts below lined up under them", async () => {

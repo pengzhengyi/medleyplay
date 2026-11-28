@@ -1314,6 +1314,7 @@ export interface LinkPart {
   readonly title: string;
   readonly duration_ms: number | null;
   readonly track_id: number | null;
+  readonly retry_job_id?: number;
 }
 
 /** An audio quality a video can be added at. */
@@ -2070,6 +2071,11 @@ export const api = {
     call<SavedVideoLookup>("POST", "/api/links/lookups", { link: publicVideoInput(link) }),
   videoLookups: () => call<SavedVideoLookup[]>("GET", "/api/links/lookups"),
   videoLookup: (id: number) => call<SavedVideoLookup>("GET", `/api/links/lookups/${String(id)}`),
+  retryVideoPart: (id: number, part: number, failedJobId: number) =>
+    call<Job>("POST", `/api/links/lookups/${String(id)}/retry`, {
+      part,
+      failed_job_id: failedJobId,
+    }),
   dismissLookup: (id: number) => call<undefined>("DELETE", `/api/links/lookups/${String(id)}`),
   addLink: (id: number, quality: string, choices: VideoChoices) =>
     call<AddedPart[]>("POST", `/api/links/lookups/${String(id)}`, {

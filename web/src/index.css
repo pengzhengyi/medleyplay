@@ -5853,6 +5853,11 @@ dialog.modal::backdrop {
   font-variant-numeric: tabular-nums;
 }
 
+.video-part-retry {
+  padding: 0 0.5rem 0.5rem;
+  font-size: 0.875rem;
+}
+
 .video-download-option {
   margin: 0 0 0.5rem;
   font-size: 0.9rem;

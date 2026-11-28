@@ -24,7 +24,7 @@ from medleyplay.domain.downloads import (
     quality_kbps,
 )
 from medleyplay.domain.errors import ConflictError, InvalidInputError, OfflineError, PluginCallError
-from medleyplay.domain.jobs import Job
+from medleyplay.domain.jobs import Job, JobId
 from medleyplay.domain.links import (
     MAX_PART_NUMBER,
     joined_locator,
@@ -66,6 +66,7 @@ class PartLookup:
     title: str
     duration_ms: int | None
     track_id: TrackId | None
+    retry_job_id: JobId | None = None
 
 
 @dataclass(frozen=True)
@@ -168,16 +169,26 @@ class LinkService:
         self.require_online()
         return self.preview(self._resolve(link))
 
-    def preview(self, resolved: Resolved) -> Lookup:
+    def preview(self, resolved: Resolved, *, caller: Account | None = None) -> Lookup:
         """Show the saved metadata with parts that are already in the catalog marked."""
         kind, video, read = resolved.kind, resolved.video, resolved.read
         if isinstance(read, Unreadable):
             part = resolved.part or 1
-            track = self._tracks(kind, [part_locator(video, part)]).get(part_locator(video, part))
+            with self._units() as db:
+                source = self._part_sources(db, kind, video, [part]).get(part)
+                track = TrackId(source.track_id) if source is not None else None
             return Lookup(
                 kind, video, "", "", (PartLookup(part, "", None, track),), (), unreadable=read
             )
-        tracks = self._tracks(kind, [part_locator(video, part.part) for part in read.parts])
+        parts = [part.part for part in read.parts]
+        with self._units() as db:
+            sources = self._part_sources(db, kind, video, parts)
+            tracks = {part: TrackId(source.track_id) for part, source in sources.items()}
+            retries = (
+                self._downloads.dismissed_retries_in(db, caller, list(sources.values()))
+                if caller is not None and self._online()
+                else {}
+            )
         return Lookup(
             kind=kind,
             video=video,
@@ -188,12 +199,27 @@ class LinkService:
                     part.part,
                     part.title,
                     part.duration_ms,
-                    tracks.get(part_locator(video, part.part)),
+                    tracks.get(part.part),
+                    retries.get(part_locator(video, part.part)),
                 )
                 for part in read.parts
             ),
             qualities=read.qualities,
         )
+
+    def retry_part_in(
+        self, db: Session, caller: Account, resolved: Resolved, part: int, failed: JobId
+    ) -> Job:
+        """Retry the named failed attempt on an existing part of a readable video."""
+        self.require_online()
+        if not isinstance(resolved.read, Unreadable) and any(
+            each.part == part for each in resolved.read.parts
+        ):
+            source = self._part_sources(db, resolved.kind, resolved.video, [part]).get(part)
+            if source is not None:
+                return self._downloads.retry_dismissed_in(db, caller, source, failed)
+        message = "This download can no longer be retried from this lookup."
+        raise ConflictError(message)
 
     def add(
         self, caller: Account, link: str, quality: str, parts: Sequence[PartChoice]
@@ -424,14 +450,15 @@ class LinkService:
             self._remembered[kind, video] = _Remembered(read, now)
             return read
 
-    def _tracks(self, kind: str, locators: list[str]) -> dict[str, TrackId]:
-        with self._units() as db:
-            rows = db.execute(
-                select(SourceRow.locator, SourceRow.track_id).where(
-                    SourceRow.kind == kind, SourceRow.locator.in_(locators)
-                )
-            ).all()
-        return {locator: TrackId(track_id) for locator, track_id in rows}
+    @staticmethod
+    def _part_sources(
+        db: Session, kind: str, video: str, parts: Sequence[int]
+    ) -> dict[int, SourceRow]:
+        numbers = {part_locator(video, part): part for part in parts}
+        sources = db.scalars(
+            select(SourceRow).where(SourceRow.kind == kind, SourceRow.locator.in_(numbers))
+        )
+        return {numbers[source.locator]: source for source in sources}
 
     def _source(self, key: SourceKey) -> tuple[SourceId, bool]:
         """Return the Source's id, and whether it needs downloading."""

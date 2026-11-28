@@ -173,6 +173,7 @@ export interface Library {
   readonly lookUpLink: (link: string) => Promise<SavedVideoLookup>;
   readonly videoLookups: readonly SavedVideoLookup[];
   readonly videoLookup: (id: number) => Promise<SavedVideoLookup>;
+  readonly retryVideoPart: (id: number, part: number, failedJobId: number) => Promise<void>;
   readonly dismissLookup: (id: number) => Promise<void>;
   /**
    * Add the chosen parts of a link's video as Tracks, which then show downloading. The
@@ -840,6 +841,11 @@ export function useLibrary(onSignedOut: () => void): Library {
     },
     videoLookups,
     videoLookup: (id) => signedOutOn401(api.videoLookup(id)),
+    retryVideoPart: async (id, part, failedJobId) => {
+      await signedOutOn401(api.retryVideoPart(id, part, failedJobId));
+      reloadTracks();
+      loadDownloading();
+    },
     lookUpLink: async (link) => {
       const saved = await signedOutOn401(api.lookUpLink(link));
       loadVideoLookups();

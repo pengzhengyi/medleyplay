@@ -993,6 +993,7 @@ export function Library({
           listed={library.videoLookups}
           load={library.videoLookup}
           add={library.addLink}
+          retry={library.retryVideoPart}
           onAdded={(count, destination) => {
             if (destination !== undefined) {
               setNotice({

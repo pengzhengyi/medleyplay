@@ -1,8 +1,11 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode, Suspense, useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { RETRY_AFTER_MS, lazyPart } from "../lazyPart";
+import { RETRY_AFTER_MS, forgetFailedLoads, lazyPart } from "../lazyPart";
+import { PartFrame } from "../partFrame";
+import { DialogOpening } from "./DialogOpening";
 import { LanguageSelect } from "./LanguageSelect";
 import { LazyPart } from "./LazyPart";
 
@@ -11,15 +14,49 @@ function Greeting() {
   return <p>Hello</p>;
 }
 
+/** An editable song title whose label can change while the draft stays open. */
+function Draft({ label }: { readonly label: string }) {
+  const [title, setTitle] = useState("First song");
+  return (
+    <input
+      aria-label={label}
+      value={title}
+      onChange={(event) => {
+        setTitle(event.target.value);
+      }}
+    />
+  );
+}
+
+/** A Greeting part whose shared module load is completed by the test. */
+function heldPart() {
+  let finish: () => void = () => undefined;
+  const load = vi.fn(
+    () =>
+      new Promise<typeof Greeting>((resolve) => {
+        finish = () => {
+          resolve(Greeting);
+        };
+      }),
+  );
+  return {
+    part: lazyPart(load),
+    load,
+    finish: () => {
+      finish();
+    },
+  };
+}
+
 /** A part whose code loads only once `reachable` is set, as after the network returns. */
 function partBehindTheNetwork() {
   const network = { reachable: false };
-  const part = lazyPart(() =>
+  const load = vi.fn(() =>
     network.reachable
       ? Promise.resolve(Greeting)
       : Promise.reject(new TypeError("Failed to fetch dynamically imported module")),
   );
-  return { part, network };
+  return { part: lazyPart(load), network, load };
 }
 
 /** The page as the server sends it, naming the entry script `entry`. */
@@ -61,6 +98,273 @@ afterEach(() => {
 });
 
 describe("a part of the page loaded when it opens", () => {
+  it("keeps neighboring content visible while the part shows its own loading frame", async () => {
+    const held = heldPart();
+    render(
+      <LazyPart doing="Opening the list…">
+        <p>Existing controls</p>
+        <held.part.Component />
+      </LazyPart>,
+    );
+
+    expect(screen.getByText("Existing controls")).toBeVisible();
+    expect(screen.getByText("Opening the list…")).toHaveAttribute("aria-busy", "true");
+    await act(async () => {
+      held.finish();
+      await held.part.preload();
+    });
+
+    expect(screen.getByText("Hello")).toBeVisible();
+    expect(screen.getByText("Existing controls")).toBeVisible();
+    expect(screen.queryByText("Opening the list…")).not.toBeInTheDocument();
+  });
+
+  it("shares one load during StrictMode replay and keeps a pending frame current", async () => {
+    const held = heldPart();
+    const { rerender } = render(
+      <StrictMode>
+        <LazyPart doing="Opening the first…">
+          <held.part.Component />
+        </LazyPart>
+      </StrictMode>,
+    );
+
+    rerender(
+      <StrictMode>
+        <LazyPart doing="Opening the second…">
+          <held.part.Component />
+        </LazyPart>
+      </StrictMode>,
+    );
+
+    expect(screen.getByText("Opening the second…")).toBeVisible();
+    expect(held.load).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      held.finish();
+      await held.part.preload();
+    });
+    expect(screen.getByText("Hello")).toBeVisible();
+    expect(held.load).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses completed code after closing an unfinished opening", async () => {
+    const held = heldPart();
+    const shown = (
+      <LazyPart doing="Opening…">
+        <held.part.Component />
+      </LazyPart>
+    );
+    const { unmount } = render(shown);
+    expect(screen.getByText("Opening…")).toBeVisible();
+
+    unmount();
+    await act(async () => {
+      held.finish();
+      await held.part.preload();
+    });
+    render(shown);
+
+    expect(screen.getByText("Hello")).toBeVisible();
+    expect(screen.queryByText("Opening…")).not.toBeInTheDocument();
+    expect(held.load).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["cold", "preloaded"])(
+    "keeps drafts, focus and selection when a %s part's frame and props change",
+    async (opening) => {
+      const part = lazyPart(() => Promise.resolve(Draft));
+      if (opening === "preloaded") await part.preload();
+      const { rerender } = render(
+        <LazyPart doing="Opening…">
+          <part.Component label="Song title" />
+        </LazyPart>,
+      );
+      const title = await screen.findByRole<HTMLInputElement>("textbox", { name: "Song title" });
+      fireEvent.change(title, { target: { value: "My edited song" } });
+      title.focus();
+      title.setSelectionRange(3, 9);
+
+      rerender(
+        <LazyPart doing="Opening the list…" frame={() => null}>
+          <part.Component label="Edited title" />
+        </LazyPart>,
+      );
+
+      const updated = screen.getByRole<HTMLInputElement>("textbox", { name: "Edited title" });
+      expect(updated).toBe(title);
+      expect(updated).toHaveValue("My edited song");
+      expect(updated).toHaveFocus();
+      expect([updated.selectionStart, updated.selectionEnd]).toEqual([3, 9]);
+    },
+  );
+
+  it("lets a loaded part's nested plain Suspense use its own fallback", async () => {
+    const held = heldPart();
+    function Parent() {
+      return (
+        <Suspense fallback={<p>Inner loading</p>}>
+          <held.part.Component />
+        </Suspense>
+      );
+    }
+    const parent = lazyPart(() => Promise.resolve(Parent));
+    await parent.preload();
+
+    render(
+      <LazyPart doing="Outer loading">
+        <parent.Component />
+      </LazyPart>,
+    );
+
+    expect(screen.getByText("Inner loading")).toBeVisible();
+    expect(screen.queryByText("Outer loading")).not.toBeInTheDocument();
+    await act(async () => {
+      held.finish();
+      await held.part.preload();
+    });
+    expect(screen.getByText("Hello")).toBeVisible();
+  });
+
+  it.each(["framed", "native"])(
+    "keeps a failed %s opening cached across closing and reopening until Try again",
+    async (path) => {
+      servePage(undefined);
+      const { part, network, load } = partBehindTheNetwork();
+      const content =
+        path === "native" ? (
+          <PartFrame value={null}>
+            <part.Component />
+          </PartFrame>
+        ) : (
+          <part.Component />
+        );
+      const shown = <LazyPart doing="Opening…">{content}</LazyPart>;
+      const { unmount } = render(shown);
+      await failToLoad();
+      expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach medleyplay");
+      expect(load).toHaveBeenCalledTimes(2);
+
+      unmount();
+      network.reachable = true;
+      render(shown);
+
+      expect(screen.queryByText("Opening…")).not.toBeInTheDocument();
+      expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach medleyplay");
+      expect(load).toHaveBeenCalledTimes(2);
+      await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+      expect(await screen.findByText("Hello")).toBeVisible();
+      expect(load).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it.each(["framed", "native"])(
+    "retries a failed background preload when first opened through the %s path",
+    async (path) => {
+      const { part, network, load } = partBehindTheNetwork();
+      const failed = part.preload().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS + 10);
+      await failed;
+      expect(load).toHaveBeenCalledTimes(2);
+      network.reachable = true;
+
+      render(
+        <LazyPart doing="Opening…">
+          {path === "native" ? (
+            <PartFrame value={null}>
+              <part.Component />
+            </PartFrame>
+          ) : (
+            <part.Component />
+          )}
+        </LazyPart>,
+      );
+
+      expect(await screen.findByText("Hello")).toBeVisible();
+      expect(load).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it("replaces a dialog's loading frame without treating replacement as a user close", async () => {
+    const held = heldPart();
+    const closed = vi.fn();
+    render(
+      <LazyPart
+        doing="Opening…"
+        frame={(shown) => (
+          <DialogOpening className="device-window" title="Listen on your device" onClose={closed}>
+            {shown}
+          </DialogOpening>
+        )}
+      >
+        <held.part.Component />
+      </LazyPart>,
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+
+    await act(async () => {
+      held.finish();
+      await held.part.preload();
+    });
+
+    expect(screen.getByText("Hello")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(closed).not.toHaveBeenCalled();
+  });
+
+  it.each(["framed", "native"])(
+    "does not renew an unfinished %s opening because an earlier background preload failed",
+    async (path) => {
+      servePage(undefined);
+      let rejectOpening: () => void = () => undefined;
+      const pending = new Promise<typeof Greeting>((_, reject) => {
+        rejectOpening = () => {
+          reject(new TypeError("The module is unreachable"));
+        };
+      });
+      let reachable = false;
+      let attempts = 0;
+      const load = vi.fn(() => {
+        attempts += 1;
+        if (reachable) return Promise.resolve(Greeting);
+        if (attempts === 3) return pending;
+        return Promise.reject(new TypeError("The module is unreachable"));
+      });
+      const part = lazyPart(load);
+      const failedPreload = part.preload().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS + 10);
+      await failedPreload;
+      const content =
+        path === "native" ? (
+          <PartFrame value={null}>
+            <part.Component />
+          </PartFrame>
+        ) : (
+          <part.Component />
+        );
+      const shown = <LazyPart doing="Opening…">{content}</LazyPart>;
+      const { unmount } = render(shown);
+      expect(load).toHaveBeenCalledTimes(3);
+
+      forgetFailedLoads();
+      await act(async () => {
+        rejectOpening();
+        await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS + 10);
+      });
+      expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach medleyplay");
+      expect(load).toHaveBeenCalledTimes(4);
+      unmount();
+      reachable = true;
+      render(shown);
+
+      expect(load).toHaveBeenCalledTimes(4);
+      expect(screen.queryByText("Opening…")).not.toBeInTheDocument();
+      expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach medleyplay");
+      await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+      expect(await screen.findByText("Hello")).toBeVisible();
+      expect(load).toHaveBeenCalledTimes(5);
+    },
+  );
+
   it("shows its frame, busy, while its code loads, then the part", async () => {
     const part = lazyPart(() => Promise.resolve(Greeting));
 

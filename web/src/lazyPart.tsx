@@ -8,9 +8,18 @@
  * afresh.
  */
 
-import { type ComponentType, type LazyExoticComponent, lazy, useState } from "react";
+import {
+  type ComponentType,
+  type LazyExoticComponent,
+  type ReactNode,
+  lazy,
+  use,
+  useEffect,
+  useState,
+} from "react";
 
 import { whenIdle } from "./library/stages";
+import { PartFrame } from "./partFrame";
 
 /** How long a failed load waits before it tries once more, in milliseconds. */
 export const RETRY_AFTER_MS = 1000;
@@ -25,10 +34,20 @@ export class PartLoadError extends Error {
 
 /** A part of the page loaded when first needed. */
 export interface Part<P extends object> {
-  /** The part; while its code loads it suspends, and it throws `PartLoadError` if that fails. */
+  /** The part; uses its loading frame or suspends while loading, and throws `PartLoadError` on failure. */
   readonly Component: ComponentType<P>;
   /** Start loading its code, if it isn't loaded or loading. */
   readonly preload: () => Promise<void>;
+}
+
+interface FailedPart {
+  readonly error: unknown;
+}
+
+interface PartOpening<P extends object> {
+  readonly Component: LazyExoticComponent<ComponentType<P>>;
+  readonly open: () => Promise<ComponentType<P>>;
+  readonly failure: () => FailedPart | undefined;
 }
 
 /** How each part whose load failed starts afresh, once someone tries again. */
@@ -45,36 +64,73 @@ export function forgetFailedLoads(): void {
 export function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>): Part<P> {
   let loading: Promise<ComponentType<P>> | undefined;
   let ready: ComponentType<P> | undefined;
-  let failed = false;
   const attempt = () => {
-    loading ??= retriedOnce(load)
-      .then((loaded) => {
-        ready = loaded;
-        return loaded;
-      })
-      .catch((failure: unknown) => {
-        // Forgotten, so the next try loads; the shown part keeps its failure until then.
-        loading = undefined;
-        failed = true;
-        throw new PartLoadError(failure);
-      });
+    if (loading === undefined) {
+      const work: Promise<ComponentType<P>> = retriedOnce(load)
+        .then((loaded) => {
+          if (loading === work) {
+            ready = loaded;
+          }
+          return loaded;
+        })
+        .catch((failure: unknown) => {
+          if (loading === work) {
+            loading = undefined;
+          }
+          throw new PartLoadError(failure);
+        });
+      loading = work;
+    }
     return loading;
   };
-  const fresh = (): LazyExoticComponent<ComponentType<P>> =>
-    lazy(() => attempt().then((loaded) => ({ default: loaded })));
+  const fresh = (): PartOpening<P> => {
+    let failure: FailedPart | undefined;
+    const open = async () => {
+      if (failure !== undefined) throw failure.error;
+      try {
+        return await attempt();
+      } catch (error: unknown) {
+        failure = { error };
+        throw error;
+      }
+    };
+    return {
+      Component: lazy(() => open().then((loaded) => ({ default: loaded }))),
+      open,
+      failure: () => failure,
+    };
+  };
   let current = fresh();
   const renew = () => {
-    if (failed) {
-      failed = false;
+    if (current.failure() !== undefined) {
       current = fresh();
     }
   };
   renewals.add(renew);
 
   function Component(props: P) {
-    // A stable component type keeps an editor's state across parent updates.
-    const [Loaded] = useState(() => ready ?? current);
-    return <Loaded {...props} />;
+    const frame = use(PartFrame);
+    const [rendering] = useState(() => ({
+      framed: frame !== null,
+      opening: current,
+      ready,
+      Loaded: ready ?? current.Component,
+    }));
+    if (rendering.framed) {
+      return (
+        <FramedPart
+          opening={rendering.opening}
+          initial={rendering.ready}
+          frame={frame}
+          props={props}
+        />
+      );
+    }
+    return (
+      <PartFrame value={null}>
+        <rendering.Loaded {...props} />
+      </PartFrame>
+    );
   }
   return {
     Component,
@@ -83,6 +139,44 @@ export function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>
       return attempt().then(() => undefined);
     },
   };
+  function FramedPart({
+    opening,
+    initial,
+    frame,
+    props,
+  }: {
+    readonly opening: PartOpening<P>;
+    readonly initial: ComponentType<P> | undefined;
+    readonly frame: ReactNode;
+    readonly props: P;
+  }) {
+    const [state, setState] = useState<
+      FailedPart | { readonly Component: ComponentType<P> } | undefined
+    >(() => (initial === undefined ? opening.failure() : { Component: initial }));
+    useEffect(() => {
+      if (state !== undefined) return;
+      let shown = true;
+      void opening.open().then(
+        (Component) => {
+          if (shown) setState({ Component });
+        },
+        (error: unknown) => {
+          if (shown) setState({ error });
+        },
+      );
+      return () => {
+        shown = false;
+      };
+    }, [opening, state]);
+
+    if (state === undefined) return frame;
+    if ("error" in state) throw state.error;
+    return (
+      <PartFrame value={null}>
+        <state.Component {...props} />
+      </PartFrame>
+    );
+  }
 }
 
 function retriedOnce<T>(load: () => Promise<T>): Promise<T> {

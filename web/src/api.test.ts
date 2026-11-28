@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, HeldReads, THUMBNAIL_RECIPE, api, coverUrl, uploadFile } from "./api";
+import {
+  ApiError,
+  HeldReads,
+  THUMBNAIL_RECIPE,
+  api,
+  coverUrl,
+  forgetHeldReads,
+  uploadFile,
+} from "./api";
 import { downloadOf, serve } from "./testing/server";
 import { FakeUploads } from "./testing/uploads";
 
@@ -115,6 +123,7 @@ describe("sending a file as a Track's download", () => {
 /** A `fetch` that answers each request only when the test says, noting what each asked. */
 class HeldFetch {
   readonly asked: { readonly path: string; readonly etag: string | null }[] = [];
+  readonly options: RequestInit[] = [];
   private readonly waiting: ((response: Response) => void)[] = [];
 
   static install(): HeldFetch {
@@ -122,6 +131,7 @@ class HeldFetch {
     vi.stubGlobal("fetch", (path: string, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       fake.asked.push({ path, etag: headers.get("If-None-Match") });
+      fake.options.push(init ?? {});
       return new Promise<Response>((resolve) => fake.waiting.push(resolve));
     });
     return fake;
@@ -144,6 +154,98 @@ class HeldFetch {
     await new Promise((settled) => setTimeout(settled, 0));
   }
 }
+
+describe("priority for supporting reads", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ["/api/artist-names", api.artistNames],
+    ["/api/artist-photos/missing", api.missingPhotos],
+    ["/api/album-covers/missing", api.missingCovers],
+    ["/api/split-offers", api.splitOffers],
+    ["/api/artist-splits", api.artistSplits],
+    ["/api/shared-names", api.sharedNames],
+    ["/api/names-to-tidy", api.namesToTidy],
+    ["/api/enrichers/musicbrainz", () => api.enricher("musicbrainz")],
+  ] as const)(
+    "%s stays low priority on initial, conditional, and shared trailing reads",
+    async (path, read) => {
+      const server = HeldFetch.install();
+
+      const first = read();
+      await server.answer(200, {}, 'W/"a"');
+      const held = await first;
+      const conditional = read();
+      const trailing = read();
+      const shared = read();
+      await server.answer(304);
+      await server.answer(304);
+
+      expect(await conditional).toBe(held);
+      expect(await trailing).toBe(held);
+      expect(await shared).toBe(held);
+      expect(server.asked).toEqual([
+        { path, etag: null },
+        { path, etag: 'W/"a"' },
+        { path, etag: 'W/"a"' },
+      ]);
+      expect(
+        server.options.map(({ priority, credentials }) => ({ priority, credentials })),
+      ).toEqual(Array.from({ length: 3 }, () => ({ priority: "low", credentials: "same-origin" })));
+    },
+  );
+
+  it.each([
+    ["song list", api.tracks],
+    ["details editor", () => api.details(1)],
+    ["songs editor", () => api.songs(1)],
+    ["playback", () => api.playback(1)],
+    ["saving songs", () => api.saveSongs(1, [], [])],
+    ["favoriting", () => api.setFavorite(1, true)],
+  ] as const)("leaves %s at the browser's ordinary priority", async (_name, read) => {
+    const server = HeldFetch.install();
+
+    const answer = read();
+    await server.answer(200, {});
+    await answer;
+
+    expect(server.options).toHaveLength(1);
+    expect(server.options[0]?.priority).toBeUndefined();
+    expect(server.options[0]?.credentials).toBe("same-origin");
+  });
+
+  it("forgets both groups on Account change, including answers already on their way", async () => {
+    const server = HeldFetch.install();
+    const firstSongs = api.tracks();
+    const firstNames = api.artistNames();
+    await server.answer(200, [], 'W/"songs"');
+    await server.answer(200, { names: [] }, 'W/"names"');
+    await Promise.all([firstSongs, firstNames]);
+    const lateSongs = api.tracks();
+    const lateNames = api.artistNames();
+
+    forgetHeldReads();
+    await server.answer(200, [], 'W/"late-songs"');
+    await server.answer(200, { names: [] }, 'W/"late-names"');
+    await Promise.all([lateSongs, lateNames]);
+    const songs = api.tracks();
+    const names = api.artistNames();
+
+    expect(server.asked).toEqual([
+      { path: "/api/tracks", etag: null },
+      { path: "/api/artist-names", etag: null },
+      { path: "/api/tracks", etag: 'W/"songs"' },
+      { path: "/api/artist-names", etag: 'W/"names"' },
+      { path: "/api/tracks", etag: null },
+      { path: "/api/artist-names", etag: null },
+    ]);
+    await server.answer(200, []);
+    await server.answer(200, { names: [] });
+    await Promise.all([songs, names]);
+  });
+});
 
 describe("a held read", () => {
   afterEach(() => {
@@ -200,22 +302,25 @@ describe("a held read", () => {
     expect(server.asked.at(-1)?.etag).toBe('W/"b"');
   });
 
-  it("keeps what it holds when a read is refused", async () => {
-    const server = HeldFetch.install();
-    const reads = new HeldReads();
-    const first = reads.read("/api/tracks");
-    await server.answer(200, SONGS, 'W/"a"');
-    const held = await first;
+  it.each([undefined, "low"] as const)(
+    "keeps what it holds when a %s priority read is refused",
+    async (priority) => {
+      const server = HeldFetch.install();
+      const reads = new HeldReads(priority);
+      const first = reads.read("/api/tracks");
+      await server.answer(200, SONGS, 'W/"a"');
+      const held = await first;
 
-    const refused = expect(reads.read("/api/tracks")).rejects.toThrow(ApiError);
-    await server.answer(500);
-    await refused;
-    const again = reads.read("/api/tracks");
-    await server.answer(304);
+      const refused = expect(reads.read("/api/tracks")).rejects.toThrow(ApiError);
+      await server.answer(500);
+      await refused;
+      const again = reads.read("/api/tracks");
+      await server.answer(304);
 
-    expect(server.asked.at(-1)?.etag).toBe('W/"a"');
-    expect(await again).toBe(held);
-  });
+      expect(server.asked.at(-1)?.etag).toBe('W/"a"');
+      expect(await again).toBe(held);
+    },
+  );
 
   it("refuses a 304 when it holds nothing to give back", async () => {
     const server = HeldFetch.install();

@@ -1589,6 +1589,8 @@ export class HeldReads {
   /** Moves on each `forget`, so an answer asked for before it isn't held after. */
   private era = 0;
 
+  constructor(private readonly priority?: RequestPriority) {}
+
   /** Read `path`, or wait for the read after the one under way. */
   read<T>(path: string): Promise<T> {
     const flying = this.flying.get(path);
@@ -1621,6 +1623,9 @@ export class HeldReads {
     const era = this.era;
     const kept = this.held.get(path);
     const init: RequestInit = { credentials: "same-origin" };
+    if (this.priority !== undefined) {
+      init.priority = this.priority;
+    }
     if (kept !== undefined) {
       init.headers = { "If-None-Match": kept.etag };
     }
@@ -1660,12 +1665,14 @@ function freezeDeeply(value: unknown): void {
   }
 }
 
-/** The held reads of this page; forgotten whenever the Account signed in changes. */
+/** Both stores are forgotten whenever the Account signed in changes. */
 const heldReads = new HeldReads();
+const supportingReads = new HeldReads("low");
 
 /** Forget every answer held, so the next Account starts with nothing. */
 export function forgetHeldReads(): void {
   heldReads.forget();
+  supportingReads.forget();
 }
 
 /** Send `file` as the request's body, as it is. */
@@ -1833,7 +1840,7 @@ export const api = {
       { "Accept-Language": language },
     ),
   /** Every artist name the Library shows, and the artists MusicBrainz knows them by. */
-  artistNames: () => heldReads.read<ArtistNames>("/api/artist-names"),
+  artistNames: () => supportingReads.read<ArtistNames>("/api/artist-names"),
   /** Ask MusicBrainz about each name not linked yet; answers how many are being asked. */
   lookUpArtists: (names: readonly string[]) =>
     call<{ asked: number }>("POST", "/api/artist-names/look-up", { names }),
@@ -1869,7 +1876,8 @@ export const api = {
   findArtistPictures: (artistId: string) =>
     call<null>("POST", `/api/artists/${encodeURIComponent(artistId)}/pictures/find`),
   /** Every artist linked to MusicBrainz with no photo, those with a photo suggested first. */
-  missingPhotos: () => heldReads.read<{ artists: MissingPhoto[] }>("/api/artist-photos/missing"),
+  missingPhotos: () =>
+    supportingReads.read<{ artists: MissingPhoto[] }>("/api/artist-photos/missing"),
   /** Ask Deezer about the artists with no photo of `trackIds`, or every one for `null`. */
   findPhotos: (trackIds: readonly number[] | null) =>
     call<{ asked: number }>("POST", "/api/artist-photos/find", { track_ids: trackIds }),
@@ -1897,7 +1905,8 @@ export const api = {
   dismissAlbumCover: (album: string, artist: string, cover: string) =>
     call<undefined>("POST", "/api/album-covers/dismiss", { album, artist, cover }),
   /** Every album with no cover, those with a cover suggested first, then most songs. */
-  missingCovers: () => heldReads.read<{ albums: MissingCover[] }>("/api/album-covers/missing"),
+  missingCovers: () =>
+    supportingReads.read<{ albums: MissingCover[] }>("/api/album-covers/missing"),
   missingDetails: (after: number) =>
     call<MissingDetailsPage>("GET", `/api/missing-details?after=${String(after)}`),
   askMissingDetails: (track: number, key: string) =>
@@ -1958,7 +1967,7 @@ export const api = {
   useArtistPhotoCover: (artistId: string, cover: string) =>
     call<undefined>("POST", `/api/artists/${encodeURIComponent(artistId)}/photo/cover`, { cover }),
   /** The long files a song list was found for, to split or keep as one file. */
-  splitOffers: () => heldReads.read<SplitOffers>("/api/split-offers"),
+  splitOffers: () => supportingReads.read<SplitOffers>("/api/split-offers"),
   /** Split each file by the offer seen for it; one whose offer changed is left as it is. */
   splitFiles: (files: readonly { readonly track_id: number; readonly signature: string }[]) =>
     call<{ split: number; left: number }>("POST", "/api/split-offers/split", { files }),
@@ -1966,7 +1975,7 @@ export const api = {
   keepFiles: (trackIds: readonly number[]) =>
     call<{ kept: number }>("POST", "/api/split-offers/keep", { track_ids: trackIds }),
   /** The artist names written as several artists, to split, and those decided. */
-  artistSplits: () => heldReads.read<ArtistSplits>("/api/artist-splits"),
+  artistSplits: () => supportingReads.read<ArtistSplits>("/api/artist-splits"),
   /** Split each name into the artists it lists. */
   splitArtistNames: (names: readonly string[]) =>
     call<null>("POST", "/api/artist-splits/split", { names }),
@@ -1977,7 +1986,7 @@ export const api = {
   forgetArtistNames: (names: readonly string[]) =>
     call<null>("POST", "/api/artist-splits/forget", { names }),
   /** The names that may name several artists, most songs first. */
-  sharedNames: () => heldReads.read<{ names: SharedName[] }>("/api/shared-names"),
+  sharedNames: () => supportingReads.read<{ names: SharedName[] }>("/api/shared-names"),
   /** Bind each album's songs of a name to the artist chosen for them, confirming them. */
   tellApart: (name: string, albums: readonly SongsBy[]) =>
     call<null>("PUT", "/api/shared-names/albums", { name, albums }),
@@ -1988,7 +1997,7 @@ export const api = {
   forgetSharedNames: (names: readonly string[]) =>
     call<null>("POST", "/api/shared-names/forget", { names }),
   /** The artist and album names written with more than the name in them, tidied. */
-  namesToTidy: () => heldReads.read<{ names: NameToTidy[] }>("/api/names-to-tidy"),
+  namesToTidy: () => supportingReads.read<{ names: NameToTidy[] }>("/api/names-to-tidy"),
   /** Show a name's tidy form on every Track showing it, and its year where none shows. */
   tidyName: (kind: NameToTidy["kind"], written: string) =>
     call<{ changed: number }>("POST", "/api/names-to-tidy/tidy", { kind, written }),
@@ -2094,7 +2103,7 @@ export const api = {
   addresses: () =>
     call<{ addresses: string[]; share_url?: string | null }>("GET", "/api/addresses"),
   /** The enricher's state, and the Tracks it may be asked about. */
-  enricher: (name: string) => heldReads.read<Enricher>(`/api/enrichers/${name}`),
+  enricher: (name: string) => supportingReads.read<Enricher>(`/api/enrichers/${name}`),
   /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */
   /** Ask the enricher about a Track; the AI may be asked `again`, with a `hint` of yours. */
   findDetails: (name: string, trackId: number, again?: { readonly hint: string }) =>

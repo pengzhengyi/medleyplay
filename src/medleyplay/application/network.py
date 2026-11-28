@@ -15,7 +15,7 @@ import subprocess  # nosec B404 -- runs fixed system commands, never a shell
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from ipaddress import AddressValueError, IPv4Network, NetmaskValueError
+from ipaddress import AddressValueError, IPv4Address, IPv4Network, NetmaskValueError
 from typing import Final
 
 from medleyplay.domain.mode import UNREAD, Network, NetworkKind, Unread
@@ -92,6 +92,35 @@ def parse_service_info(output: str) -> ServiceInfo | None:
     except (AddressValueError, NetmaskValueError, ValueError):
         return None
     return ServiceInfo(subnet, router)
+
+
+def read_lan_addresses(run: Commands) -> tuple[str, ...]:
+    """Return addresses assigned to enabled physical services, not the VPN route."""
+    services = parse_service_order(run(["networksetup", "-listnetworkserviceorder"]) or "")
+    addresses = (
+        _usable_ipv4(run(["networksetup", "-getinfo", service.name]) or "")
+        for service in services
+        if service.enabled and service.physical
+    )
+    return tuple(dict.fromkeys(address for address in addresses if address is not None))
+
+
+def _usable_ipv4(output: str) -> str | None:
+    value = next(
+        (field["value"] for field in _FIELD.finditer(output) if field["name"] == "IP address"), ""
+    )
+    try:
+        address = IPv4Address(value)
+    except AddressValueError:
+        return None
+    if (
+        address.is_unspecified
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+    ):
+        return None
+    return str(address)
 
 
 def parse_arp(output: str) -> str | None:

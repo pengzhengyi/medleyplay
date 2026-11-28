@@ -8,6 +8,8 @@ import subprocess
 import sys
 from array import array
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from datetime import timedelta
 from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,6 +20,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import downloads as download_app
+from medleyplay.domain.accounts import Role
+from medleyplay.domain.errors import ConflictError
 from medleyplay.domain.jobs import JobId, JobState
 from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import (
@@ -30,17 +34,140 @@ from medleyplay.persistence.schema import (
 from medleyplay.programs.joined_audio import join_tools
 from medleyplay.web.deps import Services
 from tests.support.api import add_bob, sign_in
+from tests.support.audio import Song, wav_bytes
+from tests.support.factories import AccountFactory
+from tests.support.fakes import FakeClock
 from tests.support.plugins.tube import JOIN_RETRY, LONG_PARTS, LONG_VIDEO
 from tests.support.sites import Site
 
 LOOKUPS = "/api/links/lookups"
 CHOICE = {"parts": [{"part": 2, "title": "Side B", "artist": "Blue Room"}]}
+SIGN_IN_VIDEO = "https://www.bilibili.com/video/BVSignedIn"
 
 
 def _ready(client: TestClient, site: Site, code: str) -> str:
     job = JobId(client.post(LOOKUPS, json={"link": code}).json()["id"])
     site.wait_for(job, JobState.SUCCEEDED)
     return f"{LOOKUPS}/{job}"
+
+
+def _dismissed_login_failure(client: TestClient, site: Site) -> tuple[int, JobId]:
+    path = _ready(client, site, SIGN_IN_VIDEO)
+    (added,) = client.post(path, json={"mode": "download", "quality": "30216"}).json()
+    job = JobId(added["job"]["id"])
+    failure = site.wait_for(job, JobState.FAILED)
+    assert failure.job.failure_kind == "auth"
+    assert client.post("/api/downloads/failed/dismiss", json={"job_ids": [job]}).status_code == 204
+    return int(added["track_id"]), job
+
+
+def _renew_bilibili_login(client: TestClient, clock: FakeClock) -> None:
+    clock.advance(timedelta(seconds=1))
+    cookies = "# Netscape HTTP Cookie File\n.bilibili.com\tTRUE\t/\tTRUE\t0\tSESSDATA\tfixture\n"
+    assert (
+        client.put("/api/me/linked-accounts/bilibili", json={"cookies": cookies}).status_code == 200
+    )
+
+
+def test_a_dismissed_download_retries_the_same_track_after_signing_in_again(
+    site_client: TestClient, site_services: tuple[Site, Services], clock: FakeClock
+) -> None:
+    site, _ = site_services
+    track, failed = _dismissed_login_failure(site_client, site)
+    path = _ready(site_client, site, SIGN_IN_VIDEO)
+    assert site_client.get(f"/api/tracks/{track}").json()["download_dismissed"] is True
+    assert "retry_job_id" not in site_client.get(path).json()["result"]["parts"][0]
+    request = {"part": 1, "failed_job_id": failed}
+    assert site_client.post(f"{path}/retry", json=request).status_code == 409
+    _renew_bilibili_login(site_client, clock)
+
+    (part,) = site_client.get(path).json()["result"]["parts"]
+    retried = site_client.post(f"{path}/retry", json=request)
+
+    assert (part["track_id"], part["retry_job_id"]) == (track, failed)
+    assert retried.status_code == 200
+    job = JobId(retried.json()["id"])
+    assert job != failed
+    site.wait_for(job, JobState.SUCCEEDED)
+    saved = site_client.get(f"/api/tracks/{track}/download").json()
+    assert saved["status"] == "downloaded"
+    audio = site_client.get(f"/api/sources/{saved['source_id']}/audio")
+    assert b"quality=30216" in audio.content
+    assert {row["id"] for row in site_client.get("/api/tracks").json()} == {track}
+    assert site_client.get(f"/api/tracks/{track}").json()["download_dismissed"] is False
+    assert site_client.get(f"/api/jobs/{failed}").json()["state"] == "failed"
+    assert site_client.get(path).status_code == 200
+    assert "retry_job_id" not in site_client.get(path).json()["result"]["parts"][0]
+    assert site_client.post(f"{path}/retry", json=request).status_code == 409
+
+
+def test_a_dismissed_provider_refusal_is_not_offered_or_retried(
+    site_client: TestClient,
+    site_services: tuple[Site, Services],
+    units: sessionmaker[Session],
+    clock: FakeClock,
+) -> None:
+    site, _ = site_services
+    _, failed = _dismissed_login_failure(site_client, site)
+    # Older downloads can store a provider refusal as a generic plugin fault.
+    with units.begin() as db:
+        row = db.get_one(JobRow, failed)
+        row.failure_kind = "plugin"
+        row.failure_message = "Bilibili refused the request (403)."
+    _renew_bilibili_login(site_client, clock)
+    path = _ready(site_client, site, SIGN_IN_VIDEO)
+
+    (part,) = site_client.get(path).json()["result"]["parts"]
+    refused = site_client.post(f"{path}/retry", json={"part": 1, "failed_job_id": failed})
+
+    assert "retry_job_id" not in part
+    assert refused.status_code == 409
+    assert site_client.get("/api/downloads").json() == []
+
+
+def test_a_member_cannot_retry_another_accounts_dismissed_download(
+    site_client: TestClient, site_services: tuple[Site, Services], clock: FakeClock
+) -> None:
+    site, _ = site_services
+    _, failed = _dismissed_login_failure(site_client, site)
+    alice = _ready(site_client, site, SIGN_IN_VIDEO)
+    bob_id = add_bob(site_client)
+    sign_in(site_client, "bob")
+    _renew_bilibili_login(site_client, clock)
+    bob = _ready(site_client, site, SIGN_IN_VIDEO)
+
+    (part,) = site_client.get(bob).json()["result"]["parts"]
+    request = {"part": 1, "failed_job_id": failed}
+
+    assert "retry_job_id" not in part
+    assert site_client.post(f"{alice}/retry", json=request).status_code == 404
+    assert site_client.post(f"{bob}/retry", json=request).status_code == 409
+    stale_admin = replace(AccountFactory.member(bob_id), role=Role.ADMIN)
+    with pytest.raises(ConflictError, match="can no longer be retried"):
+        site.video_lookups.retry_part(stale_admin, JobId(int(bob.rsplit("/", 1)[-1])), 1, failed)
+
+
+def test_a_stale_retry_does_not_replace_a_file_added_by_hand(
+    site_client: TestClient, site_services: tuple[Site, Services], clock: FakeClock
+) -> None:
+    site, _ = site_services
+    track, failed = _dismissed_login_failure(site_client, site)
+    _renew_bilibili_login(site_client, clock)
+    path = _ready(site_client, site, SIGN_IN_VIDEO)
+    assert site_client.get(path).json()["result"]["parts"][0]["retry_job_id"] == failed
+    audio = wav_bytes(Song(seconds=2))
+    downloaded = site_client.put(
+        f"/api/tracks/{track}/download", params={"name": "local.wav"}, content=audio
+    )
+    assert downloaded.status_code == 200
+    source = downloaded.json()["source_id"]
+
+    retry = site_client.post(f"{path}/retry", json={"part": 1, "failed_job_id": failed})
+
+    assert retry.status_code == 409
+    assert "retry_job_id" not in site_client.get(path).json()["result"]["parts"][0]
+    assert site_client.get(f"/api/sources/{source}/audio").content == audio
+    assert site_client.get("/api/downloads").json() == []
 
 
 @pytest.mark.parametrize("layout", ["download", "album", "joined", "edited", "manual"])

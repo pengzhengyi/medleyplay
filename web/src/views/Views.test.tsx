@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Track } from "../api";
 import { App } from "../App";
+import { linksOf } from "../library/artistLinks";
 import { albumKey } from "../library/favoriteGroups";
 import { albumUnit } from "../library/playOrder";
 import { hrefOf } from "../routes";
@@ -238,6 +239,116 @@ describe("album contents stay current", () => {
       const album = within(gallery).getByRole("link", { name: /Supercell.*2 首歌曲/u });
       expect(album).toHaveAttribute("href", href);
       expect(within(album).getByRole("img", { name: "专辑" })).toBeVisible();
+    } finally {
+      await userEvent.selectOptions(language, "auto");
+    }
+  });
+});
+
+describe("artist contents stay current", () => {
+  it.each(["artists", "search"] as const)(
+    "updates names, counts and durations in the mounted %s list",
+    async (view) => {
+      const props = viewPropsOf({
+        route: view === "artists" ? { view } : { view, query: "kind:artists" },
+        tracks: [
+          trackOf(1, "First", { artist: "Ryo", duration_ms: 60_000 }),
+          trackOf(2, "Second", { artist: "Ryo", duration_ms: 120_000 }),
+          trackOf(3, "Other", { artist: "Sia", duration_ms: 180_000 }),
+        ],
+      });
+      const { rerender } = render(<CurrentView {...props} />);
+      const gallery = await screen.findByRole("list", { name: "Artists" });
+      const original = within(gallery).getByRole("link", { name: /Ryo/u });
+      expect(within(original).getByText("2 songs, 3 min")).toBeVisible();
+      const updated = [
+        trackOf(1, "First", { artist: "New name", duration_ms: 240_000 }),
+        trackOf(3, "Other", { artist: "Sia", duration_ms: 180_000 }),
+      ];
+
+      rerender(<CurrentView {...props} tracks={updated} />);
+
+      const renamed = await within(gallery).findByRole("link", { name: /New name/u });
+      expect(within(renamed).getByText("1 song, 4 min")).toBeVisible();
+      expect(renamed).toHaveAttribute(
+        "href",
+        hrefOf({ view: "artist", name: "New name", id: artistIdOf("New name") }),
+      );
+      expect(within(gallery).queryByRole("link", { name: /Ryo/u })).not.toBeInTheDocument();
+      expect(within(gallery).getAllByRole("link")).toHaveLength(2);
+    },
+  );
+
+  it("updates favorite marks while artist data stays unchanged", () => {
+    const props = viewPropsOf({ route: { view: "artists" }, tracks: LIBRARY });
+    const { rerender } = render(<CurrentView {...props} />);
+    const artist = screen.getByRole("link", { name: /ryo/u });
+    expect(artist.closest("li")).not.toHaveClass("favorite");
+
+    rerender(
+      <CurrentView {...props} favorites={{ ...props.favorites, artists: new Set(["ryo"]) }} />,
+    );
+
+    expect(artist.closest("li")).toHaveClass("favorite");
+    expect(within(artist).getByTitle("Favorite")).toBeVisible();
+    rerender(<CurrentView {...props} />);
+    expect(artist.closest("li")).not.toHaveClass("favorite");
+    expect(within(artist).queryByTitle("Favorite")).not.toBeInTheDocument();
+  });
+
+  it("updates chosen names and replaces or clears photos without changing the catalog", () => {
+    const names = [artistNameOf("ryo", "known-ryo")];
+    const known = knownArtistOf("known-ryo", "ryo", {
+      shown_as: "Ryo the composer",
+      photo: "first-photo",
+    });
+    const props = viewPropsOf({
+      route: { view: "artists" },
+      tracks: LIBRARY,
+      links: linksOf({ names, artists: [known] }, LIBRARY),
+    });
+    const { rerender } = render(<CurrentView {...props} />);
+    const original = screen.getByRole("link", { name: /Ryo the composer/u });
+    const href = original.getAttribute("href");
+    expect(original.querySelector(".avatar img")).toHaveAttribute(
+      "src",
+      "/api/covers/first-photo?size=medium&recipe=1",
+    );
+    const updated = { ...known, shown_as: "Ryo the musician", photo: "second-photo" };
+
+    rerender(<CurrentView {...props} links={linksOf({ names, artists: [updated] }, LIBRARY)} />);
+
+    const artist = screen.getByRole("link", { name: /Ryo the musician/u });
+    expect(artist).toHaveAttribute("href", href);
+    expect(artist.querySelector(".avatar img")).toHaveAttribute(
+      "src",
+      "/api/covers/second-photo?size=medium&recipe=1",
+    );
+    rerender(
+      <CurrentView
+        {...props}
+        links={linksOf({ names, artists: [{ ...updated, photo: null }] }, LIBRARY)}
+      />,
+    );
+    expect(artist.querySelector(".avatar img")).not.toBeInTheDocument();
+    expect(artist.querySelector(".avatar")).toHaveTextContent("R");
+  });
+
+  it("translates a mounted list with unchanged props without translating names or links", async () => {
+    const props = viewPropsOf({ route: { view: "artists" }, tracks: LIBRARY });
+    render(<CurrentView {...props} />);
+    render(<LanguageSelect />);
+    const language = screen.getByRole("combobox", { name: "Language" });
+    const href = screen.getByRole("link", { name: /ryo/u }).getAttribute("href");
+
+    try {
+      await userEvent.selectOptions(language, "zh-Hans");
+
+      const gallery = screen.getByRole("list", { name: "艺人" });
+      expect(within(gallery).getByRole("link", { name: /ryo.*2 首歌曲/u })).toHaveAttribute(
+        "href",
+        href,
+      );
     } finally {
       await userEvent.selectOptions(language, "auto");
     }

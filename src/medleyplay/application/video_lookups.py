@@ -115,9 +115,24 @@ class VideoLookups:
             preview = (
                 None
                 if row.result is None
-                else self._links.preview(Resolved.model_validate(row.result))
+                else self._links.preview(Resolved.model_validate(row.result), caller=me)
             )
             return _summary(job, preview.title if preview else "", preview)
+
+    def retry_part(self, me: Account, job_id: JobId, part: int, failed: JobId) -> Job:
+        """Queue one retried part without consuming the caller's saved lookup."""
+        with self._choices, self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            _, row = _owned(db, me, job_id)
+            if row.result is None:
+                message = "This video has no parts ready to choose."
+                raise ConflictError(message)
+            job = self._links.retry_part_in(
+                db, me, Resolved.model_validate(row.result), part, failed
+            )
+        self._jobs.announce_queued(job.id)
+        self._links.announce_import()
+        return job
 
     def confirm(
         self, me: Account, job_id: JobId, quality: str, parts: Sequence[PartChoice]

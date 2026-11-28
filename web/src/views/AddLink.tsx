@@ -52,6 +52,7 @@ const LINK_REFUSALS = new Map<number, ReadonlySet<string>>([
       "medleyplay is Offline, so links wait until it is Online.",
       "No downloader is available. Enable one before downloading.",
       "All parts are already in the Library.",
+      "This download can no longer be retried from this lookup.",
     ]),
   ],
   [
@@ -100,6 +101,7 @@ export function AddLink({
   listed,
   load,
   add,
+  retry,
   onAdded,
   onClose,
 }: {
@@ -107,6 +109,7 @@ export function AddLink({
   readonly listed: readonly SavedVideoLookup[];
   readonly load: (id: number) => Promise<SavedVideoLookup>;
   readonly add: (id: number, quality: string, parts: VideoChoices) => Promise<readonly AddedPart[]>;
+  readonly retry: RetryPart;
   readonly onAdded: (count: number, destination?: AlbumDestination) => void;
   readonly onClose: () => void;
 }) {
@@ -200,7 +203,7 @@ export function AddLink({
         )}
         {lookup &&
           (lookup.readable ? (
-            <ReadVideo id={opened.id} lookup={lookup} add={add} onAdded={finish} />
+            <ReadVideo id={opened.id} lookup={lookup} add={add} onAdded={finish} retry={retry} />
           ) : (
             <UnreadableVideo id={opened.id} lookup={lookup} add={add} onAdded={finish} />
           ))}
@@ -242,11 +245,13 @@ interface Row {
   readonly artist: string;
   readonly chosen: boolean;
   readonly taken: boolean;
+  readonly retryJob: number | undefined;
 }
 
 type FileLayout = "separate" | "joined";
+type RetryPart = (id: number, part: number, failedJobId: number) => Promise<void>;
 
-function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
+function ReadVideo({ id, lookup, add, onAdded, retry }: FormProps & { readonly retry: RetryPart }) {
   const t = useWords();
   const number = new Intl.NumberFormat(useFormattingLocale());
   const [layout, setLayout] = useState<FileLayout>("separate");
@@ -267,9 +272,11 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
         artist: suggestedArtist(lookup),
         chosen: part.track_id === null,
         taken: part.track_id !== null,
+        retryJob: part.retry_job_id,
       })),
   );
   const [quality, setQuality] = useState(BEST);
+  const [retrying, setRetrying] = useState(false);
   const change = (part: number, changes: Partial<Row>) => {
     setRows((now) => now.map((row) => (row.part === part ? { ...row, ...changes } : row)));
   };
@@ -315,7 +322,7 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
   };
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!complete || saving) return;
+    if (!complete || saving || retrying) return;
     const parts = chosen.map((row) => row.part);
     const details = { album: album.trim(), artist: artist.trim() };
     void save(() =>
@@ -329,6 +336,14 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
             : { mode: "download", parts },
       ),
     );
+  };
+  const retryPart: RetryPart = async (lookupId, part, failed) => {
+    setRetrying(true);
+    try {
+      await retry(lookupId, part, failed);
+    } finally {
+      setRetrying(false);
+    }
   };
 
   const labelled = eligible[0]?.part;
@@ -401,12 +416,31 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
                         number: number.format(row.part),
                         title: row.original,
                       })}
-                  {row.taken && <span className="choice-meta"> {t("Already added")}</span>}
+                  {row.taken && (
+                    <span className="choice-meta">
+                      {" "}
+                      {t(
+                        row.retryJob !== undefined && !joined
+                          ? "Previous download dismissed"
+                          : "Already added",
+                      )}
+                    </span>
+                  )}
                 </span>
                 {!manual && (joined || !row.taken) && row.duration !== null && (
                   <span className="video-part-duration">{formatTime(row.duration / 1000)}</span>
                 )}
               </label>
+              {row.retryJob !== undefined && (
+                <RetryDismissedPart
+                  id={id}
+                  part={row.part}
+                  job={row.retryJob}
+                  retry={retryPart}
+                  hidden={joined}
+                  disabled={saving || retrying}
+                />
+              )}
               {manual && !row.taken && (
                 <div className="part-fields">
                   <PartField label="Title" shown={row.part === labelled}>
@@ -447,7 +481,9 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
           ))}
         </ul>
       </fieldset>
-      {eligible.length === 0 && <p>{t("All parts are already in the Library.")}</p>}
+      {eligible.length === 0 && !rows.some((row) => row.retryJob !== undefined) && (
+        <p>{t("All parts are already in the Library.")}</p>
+      )}
       {!joined && multiple && eligible.length > 0 && (
         <label className="video-download-option">
           <input
@@ -528,7 +564,7 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
           ))}
         </select>
       </label>
-      <Footer error={error} saving={saving} disabled={!complete}>
+      <Footer error={error} saving={saving} disabled={!complete || retrying}>
         {action}
       </Footer>
       {joined ? (
@@ -545,6 +581,63 @@ function ReadVideo({ id, lookup, add, onAdded }: FormProps) {
         )
       )}
     </form>
+  );
+}
+
+function RetryDismissedPart({
+  id,
+  part,
+  job,
+  retry,
+  hidden,
+  disabled,
+}: {
+  readonly id: number;
+  readonly part: number;
+  readonly job: number;
+  readonly retry: RetryPart;
+  readonly hidden: boolean;
+  readonly disabled: boolean;
+}) {
+  const t = useWords();
+  const number = new Intl.NumberFormat(useFormattingLocale());
+  const [state, setState] = useState<"ready" | "pending" | "queued">("ready");
+  const [error, setError] = useState<LinkFailure>();
+  const start = () => {
+    setState("pending");
+    setError(undefined);
+    void retry(id, part, job).then(
+      () => {
+        setState("queued");
+      },
+      (cause: unknown) => {
+        setState("ready");
+        setError({ cause });
+      },
+    );
+  };
+  return (
+    <div className="video-part-retry" hidden={hidden}>
+      {state === "queued" ? (
+        <span role="status">{t("Download queued.")}</span>
+      ) : (
+        <button
+          type="button"
+          className="secondary outline dialog-button"
+          aria-label={t("Retry download for part {{number}}", { number: number.format(part) })}
+          aria-busy={state === "pending"}
+          disabled={disabled || state === "pending"}
+          onClick={start}
+        >
+          {t("Retry download")}
+        </button>
+      )}
+      {error !== undefined && (
+        <p className="error" role="alert">
+          {linkError(error.cause, t)}
+        </p>
+      )}
+    </div>
   );
 }
 

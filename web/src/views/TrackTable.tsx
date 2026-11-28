@@ -255,6 +255,7 @@ const DEFAULT_LAYOUT: Layout = {
   visibility: { plays: false, added: false, album_artist: false, year: false, genre: false },
   sizing: {},
 };
+const MAX_COLUMN_WIDTH = 1600;
 // A column only filters and groups read; it is never shown.
 const NEVER_SHOWN: ColumnVisibilityState = { playable: false, kind: false };
 
@@ -430,6 +431,7 @@ export function TrackTable({
   const table = useTable({
     features,
     columns: COLUMNS,
+    defaultColumn: { maxSize: MAX_COLUMN_WIDTH },
     // The columns stay put, so a new callback or Track playing doesn't sort again.
     meta: { actions, playingId, songsIn: nested ? songsIn : undefined, t: words, added },
     data,
@@ -647,18 +649,35 @@ export function TrackTable({
             {table
               .getAllLeafColumns()
               .filter((column) => column.getCanHide())
-              .map((column) => (
-                <li key={column.id}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={column.getIsVisible()}
-                      onChange={column.getToggleVisibilityHandler()}
-                    />
-                    {words(LABELS[column.id] ?? "")}
-                  </label>
-                </li>
-              ))}
+              .map((column) => {
+                const name = words(LABELS[column.id] ?? "");
+                return (
+                  <li key={column.id}>
+                    <label className="column-visibility">
+                      <input
+                        type="checkbox"
+                        checked={column.getIsVisible()}
+                        onChange={column.getToggleVisibilityHandler()}
+                      />
+                      {name}
+                    </label>
+                    {column.getCanResize() && column.getIsVisible() && (
+                      <ColumnWidth
+                        name={name}
+                        width={column.id in layout.sizing ? column.getSize() : undefined}
+                        min={column.columnDef.minSize ?? 20}
+                        max={column.columnDef.maxSize ?? MAX_COLUMN_WIDTH}
+                        reset={() => {
+                          column.resetSize();
+                        }}
+                        onWidth={(width) => {
+                          table.setColumnSizing((sizing) => ({ ...sizing, [column.id]: width }));
+                        }}
+                      />
+                    )}
+                  </li>
+                );
+              })}
           </ul>
         </details>
         <SongFilters
@@ -761,7 +780,6 @@ export function TrackTable({
                     {column.getCanResize() && (
                       <div
                         className={column.getIsResizing() ? "resizer resizing" : "resizer"}
-                        // A pointer's or a finger's handle; the Columns menu is for everyone.
                         aria-hidden
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
@@ -896,6 +914,68 @@ const LABELS: Record<string, string> = {
   added: "Added",
   actions: "Actions",
 };
+
+function ColumnWidth({
+  name,
+  width,
+  min,
+  max,
+  reset,
+  onWidth,
+}: {
+  readonly name: string;
+  readonly width: number | undefined;
+  readonly min: number;
+  readonly max: number;
+  readonly reset: () => void;
+  readonly onWidth: (width: number) => void;
+}) {
+  const t = useWords();
+  const [draft, setDraft] = useState<string | null>(null);
+  const accept = () => {
+    if (draft !== null && draft !== "" && Number.isFinite(Number(draft))) {
+      onWidth(Math.max(min, Math.min(max, Math.round(Number(draft)))));
+    }
+    setDraft(null);
+  };
+  return (
+    <div className="column-width">
+      <label className="column-width-label">
+        {t("Width (px)")}
+        <input
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={max}
+          aria-label={t("{{column}} width in pixels", { column: name })}
+          value={draft ?? width ?? ""}
+          placeholder={t("Auto")}
+          onChange={(event) => {
+            setDraft(event.currentTarget.value);
+          }}
+          onBlur={accept}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              accept();
+            }
+          }}
+        />
+      </label>
+      <button
+        type="button"
+        className="secondary outline"
+        aria-label={t("Reset {{column}} width", { column: name })}
+        onClick={() => {
+          setDraft(null);
+          reset();
+        }}
+      >
+        {t("Reset")}
+      </button>
+    </div>
+  );
+}
 
 /** Columns whose header shows an icon's worth of room, so their name is for screen readers. */
 const HIDDEN_LABELS = new Set(["favorite"]);

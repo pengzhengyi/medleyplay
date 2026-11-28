@@ -127,6 +127,10 @@ off. In another terminal, pass the Mac's private IPv4 address on the trusted
 LAN to `start`. If it is not already in the server's allowed hosts, add it
 to `MEDLEYPLAY_ALLOWED_HOSTS` when starting the server.
 
+On macOS, the server discovers its LAN addresses from physical network
+services, not the VPN's default route. If a VPN blocks local connections,
+allow LAN access on the devices using it. Device approval still applies.
+
 ```bash
 uv run medleyplay share start 192.168.1.20  # replace with the Mac's address
 uv run medleyplay share status

@@ -961,7 +961,12 @@ for (const [language, inDialog] of [
     await reorder("Bravo").dragTo(reorder("Delta"), { steps: 12 });
     await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Bravo", "Delta"]);
     await queue
-      .getByRole("button", { name: language === "en" ? "Remove Delta" : "移除「Delta」" })
+      .getByRole("button", {
+        name: language === "en" ? "Up next actions for Delta" : "「Delta」的队列操作",
+      })
+      .click();
+    await page
+      .getByRole("menuitem", { name: language === "en" ? "Remove" : "移除", exact: true })
       .click();
 
     await expect(titles).toHaveText(["Charlie 1", "Charlie 2", "Bravo"]);

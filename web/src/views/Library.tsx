@@ -338,9 +338,18 @@ export function Library({
   );
   // The header stays at the top, so what else stays there sits under it, however tall it is.
   const top = useRef<HTMLElement>(null);
+  const deck = useRef<HTMLElement>(null);
+  const layout = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const header = top.current;
-    if (header === null || typeof ResizeObserver === "undefined") {
+    const playerBar = deck.current;
+    const libraryLayout = layout.current;
+    if (
+      header === null ||
+      playerBar === null ||
+      libraryLayout === null ||
+      typeof ResizeObserver === "undefined"
+    ) {
       return;
     }
     const measured = new ResizeObserver(() => {
@@ -348,8 +357,10 @@ export function Library({
         "--top-height",
         `${String(header.offsetHeight)}px`,
       );
+      libraryLayout.style.setProperty("--player-height", `${String(playerBar.offsetHeight)}px`);
     });
     measured.observe(header);
+    measured.observe(playerBar);
     return () => {
       measured.disconnect();
     };
@@ -792,6 +803,7 @@ export function Library({
 
   const page = (
     <div
+      ref={layout}
       className={[
         "library",
         queueOpen && "queue-open",
@@ -953,6 +965,7 @@ export function Library({
       </main>
       <QueuePanel player={player} sleep={sleep} tracks={byId} showFoldAll />
       <PlayerBar
+        ref={deck}
         player={player}
         track={playing}
         tracks={byId}
@@ -980,6 +993,7 @@ export function Library({
           listed={library.videoLookups}
           load={library.videoLookup}
           add={library.addLink}
+          retry={library.retryVideoPart}
           onAdded={(count, destination) => {
             if (destination !== undefined) {
               setNotice({

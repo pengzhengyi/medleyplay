@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Reopen a saved Bilibili video lookup after signing in again to retry a
+  dismissed sign-in failure without adding the song twice.
 - Open **Devices** to approve, rename, or remove devices without leaving the
   current page. On another device, choose **Client** for an independent queue
   or **Remote** to control the computer, and see the connection in use.
@@ -777,6 +779,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Preloaded editors and views open without an extra loading wait. Edit songs and
+  Fill from a list show useful controls sooner while keeping drafts and load recovery.
+- Artists stays more responsive during playback by reusing unchanged cards.
+  Names, photos, favorites, and navigation remain current.
 - The Playing badge uses transformed bars to reduce repeated painting.
   Its motion, labels, and reduced-motion behavior stay the same.
 - The seek thumb animates a transform instead of its layout position in browsers
@@ -989,6 +995,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On macOS, the share guide and LAN listener use the physical network address
+  even when a VPN supplies the default route.
+- On touch screens, swipe over a reorder handle to scroll, or hold it before
+  dragging. In **Up next**, use a song's **More actions** menu to move or remove
+  it without dragging.
+- Tap larger playback, seek, menu, and dialog controls on touch screens.
+  Settings fits narrow screens, and **Columns** lets you set widths without
+  dragging.
 - Editing a split album's songs updates complete albums already in **Up next**.
   Restored album queues no longer leave deleted songs between surviving ones.
 

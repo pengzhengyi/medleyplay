@@ -798,7 +798,7 @@ function Artists({
   );
 }
 
-function ArtistList({
+const ArtistList = memo(function ArtistList({
   artists,
   favorites,
   links = NO_LINKS,
@@ -846,7 +846,7 @@ function ArtistList({
       ))}
     </ul>
   );
-}
+});
 
 function Albums({
   tracks,

@@ -15,6 +15,7 @@ function renderBar(position = 10) {
 }
 
 const tipOf = (bar: HTMLElement) => bar.querySelector(".seek-tip")?.textContent;
+const primary = { pointerId: 1, isPrimary: true, button: 0 };
 
 describe("the seek bar", () => {
   it("shows the time under the pointer while hovering, and nothing once it leaves", () => {
@@ -31,8 +32,8 @@ describe("the seek bar", () => {
   it("seeks where it is clicked, at once", () => {
     const { bar, onSeek } = renderBar();
 
-    fireEvent.pointerDown(bar, { clientX: 100, button: 0 });
-    fireEvent.pointerUp(bar, { clientX: 100, button: 0 });
+    fireEvent.pointerDown(bar, { ...primary, clientX: 100 });
+    fireEvent.pointerUp(bar, { ...primary, clientX: 100 });
 
     expect(onSeek).toHaveBeenCalledExactlyOnceWith(50);
   });
@@ -40,15 +41,15 @@ describe("the seek bar", () => {
   it("follows a drag without seeking, then seeks once where it is let go", () => {
     const { bar, onSeek } = renderBar();
 
-    fireEvent.pointerDown(bar, { clientX: 20, button: 0 });
-    fireEvent.pointerMove(bar, { clientX: 60 });
-    fireEvent.pointerMove(bar, { clientX: 150 });
+    fireEvent.pointerDown(bar, { ...primary, clientX: 20 });
+    fireEvent.pointerMove(bar, { ...primary, clientX: 60 });
+    fireEvent.pointerMove(bar, { ...primary, clientX: 150 });
 
     expect(onSeek).not.toHaveBeenCalled();
     expect(bar).toHaveAttribute("aria-valuenow", "75");
     expect(tipOf(bar)).toBe("1:15");
 
-    fireEvent.pointerUp(bar, { clientX: 150, button: 0 });
+    fireEvent.pointerUp(bar, { ...primary, clientX: 150 });
 
     expect(onSeek).toHaveBeenCalledExactlyOnceWith(75);
   });
@@ -56,8 +57,8 @@ describe("the seek bar", () => {
   it("stays where it was sent until the audio gets there, rather than jumping back", () => {
     const { bar, rerender } = renderBar(10);
 
-    fireEvent.pointerDown(bar, { clientX: 100, button: 0 });
-    fireEvent.pointerUp(bar, { clientX: 100, button: 0 });
+    fireEvent.pointerDown(bar, { ...primary, clientX: 100 });
+    fireEvent.pointerUp(bar, { ...primary, clientX: 100 });
     rerender(<SeekBar position={10.2} duration={100} onSeek={vi.fn()} />);
 
     expect(bar).toHaveAttribute("aria-valuenow", "50");
@@ -71,8 +72,8 @@ describe("the seek bar", () => {
     try {
       const { bar } = renderBar(10);
 
-      fireEvent.pointerDown(bar, { clientX: 100, button: 0 });
-      fireEvent.pointerUp(bar, { clientX: 100, button: 0 });
+      fireEvent.pointerDown(bar, { ...primary, clientX: 100 });
+      fireEvent.pointerUp(bar, { ...primary, clientX: 100 });
       act(() => {
         vi.advanceTimersByTime(3000);
       });
@@ -86,10 +87,10 @@ describe("the seek bar", () => {
   it("keeps a drag past either end at that end", () => {
     const { bar, onSeek } = renderBar();
 
-    fireEvent.pointerDown(bar, { clientX: 20, button: 0 });
-    fireEvent.pointerUp(bar, { clientX: 260, button: 0 });
-    fireEvent.pointerDown(bar, { clientX: 20, button: 0 });
-    fireEvent.pointerUp(bar, { clientX: -40, button: 0 });
+    fireEvent.pointerDown(bar, { ...primary, clientX: 20 });
+    fireEvent.pointerUp(bar, { ...primary, clientX: 260 });
+    fireEvent.pointerDown(bar, { ...primary, clientX: 20 });
+    fireEvent.pointerUp(bar, { ...primary, clientX: -40 });
 
     expect(onSeek.mock.calls).toEqual([[100], [0]]);
   });
@@ -97,11 +98,34 @@ describe("the seek bar", () => {
   it("forgets a drag the browser cancels, without seeking", () => {
     const { bar, onSeek } = renderBar();
 
-    fireEvent.pointerDown(bar, { clientX: 20, button: 0 });
-    fireEvent.pointerCancel(bar);
+    fireEvent.pointerDown(bar, { ...primary, clientX: 20 });
+    fireEvent.pointerCancel(bar, primary);
 
     expect(onSeek).not.toHaveBeenCalled();
     expect(bar).toHaveAttribute("aria-valuenow", "10");
+  });
+
+  it("only lets the finger that started scrubbing commit a seek", () => {
+    const { bar, onSeek } = renderBar();
+
+    fireEvent.pointerDown(bar, {
+      pointerType: "touch",
+      pointerId: 1,
+      isPrimary: true,
+      clientX: 20,
+    });
+    fireEvent.pointerDown(bar, {
+      pointerType: "touch",
+      pointerId: 2,
+      isPrimary: false,
+      clientX: 180,
+    });
+    fireEvent.pointerUp(bar, { pointerType: "touch", pointerId: 2, clientX: 180 });
+
+    expect(onSeek).not.toHaveBeenCalled();
+    expect(bar).toHaveAttribute("aria-valuenow", "10");
+    fireEvent.pointerUp(bar, { pointerType: "touch", pointerId: 1, clientX: 100 });
+    expect(onSeek).toHaveBeenCalledExactlyOnceWith(50);
   });
 
   it.each([
@@ -140,8 +164,8 @@ describe("the seek bar", () => {
     render(<SeekBar position={0} duration={undefined} onSeek={onSeek} />);
     const bar = screen.getByRole("slider", { name: "Position" });
 
-    fireEvent.pointerDown(bar, { clientX: 100, button: 0 });
-    fireEvent.pointerUp(bar, { clientX: 100, button: 0 });
+    fireEvent.pointerDown(bar, { ...primary, clientX: 100 });
+    fireEvent.pointerUp(bar, { ...primary, clientX: 100 });
     bar.focus();
     await userEvent.keyboard("{End}");
 

@@ -17,19 +17,10 @@ import {
   closestCenter,
   DndContext,
   type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
   type UniqueIdentifier,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowDownIcon,
@@ -89,6 +80,7 @@ import { Modal } from "./Modal";
 import { OriginTag } from "./OriginTag";
 import { ListEditor } from "./parts";
 import { SongsControlsContext } from "./songsControls";
+import { useReorderSensors } from "./useReorderSensors";
 import {
   type LyricsMatchStatus,
   readyLyricPicks,
@@ -287,11 +279,7 @@ export function SongsEditor({
   const asking = useRef<Promise<PlaybackAnswer> | null>(null);
   // While a song is dragged, Escape puts it back rather than closing the dialog.
   const [dragging, setDragging] = useState(false);
-  const sensors = useSensors(
-    // A few pixels of movement first, so a tap on the handle isn't a drag.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useReorderSensors();
 
   useEffect(() => {
     onLock(busy || dragging);

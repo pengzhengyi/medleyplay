@@ -2433,13 +2433,20 @@ describe("the Downloaded view", () => {
     expect(songs()).toEqual(["Shiver", "Lost Signal"]);
   });
 
-  it("dismisses one failed download without removing the song from the Library", async () => {
+  it("hides a dismissed failed download from Downloaded and the Library", async () => {
     const lost = trackOf(7, "Lost Signal", { download_failed: true, download_failure_job_id: 17 });
     const sent: unknown[] = [];
     open(hrefOf({ view: "downloaded" }), {
       ...signedIn([...LIBRARY, lost]),
       "GET /api/tracks": () => ({
-        body: [...LIBRARY, { ...lost, download_failure_job_id: sent.length === 0 ? 17 : null }],
+        body: [
+          ...LIBRARY,
+          {
+            ...lost,
+            download_failure_job_id: sent.length === 0 ? 17 : null,
+            download_dismissed: sent.length > 0,
+          },
+        ],
       }),
       "GET /api/tracks/7/download": {
         body: { ...downloadOf(7, "failed", "The download failed."), job_id: 17 },
@@ -2458,7 +2465,8 @@ describe("the Downloaded view", () => {
     });
     expect(sent).toEqual([{ job_ids: [17] }]);
     await userEvent.click(screen.getByRole("link", { name: "Library" }));
-    expect(await screen.findByRole("button", { name: "Lost Signal" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Library" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Lost Signal" })).not.toBeInTheDocument();
   });
 
   it("reports a failed dismissal instead of an earlier download status error", async () => {

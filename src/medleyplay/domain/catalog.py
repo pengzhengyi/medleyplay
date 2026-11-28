@@ -135,6 +135,7 @@ class Track:
     """Whether the Track has no Download, and the last Job downloading it failed."""
     download_failure_job_id: JobId | None = None
     """The failed download Job, if its failure has not been dismissed from Downloaded."""
+    download_dismissed: bool = False
     site: str | None = None
     """The kind of the site Source the Track is downloaded from, such as `bilibili`."""
     joined: bool = False

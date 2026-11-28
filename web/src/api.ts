@@ -34,6 +34,7 @@ export interface Track {
   readonly download_failed: boolean;
   /** The failed download Job if it has not been dismissed from Downloaded. */
   readonly download_failure_job_id: number | null;
+  readonly download_dismissed?: boolean;
   /** The kind of site its audio is downloaded from, such as `bilibili`, if any. */
   readonly site: string | null;
   readonly joined?: boolean;

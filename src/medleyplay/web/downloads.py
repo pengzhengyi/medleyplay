@@ -13,7 +13,7 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import InvalidInputError, TooLargeError
 from medleyplay.domain.jobs import JobId
-from medleyplay.web.deps import ManualDownloadsDep, SignedInAccount
+from medleyplay.web.deps import EventsDep, ManualDownloadsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 from medleyplay.web.jobs import JobOut
 
@@ -128,7 +128,8 @@ class FailedDownloadsIn(BaseModel):
 
 @under_way_router.post("/failed/dismiss", status_code=204)
 def dismiss_failed_downloads(
-    body: FailedDownloadsIn, _: SignedInAccount, manual: ManualDownloadsDep
+    body: FailedDownloadsIn, _: SignedInAccount, manual: ManualDownloadsDep, events: EventsDep
 ) -> None:
     """Dismiss only the specified failed Download Jobs, without deleting data."""
-    manual.dismiss_failures(JobId(job_id) for job_id in body.job_ids)
+    if manual.dismiss_failures(JobId(job_id) for job_id in body.job_ids):
+        events.publish_tracks()

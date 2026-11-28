@@ -112,7 +112,7 @@ def test_a_failed_download_is_retried_through_the_job_it_names(site_client: Test
     assert now["job_id"] == retried.json()["id"]
 
 
-def test_dismissing_one_failure_keeps_its_track_and_leaves_other_failures_visible(
+def test_dismissing_one_failure_hides_the_unsaved_track_and_leaves_other_failures_visible(
     site_client: TestClient,
 ) -> None:
     track_id, job_id = _failed_download(site_client)
@@ -124,8 +124,88 @@ def test_dismissing_one_failure_keeps_its_track_and_leaves_other_failures_visibl
     tracks = {track["id"]: track for track in site_client.get("/api/tracks").json()}
     assert tracks[track_id]["download_failed"] is True
     assert tracks[track_id]["download_failure_job_id"] is None
+    assert tracks[track_id]["download_dismissed"] is True
     assert tracks[other_track]["download_failure_job_id"] == other_job
+    assert tracks[other_track]["download_dismissed"] is False
     assert site_client.get(f"/api/tracks/{track_id}/download").json()["job_id"] == job_id
+
+
+def test_dismissed_failure_leaves_missing_details_and_invalidates_an_open_review(
+    site_client: TestClient,
+) -> None:
+    track_id, job_id = _failed_download(site_client)
+    other_track, _ = _failed_download(site_client, video="BVSignedIn")
+    before = {
+        row["track_id"]: row for row in site_client.get("/api/missing-details").json()["tracks"]
+    }
+    assert set(before) == {track_id, other_track}
+
+    dismissed = site_client.post("/api/downloads/failed/dismiss", json={"job_ids": [job_id]})
+
+    assert dismissed.status_code == 204
+    (remaining,) = site_client.get("/api/missing-details").json()["tracks"]
+    assert remaining["track_id"] == other_track
+    stale = site_client.post(
+        f"/api/missing-details/{track_id}/decision",
+        json={"key": before[track_id]["key"], "field": "album"},
+    )
+    assert stale.status_code == 409
+
+
+def test_missing_details_does_not_suggest_an_album_from_a_dismissed_track(
+    site_client: TestClient, site_services: tuple[Site, Services]
+) -> None:
+    donor, job_id = _failed_download(site_client)
+    edited = site_client.put(f"/api/tracks/{donor}/details", json={"values": {"album": "Sessions"}})
+    assert edited.status_code == 200
+    song = site_services[0].catalog.add_track(
+        SourceKey("bilibili", "BVSignedIn/p1"), TrackDetails("Night Drive", "Blue Room")
+    )
+    (before,) = site_client.get("/api/missing-details").json()["tracks"]
+    assert before["fields"] == [
+        {"field": "album", "candidates": [{"value": "Sessions", "origin": "library"}]}
+    ]
+
+    dismissed = site_client.post("/api/downloads/failed/dismiss", json={"job_ids": [job_id]})
+
+    assert dismissed.status_code == 204
+    (after,) = site_client.get("/api/missing-details").json()["tracks"]
+    assert after["track_id"] == song
+    assert after["fields"] == [{"field": "album", "candidates": []}]
+
+
+def test_songs_of_a_dismissed_album_file_leave_missing_details(
+    site_client: TestClient, site_services: tuple[Site, Services]
+) -> None:
+    album = site_services[0].catalog.add_track(
+        SourceKey("bilibili", "BVrefused/p1"),
+        TrackDetails("Live album", album="Sessions", duration_ms=60_000),
+    )
+    track, job_id = _failed_download(site_client)
+    assert track == album
+    split = site_client.put(
+        f"/api/tracks/{album}/songs",
+        json={
+            "rows": [
+                {"id": None, "start_ms": 0, "title": "Opening", "artist": ""},
+                {"id": None, "start_ms": 30_000, "title": "Finale", "artist": ""},
+            ]
+        },
+    )
+    assert split.status_code == 200
+    songs = {song["track_id"] for song in split.json()["songs"]}
+    assert songs <= {
+        row["track_id"] for row in site_client.get("/api/missing-details").json()["tracks"]
+    }
+
+    dismissed = site_client.post("/api/downloads/failed/dismiss", json={"job_ids": [job_id]})
+
+    assert dismissed.status_code == 204
+    assert site_client.get("/api/missing-details").json()["tracks"] == []
+    tracks = {track["id"]: track for track in site_client.get("/api/tracks").json()}
+    for song in songs:
+        assert tracks[song]["download_dismissed"] is True
+        assert tracks[song] == site_client.get(f"/api/tracks/{song}").json()
 
 
 def test_dismissing_several_failures_leaves_waiting_jobs_alone(
@@ -156,6 +236,38 @@ def test_dismissing_an_earlier_attempt_does_not_hide_a_new_failure(site_client: 
 
     assert response.status_code == 204
     assert site_client.get(f"/api/tracks/{track_id}").json()["download_failure_job_id"] == new
+    assert site_client.get(f"/api/tracks/{track_id}").json()["download_dismissed"] is False
+
+
+def test_a_file_added_after_dismissal_makes_the_track_visible_again(
+    site_client: TestClient,
+) -> None:
+    track_id, job_id = _failed_download(site_client)
+    site_client.post("/api/downloads/failed/dismiss", json={"job_ids": [job_id]})
+
+    response = _put(site_client, track_id, "night-drive.wav", TWO_SECONDS)
+
+    assert response.status_code == 200
+    track = next(each for each in site_client.get("/api/tracks").json() if each["id"] == track_id)
+    assert track["downloaded"] is True
+    assert track["download_dismissed"] is False
+    (review,) = site_client.get("/api/missing-details").json()["tracks"]
+    assert review["track_id"] == track_id
+
+
+def test_dismissal_does_not_hide_a_track_with_a_library_source(
+    site_client: TestClient, units: sessionmaker[Session]
+) -> None:
+    track_id, job_id = _failed_download(site_client)
+    with units.begin() as db:
+        db.add(SourceRow(track_id=track_id, kind="library", locator="1/night-drive.wav"))
+
+    response = site_client.post("/api/downloads/failed/dismiss", json={"job_ids": [job_id]})
+
+    assert response.status_code == 204
+    track = next(each for each in site_client.get("/api/tracks").json() if each["id"] == track_id)
+    assert track["download_dismissed"] is False
+    assert track == site_client.get(f"/api/tracks/{track_id}").json()
 
 
 def test_the_track_list_marks_a_failed_download_and_names_the_site(site_client: TestClient) -> None:

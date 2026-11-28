@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playback keeps its position when a late transition moves between contiguous
   songs in the same split album file, instead of repeating the opening.
 - Dismiss a failed download from its warning menu in *Downloaded*, or dismiss
-  them all at once. Songs and audio files stay in your Library.
+  them all at once. Any saved audio stays in your Library.
 - Each **Downloading** row has a menu to show the song in the Library, open its
   source, or cancel the current download if you requested it or are an admin.
 - **Clean up → Missing artist or album** offers Library matches for missing
@@ -985,6 +985,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **More details** clears after asking AI, so the next request starts empty.
+- Hide dismissed failed downloads that have no saved audio from the Library
+  and Up next, including old dismissals and saved queues. Clean up no longer
+  offers their missing artist or album details.
 - Saving an album's song list updates the open album page and the playing
   timeline on other open devices, without restarting playback.
 - Lyrics notation stays beneath the search bar and table headings when songs

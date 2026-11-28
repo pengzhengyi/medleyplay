@@ -986,6 +986,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Editing a split album's songs updates complete albums already in **Up next**.
+  Restored album queues no longer leave deleted songs between surviving ones.
+
 - **More details** clears after asking AI, so the next request starts empty.
 - Hide dismissed failed downloads that have no saved audio from the Library
   and Up next, including old dismissals and saved queues. Clean up no longer

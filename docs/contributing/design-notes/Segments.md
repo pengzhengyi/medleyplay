@@ -153,10 +153,12 @@ as one file.
   segment's own position and length, and seeking stays within it.
 - **A play counts as for any Track,** by the segment's own length.
 - **Saving a song list or undoing a split** updates open albums and their
-  playback. A complete sequence of the file's songs in the playing queue
-  takes the saved list. A selection of songs keeps its order and only picks up
-  the new boundaries. Playback keeps its file position when it falls within a
-  song and does not change between playing and paused.
+  playback. A complete sequence of the file's songs takes the saved list
+  while playing or queued as a group in Up next. A selection or reordered
+  list keeps its order and drops deleted songs without adding new ones.
+  A restored album queue drops entries no longer in the Library once the
+  catalog is loaded. Editing keeps the playing file's position when it
+  falls within a song and does not switch between playing and paused.
 - **The lock screen** shows each song's title and cover; an album played with
   the iPhone locked is checked by hand before this is done, since a locked
   screen may slow the page's timers.

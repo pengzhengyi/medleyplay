@@ -160,7 +160,7 @@ export function Library({
     () => [...new Set(tracks.map((track) => track.artist.trim()).filter((name) => name !== ""))],
     [tracks],
   );
-  const [local, audio] = usePlayer(catalog, onSignedOut);
+  const [local, audio] = usePlayer(catalog, onSignedOut, library.loaded);
   const localSleep = useSleepTimer(local.pause);
   useSpeaker(onHost, local, localSleep, byId, library.speaker, library.onCommand);
   // Where a page that isn't on the computer plays; with the computer gone, it plays here.

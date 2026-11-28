@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { Suspense } from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { Suspense, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PartLoadError, RETRY_AFTER_MS, lazyPart, preloadWhenIdle } from "./lazyPart";
@@ -7,6 +7,20 @@ import { PartLoadError, RETRY_AFTER_MS, lazyPart, preloadWhenIdle } from "./lazy
 /** What a part shows once loaded. */
 function Greeting({ name }: { readonly name: string }) {
   return <p>Hello, {name}</p>;
+}
+
+/** An editable title starting as "First song", with a label the parent can change. */
+function Draft({ label }: { readonly label: string }) {
+  const [title, setTitle] = useState("First song");
+  return (
+    <input
+      aria-label={label}
+      value={title}
+      onChange={(event) => {
+        setTitle(event.currentTarget.value);
+      }}
+    />
+  );
 }
 
 /** A load that fails the first `failures` times, then gives `Greeting`. */
@@ -57,6 +71,97 @@ describe("a part loaded when it is first needed", () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a preloaded part immediately without its loading frame", async () => {
+    const part = lazyPart(loadFailing(0));
+    await part.preload();
+
+    render(
+      <Suspense fallback={<p>Opening…</p>}>
+        <part.Component name="Ada" />
+      </Suspense>,
+    );
+
+    expect(screen.getByText("Hello, Ada")).toBeInTheDocument();
+    expect(screen.queryByText("Opening…")).not.toBeInTheDocument();
+  });
+
+  it("keeps the loading frame until an unfinished preload arrives", async () => {
+    const held = loadHeld();
+    const part = lazyPart(held.load);
+    const preloading = part.preload();
+    render(
+      <Suspense fallback={<p>Opening…</p>}>
+        <part.Component name="Ada" />
+      </Suspense>,
+    );
+    expect(screen.getByText("Opening…")).toBeInTheDocument();
+
+    await act(async () => {
+      held.finish();
+      await preloading;
+    });
+
+    expect(screen.getByText("Hello, Ada")).toBeInTheDocument();
+    expect(held.load).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["cold", "preloaded"])(
+    "keeps edits, focus, and selection when the parent updates a %s part",
+    async (opening) => {
+      const part = lazyPart(() => Promise.resolve(Draft));
+      if (opening === "preloaded") await part.preload();
+      const { rerender } = render(
+        <Suspense fallback={<p>Opening…</p>}>
+          <part.Component label="Song title" />
+        </Suspense>,
+      );
+      await act(async () => {
+        await part.preload();
+      });
+      const input = screen.getByRole<HTMLInputElement>("textbox", { name: "Song title" });
+      fireEvent.change(input, { target: { value: "My edited song" } });
+      input.focus();
+      input.setSelectionRange(3, 9);
+
+      rerender(
+        <Suspense fallback={<p>Opening…</p>}>
+          <part.Component label="Edited title" />
+        </Suspense>,
+      );
+
+      const updated = screen.getByRole<HTMLInputElement>("textbox", { name: "Edited title" });
+      expect(updated).toHaveValue("My edited song");
+      expect(updated).toHaveFocus();
+      expect([updated.selectionStart, updated.selectionEnd]).toEqual([3, 9]);
+    },
+  );
+
+  it("opens immediately after being closed while its code was loading", async () => {
+    const held = loadHeld();
+    const part = lazyPart(held.load);
+    const { unmount } = render(
+      <Suspense fallback={<p>Opening…</p>}>
+        <part.Component name="Ada" />
+      </Suspense>,
+    );
+    expect(screen.getByText("Opening…")).toBeInTheDocument();
+
+    unmount();
+    await act(async () => {
+      held.finish();
+      await part.preload();
+    });
+    render(
+      <Suspense fallback={<p>Opening…</p>}>
+        <part.Component name="Grace" />
+      </Suspense>,
+    );
+
+    expect(screen.getByText("Hello, Grace")).toBeInTheDocument();
+    expect(screen.queryByText("Opening…")).not.toBeInTheDocument();
+    expect(held.load).toHaveBeenCalledTimes(1);
+  });
+
   it("shows what it waits in until its code arrives, then the part", async () => {
     vi.useRealTimers();
     const part = lazyPart(loadFailing(0));
@@ -100,8 +205,14 @@ describe("a part loaded when it is first needed", () => {
     await first;
 
     await part.preload();
+    render(
+      <Suspense fallback={<p>Opening…</p>}>
+        <part.Component name="Ada" />
+      </Suspense>,
+    );
 
     expect(load).toHaveBeenCalledTimes(3);
+    expect(screen.getByText("Hello, Ada")).toBeInTheDocument();
   });
 });
 

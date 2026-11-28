@@ -131,12 +131,11 @@ child output. Read APIs use controlled messages even for old Job rows.
   - tinytag reads it as audio with a positive duration, as the type its
     extension names; otherwise 422. A fragmented MP4 whose header holds no
     length is refused for want of one.
-- **It is written beside the Downloads,** under a temporary name, fsynced, then
-  renamed over `downloads/<source id>.<ext>` in the transaction that records
-  it. A crash before the commit leaves a file no Download names, which the sweep
-  at startup removes.
-- **The transaction** cancels the Source's active download Job, replaces any
-  earlier Download and its file, and records the Download with the backend
+- **It is staged beside the Downloads** and published under a fresh name.
+  The shared [publication path](Bilibili.md#publishing-a-download) keeps the
+  previously saved file readable if the new pointer fails to commit.
+- **The transaction** cancels the Source's active download Job, replaces its
+  Download pointer, and records the Download with the backend
   `manual`, no quality, its size, and the time. A Track without a duration takes
   the file's.
 - **The policy never removes a manual Download,** since it couldn't come back
@@ -272,6 +271,3 @@ covers the selection.
   video id, instead of uploading it.
 - **Removing a manual Download** by hand.
 - **Other ways for other sites,** when there are other sites.
-- **Immutable file replacement.** Publication and manual upload need
-  distinct candidate names before either can preserve an old file across a
-  failed database commit.

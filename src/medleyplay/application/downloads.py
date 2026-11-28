@@ -1,9 +1,7 @@
 """Downloads: starting the Job that downloads a site's Source, and recording what it made.
 
-The program checks the file the plugin made, in the Job's folder; the completion
-renames it into `downloads/` and records it, in the transaction that ends the
-Job. A crash between the two leaves a file no row names, which the sweep at
-startup removes, and the Job runs again.
+Completion publishes the staged file under a fresh name before committing the
+Download pointer. Startup cleanup removes files no Download or active reader names.
 """
 
 import stat
@@ -24,7 +22,12 @@ from medleyplay.application.download_budgets import (
     estimate_of,
     limit_refusal,
 )
-from medleyplay.application.download_holds import DownloadHeldError, source_is_held
+from medleyplay.application.download_files import (
+    forget_download_silences,
+    publish_staged,
+    sweep_download_files,
+)
+from medleyplay.application.download_holds import job_selection, source_is_held
 from medleyplay.application.jobs import (
     JobCompletion,
     JobKind,
@@ -36,8 +39,8 @@ from medleyplay.application.jobs import (
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account, AccountId, Role
-from medleyplay.domain.catalog import SourceId, SourceState
-from medleyplay.domain.download_holds import NO_AUTOMATIC_RETRY
+from medleyplay.domain.catalog import SourceId, SourceState, TrackId
+from medleyplay.domain.download_holds import NO_AUTOMATIC_RETRY, DownloadSelection
 from medleyplay.domain.downloads import (
     DOWNLOAD_EXTENSIONS,
     DOWNLOAD_KIND,
@@ -48,7 +51,7 @@ from medleyplay.domain.downloads import (
     download_name,
     download_target,
 )
-from medleyplay.domain.errors import ConflictError, NotFoundError
+from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState
 from medleyplay.domain.links import BILIBILI_SOURCE, joined_locator, video_selection
 from medleyplay.download_limits import JOIN_SCRATCH_BYTES, MAX_DOWNLOAD_BYTES
@@ -101,25 +104,24 @@ def _complete(
     clock: Clock,
 ) -> JobCompletion | None:
     source_id = SourceId(int(job.target.removeprefix("source:")))
-    source = db.get(SourceRow, source_id)
+    source = _current_job_source(db, job, source_id)
     if source is None:
         return JobCompletion(failure=("refused", "The Source is no longer in the Library."))
     joined = video_selection(source.locator).joined
     existing = db.get(DownloadRow, source_id)
     if joined and existing is not None:
         return None
-    if downloaded.gone or downloaded.file is None:
+    if downloaded.gone:
         source.state = SourceState.UNAVAILABLE
         return JobCompletion(diagnostic_reason=DownloadReason.GONE)
     if joined and (refusal := limit_refusal(db, data_dir, source_id, downloaded.size)):
         return JobCompletion(failure=("refused", refusal))
-    if PurePosixPath(downloaded.file).name != downloaded.file:  # pragma: no cover
-        raise ValueError(downloaded.file)
-    name = download_name(source_id, downloaded.file)
-    folder = data_dir / DOWNLOADS_FOLDER
-    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-    made = jobs_dir / str(job.id) / DOWNLOAD_FOLDER / downloaded.file
-    made.replace(folder / name)
+    try:
+        name = _publish_download(data_dir, jobs_dir, job.id, source_id, downloaded)
+    except (InvalidInputError, OSError):
+        return JobCompletion(
+            failure=("invalid_artifact", "The staged audio could not be published.")
+        )
     row = existing or DownloadRow(source_id=source_id)
     row.file_name = name
     row.quality = downloaded.quality
@@ -127,11 +129,48 @@ def _complete(
     row.size = downloaded.size
     row.downloaded_at = clock()
     db.add(row)
+    forget_download_silences(db, TrackId(source.track_id))
     if joined:
         source.details = {**(source.details or {}), JOIN_ESTIMATE_DETAIL: downloaded.size}
         if downloaded.duration_ms is not None:
             db.get_one(TrackRow, source.track_id).duration_ms = downloaded.duration_ms
     return None
+
+
+def _current_job_source(db: Session, job: Job, source_id: SourceId) -> SourceRow | None:
+    source = db.get(SourceRow, source_id)
+    if source is None or source.kind != BILIBILI_SOURCE:
+        return None
+    request = db.get_one(JobRow, job.id).request
+    expected = job_selection(job.kind, request)
+    if expected is None:
+        return None
+    selected = video_selection(source.locator)
+    actual = DownloadSelection(source.kind, selected.video, selected.parts)
+    if (
+        expected.key().subject != actual.key().subject
+        or expected.parts != actual.parts
+        or selected.joined != (request.get("parts") is not None)
+    ):
+        return None
+    return source
+
+
+def _publish_download(
+    data_dir: Path, jobs_dir: Path, job: JobId, source: SourceId, downloaded: DownloadedSource
+) -> str:
+    file = downloaded.file
+    if file is None or PurePosixPath(file).name != file or "\\" in file:
+        message = "The staged audio must be directly in the download Job's folder."
+        raise InvalidInputError(message)
+    staged = jobs_dir / str(job) / DOWNLOAD_FOLDER / file
+    return publish_staged(
+        data_dir / DOWNLOADS_FOLDER,
+        staged,
+        download_name(source, file),
+        downloaded.size,
+        MAX_DOWNLOAD_BYTES,
+    )
 
 
 def _admit(db: Session, job: Job, *, data_dir: Path) -> None:
@@ -254,7 +293,7 @@ class DownloadService:
         when that is due. A Source already downloaded, as one may be since the
         policy's snapshot, isn't downloaded again.
         """
-        return self._start(account_id, source_id, retry_failed=True, skip_downloaded=True)
+        return self._start(account_id, source_id, by_policy=True)
 
     def served(self, source_id: SourceId) -> None:
         """Record that the Source's Download was served now, at most once a minute.
@@ -282,46 +321,65 @@ class DownloadService:
         answer is that Job: the household retries it, so playing a Track again
         and again doesn't ask the site again and again.
         """
-        return self._start(caller.id, source_id, retry_failed=False, skip_downloaded=False)
+        return self._start(caller.id, source_id, by_policy=False)
 
     def _start(
         self,
         account_id: AccountId,
         source_id: SourceId,
         *,
-        retry_failed: bool,
-        skip_downloaded: bool,
+        by_policy: bool,
     ) -> Job | None:
-        with self._units() as db:
-            row = db.get(SourceRow, source_id)
-            if row is None or row.kind != BILIBILI_SOURCE:
-                message = f"The Source {source_id} isn't one medleyplay downloads."
-                raise NotFoundError(message)
-            if row.state == SourceState.UNAVAILABLE or source_is_held(db, row.kind, row.locator):
-                return None
-            selection = video_selection(row.locator)
-            existing = (
-                db.get(DownloadRow, source_id) if skip_downloaded or selection.joined else None
+        available = BILIBILI_SOURCE in self._plugins.available_keys().get(
+            SOURCE_DOWNLOADER.name, []
+        )
+        with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            job, created = self._start_in(
+                db, account_id, source_id, by_policy=by_policy, available=available
             )
-            if existing is not None and (skip_downloaded or _saved_on_disk(existing, self.folder)):
-                return None
-            site = row.kind
-            request = _request(row)
-        if site not in self._plugins.available_keys().get(SOURCE_DOWNLOADER.name, []):
-            return None
+        if created and job is not None:
+            self._jobs.announce_queued(job.id)
+        return job
+
+    def _start_in(
+        self,
+        db: Session,
+        account_id: AccountId,
+        source_id: SourceId,
+        *,
+        by_policy: bool,
+        available: bool,
+    ) -> tuple[Job | None, bool]:
+        row = db.get(SourceRow, source_id)
+        if row is None or row.kind != BILIBILI_SOURCE:
+            message = f"The Source {source_id} isn't one medleyplay downloads."
+            raise NotFoundError(message)
+        if (
+            not available
+            or row.state == SourceState.UNAVAILABLE
+            or source_is_held(db, row.kind, row.locator)
+        ):
+            return None, False
+        existing = db.get(DownloadRow, source_id)
+        if existing is not None and (by_policy or _saved_on_disk(existing, self.folder)):
+            return None, False
         target = download_target(source_id)
-        latest = self._jobs.latest(DOWNLOAD_KIND, target)
+        latest = self._jobs.latest_in(db, DOWNLOAD_KIND, target)
         if (
             latest is not None
             and latest.state is JobState.FAILED
-            and (not retry_failed or latest.failure_kind in NO_AUTOMATIC_RETRY)
+            and (not by_policy or latest.failure_kind in NO_AUTOMATIC_RETRY)
         ):
-            return latest if not retry_failed else None
-        login = account_id if self._linked.has_valid(account_id, site) else None
-        try:
-            return self._jobs.submit(self._kind, target, request, account_id, login_account=login)
-        except DownloadHeldError:
-            return None
+            return (None if by_policy else latest), False
+        login = (
+            account_id
+            if self._linked.valid_saved_at_in(db, account_id, row.kind) is not None
+            else None
+        )
+        return self._jobs.submit_in(
+            db, self._kind, target, _request(row), account_id, login_account=login
+        )
 
     def queue_new_in(self, db: Session, caller: Account, source: SourceRow) -> Job | None:
         """Queue audio for a newly inserted Source before its import commits."""
@@ -350,14 +408,11 @@ class DownloadService:
         return None if row is None else to_job(row)
 
     def sweep(self) -> None:
-        """Remove every file in `downloads/` that no Download names."""
-        if not self.folder.is_dir():
+        """Recover abandoned files at startup before uploads or Jobs can write."""
+        if self.folder.is_symlink() or not self.folder.is_dir():
             return
-        with self._units() as db:
-            named = set(db.scalars(select(DownloadRow.file_name)))
-        for file in self.folder.iterdir():
-            if file.name not in named:
-                file.unlink(missing_ok=True)
+        with self._units.begin() as db:
+            sweep_download_files(db, self.folder)
 
 
 def _request(source: SourceRow) -> DownloadSource:

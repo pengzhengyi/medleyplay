@@ -145,8 +145,25 @@ def _limit(settings: SettingsService, admin: Account, limit: int | None) -> None
     settings.put(admin, Settings(storage_limit=limit, revision=settings.get().revision))
 
 
-def _file(site: Site, source_id: SourceId) -> Path:
-    return site.data_dir / "downloads" / f"{source_id}.m4a"
+def test_policy_admission_cannot_queue_over_a_just_committed_manual_download(
+    site: Site,
+    units: sessionmaker[Session],
+    alice: Account,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    [track] = _tracks(site, 1)
+    source_id = _source(units, track)
+    capabilities = site.plugins.available_keys
+
+    def finish_upload() -> dict[str, list[str]]:
+        _add_file_by_hand(site, track)
+        return capabilities()
+
+    monkeypatch.setattr(site.plugins, "available_keys", finish_upload)
+
+    assert site.downloads.start_for(alice.id, source_id) is None
+    assert site.jobs.latest(DOWNLOAD_KIND, download_target(source_id)) is None
+    assert site.saved_file(source_id).read_bytes() == wav_bytes(Song(seconds=2))
 
 
 def test_a_kept_playlist_downloads_its_tracks_two_at_a_time(
@@ -176,15 +193,14 @@ def test_a_lowered_limit_removes_what_no_one_keeps_least_favorite_first(
     _keep(site, alice, [loved, other], keep=False)
     site.catalog.set_favorite(alice.id, loved, favorite=True)
     clock.advance(REST + timedelta(hours=1))
-    one_file = _file(site, _source(units, loved)).stat().st_size
+    kept = site.saved_file(_source(units, loved))
+    one_file = kept.stat().st_size
 
     _limit(settings, alice, one_file)
     evaluation = policy.evaluate()
 
     assert (evaluation.removed, _stored(units)) == (1, {_source(units, loved)})
-    assert sorted(path.name for path in (site.data_dir / "downloads").iterdir()) == [
-        f"{_source(units, loved)}.m4a"
-    ]
+    assert sorted(path.name for path in (site.data_dir / "downloads").iterdir()) == [kept.name]
 
 
 def test_nothing_is_removed_within_a_day_of_being_downloaded_or_wanted(
@@ -223,7 +239,7 @@ def test_a_download_served_within_the_day_stays_though_it_is_the_least_favorite(
     clock.advance(REST + timedelta(hours=1))
     site.playback.open_audio(_source(units, played)).close()
 
-    _limit(settings, alice, _file(site, _source(units, played)).stat().st_size)
+    _limit(settings, alice, site.saved_file(_source(units, played)).stat().st_size)
     policy.evaluate()
 
     assert _stored(units) == {_source(units, played)}
@@ -317,7 +333,7 @@ def test_a_joined_download_is_not_evicted_if_the_server_cannot_recreate_it(
         SourceKey(BILIBILI_SOURCE, joined_locator(MIXTAPE, (1, 3))), TrackDetailsFactory.song()
     )
     source = _source(units, album)
-    file = _file(site, source)
+    file = site.downloads.folder / f"{source}.m4a"
     file.parent.mkdir()
     file.write_bytes(b"joined audio")
     with units.begin() as db:
@@ -514,7 +530,7 @@ def test_a_cache_copy_untouched_for_a_day_goes_before_any_download(
     _keep(site, alice, [track], keep=False)
     clock.advance(REST + timedelta(hours=1))
     copy = _old_cache_copy(site, clock)
-    one_file = _file(site, _source(units, track)).stat().st_size
+    one_file = site.saved_file(_source(units, track)).stat().st_size
 
     _limit(settings, alice, one_file)
     evaluation = policy.evaluate()
@@ -571,7 +587,7 @@ def test_the_storage_report_counts_what_each_account_keeps(
     _keep(site, alice, [shared])
     _downloaded(site, policy, units, [shared])
     site.catalog.put_playlist(bob.id, NEWER, "Bob's", [shared, bobs], keep_downloaded=True)
-    size = _file(site, _source(units, shared)).stat().st_size
+    size = site.saved_file(_source(units, shared)).stat().st_size
 
     storage = policy.storage(bob)
 
@@ -592,7 +608,7 @@ def test_an_admin_previews_another_limit_without_anything_removed(
     _downloaded(site, policy, units, [track])
     _keep(site, alice, [track], keep=False)
     clock.advance(REST + timedelta(hours=1))
-    size = _file(site, _source(units, track)).stat().st_size
+    size = site.saved_file(_source(units, track)).stat().st_size
 
     preview = policy.storage(alice, preview_limit=0).preview
 

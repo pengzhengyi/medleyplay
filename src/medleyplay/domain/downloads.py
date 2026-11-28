@@ -1,10 +1,7 @@
 """Downloads: the one copy of a site's Source on the server's disk.
 
-A Source has at most one Download, named by its id, in the data folder:
-
-```text
-downloads/7.m4a
-```
+A Source has at most one current Download. Its stored name points to the saved
+file in the data folder, including older names such as `downloads/7.m4a`.
 
 A Download is made by a site's downloader, or added by the household by hand, in
 which case its backend is `manual`.
@@ -55,7 +52,7 @@ class Download:
 
 
 def download_name(source_id: SourceId, file: str) -> str:
-    """Return the name a Source's Download has, from the name its plugin gave the file.
+    """Return the base name for a Source's automatic publication.
 
     Only an extension in `DOWNLOAD_EXTENSIONS` is accepted: `audio.M4A` makes `7.m4a`.
     """
@@ -67,7 +64,7 @@ def download_name(source_id: SourceId, file: str) -> str:
 
 
 def manual_download_name(source_id: SourceId, file: str) -> str:
-    """Return the name a file the household adds has as a Source's Download.
+    """Return the base name for a Source's manual publication.
 
     `night.WAV` for the Source 7 makes `7.wav`; an extension outside `MANUAL_EXTENSIONS`,
     or none, is refused.

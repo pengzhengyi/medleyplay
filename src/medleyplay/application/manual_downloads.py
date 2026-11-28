@@ -1,9 +1,7 @@
 """A site Track's Download as the household sees it, and the file they add by hand.
 
-A file is received into a temporary name beside the Downloads, checked, and then
-renamed over `downloads/<source id>.<ext>` in the transaction that records it, which
-also cancels the Source's active download Job. A crash before the commit leaves a file
-no Download names, which the sweep at startup removes.
+A verified upload gets a fresh name in the transaction that replaces the
+Download pointer and cancels the Source's active download Job.
 """
 
 import os
@@ -23,9 +21,10 @@ from tinytag import TinyTag, TinyTagException
 
 from medleyplay.application import Clock
 from medleyplay.application.changes import OnChange
+from medleyplay.application.download_files import forget_download_silences, publish_staged
 from medleyplay.application.download_holds import hold_of
 from medleyplay.application.jobs import JobService
-from medleyplay.domain.catalog import SourceId, SourceState, TrackId
+from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackId
 from medleyplay.domain.download_holds import DownloadSelection, HoldReason
 from medleyplay.domain.downloads import (
     DOWNLOAD_KIND,
@@ -234,40 +233,63 @@ class ManualDownloadService:
                 message = "Retry the joined album download instead of uploading one part."
                 raise ConflictError(message)
             source_id = SourceId(source.id)
+            identity = SourceKey(source.kind, source.locator)
         file_name = manual_download_name(source_id, name)
 
-        def keep(received: Path, length_ms: int) -> TrackDownload:
-            self._keep(track_id, source_id, file_name, received, length_ms)
+        def keep(received: _ReceivedAudio) -> TrackDownload:
+            self._keep(track_id, source_id, identity, file_name, received)
             return self.state(track_id)
 
         return Upload(self._folder, file_name, self._max_bytes, keep)
 
     def _keep(
-        self, track_id: TrackId, source_id: SourceId, name: str, received: Path, length_ms: int
+        self,
+        track_id: TrackId,
+        source_id: SourceId,
+        identity: SourceKey,
+        base_name: str,
+        received: "_ReceivedAudio",
     ) -> None:
-        """Rename the received file over the Source's Download, and record it."""
-        size = received.stat().st_size
+        """Publish the new bytes and move the Download pointer in one write transaction."""
         with self._units.begin() as db:
-            # The first statement, so the write lock is held before a file is renamed.
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            source = db.get(SourceRow, source_id)
+            if source is None or (source.track_id, source.kind, source.locator) != (
+                track_id,
+                identity.kind,
+                identity.locator,
+            ):
+                message = "The audio's Source changed during the upload. Start the upload again."
+                raise ConflictError(message)
             cancelled = self._jobs.cancel_active_in(
                 db, DOWNLOAD_KIND, download_target(source_id), reason="replaced"
             )
-            previous = db.get(DownloadRow, source_id)
-            replaced = None if previous is None else previous.file_name
-            received.replace(self._folder / name)
-            row = previous or DownloadRow(source_id=source_id)
+            name = publish_staged(
+                self._folder,
+                received.path,
+                base_name,
+                received.size,
+                self._max_bytes,
+            )
+            row = db.get(DownloadRow, source_id) or DownloadRow(source_id=source_id)
             row.file_name, row.quality, row.backend = name, "", MANUAL_BACKEND
-            row.size, row.downloaded_at = size, self._clock()
+            row.size, row.downloaded_at = received.size, self._clock()
             db.add(row)
+            forget_download_silences(db, track_id)
             track = db.get_one(TrackRow, track_id)
             if track.duration_ms is None:
-                track.duration_ms = length_ms
-        if replaced is not None and replaced != name:
-            (self._folder / replaced).unlink(missing_ok=True)
+                track.duration_ms = received.length_ms
         if cancelled is not None:
             self._jobs.announce_cancelled(cancelled)
         if self._on_change is not None:
             self._on_change("catalog")
+
+
+@dataclass(frozen=True)
+class _ReceivedAudio:
+    path: Path
+    size: int
+    length_ms: int
 
 
 class Upload:
@@ -286,13 +308,11 @@ class Upload:
         folder: Path,
         name: str,
         max_bytes: int,
-        keep: Callable[[Path, int], TrackDownload],
+        keep: Callable[[_ReceivedAudio], TrackDownload],
     ) -> None:
         """Prepare an upload, to be kept as the Download `name`, received into `folder`.
 
-        The file has at most `max_bytes`. `keep` takes the received file and its length
-        in milliseconds, once it is checked, and returns where the Track's Download
-        stands. The received file ends as `name` does, so it is read as the type it claims.
+        The staged file keeps the extension of `name` so the checker can read it.
         """
         self._max_bytes = max_bytes
         self._keep = keep
@@ -333,13 +353,12 @@ class Upload:
 
         An empty file, or one that isn't audio with a length, raises `InvalidInputError`.
         """
-        descriptor = self._open()
+        self._open()
         if self._size == 0:
             message = "The file is empty."
             raise InvalidInputError(message)
-        os.fsync(descriptor)
         self._close()
-        return self._keep(self._path, audio_length_ms(self._path))
+        return self._keep(_ReceivedAudio(self._path, self._size, audio_length_ms(self._path)))
 
     def _open(self) -> int:
         if self._descriptor is None:

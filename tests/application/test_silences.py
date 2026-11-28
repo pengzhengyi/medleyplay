@@ -1,6 +1,7 @@
 """Finding where a Track's audio falls quiet with ffmpeg, in a real Job, and keeping it."""
 
 import shutil
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -9,18 +10,25 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.job_runner import JobRunner, _Outcome, _Running
+from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.application.segments import SongsService
-from medleyplay.application.silences import FIND_SILENCES_KIND, SilenceService
+from medleyplay.application.silences import (
+    SilenceService,
+    find_silences_target,
+)
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.catalog import SourceKey, TrackDetails, TrackId
 from medleyplay.domain.errors import ConflictError, InvalidInputError
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LibraryKind
 from medleyplay.domain.segments import SongRow
-from medleyplay.domain.silences import Silences, SilenceState
+from medleyplay.domain.silences import FIND_SILENCES_KIND, Silences, SilenceState
 from medleyplay.domain.video_text import Song as ListedSong
 from medleyplay.persistence.schema import SourceRow, TrackRow
-from tests.support.audio import Song, folder_of
+from medleyplay.plugin_host.job_wire import JobFinished
+from medleyplay.programs.find_silences import FindSilencesJob
+from tests.support.audio import Song, folder_of, wav_bytes
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
 from tests.support.libraries import Libraries, running_libraries
@@ -84,6 +92,89 @@ def test_a_track_never_asked_about_has_no_silences_known(
     track_id = _album(running, alice, units, tmp_path / "M")
 
     assert running.silences.silences(track_id) == Silences(SilenceState.NOT_FOUND)
+
+
+def test_a_replacement_cannot_inherit_silences_from_an_older_download(
+    running: Libraries,
+    alice: Account,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    track = running.catalog.add_track(
+        SourceKey("bilibili", "BV1Xx41117Tz/p1"), TrackDetails("Bremen")
+    )
+    manual = ManualDownloadService(units, clock, running.jobs, tmp_path / "data" / "downloads")
+    _upload(manual, track, BREMEN)
+    received, release = threading.Event(), threading.Event()
+    watch = JobRunner._watch  # noqa: SLF001 -- replace before the silence result commits
+
+    def wait_for_replacement(runner: JobRunner, job: _Running) -> _Outcome:
+        outcome = watch(runner, job)
+        if job.kind.name == FIND_SILENCES_KIND and isinstance(outcome, JobFinished):
+            received.set()
+            release.wait(20)
+        return outcome
+
+    monkeypatch.setattr(JobRunner, "_watch", wait_for_replacement)
+
+    try:
+        assert running.silences.find(alice, track).state is SilenceState.FINDING
+        job = running.jobs.latest(FIND_SILENCES_KIND, find_silences_target(track))
+        assert job is not None
+        assert received.wait(20)
+        _upload(manual, track, Song("Replacement", seconds=5))
+    finally:
+        release.set()
+
+    settled = running.wait_for(job.id, JobState.FAILED).job
+    assert settled.failure_message == "The audio changed. Find gaps again."
+    assert running.silences.silences(track) == Silences(SilenceState.NOT_FOUND)
+
+
+def _upload(manual: ManualDownloadService, track: TrackId, audio: Song) -> None:
+    """Keep the supplied synthetic WAV as the Track's Download."""
+    with manual.upload(track, "bremen.wav") as upload:
+        upload.write(wav_bytes(audio))
+        upload.finish()
+
+
+@pytest.mark.parametrize("moved", [False, True])
+def test_a_legacy_request_cannot_be_dispatched_without_verifiable_download_identity(
+    running: Libraries,
+    alice: Account,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    tmp_path: Path,
+    *,
+    moved: bool,
+) -> None:
+    track = running.catalog.add_track(
+        SourceKey("bilibili", "BV1Xx41117Tz/p1"), TrackDetails("Bremen")
+    )
+    manual = ManualDownloadService(units, clock, running.jobs, tmp_path / "data" / "downloads")
+    _upload(manual, track, BREMEN)
+    current = running.playback.local_audio(manual.state(track).source_id)
+    assert current is not None
+    path = Path(current.path)
+    if moved:
+        old_folder = tmp_path / "former-location"
+        old_folder.mkdir()
+        path = old_folder / path.name
+        path.write_bytes(Path(current.path).read_bytes())
+    latest = running.silences._kind  # noqa: SLF001 -- submit an old wire shape to the real runner
+
+    submitted = running.jobs.submit(
+        latest,
+        find_silences_target(track),
+        FindSilencesJob(track_id=track, local_path=str(path), length=current.length),
+        alice.id,
+    )
+
+    settled = running.wait_for(submitted.id, JobState.FAILED).job
+    assert settled.failure_message == "The audio changed. Find gaps again."
+    assert running.silences.silences(track) == Silences(SilenceState.NOT_FOUND)
 
 
 @needs_ffmpeg

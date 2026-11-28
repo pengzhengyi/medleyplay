@@ -312,8 +312,8 @@ def find_kind(clock: FakeClock) -> FindArtistKind:
 
 
 @pytest.fixture
-def silences_kind(clock: FakeClock) -> FindSilencesKind:
-    return find_silences_kind(clock)
+def silences_kind(clock: FakeClock, tmp_path: Path) -> FindSilencesKind:
+    return find_silences_kind(clock, tmp_path / "data")
 
 
 @pytest.fixture

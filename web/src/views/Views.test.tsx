@@ -379,7 +379,7 @@ describe("repeated gallery lengths", () => {
         name: view === "albums" ? "Albums" : "Artists",
       });
       const cards = within(gallery).getAllByRole("link");
-      const hrefs = cards.map((card) => card.getAttribute("href"));
+      const destinations = cards.map((card) => card.getAttribute("href"));
       expect(cards).toHaveLength(2);
       for (const card of cards) expect(card).toHaveTextContent("1 song, 3 min");
 
@@ -406,7 +406,7 @@ describe("repeated gallery lengths", () => {
           within(gallery)
             .getAllByRole("link")
             .map((card) => card.getAttribute("href")),
-        ).toEqual(hrefs);
+        ).toEqual(destinations);
       } finally {
         await userEvent.selectOptions(language, "auto");
       }

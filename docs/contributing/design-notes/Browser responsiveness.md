@@ -5,7 +5,7 @@
 > Albums and Artists reuse unchanged cards during playback, keeping
 > their complete lists and existing controls.
 > The first Library load is unchanged.
-> Render-local gallery formatting is in progress below.
+> Gallery renders also reuse repeated count-and-duration labels.
 
 ## Contents
 
@@ -392,38 +392,16 @@ separate candidates, not part of this change.
 ## Gallery first render
 
 > [!NOTE]
-> **In progress.** Render-local labels are implemented, but performance
-> retention is not approved. Every card and its complete contents remain
-> in the first DOM update.
+> **Implemented.** Reuse repeated count-and-duration labels within one
+> render. Every card and its complete contents remain in the first DOM update.
 
 The Albums and Artists galleries construct every card before showing the
 first one. Reusing lists avoids repeated work during playback, but does not
 avoid this first-mount cost. CSS containment skips browser rendering,
 not React element construction or text formatting.
 
-### Diagnosis and scope
-
-Three paired diagnostic samples on a disposable 1,906-track catalog compare
-the production baseline with a deliberately incomplete, first-24-card
-version. Median click-to-content times are 128 versus 32 ms for Albums
-and 60 versus 34 ms for Artists. The baseline has 885 album cards and
-381 artist cards. Individual album and artist pages take 57 and 52 ms.
-These samples start from a settled Library on headless Chrome at
-1280 by 844, without CPU or network throttling.
-Subsequent-frame medians are 214 versus 47 ms for Albums and 107 versus
-43 ms for Artists. This diagnostic uses identical song durations, so it
-does not establish a cache hit rate.
-
-The incomplete version is not a candidate: it removes access to the rest
-of the catalog. It establishes that gallery construction is worth
-investigating, not that all of its savings can be retained. A separate
-baseline CPU profile attributes approximately 26 ms in Albums and 11 ms
-in Artists to localized count-and-duration formatting.
-Albums also spends about 70 ms in style calculation and layout, and
-14 ms in `KindMark`. Reusing labels addresses a bounded part of readiness,
-not all card or browser work.
-
-The proposed change targets that repeated formatting. Individual pages,
+This change targets repeated formatting, not all card construction.
+Individual pages,
 API request scheduling, startup, CSS, card geometry, and route transitions
 remain unchanged. Early navigation and direct gallery loads are separate
 controls; a settled-navigation result does not establish startup gains.
@@ -431,8 +409,9 @@ controls; a settled-navigation result does not establish startup gains.
 ### Render-local labels
 
 `lengthFormatter(t?: Words)` in `format.ts` creates a formatter for one render,
-sharing rounding and text construction with `formatLength` on the first occurrence of a song count
-and rounded minute value. Later occurrences reuse the resulting string.
+sharing rounding and text construction with `formatLength` on the first
+occurrence of a song count and rounded minute value. Later occurrences
+reuse the resulting string.
 For example, two three-song albums lasting 181 and 184 seconds both say
 `3 songs, 3 min`; an album lasting 210 seconds needs a different label.
 Its returned function accepts a count and duration in milliseconds.
@@ -460,41 +439,87 @@ construction work, but would change initial browser search, keyboard
 access, or complete-list availability. Those are not part of this change.
 Artists containment is not justified by the earlier rendering comparison.
 
-### Retention requirements
+### First-render measurements
 
-The production candidate has no accepted latency result: its comparison
-exceeds the host-stability limit. A quiet-host retention comparison is
-required before claiming faster page readiness.
-The real implementation must improve scripting and click-to-content in
-at least six of seven pairs for both large galleries, with a median
-paired content saving of at least 5%. Subsequent-frame medians must also
-improve. Smaller and startup controls must not show a repeatable
-regression exceeding both 10% and 5 ms; startup uses a 20 ms absolute
-floor because navigation includes more unrelated work.
+The comparison uses separate production builds on a four-core,
+GitHub-hosted Linux runner with Playwright's Chromium headless shell.
+Both builds use the same dependencies and Python backend; source maps
+confirm that only `format.ts` and `Views.tsx` differ among application
+modules. No build runs during measurement, and no household data is used.
 
-Use 1,906 tracks for the primary varied-duration catalog and 210 for
-the small control. Also check a 1,906-track catalog grouped into full
-albums of varying sizes. Report distinct count-and-minute labels beside
-card counts to make their repetition explicit. Record host load before
-and after samples; retention cohorts require one-minute load at most
-10 and baseline content times within 30% of a quiet reference for that
-catalog. Keep unstable cohorts as diagnostic evidence, not retained
-results. A failing cohort requires diagnosis rather than selective
-removal of unfavorable pairs.
+Each browser invocation has an unrecorded warmup. Seven adjacent pairs
+alternate build order at 1280 by 844, without CPU or network throttling.
+The primary catalog has 1,906 tracks with varied durations. Each sample
+starts from a settled Library and verifies matching complete card text,
+image references, and destinations. Times measure DOM insertion and a
+subsequent frame opportunity, not exact pixel presentation or field INP.
+
+| Gallery | Measure | Baseline median | Candidate median | Median paired saving |
+| --- | --- | ---: | ---: | ---: |
+| Albums | Click to content | 129.4 ms | 110.3 ms | 18.7 ms (14.5%) |
+| Albums | Click to frame opportunity | 197.2 ms | 178.4 ms | 18.8 ms (9.5%) |
+| Albums | Scripting | 117.7 ms | 98.5 ms | 19.2 ms (16.3%) |
+| Artists | Click to content | 51.0 ms | 40.1 ms | 10.9 ms (21.5%) |
+| Artists | Click to frame opportunity | 83.5 ms | 72.1 ms | 11.5 ms (13.8%) |
+| Artists | Scripting | 38.4 ms | 26.9 ms | 11.4 ms (30.0%) |
+
+Content and scripting improve in six of seven pairs for Albums and
+all seven for Artists. Columns are separate medians; paired savings and
+percentages need not equal differences between columns. A separate CPU
+profile attributes about 30 versus 2 ms to album length formatting and
+6 versus 2 ms to artist length formatting. Those sampled values are
+diagnostic, not another latency comparison.
+
+### Controls and limits
+
+Repeated labels determine the saving. The primary catalog has 885 album
+cards with 54 distinct labels and 381 artist cards with 44 labels.
+A 210-track control has 93 album cards with 50 labels and 41 artist
+cards with 26 labels: paired content changes are 1.4 ms faster and
+0.8 ms slower, respectively.
+
+A full-album control groups 1,906 tracks into albums of 7–18 songs.
+Its 164 album cards have 136 labels; 56 artist cards have 51 labels.
+Albums is a paired median 4.5 ms slower in the first comparison and
+1.4 ms slower in a separate seven-pair follow-up. Artist timings are nearly
+unchanged. The map has a small cost when few labels repeat; no benefit
+is claimed for every catalog.
+
+Three early-navigation pairs improve both galleries. Direct Albums
+loading has a mixed first comparison, including a paired 53 ms slower
+frame opportunity. A separate seven-pair follow-up does not repeat that
+regression: content improves in every pair and the frame opportunity
+in six pairs. All samples remain in the evidence. Direct loading is a
+control, not a general startup-performance claim.
+
+The runner waits for load at most half its core count before each
+cohort and refuses samples above its core count. Observed one-minute
+load is 0.86–3.06, with zero recorded CPU steal time. Every paired
+baseline median is within 8% of its own three-sample reference.
+Unstable shared-Mac cohorts are excluded as whole cohorts, not by
+discarding unfavorable pairs. Linux font and rendering costs do not
+establish macOS or physical-phone timings.
+
+The retention bar requires at least six of seven primary content and
+scripting improvements, at least 5% paired content savings, and better
+frame medians. Controls must not show a repeatable regression exceeding
+both 10% and 5 ms; direct startup uses a 20 ms absolute floor.
+
+### First-render acceptance
 
 - [x] Specify distinct counts, rounding boundaries, unknown duration, and
       render-local translation lifetime in focused tests.
 - [x] Preserve all gallery text and links, including mounted language and
       metadata updates, search, and artist-name choosers.
-- [ ] Compare real baseline and implementation production builds in seven
+- [x] Compare real baseline and implementation production builds in seven
       alternating pairs with varied durations, at both catalog sizes;
       check full-album grouping and capture a post-change CPU profile.
-- [ ] Report click-to-content and subsequent-frame measurements separately;
+- [x] Report click-to-content and subsequent-frame measurements separately;
       these are neither exact pixel-presentation timestamps nor field INP.
-- [ ] Establish stable direct gallery loads and early-navigation controls.
+- [x] Establish stable direct gallery loads and early-navigation controls.
 - [x] Keep phone/desktop, light/dark, reduced-motion, last-card navigation,
       browser search, and keyboard focus unchanged.
-- [ ] Obtain independent design and implementation critique. Retain only
+- [x] Obtain independent design and implementation critique. Retain only
       demonstrated useful savings without a repeatable readiness regression.
 
 CI tests assert formatting and update behavior, not wall-clock thresholds.

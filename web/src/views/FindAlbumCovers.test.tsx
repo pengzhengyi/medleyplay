@@ -341,7 +341,7 @@ describe("finding album covers in Clean up", () => {
       section().getByRole("button", { name: "Choose another cover of Help!…" }),
     );
 
-    const editor = await screen.findByRole("dialog", { name: "Add a cover" });
+    const editor = await screen.findByRole("dialog", { name: "Add album cover" });
     expect(within(editor).getByRole("tab", { name: "Upload" })).toHaveAttribute(
       "aria-selected",
       "true",

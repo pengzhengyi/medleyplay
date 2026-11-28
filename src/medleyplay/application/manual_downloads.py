@@ -23,8 +23,10 @@ from tinytag import TinyTag, TinyTagException
 
 from medleyplay.application import Clock
 from medleyplay.application.changes import OnChange
+from medleyplay.application.download_holds import hold_of
 from medleyplay.application.jobs import JobService
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
+from medleyplay.domain.download_holds import DownloadSelection, HoldReason
 from medleyplay.domain.downloads import (
     DOWNLOAD_KIND,
     MANUAL_BACKEND,
@@ -36,6 +38,7 @@ from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundE
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.domain.links import PART_LINKS, part_link, video_selection
 from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
+from medleyplay.download_receipts import DownloadReason, reason_for, reason_message
 from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
 
 _UPLOAD_PREFIX: Final = ".upload-"
@@ -74,6 +77,10 @@ class TrackDownload:
     message: str = ""
     backend: str | None = None
     job_id: JobId | None = None
+    hold: HoldReason | None = None
+    latest_job_id: JobId | None = None
+    reason: DownloadReason | None = None
+    http_status: int | None = None
 
 
 @dataclass(frozen=True)
@@ -138,23 +145,42 @@ class ManualDownloadService:
         with self._units() as db:
             source = _site_source(db, track_id)
             download = db.get(DownloadRow, source.id)
+            selection = video_selection(source.locator)
+            hold = hold_of(db, DownloadSelection(source.kind, selection.video, selection.parts))
+        latest = self._jobs.latest(DOWNLOAD_KIND, download_target(SourceId(source.id)))
         none = TrackDownload(
             track_id=track_id,
             source_id=SourceId(source.id),
             kind=source.kind,
             link=part_link(source.kind, source.locator),
             status=DownloadStatus.NONE,
+            hold=hold,
+            latest_job_id=latest.id if latest is not None else None,
         )
         if download is not None:
-            return replace(none, status=DownloadStatus.DOWNLOADED, backend=download.backend)
-        latest = self._jobs.latest(DOWNLOAD_KIND, download_target(SourceId(source.id)))
+            return replace(
+                none,
+                status=DownloadStatus.DOWNLOADED,
+                backend=download.backend,
+            )
         if latest is not None and latest.state.is_active:
             return replace(none, status=DownloadStatus.DOWNLOADING, job_id=latest.id)
         if latest is not None and latest.state is JobState.FAILED:
             message = latest.failure_message or _FAILED
-            return replace(none, status=DownloadStatus.FAILED, message=message, job_id=latest.id)
+            return replace(
+                none,
+                status=DownloadStatus.FAILED,
+                message=message,
+                job_id=latest.id,
+                reason=reason_for(latest.failure_kind),
+                http_status=latest.provider_http_status,
+            )
         if source.state == SourceState.UNAVAILABLE:
             return replace(none, status=DownloadStatus.UNAVAILABLE, message=_UNAVAILABLE)
+        if hold is not None:
+            return replace(
+                none, status=DownloadStatus.UNAVAILABLE, message=reason_message(DownloadReason.HELD)
+            )
         return none
 
     def downloading(self) -> list[DownloadUnderWay]:
@@ -223,7 +249,9 @@ class ManualDownloadService:
         size = received.stat().st_size
         with self._units.begin() as db:
             # The first statement, so the write lock is held before a file is renamed.
-            cancelled = self._jobs.cancel_active_in(db, DOWNLOAD_KIND, download_target(source_id))
+            cancelled = self._jobs.cancel_active_in(
+                db, DOWNLOAD_KIND, download_target(source_id), reason="replaced"
+            )
             previous = db.get(DownloadRow, source_id)
             replaced = None if previous is None else previous.file_name
             received.replace(self._folder / name)

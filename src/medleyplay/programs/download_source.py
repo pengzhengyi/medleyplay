@@ -14,13 +14,14 @@ from typing import Annotated, Final, Literal, NoReturn, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from medleyplay.download_limits import MAX_JOIN_INPUT_BYTES, disk_floor
+from medleyplay.download_receipts import DownloadStage
 from medleyplay.plugin_api import DOWNLOAD_PART, DownloadPart, PartNumber, QualityId, VideoId
 from medleyplay.plugin_api.progress import ProgressSink
 from medleyplay.plugin_host.job import (
     AnswerFailedError,
     JobContext,
     JobProgram,
-    PluginCallFailedError,
+    ProviderAttemptStoppedError,
 )
 from medleyplay.programs.joined_audio import file_limit, join_audio, join_tools
 
@@ -65,7 +66,6 @@ class DownloadedSource(_Model):
 
     file: str | None
     gone: bool = False
-    message: str = ""
     quality: str = ""
     backend: str = ""
     size: int = 0
@@ -84,8 +84,8 @@ def run(request: DownloadSource, context: JobContext) -> DownloadedSource:
         raise ValueError(message)
     result = _download_part(request, context, folder, part)
     if request.parts is not None and result.file is None:
-        message = f"Part {part}: {result.message}"
-        raise AnswerFailedError(message, kind="invalid")
+        message = "A joined selection is missing a part."
+        raise AnswerFailedError(message, kind="invalid", part=part)
     return result
 
 
@@ -97,25 +97,33 @@ def _download_part(
     *,
     part_progress: ProgressSink | None = None,
 ) -> DownloadedSource:
-    downloaded = context.call(
-        DOWNLOAD_PART,
-        request.site,
-        DownloadPart(
-            video=request.video,
-            part=part,
-            quality=request.quality,
-            folder=str(folder),
-            login=str(context.login) if context.login else None,
-            proxy=context.proxy,
-            bounded_http=request.lane == "join",
-        ),
-        progress=part_progress,
-    )
+    context.report_download(DownloadStage.RESOLVE, part=part)
+    report = part_progress or _transfer_progress(context, part)
+    try:
+        downloaded = context.call(
+            DOWNLOAD_PART,
+            request.site,
+            DownloadPart(
+                video=request.video,
+                part=part,
+                quality=request.quality,
+                folder=str(folder),
+                login=str(context.login) if context.login else None,
+                proxy=context.proxy,
+                bounded_http=request.lane == "join",
+            ),
+            progress=report,
+        )
+    except ProviderAttemptStoppedError as error:
+        error.part = part if error.media else None
+        raise
+    if downloaded.file is None and not downloaded.gone:
+        message = "The downloader returned no audio."
+        raise AnswerFailedError(message, kind="invalid", part=part)
     if downloaded.file is None:
-        message = downloaded.message or "The site no longer has it."
-        return DownloadedSource(file=None, gone=True, message=message)
+        return DownloadedSource(file=None, gone=True)
     if part_progress is None:
-        context.report(1, "Checking audio")
+        context.report_download(DownloadStage.VALIDATE, 1)
     size = _check(folder, downloaded.file, request, part)
     return DownloadedSource(
         file=downloaded.file,
@@ -137,30 +145,32 @@ def _join(
     for index, part in enumerate(parts):
         _disk_room(folder, left + request.max_bytes)
         report = _part_progress(context, part, index, len(parts))
-        report(None, "")
         part_dir = folder / str(index)
         part_dir.mkdir()
         with file_limit(left):
             fetched = _download_part(request, context, part_dir, part, part_progress=report)
         if fetched.file is None:
-            message = f"Part {part}: {fetched.message}"
-            raise AnswerFailedError(message, kind="invalid")
+            message = "A joined selection is missing a part."
+            raise AnswerFailedError(message, kind="invalid", part=part)
         if fetched.size > left or set(part_dir.iterdir()) != {part_dir / fetched.file}:
             message = f"Part {part} did not finish as one file within the temporary download limit."
-            raise AnswerFailedError(message, kind="invalid")
+            raise AnswerFailedError(message, kind="invalid_artifact", part=part)
         left -= fetched.size
         inputs.append(part_dir / fetched.file)
     _disk_room(folder, request.max_bytes)
 
     def joining(index: int) -> None:
-        context.report(
+        context.report_download(
+            DownloadStage.JOIN,
             (len(parts) + index) / (2 * len(parts)),
-            f"Joining part {parts[index]} ({index + 1}/{len(parts)})",
+            part=parts[index],
+            current=index + 1,
+            total=len(parts),
         )
 
     output = folder / "album.m4a"
     duration_ms = join_audio(tools, inputs, output, request.max_bytes, on_part=joining)
-    context.report(1, "Checking audio")
+    context.report_download(DownloadStage.VALIDATE, 1)
     size = _check(folder, output.name, request, parts[-1])
     return DownloadedSource(
         file=output.name, size=size, quality="aac-256k", backend="ffmpeg", duration_ms=duration_ms
@@ -168,14 +178,26 @@ def _join(
 
 
 def _part_progress(context: JobContext, part: int, index: int, count: int) -> ProgressSink:
-    stage = f"Downloading part {part} ({index + 1}/{count})"
     reached = 0.0
 
     def report(fraction: float | None, _: str) -> None:
         nonlocal reached
         if fraction is not None:
             reached = max(reached, fraction)
-        context.report((index + reached) / (2 * count), stage)
+        context.report_download(
+            DownloadStage.TRANSFER,
+            (index + reached) / (2 * count),
+            part=part,
+            current=index + 1,
+            total=count,
+        )
+
+    return report
+
+
+def _transfer_progress(context: JobContext, part: int) -> ProgressSink:
+    def report(fraction: float | None, _: str) -> None:
+        context.report_download(DownloadStage.TRANSFER, fraction, part=part)
 
     return report
 
@@ -212,7 +234,7 @@ def _check(folder: Path, name: str, request: DownloadSource, part: int) -> int:
 
 def _refuse(request: DownloadSource, part: int, why: str) -> NoReturn:
     message = f"The download of {request.video} part {part} {why}."
-    raise PluginCallFailedError(kind="plugin", message=message, plugin=None, key=request.site)
+    raise AnswerFailedError(message, kind="invalid_artifact", part=part)
 
 
 DOWNLOAD_SOURCE: JobProgram[DownloadSource, DownloadedSource] = JobProgram(

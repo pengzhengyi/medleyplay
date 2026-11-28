@@ -540,7 +540,7 @@ describe("Now Playing", () => {
     cover.focus();
     await userEvent.keyboard("{Enter}");
 
-    const editor = await screen.findByRole("dialog", { name: "Replace the cover" });
+    const editor = await screen.findByRole("dialog", { name: "Replace album cover" });
     expect(editor).toHaveAccessibleDescription("Blue");
     expect(editor.contains(document.activeElement)).toBe(true);
     expect(nowPlaying).not.toBeInTheDocument();
@@ -568,7 +568,7 @@ describe("Now Playing", () => {
     await userEvent.click(
       within(nowPlaying).getByRole("link", { name: "Edit album cover for Blue" }),
     );
-    const editor = await screen.findByRole("dialog", { name: "Add a cover" });
+    const editor = await screen.findByRole("dialog", { name: "Add album cover" });
     await userEvent.keyboard("{Escape}");
 
     expect(editor).not.toBeInTheDocument();

@@ -15,6 +15,7 @@ from medleyplay.application.plugins import FAULT_AFTER
 from medleyplay.application.proxies import ProxyService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId
+from medleyplay.domain.downloads import source_of_target
 from medleyplay.domain.errors import InvalidInputError, KeychainUnavailableError, PluginCallError
 from medleyplay.domain.jobs import Job, JobState, JobView
 from medleyplay.domain.plugins import PluginState
@@ -182,7 +183,7 @@ def test_a_host_call_fault_never_keeps_the_login_of_the_proxy(site: Site, alice:
     assert "pw" not in lookup.unreadable.message.replace("Failed through", "")
 
 
-def test_a_plugin_fault_reason_never_keeps_the_login_of_the_proxy(
+def test_a_downloader_plugin_fault_reason_does_not_report_the_proxy_address(
     site: Site, alice: Account
 ) -> None:
     request = ReadVideo(video="BVProxyLeak", proxy=PROXY)
@@ -193,8 +194,7 @@ def test_a_plugin_fault_reason_never_keeps_the_login_of_the_proxy(
 
     [tube] = [each for each in site.plugins.statuses(alice) if each.name == "tube"]
     assert tube.state is PluginState.FAULTED
-    assert "hunter2" not in tube.reason
-    assert "socks5h://<redacted>@127.0.0.1:7890" in tube.reason
+    assert tube.reason == "The download adapter failed."
 
 
 def test_a_failure_message_of_a_download_never_keeps_the_login_of_the_proxy(
@@ -205,8 +205,7 @@ def test_a_failure_message_of_a_download_never_keeps_the_login_of_the_proxy(
     view = _download_of(site, alice, units, "BVProxyLeak")
 
     assert view.job.failure_kind == "plugin"
-    assert "Failed through http://<redacted>@127.0.0.1:3128" in view.job.failure_message
-    assert "alice" not in view.job.failure_message
+    assert view.job.failure_message == "The download adapter failed."
 
 
 def test_a_progress_message_never_keeps_the_login_of_the_proxy(
@@ -215,14 +214,18 @@ def test_a_progress_message_never_keeps_the_login_of_the_proxy(
     site.proxies.save(alice, "bilibili", PROXY)
     job = _start_download(site, alice, units, "BVProxyProgress")
 
-    view = site.wait_for(job.id, JobState.RUNNING, until=lambda each: each.progress is not None)
+    view = site.wait_for(
+        job.id,
+        JobState.RUNNING,
+        until=lambda each: each.progress is not None and each.progress.stage == "transfer",
+    )
 
     assert view.progress is not None
-    assert view.progress.message == "Through socks5h://<redacted>@127.0.0.1:7890"
+    assert (view.progress.message, view.progress.fraction) == ("Downloading", 0.5)
     site.wait_for(job.id, JobState.SUCCEEDED)
 
 
-def test_a_running_download_keeps_the_proxy_it_started_with(
+def test_a_route_change_prevents_a_running_download_from_publishing(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
     site.proxies.save(alice, "bilibili", PROXY)
@@ -231,7 +234,11 @@ def test_a_running_download_keeps_the_proxy_it_started_with(
 
     site.proxies.remove(alice, "bilibili")
 
-    site.wait_for(job.id, JobState.SUCCEEDED)
+    failed = site.wait_for(job.id, JobState.FAILED)
+    assert failed.job.failure_kind == "attempt_uncertain"
+    source_id = source_of_target(job.target)
+    assert source_id is not None
+    assert site.downloads.start_for(alice.id, source_id) is None
     assert site.proxies.current("bilibili") is None
 
 

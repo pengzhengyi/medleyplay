@@ -4,7 +4,7 @@ from pathlib import Path
 
 from medleyplay.plugin_api import ThumbnailSize, ThumbnailStatus
 from medleyplay.plugin_host.job import JobContext
-from medleyplay.plugin_host.job_wire import JobProgress
+from medleyplay.plugin_host.job_wire import DownloadProgress, JobProgress
 from medleyplay.plugin_host.loader import load_plugins
 from medleyplay.programs.make_thumbnails import (
     MadeThumbnailsResult,
@@ -33,9 +33,12 @@ def context(tmp_path: Path, progress: list[JobProgress] | None = None) -> JobCon
     work_dir = tmp_path / "work"
     work_dir.mkdir(exist_ok=True)
     reports = [] if progress is None else progress
-    return JobContext(
-        work_dir, load_plugins(TEST_PLUGINS, ["sketcher"], lambda _: None), reports.append
-    )
+
+    def report(frame: JobProgress | DownloadProgress) -> None:
+        assert isinstance(frame, JobProgress)
+        reports.append(frame)
+
+    return JobContext(work_dir, load_plugins(TEST_PLUGINS, ["sketcher"], lambda _: None), report)
 
 
 def asked(tmp_path: Path, *names: str) -> MakeThumbnailsJob:

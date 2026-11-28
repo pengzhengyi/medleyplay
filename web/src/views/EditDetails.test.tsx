@@ -784,7 +784,7 @@ describe("editing a song's details", () => {
           onUseCover,
         },
       );
-      const editor = await pictureEditor(dialog, "Add a cover");
+      const editor = await pictureEditor(dialog, "Add album cover");
 
       await userEvent.click(editor.getByRole("tab", { name: "MusicBrainz" }));
       const found = await editor.findByRole("region", { name: "Covers on MusicBrainz" });
@@ -808,7 +808,7 @@ describe("editing a song's details", () => {
         ...detailsOf(7),
         kind: { value: "album", reason: "length" },
       });
-      const editor = await pictureEditor(dialog, "Add a cover");
+      const editor = await pictureEditor(dialog, "Add album cover");
 
       await userEvent.click(editor.getByRole("tab", { name: "MusicBrainz" }));
 

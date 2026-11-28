@@ -1,10 +1,12 @@
 """A Job's program, run in this process: its outcome, its result file, and its plugin calls."""
 
+import json
 from pathlib import Path
 
 from medleyplay.plugin_host.job import run_job
 from medleyplay.plugin_host.job_wire import (
     RESULT_FILE,
+    DownloadProgress,
     JobFailed,
     JobFinished,
     JobProgress,
@@ -14,6 +16,32 @@ from medleyplay.plugin_host.job_wire import (
 from tests.support.echo import Say
 from tests.support.hosts import TEST_PLUGINS
 from tests.support.programs import Echoed, EchoJob
+
+
+def test_a_gone_download_does_not_store_the_provider_message_in_its_scratch_result(
+    tmp_path: Path,
+) -> None:
+    start = JobStart(
+        package=TEST_PLUGINS,
+        plugins=("tube",),
+        program="medleyplay.programs.download_source:DOWNLOAD_SOURCE",
+        request={
+            "site": "bilibili",
+            "video": "BVremoved",
+            "part": 1,
+            "quality": "best",
+            "extensions": ["m4a"],
+            "max_bytes": 1000,
+        },
+        work_dir=str(tmp_path),
+    )
+
+    outcome = run_job(start, lambda _: None)
+    result = json.loads((tmp_path / RESULT_FILE).read_text(encoding="utf-8"))
+
+    assert isinstance(outcome, JobFinished)
+    assert (result["gone"], result["file"]) == (True, None)
+    assert "message" not in result
 
 
 def _run(
@@ -27,7 +55,12 @@ def _run(
         work_dir=str(tmp_path),
     )
     progress: list[JobProgress] = []
-    return run_job(start, progress.append), progress
+
+    def report(frame: JobProgress | DownloadProgress) -> None:
+        assert isinstance(frame, JobProgress)
+        progress.append(frame)
+
+    return run_job(start, report), progress
 
 
 def test_a_finished_program_writes_its_result_and_reports_each_keys_calls(tmp_path: Path) -> None:

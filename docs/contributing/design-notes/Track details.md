@@ -313,8 +313,11 @@ values.
 ### Replacing a cover or a photo
 
 *Replace* over a song's cover, an album's, or an artist's photo opens one picture
-editor, *Replace the cover* (or *Add a cover* when there is none), with a tab for each
-place a picture comes from, listed down its side and across the top on a phone:
+editor with a tab for each picture source. Tabs run down its side, or across
+the top on a phone. An album's editor is titled *Add album cover* or *Replace
+album cover*, including when opened from a song's *Edit details*. It names the
+album, or the parent file for a split song. In *Edit details* the dialog says
+which tracks the change affects. A song without an album keeps its own cover.
 
 | Tab | Shows | For |
 | --- | --- | --- |

@@ -13,6 +13,7 @@
 - [Looking up a code or a link](#looking-up-a-code-or-a-link)
 - [Adding a video that can't be read](#adding-a-video-that-cant-be-read)
 - [A failed Download](#a-failed-download)
+- [Download details](#download-details)
 - [Adding the file](#adding-the-file)
 - [Other ways to get it](#other-ways-to-get-it)
 - [The web client](#the-web-client)
@@ -52,9 +53,10 @@
 
 ## Adding a video that can't be read
 
-- **A lookup whose read fails still answers,** with `readable: false` and why,
-  instead of an error, whatever the failure: a fault, a network failure, a
-  refusal, *gone*, or *needs a login*. The answer's `reason` is `fault`,
+- **An unreadable result can still give parts a name.** Faults, temporary
+  network failures, login problems, and gone videos can return `readable: false`.
+  A typed provider refusal or unknown response stops the lookup instead of
+  offering manual entry. An unreadable result's `reason` is `fault`,
   `network`, `refused`, `gone`, or `needs_login`, and its `message` is the
   site's or the plugin's own words. It names the video and the part the link
   did, or part 1, and offers no title, uploader, or qualities. A link that names
@@ -62,7 +64,8 @@
   at submission.
 - **An unreadable result stays ready for manual entry.** Confirming its parts
   does not retry the read. Only the direct, synchronous API uses a ten-minute
-  memory of reads.
+  memory of reads. Repeating an Add for a remembered full video link uses
+  that result without taking the provider lane, but still checks for Holds.
 - **Adding then trusts the household's details:** distinct part numbers from
   1 to 9999, titles, and artists. Quality must be *best*. The duration is
   unknown until a file arrives.
@@ -86,9 +89,32 @@
   `failed`, `unavailable` (the site no longer has the video), or `none`, with the
   Source's `kind`, the part's `link`, a `message` for a failure, the
   `backend` of a Download, and the `job_id` of the Job downloading it or the one
-  that failed, which `POST /api/jobs/{id}/retry` runs again.
-- **Nothing changes in how the Track plays:** playing a failed Track answers its
-  failed Job, as it does now.
+  that failed. A Hold blocks Retry, even after a new sign-in.
+- **Saved audio still plays.** Refusal and interruption leave the saved file
+  intact. Without a file, an active Hold blocks playback
+  preparation from asking the site again.
+
+## Download details
+
+The Downloaded menus open **Download details** for an active or finished
+download Job. The dialog shows the saved-audio record separately from the
+Job state, and distinguishes a scheduled retry from a Hold. The server
+sends the snapshot only to the requester or an admin. **Copy diagnostics**
+puts the versioned JSON on the viewer's clipboard without uploading it.
+
+An Attempt starts at the durable dispatch reservation. SQLite records
+admission, dispatch, and settlement with the corresponding Job change.
+The worker can also report a typed stage. The server caps stage receipts
+per Attempt and samples progress within a stage at most once per second.
+Receipts expire from the view after 14 days. The server prunes them at
+startup, periodically, and when adding receipts; it keeps at most 10,000.
+The current Job outcome and Holds remain after receipts expire.
+
+A trace includes numeric HTTP status for typed provider responses, not
+provider error text.
+It may name a configured route, such as `site_proxy`; that is not proof
+of egress. The server drops raw download progress and suppresses raw
+child output. Read APIs use controlled messages even for old Job rows.
 
 ## Adding the file
 
@@ -207,6 +233,7 @@
 | `GET /api/tracks/{id}/download` | Signed in | The Track's site Source: its link, whether it is downloaded, downloading, failed, or unavailable, and the failure's message; 409 without a site Source |
 | `PUT /api/tracks/{id}/download` | Signed in | Adds the file in the body as the Track's Download; 413 too large, 422 not audio, 409 no site Source |
 | `GET /api/downloads` | Signed in | The Downloads under way, oldest first: each Track and its Job, with the Job's state, progress, and whether it waits for Online |
+| `GET /api/downloads/{id}/diagnostics` | Requester or admin | The download Job's safe snapshot and retained receipts; never a lookup's trace |
 | `POST /api/downloads/failed/dismiss` | Signed in | Hide the failed download Jobs named by `job_ids`; other Jobs and saved files are unchanged |
 
 Tracks in every list include `download_failed`, `site`, and `download_failure_job_id`
@@ -215,7 +242,8 @@ Tracks that the Library and player hide, regardless of when they were dismissed.
 On a readable saved lookup, `retry_job_id` identifies a dismissed sign-in
 failure after the requester or admin saves a valid login. On retry, the server
 checks in the same transaction that the attempt is still the latest, the login
-is valid and newer than the failure, and the Track has no saved audio.
+is valid and newer than the failure, the Track has no saved audio, and no Hold
+covers the selection.
 
 ## Testing
 
@@ -244,3 +272,6 @@ is valid and newer than the failure, and the Track has no saved audio.
   video id, instead of uploading it.
 - **Removing a manual Download** by hand.
 - **Other ways for other sites,** when there are other sites.
+- **Immutable file replacement.** Publication and manual upload need
+  distinct candidate names before either can preserve an old file across a
+  failed database commit.

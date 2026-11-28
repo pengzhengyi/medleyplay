@@ -7,6 +7,8 @@
 
 import { type Page, expect as baseExpect, test } from "@playwright/test";
 
+import { addBilibili } from "./add-bilibili";
+
 // Playback runs on the audio clock, which a busy machine slows; waits allow for that.
 const expect = baseExpect.configure({ timeout: 15_000 });
 
@@ -123,13 +125,7 @@ test("dismissing a failed download hides the song in open Library and Clean up t
   request,
 }) => {
   const title = "Dismissed download fixture";
-  const added = await request.post("/api/links", {
-    data: {
-      link: "https://www.bilibili.com/video/BVSignedIn",
-      parts: [{ part: 1, title, artist: "Blue Room" }],
-    },
-  });
-  expect(added.ok()).toBe(true);
+  await addBilibili(request, "https://www.bilibili.com/video/BVSignedIn", title, "Blue Room");
   await page.goto("/#/downloaded");
   await expect(row(page, title).getByRole("button", { name: /^Download failed/ })).toBeVisible();
 

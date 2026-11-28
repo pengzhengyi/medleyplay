@@ -16,19 +16,28 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
-from medleyplay.plugin_api import AiEndpoint
+from medleyplay.download_receipts import DownloadStage
+from medleyplay.plugin_api import AiEndpoint, PartNumber, VideoId
 
 RESULT_FILE: Final = "result.json"
 
 type JobFailureKind = Literal[
-    "network", "auth", "plugin", "program", "gone", "refused", "invalid", "provider_refused"
+    "network",
+    "auth",
+    "plugin",
+    "program",
+    "gone",
+    "refused",
+    "invalid",
+    "invalid_artifact",
+    "provider_refused",
+    "response_unknown",
 ]
 """Why a Job failed: the site's network, its login, a plugin, or the Job's own program.
 
 A program may also fail its Job because the site no longer has what it asked for
 (`gone`), because the site refused the request (`refused`), or because the site
 answered with something unusable (`invalid`).
-`provider_refused` records a download rejection that must not be replayed.
 """
 
 
@@ -53,6 +62,7 @@ class JobStart(_Message):
     """The AI providers the Job is lent, in order, keys included, for the program to pass on;
     never on disk."""
     tavily_key: str | None = Field(default=None, repr=False)
+    held_videos: tuple[VideoId, ...] = ()
 
 
 class KeyOutcome(_Message):
@@ -78,6 +88,18 @@ class JobProgress(_Message):
     peak_memory: int
 
 
+class DownloadProgress(_Message):
+    """A download progress frame with no free text."""
+
+    type: Literal["download_progress"] = "download_progress"
+    fraction: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] | None = None
+    stage: DownloadStage
+    part: PartNumber | None = None
+    current: PartNumber | None = None
+    total: PartNumber | None = None
+    peak_memory: int
+
+
 class JobFinished(_Message):
     """The program finished; its result is in the working folder."""
 
@@ -96,8 +118,13 @@ class JobFailed(_Message):
     key: str | None = None
     outcomes: tuple[KeyOutcome, ...] = ()
     peak_memory: int
+    provider_video: VideoId | None = None
+    provider_part: PartNumber | None = None
+    http_status: Annotated[int, Field(ge=100, le=599)] | None = None
 
 
-type FromJob = Annotated[JobProgress | JobFinished | JobFailed, Field(discriminator="type")]
+type FromJob = Annotated[
+    JobProgress | DownloadProgress | JobFinished | JobFailed, Field(discriminator="type")
+]
 
 FROM_JOB: Final = TypeAdapter[FromJob](FromJob)

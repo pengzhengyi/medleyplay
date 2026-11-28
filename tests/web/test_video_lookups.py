@@ -20,7 +20,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import downloads as download_app
+from medleyplay.application.download_holds import record_hold
 from medleyplay.domain.accounts import Role
+from medleyplay.domain.download_holds import DownloadHoldKey, HoldReason
 from medleyplay.domain.errors import ConflictError
 from medleyplay.domain.jobs import JobId, JobState
 from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
@@ -122,6 +124,28 @@ def test_a_dismissed_provider_refusal_is_not_offered_or_retried(
 
     assert "retry_job_id" not in part
     assert refused.status_code == 409
+    assert site_client.get("/api/downloads").json() == []
+
+
+def test_a_hold_removes_the_saved_lookup_retry_even_after_signing_in(
+    site_client: TestClient,
+    site_services: tuple[Site, Services],
+    units: sessionmaker[Session],
+    clock: FakeClock,
+) -> None:
+    site, _ = site_services
+    _, failed = _dismissed_login_failure(site_client, site)
+    _renew_bilibili_login(site_client, clock)
+    path = _ready(site_client, site, SIGN_IN_VIDEO)
+    assert site_client.get(path).json()["result"]["parts"][0]["retry_job_id"] == failed
+    with units.begin() as db:
+        record_hold(db, DownloadHoldKey("bilibili", video="BVSignedIn", part=1), HoldReason.UNKNOWN)
+
+    (part,) = site_client.get(path).json()["result"]["parts"]
+    retried = site_client.post(f"{path}/retry", json={"part": 1, "failed_job_id": failed})
+
+    assert "retry_job_id" not in part
+    assert retried.status_code == 409
     assert site_client.get("/api/downloads").json() == []
 
 
@@ -380,7 +404,7 @@ def test_concurrent_confirmations_of_one_selection_reuse_one_album_and_download(
         assert len(db.scalars(select(JobRow).where(JobRow.kind == "download_source")).all()) == 1
 
 
-def test_cancelled_and_failed_joins_leave_no_file_and_a_stale_retry_cannot_replace_success(
+def test_cancelling_a_dispatched_join_blocks_retry_and_leaves_no_file(
     site_client: TestClient, site_services: tuple[Site, Services]
 ) -> None:
     if join_tools() is None:
@@ -409,31 +433,43 @@ def test_cancelled_and_failed_joins_leave_no_file_and_a_stale_retry_cannot_repla
     assert download["job"]["progress"] == {
         "fraction": 0.375,
         "message": "Downloading part 3 (2/2)",
+        "stage": "transfer",
+        "part": 3,
+        "current": 2,
+        "total": 2,
     }
-    other = site_client.post(
-        _ready(site_client, site, JOIN_RETRY),
-        json={"mode": "joined", "album": "Another session", "parts": [1, 2]},
-    )
-    assert other.status_code == 200, other.text
-    legacy = site_client.post(_ready(site_client, site, JOIN_RETRY), json=CHOICE)
-    assert legacy.status_code == 200, legacy.text
-    site.wait_for(JobId(legacy.json()[0]["job"]["id"]), JobState.SUCCEEDED)
-    assert site.jobs.get_job(JobId(other.json()[0]["job"]["id"])).job.state == JobState.QUEUED
     assert site_client.post(f"/api/jobs/{first}/cancel").status_code == 200
+    retry = site_client.post(f"/api/jobs/{first}/retry")
+
+    assert retry.status_code == 409, retry.text
+    assert "held" in retry.text
+    assert site.jobs.get_job(JobId(first)).job.state == JobState.CANCELLED
     assert not source.exists()
-    held.unlink()
 
-    def retry(job: int) -> int:
-        result = site_client.post(f"/api/jobs/{job}/retry")
-        assert result.status_code == 200, result.text
-        return int(result.json()["id"])
 
-    second = retry(first)
-    failed = site.wait_for(JobId(second), JobState.FAILED)
-    assert "Part 3" in failed.job.failure_message
+def test_a_failed_join_leaves_no_file_and_a_stale_retry_cannot_replace_a_success(
+    site_client: TestClient, site_services: tuple[Site, Services]
+) -> None:
+    if join_tools() is None:
+        pytest.skip("Synthetic concatenation requires FFmpeg and ffprobe.")
+    site, _ = site_services
+    response = site_client.post(
+        _ready(site_client, site, JOIN_RETRY),
+        json={"mode": "joined", "album": "Live", "parts": [2, 3]},
+    )
+    assert response.status_code == 200, response.text
+    (album,) = response.json()
+    first = album["job"]["id"]
+    source = site.downloads.folder / f"{album['source_id']}.m4a"
+
+    failed = site.wait_for(JobId(first), JobState.FAILED)
+    trace = site_client.get(f"/api/downloads/{first}/diagnostics").json()
+    assert (failed.job.failure_kind, trace["events"][-1]["part"]) == ("invalid", 3)
     assert not source.exists()
     (site.data_dir / "part-restored").touch()
-    site.wait_for(JobId(retry(second)), JobState.SUCCEEDED)
+    result = site_client.post(f"/api/jobs/{first}/retry")
+    assert result.status_code == 200, result.text
+    site.wait_for(JobId(result.json()["id"]), JobState.SUCCEEDED)
     album_bytes = source.read_bytes()
 
     refusal = site_client.post(f"/api/jobs/{first}/retry")

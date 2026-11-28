@@ -17,15 +17,16 @@ from sqlalchemy.orm import Session
 
 from medleyplay.application.album_ratings import album_ratings_by_account, library_album_of
 from medleyplay.application.download_budgets import active_budgets, cache_copies, estimate_of
+from medleyplay.application.download_holds import held_sources
 from medleyplay.application.rule_schema import read_rules
 from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.album_ratings import AlbumRatings, effective_rating
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
+from medleyplay.domain.download_holds import NO_AUTOMATIC_RETRY
 from medleyplay.domain.downloads import (
     DOWNLOAD_KIND,
-    DOWNLOAD_PROVIDER_REFUSED,
     MANUAL_BACKEND,
     download_target,
 )
@@ -117,6 +118,7 @@ def read_snapshot(
     downloads = {SourceId(row.source_id): row for row in db.scalars(select(DownloadRow))}
     active = active_budgets(db)
     source_of = {source.id: source for source in sources}
+    blocked = held_sources(db)
     tools = join_tools() is not None
 
     def estimate(source: _Source) -> int:
@@ -134,6 +136,7 @@ def read_snapshot(
             replaceable=source_of[source_id].state == SourceState.OK
             and source_of[source_id].kind in sites
             and (tools or not source_of[source_id].scratch)
+            and source_id not in blocked
             and row.backend != MANUAL_BACKEND,
             active_job=source_id in active,
         )
@@ -157,7 +160,9 @@ def read_snapshot(
         if not site_sources or downloaded or has_library:
             continue
         startable = [
-            each for each in site_sources if each.kind in sites and each.state == SourceState.OK
+            each
+            for each in site_sources
+            if each.kind in sites and each.state == SourceState.OK and each.id not in blocked
         ]
         chosen = (startable or site_sources)[0]
         for account_id in accounts:
@@ -174,7 +179,9 @@ def read_snapshot(
                 active_job=chosen.id in active,
                 joined=chosen.joined,
                 scratch=chosen.scratch,
-                failure=_failure(
+                failure=Failure(now, in_a_row=1, terminal=True)
+                if chosen.id in blocked
+                else _failure(
                     history.get(download_target(chosen.id), []),
                     chosen.kind,
                     accounts,
@@ -328,4 +335,4 @@ def _failure(
         (account_id, site) in logins and saved.get((account_id, site), failed_at) > failed_at
         for account_id in accounts
     )
-    return Failure(failed_at, in_a_row, cleared=cleared, terminal=kind == DOWNLOAD_PROVIDER_REFUSED)
+    return Failure(failed_at, in_a_row, cleared=cleared, terminal=kind in NO_AUTOMATIC_RETRY)

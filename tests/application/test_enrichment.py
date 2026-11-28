@@ -465,17 +465,15 @@ def test_a_network_failure_waits_to_try_again_and_does_not_count_as_asking(
     assert enriching.enrichment.eligible(NAME) == [track_id]
 
 
-def test_a_fault_in_the_plugin_fails_that_job_alone_and_asks_again_later(
+def test_a_fault_in_the_plugin_fails_that_job_without_an_automatic_retry(
     enriching: Enriching, alice: Account
 ) -> None:
     track_id = enriching.add_site_track("BVBroken")
     job = enriching.enrichment.find_details(alice, track_id, NAME)
 
-    queued = enriching.wait_for(
-        job.id, JobState.QUEUED, until=lambda view: view.job.failure_kind is not None
-    )
+    failed = enriching.wait_for(job.id, JobState.FAILED)
 
-    assert queued.job.failure_kind == "plugin"
+    assert failed.job.failure_kind == "plugin"
     assert enriching.enrichment.state(NAME).stopped_at is None
     assert enriching.enrichment.eligible(NAME) == [track_id]
 
@@ -560,19 +558,15 @@ def test_a_stopped_enricher_asks_nothing_more_and_says_why(
         enriching.enrichment.find_details_for_all(alice, NAME)
 
 
-def test_a_job_retried_while_the_enricher_is_stopped_fails_without_asking_the_site(
+def test_a_job_that_received_a_provider_refusal_cannot_be_retried(
     enriching: Enriching, alice: Account
 ) -> None:
     refused = enriching.add_site_track("BVRefused")
     first = _failed(enriching, alice, refused)
     enriching.pause_passes()
 
-    retried = enriching.jobs.retry(alice, first.job.id)
-    again = enriching.wait_for(retried.id, JobState.FAILED)
-
-    assert again.job.failure_kind == "refused"
-    assert "stopped" in again.job.failure_message
-    assert again.job.attempts == 0
+    with pytest.raises(ConflictError, match="held"):
+        enriching.jobs.retry(alice, first.job.id)
 
 
 def test_the_stopped_state_survives_a_restart(
@@ -587,7 +581,7 @@ def test_the_stopped_state_survives_a_restart(
     assert stop.reason == "HTTP Error 412."
 
 
-def test_an_admin_resets_a_stopped_enricher_and_the_refused_track_is_eligible_again(
+def test_resetting_the_enricher_does_not_clear_a_download_hold(
     enriching: Enriching, alice: Account
 ) -> None:
     refused = enriching.add_site_track("BVRefused")
@@ -597,7 +591,8 @@ def test_an_admin_resets_a_stopped_enricher_and_the_refused_track_is_eligible_ag
     enriching.enrichment.reset(alice, NAME)
 
     assert enriching.enrichment.state(NAME).stopped_at is None
-    assert enriching.enrichment.eligible(NAME) == [refused, other]
+    assert enriching.enrichment.eligible(NAME) == [other]
+    assert enriching.enrichment.askable(NAME).eligible == (other,)
     enriching.pause_passes()
     _found(enriching, alice, other)
 

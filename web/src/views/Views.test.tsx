@@ -2110,8 +2110,8 @@ describe("editing an album from its page", () => {
     });
     await userEvent.click(await screen.findByRole("button", { name: "Edit details" }));
     const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
-    await userEvent.click(album.getByRole("button", { name: "Add a cover…" }));
-    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await userEvent.click(album.getByRole("button", { name: "Add album cover…" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add album cover" }));
 
     await userEvent.upload(
       editor.getByLabelText("Choose a cover file"),
@@ -2136,8 +2136,8 @@ describe("editing an album from its page", () => {
       },
     });
     const about = within(await screen.findByRole("region", { name: "About the album" }));
-    await userEvent.click(about.getByRole("button", { name: "Add a cover…" }));
-    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await userEvent.click(about.getByRole("button", { name: "Add album cover…" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add album cover" }));
 
     await userEvent.upload(
       editor.getByLabelText("Choose a cover file"),
@@ -2198,8 +2198,12 @@ describe("editing an album from its page", () => {
       await user.selectOptions(language, "auto");
     }
 
-    await user.click(details.getByRole("button", { name: "Replace the cover…" }));
-    const picture = within(await screen.findByRole("dialog", { name: "Replace the cover" }));
+    await user.click(details.getByRole("button", { name: "Replace album cover…" }));
+    const coverEditor = await screen.findByRole("dialog", { name: "Replace album cover" });
+    expect(coverEditor).toHaveAccessibleDescription(
+      "New Album Cover changes apply immediately to the 2 songs of “New Album”.",
+    );
+    const picture = within(coverEditor);
     await user.upload(
       picture.getByLabelText("Choose a cover file"),
       new File(["png"], "cover.png", { type: "image/png" }),
@@ -2212,6 +2216,37 @@ describe("editing an album from its page", () => {
         { track_ids: [1, 3], values: { cover: "new-cover" } },
       ]);
     });
+  });
+
+  it("names the parent album file instead of the selected song when editing its cover", async () => {
+    const file = trackOf(9, "Live at Home", {
+      artist: "Trio",
+      album: "",
+      kind: "album",
+      split: true,
+    });
+    const song = trackOf(11, "Opening", {
+      artist: "Trio",
+      album: "Individual title",
+      segment_of: 9,
+    });
+    open("#/library", {
+      ...signedIn([file, song]),
+      "GET /api/tracks/11/details": {
+        body: detailsOf(11, { title: song.title, album: song.album, artist: song.artist }),
+      },
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Show the songs of Live at Home" }));
+    await user.click(await screen.findByRole("button", { name: "More actions for Opening" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit details…" }));
+    const details = within(await screen.findByRole("dialog", { name: "Edit details" }));
+    await user.click(await details.findByRole("button", { name: "Add album cover…" }));
+
+    const coverEditor = await screen.findByRole("dialog", { name: "Add album cover" });
+    expect(coverEditor).toHaveAccessibleDescription(
+      "Live at Home Cover changes apply immediately to the parent album file. Removing the cover also clears this song's override.",
+    );
   });
 
   it("refuses a cover change when different songs now share the album", async () => {
@@ -2235,7 +2270,7 @@ describe("editing an album from its page", () => {
     await user.click(await screen.findByRole("button", { name: "More actions for Night Drive" }));
     await user.click(await screen.findByRole("menuitem", { name: "Edit details…" }));
     const details = within(await screen.findByRole("dialog", { name: "Edit details" }));
-    const remove = await details.findByRole("button", { name: "Remove your cover" });
+    const remove = await details.findByRole("button", { name: "Remove your album cover" });
     const language = render(<LanguageSelect />).getByRole("combobox", { name: "Language" });
     moved = true;
 
@@ -2274,8 +2309,8 @@ describe("editing an album from its page", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Edit details" }));
     const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
-    await user.click(album.getByRole("button", { name: "Add a cover…" }));
-    const picture = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await user.click(album.getByRole("button", { name: "Add album cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Add album cover" }));
     await user.upload(
       picture.getByLabelText("Choose a cover file"),
       new File(["png"], "cover.png", { type: "image/png" }),
@@ -2316,8 +2351,8 @@ describe("editing an album from its page", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Edit details" }));
     const album = within(await screen.findByRole("dialog", { name: "Edit album" }));
-    await user.click(album.getByRole("button", { name: "Add a cover…" }));
-    const picture = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await user.click(album.getByRole("button", { name: "Add album cover…" }));
+    const picture = within(await screen.findByRole("dialog", { name: "Add album cover" }));
     await user.upload(
       picture.getByLabelText("Choose a cover file"),
       new File(["png"], "cover.png", { type: "image/png" }),
@@ -2346,8 +2381,8 @@ describe("editing an album from its page", () => {
       },
     });
     const about = within(await screen.findByRole("region", { name: "About the album" }));
-    await userEvent.click(about.getByRole("button", { name: "Add a cover…" }));
-    const editor = within(await screen.findByRole("dialog", { name: "Add a cover" }));
+    await userEvent.click(about.getByRole("button", { name: "Add album cover…" }));
+    const editor = within(await screen.findByRole("dialog", { name: "Add album cover" }));
 
     await userEvent.upload(
       editor.getByLabelText("Choose a cover file"),

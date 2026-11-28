@@ -232,12 +232,12 @@ def test_nothing_is_answered_to_a_client_that_is_not_signed_in(
     assert client.request(method, path).status_code == 401
 
 
-def test_after_a_refusal_the_enricher_shows_why_it_stopped_and_an_admin_resets_it(
+def test_resetting_the_enricher_reopens_other_videos_but_not_the_refused_one(
     enrichers_client: TestClient, enriching: Enriching
 ) -> None:
     set_up_as_alice(enrichers_client)
     refused = enriching.add_site_track("BVRefused")
-    enriching.add_site_track(RECORDED)
+    other = enriching.add_site_track(RECORDED)
     job = enrichers_client.post(f"/api/enrichers/{NAME}/tracks/{refused}").json()
     enriching.wait_for(JobId(job["id"]), JobState.FAILED)
 
@@ -248,7 +248,7 @@ def test_after_a_refusal_the_enricher_shows_why_it_stopped_and_an_admin_resets_i
     assert (stopped["stopped"]["reason"], stopped["eligible"]) == ("HTTP Error 412.", [])
     assert reset.status_code == 204
     assert after["stopped"] is None
-    assert len(after["eligible"]) == 2
+    assert after["eligible"] == [other]
 
 
 # MusicBrainz, through the same routes

@@ -205,10 +205,10 @@ for (const width of [390, 1280]) {
       await expectIndicatorBadge(page.locator(".album-heading .picture-title .lyrics-badge"));
       await expect(about.locator(".lyrics-badge")).toHaveCount(0);
       await about.hover();
-      const replace = about.getByRole("button", { name: "Add a cover…", exact: true });
+      const replace = about.getByRole("button", { name: "Add album cover…", exact: true });
       await expect(replace).toBeVisible();
       await replace.click();
-      await expect(page.getByRole("dialog", { name: "Add a cover" })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Add album cover" })).toBeVisible();
     });
   }
 }

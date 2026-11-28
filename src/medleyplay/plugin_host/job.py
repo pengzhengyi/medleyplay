@@ -17,6 +17,7 @@ import importlib
 import os
 import signal
 import threading
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,17 +25,14 @@ from typing import IO, Generic, Literal, TypeVar
 
 from pydantic import BaseModel
 
-from medleyplay.plugin_api import (
-    AiEndpoint,
-    AuthError,
-    DownloadRefusedError,
-    NetworkError,
-    Operation,
-)
+from medleyplay.download_receipts import DOWNLOAD_PROGRAM, DownloadStage
+from medleyplay.plugin_api import AiEndpoint, AuthError, NetworkError, Operation, ProviderStopError
 from medleyplay.plugin_api.progress import ProgressSink, reporting_to
 from medleyplay.plugin_host.host import peak_memory
 from medleyplay.plugin_host.job_wire import (
     RESULT_FILE,
+    DownloadProgress,
+    FromJob,
     JobFailed,
     JobFinished,
     JobProgress,
@@ -48,18 +46,27 @@ from medleyplay.proxy_redaction import redact_proxy
 I = TypeVar("I", bound=BaseModel)  # noqa: E741 -- the conventional name for an input
 R = TypeVar("R", bound=BaseModel)
 
+type ProgressFrame = JobProgress | DownloadProgress
+
 
 class PluginCallFailedError(Exception):
     """A plugin call in a Job failed; a program may catch it and carry on."""
 
     def __init__(
-        self, kind: Literal["network", "auth", "plugin"], message: str, plugin: str | None, key: str
+        self,
+        kind: Literal["network", "auth", "plugin"],
+        message: str,
+        plugin: str | None,
+        key: str,
+        *,
+        http_status: int | None = None,
     ) -> None:
         """Record why the call failed, and which provider failed it."""
         super().__init__(message)
         self.kind: Literal["network", "auth", "plugin"] = kind
         self.plugin = plugin
         self.key = key
+        self.http_status = http_status
 
 
 class AnswerFailedError(Exception):
@@ -67,15 +74,32 @@ class AnswerFailedError(Exception):
 
     `kind` is `gone` when the site no longer has what was asked for, `refused` when
     it refused the request, and `invalid` when it answered with something unusable.
-    `provider_refused` stops a rejected download without retrying.
     """
 
     def __init__(
-        self, message: str, *, kind: Literal["gone", "refused", "invalid", "provider_refused"]
+        self,
+        message: str,
+        *,
+        kind: Literal["gone", "refused", "invalid", "invalid_artifact"],
+        part: int | None = None,
     ) -> None:
         """Record why the Job fails."""
         super().__init__(message)
         self.kind = kind
+        self.part = part
+
+
+class ProviderAttemptStoppedError(Exception):
+    """Keep the trusted program's selection alongside typed provider evidence."""
+
+    def __init__(self, error: ProviderStopError) -> None:
+        """Record the provider's stop reason; the Job program narrows its scope."""
+        super().__init__(str(error))
+        self.reason = error.reason
+        self.media = error.media
+        self.status = error.status
+        self.video: str | None = None
+        self.part: int | None = None
 
 
 @dataclass
@@ -92,7 +116,7 @@ class JobContext:
 
     work_dir: Path
     _endpoints: Mapping[Address, Endpoint]
-    _send: Callable[[JobProgress], None]
+    _send: Callable[[ProgressFrame], None]
     login: Path | None = None
     """A copy of the login the Job was given, readable by its owner alone, or `None`."""
     proxy: str | None = field(default=None, repr=False)
@@ -100,7 +124,10 @@ class JobContext:
     ai: tuple[AiEndpoint, ...] = field(default=(), repr=False)
     """The AI providers the Job is lent, in order, keys included; held in memory only."""
     tavily_key: str | None = field(default=None, repr=False)
+    held_videos: tuple[str, ...] = ()
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
+    _download_stage: tuple[DownloadStage, int | None] | None = None
+    _download_reported_at: float = 0.0
 
     def safe_text(self, text: str) -> str:
         """Remove the borrowed proxy and its credentials from text a program keeps."""
@@ -115,6 +142,33 @@ class JobContext:
         step reports as it goes.
         """
         self._send(JobProgress(fraction=fraction, message=message, peak_memory=peak_memory()))
+
+    def report_download(
+        self,
+        stage: DownloadStage,
+        fraction: float | None = None,
+        *,
+        part: int | None = None,
+        current: int | None = None,
+        total: int | None = None,
+    ) -> None:
+        """Report a stage change immediately and sample its progress at most once per second."""
+        now = time.monotonic()
+        key = (stage, part)
+        if self._download_stage == key and now - self._download_reported_at < 1:
+            return
+        self._download_stage = key
+        self._download_reported_at = now
+        self._send(
+            DownloadProgress(
+                stage=stage,
+                fraction=fraction,
+                part=part,
+                current=current,
+                total=total,
+                peak_memory=peak_memory(),
+            )
+        )
 
     def call[P, In: BaseModel, Out: BaseModel](
         self,
@@ -135,14 +189,18 @@ class JobContext:
                 reply = endpoint.invoke(request)
         except NetworkError as error:
             raise PluginCallFailedError(
-                kind="network", message=str(error), plugin=endpoint.plugin, key=key
+                kind="network",
+                message=str(error),
+                plugin=endpoint.plugin,
+                key=key,
+                http_status=error.http_status,
             ) from error
         except AuthError as error:
             raise PluginCallFailedError(
                 kind="auth", message=str(error), plugin=endpoint.plugin, key=key
             ) from error
-        except DownloadRefusedError as error:
-            raise AnswerFailedError(str(error), kind="provider_refused") from error
+        except ProviderStopError as error:
+            raise ProviderAttemptStoppedError(error) from error
         except (Exception, SystemExit) as error:
             message = f"{type(error).__name__}: {error}"
             record.trailing_failures += 1
@@ -183,7 +241,7 @@ def main() -> int:
     """Run the one Job the server sends, then exit."""
     protocol_in, protocol_out = take_standard_streams()
 
-    def send(message: JobProgress | JobFinished | JobFailed) -> None:
+    def send(message: FromJob) -> None:
         protocol_out.write(message.model_dump_json() + "\n")
         protocol_out.flush()
 
@@ -193,8 +251,31 @@ def main() -> int:
     return 0
 
 
-def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished | JobFailed:
+def run_job(start: JobStart, send: Callable[[ProgressFrame], None]) -> JobFinished | JobFailed:
     """Run `start`'s program and return its outcome, writing its result to the working folder."""
+    if start.program != DOWNLOAD_PROGRAM:
+        return _run_job(start, send)
+
+    def report(frame: ProgressFrame) -> None:
+        if isinstance(frame, DownloadProgress):
+            send(frame)
+
+    outcome = _run_job(start, report)
+    outcomes = tuple(each.model_copy(update={"last_failure": ""}) for each in outcome.outcomes)
+    if isinstance(outcome, JobFailed):
+        return outcome.model_copy(
+            update={
+                "outcomes": outcomes,
+                "message": "",
+                "plugin": None,
+                "key": None,
+                "provider_video": None,
+            }
+        )
+    return outcome.model_copy(update={"outcomes": outcomes})
+
+
+def _run_job(start: JobStart, send: Callable[[ProgressFrame], None]) -> JobFinished | JobFailed:
     work_dir = Path(start.work_dir)
     endpoints = load_plugins(start.package, start.plugins, lambda _: None)
     context = JobContext(
@@ -205,6 +286,7 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
         proxy=start.proxy,
         ai=start.ai,
         tavily_key=start.tavily_key,
+        held_videos=start.held_videos,
     )
     try:
         program = _program(start.program)
@@ -218,6 +300,7 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
             key=error.key,
             outcomes=context.outcomes(),
             peak_memory=peak_memory(),
+            http_status=error.http_status,
         )
     except AnswerFailedError as error:
         return JobFailed(
@@ -225,6 +308,17 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
             message=str(error),
             outcomes=context.outcomes(),
             peak_memory=peak_memory(),
+            provider_part=error.part,
+        )
+    except ProviderAttemptStoppedError as error:
+        return JobFailed(
+            kind=error.reason,
+            message=context.safe_text(str(error)),
+            outcomes=context.outcomes(),
+            peak_memory=peak_memory(),
+            provider_video=error.video,
+            provider_part=error.part,
+            http_status=error.status,
         )
     except (Exception, SystemExit) as error:  # noqa: BLE001 -- the program's own fault
         return JobFailed(

@@ -370,16 +370,18 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   *gone*, which makes its
   standalone Source *unavailable* for good. A missing part of a joined album
   fails its Job without marking the album unavailable. Other site errors,
-  including ones the plugin doesn't recognize, are faults. A fault retries
-  and can be reset; *gone* can't be undone.
+  including ones the plugin doesn't recognize, are faults. A download
+  adapter fault ends the Job instead of repeating it; *gone* marks the
+  standalone Source unavailable.
 - **A video for members** needs a login when none was sent. With a login it is
   a fault, not an `AuthError`, since the account may simply not be a member, and
   a working login shouldn't need signing in again.
-- **A rejected download stops.** On HTTP 403, 412, 429, or 567, the downloader
-  stops without repeating the request. The Job records `provider_refused`
-  without revoking the login or counting a plugin fault. The policy and
-  **Retry download** do not reopen this failure. A listener can still add a
-  file they already have. Earlier jobs keep their original failure kind.
+- **A refusal stops the request.** HTTP 403, 412, and 429 produce
+  `provider_refused`; unexplained HTTP 567 produces `response_unknown`.
+  Neither revokes a login or counts as a plugin fault. A durable Hold blocks
+  overlapping requests, including manual Retry and storage policy retries.
+  Listeners can still play a saved file or add a file they already have.
+  On upgrade, ambiguous earlier attempts are held rather than replayed.
 - The [download policy](Download%20policy.md) tracks final Download reservations.
   Temporary space for joins is checked separately, not allocated in advance.
   A full disk fails the Job and its working folder is removed.

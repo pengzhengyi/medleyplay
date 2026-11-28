@@ -1,9 +1,8 @@
 """Proxies: an admin sets the household's proxy for a site, and plugin calls read it from memory.
 
 The URL, which may hold a password, lives in the Keychain and the catalog keeps a
-summary. The Keychain is written first and the row second, so a crash between them
-leaves a URL with no row, which the next save replaces. Once read, the URL stays in
-memory, so a plugin call never waits on the Keychain while it holds the plugin host.
+summary. A replacement invalidates the previous route generation before changing
+the URL. A crash before the new generation commits leaves the route unavailable.
 
 Saving or removing a proxy tells the listeners and changes nothing else: no fault
 is reset, no Job retried, and no Source's state touched.
@@ -14,8 +13,9 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from uuid import uuid4
 
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
@@ -74,6 +74,9 @@ class ProxyService:
         name = proxy_secret_name(site)
         proxy = ProxyUrl.parse(text)
         with self._locks[site]:
+            with self._units.begin() as db:
+                db.execute(update(ProxyRow).where(ProxyRow.site == site).values(generation=None))
+            self._urls.pop(site, None)
             self._secrets.set(name, proxy.url)
             with self._units.begin() as db:
                 row = db.get(ProxyRow, site) or ProxyRow(site=site)
@@ -82,6 +85,7 @@ class ProxyService:
                 row.port = proxy.port
                 row.has_login = proxy.user is not None
                 row.saved_at = self._clock()
+                row.generation = uuid4().hex
                 db.add(row)
                 db.flush()
                 saved = _to_saved(row)
@@ -109,8 +113,6 @@ class ProxyService:
         """
         if site not in PROXY_SITES:
             return None
-        if site in self._urls:
-            return self._urls[site]
         with self._locks[site]:
             if site not in self._urls:
                 self._urls[site] = self._read(site)
@@ -118,8 +120,12 @@ class ProxyService:
 
     def _read(self, site: str) -> str | None:
         with self._units() as db:
-            if db.get(ProxyRow, site) is None:
+            row = db.get(ProxyRow, site)
+            if row is None:
                 return None
+            if row.generation is None:
+                message = f"The {site} proxy change did not finish; save it again."
+                raise KeychainUnavailableError(message)
         url = self._secrets.get(proxy_secret_name(site))
         if url is None:
             message = f"The {site} proxy is no longer in the Keychain; set it again."

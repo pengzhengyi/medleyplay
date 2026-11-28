@@ -167,7 +167,7 @@ export function EditAlbum({
           <div className="edit-album-cover">
             <PictureFrame
               className="edit-album-frame"
-              replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
+              replaceLabel={cover === undefined ? "Add album cover" : "Replace album cover"}
               save={
                 cover === undefined
                   ? undefined

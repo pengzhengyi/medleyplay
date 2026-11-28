@@ -3,8 +3,8 @@
  *
  * Its History tab, beside it, lists what played.
  *
- * A Track is dragged by its handle, with a pointer or a finger; from the
- * keyboard, Space picks it up, the arrow keys move it, and Space drops it.
+ * A mouse or pen drags a Track by its handle; a finger holds the handle first.
+ * From the keyboard, Space picks it up, the arrow keys move it, and Space drops it.
  * Songs of one split file queued one after another show under a row naming the
  * file and where they start in it, such as *3 of 11*, to fold away or remove at once.
  */
@@ -13,29 +13,36 @@ import {
   type Announcements,
   DndContext,
   type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
   type UniqueIdentifier,
   closestCenter,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowDownIcon,
+  ArrowLineDownIcon,
+  ArrowLineUpIcon,
+  ArrowUpIcon,
   ArrowsInLineVerticalIcon,
   ArrowsOutLineVerticalIcon,
   CaretRightIcon,
   DotsSixVerticalIcon,
+  DotsThreeIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { type KeyboardEvent, memo, useCallback, useMemo, useState } from "react";
+import * as Menu from "@radix-ui/react-dropdown-menu";
+import {
+  type ComponentPropsWithRef,
+  type KeyboardEvent,
+  memo,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { Track } from "../api";
 import { formatQueueLength } from "../format";
@@ -51,6 +58,7 @@ import { ClearQuestion, HistoryClear, HistoryList } from "./HistoryPanel";
 import { Hint } from "./Hint";
 import { KindMark } from "./KindMark";
 import { SleepTimerMenu } from "./SleepTimerMenu";
+import { useReorderSensors } from "./useReorderSensors";
 
 const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 
@@ -258,20 +266,58 @@ const QueueContents = memo(function QueueContents({
 } & Pick<Player, "playAt" | "move" | "remove">) {
   const words = useWords();
   const songsIn = useMemo(() => songsByFile([...tracks.values()]), [tracks]);
+  const places = useMemo(() => new Map(entries.map(({ key }, index) => [key, index])), [entries]);
+  const list = useRef<HTMLOListElement>(null);
+  const [requestedMove, setRequestedMove] = useState<{
+    readonly key: string;
+    readonly from: number;
+    readonly to: number;
+  }>();
+  const [finishedMove, setFinishedMove] = useState<{
+    readonly key: string;
+    readonly arrived: { readonly entry: Entry | undefined; readonly place: number } | undefined;
+  }>();
+  if (requestedMove !== undefined) {
+    const place = places.get(requestedMove.key);
+    if (place !== requestedMove.from) {
+      setRequestedMove(undefined);
+      setFinishedMove({
+        key: requestedMove.key,
+        arrived: place === requestedMove.to ? { entry: entries[place], place } : undefined,
+      });
+    }
+  }
+  const focusMoved = useEffectEvent((key: string) => {
+    if (document.activeElement !== document.body) return;
+    const album = rows.find(
+      (row) => row.kind === "album" && row.entries.some((entry) => entry.key === key),
+    );
+    const buttons = [
+      ...(list.current?.querySelectorAll<HTMLButtonElement>("[data-queue-focus]") ?? []),
+    ];
+    const find = (key: string | undefined) =>
+      buttons.find((button) => button.dataset.queueFocus === key);
+    const target =
+      find(key) ??
+      find(album === undefined ? undefined : `album:${album.entries[0].key}`) ??
+      list.current
+        ?.closest(".queue")
+        ?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]');
+    target?.focus({ preventScroll: true });
+  });
+  useEffect(() => {
+    if (finishedMove !== undefined) focusMoved(finishedMove.key);
+  }, [finishedMove]);
   const shown = rows.flatMap((row) =>
     row.kind === "album" && folded.has(row.fileId) ? [] : row.entries,
   );
-  const sensors = useSensors(
-    // A few pixels of movement first, so a tap on the handle isn't a drag.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useReorderSensors();
   const titleOf = (entry: Entry | undefined) =>
     entry === undefined
       ? words("A Track")
       : (tracks.get(entry.trackId)?.title ?? words("A Track no longer here"));
   const placeOf = (id: UniqueIdentifier | undefined) =>
-    entries.findIndex((entry) => entry.key === id);
+    typeof id === "string" ? (places.get(id) ?? -1) : -1;
   const announcements: Announcements = {
     onDragStart: ({ active }) =>
       words("Picked up {{title}}.", { title: titleOf(entries[placeOf(active.id)]) }),
@@ -292,8 +338,9 @@ const QueueContents = memo(function QueueContents({
       words("{{title}} stays where it was.", { title: titleOf(entries[placeOf(active.id)]) }),
   };
   const drop = ({ active, over }: DragEndEvent) => {
-    if (over !== null && active.id !== over.id) {
-      move(String(active.id), placeOf(over.id));
+    const to = placeOf(over?.id);
+    if (to >= 0 && active.id !== over?.id) {
+      move(String(active.id), to);
     }
   };
 
@@ -317,8 +364,8 @@ const QueueContents = memo(function QueueContents({
         items={shown.map((entry) => entry.key)}
         strategy={verticalListSortingStrategy}
       >
-        <ol>
-          {rows.map((row) => {
+        <ol ref={list}>
+          {rows.flatMap((row) => {
             const items = (inAlbum: boolean) =>
               row.entries.map((entry) => (
                 <QueueItem
@@ -326,6 +373,16 @@ const QueueContents = memo(function QueueContents({
                   entry={entry}
                   track={tracks.get(entry.trackId)}
                   inAlbum={inAlbum}
+                  place={placeOf(entry.key)}
+                  last={entries.length - 1}
+                  container={announceIn}
+                  onMove={(to) => {
+                    const from = places.get(entry.key);
+                    if (from !== undefined && to !== from) {
+                      setRequestedMove({ key: entry.key, from, to });
+                      move(entry.key, to);
+                    }
+                  }}
                   onPlay={() => {
                     playAt(entry.key, 0);
                   }}
@@ -340,9 +397,11 @@ const QueueContents = memo(function QueueContents({
             const songs = songsIn.get(row.fileId) ?? [];
             const first = songs.findIndex((song) => song.id === row.entries[0]?.trackId);
             const isFolded = folded.has(row.fileId);
+            const albumKey = `album:${row.entries[0]?.key ?? ""}`;
             return [
               <AlbumRow
-                key={`album:${row.entries[0]?.key ?? ""}`}
+                key={albumKey}
+                focusKey={albumKey}
                 file={tracks.get(row.fileId)}
                 place={first + 1}
                 count={songs.length}
@@ -366,6 +425,13 @@ const QueueContents = memo(function QueueContents({
             ];
           })}
         </ol>
+        <span className="visually-hidden" role="status">
+          {finishedMove?.arrived !== undefined &&
+            words("{{title}} plays {{place}}.", {
+              title: titleOf(finishedMove.arrived.entry),
+              place: ordinal(finishedMove.arrived.place, words),
+            })}
+        </span>
       </SortableContext>
     </DndContext>
   );
@@ -403,6 +469,7 @@ function rowsOf(entries: readonly Entry[], tracks: ReadonlyMap<number, Track>): 
 
 /** The row naming a split file whose songs follow, where they start in it, and how many it has. */
 function AlbumRow({
+  focusKey,
   file,
   place,
   count,
@@ -411,6 +478,7 @@ function AlbumRow({
   onPlay,
   onRemove,
 }: {
+  readonly focusKey: string;
   readonly file: Track | undefined;
   /** The place in the file of the first song queued, from 1. */
   readonly place: number;
@@ -429,6 +497,7 @@ function AlbumRow({
       <button
         type="button"
         className="icon fold"
+        data-queue-focus={focusKey}
         aria-expanded={!folded}
         aria-label={t(folded ? "Show the songs of {{title}}" : "Hide the songs of {{title}}", {
           title,
@@ -472,6 +541,10 @@ function QueueItem({
   entry,
   track,
   inAlbum,
+  place,
+  last,
+  container,
+  onMove,
   onPlay,
   onRemove,
 }: {
@@ -479,6 +552,10 @@ function QueueItem({
   readonly track: Track | undefined;
   /** Whether it shows under its album's row. */
   readonly inAlbum: boolean;
+  readonly place: number;
+  readonly last: number;
+  readonly container: HTMLElement | null | undefined;
+  readonly onMove: (to: number) => void;
   readonly onPlay: () => void;
   readonly onRemove: () => void;
 }) {
@@ -501,8 +578,11 @@ function QueueItem({
       }
       style={{ transform: CSS.Translate.toString(transform), transition }}
       onClick={(event) => {
-        // The title is a button of its own; the handle and Remove do their own thing.
-        if (!(event.target instanceof Element) || event.target.closest("button") === null) {
+        if (
+          event.target instanceof Element &&
+          event.currentTarget.contains(event.target) &&
+          event.target.closest("button") === null
+        ) {
           onPlay();
         }
       }}
@@ -534,17 +614,97 @@ function QueueItem({
         {title}
       </button>
       <span className="entry-artist">{track?.artist}</span>
-      <button
-        type="button"
-        className="icon remove"
-        aria-label={t("Remove {{title}}", { title })}
-        title={t("Remove")}
-        onClick={onRemove}
-      >
-        <XIcon weight="bold" aria-hidden />
-      </button>
+      <QueueItemMenu
+        entryKey={entry.key}
+        title={title}
+        place={place}
+        last={last}
+        container={container}
+        onMove={onMove}
+        onRemove={onRemove}
+      />
     </li>
   );
+}
+
+function QueueItemMenu({
+  entryKey,
+  title,
+  place,
+  last,
+  container,
+  onMove,
+  onRemove,
+}: {
+  readonly entryKey: string;
+  readonly title: string;
+  readonly place: number;
+  readonly last: number;
+  readonly container: HTMLElement | null | undefined;
+  readonly onMove: (to: number) => void;
+  readonly onRemove: () => void;
+}) {
+  const t = useWords();
+  const [open, setOpen] = useState(false);
+  const moves = [
+    { label: "Move to top", to: 0, icon: ArrowLineUpIcon },
+    { label: "Move up", to: place - 1, icon: ArrowUpIcon },
+    { label: "Move down", to: place + 1, icon: ArrowDownIcon },
+    { label: "Move to end", to: last, icon: ArrowLineDownIcon },
+  ];
+  return (
+    <Menu.Root modal={false} open={open} onOpenChange={setOpen}>
+      <Menu.Trigger asChild>
+        <QueueMenuButton
+          type="button"
+          className="icon queue-more"
+          data-queue-focus={entryKey}
+          aria-label={t("Up next actions for {{title}}", { title })}
+          title={t("More actions")}
+          onClick={() => {
+            setOpen((was) => !was);
+          }}
+        >
+          <DotsThreeIcon weight="bold" aria-hidden />
+        </QueueMenuButton>
+      </Menu.Trigger>
+      <Menu.Portal container={container}>
+        <Menu.Content
+          className="track-menu"
+          align="end"
+          sideOffset={4}
+          collisionPadding={8}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          {moves.map(({ label, to, icon: Icon }) => (
+            <Menu.Item
+              key={label}
+              className="track-menu-item"
+              disabled={to < 0 || to > last || to === place}
+              onSelect={() => {
+                onMove(to);
+              }}
+            >
+              <Icon className="track-menu-icon" aria-hidden />
+              {t(label)}
+            </Menu.Item>
+          ))}
+          <Menu.Separator className="track-menu-separator" />
+          <Menu.Item className="track-menu-item" onSelect={onRemove}>
+            <XIcon className="track-menu-icon" aria-hidden />
+            {t("Remove")}
+          </Menu.Item>
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+// Open on click, not pointer down, so a swipe starting on the button scrolls.
+function QueueMenuButton(props: ComponentPropsWithRef<"button">) {
+  return <button {...props} onPointerDown={undefined} />;
 }
 
 /** Return "next", "second", and so on, for a place in what plays next. */

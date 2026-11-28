@@ -1,5 +1,7 @@
 """The composition root: settings from the environment, and a working app from them."""
 
+# cspell:ignore getinfo listnetworkserviceorder networksetup utun
+
 import inspect
 import socket
 import sqlite3

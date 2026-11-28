@@ -42,12 +42,13 @@ function ready(source: number, start: number | null, end: number | null) {
 }
 
 function renderPlayer(tracks: readonly Track[]) {
-  const shown: { player?: Player } = {};
+  const shown: { player?: Player; enableAudio?: (enabled: boolean) => void } = {};
   function Page({ catalog }: { readonly catalog: ReadonlyMap<number, Track> }) {
-    const [player, audio] = usePlayer(catalog, () => {
+    const [player, audio, enableAudio] = usePlayer(catalog, () => {
       throw new Error("Signed out.");
     });
     shown.player = player;
+    shown.enableAudio = enableAudio;
     return <audio ref={audio} />;
   }
   const index = (list: readonly Track[]) => new Map(list.map((track) => [track.id, track]));
@@ -67,6 +68,10 @@ function renderPlayer(tracks: readonly Track[]) {
     element,
     media,
     player,
+    setAudioEnabled: (enabled: boolean) => {
+      if (shown.enableAudio === undefined) throw new Error("The player hasn't rendered.");
+      shown.enableAudio(enabled);
+    },
     unmount,
     replaceCatalog: (next: readonly Track[]) => {
       rerender(<Page catalog={index(next)} />);
@@ -80,6 +85,74 @@ const playing = (player: () => Player, track: Track) =>
     expect(now.queue.entries[now.queue.position]?.trackId).toBe(track.id);
     expect(now.status.kind).toBe("playing");
   });
+
+describe("suspending local audio in Remote mode", () => {
+  it("keeps a pending song paused even when Client is selected again before it loads", async () => {
+    let read: () => void = () => {
+      throw new Error("The slow answer is not ready.");
+    };
+    const after = new Promise<void>((resolve) => {
+      read = resolve;
+    });
+    const { calls } = serve({
+      "POST /api/tracks/7/playback": { body: ready(7, null, null), after },
+    });
+    const { element, player, setAudioEnabled } = renderPlayer([OTHER]);
+    act(() => {
+      player().playNow(OTHER);
+    });
+    expect(calls).toContain("POST /api/tracks/7/playback");
+
+    act(() => {
+      setAudioEnabled(false);
+      setAudioEnabled(true);
+      read();
+    });
+
+    await waitFor(() => {
+      expect(player().status.kind).toBe("paused");
+    });
+    expect(player().queue.entries[0]?.trackId).toBe(OTHER.id);
+    expect(element.paused).toBe(true);
+    act(() => {
+      player().toggle();
+    });
+    await playing(player, OTHER);
+  });
+
+  it("ignores system media play while Remote and resumes only after a new command in Client", async () => {
+    const system = fakeSystemMedia();
+    try {
+      serve(ANSWERS);
+      const { element, media, player, setAudioEnabled } = renderPlayer([OTHER]);
+      act(() => {
+        player().playNow(OTHER);
+      });
+      await playing(player, OTHER);
+      act(() => {
+        media.playTo(15);
+        setAudioEnabled(false);
+        system.press("play");
+      });
+      expect(element.paused).toBe(true);
+      expect(player().position).toBe(15);
+
+      act(() => {
+        setAudioEnabled(true);
+      });
+
+      expect(element.paused).toBe(true);
+      act(() => {
+        system.press("play");
+      });
+      await playing(player, OTHER);
+      expect(element.currentTime).toBe(15);
+    } finally {
+      cleanup();
+      system.restore();
+    }
+  });
+});
 
 describe("dismissed downloads in the queue", () => {
   const DISMISSED = trackOf(20, "Lost Signal", { download_dismissed: true });

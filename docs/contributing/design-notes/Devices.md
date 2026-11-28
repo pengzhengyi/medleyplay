@@ -135,7 +135,7 @@ uv run medleyplay share stop
 
 For another data folder, pass it to both commands, for example
 `medleyplay share --data-dir "$data_dir" start 192.168.1.20`. Add `--port` to
-`share start` for a different LAN port. **Listen on your device** shows the
+`share start` for a different LAN port. The host's **Devices** window shows the
 running helper's URL instead of the Mac browser's address. The URL confirms
 the helper is listening; open it from a phone to verify access. `share stop`
 closes shared streams and keeps local playback and device approvals. Omit
@@ -268,13 +268,17 @@ medleyplay devices choose ask-first|allow-all|block-new-devices
   badge: "1 device waiting". It opens a menu with each device's label, address
   and code, and Allow and Turn away. The pill is the request's place on the
   screen, so it needs no toast.
-- **Settings has an *Other devices* section**: the choice, then the waiting
-  devices and the allowed ones, each with its label, address, and when it was
-  last seen. An allowed device shows its name, with its label beneath, or its
-  label alone; a pencil beside it turns it into a field, which Enter or Save
-  saves and Escape or Cancel leaves, and why a name was refused shows there.
-  Allowed devices have Remove, and the list has Remove all, which asks once
-  more first. This device is tagged and has no Remove.
+- **Admins can manage devices in the header's Devices window or in Settings.**
+  Both use the same list and policy. Match a waiting code to allow or turn
+  away a device. For allowed devices, the pencil opens a name field and
+  Remove signs the device out. A recorded **This device** cannot be removed
+  from its own browser. **Remove all** asks first; in the window, it and
+  **New devices** are under **Device policy**. Management remains available
+  on the host when sharing is off; members do not see the list.
+- **The list refreshes when opened, when live updates reconnect, when the
+  waiting list changes, and after changes from that page.** An older read
+  cannot overwrite a newer response.
+  The server remains the authority for device permissions in both places.
 
 ## What it protects
 

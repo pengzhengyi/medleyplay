@@ -7,21 +7,15 @@
  */
 
 import { PencilSimpleIcon } from "@phosphor-icons/react";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState } from "react";
 
-import {
-  type Admission,
-  type AllowedDevice,
-  ApiError,
-  type Devices,
-  type WaitingDevice,
-  api,
-} from "../api";
+import { type Admission, type AllowedDevice, ApiError, type WaitingDevice, api } from "../api";
 import { formatSeen } from "../format";
 import { useFormattingLocale, useWords } from "../locale";
 import { useNow } from "../useNow";
 import { classOf, useNote } from "../useNote";
 import { deviceError } from "./deviceError";
+import { DeviceManagement, useDeviceManagement } from "./deviceManagement";
 
 /** The choices for new devices, in the order the section shows them. */
 const ADMISSIONS: readonly { readonly admission: Admission; readonly said: string }[] = [
@@ -35,12 +29,27 @@ const ADMISSIONS: readonly { readonly admission: Admission; readonly said: strin
  * remove; `waiting` is what the event stream last said waits, so the lists
  * follow it.
  */
-export function DeviceSettings({ waiting }: { readonly waiting: readonly WaitingDevice[] }) {
+export function DeviceSettings({
+  waiting = [],
+  compact = false,
+}: {
+  readonly waiting?: readonly WaitingDevice[];
+  readonly compact?: boolean;
+}) {
   const t = useWords();
-  const [devices, setDevices] = useState<Devices | undefined>(undefined);
+  const shared = useContext(DeviceManagement);
+  const standalone = useDeviceManagement(
+    shared === null ? "settings" : null,
+    waiting.map(({ id }) => id).join(" "),
+  );
+  const { devices, failure: readingFailed, refresh: reload, keep } = shared ?? standalone;
+  const admissionGroup = useId();
   const [removingAll, setRemovingAll] = useState(false);
-  const [failure, setFailure] = useState<{ readonly cause: unknown }>();
-  const error = failure === undefined ? "" : deviceError(failure.cause, t);
+  const [failure, setFailure] = useState<{ readonly cause: unknown; readonly item?: string }>();
+  const failureShown = failure?.item === undefined ? (failure ?? readingFailed) : readingFailed;
+  const error = failureShown === undefined ? "" : deviceError(failureShown.cause, t);
+  const [savingAdmission, setSavingAdmission] = useState(false);
+  const [pending, setPending] = useState<string>();
   const notes = useNote();
   const now = useNow();
   const locale = useFormattingLocale();
@@ -48,40 +57,58 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
   const failed = (failure: unknown) => {
     setFailure({ cause: failure });
   };
-  const reload = () => {
-    api.devices().then(setDevices, failed);
-  };
-  const act = (request: Promise<unknown>, done = "") => {
+  const rowError = (item: string) =>
+    failure?.item === item && (
+      <span className="note failed" role="alert">
+        {deviceError(failure.cause, t)}
+      </span>
+    );
+  const act = (action: string, item: string, request: Promise<unknown>, done = "") => {
     setFailure(undefined);
-    request.then(() => {
-      reload();
-      if (done !== "") {
-        notes.confirm(done);
-      }
-    }, failed);
+    setPending(`${action}:${item}`);
+    void request
+      .then(
+        () => {
+          reload();
+          if (done !== "") notes.confirm(done);
+        },
+        (cause: unknown) => {
+          setFailure({ cause, item });
+          reload();
+        },
+      )
+      .finally(() => {
+        setPending(undefined);
+      });
   };
-  const reloadWhenWaitingChanges = useEffectEvent(() => {
-    reload();
-  });
-  const waitingIds = waiting.map(({ id }) => id).join(" ");
-  useEffect(() => {
-    reloadWhenWaitingChanges();
-  }, [waitingIds]);
 
   const choose = (admission: Admission) => {
     if (devices === undefined) {
       return;
     }
     setFailure(undefined);
-    setDevices({ ...devices, admission });
-    api.saveAdmission(admission, devices.revision).then(setDevices, (failure: unknown) => {
-      reload();
-      if (failure instanceof ApiError && failure.status === 409) {
-        notes.tell("The choice changed elsewhere, so here it is now. Choose again to change it.");
-        return;
-      }
-      failed(failure);
-    });
+    setSavingAdmission(true);
+    void api
+      .saveAdmission(admission, devices.revision)
+      .then(
+        (saved) => {
+          keep(saved);
+          reload();
+        },
+        (failure: unknown) => {
+          reload();
+          if (failure instanceof ApiError && failure.status === 409) {
+            notes.tell(
+              "The choice changed elsewhere, so here it is now. Choose again to change it.",
+            );
+            return;
+          }
+          failed(failure);
+        },
+      )
+      .finally(() => {
+        setSavingAdmission(false);
+      });
   };
 
   if (devices === undefined) {
@@ -94,16 +121,15 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
     );
   }
   const others = devices.allowed.filter((device) => !device.this_device);
-  return (
+  const policy = (
     <>
-      {error !== "" && <p role="alert">{error}</p>}
-      <fieldset className="mode-setting">
+      <fieldset className="mode-setting" disabled={savingAdmission}>
         <legend>{t("New devices")}</legend>
         {ADMISSIONS.map(({ admission, said }) => (
           <label key={admission} className="mode-choice">
             <input
               type="radio"
-              name="admission"
+              name={admissionGroup}
               checked={devices.admission === admission}
               onChange={() => {
                 choose(admission);
@@ -114,6 +140,55 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
         ))}
       </fieldset>
       <p className="hint">{t("The computer running medleyplay is always let in.")}</p>
+    </>
+  );
+  const bulk =
+    others.length > 1 &&
+    (removingAll ? (
+      <p className="device-remove-all" role="group" aria-label={t("Remove all devices")}>
+        <span>
+          {t(
+            "Remove {{count}} devices? This signs them out. The New devices setting determines whether they can reconnect.",
+            { count: others.length },
+          )}
+        </span>
+        <button
+          type="button"
+          disabled={pending !== undefined}
+          aria-busy={pending === "remove:all"}
+          onClick={() => {
+            setRemovingAll(false);
+            act("remove", "all", api.removeOtherDevices(), "Removed.");
+          }}
+        >
+          {t("Remove all")}
+        </button>
+        <button
+          type="button"
+          className="secondary outline"
+          onClick={() => {
+            setRemovingAll(false);
+          }}
+        >
+          {t("Keep them")}
+        </button>
+      </p>
+    ) : (
+      <button
+        type="button"
+        className="secondary outline"
+        disabled={pending !== undefined}
+        onClick={() => {
+          setRemovingAll(true);
+        }}
+      >
+        {t("Remove all")}
+      </button>
+    ));
+  return (
+    <>
+      {error !== "" && <p role="alert">{error}</p>}
+      {!compact && policy}
       {devices.waiting.length > 0 && (
         <>
           <h4 className="device-heading">{t("Waiting")}</h4>
@@ -128,8 +203,10 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                 <span className="device-actions">
                   <button
                     type="button"
+                    disabled={pending !== undefined}
+                    aria-busy={pending === `allow:${device.id}`}
                     onClick={() => {
-                      act(api.allowDevice(device.id));
+                      act("allow", device.id, api.allowDevice(device.id));
                     }}
                   >
                     {t("Allow")}
@@ -137,13 +214,16 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                   <button
                     type="button"
                     className="secondary outline"
+                    disabled={pending !== undefined}
+                    aria-busy={pending === `turn:${device.id}`}
                     onClick={() => {
-                      act(api.turnAwayDevice(device.id));
+                      act("turn", device.id, api.turnAwayDevice(device.id));
                     }}
                   >
                     {t("Turn away")}
                   </button>
                 </span>
+                {rowError(device.id)}
               </li>
             ))}
           </ul>
@@ -166,61 +246,38 @@ export function DeviceSettings({ waiting }: { readonly waiting: readonly Waiting
                   <button
                     type="button"
                     className="secondary outline"
+                    disabled={pending !== undefined}
+                    aria-busy={pending === `remove:${device.id}`}
                     aria-label={t("Remove {{device}} at {{address}}", {
                       device: device.name ?? device.label,
                       address: device.address,
                     })}
                     onClick={() => {
-                      act(api.removeDevice(device.id), "Removed.");
+                      act("remove", device.id, api.removeDevice(device.id), "Removed.");
                     }}
                   >
                     {t("Remove")}
                   </button>
                 </span>
               )}
+              {rowError(device.id)}
             </li>
           ))}
         </ul>
       )}
-      {others.length > 1 &&
-        (removingAll ? (
-          <p className="device-remove-all" role="group" aria-label={t("Remove all devices")}>
-            <span>
-              {t(
-                "Remove {{count}} devices? This signs them out. The New devices setting determines whether they can reconnect.",
-                { count: others.length },
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setRemovingAll(false);
-                act(api.removeOtherDevices(), "Removed.");
-              }}
-            >
-              {t("Remove all")}
-            </button>
-            <button
-              type="button"
-              className="secondary outline"
-              onClick={() => {
-                setRemovingAll(false);
-              }}
-            >
-              {t("Keep them")}
-            </button>
-          </p>
-        ) : (
-          <button
-            type="button"
-            className="secondary outline"
-            onClick={() => {
-              setRemovingAll(true);
-            }}
-          >
-            {t("Remove all")}
-          </button>
-        ))}
+      {compact ? (
+        <details className="listen-help">
+          <summary>{t("Device policy")}</summary>
+          {policy}
+          {bulk}
+          {rowError("all")}
+        </details>
+      ) : (
+        <>
+          {bulk}
+          {rowError("all")}
+        </>
+      )}
       <p className={classOf(notes.note)} role="status">
         {t(notes.note.text)}
       </p>

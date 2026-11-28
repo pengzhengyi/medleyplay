@@ -13,6 +13,7 @@ import {
   letIn,
   onDeviceRefused,
 } from "./api";
+import type { DeviceConnection } from "./listen";
 import { DeviceWaiting } from "./views/DeviceWaiting";
 import { Hints } from "./views/Hint";
 import { Library } from "./views/Library";
@@ -34,7 +35,7 @@ export function App() {
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
   const [keptOut, setKeptOut] = useState<DeviceInfo | null>(null);
   // Whether this page is on the computer medleyplay runs on, so it plays for the Account.
-  const [onHost, setOnHost] = useState(false);
+  const [connection, setConnection] = useState<DeviceConnection>("unknown");
   const reads = useRef({ lastRequest: 0, current: 0, admitted: false });
   const initialReads = useRef<FirstReads | null | undefined>(undefined);
 
@@ -51,7 +52,7 @@ export function App() {
     );
   };
   const answered = (device: DeviceInfo, read: number, first?: FirstReads["account"]) => {
-    setOnHost(device.presence === "host");
+    setConnection(device.presence === "host" ? "host" : "lan");
     if (letIn(device)) {
       setKeptOut(null);
       askWhoIsSignedIn(read, first);
@@ -78,6 +79,7 @@ export function App() {
       () => {
         if (retry || read !== order.current) return;
         initialReads.current = null;
+        setConnection("unknown");
         askWhoIsSignedIn(read);
       },
     );
@@ -134,7 +136,7 @@ export function App() {
     <Hints>
       <Library
         account={account}
-        onHost={onHost}
+        connection={connection}
         onSignedOut={() => {
           if (reads.current.admitted) setSession(null);
         }}

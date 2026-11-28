@@ -20,9 +20,9 @@
 
 ## Principles
 
-- **Where the music plays is the listener's choice, per device.** A phone plays
-  on itself, or on the computer, chosen in the player: *Play on* this phone or
-  the computer.
+- **Where the music plays is the listener's choice.** On a connected browser,
+  **Client** plays on that device with its own queue. **Remote** controls the
+  computer's player. The choice lasts while the page is open.
 - **The computer plays through its own medleyplay page**, the one the household
   already keeps open there. The server plays nothing itself, so it needs no
   audio library and plays a song inside a longer file exactly as the page does.
@@ -99,14 +99,23 @@
 - **The sleep timer runs on the speaker**, so it pauses the computer even when
   the phone's page sleeps; the remote sets it and shows it.
 - **The remote's own audio stays silent** while it plays on the computer.
+- **Choosing Remote pauses local audio and cancels pending starts.** The local
+  queue and position stay where they were; the phone's media controls cannot
+  start its audio. Choosing Client returns to that queue without starting it
+  or pausing the computer. Two devices can play different songs at once.
+  Each station adds songs only to the player it started on.
+- **No speaker means no new Remote selection.** A page already in Remote
+  stays there if the speaker goes away. It does not become a local player
+  without the listener choosing Client.
 
 ## Moving the music
 
-Choosing where to play moves what plays, as Spotify Connect does:
+The player's **Move playback** action transfers the playing queue and position.
+It is separate from changing playback mode and replaces the destination queue.
 
 ```text
-phone plays, Play on → the computer   phone's queue and second → computer, playing; phone pauses
-computer plays, Play on → this device  computer's queue window and second → phone, playing; computer pauses
+phone plays, Move playback:     phone's queue and second go to the computer; phone pauses
+computer plays, Move playback:  computer's queue window and second go to the phone; computer pauses
 ```
 
 - **The move onto the computer is one command, `take`**, carrying the whole
@@ -118,8 +127,10 @@ computer plays, Play on → this device  computer's queue window and second → 
   on* says why. Both commands go in the remote's line, after any sent before.
 - **Moving onto the phone takes the report's window**, the 500 entries around
   the one playing, and whether its play has counted.
-- **Nothing playing moves nothing**: choosing the computer while the phone is
-  paused or idle just shows what the computer has.
+- **The move is offered when the source is playing and a speaker is
+  available.** The mode controls wait for the command. A late reply after a
+  lost or replaced speaker does not change mode. Delivery does not confirm
+  that the destination's browser started audio.
 
 ## The server
 
@@ -154,17 +165,14 @@ All in memory, in `RemoteService`; nothing is stored.
   the browser refuses is the status *blocked*.
 - **`useSpeaker`** reports the host page's player and carries out the commands
   its stream hears. **`useRemotePlayer`** is the remote's `Player`, from the
-  `remote` event. `Library` uses one or the other, whichever *Play on* names.
+  `remote` event. `Library` uses one or the other according to **Playback mode**.
   The rules both share, the report, the window, the count of the seconds, and
   how a command is carried out, are pure functions in `player/remote.ts`.
-- ***Play on*** is a speaker button in the player, beside *Up next*, on every
-  page that isn't on the host: a menu of *This device* and *The computer*. The
-  computer is offered only while medleyplay plays there, and otherwise says to
-  open it. Playing on the computer, the button says *Computer*. The choice
-  lasts while the page is open; with the speaker gone, the page plays on
-  itself again.
-- **The *Listen on your device* guide** says the phone plays on itself, or on
-  the computer with *Play on*.
+- **The player shortcut and Devices window share the same mode selection.**
+  The player menu also offers **Move playback** as an explicit action.
+- **Devices shows the current connection** on a non-host browser. Its live
+  update status is separate from speaker availability and from internet
+  access. During a reconnect, the last speaker report is not shown as live.
 
 ## Testing
 
@@ -181,8 +189,8 @@ All in memory, in `RemoteService`; nothing is stored.
   the volume's pace, a refusal, *not responding*, *blocked*, and the sleep
   timer; the speaker's reports, on a change, a seek, a heartbeat, once its
   stream answers, not when another tab takes over, and at their pace; a
-  station refilling a queue a remote sees only part of; *Play on* through the
-  page, a refused move among them.
+  station refilling a queue a remote sees only part of; independent queues, a
+  pending local load in Remote, and a refused move through the player menu.
 
 ## Left for later
 

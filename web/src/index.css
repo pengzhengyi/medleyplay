@@ -7658,6 +7658,35 @@ button.enricher-reset {
   font-size: 0.85rem;
 }
 
+.listen-modes {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.listen-mode {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.4rem 0;
+}
+
+.listen-mode-option {
+  flex: none;
+  margin: 0;
+}
+
+.listen-mode-about {
+  display: block;
+}
+
+.listen-management {
+  margin-top: 1.15rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
 .listen-body {
   display: grid;
   grid-template-columns: 12rem minmax(0, 1fr);

@@ -9,17 +9,11 @@ import { LanguageSelect } from "./LanguageSelect";
 const ON_THIS_MACHINE = { protocol: "http:", hostname: "localhost", port: "8000" };
 
 /** Open the guide for Alice, the server answering on the network at `addresses`. */
-async function open(addresses: readonly string[], here = ON_THIS_MACHINE, waitingCount?: number) {
+async function open(addresses: readonly string[], here = ON_THIS_MACHINE) {
   render(
-    <ListenOnDevice
-      username="alice"
-      load={() => Promise.resolve({ addresses })}
-      here={here}
-      waitingCount={waitingCount}
-      onClose={vi.fn()}
-    />,
+    <ListenOnDevice username="alice" load={() => Promise.resolve({ addresses })} here={here} />,
   );
-  const dialog = screen.getByRole("dialog", { name: "Listen on your device" });
+  const dialog = screen.getByRole("region", { name: "Listen on another device" });
   await within(dialog).findByText(/Join the same Wi-Fi|No local network address/u);
   return dialog;
 }
@@ -35,7 +29,6 @@ describe("listening on another device", () => {
         username="alice"
         load={() => Promise.resolve({ addresses: [], share_url: "http://192.168.1.20:8123" })}
         here={ON_THIS_MACHINE}
-        onClose={vi.fn()}
       />,
     );
 
@@ -51,7 +44,6 @@ describe("listening on another device", () => {
         username="alice"
         load={() => Promise.resolve({ addresses: [], share_url: null })}
         here={{ ...ON_THIS_MACHINE, hostname: "music.home" }}
-        onClose={vi.fn()}
       />,
     );
 
@@ -66,9 +58,7 @@ describe("listening on another device", () => {
         .fn<() => Promise<{ addresses: string[]; share_url: string | null }>>()
         .mockResolvedValueOnce({ addresses: [], share_url: "http://192.168.1.20:8123" })
         .mockResolvedValue({ addresses: [], share_url: null });
-      render(
-        <ListenOnDevice username="alice" load={load} here={ON_THIS_MACHINE} onClose={vi.fn()} />,
-      );
+      render(<ListenOnDevice username="alice" load={load} here={ON_THIS_MACHINE} />);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
@@ -96,7 +86,7 @@ describe("listening on another device", () => {
       fireEvent.change(language, { target: { value: "zh-Hans" } });
 
       const guide = within(dialog);
-      expect(dialog).toHaveAccessibleName("在你的设备上收听");
+      expect(dialog).toHaveAccessibleName("在其他设备上收听");
       expect(guide.getByText("连接到与这台电脑相同的 Wi-Fi。")).toBeVisible();
       expect(guide.getByRole("region", { name: "连接信息" })).toHaveTextContent("协议HTTP");
       expect(guide.getByRole("img", { name: "http://192.168.1.20:8000 的二维码" })).toBeVisible();
@@ -146,22 +136,10 @@ describe("listening on another device", () => {
     expect(connection.getByText("443")).toBeVisible();
   });
 
-  it("shows an admin when a device did reach the server and needs approval", async () => {
-    const dialog = await open(["192.168.1.20"], ON_THIS_MACHINE, 1);
-    const connection = within(within(dialog).getByRole("region", { name: "Connection info" }));
-
-    expect(connection.getByText("1 device waiting")).toBeVisible();
-    expect(connection.getByRole("link", { name: "Open Devices settings" })).toHaveAttribute(
-      "href",
-      "#/settings?section=devices",
-    );
-  });
-
   it("offers no choice of address when there is one", async () => {
     const dialog = await open(["192.168.1.20"]);
 
     expect(within(dialog).queryByRole("list", { name: "Addresses" })).toBeNull();
-    expect(within(dialog).queryByRole("link", { name: "Open Devices settings" })).toBeNull();
   });
 
   it("copies the address and says so beside it", async () => {

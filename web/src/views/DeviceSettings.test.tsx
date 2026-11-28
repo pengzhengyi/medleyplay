@@ -99,10 +99,13 @@ describe("DeviceSettings", () => {
 
   it("saves another choice at the revision read", async () => {
     const saved: unknown[] = [];
+    let house = HOUSEHOLD;
     open({
+      "GET /api/devices": () => ({ body: house }),
       "PUT /api/devices/setting": (body) => {
         saved.push(body);
-        return { body: { ...HOUSEHOLD, admission: "known", revision: 4 } };
+        house = { ...HOUSEHOLD, admission: "known", revision: 4 };
+        return { body: house };
       },
     });
     const user = userEvent.setup();

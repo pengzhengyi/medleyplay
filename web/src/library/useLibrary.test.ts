@@ -348,6 +348,7 @@ describe("remote play", () => {
     const { result } = renderHook(() => useLibrary(vi.fn()));
 
     act(() => {
+      stream().send("ready");
       stream().send("remote", { page: "host-page-0001", state: speakerStateOf(), age_ms: 3000 });
     });
 
@@ -370,6 +371,7 @@ describe("remote play", () => {
     serve(signedIn([]));
     const { result } = renderHook(() => useLibrary(vi.fn()));
     act(() => {
+      stream().send("ready");
       stream().send("remote", { page: "host-page-0001", state: speakerStateOf(), age_ms: 0 });
     });
 
@@ -387,6 +389,7 @@ describe("remote play", () => {
     const stop = result.current.onCommand(heard);
 
     act(() => {
+      stream().send("ready");
       stream().send("command", { kind: "next" });
     });
     stop();

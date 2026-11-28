@@ -6,8 +6,8 @@
 
 import { lazyPart } from "../lazyPart";
 
-export const ListenOnDevice = lazyPart(() =>
-  import("./ListenOnDevice").then((loaded) => loaded.ListenOnDevice),
+export const DeviceWindow = lazyPart(() =>
+  import("./DeviceWindow").then((loaded) => loaded.DeviceWindow),
 );
 export const LyricsEditor = lazyPart(() =>
   import("./LyricsEditor").then((loaded) => loaded.LyricsEditor),
@@ -29,7 +29,7 @@ export const ListEditor = lazyPart(() => import("./ListEditor").then((loaded) =>
 
 /** Every part, in the order they are preloaded: the dialogs and panels, the views, the list editor. */
 export const PRELOADED = [
-  ListenOnDevice,
+  DeviceWindow,
   LyricsEditor,
   SongsEditor,
   SettingsView,

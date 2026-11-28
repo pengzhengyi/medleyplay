@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import { FakeEventSource, stream } from "../testing/events";
+import { fakeMedia } from "../testing/media";
 import { type Routes, serve, signedIn, speakerStateOf, trackOf } from "../testing/server";
 import { LanguageSelect } from "./LanguageSelect";
 
@@ -22,6 +23,7 @@ function phone(routes: Routes = {}): Routes {
 /** The computer playing Lemon, as the event stream says. */
 function computerPlaysLemon() {
   act(() => {
+    stream().send("ready");
     stream().send("remote", { page: "host-page-0001", state: speakerStateOf(), age_ms: 0 });
   });
 }
@@ -33,11 +35,73 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   FakeEventSource.last = undefined;
 });
 
 describe("Play on", () => {
+  it("switches between independent queues without sending the computer a command", async () => {
+    const { calls } = serve(
+      phone({
+        "POST /api/tracks/2/playback": {
+          body: {
+            state: "ready",
+            audio_url: "/api/sources/2/audio",
+            source_id: 2,
+            media_type: "audio/mp4",
+            start_ms: null,
+            end_ms: null,
+          },
+        },
+      }),
+    );
+    const { container } = render(<App />);
+    const user = userEvent.setup();
+    await screen.findByRole("button", { name: "Play on: this device" });
+    const audio = container.querySelector("audio");
+    if (audio === null) throw new Error("The player rendered no audio element.");
+    fakeMedia(audio);
+    computerPlaysLemon();
+    await user.click(await screen.findByRole("button", { name: "Flamingo" }));
+    await waitFor(() => {
+      expect(within(player()).getByText("Flamingo")).toBeVisible();
+      expect(audio.paused).toBe(false);
+    });
+
+    await user.click(screen.getByRole("button", { name: "Play on: this device" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /^Remote/u }));
+    expect(within(player()).getByText("Lemon")).toBeVisible();
+    expect(audio.paused).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Play on: the computer" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /^Client/u }));
+
+    expect(within(player()).getByText("Flamingo")).toBeVisible();
+    expect(audio.paused).toBe(true);
+    expect(calls).not.toContain("POST /api/remote/commands");
+  });
+
+  it("keeps a Client station from adding songs to the computer when switching to Remote", async () => {
+    const { calls } = serve(
+      phone({ "GET /api/tracks": { body: [{ ...LEMON, favorite: true }, FLAMINGO] } }),
+    );
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("link", { name: "Radio" }));
+    await user.click(await screen.findByRole("button", { name: "Play favorites" }));
+    expect(await screen.findByText("Current station")).toBeVisible();
+    computerPlaysLemon();
+
+    await user.click(screen.getByRole("button", { name: "Play on: this device" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /^Remote/u }));
+
+    expect(screen.queryByText("Current station")).not.toBeInTheDocument();
+    expect(calls).not.toContain("POST /api/remote/commands");
+    await user.click(screen.getByRole("button", { name: "Play on: the computer" }));
+    await user.click(screen.getByRole("menuitemradio", { name: /^Client/u }));
+    expect(screen.getByText("Current station")).toBeVisible();
+  });
+
   it("shows the remote playback instruction in Chinese inside Now Playing", async () => {
     serve(phone());
     render(<App />);
@@ -45,6 +109,7 @@ describe("Play on", () => {
     const user = userEvent.setup();
     const choose = await screen.findByRole("button", { name: "Play on: this device" });
     act(() => {
+      stream().send("ready");
       stream().send("remote", {
         page: "host-page-0001",
         state: speakerStateOf({ status: "blocked" }),
@@ -71,7 +136,12 @@ describe("Play on", () => {
     render(<App />);
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: "Play on: this device" }));
+    const choice = await screen.findByRole("button", { name: "Play on: this device" });
+    act(() => {
+      stream().send("ready");
+      stream().send("remote", { page: null, state: null, age_ms: null });
+    });
+    await user.click(choice);
 
     const computer = screen.getByRole("menuitemradio", { name: /The computer/ });
     expect(computer).toHaveAttribute("aria-disabled", "true");
@@ -160,13 +230,13 @@ describe("Play on", () => {
     await user.click(screen.getByRole("menuitemradio", { name: /The computer/ }));
 
     await user.click(screen.getByRole("button", { name: "Play on: the computer" }));
-    await user.click(screen.getByRole("menuitemradio", { name: /This device/ }));
+    await user.click(screen.getByRole("menuitem", { name: /^Move playback/u }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Too many commands waiting.");
     expect(screen.getByRole("button", { name: "Play on: the computer" })).toBeInTheDocument();
   });
 
-  it("plays here again once the computer stops playing for the Account", async () => {
+  it("keeps Remote selected when the speaker is lost", async () => {
     serve(phone());
     render(<App />);
     const user = userEvent.setup();
@@ -179,7 +249,37 @@ describe("Play on", () => {
       stream().send("remote", { page: null, state: null, age_ms: null });
     });
 
-    expect(screen.getByRole("button", { name: "Play on: this device" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play on: the computer" })).toBeInTheDocument();
+  });
+
+  it("does not start local audio from a late handoff reply after the speaker is lost", async () => {
+    let finish: () => void = () => {
+      throw new Error("The handoff is not pending.");
+    };
+    const after = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const { calls } = serve(phone({ "POST /api/remote/commands": { status: 204, after } }));
+    render(<App />);
+    const user = userEvent.setup();
+    const choice = await screen.findByRole("button", { name: "Play on: this device" });
+    computerPlaysLemon();
+    await user.click(choice);
+    await user.click(screen.getByRole("menuitemradio", { name: /^Remote/u }));
+    await user.click(screen.getByRole("button", { name: "Play on: the computer" }));
+    await user.click(screen.getByRole("menuitem", { name: /^Move playback/u }));
+    expect(calls).toContain("POST /api/remote/commands");
+
+    act(() => {
+      stream().send("remote", { page: null, state: null, age_ms: null });
+    });
+    await act(async () => {
+      finish();
+      await after;
+    });
+
+    expect(screen.getByRole("button", { name: "Play on: the computer" })).toBeInTheDocument();
+    expect(calls).not.toContain("POST /api/tracks/1/playback");
   });
 
   it("isn't offered on the computer itself", async () => {

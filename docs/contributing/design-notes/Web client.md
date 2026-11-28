@@ -789,27 +789,23 @@ and its last button folds or opens them all. A link that names a section, such a
 
 ## Listening on another device
 
-- ***Listen on your device*** in the header opens a guide: the address to open
-  on a phone, as a QR code to scan with its camera and as text with *Copy*, and
-  the steps around it: join the same Wi-Fi, sign in as the same Account, and
-  add it to the Home Screen.
-- **The address is the server's on the network,** from `GET /api/addresses`:
-  the names it answers to that another device can open, its IPv4 addresses
-  first, then dotted names such as `mac-mini.local`, all on this page's port.
-  Where the page itself was opened comes first when that is not this machine
-  alone, since it already works for that browser. **Connection info** shows
-  the selected URL, protocol, and TCP port, without claiming another device
-  can reach them. With several addresses, each can be chosen; with none, the
-  guide explains how to get a local address.
+- **Devices** in the header opens the host's share guide: an address to copy
+  or scan as a QR code, and instructions to join the same Wi-Fi and sign in.
+- **The host gets share addresses from `GET /api/addresses`.** Managed
+  sharing shows only its published URL, or no URL while sharing is off.
+  Standalone mode offers its available network addresses on the page's port.
+  **Connection info** shows the selected URL, protocol, and TCP port, without
+  claiming another device can reach them.
 - **Connection help** distinguishes a page that never loads from a device
-  waiting for approval. Admins can see the number of waiting devices and
-  open Devices settings from the guide to match the code.
+  waiting for approval. See [Devices](Devices.md#the-web-client) for the controls
+  both the window and Settings offer to admins.
 - **The QR code is drawn as one SVG path,** dark on light in either theme, from
   [uqr](https://github.com/unjs/uqr)'s matrix, which only `qr.ts` imports. It
   was chosen over lean-qr and `qrcode-generator`, which encoded as well in a
   spike; each address the spike tried was decoded back by jsQR.
-- ***Play on*** in the player, on a page that isn't on the computer, plays the
-  music on the computer instead; see [Remote play](<Remote play.md>).
+- **On another device, Devices shows its own connection and playback mode.**
+  Client plays here; Remote controls the computer. See
+  [Remote play](<Remote play.md#the-web-client>) for the two modes and handoff.
 
 ## Layout
 

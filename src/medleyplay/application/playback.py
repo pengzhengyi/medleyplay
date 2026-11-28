@@ -361,6 +361,10 @@ class PlaybackService:
         if to_download is not None:
             job = self._downloads.start(caller, to_download.source_id)
             if job is None:
+                download = self._open_download(to_download.source_id)
+                if download is not None:
+                    download.close()
+                    return Ready(to_download.source_id, download.media_type, stretch)
                 found.append(Availability.UNAVAILABLE)
             elif not self._online() and job.state in {JobState.QUEUED, JobState.WAITING}:
                 found.append(Availability.WAITING_ONLINE)

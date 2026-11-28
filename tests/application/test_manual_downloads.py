@@ -40,7 +40,7 @@ from medleyplay.domain.errors import (
     NotFoundError,
     TooLargeError,
 )
-from medleyplay.domain.jobs import JobState
+from medleyplay.domain.jobs import Job, JobState
 from medleyplay.domain.silences import FIND_SILENCES_KIND
 from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
 from medleyplay.programs.find_silences import FindSilencesJob
@@ -626,6 +626,25 @@ def test_a_file_is_added_while_offline_since_nothing_contacts_the_site(
     _store(site.manual, track_id, "night.wav", _two_second_wav())
 
     assert site.playback.play(alice, track_id) == Ready(_source_of(units, track_id), "audio/wav")
+
+
+def test_play_uses_a_file_uploaded_between_its_read_and_download_admission(
+    site: Site, alice: Account, units: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = site.catalog.add_track(SourceKey("bilibili", "BV1Xx41117Tz/p1"), TrackDetails("A"))
+    source = _source_of(units, track)
+    start = site.downloads.start
+
+    def finish_upload(caller: Account, source_id: SourceId) -> Job | None:
+        _store(site.manual, track, "local.wav", _two_second_wav())
+        return start(caller, source_id)
+
+    monkeypatch.setattr(site.downloads, "start", finish_upload)
+
+    played = site.playback.play(alice, track)
+
+    assert played == Ready(source, "audio/wav")
+    assert site.jobs.latest(DOWNLOAD_KIND, download_target(source)) is None
 
 
 def test_adding_a_file_tells_what_changed_after_it_commits(site: Site, alice: Account) -> None:

@@ -1,10 +1,12 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AlbumSong, Playing } from "../player/albumNow";
+import { useLanguageChoice } from "../locale";
 import { trackOf } from "../testing/server";
 import { AlbumCard, PlayingKind } from "./PlayingKind";
+import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 
 /**
  * 生如夏花 split into three songs, the second playing:
@@ -57,6 +59,64 @@ const songButtons = (songs: HTMLElement) =>
   within(songs).getAllByRole("button", { name: /, (played|playing now|to come)$/u });
 
 describe("what plays now", () => {
+  it.each(["song", "album"] as const)(
+    "keeps a mounted %s mark's lyrics and language current without changing its track props",
+    (kind) => {
+      const { result } = renderHook(() => useLanguageChoice());
+      const original = result.current[0];
+      const track = trackOf(9, "Blue", { kind, album: "Blue" });
+      const playing: Playing =
+        kind === "song"
+          ? { kind: "song" }
+          : { kind: "album", songs: [], current: -1, length: undefined };
+      const shown = (
+        <PlayingKind
+          playing={playing}
+          track={track}
+          position={0}
+          moving={false}
+          opens="below"
+          onPlaySong={vi.fn()}
+          onEditSongs={vi.fn()}
+        />
+      );
+      const { rerender } = render(
+        <LyricsAvailabilityProvider tracks={[track]}>{shown}</LyricsAvailabilityProvider>,
+      );
+      const role = kind === "song" ? "img" : "button";
+      const mark = screen.getByRole(role, {
+        name: kind === "song" ? "Playing a song" : "Album: Blue",
+      });
+
+      rerender(
+        <LyricsAvailabilityProvider tracks={[{ ...track, has_lyrics: true }]}>
+          {shown}
+        </LyricsAvailabilityProvider>,
+      );
+
+      expect(mark).toHaveAccessibleName(
+        kind === "song" ? "Playing a song, Lyrics available" : "Album: Blue, All songs have lyrics",
+      );
+      try {
+        act(() => {
+          result.current[1]("zh-Hans");
+        });
+
+        expect(
+          screen.getByRole(role, {
+            name: kind === "song" ? "正在播放歌曲，有歌词" : "专辑：Blue，所有歌曲都有歌词",
+          }),
+        ).toBe(mark);
+        rerender(<LyricsAvailabilityProvider tracks={[track]}>{shown}</LyricsAvailabilityProvider>);
+        expect(mark).toHaveAccessibleName(kind === "song" ? "正在播放歌曲" : "专辑：Blue");
+      } finally {
+        act(() => {
+          result.current[1](original);
+        });
+      }
+    },
+  );
+
   it("is a song's mark, with nothing to open", () => {
     renderKind({ kind: "song" });
 

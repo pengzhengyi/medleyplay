@@ -92,6 +92,27 @@ describe("lyrics availability marks", () => {
     }
   });
 
+  it("updates kind and lyrics labels together when the mounted mark changes language", () => {
+    const { result } = renderHook(() => useLanguageChoice());
+    const original = result.current[0];
+    const song = trackOf(1, "First light", { has_lyrics: true });
+    render(<KindMark kind="song" reason="named" lyrics={song} />);
+    const mark = screen.getByRole("img", { name: "Song, Lyrics available" });
+
+    try {
+      act(() => {
+        result.current[1]("zh-Hans");
+      });
+
+      expect(screen.getByRole("img", { name: "歌曲，有歌词" })).toBe(mark);
+      expect(mark).toHaveAttribute("title", "歌曲，有歌词");
+    } finally {
+      act(() => {
+        result.current[1](original);
+      });
+    }
+  });
+
   it.each([null, "saved-cover"])(
     "marks the song note beside cover %s without taking its click or focus",
     (cover) => {

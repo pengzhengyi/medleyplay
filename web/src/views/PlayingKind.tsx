@@ -61,7 +61,7 @@ export function PlayingKind({
 }) {
   const t = useWords();
   const motion = moving ? "moving" : "still";
-  const songLyrics = useLyricsLabel(playing.kind === "song" ? track : undefined);
+  const songLyrics = useLyricsLabel(playing.kind === "song" ? track : undefined, t);
   const songLabel = songLyrics === undefined ? t("Song") : [t("Song"), songLyrics].join(t(", "));
   if (playing.kind === "song") {
     return (
@@ -118,10 +118,10 @@ function AlbumMark({
   /** Favorite a song of the album, or not; without it, the songs show no hearts. */
   readonly onFavorite?: ((track: Track, favorite: boolean) => void) | undefined;
 }) {
-  const lyricsLabel = useLyricsLabel(track.kind === "song" ? albumLyricsSubject(track) : track);
+  const t = useWords();
+  const lyricsLabel = useLyricsLabel(track.kind === "song" ? albumLyricsSubject(track) : track, t);
   // Pointing opens the songs, and a press keeps them open while the pointer stays or
   // focus is in them; leaving with the mouse closes them either way.
-  const t = useWords();
   const [shown, setShown] = useState<"closed" | "pointed" | "kept">("closed");
   const open = shown !== "closed";
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

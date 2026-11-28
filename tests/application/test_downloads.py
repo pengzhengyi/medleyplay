@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application import downloads as download_app
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.job_runner import NETWORK_RETRY, JobRunner, _Outcome, _Running
 from medleyplay.application.links import Added, AlbumChoice, PartChoice
@@ -314,6 +315,7 @@ def test_a_media_stop_blocks_an_overlapping_join_and_retries_but_not_other_parts
     link = "https://www.bilibili.com/video/BVMediaStop"
     lookup = site.video_lookups.start(alice, link)
     site.wait_for(lookup.id, JobState.SUCCEEDED)
+    monkeypatch.setattr(download_app, "join_tools", lambda: ("ffmpeg", "ffprobe"))
     resolve = site.links.require_online
     monkeypatch.setattr(site.links, "require_online", lambda: None)
     site.online.online = False

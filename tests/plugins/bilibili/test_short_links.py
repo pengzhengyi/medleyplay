@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from medleyplay.plugin_api import CANONICALIZE, NetworkError
+from medleyplay.plugin_api import CANONICALIZE, NetworkError, ProviderStopError
 from medleyplay.plugins.bilibili.short_links import (
     MAX_HOPS,
     TIMEOUT_SECONDS,
@@ -188,10 +188,16 @@ def test_a_redirect_through_the_proxy_is_read_and_not_followed(no_outside_networ
     assert proxy.requests == ["GET http://b23.tv/abc123 HTTP/1.1"]
 
 
-def test_a_proxy_that_answers_with_an_error_is_a_network_failure_asked_once(
+@pytest.mark.parametrize(("status", "error"), [(412, ProviderStopError), (503, NetworkError)])
+def test_a_failed_short_link_request_is_sent_once(
     no_outside_network: None,
+    status: int,
+    error: type[Exception],
 ) -> None:
-    with running_http_proxy() as proxy, pytest.raises(NetworkError, match="412"):
+    with (
+        running_http_proxy(otherwise=Answer(status)) as proxy,
+        pytest.raises(error, match=str(status)),
+    ):
         fetch_redirect("http://b23.tv/abc123", proxy=proxy.url)
 
     assert len(proxy.requests) == 1

@@ -777,6 +777,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Playing badge uses transformed bars to reduce repeated painting.
+  Its motion, labels, and reduced-motion behavior stay the same.
 - The seek thumb animates a transform instead of its layout position in browsers
   that support its clipping rules. Motion and seeking controls stay the same.
 - Icon controls enlarge their glyph on hover instead of adding a background.
@@ -986,6 +988,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- Editing a split album's songs updates complete albums already in **Up next**.
+  Restored album queues no longer leave deleted songs between surviving ones.
 
 - **More details** clears after asking AI, so the next request starts empty.
 - Hide dismissed failed downloads that have no saved audio from the Library

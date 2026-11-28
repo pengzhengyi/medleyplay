@@ -1226,7 +1226,11 @@ function CoverBadge({
   }
   return playing ? (
     <span className="cover-badge" role="img" aria-label={t("Playing")} title={t("Playing")}>
-      <span className="bars" aria-hidden />
+      <span className="bars" aria-hidden>
+        <span />
+        <span />
+        <span />
+      </span>
     </span>
   ) : null;
 }

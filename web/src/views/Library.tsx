@@ -160,7 +160,7 @@ export function Library({
     () => [...new Set(tracks.map((track) => track.artist.trim()).filter((name) => name !== ""))],
     [tracks],
   );
-  const [local, audio, setLocalAudio] = usePlayer(catalog, onSignedOut);
+  const [local, audio, setLocalAudio] = usePlayer(catalog, onSignedOut, library.loaded);
   const localSleep = useSleepTimer(local.pause);
   useSpeaker(connection === "host", local, localSleep, byId, library.speaker, library.onCommand);
   const playback = usePlaybackMode(

@@ -18,7 +18,13 @@ import {
 
 import { ApiError, type PlaybackAnswer, type Track, api, coverUrl } from "../api";
 import { newId } from "../ids";
-import { segmentStretch, splitChanged, updatePlayingAlbum, withoutDeletedSongs } from "./albumSync";
+import {
+  segmentStretch,
+  splitChanged,
+  updatePlayingAlbum,
+  updateUpcomingAlbums,
+  withoutDeletedSongs,
+} from "./albumSync";
 import { PlayTime, reportOf } from "./playCount";
 import { recordPlay, sendPlays, updatePlay } from "./plays";
 import {
@@ -151,11 +157,13 @@ const wait = (ms: number) =>
  * returned ref: `<audio ref={audio} />`.
  *
  * `tracks` names each Track for the lock screen; `onSignedOut` runs when a request
- * finds the session has expired. The third result enables or suspends this device's audio.
+ * finds the session has expired. Saved album entries stay until `catalogLoaded`.
+ * The third result enables or suspends this device's audio.
  */
 export function usePlayer(
   tracks: ReadonlyMap<number, Track>,
   onSignedOut: () => void,
+  catalogLoaded = true,
 ): readonly [Player, RefObject<HTMLAudioElement | null>, (enabled: boolean) => void] {
   const audio = useRef<HTMLAudioElement>(null);
   const [audioEnabled, showAudioEnabled] = useState(true);
@@ -164,6 +172,7 @@ export function usePlayer(
   const [queue, dispatch] = useReducer(reduce, EMPTY);
   const [albumRevision, setAlbumRevision] = useState(0);
   const previousTracks = useRef(tracks);
+  const catalogWasLoaded = useRef(catalogLoaded);
   const updatedPosition = useRef<{ queue: Queue; seconds: number } | undefined>(undefined);
   const [view, setView] = useState<View>({
     key: undefined,
@@ -275,7 +284,7 @@ export function usePlayer(
 
   const restoreSaved = useEffectEvent((saved: Saved | undefined) => {
     if (saved === undefined || saved.queue.entries.length === 0) return;
-    const restored = withoutDismissed(saved.queue, tracks);
+    const restored = catalogLoaded ? withoutMissingAlbumSongs(saved.queue, tracks) : saved.queue;
     const entry = current(restored);
     const seconds = entry !== undefined && entry === current(saved.queue) ? saved.seconds : 0;
     restore.current = entry === undefined ? undefined : seconds;
@@ -536,8 +545,10 @@ export function usePlayer(
 
   const refreshQueue = useEffectEvent(() => {
     const before = previousTracks.current;
+    const alreadyLoaded = catalogWasLoaded.current;
     previousTracks.current = tracks;
-    if (before === tracks) return;
+    catalogWasLoaded.current = catalogLoaded;
+    if (!catalogLoaded || (before === tracks && alreadyLoaded)) return;
     const element = audio.current;
     const loaded =
       element !== null &&
@@ -558,19 +569,18 @@ export function usePlayer(
     const isActive = trackId === undefined ? undefined : tracks.get(trackId);
     const activeChanged = splitChanged(wasActive, isActive);
     const coming = following(queue)?.trackId;
+    const refreshed = updateUpcomingAlbums(revised ?? queue, before, tracks, newId);
+    const nextQueue = withoutDismissed(withoutDeletedSongs(refreshed, before, tracks), tracks);
     if (
       revised !== undefined ||
       activeChanged ||
+      coming !== following(nextQueue)?.trackId ||
       (coming !== undefined && splitChanged(before.get(coming), tracks.get(coming)))
     ) {
       ahead.current = new Map();
       setAlbumRevision((revision) => revision + 1);
     }
 
-    const nextQueue = withoutDismissed(
-      withoutDeletedSongs(revised ?? queue, before, tracks),
-      tracks,
-    );
     const entry = current(nextQueue);
     const track = entry === undefined ? undefined : tracks.get(entry.trackId);
     const file = wasActive?.segment_of;
@@ -625,7 +635,11 @@ export function usePlayer(
       } else {
         updatedPosition.current = { queue: nextQueue, seconds };
       }
-    } else if (loaded && entry !== undefined && entry.key !== key && element.paused) {
+    } else if (
+      entry !== undefined &&
+      entry.key !== key &&
+      (loaded ? element.paused : resumeAt.current !== undefined)
+    ) {
       restore.current = 0;
       takenPlaying.current = false;
     }
@@ -646,7 +660,7 @@ export function usePlayer(
   });
   useEffect(() => {
     refreshQueue();
-  }, [tracks]);
+  }, [catalogLoaded, tracks]);
 
   const onTime = useEffectEvent((element: HTMLAudioElement) => {
     const position = positionIn(stretch.current, element.currentTime);
@@ -937,7 +951,9 @@ export function usePlayer(
             play: handedPlay(listening.current),
           },
     take: (handoff, playing) => {
-      const restored = withoutDismissed(handoff.queue, tracks);
+      const restored = catalogLoaded
+        ? withoutMissingAlbumSongs(handoff.queue, tracks)
+        : handoff.queue;
       const taking = current(restored);
       const sameEntry = taking !== undefined && taking === current(handoff.queue);
       const seconds = sameEntry ? handoff.seconds : 0;
@@ -961,6 +977,10 @@ export function usePlayer(
 
 function withoutDismissed(queue: Queue, tracks: ReadonlyMap<number, Track>): Queue {
   return withoutTracks(queue, (id) => tracks.get(id)?.download_dismissed === true);
+}
+
+function withoutMissingAlbumSongs(queue: Queue, tracks: ReadonlyMap<number, Track>): Queue {
+  return withoutDismissed(withoutDeletedSongs(queue, tracks, tracks), tracks);
 }
 
 /** Return the status to show for `error`, or `undefined` when the session has expired. */

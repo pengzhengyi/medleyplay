@@ -2,8 +2,7 @@ import { type Page, expect, test } from "@playwright/test";
 
 import type { Track } from "../src/api";
 
-// Both tests open Alpha's songs and the first splits it, so they run one after the other,
-// in a project of their own that waits for every other test (see playwright.config.ts).
+// These tests share the fixture albums, and edits must not affect other playback tests.
 test.describe.configure({ mode: "default" });
 
 const row = (page: Page, title: string) =>
@@ -127,6 +126,54 @@ test("saving song boundaries updates the album and playing timeline in another t
         })
       ).ok(),
     ).toBe(true);
+  }
+});
+
+test("saving edited songs keeps an upcoming album together", async ({ page, request }) => {
+  const tracks = (await (await request.get("/api/tracks")).json()) as Track[];
+  const file = tracks.find((track) => track.title === "Bravo");
+  if (file === undefined) throw new Error("Missing Bravo fixture.");
+  const path = `/api/tracks/${String(file.id)}/songs`;
+  const rows = [
+    { start_ms: 0, title: "Opening song" },
+    { start_ms: 20_000, title: "Old middle song" },
+    { start_ms: 40_000, title: "Closing song" },
+  ];
+  const initial = await request.put(path, { data: { rows } });
+  expect(initial.ok()).toBe(true);
+  try {
+    const saved = (await initial.json()) as { songs: ((typeof rows)[number] & { id: number })[] };
+    const [opening, middle, closing] = saved.songs;
+    if (!opening || !middle || !closing) throw new Error("Expected three songs in Bravo.");
+    await page.goto("/");
+    await row(page, "Alpha").getByRole("button", { name: "Alpha", exact: true }).click();
+    const next = page.getByRole("region", { name: "Up next" });
+    const group = next.getByRole("button", { name: "Hide the songs of Bravo" });
+    await expect(group).toHaveCount(1);
+    await expect(next.getByRole("button", { name: "Play Old middle song now" })).toBeVisible();
+
+    await expect(
+      await request.put(path, {
+        data: {
+          known: [opening.id, middle.id, closing.id],
+          rows: [
+            { id: opening.id, start_ms: opening.start_ms, title: opening.title },
+            { start_ms: 20_000, title: "Replacement song" },
+            { id: closing.id, start_ms: closing.start_ms, title: closing.title },
+          ],
+        },
+      }),
+    ).toBeOK();
+
+    await expect(next.getByRole("button", { name: "Play Replacement song now" })).toBeVisible();
+    await expect(group).toHaveCount(1);
+    await expect(next.getByRole("button", { name: "Play Old middle song now" })).toHaveCount(0);
+    await expect(next.getByText("A Track no longer here")).toHaveCount(0);
+    const player = page.getByRole("region", { name: "Player" });
+    await expect(player.getByText("Alpha", { exact: true })).toBeVisible();
+    await expect(player.getByRole("button", { name: "Pause" })).toBeVisible();
+  } finally {
+    expect((await request.delete(path)).ok()).toBe(true);
   }
 });
 

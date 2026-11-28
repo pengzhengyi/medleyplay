@@ -85,10 +85,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ask the AI with a note** — beside each *Ask AI* button (a song's details, and the
   songs of a file), ▾ or a right-click opens the note to ask with: the household's notes
   for that ask to tick, such as *One song per track of the album's standard edition.*,
-  and more details typed, which this browser remembers. An admin adds, rewords, and
+  and more details to type for that request. An admin adds, rewords, and
   removes the notes in Settings → AI.
-- **Clear** beside **More details** forgets the previous AI prompt in this browser
-  without clearing selected notes.
+- **Clear** beside **More details** empties the field without unchecking
+  selected notes.
 - **Ask the AI about a song with no video text** — from its details, someone may now ask
   the AI about any song or album, by the title, artist, album, and length it shows and
   what the model knows; only songs with a video's text are asked about on their own.
@@ -980,6 +980,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **More details** clears after asking AI, so the next request starts empty.
 - Saving an album's song list updates the open album page and the playing
   timeline on other open devices, without restarting playback.
 - Lyrics notation stays beneath the search bar and table headings when songs

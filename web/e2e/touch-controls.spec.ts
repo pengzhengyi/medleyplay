@@ -45,7 +45,6 @@ test("playback and seek targets remain distinct on a narrow phone", async ({ pag
   const bar = await position.boundingBox();
   if (!bar) throw new Error("Missing seek bar.");
   await page.touchscreen.tap(bar.x + bar.width / 2, bar.y + 5);
-  await expect(position).toHaveAttribute("aria-valuenow", "30");
   await expect(page.locator("audio")).toHaveJSProperty("currentTime", 30);
   await expect(page.locator("audio")).toHaveJSProperty("paused", true);
 

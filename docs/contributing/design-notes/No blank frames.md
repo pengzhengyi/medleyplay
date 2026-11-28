@@ -16,6 +16,7 @@
 - [A frame for each lazy part](#a-frame-for-each-lazy-part)
 - [A part that fails to load](#a-part-that-fails-to-load)
 - [Loading the rest while the browser is idle](#loading-the-rest-while-the-browser-is-idle)
+- [Opening a part whose code is ready](#opening-a-part-whose-code-is-ready)
 - [Assets sent gzipped](#assets-sent-gzipped)
 - [Interfaces](#interfaces)
 - [Boundary cases](#boundary-cases)
@@ -183,6 +184,148 @@ uses:
 - **The first content, not the first rows,** starts it, so an empty Library or a
   first load straight into Settings preloads too.
 - **Add from Bilibili's own three-second timer goes;** it loads with the page.
+
+## Opening a part whose code is ready
+
+> [!NOTE]
+> **Status: implemented.** A part whose code has already loaded renders without
+> another module-loading suspension. Code splitting, loading frames, retries, and
+> edits are preserved.
+
+### What makes the window wait
+
+Downloading code and showing useful controls are separate milestones.
+Keeping only the module's promise makes the first render initialize a fresh
+`React.lazy` component through another promise. That render can suspend even
+though the module is ready. React can then delay revealing the part; its effects,
+including the Songs request, cannot start until it mounts. Keeping the resolved
+component too avoids that unnecessary suspension.
+
+In the measured React 19.3.1 baseline, a preloaded list editor schedules a roughly
+300 ms timer after showing its loading frame. The ready-component path removes
+that wait and starts list validation earlier. Songs likewise starts its data
+request earlier. That wait is not time spent downloading the module or rendering
+song rows.
+
+React documents [lazy initialization](https://react.dev/reference/react/lazy) and
+[Suspense's reveal timing and initial-state behavior](https://react.dev/reference/react/Suspense).
+The duration is a framework detail, not an application timer to override.
+
+### Rendering boundary
+
+`lazyPart` owns this behavior, with the existing `Part<P>` interface:
+
+| Collaborator | Responsibility |
+| --- | --- |
+| `lazyPart` | Remembers the successfully loaded component as well as the shared promise |
+| The part's `Component` wrapper | Chooses the ready component or existing lazy component for this mount; keeps that choice stable after mounting |
+| `LazyPart` | Provides the loading frame, error messages, and keyed remount on retry |
+| `preloadWhenIdle` | Keeps the order, cancellation, and single-part loading policy |
+
+A state initializer selects the component once per mount. A later parent update
+must not replace a mounted lazy component with its resolved component: changing
+element type risks discarding editor state. React may retry an uncommitted suspended
+tree from scratch; that is distinct from resetting an editor already in use.
+
+| State at opening | Behavior |
+| --- | --- |
+| Code already loaded | Render it directly, with no module-loading suspension |
+| Code absent or still loading | Use the existing lazy path and loading frame |
+| Preload failed | Preserve the existing retry and failure-reset behavior |
+| Loaded component throws | Preserve the rendering-error boundary, not an upgrade warning |
+| Parent updates during editing | Preserve the component, draft, focus, and selection |
+| Closed before loading finishes | Keep the successful module available for the next opening |
+
+This does not make editors eager, prefetch song data, cache drafts, change API
+scheduling, or replace the native modal focus policy. Moving more code into the
+entry bundle would charge every page load; changing React's internal timer would
+couple the app to an implementation detail. Neither is needed for the preloaded case.
+
+Earlier content affects initial focus: the available *Details* button takes focus
+where the baseline initially focuses the empty dialog. The native first-control
+policy stays the same, without moving focus again when song data arrives. Keyboard
+checks cover that intentional difference as well as preserving focus and selection
+during editing.
+
+### Window readiness measurements
+
+Production builds, silent headless Chrome 158.0.8127.89, a disposable real API with
+1,906 synthetic tracks and a 12-song album, desktop viewport, and no CPU or network
+throttling. Each sample uses a fresh browser context. The preloaded case waits for
+the last module download and another second; traces confirm no editor module
+request during opening. Seven adjacent baseline/candidate pairs alternate order,
+with no concurrent build or test process owned by the experiment.
+
+The primary measure is click-to-DOM insertion of the selected useful control:
+the first song title, editable song list, or Settings' language selector. Settings
+does not wait for every section's data, and the list does not wait for validation.
+A following `requestAnimationFrame` plus timer provides a frame-opportunity proxy,
+**not an exact presentation timestamp or a standard first meaningful paint metric**.
+Visibility and enabled state are checked afterward, not at the recorded DOM
+timestamp. Separate traces and screenshots corroborate earlier visible content.
+
+| Action | Useful controls, baseline → implementation | Frame proxy, baseline → implementation | Median paired frame saving |
+| --- | --- | --- | --- |
+| Edit songs | 376 → 120 ms | 395 → 137 ms | 258 ms |
+| Fill from a list | 346 → 49 ms | 358 → 65 ms | 294 ms |
+| Settings | 147 → 54 ms | 211 → 108 ms | 91 ms |
+
+Every first-opening pair improves for these preloaded parts. Eager Edit details,
+Edit album, and cover editors are not changed by this loading path; no gains are
+claimed for them. Machine load changes during the run, so paired differences
+matter more than absolute timing guarantees.
+The table uses separate medians; subtracting its columns need not equal the median
+paired saving.
+
+The interaction tradeoff is explicit: median click Event Timing duration rises
+from 24 to 72 ms for the list, 72 to 80 ms for Songs, and 24 to 32 ms for Settings.
+The list's construction moves into the initial interaction. Useful content
+appears much earlier, but this is **not an INP improvement claim**.
+
+Reopening is essentially unchanged: median paired frame differences are 0.4–1.1 ms
+slower, with mixed per-pair results. The gain is on the first opening after code
+loads, not every opening.
+
+A separate 100-song fixture retains the gain in all three pairs per editor.
+Songs' useful controls move from 429 to 176 ms, with the frame proxy moving from
+506 to 259 ms. The list moves from 381 to 95 ms, with the frame proxy moving from
+395 to 113 ms. Its click duration rises from 56 to 120 ms; Songs stays at 80 ms.
+
+There are two important exclusions:
+
+- **A genuinely cold opening still waits.** With 40 ms network latency and a
+  10 Mbps limit, the Songs module request starts after the click in both builds.
+  Three pairs put useful controls at 397 ms versus 407 ms, and the frame proxy
+  at 413 ms versus 424 ms. Two pairs are slower; one baseline opening also waits
+  behind startup work and takes about a second. This change does not remove the
+  cold loading delay or guarantee lower latency in every case.
+- **Startup requests can occupy the connections.** One early Edit details sample
+  waits 1,750 ms before its HTTP request is sent, while the API reports 61 ms of
+  application time. Enricher status and other side reads occupy the connections;
+  an event stream keeps another open. Other early samples are much faster.
+  Background-read scheduling needs a separate design, not a claimed benefit here.
+
+Edit album also has time between DOM insertion and the next frame that the lazy
+path does not explain. Removing backdrop blur in a separate three-pair experiment
+changes the frame proxy from 96 to 93 ms and leaves most of that delay. That does
+not justify changing its appearance; the remaining native browser work needs
+further attribution.
+
+### Verified behavior
+
+- [x] A fulfilled preload renders synchronously without showing the loading frame.
+- [x] Absent and pending modules keep their frame, shared load, retry interval,
+      failure messages, and recovery through the existing boundary.
+- [x] Cold-loaded and preloaded editors preserve drafts and focus on parent
+      updates; closing during loading does not prevent a later opening.
+- [x] Focused tests exercise these contracts through components, not React internals.
+- [x] Production comparisons retain the preloaded Songs/list gains and check cold
+      opening, reopening, and a larger song list without hiding regressions.
+- [x] Settings comparisons cover useful content and click duration for a non-editor
+      consumer of the same loading helper.
+- [x] Headless browser checks cover editing, validation-driven parent updates,
+      focus and selection, Escape, and reopening at desktop and phone widths in
+      light and dark themes, with normal and reduced motion.
 
 ## Assets sent gzipped
 

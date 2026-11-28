@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Download details** shows the Job outcome separately from saved audio.
+  The requester or an admin can copy a trace with attempts, stages, and HTTP
+  statuses, without raw provider messages.
 - Reopen a saved Bilibili video lookup after signing in again to retry a
   dismissed sign-in failure without adding the song twice.
 - Open **Devices** to approve, rename, or remove devices without leaving the
@@ -1032,8 +1035,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while searching. The arc stays still with reduced motion.
 - Downloaded distinguishes queued work, offline waits, and scheduled retries.
   It shows preparation, transfer progress, and the part being joined when known.
-- A rejected Bilibili download, including HTTP 567, stops without repeating
-  the request or invalidating the site's saved login.
+- A Bilibili refusal or unexplained HTTP 567 stops without repeating the
+  request or invalidating the saved login. A Hold blocks later requests for
+  the affected video or parts while leaving saved audio playable.
 - Closing the cover editor no longer outlines the album artwork. The queue
   shortcut focuses the selected tab instead of the whole panel.
 - The Album column opens the song's album without starting playback.

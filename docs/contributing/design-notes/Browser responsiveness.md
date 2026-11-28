@@ -4,7 +4,7 @@
 > **Implemented.** The Albums gallery skips offscreen rendering.
 > Albums and Artists reuse unchanged cards during playback, keeping
 > their complete lists and existing controls.
-> The first Library load is unchanged.
+> The first Library startup sequence is unchanged.
 > Gallery renders also reuse repeated count-and-duration labels.
 
 ## Contents
@@ -17,6 +17,7 @@
 - [Album contents during playback](#album-contents-during-playback)
 - [Artist contents during playback](#artist-contents-during-playback)
 - [Gallery first render](#gallery-first-render)
+- [Shared translation for kind marks](#shared-translation-for-kind-marks)
 - [Further investigations](#further-investigations)
 - [References](#references)
 
@@ -526,6 +527,52 @@ CI tests assert formatting and update behavior, not wall-clock thresholds.
 Performance claims require complete-card counts and matching contents in
 the compared builds. Synthetic repetition alone is insufficient evidence;
 varied-duration catalogs exercise both repeated and distinct labels.
+
+## Shared translation for kind marks
+
+> [!NOTE]
+> **In progress.** A kind mark uses its existing language subscription for
+> both its kind and lyrics labels.
+
+Large-gallery profiling identifies repeated `useWords` subscriptions in
+`KindMark`: it subscribes directly, then `useLyricsLabel` subscribes again.
+The proposed helper signature is `useLyricsLabel(subject, t: Words)`.
+`KindMark`, `PlayingKind`, and its `AlbumMark` pass their existing
+translator. The helper retains its lyrics-availability context read.
+The translator is required; a conditional fallback hook is not allowed.
+
+This changes neither labels nor markup. The same parent subscription
+updates both labels when the language changes, and context-only lyrics
+updates remain current. Card order, browser search, keyboard behavior,
+styles, and dependencies stay unchanged.
+
+A seven-pair build-only diagnostic on 7,000 tracks has 3,262 album cards.
+Albums content appears at 305 versus 275 ms, with a median paired 29 ms
+saving, and scripting falls by 31 ms. Every content and scripting pair
+improves; Artists is a neutral control. This is not retained production
+evidence. An incomplete attempt with an unnecessarily strict load ceiling
+is excluded; the completed trial follows the reviewed physical-core limit.
+
+### Acceptance
+
+- [ ] Keep all call sites unconditional and typed, without an extra language hook.
+- [ ] Verify mounted language changes update kind and lyrics labels together,
+      including the playing song and album marks.
+- [ ] Preserve context-only lyrics changes and existing glyphs, navigation,
+      focus, and playback actions.
+- [ ] Compare real production builds in seven alternating large-catalog pairs,
+      with an unrecorded warmup and matching complete-card contents.
+- [ ] Require at least six of seven Albums content and scripting improvements,
+      paired content savings of at least 5% and 10 ms, scripting savings of at
+      least 5%, and a better frame-opportunity median.
+- [ ] Check smaller, full-album, Artists, and direct-load controls for repeatable
+      regressions; capture a separate CPU profile to confirm the cause.
+
+Use a quiet start below half the physical core count and refuse samples
+above the core count. Control regressions exceeding both 10% and 5 ms
+need investigation; direct loads use a 20 ms absolute floor.
+If the primary requirement is missed, drop the change rather than
+expanding it into a shared-label provider or changing gallery access.
 
 ## Further investigations
 

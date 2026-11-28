@@ -133,10 +133,15 @@ class LinkedAccountService:
     def has_valid(self, account_id: AccountId, site: str) -> bool:
         """Return whether the Account has a valid login on `site` now."""
         with self._units() as db:
-            row = db.get(LinkedAccountRow, (account_id, site))
-            if row is None:
-                return False
-            return _current(_to_linked(row), self._clock()).state is LinkState.VALID
+            return self.valid_saved_at_in(db, account_id, site) is not None
+
+    def valid_saved_at_in(self, db: Session, account_id: AccountId, site: str) -> datetime | None:
+        """Return when a still-valid login was saved, in the caller's transaction."""
+        row = db.get(LinkedAccountRow, (account_id, site))
+        if row is None:
+            return None
+        linked = _current(_to_linked(row), self._clock())
+        return linked.saved_at if linked.state is LinkState.VALID else None
 
     def lend(self, account_id: AccountId, site: str) -> LentLogin | None:
         """Return a copy of the Account's valid login on `site` for a Job, or `None`.

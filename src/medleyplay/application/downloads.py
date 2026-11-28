@@ -7,15 +7,17 @@ startup removes, and the Job runs again.
 """
 
 import stat
+from collections.abc import Sequence
 from datetime import timedelta
 from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.catalog import dismissed_download_tracks
 from medleyplay.application.download_budgets import (
     DownloadBudget,
     disk_refusal,
@@ -32,7 +34,7 @@ from medleyplay.application.jobs import (
 )
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.plugins import PluginService
-from medleyplay.domain.accounts import Account, AccountId
+from medleyplay.domain.accounts import Account, AccountId, Role
 from medleyplay.domain.catalog import SourceId, SourceState
 from medleyplay.domain.downloads import (
     DOWNLOAD_EXTENSIONS,
@@ -45,10 +47,10 @@ from medleyplay.domain.downloads import (
     download_target,
 )
 from medleyplay.domain.errors import ConflictError, NotFoundError
-from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobState
+from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState
 from medleyplay.domain.links import BILIBILI_SOURCE, joined_locator, video_selection
 from medleyplay.download_limits import JOIN_SCRATCH_BYTES, MAX_DOWNLOAD_BYTES
-from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
+from medleyplay.persistence.schema import AccountRow, DownloadRow, JobRow, SourceRow, TrackRow
 from medleyplay.plugin_api import BEST_QUALITY, SOURCE_DOWNLOADER
 from medleyplay.programs.download_source import (
     DOWNLOAD_FOLDER,
@@ -182,6 +184,64 @@ class DownloadService:
         self._kind = kind
         self._linked = linked
         self.folder = data_dir / DOWNLOADS_FOLDER
+
+    def dismissed_retries_in(
+        self, db: Session, caller: Account, sources: Sequence[SourceRow]
+    ) -> dict[str, JobId]:
+        """Return dismissed sign-in failures the caller can retry, by Source locator."""
+        renewed = self._linked.valid_saved_at_in(db, caller.id, BILIBILI_SOURCE)
+        if renewed is None or BILIBILI_SOURCE not in self._plugins.available_keys().get(
+            SOURCE_DOWNLOADER.name, []
+        ):
+            return {}
+        targets = {
+            download_target(SourceId(source.id)): source
+            for source in sources
+            if source.kind == BILIBILI_SOURCE and source.state != SourceState.UNAVAILABLE
+        }
+        if not targets:
+            return {}
+        latest = (
+            select(func.max(JobRow.id))
+            .where(JobRow.kind == DOWNLOAD_KIND, JobRow.target.in_(targets))
+            .group_by(JobRow.target)
+        )
+        eligible = select(JobRow.target, JobRow.id).where(
+            JobRow.id.in_(latest),
+            JobRow.state == JobState.FAILED,
+            JobRow.failure_dismissed.is_(True),
+            JobRow.failure_kind == "auth",
+            JobRow.finished_at < renewed,
+        )
+        role = db.scalar(select(AccountRow.role).where(AccountRow.id == caller.id))
+        if role != Role.ADMIN:
+            eligible = eligible.where(JobRow.requested_by == caller.id)
+        failures = db.execute(eligible).all()
+        if not failures:
+            return {}
+        dismissed = dismissed_download_tracks(db)
+        return {
+            targets[target].locator: JobId(job_id)
+            for target, job_id in failures
+            if targets[target].track_id in dismissed
+        }
+
+    def retry_dismissed_in(
+        self, db: Session, caller: Account, source: SourceRow, failed: JobId
+    ) -> Job:
+        """Queue this dismissed attempt again while the caller holds the writer lock."""
+        if self.dismissed_retries_in(db, caller, [source]).get(source.locator) != failed:
+            message = "This download can no longer be retried from this lookup."
+            raise ConflictError(message)
+        return queue_job_in(
+            db,
+            self._kind,
+            download_target(SourceId(source.id)),
+            _request(source),
+            caller.id,
+            self._clock,
+            login_account=caller.id,
+        )
 
     def start_for(self, account_id: AccountId, source_id: SourceId) -> Job | None:
         """Start downloading the Source for the policy, as `account_id`, even after a failure.

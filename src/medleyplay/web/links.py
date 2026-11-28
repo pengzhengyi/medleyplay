@@ -37,6 +37,7 @@ class PartOut(BaseModel):
     title: str
     duration_ms: int | None
     track_id: int | None
+    retry_job_id: int | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class QualityOut(BaseModel):
@@ -88,6 +89,14 @@ class PartIn(BaseModel):
     part: PartNumber
     title: str = Field(max_length=512, examples=["Night Drive"])
     artist: str = Field(default="", max_length=512, examples=["Blue Room"])
+
+
+class RetryPartIn(BaseModel):
+    """The failed attempt offered for an existing part of the saved lookup."""
+
+    model_config = ConfigDict(extra="forbid")
+    part: PartNumber
+    failed_job_id: RowId
 
 
 class ChoicesIn(BaseModel):
@@ -237,6 +246,15 @@ def confirm_lookup(
 def dismiss_lookup(job_id: RowId, me: SignedInAccount, lookups: VideoLookupsDep) -> None:
     """Dismiss this Account's lookup without adding any parts."""
     lookups.dismiss(me, JobId(job_id))
+
+
+@router.post("/lookups/{job_id}/retry")
+def retry_part(
+    job_id: RowId, body: RetryPartIn, me: SignedInAccount, lookups: VideoLookupsDep
+) -> JobOut:
+    """Retry the current dismissed failure shown for this part, leaving the lookup open."""
+    job = lookups.retry_part(me, JobId(job_id), body.part, JobId(body.failed_job_id))
+    return JobOut.of(JobView(job), me)
 
 
 def _added(added: Added, me: Account) -> AddedOut:

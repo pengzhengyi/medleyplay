@@ -181,6 +181,12 @@
   missing artist or album details are left out of Clean up, including for
   dismissals made before opening the view. Files and Job history are unchanged.
   A new attempt or a saved file makes the Track visible again.
+- **Retry a dismissed part from its saved video lookup.** After a download
+  fails because it needs sign-in, save a valid Bilibili login and reopen the
+  lookup. **Retry download** beside the part queues the same Source with its
+  saved quality. It does not add a Track, erase a failure, or close the
+  lookup. Connection failures that are still waiting do not need a manual
+  retry. Provider refusals and unclassified failures do not get this action.
 - **The add-the-file dialog:** the failure's message, the other ways, a file
   picker, and *Add*, with the upload's progress; *Stop* beside it stops an upload
   under way. When it finishes, the dialog closes and the Track shows as downloaded and
@@ -194,6 +200,7 @@
 | `GET /api/links/lookups` | Signed in | The Account's open choices, newest first |
 | `GET /api/links/lookups/{id}` | Lookup owner | The state and, when ready, the saved result with parts already added marked |
 | `POST /api/links/lookups/{id}` | Lookup owner | Confirm the quality and chosen parts; remove the choice after a successful add |
+| `POST /api/links/lookups/{id}/retry` | Lookup owner who requested the download, or a lookup owner who is an admin | Retry `failed_job_id` for `part`, without closing the lookup |
 | `DELETE /api/links/lookups/{id}` | Lookup owner | Dismiss without adding; stop a pending lookup |
 | `POST /api/links/lookup` | Signed in | Direct lookup without a saved choice; answers `readable: false` when the read fails |
 | `POST /api/links` | Signed in | Direct add by link, including a video that could not be read |
@@ -205,6 +212,10 @@
 Tracks in every list include `download_failed`, `site`, and `download_failure_job_id`
 for a failed attempt still shown in *Downloaded*. `download_dismissed` marks
 Tracks that the Library and player hide, regardless of when they were dismissed.
+On a readable saved lookup, `retry_job_id` identifies a dismissed sign-in
+failure after the requester or admin saves a valid login. On retry, the server
+checks in the same transaction that the attempt is still the latest, the login
+is valid and newer than the failure, and the Track has no saved audio.
 
 ## Testing
 

@@ -1,13 +1,15 @@
 """Downloading a Bilibili Source in a real Job, through the test plugin `tube`, and playing it."""
 
 import os
+import threading
 import time
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import downloads as download_app
@@ -24,8 +26,9 @@ from medleyplay.domain.linked_accounts import LinkState
 from medleyplay.domain.plugins import PluginState
 from medleyplay.download_limits import MAX_DOWNLOAD_BYTES
 from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow
-from medleyplay.plugin_host.job_wire import JobFailed
+from medleyplay.plugin_host.job_wire import JobFailed, JobFinished
 from medleyplay.programs.download_source import DownloadSource
+from tests.support.audio import Song, wav_bytes
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock, MemorySecrets
 from tests.support.sites import Site, running_site
@@ -86,14 +89,16 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_a_download_lands_in_downloads_named_by_its_source_and_plays(
+def test_a_download_is_saved_under_an_owned_name_and_plays(
     site: Site, alice: Account, units: sessionmaker[Session], clock: FakeClock
 ) -> None:
     added = _added(site, alice, "BV1Xx41117Tz")
 
     _finished(site, added)
 
-    file = site.data_dir / "downloads" / f"{added.source_id}.m4a"
+    file = site.saved_file(added.source_id)
+    assert file.name.startswith(f"{added.source_id}-")
+    assert file.suffix == ".m4a"
     assert _read(file) == "BV1Xx41117Tz/p1 quality=30280 login=none mode=none"
     with units() as db:
         row = db.get_one(DownloadRow, added.source_id)
@@ -117,7 +122,78 @@ def test_a_download_asks_for_the_quality_chosen_when_adding(site: Site, alice: A
 
     _finished(site, added)
 
-    assert "quality=30216" in _read(site.data_dir / "downloads" / f"{added.source_id}.m4a")
+    assert "quality=30216" in _read(site.saved_file(added.source_id))
+
+
+def test_a_job_cannot_replace_the_saved_audio_if_the_commit_fails(
+    site: Site, alice: Account, units: sessionmaker[Session]
+) -> None:
+    added = _added(site, alice, "BV1Xx41117Tz")
+    _finished(site, added)
+
+    def reject_replacement(db: Session) -> None:
+        if db.get_one(DownloadRow, added.source_id).quality == "30216":
+            message = "Synthetic database commit failure."
+            raise SQLAlchemyError(message)
+
+    event.listen(units, "before_commit", reject_replacement)
+    try:
+        replacement = site.jobs.submit(
+            site.download_kind,
+            download_target(added.source_id),
+            DownloadSource(
+                site="bilibili",
+                video="BV1Xx41117Tz",
+                part=1,
+                quality="30216",
+                extensions=DOWNLOAD_EXTENSIONS,
+                max_bytes=MAX_DOWNLOAD_BYTES,
+            ),
+            alice.id,
+        )
+        failed = site.wait_for(replacement.id, JobState.FAILED)
+    finally:
+        event.remove(units, "before_commit", reject_replacement)
+
+    assert failed.job.failure_kind == "attempt_uncertain"
+    audio = site.playback.open_audio(added.source_id)
+    try:
+        assert b"quality=30280" in os.pread(audio.descriptor, audio.length, 0)
+    finally:
+        audio.close()
+
+
+def test_an_upload_that_wins_commit_cannot_be_overwritten_by_a_late_job_result(
+    site: Site,
+    alice: Account,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received, release = threading.Event(), threading.Event()
+    watch = JobRunner._watch  # noqa: SLF001 -- pause after reading the worker's result
+
+    def wait_for_upload(runner: JobRunner, job: _Running) -> _Outcome:
+        outcome = watch(runner, job)
+        if job.kind.name == site.download_kind.name and isinstance(outcome, JobFinished):
+            received.set()
+            release.wait(20)
+        return outcome
+
+    monkeypatch.setattr(JobRunner, "_watch", wait_for_upload)
+    added = _added(site, alice, "BV1Xx41117Tz")
+    job = _job_id(added)
+    audio = wav_bytes(Song(seconds=2))
+    try:
+        assert received.wait(20)
+        with site.manual.upload(added.track_id, "local.wav") as upload:
+            upload.write(audio)
+            upload.finish()
+    finally:
+        release.set()
+
+    _wait_until_gone(site.data_dir / "jobs" / str(job))
+    assert site.jobs.get_job(job).job.state is JobState.CANCELLED
+    assert site.saved_file(added.source_id).read_bytes() == audio
+    assert list(site.downloads.folder.glob("*.m4a")) == []
 
 
 def test_a_download_gets_a_copy_of_the_valid_login_only_its_owner_reads(
@@ -128,7 +204,7 @@ def test_a_download_gets_a_copy_of_the_valid_login_only_its_owner_reads(
     added = _added(site, alice, "BVSignedIn")
     view = _finished(site, added)
 
-    said = _read(site.data_dir / "downloads" / f"{added.source_id}.m4a")
+    said = _read(site.saved_file(added.source_id))
     assert said == f"BVSignedIn/p1 quality=30280 login={SESSION} mode=0o600"
     _wait_until_gone(site.data_dir / "jobs" / str(view.job.id))
 
@@ -272,7 +348,7 @@ def test_a_source_without_a_download_answers_preparing_with_its_download(
 ) -> None:
     added = _added(site, alice, "BV1Xx41117Tz")
     _finished(site, added)
-    (site.data_dir / "downloads" / f"{added.source_id}.m4a").unlink()
+    site.saved_file(added.source_id).unlink()
 
     preparing = site.playback.play(alice, added.track_id)
 
@@ -447,7 +523,7 @@ def test_a_job_whose_account_is_gone_borrows_no_login(site: Site, alice: Account
     )
     site.wait_for(job.id, JobState.SUCCEEDED)
 
-    said = _read(site.data_dir / "downloads" / f"{added.source_id}.m4a")
+    said = _read(site.saved_file(added.source_id))
     assert said == "BV1Xx41117Tz/p1 quality=30280 login=none mode=none"
 
 
@@ -519,7 +595,7 @@ def test_offline_a_track_to_download_waits_for_online_and_its_download_waits_que
 ) -> None:
     added = _added(site, alice, "BV1Xx41117Tz")
     _finished(site, added)
-    (site.data_dir / "downloads" / f"{added.source_id}.m4a").unlink()
+    site.saved_file(added.source_id).unlink()
     site.online.online = False
 
     played = site.playback.play(alice, added.track_id)

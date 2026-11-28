@@ -6,6 +6,9 @@ starts guessed from a video's text or an AI model can be moved onto them.
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Final
+
+FIND_SILENCES_KIND: Final = "find_silences"
 
 
 @dataclass(frozen=True)

@@ -79,8 +79,9 @@ def _download_of(site: Site, alice: Account, units: sessionmaker[Session], video
 
 
 def _said_by_the_download(site: Site, view: JobView) -> str:
-    source_id = int(view.job.target.removeprefix("source:"))
-    return (site.data_dir / "downloads" / f"{source_id}.m4a").read_text(encoding="utf-8")
+    source_id = source_of_target(view.job.target)
+    assert source_id is not None
+    return site.saved_file(source_id).read_text(encoding="utf-8")
 
 
 def test_a_lookup_without_a_proxy_asks_the_plugin_with_none(site: Site, alice: Account) -> None:

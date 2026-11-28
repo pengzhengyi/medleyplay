@@ -4,14 +4,17 @@ Downloads fail, finish, and are replaced through the test plugin `tube`; the fil
 added are small audio files the tests make.
 """
 
+import os
 import tempfile
 from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
@@ -38,7 +41,9 @@ from medleyplay.domain.errors import (
     TooLargeError,
 )
 from medleyplay.domain.jobs import JobState
-from medleyplay.persistence.schema import DownloadRow, SourceRow, TrackRow
+from medleyplay.domain.silences import FIND_SILENCES_KIND
+from medleyplay.persistence.schema import DownloadRow, JobRow, SourceRow, TrackRow
+from medleyplay.programs.find_silences import FindSilencesJob
 from tests.support.audio import Song, mp3_bytes, wav_bytes
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock, MemorySecrets
@@ -308,7 +313,9 @@ def test_a_file_is_kept_as_the_downloads_file_named_by_its_source_and_plays(
 
     stored = _store(site.manual, track_id, name, content)
 
-    file = _downloads_folder(site) / f"{source_id}.{name.rsplit('.', 1)[1].lower()}"
+    file = site.saved_file(source_id)
+    assert file.name.startswith(f"{source_id}-")
+    assert file.suffix == f".{name.rsplit('.', 1)[1].lower()}"
     assert file.read_bytes() == content
     assert stored.status is DownloadStatus.DOWNLOADED
     with units() as db:
@@ -458,32 +465,156 @@ def test_adding_the_file_to_a_track_still_waiting_to_download_cancels_that_job(
     assert site.jobs.get_job(waiting.id).job.state is JobState.CANCELLED
 
 
-def test_a_file_replaces_the_download_a_job_made_and_its_file(
+def test_a_file_replaces_the_download_a_job_made_but_keeps_its_open_audio(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
     track_id = _downloaded_part(site, alice)
     source_id = _source_of(units, track_id)
-    assert (_downloads_folder(site) / f"{source_id}.m4a").is_file()
+    previous = site.saved_file(source_id)
+    opened = site.playback.open_audio(source_id)
+    before = previous.read_bytes()
 
-    _store(site.manual, track_id, "night.wav", _two_second_wav())
+    try:
+        _store(site.manual, track_id, "night.wav", _two_second_wav())
+        assert os.pread(opened.descriptor, opened.length, 0) == before
+    finally:
+        opened.close()
 
-    assert [path.name for path in _downloads_folder(site).iterdir()] == [f"{source_id}.wav"]
+    current = site.saved_file(source_id)
+    assert {path.name for path in _downloads_folder(site).iterdir()} == {
+        previous.name,
+        current.name,
+    }
+    assert current.read_bytes() == _two_second_wav()
     with units() as db:
         row = db.get_one(DownloadRow, source_id)
-        assert (row.file_name, row.backend) == (f"{source_id}.wav", MANUAL_BACKEND)
+        assert (row.file_name, row.backend) == (current.name, MANUAL_BACKEND)
+    site.playback.sweep_downloads()
+    assert not previous.exists()
 
 
-def test_a_file_of_the_same_type_replaces_the_earlier_file_in_place(
+def test_a_same_format_upload_keeps_the_saved_audio_if_the_commit_fails(
+    site: Site,
+    alice: Account,
+    units: sessionmaker[Session],
+) -> None:
+    track_id = _failed_part(site, alice)
+    original = _two_second_wav()
+    _store(site.manual, track_id, "original.wav", original)
+    source_id = _source_of(units, track_id)
+    replacement = wav_bytes(Song(seconds=3))
+
+    def reject(db: Session) -> None:
+        row = db.get(DownloadRow, source_id)
+        if row is not None and row.size == len(replacement):
+            message = "Synthetic database commit failure."
+            raise SQLAlchemyError(message)
+
+    event.listen(units, "before_commit", reject)
+    try:
+        with pytest.raises(SQLAlchemyError, match="commit failure"):
+            _store(site.manual, track_id, "replacement.wav", replacement)
+    finally:
+        event.remove(units, "before_commit", reject)
+
+    audio = site.playback.open_audio(source_id)
+    try:
+        assert os.pread(audio.descriptor, audio.length, 0) == original
+    finally:
+        audio.close()
+    with units() as db:
+        named = db.get_one(DownloadRow, source_id).file_name
+    site.playback.sweep_downloads()
+    assert [file.name for file in site.downloads.folder.iterdir()] == [named]
+
+
+def test_local_audio_uses_one_file_for_its_name_and_length(
+    site: Site,
+    alice: Account,
+    units: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    track_id = _failed_part(site, alice)
+    source_id = _source_of(units, track_id)
+    original = _two_second_wav()
+    _store(site.manual, track_id, "original.wav", original)
+    pathname = site.saved_file(source_id)
+    lookup = site.playback._download_name  # noqa: SLF001 -- replace between pointer read and open
+    replaced = False
+
+    def replace_before_open(source: SourceId) -> str | None:
+        nonlocal replaced
+        name = lookup(source)
+        if not replaced:
+            replaced = True
+            _store(site.manual, track_id, "different.wav", wav_bytes(Song(seconds=3)))
+        return name
+
+    monkeypatch.setattr(site.playback, "_download_name", replace_before_open)
+
+    audio = site.playback.local_audio(source_id)
+
+    assert audio is not None
+    assert (audio.path, audio.length) == (str(pathname), len(original))
+    assert site.saved_file(source_id) != pathname
+
+
+def test_startup_cleanup_keeps_an_active_silence_jobs_old_input_until_it_ends(
+    site: Site,
+    alice: Account,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+) -> None:
+    track_id = _failed_part(site, alice)
+    source_id = _source_of(units, track_id)
+    _store(site.manual, track_id, "original.wav", _two_second_wav())
+    old = site.saved_file(source_id)
+    request = FindSilencesJob(
+        track_id=track_id,
+        local_path=str(old),
+        length=old.stat().st_size,
+        download_name=old.name,
+        download_source_id=source_id,
+    )
+    with units.begin() as db:
+        job = JobRow(
+            kind=FIND_SILENCES_KIND,
+            target=f"silences:{track_id}",
+            state=JobState.WAITING,
+            request=request.model_dump(mode="json"),
+            created_at=clock(),
+            not_before=clock() + timedelta(days=1),
+        )
+        db.add(job)
+    _store(site.manual, track_id, "replacement.wav", wav_bytes(Song(seconds=3)))
+    current = site.saved_file(source_id)
+
+    site.playback.sweep_downloads()
+
+    assert old.is_file()
+    assert current.is_file()
+    with units.begin() as db:
+        db.get_one(JobRow, job.id).state = JobState.CANCELLED
+    site.playback.sweep_downloads()
+    assert not old.exists()
+    assert current.is_file()
+
+
+def test_a_same_format_upload_switches_the_pointer_without_overwriting_the_old_file(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
     track_id = _downloaded_part(site, alice)
+    source_id = _source_of(units, track_id)
+    old = site.saved_file(source_id)
+    before = old.read_bytes()
     content = mp4_bytes(Mp4(header_seconds=3))
 
     _store(site.manual, track_id, "night.m4a", content)
 
-    file = _downloads_folder(site) / f"{_source_of(units, track_id)}.m4a"
-    assert [path.name for path in _downloads_folder(site).iterdir()] == [file.name]
+    file = site.saved_file(source_id)
+    assert file != old
     assert file.read_bytes() == content
+    assert old.read_bytes() == before
 
 
 def test_a_file_is_added_while_offline_since_nothing_contacts_the_site(
@@ -517,7 +648,7 @@ def test_the_sweep_at_startup_removes_a_file_a_crash_left_and_keeps_the_manual_d
     site.downloads.sweep()
 
     assert [path.name for path in _downloads_folder(site).iterdir()] == [
-        f"{_source_of(units, track_id)}.wav"
+        site.saved_file(_source_of(units, track_id)).name
     ]
 
 

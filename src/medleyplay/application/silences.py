@@ -8,24 +8,28 @@ A file that must be copied or downloaded first is prepared as playing it would b
 """
 
 from functools import partial
+from pathlib import Path
 from typing import Final
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.jobs import JobKind, JobService
+from medleyplay.application.download_files import download_basename
+from medleyplay.application.jobs import JobCompletion, JobKind, JobService
 from medleyplay.application.playback import PlaybackService, Preparing, Ready
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.downloads import DOWNLOADS_FOLDER
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job
-from medleyplay.domain.silences import Silence, Silences, SilenceState
-from medleyplay.persistence.schema import SilenceRow, TrackRow
+from medleyplay.domain.links import BILIBILI_SOURCE
+from medleyplay.domain.silences import FIND_SILENCES_KIND, Silence, Silences, SilenceState
+from medleyplay.persistence.schema import DownloadRow, JobRow, SilenceRow, SourceRow, TrackRow
 from medleyplay.plugin_api import SILENCE_FINDER, SilenceStatus
 from medleyplay.programs.find_silences import FindSilencesJob, FoundSilencesResult
 
-FIND_SILENCES_KIND: Final = "find_silences"
 FINDER: Final = "ffmpeg"
 """The silence finder asked: the plugin that runs ffmpeg."""
 
@@ -38,15 +42,19 @@ _STATES: Final = {
 }
 
 
-def find_silences_kind(clock: Clock) -> FindSilencesKind:
+_STALE_AUDIO: Final = "The audio changed. Find gaps again."
+
+
+def find_silences_kind(clock: Clock, data_dir: Path) -> FindSilencesKind:
     """Return the kind of Job that finds where a Track's audio falls quiet."""
     return JobKind(
         name=FIND_SILENCES_KIND,
         program="medleyplay.programs.find_silences:FIND_SILENCES_PROGRAM",
         request=FindSilencesJob,
         result=FoundSilencesResult,
-        complete=partial(_complete, clock=clock),
+        complete=partial(_complete, clock=clock, folder=data_dir / DOWNLOADS_FOLDER),
         points=(SILENCE_FINDER.name,),
+        refuse_start=partial(_refuse_stale, folder=data_dir / DOWNLOADS_FOLDER),
     )
 
 
@@ -116,6 +124,9 @@ class SilenceService:
                     offset=audio.offset,
                     length=audio.length,
                     finder=FINDER,
+                    audio_kind="library" if audio.download_name is None else "download",
+                    download_source_id=source_id if audio.download_name is not None else None,
+                    download_name=audio.download_name,
                 )
                 self._jobs.submit(self._kind, find_silences_target(track_id), request, caller.id)
                 return Silences(SilenceState.FINDING)
@@ -126,15 +137,48 @@ class SilenceService:
                 raise ConflictError(message)
 
 
-def _complete(db: Session, job: Job, result: FoundSilencesResult, *, clock: Clock) -> None:
+def _refuse_stale(db: Session, raw: object, *, folder: Path) -> str | None:
+    request = FindSilencesJob.model_validate(raw)
+    name = download_basename(folder, request.local_path)
+    if name is None and request.download_source_id is None and request.download_name is None:
+        if request.audio_kind == "library":
+            return None
+        site_source = db.scalar(
+            select(SourceRow.id)
+            .where(SourceRow.track_id == request.track_id, SourceRow.kind == BILIBILI_SOURCE)
+            .limit(1)
+        )
+        return _STALE_AUDIO if site_source is not None or request.audio_kind == "download" else None
+    if name is None or request.download_source_id is None or request.download_name != name:
+        return _STALE_AUDIO
+    download = db.get(DownloadRow, request.download_source_id)
+    source = db.get(SourceRow, request.download_source_id)
+    if (
+        source is None
+        or source.track_id != request.track_id
+        or download is None
+        or download.file_name != name
+        or download.size != request.length
+        or request.offset != 0
+    ):
+        return _STALE_AUDIO
+    return None
+
+
+def _complete(
+    db: Session, job: Job, result: FoundSilencesResult, *, clock: Clock, folder: Path
+) -> JobCompletion | None:
     """Keep the silences found, with the Track's length now, in place of any found before."""
-    del job
+    raw = db.get_one(JobRow, job.id).request
+    if refusal := _refuse_stale(db, raw, folder=folder):
+        return JobCompletion(failure=("refused", refusal))
     track = db.get(TrackRow, result.track_id)
     if track is None:
-        return
+        return None
     row = db.get(SilenceRow, result.track_id) or SilenceRow(track_id=result.track_id)
     row.status = result.status.value
     row.silences = [{"start_ms": each.start_ms, "end_ms": each.end_ms} for each in result.silences]
     row.length_ms = track.duration_ms
     row.found_at = clock()
     db.add(row)
+    return None

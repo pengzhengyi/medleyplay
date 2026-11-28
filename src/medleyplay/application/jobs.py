@@ -263,6 +263,8 @@ class JobService:
         target: str,
         request: I,
         requested_by: AccountId | None,
+        *,
+        login_account: AccountId | None = None,
     ) -> tuple[Job, bool]:
         """Queue a Job or reuse an active one while the caller holds the writer lock."""
         existing = db.scalar(
@@ -274,7 +276,10 @@ class JobService:
         )
         if existing is not None:
             return to_job(existing), False
-        return queue_job_in(db, kind, target, request, requested_by, self._clock), True
+        job = queue_job_in(
+            db, kind, target, request, requested_by, self._clock, login_account=login_account
+        )
+        return job, True
 
     def list_jobs(self, limit: int = LIST_LIMIT, *, viewer: Account | None = None) -> list[JobView]:
         """Return the newest Jobs first."""
@@ -370,13 +375,17 @@ class JobService:
     def latest(self, kind: str, target: str) -> Job | None:
         """Return the newest Job of `kind` for `target`, in any state, if any."""
         with self._units() as db:
-            row = db.scalar(
-                select(JobRow)
-                .where(JobRow.kind == kind, JobRow.target == target)
-                .order_by(JobRow.id.desc())
-                .limit(1)
-            )
-            return None if row is None else to_job(row)
+            return self.latest_in(db, kind, target)
+
+    def latest_in(self, db: Session, kind: str, target: str) -> Job | None:
+        """Return the newest Job in the caller's transaction."""
+        row = db.scalar(
+            select(JobRow)
+            .where(JobRow.kind == kind, JobRow.target == target)
+            .order_by(JobRow.id.desc())
+            .limit(1)
+        )
+        return None if row is None else to_job(row)
 
     def active(self, kind: str, target: str) -> Job | None:
         """Return the waiting, queued, or running Job of `kind` for `target`, if any."""

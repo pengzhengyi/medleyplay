@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import downloads as download_app
 from medleyplay.application.download_holds import record_hold
 from medleyplay.domain.accounts import Role
+from medleyplay.domain.catalog import SourceId
 from medleyplay.domain.download_holds import DownloadHoldKey, HoldReason
 from medleyplay.domain.errors import ConflictError
 from medleyplay.domain.jobs import JobId, JobState
@@ -278,7 +279,8 @@ def test_playing_a_joined_album_recreates_its_missing_download(
     assert result.status_code == 200
     (album,) = result.json()
     site.wait_for(JobId(album["job"]["id"]), JobState.SUCCEEDED)
-    file = site.downloads.folder / f"{album['source_id']}.m4a"
+    source_id = SourceId(album["source_id"])
+    file = site.saved_file(source_id)
     original = file.read_bytes()
     file.unlink()
 
@@ -287,7 +289,9 @@ def test_playing_a_joined_album_recreates_its_missing_download(
     assert play.status_code == 200, play.text
     assert play.json()["state"] == "preparing"
     site.wait_for(JobId(play.json()["job_id"]), JobState.SUCCEEDED)
-    assert file.read_bytes() == original
+    replacement = site.saved_file(source_id)
+    assert replacement != file
+    assert replacement.read_bytes() == original
 
 
 @pytest.mark.parametrize("reason", ["tools", "disk"])
@@ -419,7 +423,6 @@ def test_cancelling_a_dispatched_join_blocks_retry_and_leaves_no_file(
     assert response.status_code == 200, response.text
     (album,) = response.json()
     first = album["job"]["id"]
-    source = site.downloads.folder / f"{album['source_id']}.m4a"
     site.wait_for(
         JobId(first),
         JobState.RUNNING,
@@ -444,7 +447,7 @@ def test_cancelling_a_dispatched_join_blocks_retry_and_leaves_no_file(
     assert retry.status_code == 409, retry.text
     assert "held" in retry.text
     assert site.jobs.get_job(JobId(first)).job.state == JobState.CANCELLED
-    assert not source.exists()
+    assert not list(site.downloads.folder.glob("*.m4a"))
 
 
 def test_a_failed_join_leaves_no_file_and_a_stale_retry_cannot_replace_a_success(
@@ -460,16 +463,17 @@ def test_a_failed_join_leaves_no_file_and_a_stale_retry_cannot_replace_a_success
     assert response.status_code == 200, response.text
     (album,) = response.json()
     first = album["job"]["id"]
-    source = site.downloads.folder / f"{album['source_id']}.m4a"
+    source_id = SourceId(album["source_id"])
 
     failed = site.wait_for(JobId(first), JobState.FAILED)
     trace = site_client.get(f"/api/downloads/{first}/diagnostics").json()
     assert (failed.job.failure_kind, trace["events"][-1]["part"]) == ("invalid", 3)
-    assert not source.exists()
+    assert not list(site.downloads.folder.glob("*.m4a"))
     (site.data_dir / "part-restored").touch()
     result = site_client.post(f"/api/jobs/{first}/retry")
     assert result.status_code == 200, result.text
     site.wait_for(JobId(result.json()["id"]), JobState.SUCCEEDED)
+    source = site.saved_file(source_id)
     album_bytes = source.read_bytes()
 
     refusal = site_client.post(f"/api/jobs/{first}/retry")
@@ -540,7 +544,7 @@ def test_cancelling_a_join_during_encoding_stops_both_audio_processes(
     site.wait_for(
         job, JobState.CANCELLED, until=lambda _: not any(map(_running_process, process_ids))
     )
-    assert not (site.downloads.folder / f"{album['source_id']}.m4a").exists()
+    assert not list(site.downloads.folder.glob("*.m4a"))
 
 
 def test_album_queues_each_source_in_order_with_household_album_details(

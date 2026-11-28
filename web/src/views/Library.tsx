@@ -33,6 +33,7 @@ import { LyricsAvailabilityProvider } from "./LyricsAvailabilityProvider";
 import { useLookAhead } from "../library/useLookAhead";
 import { useLyrics } from "../library/useLyrics";
 import { songTimeOf } from "../lyrics";
+import type { DeviceConnection } from "../listen";
 import { type StepCommand, albumSteps, playingOf, songPlaying, stepFor } from "../player/albumNow";
 import { useStation } from "../library/useStation";
 import { linksOf, withLinkedFavorites } from "../library/artistLinks";
@@ -57,8 +58,7 @@ import {
 import { current, repeatAfter, upNext } from "../player/queue";
 import { checkable, offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
-import { takeOf } from "../player/remote";
-import { useRemotePlayer } from "../player/useRemotePlayer";
+import { usePlaybackMode } from "../player/usePlaybackMode";
 import { useSleepTimer } from "../player/useSleepTimer";
 import { useSpeaker } from "../player/useSpeaker";
 import { stepVolume } from "../player/volume";
@@ -78,9 +78,9 @@ import { LazyPart } from "./LazyPart";
 import type { AiAsk, SilenceFinder } from "./EditSongs";
 import { LibrarySkeleton } from "./LibrarySkeleton";
 import { NowPlaying } from "./NowPlaying";
-import { ListenOnDevice, LyricsEditor, PRELOADED, SongsEditor } from "./parts";
+import { DeviceWindow, LyricsEditor, PRELOADED, SongsEditor } from "./parts";
 import { AccountMenu, Nav } from "./Nav";
-import { PlayOn, type PlaysOn } from "./PlayOn";
+import { PlayOn } from "./PlayOn";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
 import { SearchBox } from "./SearchBox";
@@ -92,6 +92,7 @@ import { WaitingDevices } from "./WaitingDevices";
 import type { TrackActions } from "./TrackTable";
 import { CurrentView } from "./Views";
 import { AiSetUpContext } from "./aiSetUp";
+import { DeviceManagement, useDeviceManagement } from "./deviceManagement";
 import { Hint } from "./Hint";
 import { setRailCollapsed, setRailMinimized, useRailCollapsed, useRailMinimized } from "../rail";
 
@@ -126,12 +127,11 @@ const SILENCES: SilenceFinder = { read: api.silences, find: api.findSilences };
 
 export function Library({
   account,
-  onHost,
+  connection,
   onSignedOut,
 }: {
   readonly account: Account;
-  /** Whether this page is on the computer medleyplay runs on, and so plays for the Account. */
-  readonly onHost: boolean;
+  readonly connection: DeviceConnection;
   readonly onSignedOut: () => void;
 }) {
   const route = useRoute();
@@ -160,56 +160,21 @@ export function Library({
     () => [...new Set(tracks.map((track) => track.artist.trim()).filter((name) => name !== ""))],
     [tracks],
   );
-  const [local, audio] = usePlayer(catalog, onSignedOut);
+  const [local, audio, setLocalAudio] = usePlayer(catalog, onSignedOut, library.loaded);
   const localSleep = useSleepTimer(local.pause);
-  useSpeaker(onHost, local, localSleep, byId, library.speaker, library.onCommand);
-  // Where a page that isn't on the computer plays; with the computer gone, it plays here.
-  const [playsOn, setPlaysOn] = useState<PlaysOn>("here");
-  const [playOnFailed, setPlayOnFailed] = useState("");
-  const speaker = library.speaker ?? null;
-  const canPlayOnComputer = !onHost && speaker !== null;
-  if (playsOn === "computer" && !canPlayOnComputer) {
-    setPlaysOn("here");
-  }
-  const onComputer = playsOn === "computer" && canPlayOnComputer;
-  const [remote, remoteSleep, command] = useRemotePlayer(speaker, onComputer, onSignedOut);
-  const player = onComputer ? remote : local;
+  useSpeaker(connection === "host", local, localSleep, byId, library.speaker, library.onCommand);
+  const playback = usePlaybackMode(
+    local,
+    setLocalAudio,
+    connection,
+    library.liveUpdates,
+    library.speaker,
+    onSignedOut,
+  );
+  const { player } = playback;
+  const onComputer = playback.picker.on === "computer";
+  const remoteSleep = playback.remoteSleep;
   const sleep = onComputer ? remoteSleep : localSleep;
-  const playOnFailedFor = (failure: unknown) => {
-    setPlayOnFailed(failure instanceof Error ? failure.message : String(failure));
-  };
-  /**
-   * Play on `where`, moving what plays there, as Spotify Connect does. The device the
-   * music leaves stops only once the computer has the command, so a refusal leaves
-   * the music where it was.
-   */
-  const playOn = (where: PlaysOn) => {
-    setPlayOnFailed("");
-    if (where === playsOn) {
-      return;
-    }
-    if (where === "here") {
-      const handoff = remote.status.kind === "playing" ? remote.handoff() : undefined;
-      if (handoff === undefined) {
-        setPlaysOn("here");
-        return;
-      }
-      command({ kind: "pause" }).then(() => {
-        local.take(handoff, true);
-        setPlaysOn("here");
-      }, playOnFailedFor);
-      return;
-    }
-    const handoff = local.status.kind === "playing" ? local.handoff() : undefined;
-    if (handoff === undefined) {
-      setPlaysOn("computer");
-      return;
-    }
-    command(takeOf(handoff, true)).then(() => {
-      local.pause();
-      setPlaysOn("computer");
-    }, playOnFailedFor);
-  };
   // What is read beside the songs is read once they are in, and again whenever the
   // Library may have changed; never for a heart or a rating.
   const refreshes = library.loaded ? library.refreshes : undefined;
@@ -243,7 +208,9 @@ export function Library({
       library.setArtistFavorite(id, favorite);
     }
   };
-  const station = useStation(player, tracks, account.id, favorites);
+  const localStation = useStation(local, tracks, account.id, favorites);
+  const remoteStation = useStation(playback.remote, tracks, account.id, favorites);
+  const station = onComputer ? remoteStation : localStation;
   // On a narrow screen the queue opens over the page, from the player.
   const [queueOpen, setQueueOpen] = useState(false);
   // When the Mode a check left Offline began, so the header says it is still Offline.
@@ -356,6 +323,19 @@ export function Library({
   const [listingShortcuts, setListingShortcuts] = useState(false);
   // Whether the guide to listening on another device is open.
   const [listening, setListening] = useState(false);
+  const devices = useDeviceManagement(
+    !admin
+      ? null
+      : route.view === "settings"
+        ? listening
+          ? "both"
+          : "settings"
+        : listening
+          ? "dialog"
+          : null,
+    library.waitingDevices.map(({ id }) => id).join(" "),
+    library.liveUpdates === "connected",
+  );
   // The header stays at the top, so what else stays there sits under it, however tall it is.
   const top = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -870,8 +850,8 @@ export function Library({
         <button
           type="button"
           className="icon listen-button"
-          aria-label={t("Listen on your device")}
-          title={t("Listen on your device")}
+          aria-label={t("Devices")}
+          title={t("Devices")}
           onClick={() => {
             setListening(true);
           }}
@@ -989,14 +969,9 @@ export function Library({
           setNowPlayingOver(here);
         }}
         playOn={
-          onHost ? undefined : (
-            <PlayOn
-              on={onComputer ? "computer" : "here"}
-              available={canPlayOnComputer}
-              failed={playOnFailed}
-              onChoose={playOn}
-            />
-          )
+          connection === "lan" ? (
+            <PlayOn {...playback.picker} failed={playback.failed} onMove={playback.move} />
+          ) : undefined
         }
       />
       {linking !== undefined && (
@@ -1187,11 +1162,11 @@ export function Library({
       )}
       {listening && (
         <LazyPart
-          doing="Finding this computer's addresses…"
+          doing="Loading…"
           frame={(shown) => (
             <DialogOpening
               className="listen"
-              title={t("Listen on your device")}
+              title={t("Devices")}
               onClose={() => {
                 setListening(false);
               }}
@@ -1200,10 +1175,13 @@ export function Library({
             </DialogOpening>
           )}
         >
-          <ListenOnDevice.Component
+          <DeviceWindow.Component
+            connection={connection}
+            live={library.liveUpdates}
+            admin={admin}
             username={account.username}
             load={api.addresses}
-            waitingCount={admin ? library.waitingDevices.length : undefined}
+            playback={playback.picker}
             onClose={() => {
               setListening(false);
             }}
@@ -1253,7 +1231,9 @@ export function Library({
   );
   return (
     <AiSetUpContext value={aiSetUp}>
-      <LyricsAvailabilityProvider tracks={tracks}>{page}</LyricsAvailabilityProvider>
+      <DeviceManagement value={devices}>
+        <LyricsAvailabilityProvider tracks={tracks}>{page}</LyricsAvailabilityProvider>
+      </DeviceManagement>
     </AiSetUpContext>
   );
 }

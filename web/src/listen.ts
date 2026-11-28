@@ -10,6 +10,9 @@ export interface Here {
   readonly port: string;
 }
 
+/** How the server identified this browser when it checked device admission. */
+export type DeviceConnection = "host" | "lan" | "unknown";
+
 const THIS_MACHINE = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 /**

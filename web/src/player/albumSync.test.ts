@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Track } from "../api";
 import { trackOf } from "../testing/server";
-import { updatePlayingAlbum } from "./albumSync";
+import { updatePlayingAlbum, updateUpcomingAlbums } from "./albumSync";
 import type { Entry, Queue } from "./queue";
 
 const FILE = trackOf(10, "Suite", { kind: "album", split: true, duration_ms: 60_000 });
@@ -38,6 +38,7 @@ describe("updating the playing split file", () => {
       track_number: 2,
       duration_ms: 15_000,
     });
+
     const before = tracks(FILE, FIRST, LAST, OTHER);
     const after = tracks(FILE, { ...FIRST, duration_ms: 15_000 }, added, LAST, OTHER);
 
@@ -104,5 +105,51 @@ describe("updating the playing split file", () => {
       { key: "whole", trackId: FILE.id, unit },
       { ...OTHER_ENTRY, unit },
     ]);
+  });
+});
+
+describe("updating upcoming split files", () => {
+  it("replaces a complete upcoming split in both shuffled and original order", () => {
+    const tail: Entry = { key: "tail", trackId: OTHER.id };
+    const queue: Queue = {
+      entries: [OTHER_ENTRY, FIRST_ENTRY, LAST_ENTRY, tail],
+      position: 0,
+      order: ["tail", "first", "last", "other"],
+      repeat: "all",
+    };
+
+    const updated = updateUpcomingAlbums(
+      queue,
+      tracks(FILE, FIRST, LAST, OTHER),
+      tracks({ ...FILE, split: false }, OTHER),
+      () => "whole",
+    );
+
+    expect(updated).toEqual({
+      entries: [OTHER_ENTRY, { key: "whole", trackId: FILE.id, unit: undefined }, tail],
+      position: 0,
+      order: ["tail", "whole", "other"],
+      repeat: "all",
+    });
+  });
+
+  it("leaves a reordered selection alone even if shuffling has grouped the original songs", () => {
+    const queue: Queue = {
+      entries: [OTHER_ENTRY, FIRST_ENTRY, LAST_ENTRY],
+      position: 0,
+      order: ["last", "first", "other"],
+      repeat: "off",
+    };
+    const editedFirst = { ...FIRST, duration_ms: 15_000 };
+    const bridge = trackOf(13, "Bridge", { segment_of: 10, segment_start_ms: 15_000 });
+
+    const updated = updateUpcomingAlbums(
+      queue,
+      tracks(FILE, FIRST, LAST, OTHER),
+      tracks(FILE, editedFirst, bridge, LAST, OTHER),
+      () => "bridge",
+    );
+
+    expect(updated).toBe(queue);
   });
 });

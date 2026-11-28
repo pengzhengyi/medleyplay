@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Open **Devices** to approve, rename, or remove devices without leaving the
+  current page. On another device, choose **Client** for an independent queue
+  or **Remote** to control the computer, and see the connection in use.
 - On macOS, opt in to a separately authorized **Medleyplay Share** listener.
   Start or stop LAN sharing without taking down the player on the Mac.
 - **Listen on your device** shows the share URL, protocol, and TCP port, with
@@ -987,6 +990,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history.
 
 ### Fixed
+
+- Editing a split album's songs updates complete albums already in **Up next**.
+  Restored album queues no longer leave deleted songs between surviving ones.
 
 - **More details** clears after asking AI, so the next request starts empty.
 - Hide dismissed failed downloads that have no saved audio from the Library

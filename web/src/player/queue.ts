@@ -84,7 +84,11 @@ export function current(queue: Queue): Entry | undefined {
 }
 
 export function withoutTracks(queue: Queue, excludes: (trackId: number) => boolean): Queue {
-  const kept = (entry: Entry) => !excludes(entry.trackId);
+  return withoutEntries(queue, (entry) => excludes(entry.trackId));
+}
+
+export function withoutEntries(queue: Queue, excludes: (entry: Entry) => boolean): Queue {
+  const kept = (entry: Entry) => !excludes(entry);
   const entries = queue.entries.filter(kept);
   if (entries.length === queue.entries.length) return queue;
   const keys = new Set(entries.map((entry) => entry.key));

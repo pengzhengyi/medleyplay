@@ -41,17 +41,28 @@ function ready(source: number, start: number | null, end: number | null) {
   };
 }
 
-function renderPlayer(tracks: readonly Track[]) {
-  const shown: { player?: Player } = {};
-  function Page({ catalog }: { readonly catalog: ReadonlyMap<number, Track> }) {
-    const [player, audio] = usePlayer(catalog, () => {
-      throw new Error("Signed out.");
-    });
+function renderPlayer(tracks: readonly Track[], loaded = true) {
+  const shown: { player?: Player; enableAudio?: (enabled: boolean) => void } = {};
+  function Page({
+    catalog,
+    loaded,
+  }: {
+    readonly catalog: ReadonlyMap<number, Track>;
+    readonly loaded: boolean;
+  }) {
+    const [player, audio, enableAudio] = usePlayer(
+      catalog,
+      () => {
+        throw new Error("Signed out.");
+      },
+      loaded,
+    );
     shown.player = player;
+    shown.enableAudio = enableAudio;
     return <audio ref={audio} />;
   }
   const index = (list: readonly Track[]) => new Map(list.map((track) => [track.id, track]));
-  const { container, unmount, rerender } = render(<Page catalog={index(tracks)} />);
+  const { container, unmount, rerender } = render(<Page catalog={index(tracks)} loaded={loaded} />);
   const element = container.querySelector("audio");
   if (element === null) {
     throw new Error("The player rendered no audio element.");
@@ -67,9 +78,13 @@ function renderPlayer(tracks: readonly Track[]) {
     element,
     media,
     player,
+    setAudioEnabled: (enabled: boolean) => {
+      if (shown.enableAudio === undefined) throw new Error("The player hasn't rendered.");
+      shown.enableAudio(enabled);
+    },
     unmount,
     replaceCatalog: (next: readonly Track[]) => {
-      rerender(<Page catalog={index(next)} />);
+      rerender(<Page catalog={index(next)} loaded />);
     },
   };
 }
@@ -80,6 +95,74 @@ const playing = (player: () => Player, track: Track) =>
     expect(now.queue.entries[now.queue.position]?.trackId).toBe(track.id);
     expect(now.status.kind).toBe("playing");
   });
+
+describe("suspending local audio in Remote mode", () => {
+  it("keeps a pending song paused even when Client is selected again before it loads", async () => {
+    let read: () => void = () => {
+      throw new Error("The slow answer is not ready.");
+    };
+    const after = new Promise<void>((resolve) => {
+      read = resolve;
+    });
+    const { calls } = serve({
+      "POST /api/tracks/7/playback": { body: ready(7, null, null), after },
+    });
+    const { element, player, setAudioEnabled } = renderPlayer([OTHER]);
+    act(() => {
+      player().playNow(OTHER);
+    });
+    expect(calls).toContain("POST /api/tracks/7/playback");
+
+    act(() => {
+      setAudioEnabled(false);
+      setAudioEnabled(true);
+      read();
+    });
+
+    await waitFor(() => {
+      expect(player().status.kind).toBe("paused");
+    });
+    expect(player().queue.entries[0]?.trackId).toBe(OTHER.id);
+    expect(element.paused).toBe(true);
+    act(() => {
+      player().toggle();
+    });
+    await playing(player, OTHER);
+  });
+
+  it("ignores system media play while Remote and resumes only after a new command in Client", async () => {
+    const system = fakeSystemMedia();
+    try {
+      serve(ANSWERS);
+      const { element, media, player, setAudioEnabled } = renderPlayer([OTHER]);
+      act(() => {
+        player().playNow(OTHER);
+      });
+      await playing(player, OTHER);
+      act(() => {
+        media.playTo(15);
+        setAudioEnabled(false);
+        system.press("play");
+      });
+      expect(element.paused).toBe(true);
+      expect(player().position).toBe(15);
+
+      act(() => {
+        setAudioEnabled(true);
+      });
+
+      expect(element.paused).toBe(true);
+      act(() => {
+        system.press("play");
+      });
+      await playing(player, OTHER);
+      expect(element.currentTime).toBe(15);
+    } finally {
+      cleanup();
+      system.restore();
+    }
+  });
+});
 
 describe("dismissed downloads in the queue", () => {
   const DISMISSED = trackOf(20, "Lost Signal", { download_dismissed: true });
@@ -150,6 +233,86 @@ describe("dismissed downloads in the queue", () => {
 });
 
 describe("playing songs inside one file", () => {
+  it("replaces a complete upcoming album with its saved songs without disturbing the current track", async () => {
+    const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+    const replacement = trackOf(156, "New closing song", {
+      segment_of: 104,
+      segment_start_ms: 30_000,
+      duration_ms: 30_000,
+    });
+    serve(ANSWERS);
+    const { element, media, player, replaceCatalog } = renderPlayer([OTHER, file, FIRST, SECOND]);
+    act(() => {
+      player().playList([OTHER, FIRST, SECOND], 0, fileUnit);
+    });
+    await playing(player, OTHER);
+    act(() => {
+      media.playTo(12);
+    });
+    const [current, first] = player().queue.entries;
+
+    replaceCatalog([OTHER, file, FIRST, replacement]);
+
+    expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([
+      OTHER.id,
+      FIRST.id,
+      replacement.id,
+    ]);
+    expect(player().queue.entries.slice(0, 2)).toEqual([current, first]);
+    expect(player().queue.entries[2]?.unit).toBe("file:104");
+    expect(player().position).toBe(12);
+    expect(element.paused).toBe(false);
+    expect(media.loads).toBe(1);
+  });
+
+  it.each([true, false])(
+    "cleans a saved album queue when the catalog is ready (already loaded: %s)",
+    async (loaded) => {
+      const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
+      serve(ANSWERS);
+      const savedQueue = {
+        entries: [
+          { key: "playing", trackId: OTHER.id },
+          { key: "first", trackId: FIRST.id, unit: "file:104" },
+          { key: "deleted", trackId: 156, unit: "file:104" },
+          { key: "second", trackId: SECOND.id, unit: "file:104" },
+          { key: "unrelated", trackId: 999 },
+        ],
+        position: 0,
+        order: ["first", "deleted", "second", "playing", "unrelated"],
+        repeat: "off",
+      } as const;
+      const load = vi
+        .spyOn(storage, "loadQueue")
+        .mockResolvedValue({ queue: savedQueue, seconds: 12 });
+      const save = vi.spyOn(storage, "saveQueue");
+      try {
+        const catalog = [OTHER, file, FIRST, SECOND];
+        const { element, player, replaceCatalog } = renderPlayer(loaded ? catalog : [], loaded);
+        await waitFor(() => {
+          expect(player().status.kind).toBe("paused");
+          expect(element.currentTime).toBe(12);
+        });
+        if (!loaded) {
+          expect(player().queue.entries).toEqual(savedQueue.entries);
+          replaceCatalog(catalog);
+        }
+
+        expect(player().queue.entries.map((entry) => entry.key)).toEqual([
+          "playing",
+          "first",
+          "second",
+          "unrelated",
+        ]);
+        expect(player().queue.order).toEqual(["first", "second", "playing", "unrelated"]);
+        expect(save).toHaveBeenLastCalledWith({ queue: player().queue, seconds: 12 });
+      } finally {
+        load.mockRestore();
+        save.mockRestore();
+      }
+    },
+  );
+
   it("updates the playing album and next song after a split edit without restarting the current song", async () => {
     const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
     const bridge = trackOf(156, "Bridge", {

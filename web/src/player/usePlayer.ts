@@ -18,7 +18,13 @@ import {
 
 import { ApiError, type PlaybackAnswer, type Track, api, coverUrl } from "../api";
 import { newId } from "../ids";
-import { segmentStretch, splitChanged, updatePlayingAlbum, withoutDeletedSongs } from "./albumSync";
+import {
+  segmentStretch,
+  splitChanged,
+  updatePlayingAlbum,
+  updateUpcomingAlbums,
+  withoutDeletedSongs,
+} from "./albumSync";
 import { PlayTime, reportOf } from "./playCount";
 import { recordPlay, sendPlays, updatePlay } from "./plays";
 import {
@@ -151,16 +157,22 @@ const wait = (ms: number) =>
  * returned ref: `<audio ref={audio} />`.
  *
  * `tracks` names each Track for the lock screen; `onSignedOut` runs when a request
- * finds the session has expired.
+ * finds the session has expired. Saved album entries stay until `catalogLoaded`.
+ * The third result enables or suspends this device's audio.
  */
 export function usePlayer(
   tracks: ReadonlyMap<number, Track>,
   onSignedOut: () => void,
-): readonly [Player, RefObject<HTMLAudioElement | null>] {
+  catalogLoaded = true,
+): readonly [Player, RefObject<HTMLAudioElement | null>, (enabled: boolean) => void] {
   const audio = useRef<HTMLAudioElement>(null);
+  const [audioEnabled, showAudioEnabled] = useState(true);
+  const audioEnabledNow = useRef(true);
+  const audioStarts = useRef(0);
   const [queue, dispatch] = useReducer(reduce, EMPTY);
   const [albumRevision, setAlbumRevision] = useState(0);
   const previousTracks = useRef(tracks);
+  const catalogWasLoaded = useRef(catalogLoaded);
   const updatedPosition = useRef<{ queue: Queue; seconds: number } | undefined>(undefined);
   const [view, setView] = useState<View>({
     key: undefined,
@@ -193,6 +205,17 @@ export function usePlayer(
   const followingBoundary = useRef<{ key: string; end: number } | undefined>(undefined);
   const [volume, setVolume] = useState(loadVolume);
   const [muted, setMuted] = useState(false);
+
+  const setAudioEnabled = (enabled: boolean) => {
+    if (audioEnabledNow.current === enabled) return;
+    audioEnabledNow.current = enabled;
+    showAudioEnabled(enabled);
+    if (!enabled) {
+      ++audioStarts.current;
+      clearTimeout(ending.current);
+      audio.current?.pause();
+    }
+  };
 
   const playing = current(queue);
   const key = playing?.key;
@@ -261,7 +284,7 @@ export function usePlayer(
 
   const restoreSaved = useEffectEvent((saved: Saved | undefined) => {
     if (saved === undefined || saved.queue.entries.length === 0) return;
-    const restored = withoutDismissed(saved.queue, tracks);
+    const restored = catalogLoaded ? withoutMissingAlbumSongs(saved.queue, tracks) : saved.queue;
     const entry = current(restored);
     const seconds = entry !== undefined && entry === current(saved.queue) ? saved.seconds : 0;
     restore.current = entry === undefined ? undefined : seconds;
@@ -315,7 +338,9 @@ export function usePlayer(
     const restoring = restore.current;
     restore.current = undefined;
     resumeAt.current = restoring;
-    const playOn = restoring === undefined || takenPlaying.current;
+    const playOn = audioEnabledNow.current && (restoring === undefined || takenPlaying.current);
+    const start = audioStarts.current;
+    const canStart = () => playOn && start === audioStarts.current && audioEnabledNow.current;
     const counted = takenCounted.current;
     const carried = takenPlay.current;
     takenPlaying.current = false;
@@ -376,25 +401,30 @@ export function usePlayer(
             element.currentTime = from;
           }
           // Playing on fires no `play` event, so the new entry says it is playing itself.
+          const shouldStart = canStart();
           show(key, {
             duration: lengthOf(song, element.duration),
             ...(alreadyInNext ? { position: positionIn(song, at) } : {}),
-            ...(element.paused ? {} : { status: { kind: "playing" } }),
+            ...(!element.paused
+              ? { status: { kind: "playing" } }
+              : shouldStart
+                ? {}
+                : { status: { kind: "paused" } }),
           });
-          if (element.paused && playOn) {
+          if (element.paused && shouldStart) {
             await element.play();
           }
           return;
         }
         waitingMetadata.current = true;
         element.src = answer.audio_url;
-        if (playOn) {
+        if (canStart()) {
           await element.play();
         } else {
           show(key, { status: { kind: "paused" } });
         }
       } catch (error) {
-        if (!stale()) {
+        if (!stale() && start === audioStarts.current) {
           fail(key, error);
         }
       }
@@ -405,12 +435,13 @@ export function usePlayer(
   /** Play the current Track on from where it is, if it is loaded and paused. */
   const resume = () => {
     const element = audio.current;
-    if (element?.getAttribute("src") == null || !element.paused) {
+    if (!audioEnabledNow.current || element?.getAttribute("src") == null || !element.paused) {
       return;
     }
     const forKey = playingKey.current;
+    const start = audioStarts.current;
     element.play().catch((error: unknown) => {
-      failed(forKey, error);
+      if (start === audioStarts.current) failed(forKey, error);
     });
   };
   const toggle = () => {
@@ -429,10 +460,11 @@ export function usePlayer(
     element.currentTime = stretch.current.start;
     ended.current = undefined;
     startListening(trackId);
-    if (play) {
+    if (play && audioEnabledNow.current) {
       const forKey = playingKey.current;
+      const start = audioStarts.current;
       element.play().catch((error: unknown) => {
-        failed(forKey, error);
+        if (start === audioStarts.current) failed(forKey, error);
       });
     }
   };
@@ -483,7 +515,7 @@ export function usePlayer(
   /** End the current entry once: start it over, or move on, playing on into the next song of the file. */
   const finish = useEffectEvent(() => {
     const element = audio.current;
-    if (element === null || ended.current === playingKey.current) {
+    if (!audioEnabledNow.current || element === null || ended.current === playingKey.current) {
       return;
     }
     ended.current = playingKey.current;
@@ -513,8 +545,10 @@ export function usePlayer(
 
   const refreshQueue = useEffectEvent(() => {
     const before = previousTracks.current;
+    const alreadyLoaded = catalogWasLoaded.current;
     previousTracks.current = tracks;
-    if (before === tracks) return;
+    catalogWasLoaded.current = catalogLoaded;
+    if (!catalogLoaded || (before === tracks && alreadyLoaded)) return;
     const element = audio.current;
     const loaded =
       element !== null &&
@@ -535,19 +569,18 @@ export function usePlayer(
     const isActive = trackId === undefined ? undefined : tracks.get(trackId);
     const activeChanged = splitChanged(wasActive, isActive);
     const coming = following(queue)?.trackId;
+    const refreshed = updateUpcomingAlbums(revised ?? queue, before, tracks, newId);
+    const nextQueue = withoutDismissed(withoutDeletedSongs(refreshed, before, tracks), tracks);
     if (
       revised !== undefined ||
       activeChanged ||
+      coming !== following(nextQueue)?.trackId ||
       (coming !== undefined && splitChanged(before.get(coming), tracks.get(coming)))
     ) {
       ahead.current = new Map();
       setAlbumRevision((revision) => revision + 1);
     }
 
-    const nextQueue = withoutDismissed(
-      withoutDeletedSongs(revised ?? queue, before, tracks),
-      tracks,
-    );
     const entry = current(nextQueue);
     const track = entry === undefined ? undefined : tracks.get(entry.trackId);
     const file = wasActive?.segment_of;
@@ -602,7 +635,11 @@ export function usePlayer(
       } else {
         updatedPosition.current = { queue: nextQueue, seconds };
       }
-    } else if (loaded && entry !== undefined && entry.key !== key && element.paused) {
+    } else if (
+      entry !== undefined &&
+      entry.key !== key &&
+      (loaded ? element.paused : resumeAt.current !== undefined)
+    ) {
       restore.current = 0;
       takenPlaying.current = false;
     }
@@ -623,7 +660,7 @@ export function usePlayer(
   });
   useEffect(() => {
     refreshQueue();
-  }, [tracks]);
+  }, [catalogLoaded, tracks]);
 
   const onTime = useEffectEvent((element: HTMLAudioElement) => {
     const position = positionIn(stretch.current, element.currentTime);
@@ -669,6 +706,10 @@ export function usePlayer(
       [
         "play",
         () => {
+          if (!audioEnabledNow.current) {
+            element.pause();
+            return;
+          }
           show(playingKey.current, { status: { kind: "playing" } });
         },
       ],
@@ -775,7 +816,7 @@ export function usePlayer(
   useEffect(() => {
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata =
-        track === undefined
+        !audioEnabled || track === undefined
           ? null
           : new MediaMetadata({
               title: track.title,
@@ -784,14 +825,18 @@ export function usePlayer(
               artwork: track.cover ? [{ src: coverUrl(track.cover, "original") }] : [],
             });
     }
-  }, [track]);
+  }, [audioEnabled, track]);
   useEffect(() => {
     if ("mediaSession" in navigator) {
-      navigator.mediaSession.playbackState =
-        status.kind === "playing" ? "playing" : status.kind === "paused" ? "paused" : "none";
+      navigator.mediaSession.playbackState = !audioEnabled
+        ? "none"
+        : status.kind === "playing" || status.kind === "paused"
+          ? status.kind
+          : "none";
     }
-  }, [status.kind]);
+  }, [audioEnabled, status.kind]);
   const onAction = useEffectEvent((details: MediaSessionActionDetails) => {
+    if (!audioEnabledNow.current) return;
     switch (details.action) {
       // The system may ask twice, once per earbud taken out, so each asks for a state, not a change.
       case "play":
@@ -813,7 +858,7 @@ export function usePlayer(
     }
   });
   useEffect(() => {
-    if (!("mediaSession" in navigator)) {
+    if (!audioEnabled || !("mediaSession" in navigator)) {
       return;
     }
     const actions: MediaSessionAction[] = ["play", "pause", "previoustrack", "nexttrack", "seekto"];
@@ -825,7 +870,7 @@ export function usePlayer(
         navigator.mediaSession.setActionHandler(action, null);
       }
     };
-  }, []);
+  }, [audioEnabled]);
 
   // Earbuds taken out or headphones unplugged leave the sound to the next device, often
   // the speakers, so a change of devices pauses. A page over plain HTTP has no devices.
@@ -906,7 +951,9 @@ export function usePlayer(
             play: handedPlay(listening.current),
           },
     take: (handoff, playing) => {
-      const restored = withoutDismissed(handoff.queue, tracks);
+      const restored = catalogLoaded
+        ? withoutMissingAlbumSongs(handoff.queue, tracks)
+        : handoff.queue;
       const taking = current(restored);
       const sameEntry = taking !== undefined && taking === current(handoff.queue);
       const seconds = sameEntry ? handoff.seconds : 0;
@@ -925,11 +972,15 @@ export function usePlayer(
       takenPlay.current = sameEntry ? handoff.play : undefined;
     },
   };
-  return [player, audio];
+  return [player, audio, setAudioEnabled];
 }
 
 function withoutDismissed(queue: Queue, tracks: ReadonlyMap<number, Track>): Queue {
   return withoutTracks(queue, (id) => tracks.get(id)?.download_dismissed === true);
+}
+
+function withoutMissingAlbumSongs(queue: Queue, tracks: ReadonlyMap<number, Track>): Queue {
+  return withoutDismissed(withoutDeletedSongs(queue, tracks, tracks), tracks);
 }
 
 /** Return the status to show for `error`, or `undefined` when the session has expired. */

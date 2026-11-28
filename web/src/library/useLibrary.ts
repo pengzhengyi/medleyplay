@@ -60,6 +60,8 @@ export interface TrackLookup {
 }
 
 /** The Library as the page sees it. */
+export type LiveUpdates = "connecting" | "connected" | "reconnecting";
+
 export interface Library {
   readonly tracks: ReadonlyMap<number, Track>;
   readonly playlists: readonly Playlist[];
@@ -92,6 +94,7 @@ export interface Library {
   readonly modeChecked: (mode: Mode) => void;
   /** The devices waiting for an admin's answer, oldest first; none for a member. */
   readonly waitingDevices: readonly WaitingDevice[];
+  readonly liveUpdates: LiveUpdates;
   /** The Downloads under way, oldest first, each with how far it has got. */
   readonly downloading: readonly DownloadUnderWay[];
   /**
@@ -268,6 +271,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const [waitingDevices, setWaitingDevices] = useState<readonly WaitingDevice[]>([]);
+  const [liveUpdates, setLiveUpdates] = useState<LiveUpdates>("connecting");
   const [downloading, setDownloading] = useState<readonly DownloadUnderWay[]>([]);
   const [videoLookups, setVideoLookups] = useState<readonly SavedVideoLookup[]>([]);
   const videoReads = useRef(0);
@@ -553,6 +557,7 @@ export function useLibrary(onSignedOut: () => void): Library {
         load,
         refresh,
         firstReady: loadVideoLookups,
+        onConnection: setLiveUpdates,
         onReady: () => {
           readLyricsAgain();
           setLyricsStreamConnections((count) => count + 1);
@@ -737,6 +742,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     mode,
     modeChecked: setMode,
     waitingDevices,
+    liveUpdates,
     downloading,
     speaker,
     onCommand,
@@ -927,18 +933,20 @@ function listen(
     refresh,
     firstReady,
     onReady,
+    onConnection,
     onLyricsSaved,
   }: {
     readonly load: () => void;
     readonly refresh: () => void;
     readonly firstReady: () => void;
     readonly onReady: () => void;
+    readonly onConnection: (state: LiveUpdates) => void;
     readonly onLyricsSaved: (trackIds: readonly number[]) => void;
   },
   onMode: (mode: Mode) => void,
   onJob: (job: JobEvent) => void,
   onWaitingDevices: (waiting: readonly WaitingDevice[]) => void,
-  onSpeaker: (speaker: Speaker | null) => void,
+  onSpeaker: (speaker: Speaker | null | undefined) => void,
   onCommand: (command: RemoteCommand) => void,
 ): () => void {
   if (typeof EventSource === "undefined") {
@@ -949,8 +957,11 @@ function listen(
   // Whether a Job that ended while settling may have changed the Tracks.
   let tracksChanged = false;
   let connected = false;
+  let listening = false;
   let online: boolean | undefined;
   events.addEventListener("ready", () => {
+    listening = true;
+    onConnection("connected");
     onReady();
     if (connected) {
       load();
@@ -958,6 +969,11 @@ function listen(
       firstReady();
     }
     connected = true;
+  });
+  events.addEventListener("error", () => {
+    listening = false;
+    onConnection("reconnecting");
+    onSpeaker(undefined);
   });
   events.addEventListener("mode", (event: MessageEvent<string>) => {
     const mode = JSON.parse(event.data) as Mode;
@@ -981,6 +997,7 @@ function listen(
     onWaitingDevices(waiting);
   });
   events.addEventListener("remote", (event: MessageEvent<string>) => {
+    if (!listening) return;
     const { page, state, age_ms } = JSON.parse(event.data) as RemoteEvent;
     onSpeaker(
       page === null || state === null
@@ -989,6 +1006,7 @@ function listen(
     );
   });
   events.addEventListener("command", (event: MessageEvent<string>) => {
+    if (!listening) return;
     onCommand(JSON.parse(event.data) as RemoteCommand);
   });
   events.addEventListener("job", (event: MessageEvent<string>) => {

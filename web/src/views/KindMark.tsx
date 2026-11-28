@@ -29,7 +29,7 @@ export function KindMark({
   readonly besideTitle?: boolean;
 }) {
   const t = useWords();
-  const lyricsLabel = useLyricsLabel(lyrics);
+  const lyricsLabel = useLyricsLabel(lyrics, t);
   const album = kind === "album";
   const settled = kindSettled(reason);
   const named = t(album ? "Album" : "Song");

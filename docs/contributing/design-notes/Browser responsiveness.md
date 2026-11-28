@@ -531,12 +531,11 @@ varied-duration catalogs exercise both repeated and distinct labels.
 ## Shared translation for kind marks
 
 > [!NOTE]
-> **In progress.** A kind mark uses its existing language subscription for
+> **Implemented.** A kind mark uses its existing language subscription for
 > both its kind and lyrics labels.
 
-Large-gallery profiling identifies repeated `useWords` subscriptions in
-`KindMark`: it subscribes directly, then `useLyricsLabel` subscribes again.
-The proposed helper signature is `useLyricsLabel(subject, t: Words)`.
+`KindMark` uses the same interface language for its kind and lyrics labels.
+The helper signature is `useLyricsLabel(subject, t: Words)`.
 `KindMark`, `PlayingKind`, and its `AlbumMark` pass their existing
 translator. The helper retains its lyrics-availability context read.
 The translator is required; a conditional fallback hook is not allowed.
@@ -546,26 +545,61 @@ updates both labels when the language changes, and context-only lyrics
 updates remain current. Card order, browser search, keyboard behavior,
 styles, and dependencies stay unchanged.
 
-A seven-pair build-only diagnostic on 7,000 tracks has 3,262 album cards.
-Albums content appears at 305 versus 275 ms, with a median paired 29 ms
-saving, and scripting falls by 31 ms. Every content and scripting pair
-improves; Artists is a neutral control. This is not retained production
-evidence. An incomplete attempt with an unnecessarily strict load ceiling
-is excluded; the completed trial follows the reviewed physical-core limit.
+### Production comparison
+
+Separate production builds differ only in `lyricsAvailability.ts`,
+`KindMark.tsx`, and `PlayingKind.tsx`. Seven alternating pairs use a
+7,000-track synthetic catalog with 3,262 album cards, a settled Library,
+an unrecorded warmup, and identical complete-card contents.
+Chrome runs silently at desktop width without CPU or network throttling.
+
+| Albums measure | Baseline median | Implementation median | Median paired saving |
+| --- | ---: | ---: | ---: |
+| Click to content | 301.2 ms | 272.7 ms | 21.9 ms (7.2%) |
+| Scripting | 292.5 ms | 262.3 ms | 23.6 ms (8.1%) |
+| Click to frame opportunity | 577.8 ms | 552.1 ms | 20.9 ms (3.7%) |
+
+Every content, scripting, and frame pair improves. Columns are separate
+medians; their differences need not equal the median paired savings.
+DOM insertion and a subsequent frame opportunity are lab measures, not
+exact pixel presentation or field INP.
+
+The separate CPU profile shows `useWords` decreasing from about 35 to
+25 ms and `useLyricsLabel` from 19 to 8 ms. These inclusive frames overlap
+and cannot be added; sampling does not account for every saved millisecond.
+Browser style and layout work remain essentially unchanged.
+
+### Controls and limits
+
+Artists is a neutral control: it has no kind marks in its cards. Its
+paired content change is 1.6 ms slower and frame change 3.2 ms slower,
+below the control threshold. No improvement is claimed for Artists here.
+
+Three-pair controls cover 1,906 tracks, a small 210-track catalog, and
+1,906 tracks grouped into full albums. Albums has median paired content
+savings of 6.8, 2.4, and 2.5 ms, respectively, with small or mixed frame
+changes. A direct Albums load has a paired 12.3 ms content saving, but
+that short control does not establish a general startup gain.
+
+Each cohort starts below half the Mac's eight physical cores in
+one-minute load and refuses samples above eight. The primary cohort's
+observed load is 3.90–4.59. No build or test runs beside measurements.
+Build-only diagnostics and the incomplete diagnostic with a stricter
+load ceiling are not used as production retention evidence.
 
 ### Acceptance
 
-- [ ] Keep all call sites unconditional and typed, without an extra language hook.
-- [ ] Verify mounted language changes update kind and lyrics labels together,
+- [x] Keep all call sites unconditional and typed, without an extra language hook.
+- [x] Verify mounted language changes update kind and lyrics labels together,
       including the playing song and album marks.
-- [ ] Preserve context-only lyrics changes and existing glyphs, navigation,
+- [x] Preserve context-only lyrics changes and existing glyphs, navigation,
       focus, and playback actions.
-- [ ] Compare real production builds in seven alternating large-catalog pairs,
+- [x] Compare real production builds in seven alternating large-catalog pairs,
       with an unrecorded warmup and matching complete-card contents.
-- [ ] Require at least six of seven Albums content and scripting improvements,
+- [x] Require at least six of seven Albums content and scripting improvements,
       paired content savings of at least 5% and 10 ms, scripting savings of at
       least 5%, and a better frame-opportunity median.
-- [ ] Check smaller, full-album, Artists, and direct-load controls for repeatable
+- [x] Check smaller, full-album, Artists, and direct-load controls for repeatable
       regressions; capture a separate CPU profile to confirm the cause.
 
 Use a quiet start below half the physical core count and refuse samples

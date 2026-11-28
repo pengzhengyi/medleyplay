@@ -5,7 +5,7 @@ import { createContext, use } from "react";
 import type { Track } from "../api";
 import { albumKey } from "../library/favoriteGroups";
 import { albumArtistOf } from "../library/views";
-import { useWords } from "../locale";
+import type { Words } from "../locale";
 
 export type LyricsSubject =
   Track | { readonly artist: string; readonly album: string } | { readonly file: number };
@@ -25,9 +25,8 @@ export const LyricsAvailability = createContext<
 >(undefined);
 
 /** The readable state of a song or a complete album; no state for missing lyrics. */
-export function useLyricsLabel(subject: LyricsSubject | undefined): string | undefined {
+export function useLyricsLabel(subject: LyricsSubject | undefined, t: Words): string | undefined {
   const catalog = use(LyricsAvailability);
-  const t = useWords();
   if (subject === undefined) return undefined;
   if ("file" in subject) {
     return catalog?.tracks.get(subject.file)?.has_lyrics ? t("All songs have lyrics") : undefined;

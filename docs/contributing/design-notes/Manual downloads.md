@@ -53,9 +53,10 @@
 
 ## Adding a video that can't be read
 
-- **A lookup whose read fails still answers,** with `readable: false` and why,
-  instead of an error, whatever the failure: a fault, a network failure, a
-  refusal, *gone*, or *needs a login*. The answer's `reason` is `fault`,
+- **An unreadable result can still give parts a name.** Faults, temporary
+  network failures, login problems, and gone videos can return `readable: false`.
+  A typed provider refusal or unknown response stops the lookup instead of
+  offering manual entry. An unreadable result's `reason` is `fault`,
   `network`, `refused`, `gone`, or `needs_login`, and its `message` is the
   site's or the plugin's own words. It names the video and the part the link
   did, or part 1, and offers no title, uploader, or qualities. A link that names
@@ -63,7 +64,8 @@
   at submission.
 - **An unreadable result stays ready for manual entry.** Confirming its parts
   does not retry the read. Only the direct, synchronous API uses a ten-minute
-  memory of reads.
+  memory of reads. Repeating an Add for a remembered full video link uses
+  that result without taking the provider lane, but still checks for Holds.
 - **Adding then trusts the household's details:** distinct part numbers from
   1 to 9999, titles, and artists. Quality must be *best*. The duration is
   unknown until a file arrives.

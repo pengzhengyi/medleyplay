@@ -9,6 +9,8 @@
 
 import { expect as baseExpect, test } from "@playwright/test";
 
+import { addBilibili } from "./add-bilibili";
+
 // A search is a Job, which a busy machine slows; waits allow for that.
 const expect = baseExpect.configure({ timeout: 15_000 });
 
@@ -20,16 +22,7 @@ test("an album with no cover is suggested one found, and using it in Clean up sh
 }, { retry }) => {
   // A retry has a song and album of its own: the first try may have used the cover.
   const ALBUM = `Tube Covers ${String(retry + 1)}`;
-  const added = await request.post("/api/links", {
-    data: {
-      // A Bilibili code is ten letters or digits after `BV`.
-      link: `BVCoverTry0${String(retry)}`,
-      parts: [{ part: 1, title: "Cover Song", artist: ARTIST }],
-    },
-  });
-  expect(added.ok()).toBe(true);
-  const [first] = (await added.json()) as { readonly track_id: number }[];
-  const song = first?.track_id;
+  const song = await addBilibili(request, `BVCoverTry0${String(retry)}`, "Cover Song", ARTIST);
   const saved = await request.post("/api/tracks/details", {
     data: { track_ids: [song], values: { album: ALBUM } },
   });
@@ -66,15 +59,7 @@ test("a cover chosen in a song's Edit details goes on its album's other songs, a
     ["A", "Edit Cover One"],
     ["B", "Edit Cover Two"],
   ] as const) {
-    const added = await request.post("/api/links", {
-      data: {
-        link: `BVEdiCover${mark}${String(retry)}`,
-        parts: [{ part: 1, title, artist: ARTIST }],
-      },
-    });
-    expect(added.ok()).toBe(true);
-    const [first] = (await added.json()) as { readonly track_id: number }[];
-    ids.push(first?.track_id ?? 0);
+    ids.push(await addBilibili(request, `BVEdiCover${mark}${String(retry)}`, title, ARTIST));
   }
   const saved = await request.post("/api/tracks/details", {
     data: { track_ids: ids, values: { album: ALBUM } },

@@ -135,8 +135,8 @@ type _Read = VideoDetails | Unreadable
 
 
 @dataclass(frozen=True)
-class _Remembered:
-    read: _Read
+class _Remembered[T]:
+    value: T
     read_at: datetime
 
 
@@ -168,11 +168,15 @@ class LinkService:
         # One lookup at a time: the plugin host answers one call at a time anyway,
         # and a burst of lookups shouldn't reach the site at once.
         self._reading = threading.Lock()
-        self._remembered: dict[tuple[str, str], _Remembered] = {}
+        self._remembered: dict[tuple[str, str], _Remembered[_Read]] = {}
+        self._direct_lock = threading.Lock()
+        self._direct: dict[str, _Remembered[Resolved]] = {}
 
     def forget_lookups(self) -> None:
         """Forget the videos looked up, so the next lookup asks the site again."""
         self._remembered = {}
+        with self._direct_lock:
+            self._direct = {}
 
     def lookup(self, caller: Account, link: str) -> Lookup:
         """Return the video `link` names, with each part's Track if it is already added.
@@ -436,10 +440,37 @@ class LinkService:
 
     def _resolve(self, link: str, *, parts: tuple[int, ...] = ()) -> Resolved:
         link = lookup_link(link)
-        kind = recognize_link(link)
+        initial = DownloadSelection.from_link(link)
+        generation = self._direct
+        cached = generation.get(link)
+        if cached is not None and self._clock() - cached.read_at < LOOKUP_MEMORY:
+            resolved = cached.value
+            with self._units() as db:
+                require_clear_parts(db, initial.site, initial.video, parts)
+                require_clear_parts(db, resolved.kind, resolved.video, parts)
+            return resolved
+        resolved = self._ask_provider(link, initial, parts)
+        if not initial.short and not isinstance(resolved.read, Unreadable):
+            self._remember_direct(generation, link, resolved)
+        return resolved
+
+    def _remember_direct(
+        self, generation: dict[str, _Remembered[Resolved]], link: str, resolved: Resolved
+    ) -> None:
+        with self._direct_lock:
+            if generation is not self._direct:
+                return
+            now = self._clock()
+            self._direct = {
+                url: item for url, item in generation.items() if now - item.read_at < LOOKUP_MEMORY
+            } | {link: _Remembered(resolved, now)}
+
+    def _ask_provider(
+        self, link: str, initial: DownloadSelection, parts: tuple[int, ...]
+    ) -> Resolved:
+        kind = initial.site
         # Read before any call, so a slow Keychain never holds up the plugin host.
         proxy = self._proxies.current(kind) if self._proxies is not None else None
-        initial = DownloadSelection.from_link(link)
         with self._units.begin() as db:
             db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             require_clear(db, DownloadSelection(kind, initial.video, parts, initial.short))
@@ -500,7 +531,7 @@ class LinkService:
             now = self._clock()
             remembered = self._remembered.get((kind, video))
             if remembered is not None and now - remembered.read_at < LOOKUP_MEMORY:
-                return remembered.read
+                return remembered.value
             try:
                 details = self._plugins.call(READ_VIDEO, kind, ReadVideo(video=video, proxy=proxy))
             except PluginCallError as error:

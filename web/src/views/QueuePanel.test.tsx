@@ -83,12 +83,54 @@ describe("queue updates during playback", () => {
 
     rerender(<QueuePanel player={remote} tracks={tracks} sleep={sleep} />);
     await userEvent.click(screen.getByRole("button", { name: "Play Long Road now" }));
-    await userEvent.click(screen.getByRole("button", { name: "Remove Long Road" }));
+    await removeFromQueue("Long Road");
 
     expect(remote.playAt).toHaveBeenCalledWith("b", 0);
     expect(remote.remove).toHaveBeenCalledWith("b");
     expect(local.playAt).not.toHaveBeenCalled();
     expect(local.remove).not.toHaveBeenCalled();
+  });
+
+  it("does not restore focus again when a later queue update arrives", async () => {
+    const [current, first, second] = [
+      { key: "a", trackId: 1 },
+      { key: "b", trackId: 2 },
+      { key: "c", trackId: 3 },
+    ] as const;
+    const player = playerOf({ queue: { ...EMPTY, entries: [current, first, second] } });
+    const tracks = new Map([
+      [2, trackOf(2, "Long Road")],
+      [3, trackOf(3, "Outro")],
+      [4, trackOf(4, "Encore")],
+    ]);
+    const sleep = sleepTimerOf();
+    const { rerender } = render(<QueuePanel player={player} tracks={tracks} sleep={sleep} />);
+    const actions = screen.getByRole("button", { name: "Up next actions for Outro" });
+    await userEvent.click(actions);
+    await userEvent.click(screen.getByRole("menuitem", { name: "Move to top" }));
+    rerender(
+      <QueuePanel
+        player={{ ...player, queue: { ...player.queue, entries: [current, second, first] } }}
+        tracks={tracks}
+        sleep={sleep}
+      />,
+    );
+    expect(await screen.findByText("Outro plays next.")).toBeInTheDocument();
+    actions.blur();
+
+    rerender(
+      <QueuePanel
+        player={{
+          ...player,
+          queue: { ...player.queue, entries: [current, second, first, { key: "d", trackId: 4 }] },
+        }}
+        tracks={tracks}
+        sleep={sleep}
+      />,
+    );
+
+    expect(document.body).toHaveFocus();
+    expect(upNext()).toEqual(["Outro", "Long Road", "Encore"]);
   });
 
   it("updates lyrics and language through their contexts while the queue props stay unchanged", async () => {
@@ -152,6 +194,11 @@ function upNext(): string[] {
     .flatMap((item) => item.querySelector(".entry-title")?.textContent ?? []);
 }
 
+async function removeFromQueue(title: string) {
+  await userEvent.click(screen.getByRole("button", { name: `Up next actions for ${title}` }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "Remove" }));
+}
+
 describe("the queue", () => {
   it("translates the drag help, names and empty queue explanation without changing song names", async () => {
     await playingIntro();
@@ -203,7 +250,7 @@ describe("the queue", () => {
   it("removes what plays next", async () => {
     await playingIntro();
 
-    await userEvent.click(screen.getByRole("button", { name: "Remove Long Road" }));
+    await removeFromQueue("Long Road");
 
     expect(upNext()).toEqual(["Outro"]);
   });
@@ -336,7 +383,7 @@ describe("an album in the queue", () => {
   it("does not claim complete album lyrics when the only missing song leaves the queue", async () => {
     const queue = await playingMelt("partial");
 
-    await userEvent.click(within(queue).getByRole("button", { name: "Remove 生如夏花" }));
+    await removeFromQueue("生如夏花");
 
     const album = within(queue).getByRole("listitem", { name: "生如夏花, 1 of 3" });
     expect(within(album).getByRole("img", { name: "Album" })).toBeVisible();
@@ -410,5 +457,38 @@ describe("an album in the queue", () => {
 
     expect(folded).toEqual(["Bremen"]);
     expect(upNext()).toEqual(["傲慢的上校", "浮游", "生如夏花", "Bremen"]);
+  });
+
+  it("moves an entry past the songs in a folded album without starting playback", async () => {
+    const queue = await playingMelt();
+    const withinQueue = within(queue);
+    await userEvent.click(withinQueue.getByRole("button", { name: "Hide the songs of 生如夏花" }));
+    const actions = withinQueue.getByRole("button", { name: "Up next actions for Bremen" });
+
+    actions.focus();
+    await userEvent.keyboard("{Enter}");
+    await userEvent.click(screen.getByRole("menuitem", { name: "Move to top" }));
+
+    expect(await screen.findByText("Bremen plays next.")).toBeInTheDocument();
+    expect(actions).toHaveFocus();
+    expect(within(screen.getByRole("region", { name: "Player" })).getByText("Melt")).toBeVisible();
+    await userEvent.click(withinQueue.getByRole("button", { name: "Show the songs of 生如夏花" }));
+    expect(upNext()).toEqual(["Bremen", "傲慢的上校", "浮游", "生如夏花"]);
+  });
+
+  it("returns focus to the album when a moved song joins its folded group", async () => {
+    const queue = await playingMelt();
+    const actions = within(queue).getByRole("button", { name: "Up next actions for 生如夏花" });
+    await userEvent.click(actions);
+    await userEvent.click(screen.getByRole("menuitem", { name: "Move to end" }));
+    await userEvent.click(
+      within(queue).getByRole("button", { name: "Hide the songs of 生如夏花" }),
+    );
+    await userEvent.click(actions);
+    await userEvent.click(screen.getByRole("menuitem", { name: "Move up" }));
+
+    expect(await screen.findByText("生如夏花 plays third.")).toBeInTheDocument();
+    expect(upNext()).toEqual(["Bremen"]);
+    expect(within(queue).getByRole("button", { name: "Show the songs of 生如夏花" })).toHaveFocus();
   });
 });

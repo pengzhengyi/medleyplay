@@ -993,6 +993,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On macOS, the share guide and LAN listener use the physical network address
+  even when a VPN supplies the default route.
+- On touch screens, swipe over a reorder handle to scroll, or hold it before
+  dragging. In **Up next**, use a song's **More actions** menu to move or remove
+  it without dragging.
+- Tap larger playback, seek, menu, and dialog controls on touch screens.
+  Settings fits narrow screens, and **Columns** lets you set widths without
+  dragging.
 - Editing a split album's songs updates complete albums already in **Up next**.
   Restored album queues no longer leave deleted songs between surviving ones.
 

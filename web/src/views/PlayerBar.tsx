@@ -7,7 +7,7 @@
  */
 
 import { QueueIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import type { Lyrics, Track } from "../api";
 import { useWords } from "../locale";
@@ -36,6 +36,7 @@ import { Hint } from "./Hint";
  * on a row of its own along the bar's bottom edge.
  */
 export function PlayerBar({
+  ref,
   player,
   track,
   tracks,
@@ -49,6 +50,7 @@ export function PlayerBar({
   onOpenNowPlaying,
   playOn,
 }: {
+  readonly ref?: Ref<HTMLElement>;
   readonly player: Player;
   readonly track: Track | undefined;
   readonly tracks: ReadonlyMap<number, Track>;
@@ -79,7 +81,7 @@ export function PlayerBar({
   const shownPosition = timeline?.position ?? position;
   const shownDuration = timeline === undefined ? duration : timeline.length;
   return (
-    <section className="player" aria-label={t("Player")}>
+    <section ref={ref} className="player" aria-label={t("Player")}>
       <SeekBar
         position={shownPosition}
         duration={shownDuration}

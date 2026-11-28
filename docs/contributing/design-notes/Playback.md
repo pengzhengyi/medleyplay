@@ -402,6 +402,105 @@ and the full views are in [Web client](Web%20client.md).
   restored position is applied, paused, once the Track's metadata loads; when the
   browser can't save, or has cleared it, the page starts with an empty queue.
 
+### Playing-badge rendering
+
+> [!NOTE]
+> **Implemented.** Keep the current Track's animated badge while avoiding
+> repeated painting of its bars.
+
+The Playing badge is a decoration inside `TrackTable`'s `CoverBadge`.
+Three bottom-anchored elements change height through `scaleY`, rather than
+repainting three gradient backgrounds.
+The badge's size, color, rhythm, label, and place over the cover stay the same.
+The current Track keeps its badge when paused, matching the existing behavior.
+Changing that behavior, other animations, and first-load work are outside scope.
+
+#### Badge positioning and motion
+
+`CoverBadge` keeps its existing inputs and status precedence. A lookup or
+download status replaces the Playing badge; otherwise the current Track has
+the localized Playing label and title. Three decorative spans stay inside
+the existing `aria-hidden` bars element. No state, animation clock, public API,
+or dependency is added.
+
+The `bars` element keeps its inline size and becomes the positioning reference.
+Each child is 22% wide and fills its height before transformation. Horizontal
+positions are 0%, 39%, and 78%, matching the gradient alignment. Each child
+scales from the bottom and uses its own `@keyframes` rule:
+
+| Cycle position | Left bar | Middle bar | Right bar |
+| --- | ---: | ---: | ---: |
+| Start | 60% | 100% | 40% |
+| Halfway | 100% | 35% | 80% |
+| End | 40% | 75% | 100% |
+
+Motion takes 1.1 seconds, with `ease-in-out` between the listed cycle positions, repeating
+forever in alternating directions. Reduced motion disables all three
+animations and keeps the starting heights. Resizing and theme changes use
+the same relative sizes and accent color; no permanent `will-change` hint
+is added.
+
+```mermaid
+flowchart LR
+  T["Current Track and status"] --> B["CoverBadge"]
+  B --> L["Localized label and title"]
+  B --> D["Hidden decoration"]
+  D --> C["Three bottom-anchored scaleY bars"]
+  R["Reduced motion"] --> S["Static starting heights"]
+```
+
+#### Badge acceptance
+
+- [x] Preserve the badge's bounding box, color, horizontal alignment, and
+      animation heights across the complete forward and reverse cycle.
+- [x] Animate transforms, not layout or background properties; keep the
+      original duration, easing, direction, and reduced-motion appearance.
+- [x] Preserve current-track changes, paused-track behavior, status
+      precedence, localized labels, and accessible hiding of the decoration.
+- [x] Compare phase-matched pixels at desktop and phone widths in light
+      and dark themes, including reduced motion.
+- [x] Compare separate compiled baseline and candidate builds in seven
+      alternating headless pairs per playback state. Keep the badge moving;
+      record actual audio progress, renderer work, and `keydown` timing.
+- [x] Obtain independent implementation review and reconcile the measured
+      result here without claiming physical display latency, whole-machine
+      CPU usage, or a first-load improvement.
+
+Existing Track-table unit tests own status precedence and current-track
+selection. Browser tests check CSS motion, geometry, and reduced motion.
+Timing measurements stay outside CI.
+
+#### Badge measurements
+
+Separate production builds were compared in headless Chrome with a
+1,906-Track Library, one visible Playing badge, and two queued Tracks.
+Seven alternating pairs per playback state ran on a busy shared Mac.
+Audio advanced in every playing sample and stayed paused in every paused
+sample; the badge continued animating in both states.
+
+| Playback state | Baseline renderer work | Transform renderer work | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| Playing | 595 ms/s | 303 ms/s | 47.5% |
+| Paused | 279 ms/s | 7.5 ms/s | 97.4% |
+
+The work columns are medians of Chrome's renderer-task duration per second.
+The reduction column is the median of each pair's percentage reduction,
+not a ratio of those medians. All playing pairs improved by 44–56%; all
+paused pairs improved by 96–98%. In separate three-second playing traces,
+main-thread Paint events fell from 297 to 6 while Layout events stayed at 3.
+
+Keyboard-to-next-paint medians were 120 → 104 ms while playing and
+96 → 104 ms while paused. These mixed results do not establish an input-latency
+improvement. The measurements describe this browser workload, not physical
+display latency, whole-machine CPU use, field responsiveness, or first load.
+
+Phase-matched captures cover the forward and reverse cycle and reduced motion,
+at desktop and phone widths in both themes. The outer box and colors match;
+bar geometry differs by at most 0.016 CSS pixels. The crops are not
+pixel-identical: transformed elements rasterize fractional edges differently
+from gradients. Differing pixels stay within 1.1 CSS pixels of bar boundaries
+at a device scale of 1.
+
 ### Seek-thumb rendering
 
 > [!NOTE]

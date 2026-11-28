@@ -49,7 +49,6 @@ import {
   type KindReason,
   type MissingDetailReview,
   type Origin,
-  type Pictured,
   type Track,
   type VideoRead,
   type VideoText,
@@ -126,7 +125,7 @@ export function EditDetails({
   load,
   onSave,
   onReadVideo,
-  coverHelp,
+  coverContext,
   onSetCover,
   onRemoveCover,
   onUseCover,
@@ -150,7 +149,10 @@ export function EditDetails({
     artists?: readonly Credit[],
   ) => Promise<void>;
   readonly onReadVideo: (text: VideoText) => Promise<VideoRead>;
-  readonly coverHelp?: string | undefined;
+  readonly coverContext?: {
+    readonly album: CoverAlbum | undefined;
+    readonly help: string;
+  };
   readonly onSetCover: (image: Blob) => Promise<Details>;
   readonly onRemoveCover: () => Promise<Details>;
   /** Make the cover `cover`, one found for the song's album, the household's own. */
@@ -379,6 +381,12 @@ export function EditDetails({
         };
   const changed = Object.keys(changes).length > 0 || artists !== undefined;
   const albumName = details === undefined ? "" : boxText(details, own, "album");
+  const coverAlbum =
+    coverContext === undefined
+      ? details === undefined
+        ? undefined
+        : albumOf(details)
+      : coverContext.album;
   const isSingle =
     details !== undefined &&
     details.kind.reason !== "segment" &&
@@ -605,11 +613,12 @@ export function EditDetails({
           <div className="edit-details-body">
             <div className="edit-details-side">
               <CoverBox
-                title={track.title}
+                title={coverAlbum?.album ?? track.title}
+                albumCover={coverAlbum !== undefined}
                 details={details}
                 busy={saving || reading || covering}
                 covering={covering}
-                help={coverHelp}
+                help={coverContext?.help}
                 error={coverError}
                 onReplace={() => {
                   setReplacingCover(true);
@@ -620,10 +629,12 @@ export function EditDetails({
                 <PictureEditor
                   sources={{
                     kind: "cover",
-                    of: track.title,
+                    of: coverAlbum?.album ?? track.title,
                     shown: shownCoverOf(details),
-                    album: albumOf(details),
-                    pictured: picturedOf(albumOf(details)),
+                    album: coverAlbum,
+                    pictured:
+                      coverAlbum === undefined ? undefined : { kind: "album", ...coverAlbum },
+                    scopeHelp: coverContext?.help,
                     upload: async (image) => {
                       setDetails(await onSetCover(image));
                     },
@@ -940,11 +951,6 @@ function albumOf(details: Details): CoverAlbum | undefined {
   return album === "" ? undefined : { album, artist: text("album_artist") || text("artist") };
 }
 
-/** What a model is asked to picture for the song's cover: its album, when it has one. */
-function picturedOf(album: CoverAlbum | undefined): Pictured | undefined {
-  return album === undefined ? undefined : { kind: "album", ...album };
-}
-
 /**
  * The cover shown, large, and where it came from. Over it, on hover or focus, and
  * always on a touch screen: save it as an image, replace it in the picture editor, or
@@ -952,6 +958,7 @@ function picturedOf(album: CoverAlbum | undefined): Pictured | undefined {
  */
 function CoverBox({
   title,
+  albumCover,
   details,
   busy,
   covering,
@@ -960,8 +967,9 @@ function CoverBox({
   onRemove,
   help,
 }: {
-  /** The song's title, which names a saved image. */
+  /** The album or track's name for a saved image. */
   readonly title: string;
+  readonly albumCover: boolean;
   readonly details: Details;
   readonly busy: boolean;
   /** Whether the household's cover is being removed. */
@@ -975,12 +983,19 @@ function CoverBox({
   const shown = details.shown.cover;
   const yours = details.origins.household?.cover !== undefined;
   const cover = shownCoverOf(details);
+  const replaceLabel = albumCover
+    ? cover === undefined
+      ? "Add album cover"
+      : "Replace album cover"
+    : cover === undefined
+      ? "Add a cover"
+      : "Replace the cover";
   return (
     <div className="cover-box">
       <PictureFrame
-        replaceLabel={cover === undefined ? "Add a cover" : "Replace the cover"}
+        replaceLabel={replaceLabel}
         save={cover === undefined ? undefined : { href: coverUrl(cover, "original"), name: title }}
-        removeLabel="Remove your cover"
+        removeLabel={albumCover ? "Remove your album cover" : "Remove your cover"}
         busy={busy}
         saving={covering ? "Saving the cover…" : undefined}
         onReplace={onReplace}

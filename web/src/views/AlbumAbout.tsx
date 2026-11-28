@@ -50,7 +50,7 @@ export function AlbumAbout({
   const framed = (
     <PictureFrame
       className="album-frame"
-      replaceLabel={cover === null ? "Add a cover" : "Replace the cover"}
+      replaceLabel={cover === null ? "Add album cover" : "Replace album cover"}
       save={cover === null ? undefined : { href: coverUrl(cover, "original"), name: album }}
       onReplace={() => {
         setReplacing(true);

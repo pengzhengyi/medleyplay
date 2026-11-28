@@ -97,6 +97,117 @@ test("choosing a Track plays it and queues the Tracks after it", async ({ page }
   await expect(player(page).getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
+for (const [width, colorScheme] of [
+  [1280, "light"],
+  [390, "dark"],
+] as const) {
+  test(`the Playing badge scales its bars without changing their layout at ${String(width)}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ colorScheme, reducedMotion: "no-preference" });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Alpha", exact: true }).click();
+    await player(page).getByRole("button", { name: "Pause", exact: true }).click();
+    const badge = page.getByRole("img", { name: "Playing", exact: true });
+    const bars = badge.locator(".bars");
+    await expect(badge).toHaveAttribute("title", "Playing");
+    await expect(bars).toHaveAttribute("aria-hidden", "true");
+
+    const animations = await bars.evaluate((element) =>
+      element.getAnimations({ subtree: true }).map((animation) => {
+        animation.pause();
+        const effect = animation.effect;
+        return {
+          timing: effect?.getTiming(),
+          properties:
+            effect instanceof KeyframeEffect
+              ? effect
+                  .getKeyframes()
+                  .map((frame) =>
+                    Object.keys(frame).filter(
+                      (key) => !["offset", "computedOffset", "easing", "composite"].includes(key),
+                    ),
+                  )
+              : [],
+        };
+      }),
+    );
+    expect(animations).toHaveLength(3);
+    for (const animation of animations) {
+      expect(animation.timing).toMatchObject({
+        duration: 1100,
+        direction: "alternate",
+        iterations: Infinity,
+      });
+      expect(animation.properties).toEqual([["transform"], ["transform"], ["transform"]]);
+    }
+
+    const phases = [
+      { at: 0, heights: [0.6, 1, 0.4] },
+      { at: 137.5, heights: [0.6517, 0.916, 0.4517] },
+      { at: 275, heights: [0.8, 0.675, 0.6] },
+      { at: 550, heights: [1, 0.35, 0.8] },
+      { at: 825, heights: [0.7, 0.55, 0.9] },
+      { at: 1100, heights: [0.4, 0.75, 1] },
+      { at: 1375, heights: [0.7, 0.55, 0.9] },
+      { at: 1650, heights: [1, 0.35, 0.8] },
+      { at: 1925, heights: [0.8, 0.675, 0.6] },
+      { at: 2062.5, heights: [0.6517, 0.916, 0.4517] },
+      { at: 2200, heights: [0.6, 1, 0.4] },
+    ];
+    const layout = await bars.boundingBox();
+    for (const phase of phases) {
+      const columns = await bars.evaluate((element, at) => {
+        for (const animation of element.getAnimations({ subtree: true })) {
+          animation.currentTime = at;
+        }
+        const bounds = element.getBoundingClientRect();
+        return Array.from(element.children, (child) => {
+          const box = child.getBoundingClientRect();
+          return {
+            height: box.height / bounds.height,
+            left: (box.left - bounds.left) / bounds.width,
+            width: box.width / bounds.width,
+            bottom: box.bottom - bounds.bottom,
+            layoutHeight: (child as HTMLElement).offsetHeight,
+          };
+        });
+      }, phase.at);
+      expect(await bars.boundingBox()).toEqual(layout);
+      for (const [index, column] of columns.entries()) {
+        expect(column.height).toBeCloseTo(phase.heights[index] ?? NaN, 2);
+        expect(column.left).toBeCloseTo(index * 0.39, 2);
+        expect(column.width).toBeCloseTo(0.22, 2);
+        expect(column.bottom).toBeCloseTo(0, 2);
+        expect(column.layoutHeight).toBe(Math.round(layout?.height ?? NaN));
+      }
+    }
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const reduced = await bars.evaluate((element) => ({
+      animations: element.getAnimations({ subtree: true }).length,
+      heights: Array.from(
+        element.children,
+        (child) => child.getBoundingClientRect().height / element.getBoundingClientRect().height,
+      ),
+    }));
+    expect(reduced.animations).toBe(0);
+    for (const [index, height] of reduced.heights.entries()) {
+      expect(height).toBeCloseTo(phases[0]?.heights[index] ?? NaN, 2);
+    }
+    expect((await audioState(page)).playing).toBe(false);
+    await page.getByRole("button", { name: "Bravo", exact: true }).click();
+    await expect(page.locator(".tracks tr[aria-current=true]")).toContainText("Bravo");
+    await expect(badge).toHaveCount(1);
+    await expect(
+      page
+        .locator(".tracks tr[aria-current=true]")
+        .getByRole("img", { name: "Playing", exact: true }),
+    ).toBeVisible();
+  });
+}
+
 const queueHeaderWords = {
   en: {
     next: "Up next",

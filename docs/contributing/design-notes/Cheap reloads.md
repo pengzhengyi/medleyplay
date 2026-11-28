@@ -15,6 +15,7 @@
 - [More answers cached on the server](#more-answers-cached-on-the-server)
 - [The enricher reads hold no time](#the-enricher-reads-hold-no-time)
 - [Asking with the ETag held](#asking-with-the-etag-held)
+- [Priority for supporting reads](#priority-for-supporting-reads)
 - [Keeping what didn't change](#keeping-what-didnt-change)
 - [When the side reads run](#when-the-side-reads-run)
 - [Interfaces](#interfaces)
@@ -200,6 +201,154 @@ class HeldReads {
   development, so code that changes one fails at once.
 - **Forgotten on every sign-out,** including a 401 that signs the page out, as the
   server's `Clear-Site-Data` clears the browser's copy.
+
+## Priority for supporting reads
+
+> [!NOTE]
+> **Status: implemented.** Supporting Library reads have lower browser priority so
+> a listener's editor or playback request can get a connection sooner.
+
+### The remaining wait
+
+Waiting until the songs are drawn prevents competing reads from delaying the
+first song list. It does not keep the browser's connections free afterward.
+The enricher and side reads can occupy them while the server rebuilds answers
+under its heavy-read lock. An editor's small request can wait behind that work
+before the server even receives it.
+
+This is most visible when the server's cached answers are invalid. A warm server
+cache makes the same reads cheap. Comparing one cold-cache opening with later
+warm-cache openings would attribute that difference to the wrong change.
+
+### Native priority, not another queue
+
+Use the browser's [`RequestInit.priority`](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#priority)
+hint, with no new package, application queue, concurrency cap, or delay:
+
+| Collaborator | Responsibility |
+| --- | --- |
+| `HeldReads` | Accept an optional priority for the store's requests; keep conditional headers, shared trailing reads, errors, and object identity unchanged |
+| The song-list store | Keep the browser's default priority |
+| The supporting-read store | Request low priority for side and enricher reads, such as artist names, missing photos, and lookup eligibility |
+| `forgetHeldReads` | Clear both stores when the signed-in Account changes |
+| Other API calls | Keep their existing options and priority, including editor data, playback, and writes |
+
+Separate stores make the priority a property of the read group without adding
+options to every caller. A path belongs to one store, so its in-flight sharing
+and trailing read remain in one place. Both stores must forget their answers
+together; priority is not a new cache key or an Account boundary.
+
+The hint changes which pending request the browser prefers. It cannot interrupt
+a request already being served, guarantee a free connection, or make the server
+build an answer faster. Browsers that ignore it keep their existing scheduling.
+All reads still happen, with the same polling and invalidation rules.
+
+These reads also supply Clean up, linked artist favorites, and station selection.
+The grouping is not per-view priority: navigating there does not promote a
+request already under way. Their readiness and behavior while reads remain
+pending are part of the retention check, not an assumed free gain.
+
+An experimental two-read concurrency cap reduces connection waiting further,
+but does not consistently beat the native hint for Songs. It needs admission,
+cancellation, and foreground-promotion rules; a queue package would not decide
+those rules. The native hint is the smaller change and adds no dependency.
+
+### Production measurements
+
+Two seven-pair comparisons per action alternate baseline/implementation order in
+silent headless Chrome. They use a disposable real API, a 1,906-track Library
+with bound artist credits, and a 12-song album. Before each sample, the fixture
+advances the database revision so cached answers need rebuilding. Outstanding
+reads finish between samples. Source maps confirm that only the API module
+differs between the production builds; the browser does not override priority.
+
+Measurements use a desktop viewport without CPU or network throttling.
+Each sample waits for one-minute host load at most four before starting and
+refuses a sample above five. No build or test runs beside them. An incomplete
+cohort that exceeded the ceiling is excluded as a whole. All samples in the
+two completed comparisons remain in the results.
+
+| Action | Useful controls, baseline → implementation | Frame proxy, baseline → implementation | Median paired frame saving |
+| --- | --- | --- | --- |
+| Edit details | 445 → 105 ms | 459 → 127 ms | 351 ms |
+| Edit songs | 363 → 215 ms | 381 → 230 ms | 163 ms |
+| Clean up: first Link artist names action | 480 → 700 ms | 538 → 764 ms | -251 ms |
+
+The useful-control measure is click-to-DOM insertion of the first editable title
+or an enabled action in Link artist names, not completion of every Clean up section.
+Visibility and enabled state are checked afterward. The frame measure is a
+`requestAnimationFrame` followed by a timer: a frame-opportunity proxy, **not
+an exact presentation timestamp or standard first meaningful paint metric**.
+The table uses separate medians; their difference need not equal the median
+paired saving.
+
+Details improves in 13 of 14 pairs, with a median paired 361 ms reduction
+in the detail request's pre-send wait. Chrome reports supporting requests
+as Low instead of High; editor requests stay High. The gain comes from
+waiting less for a connection, not faster server computation.
+
+Songs improves in 10 of 14 pairs, not consistently in each comparison.
+Some baseline clicks occur after connections have already become free.
+Others also cross the boundary between a preloaded Songs module and one
+that still needs loading. The hint cannot improve work already served.
+
+### Retention decision and limits
+
+**Keep the hint for contested foreground reads, led by Edit details.**
+The last supporting transfer finishes a median paired 1 ms later during
+Details and 97 ms later during Songs. The hint changes service order and
+adds no requests of its own; refresh rules remain unchanged.
+
+Clean up's click-to-action wait is a median paired 224 ms longer across
+the two comparisons. Click timing explains much of this difference:
+in the second comparison, median baseline clicks occur 1,123 ms after
+navigation starts, while candidate clicks occur at 707 ms. The action
+itself appears at 1,396 versus 1,411 ms. Its navigation-anchored paired
+change is 37 ms faster in the first comparison and 15 ms slower in
+the second; artist-name response arrival is similarly mixed.
+Earlier navigation does not make a listener's longer visible wait
+disappear, so both measurements matter.
+Across all 14 pairs, navigation-anchored action arrival is 1,401 → 1,414 ms,
+with a paired 9 ms saving and seven pairs improving. Artist-name arrival
+has a paired 1 ms delay, also with seven pairs improving. The click-time
+difference follows variation in the initial track response, before
+supporting reads start; it is not evidence that low priority delays
+the action by 224 ms.
+
+Warm-cache and fully preloaded controls do not establish a general gain.
+Across eight warm-cache pairs, Songs has a median paired 5 ms content
+delay and Clean up a 5 ms delay. Some Songs samples cross a roughly
+260 ms module-preload boundary in either direction; the five-pair
+follow-up does not show a consistently worse candidate preload state.
+Three settled-opening pairs put Details at 69 → 65 ms and Songs at
+87 → 85 ms, with mixed paired changes.
+
+Click Event Timing is separate from useful content. The median is
+64 → 56 ms for invalidated-cache Details and 56 → 56 ms for Songs.
+Neither an INP improvement nor an everywhere-faster opening is claimed.
+
+The comparisons cover Chrome over local HTTP, not every browser or network.
+A browser that ignores the hint retains its own scheduling.
+
+### Verified behavior
+
+- [x] Supporting requests carry low priority on initial, conditional, and trailing
+      reads; song-list, editor, playback, and write requests do not acquire it.
+- [x] A 304 still returns the held object, overlapping reads still share one
+      trailing request, and errors still allow recovery.
+- [x] Changing Accounts clears both stores; a read begun before the change cannot
+      repopulate either cache afterward.
+- [x] The compiled implementation retains editor gains with invalidated server
+      answers in paired measurements, not just the browser-side experiment.
+- [x] Warm-cache and preloaded openings, supporting-data completion, and Clean up
+      readiness are measured. Any reproducible supporting-view regression has an
+      explicit keep-or-revert decision before retention.
+- [x] While artist names are held at the network boundary, the existing favorite
+      is still queued by the favorites station. After links arrive, that station
+      also includes the linked name's song, in both builds.
+- [x] Editor behavior still works at phone and desktop widths, in both themes and
+      with reduced motion: drafts, selection, focus, validation updates, Escape,
+      and reopening.
 
 ## Keeping what didn't change
 

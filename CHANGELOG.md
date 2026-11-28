@@ -782,6 +782,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Supporting Library reads use lower browser priority, so opening an editor can
+  wait less behind background data requests. Browsers may ignore the hint, and
+  supporting data can arrive later.
 - Albums and Artists open faster when many cards share the same song count
   and length. Every card remains available to navigation and browser search.
 - Preloaded editors and views open without an extra loading wait. Edit songs and

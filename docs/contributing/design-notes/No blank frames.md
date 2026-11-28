@@ -304,7 +304,8 @@ There are two important exclusions:
   waits 1,750 ms before its HTTP request is sent, while the API reports 61 ms of
   application time. Enricher status and other side reads occupy the connections;
   an event stream keeps another open. Other early samples are much faster.
-  Background-read scheduling needs a separate design, not a claimed benefit here.
+  [Priority for supporting reads](Cheap%20reloads.md#priority-for-supporting-reads)
+  addresses that separate wait; it is not a benefit of preloaded-part rendering.
 
 Edit album also has time between DOM insertion and the next frame that the lazy
 path does not explain. Removing backdrop blur in a separate three-pair experiment

@@ -20,12 +20,15 @@ from medleyplay.plugin_api import AiEndpoint
 
 RESULT_FILE: Final = "result.json"
 
-type JobFailureKind = Literal["network", "auth", "plugin", "program", "gone", "refused", "invalid"]
+type JobFailureKind = Literal[
+    "network", "auth", "plugin", "program", "gone", "refused", "invalid", "provider_refused"
+]
 """Why a Job failed: the site's network, its login, a plugin, or the Job's own program.
 
 A program may also fail its Job because the site no longer has what it asked for
 (`gone`), because the site refused the request (`refused`), or because the site
 answered with something unusable (`invalid`).
+`provider_refused` records a download rejection that must not be replayed.
 """
 
 

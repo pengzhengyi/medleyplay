@@ -263,13 +263,18 @@ def test_a_failure_is_retried_a_day_later_up_to_three_times_or_at_once_when_its_
             _wanted(2, MB, failure=Failure(NOW - timedelta(hours=1), in_a_row=1)),
             _wanted(3, MB, failure=Failure(yesterday, in_a_row=MAX_FAILURES + 1)),
             _wanted(4, MB, failure=Failure(NOW, in_a_row=MAX_FAILURES + 1, cleared=True)),
+            _wanted(5, MB, failure=Failure(yesterday, in_a_row=1, terminal=True)),
         ),
     )
 
     planned = plan(state)
 
     assert {each.track_id for each in planned.starts} == {TrackId(1), TrackId(4)}
-    assert planned.shortfalls == {TrackId(2): Shortfall.FAILING, TrackId(3): Shortfall.FAILING}
+    assert planned.shortfalls == {
+        TrackId(2): Shortfall.FAILING,
+        TrackId(3): Shortfall.FAILING,
+        TrackId(5): Shortfall.FAILING,
+    }
 
 
 def test_a_track_no_plugin_downloads_or_whose_source_is_gone_is_reported_not_started() -> None:

@@ -28,6 +28,7 @@ MANUAL_EXTENSIONS: Final = frozenset(
 MANUAL_BACKEND: Final = "manual"
 """The backend of a Download the household added by hand."""
 DOWNLOAD_KIND: Final = "download_source"
+DOWNLOAD_PROVIDER_REFUSED: Final = "provider_refused"
 QUALITY_DETAIL: Final = "quality"
 JOIN_ESTIMATE_DETAIL: Final = "joined_estimate"
 JOIN_LANE: Final = "join"

@@ -24,7 +24,13 @@ from typing import IO, Generic, Literal, TypeVar
 
 from pydantic import BaseModel
 
-from medleyplay.plugin_api import AiEndpoint, AuthError, NetworkError, Operation
+from medleyplay.plugin_api import (
+    AiEndpoint,
+    AuthError,
+    DownloadRefusedError,
+    NetworkError,
+    Operation,
+)
 from medleyplay.plugin_api.progress import ProgressSink, reporting_to
 from medleyplay.plugin_host.host import peak_memory
 from medleyplay.plugin_host.job_wire import (
@@ -61,12 +67,15 @@ class AnswerFailedError(Exception):
 
     `kind` is `gone` when the site no longer has what was asked for, `refused` when
     it refused the request, and `invalid` when it answered with something unusable.
+    `provider_refused` stops a rejected download without retrying.
     """
 
-    def __init__(self, message: str, *, kind: Literal["gone", "refused", "invalid"]) -> None:
+    def __init__(
+        self, message: str, *, kind: Literal["gone", "refused", "invalid", "provider_refused"]
+    ) -> None:
         """Record why the Job fails."""
         super().__init__(message)
-        self.kind: Literal["gone", "refused", "invalid"] = kind
+        self.kind = kind
 
 
 @dataclass
@@ -132,6 +141,8 @@ class JobContext:
             raise PluginCallFailedError(
                 kind="auth", message=str(error), plugin=endpoint.plugin, key=key
             ) from error
+        except DownloadRefusedError as error:
+            raise AnswerFailedError(str(error), kind="provider_refused") from error
         except (Exception, SystemExit) as error:
             message = f"{type(error).__name__}: {error}"
             record.trailing_failures += 1

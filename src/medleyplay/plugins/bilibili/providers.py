@@ -13,6 +13,7 @@ from medleyplay.plugin_api import (
     CheckLogin,
     Downloaded,
     DownloadPart,
+    DownloadRefusedError,
     ReadVideo,
     VideoDetails,
     VideoStatus,
@@ -104,6 +105,8 @@ class BilibiliDownloader:
             )
         except _ytdlp.BoundedDownloadError as error:
             return Downloaded(file=None, message=str(error))
+        except _ytdlp.RefusedError as error:
+            raise DownloadRefusedError(str(error)) from None
         except _ytdlp.GoneError as error:
             return Downloaded(file=None, gone=True, message=str(error)[:512])
         except _ytdlp.NeedsLoginError as error:

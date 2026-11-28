@@ -525,7 +525,10 @@ class JobRunner:
 
     def _settle(self, running: _Running, outcome: _Outcome) -> None:
         outcome = _redacted(running, outcome)
-        if running.held and not isinstance(outcome, JobFinished):
+        terminal = isinstance(outcome, JobFinished) or (
+            isinstance(outcome, JobFailed) and outcome.kind == "provider_refused"
+        )
+        if running.held and not terminal:
             self._set(running.job_id, JobState.QUEUED)
             return
         login, refused = running.login, isinstance(outcome, JobFailed) and outcome.kind == "auth"

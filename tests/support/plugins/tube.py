@@ -11,6 +11,7 @@ The video id says how the plugin behaves:
 | `BVSignedIn` | one part | `audio.m4a` with a login, an `AuthError` without |
 | `BVremoved` | one part | gone: removed after it was added |
 | `BVrefused` | one part | an `AuthError`: the site refuses the login |
+| `BVProviderRefused` | one part | a download refusal that does not reject the login |
 | `BVdown` | a `NetworkError` | a `NetworkError` |
 | `BVflaky` | a `NetworkError` the first time it is read, then one part | `audio.m4a` |
 | `BVdenied` | an `AuthError`: the site refuses the read | `audio.m4a` |
@@ -52,6 +53,7 @@ from medleyplay.plugin_api import (
     CheckLogin,
     Downloaded,
     DownloadPart,
+    DownloadRefusedError,
     NetworkError,
     PartDetails,
     Plugin,
@@ -149,6 +151,9 @@ class Downloader:
 
     def download(self, request: DownloadPart) -> Downloaded:
         video, folder = request.video, Path(request.folder)
+        if video == "BVProviderRefused":
+            message = "Bilibili returned HTTP 567. The download stopped."
+            raise DownloadRefusedError(message)
         _fail_as(video)
         if video in {"BVgone", "BVremoved"}:
             return Downloaded(file=None, gone=True, message="The video was removed.")

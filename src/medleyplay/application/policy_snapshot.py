@@ -25,6 +25,7 @@ from medleyplay.domain.album_ratings import AlbumRatings, effective_rating
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
 from medleyplay.domain.downloads import (
     DOWNLOAD_KIND,
+    DOWNLOAD_PROVIDER_REFUSED,
     MANUAL_BACKEND,
     download_target,
 )
@@ -327,4 +328,4 @@ def _failure(
         (account_id, site) in logins and saved.get((account_id, site), failed_at) > failed_at
         for account_id in accounts
     )
-    return Failure(failed_at, in_a_row, cleared=cleared)
+    return Failure(failed_at, in_a_row, cleared=cleared, terminal=kind == DOWNLOAD_PROVIDER_REFUSED)

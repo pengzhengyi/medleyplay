@@ -7,3 +7,7 @@ class NetworkError(Exception):
 
 class AuthError(Exception):
     """The site refused the login, for example because it expired."""
+
+
+class DownloadRefusedError(Exception):
+    """The provider rejected the download attempt without rejecting the login."""

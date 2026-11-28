@@ -61,6 +61,7 @@ _REFUSED: Final = re.compile(r"rate limit|blocked by server|rejected by server",
 # The site's risk control answers a request from a client it suspects with 352, 401, or 412.
 _RISK_CONTROL: Final = re.compile(r"Unable to download video info: (?:352|401|412)\b")
 _REFUSED_STATUSES: Final = frozenset({403, 412})
+_STOP_DOWNLOAD_STATUSES: Final = _REFUSED_STATUSES | {429, 567}
 _REMOVED: Final = re.compile(r"deleted or geo-restricted", re.IGNORECASE)
 _TRANSFER_HTTP_ERROR: Final = re.compile(r"^ERROR:\s*\[download\] Got error: HTTP Error (\d{3}):")
 _RETRY_LATER: Final = frozenset({429, 500, 502, 503, 504, 567})
@@ -78,7 +79,7 @@ class NeedsLoginError(Exception):
 
 
 class RefusedError(RuntimeError):
-    """The site refused the request: a 403, a 412, a rate limit, or its risk control."""
+    """The site rejected the request or limited new requests."""
 
 
 class BoundedDownloadError(Exception):
@@ -163,6 +164,7 @@ def download(
 
     options = {
         **_base(cookie_file, proxy),
+        "medleyplay_download": True,
         "noplaylist": True,
         "format": formats,
         "paths": {"home": folder, "temp": folder},
@@ -207,6 +209,8 @@ def _run[T](options: dict[str, object], call: Callable[[Any], T], cookie_file: s
             return call(ydl)
     except DownloadError as error:
         cause = (error.exc_info[1] if error.exc_info else None) or error
+        if isinstance(cause, RefusedError):
+            raise cause from None
         refusal = refusal_of(cause)
         if refusal is not None:
             raise RefusedError(refusal) from None
@@ -420,6 +424,19 @@ class _YoutubeDL(yt_dlp.YoutubeDL):  # type: ignore[misc] # yt-dlp ships no type
     """yt-dlp that sends its requests with `_ProxiedRH` before any other handler."""
 
     _bounded_transfer_started = False
+
+    def urlopen(self, req: Any) -> Any:  # noqa: ANN401 -- untyped yt-dlp override
+        """Stop a rejected download request before the native HTTP loop can repeat it."""
+        try:
+            return super().urlopen(req)
+        except HTTPError as error:
+            if self.params.get("medleyplay_download"):
+                if error.status in _STOP_DOWNLOAD_STATUSES | _RETRY_LATER:
+                    error.close()
+                if error.status in _STOP_DOWNLOAD_STATUSES:
+                    message = f"Bilibili returned HTTP {error.status}. The download stopped."
+                    raise RefusedError(message) from None
+            raise
 
     def save_cookies(self) -> None:
         """Do not write a cookie jar during a bounded audio transfer."""

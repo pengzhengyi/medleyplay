@@ -129,3 +129,74 @@ test("saving song boundaries updates the album and playing timeline in another t
     ).toBe(true);
   }
 });
+
+test("segmented seek thumbs align and leave album previews reachable in both layouts", async ({
+  page,
+  request,
+}) => {
+  const tracks = (await (await request.get("/api/tracks")).json()) as Track[];
+  const file = tracks.find((track) => track.title === "Alpha");
+  if (file === undefined) throw new Error("Missing Alpha fixture.");
+  const details = `/api/tracks/${String(file.id)}/details`;
+  const songs = `/api/tracks/${String(file.id)}/songs`;
+  const album = "Seek geometry album";
+  expect((await request.put(details, { data: { values: { album } } })).ok()).toBe(true);
+  try {
+    expect(
+      (
+        await request.put(songs, {
+          data: {
+            rows: [
+              { start_ms: 0, title: "Opening" },
+              { start_ms: 30_000, title: "Second half" },
+            ],
+          },
+        })
+      ).ok(),
+    ).toBe(true);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`/#/album?artist=&name=${encodeURIComponent(album)}`);
+    await page.getByRole("button", { name: "Opening", exact: true }).click();
+    const player = page.getByRole("region", { name: "Player" });
+    await player.getByRole("button", { name: "Pause" }).click();
+
+    for (const inDialog of [false, true]) {
+      if (inDialog) await player.getByRole("button", { name: "Open Now Playing" }).click();
+      const scope = inDialog ? page.getByRole("dialog", { name: "Now Playing" }) : player;
+      const bar = scope.getByRole("slider", { name: "Position" });
+      await expect(bar.locator(".seek-segment")).toHaveCount(2);
+      await expect(bar).toHaveAttribute("aria-valuemax", "60");
+      await bar.focus();
+      await page.keyboard.press("Home");
+      for (let press = 0; press < 3; press++) await page.keyboard.press("PageUp");
+      await expect(bar).toHaveJSProperty("ariaValueNow", "18");
+      const error = await bar.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const dot = element.querySelector(".seek-thumb")?.getBoundingClientRect();
+        if (dot === undefined) throw new Error("Missing seek thumb.");
+        return Math.abs(dot.left + dot.width / 2 - (box.left + box.width * 0.3));
+      });
+      expect(error).toBeLessThan(0.75);
+      const box = await bar.boundingBox();
+      if (box === null) throw new Error("Missing seek bar.");
+
+      await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+
+      await expect(bar.locator(".seek-tip")).toContainText("Opening");
+      const preview = bar.locator(".seek-preview");
+      await expect(preview).toBeVisible();
+      await preview.hover();
+      await expect(preview).toBeVisible();
+      await expect(bar).toHaveJSProperty("ariaValueNow", "18");
+    }
+  } finally {
+    expect((await request.delete(songs)).ok()).toBe(true);
+    expect(
+      (
+        await request.post("/api/tracks/details", {
+          data: { track_ids: [file.id], values: { album: null } },
+        })
+      ).ok(),
+    ).toBe(true);
+  }
+});

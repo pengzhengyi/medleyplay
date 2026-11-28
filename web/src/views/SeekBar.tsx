@@ -233,7 +233,11 @@ export function SeekBar({
           <span className="seek-fill" />
         </span>
       )}
-      <span className="seek-thumb" aria-hidden />
+      <span className="seek-thumb-clip" aria-hidden>
+        <span className="seek-thumb-position">
+          <span className="seek-thumb" />
+        </span>
+      </span>
       {tip !== undefined && movable && (
         <span className="seek-tip" aria-hidden>
           {tipOf(songAtTime(tip), tip)}

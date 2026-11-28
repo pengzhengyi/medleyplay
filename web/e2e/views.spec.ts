@@ -519,7 +519,7 @@ test("closing a linked cover editor leaves the artwork without an outline and th
 }) => {
   await giveAlphaCredits(page);
   await page.goto("/#/album?artist=Adele%2C+Sia&name=Duet&edit=cover");
-  const editor = page.getByRole("dialog", { name: /^(Add a|Replace the) cover$/u });
+  const editor = page.getByRole("dialog", { name: /^(Add|Replace) album cover$/u });
   await expect(editor).toBeVisible();
   const artwork = page.getByRole("region", { name: "About the album" });
 
@@ -531,7 +531,7 @@ test("closing a linked cover editor leaves the artwork without an outline and th
   await page.keyboard.press("Tab");
   const coverControl = artwork
     .getByRole("link", { name: "Save the image" })
-    .or(artwork.getByRole("button", { name: "Add a cover…" }));
+    .or(artwork.getByRole("button", { name: "Add album cover…" }));
   await expect(coverControl).toBeFocused();
   await expect(coverControl).toHaveCSS("outline-style", "solid");
 });

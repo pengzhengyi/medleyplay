@@ -35,10 +35,10 @@ function beatlesPhoto(): PictureSources {
   });
 }
 
-function editing(sources: PictureSources) {
+function editing(sources: PictureSources, heading = "Replace album cover") {
   const onClose = vi.fn();
   render(<PictureEditor sources={sources} onClose={onClose} />);
-  return { onClose, dialog: within(screen.getByRole("dialog", { name: "Replace the cover" })) };
+  return { onClose, dialog: within(screen.getByRole("dialog", { name: heading })) };
 }
 
 /** A JPEG named `name`, of `size` bytes. */
@@ -64,7 +64,9 @@ describe("the picture editor", () => {
     try {
       await user.selectOptions(language, "zh-Hans");
 
-      expect(screen.getByRole("dialog", { name: "更换封面" })).toHaveAccessibleDescription("Help!");
+      expect(screen.getByRole("dialog", { name: "更换专辑封面" })).toHaveAccessibleDescription(
+        "Help!",
+      );
       expect(dialog.getByText(/JPEG、PNG 或 WebP，最大 10 MiB/u)).toBeVisible();
       await user.click(dialog.getByRole("tab", { name: "Google" }));
       const source = dialog.getByRole("link", { name: "在 Google 图片中搜索" });
@@ -324,7 +326,10 @@ describe("the picture editor", () => {
   it("can't look up the cover of a song on no album, and says how to", () => {
     serve({});
 
-    const { dialog } = editing(helpCover({ album: undefined, pictured: undefined }));
+    const { dialog } = editing(
+      helpCover({ album: undefined, pictured: undefined }),
+      "Replace the cover",
+    );
 
     for (const name of ["MusicBrainz", "Google", "Ask AI"]) {
       const tab = dialog.getByRole("tab", { name });

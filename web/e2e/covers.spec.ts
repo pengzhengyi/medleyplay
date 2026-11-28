@@ -46,7 +46,7 @@ test("an album with no cover is suggested one found, and using it in Clean up sh
 
   await expect(section.getByRole("list", { name: "Covers suggested" })).toBeHidden();
   await page.goto(`/#/album?${new URLSearchParams({ artist: ARTIST, name: ALBUM }).toString()}`);
-  await expect(page.getByRole("button", { name: "Replace the cover" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replace album cover" })).toBeVisible();
 });
 
 /** A PNG of one pixel. */
@@ -85,8 +85,11 @@ test("a cover chosen in a song's Edit details goes on its album's other songs, a
   await page.getByRole("menuitem", { name: "Edit details…" }).click();
   const details = page.getByRole("dialog", { name: "Edit details" });
 
-  await details.getByRole("button", { name: "Add a cover…" }).click();
-  const editor = page.getByRole("dialog", { name: "Add a cover" });
+  await details.getByRole("button", { name: "Add album cover…" }).click();
+  const editor = page.getByRole("dialog", { name: "Add album cover" });
+  await expect(editor).toHaveAccessibleDescription(
+    `${ALBUM} Cover changes apply immediately to the 2 songs of “${ALBUM}”.`,
+  );
   await editor.getByLabel("Choose a cover file").setInputFiles({
     name: "cover.png",
     mimeType: "image/png",

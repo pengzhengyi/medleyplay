@@ -46,8 +46,8 @@ function renderEditor(songs: readonly Track[] = SUPERCELL) {
 
 /** Open the picture editor from the album's cover. */
 async function pictureEditor() {
-  await userEvent.click(screen.getByRole("button", { name: "Add a cover…" }));
-  return within(screen.getByRole("dialog", { name: "Add a cover" }));
+  await userEvent.click(screen.getByRole("button", { name: "Add album cover…" }));
+  return within(screen.getByRole("dialog", { name: "Add album cover" }));
 }
 
 describe("editing an album of songs of their own", () => {

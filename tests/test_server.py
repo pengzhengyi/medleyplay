@@ -1,13 +1,18 @@
 """The composition root: settings from the environment, and a working app from them."""
 
+import inspect
+import socket
 import sqlite3
 import time
+from collections.abc import Sequence
 from contextlib import closing
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from medleyplay import server
+from medleyplay.application import network
 from medleyplay.config import Config, ConfigError
 from medleyplay.domain.ai import key_secret
 from medleyplay.plugin_host.loader import plugin_names
@@ -71,6 +76,59 @@ def test_the_local_names_include_this_machines_hostname() -> None:
 
     assert "localhost" in names
     assert any(name.endswith(".local") for name in names)
+
+
+def test_mac_sharing_advertises_the_physical_lan_instead_of_the_vpn_default_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service_order = """\
+    (1) VPN
+    (Hardware Port: VPN, Device: utun4)
+
+    (2) Wi-Fi
+    (Hardware Port: Wi-Fi, Device: en0)
+
+    (*) Disabled Ethernet
+    (Hardware Port: Ethernet, Device: en1)
+    (4) Disconnected Ethernet
+    (Hardware Port: Ethernet, Device: en2)
+    (5) Self-assigned Ethernet
+    (Hardware Port: Ethernet, Device: en3)
+    (6) Wired
+    (Hardware Port: Ethernet, Device: en4)
+    """
+    replies = {
+        ("networksetup", "-listnetworkserviceorder"): inspect.cleandoc(service_order),
+        ("networksetup", "-getinfo", "VPN"): "IP address: 10.77.0.2\n",
+        ("networksetup", "-getinfo", "Wi-Fi"): "IP address: 192.168.4.20\n",
+        ("networksetup", "-getinfo", "Disabled Ethernet"): "IP address: 192.168.8.20\n",
+        ("networksetup", "-getinfo", "Disconnected Ethernet"): "IP address: none\n",
+        ("networksetup", "-getinfo", "Self-assigned Ethernet"): "IP address: 169.254.8.20\n",
+        ("networksetup", "-getinfo", "Wired"): "IP address: 192.168.5.20\n",
+    }
+
+    def run(args: Sequence[str]) -> str | None:
+        return replies.get(tuple(args))
+
+    monkeypatch.setattr(network, "run_command", run)
+    monkeypatch.setattr(server, "_primary_address", lambda: {"10.77.0.2"})
+    monkeypatch.setattr(socket, "gethostname", lambda: "music-mac")
+    monkeypatch.setattr(socket, "gethostbyname_ex", lambda host: (host, [], ["10.77.0.2"]))
+
+    settings = Settings.from_environment(
+        {"MEDLEYPLAY_ALLOWED_HOSTS": "speaker.home"}, platform="darwin"
+    )
+
+    assert set(settings.allowed_hosts) == {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "music-mac",
+        "music-mac.local",
+        "speaker.home",
+        "192.168.4.20",
+        "192.168.5.20",
+    }
 
 
 def test_the_built_app_creates_its_database_and_answers(tmp_path: Path) -> None:

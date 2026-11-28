@@ -991,6 +991,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On macOS, the share guide and LAN listener use the physical network address
+  even when a VPN supplies the default route.
+
 - Editing a split album's songs updates complete albums already in **Up next**.
   Restored album queues no longer leave deleted songs between surviving ones.
 

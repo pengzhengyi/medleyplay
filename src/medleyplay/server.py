@@ -19,7 +19,7 @@ from pwdlib.hashers.argon2 import Argon2Hasher
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application import Clock
+from medleyplay.application import Clock, network
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.ai import AiService
 from medleyplay.application.album_covers import AlbumCoverService, album_cover_kinds
@@ -123,7 +123,7 @@ class Settings:
         extra = tuple(h.strip() for h in environ.get(ALLOWED_HOSTS_VARIABLE, "").split(",") if h)
         return cls(
             data_dir=data_dir,
-            allowed_hosts=(*local_host_names(), *extra),
+            allowed_hosts=(*local_host_names(platform), *extra),
             data_dir_chosen=bool(configured),
         )
 
@@ -155,14 +155,16 @@ def former_data_dir(platform: str = sys.platform) -> Path | None:
     return None
 
 
-def local_host_names() -> tuple[str, ...]:
+def local_host_names(platform: str = sys.platform) -> tuple[str, ...]:
     """Return the names and addresses LAN devices may use to reach this machine."""
     hostname = socket.gethostname()
     names = {"localhost", "127.0.0.1", "::1", hostname, f"{hostname.removesuffix('.local')}.local"}
-    # An unresolvable hostname still leaves the names above.
-    with contextlib.suppress(OSError):
-        names.update(socket.gethostbyname_ex(hostname)[2])
-    names.update(_primary_address())
+    if platform == "darwin":
+        names.update(network.read_lan_addresses(network.run_command))
+    else:
+        with contextlib.suppress(OSError):
+            names.update(socket.gethostbyname_ex(hostname)[2])
+        names.update(_primary_address())
     return tuple(sorted(names))
 
 

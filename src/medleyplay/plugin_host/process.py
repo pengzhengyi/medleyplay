@@ -16,6 +16,8 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from medleyplay.plugin_host.wire import MAX_LINE
 
 _STOP_GRACE: Final = 2.0
+_DOWNLOAD_LINE: Final = 16 * 1024
+_DOWNLOAD_BACKLOG: Final = 32
 
 
 @dataclass(frozen=True)
@@ -44,22 +46,28 @@ class ChildProcess[T]:
         *,
         args: Sequence[str] = (),
         pass_fds: Sequence[int] = (),
+        bounded_output: bool = False,
     ) -> None:
         """Start the child; `messages` parses each line it sends."""
         env = None if command.env is None else {**os.environ, **command.env}
         self._messages = messages
+        self._closed = threading.Event()
+        self._max_line = _DOWNLOAD_LINE if bounded_output else MAX_LINE
         # The argv is the server's own interpreter running a module of the core.
         self._popen = subprocess.Popen(  # noqa: S603  # nosec B603
             (*command.argv, *args),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL if bounded_output else None,
             text=True,
             encoding="utf-8",
             env=env,
             start_new_session=True,
             pass_fds=tuple(pass_fds),
         )
-        self._lines: queue.Queue[str | None] = queue.Queue()
+        self._lines: queue.Queue[str | None] = queue.Queue(
+            _DOWNLOAD_BACKLOG if bounded_output else 0
+        )
         threading.Thread(target=self._read, args=(_pipe(self._popen.stdout),), daemon=True).start()
 
     @property
@@ -68,10 +76,20 @@ class ChildProcess[T]:
         return self._popen.pid
 
     def _read(self, stdout: IO[str]) -> None:
-        with contextlib.suppress(ValueError, OSError):
-            while line := stdout.readline(MAX_LINE + 1):
-                self._lines.put(line)
-        self._lines.put(None)
+        with contextlib.suppress(ValueError, OSError, UnicodeError):
+            while line := stdout.readline(self._max_line + 1):
+                if len(line) > self._max_line or not self._enqueue(line):
+                    break
+        self._enqueue(None)
+
+    def _enqueue(self, line: str | None) -> bool:
+        while not self._closed.is_set():
+            try:
+                self._lines.put(line, timeout=0.1)
+            except queue.Full:
+                continue
+            return True
+        return False
 
     def alive(self) -> bool:
         """Return whether the child is still running."""
@@ -88,6 +106,8 @@ class ChildProcess[T]:
 
     def receive(self, timeout: float) -> T:
         """Return the child's next message, waiting at most `timeout` seconds."""
+        if self._closed.is_set() and self._lines.empty():
+            raise ChildExitedError
         try:
             line = self._lines.get(timeout=max(timeout, 0))
         except queue.Empty:
@@ -115,6 +135,9 @@ class ChildProcess[T]:
 
     def kill(self) -> None:
         """Kill the child's whole process group, and reap the child."""
+        self._closed.set()
+        with contextlib.suppress(queue.Full):
+            self._lines.put_nowait(None)
         kill_group(self._popen.pid)
         self._popen.wait()
         for pipe in (self._popen.stdin, self._popen.stdout):

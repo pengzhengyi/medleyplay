@@ -57,6 +57,16 @@ def bv_to_av(bvid: str) -> int:
     return (value & _MASK) ^ _XOR
 
 
+def canonical_video_id(video: str) -> str:
+    """Return one identity for equivalent Bilibili IDs, such as av170001 and BV17x411w7KC."""
+    prefix, suffix = video[:2].lower(), video[2:]
+    if prefix == "av" and suffix.isascii() and suffix.isdecimal():
+        aid = int(suffix)
+        if 0 < aid < _MAX_AID:
+            return av_to_bv(aid)
+    return f"BV{suffix}" if prefix == "bv" else video
+
+
 def parse_video_link(link: str) -> VideoLink | None:
     """Return the video and part a full video link names, or `None` for any other link."""
     parts = urlsplit(link)

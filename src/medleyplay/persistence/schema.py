@@ -561,6 +561,56 @@ class JobRow(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    provider_attempts: Mapped[int | None] = mapped_column(Integer, default=0)
+    provider_route: Mapped[str | None] = mapped_column(String(32))
+    provider_backend: Mapped[str | None] = mapped_column(String(64))
+    provider_http_status: Mapped[int | None]
+
+
+class DownloadReceiptRow(Base):
+    """A bounded safe diagnostic event for a download Job."""
+
+    __tablename__ = "download_receipt"
+    __table_args__ = (
+        Index("ix_download_receipt_job_id", "job_id", "id"),
+        Index("ix_download_receipt_at", "at"),
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("job.id", ondelete="CASCADE"))
+    at: Mapped[datetime] = mapped_column(UtcDateTime)
+    event: Mapped[str] = mapped_column(String(16))
+    attempt: Mapped[int | None]
+    route: Mapped[str | None] = mapped_column(String(16))
+    stage: Mapped[str | None] = mapped_column(String(16))
+    part: Mapped[int | None]
+    reason: Mapped[str | None] = mapped_column(String(32))
+    http_status: Mapped[int | None]
+    retry_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+
+
+class DownloadHoldRow(Base):
+    """Keep the original reason to stop, independent of the Source and Job display."""
+
+    __tablename__ = "download_hold"
+
+    site: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(80), primary_key=True)
+    part: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reason: Mapped[str] = mapped_column(String(32))
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("job.id", ondelete="SET NULL"))
+    attempt: Mapped[int | None] = mapped_column(Integer)
+
+
+class ProviderDispatchRow(Base):
+    """Reserve a provider until the outbound attempt has been settled."""
+
+    __tablename__ = "provider_dispatch"
+
+    site: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(80))
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("job.id", ondelete="SET NULL"))
 
 
 class VideoLookupRow(Base):
@@ -628,6 +678,7 @@ class ProxyRow(Base):
     port: Mapped[int] = mapped_column(Integer)
     has_login: Mapped[bool] = mapped_column()
     saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    generation: Mapped[str | None] = mapped_column(String(32))
 
 
 class DownloadRow(Base):

@@ -11,6 +11,7 @@ from medleyplay.plugin_api import (
     READ_VIDEO,
     Canonicalize,
     PartNumber,
+    ProviderStopError,
     ReadVideo,
     VideoDetails,
     VideoId,
@@ -21,6 +22,7 @@ from medleyplay.plugin_host.job import (
     JobContext,
     JobProgram,
     PluginCallFailedError,
+    ProviderAttemptStoppedError,
 )
 from medleyplay.video_urls import public_video_link
 
@@ -88,12 +90,20 @@ def run(request: VideoRequest, context: JobContext) -> Resolved:
     if canonical.video is None:
         msg = "The link doesn't name a video."
         raise AnswerFailedError(msg, kind="invalid")
+    if canonical.video in context.held_videos:
+        message = "Download held. Medleyplay will not ask the provider again."
+        stopped = ProviderAttemptStoppedError(ProviderStopError(message))
+        stopped.video = canonical.video
+        raise stopped
     try:
         details = context.call(
             READ_VIDEO, site, ReadVideo(video=canonical.video, proxy=context.proxy)
         )
     except PluginCallFailedError as error:
         read: VideoDetails | Unreadable = read_failure(error.kind, context.safe_text(str(error)))
+    except ProviderAttemptStoppedError as error:
+        error.video = canonical.video
+        raise
     else:
         details = details.model_copy(
             update={

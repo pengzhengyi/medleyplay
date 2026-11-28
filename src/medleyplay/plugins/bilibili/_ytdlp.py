@@ -27,6 +27,7 @@ from urllib.parse import unquote, urlsplit
 import yt_dlp  # type: ignore[import-untyped] # yt-dlp ships no type hints
 from yt_dlp.downloader import get_suitable_downloader  # type: ignore[import-untyped]
 from yt_dlp.downloader.http import HttpFD  # type: ignore[import-untyped]
+from yt_dlp.extractor.bilibili import BiliBiliIE  # type: ignore[import-untyped]
 from yt_dlp.networking import (  # type: ignore[import-untyped]
     Request,
     RequestDirector,
@@ -45,7 +46,7 @@ from yt_dlp.utils import (  # type: ignore[import-untyped]
     UnavailableVideoError,
 )
 
-from medleyplay.plugin_api import AuthError, NetworkError
+from medleyplay.plugin_api import AuthError, DownloadRefusedError, NetworkError, ProviderStopError
 
 type Info = Mapping[str, object]
 type OnProgress = Callable[[int, int | None], None]
@@ -60,11 +61,14 @@ _MEMBERS: Final = re.compile(r"premium members|supporter-only|members only|purch
 _REFUSED: Final = re.compile(r"rate limit|blocked by server|rejected by server", re.IGNORECASE)
 # The site's risk control answers a request from a client it suspects with 352, 401, or 412.
 _RISK_CONTROL: Final = re.compile(r"Unable to download video info: (?:352|401|412)\b")
+_RISK_CONTROL_CODES: Final = frozenset({-352, -401, -412})
 _REFUSED_STATUSES: Final = frozenset({403, 412})
-_STOP_DOWNLOAD_STATUSES: Final = _REFUSED_STATUSES | {429, 567}
+_RATE_LIMITED: Final = 429
+_UNCLASSIFIED: Final = 567
+_STOP_STATUSES: Final = _REFUSED_STATUSES | {_RATE_LIMITED, _UNCLASSIFIED}
 _REMOVED: Final = re.compile(r"deleted or geo-restricted", re.IGNORECASE)
 _TRANSFER_HTTP_ERROR: Final = re.compile(r"^ERROR:\s*\[download\] Got error: HTTP Error (\d{3}):")
-_RETRY_LATER: Final = frozenset({429, 500, 502, 503, 504, 567})
+_RETRY_LATER: Final = frozenset({500, 502, 503, 504})
 _GONE: Final = frozenset({404, 410})
 _REDIRECTS: Final = frozenset({301, 302, 303, 307, 308})
 _SOCKS: Final = "socks5h"
@@ -78,8 +82,20 @@ class NeedsLoginError(Exception):
     """The site shows the video only to a signed-in account, and none was sent."""
 
 
-class RefusedError(RuntimeError):
-    """The site rejected the request or limited new requests."""
+class RefusedError(DownloadRefusedError):
+    """Bilibili asked the client to stop or returned an unclassified status."""
+
+
+def _http_stop(status: int, *, media: bool = False) -> RefusedError:
+    if status == _UNCLASSIFIED:
+        stage = "Media endpoint" if media else "Bilibili endpoint"
+        message = f"{stage} returned HTTP {status}. No retry scheduled."
+        return RefusedError(message, reason="response_unknown", status=status, media=media)
+    if status == _RATE_LIMITED:
+        message = f"Bilibili limited requests (HTTP {status}). No retry scheduled."
+    else:
+        message = f"Bilibili refused the request ({status})."
+    return RefusedError(message, status=status, media=media)
 
 
 class BoundedDownloadError(Exception):
@@ -164,7 +180,6 @@ def download(
 
     options = {
         **_base(cookie_file, proxy),
-        "medleyplay_download": True,
         "noplaylist": True,
         "format": formats,
         "paths": {"home": folder, "temp": folder},
@@ -198,7 +213,9 @@ def _base(cookie_file: str | None, proxy: str | None) -> dict[str, object]:
         "noprogress": True,
         "color": "never",
         "logger": _Quiet(),
-        "retries": 1,
+        "retries": 0,
+        "fragment_retries": 0,
+        "extractor_retries": 0,
         "cookiefile": cookie_file,
     }
 
@@ -209,28 +226,25 @@ def _run[T](options: dict[str, object], call: Callable[[Any], T], cookie_file: s
             return call(ydl)
     except DownloadError as error:
         cause = (error.exc_info[1] if error.exc_info else None) or error
-        if isinstance(cause, RefusedError):
+        if isinstance(cause, ProviderStopError):
             raise cause from None
-        refusal = refusal_of(cause)
-        if refusal is not None:
-            raise RefusedError(refusal) from None
         raise sort_failure(cause, signed_in=cookie_file is not None) from None
 
 
 def sort_failure(error: BaseException, *, signed_in: bool) -> Exception:
-    """Return the failure the plugin raises for one of yt-dlp's errors.
+    """Classify yt-dlp's error; a 503 can wait, while a 429 or 567 stops."""
+    if (failure := _request_failure(error)) is not None:
+        return failure
+    if refusal_of(error) is not None:
+        return RefusedError("Bilibili refused the request.")
+    if isinstance(error, GeoRestrictedError):
+        return GoneError(f"Bilibili doesn't offer the video here: {error}")
+    if isinstance(error, ExtractorError) and error.expected:
+        return _sort_expected(str(getattr(error, "orig_msg", None) or error), signed_in=signed_in)
+    return RuntimeError(f"yt-dlp failed: {error}")
 
-    By type first: a connection failure, a timeout, or a retryable HTTP status
-    is a `NetworkError`; a 404, a 410, or a geo-restriction is gone; a 403 or a 412 is
-    Bilibili refusing the client, a fault, so it isn't retried every minute. An
-    error yt-dlp marks *expected* is sorted by yt-dlp's own fixed messages: a
-    login refused, a video for members, a rate limit, or a removal.
 
-    Anything else is a fault, such as an extractor that no longer understands
-    the page or a message it doesn't recognize: a fault is retried and shows, while
-    gone makes the Source unavailable for good. A video for members never marks a
-    login refused, since the account may simply not be a member.
-    """
+def _request_failure(error: BaseException) -> Exception | None:
     # yt-dlp hands over the network error itself when an extractor raised it, and
     # wrapped in an `ExtractorError` when it raised its own.
     for cause in (error, getattr(error, "cause", None)):
@@ -238,16 +252,14 @@ def sort_failure(error: BaseException, *, signed_in: bool) -> Exception:
             return _sort_status(cause.status)
         if isinstance(cause, TransportError):
             return NetworkError(f"Bilibili couldn't be reached: {cause}")
-    # When transfer retries run out, yt-dlp reports the HTTP status as text.
+    # yt-dlp can report a failed transfer as text without the original HTTP error.
     if isinstance(error, DownloadError) and (status := _TRANSFER_HTTP_ERROR.match(str(error))):
         code = int(status[1])
+        if code in _STOP_STATUSES:
+            return _http_stop(code, media=True)
         if code in _RETRY_LATER:
             return _sort_status(code)
-    if isinstance(error, GeoRestrictedError):
-        return GoneError(f"Bilibili doesn't offer the video here: {error}")
-    if isinstance(error, ExtractorError) and error.expected:
-        return _sort_expected(str(getattr(error, "orig_msg", None) or error), signed_in=signed_in)
-    return RuntimeError(f"yt-dlp failed: {error}")
+    return None
 
 
 def refusal_of(error: BaseException) -> str | None:
@@ -267,16 +279,16 @@ def refusal_of(error: BaseException) -> str | None:
 
 
 def _sort_status(status: int) -> Exception:
+    if status in _STOP_STATUSES:
+        return _http_stop(status)
     if status in _RETRY_LATER:
-        return NetworkError(f"Bilibili answered {status}; trying again later.")
+        return NetworkError(f"Bilibili answered {status}; trying again later.", http_status=status)
     if status in _GONE:
         return GoneError("Bilibili has no such video.")
     return RuntimeError(f"Bilibili refused the request ({status}).")
 
 
 def _sort_expected(text: str, *, signed_in: bool) -> Exception:
-    if _REFUSED.search(text):
-        return RuntimeError(f"Bilibili refused the request: {text}")
     if _LOGIN.search(text):
         return AuthError(text) if signed_in else NeedsLoginError(text)
     if _MEMBERS.search(text) and not signed_in:
@@ -322,6 +334,8 @@ def read_redirect(url: str, *, proxy: str | None, timeout: float, user_agent: st
             if error.status in _REDIRECTS:
                 location: str | None = error.response.headers.get("Location")
                 return location
+            if error.status in _STOP_STATUSES:
+                raise _http_stop(error.status) from None
         message = f"{host} answered {error.status}."
         raise NetworkError(message) from None
     except NoSupportingHandlers:
@@ -420,23 +434,49 @@ class _OneHopRH(_ProxiedRH):
         return opener
 
 
+class _GuardedBiliBiliIE(BiliBiliIE):  # type: ignore[misc] # yt-dlp ships no type hints
+    @classmethod
+    def ie_key(cls) -> str:
+        return str(BiliBiliIE.ie_key())
+
+    def _download_json(self, *args: object, **kwargs: object) -> object:
+        result = super()._download_json(*args, **kwargs)
+        code = result.get("code") if isinstance(result, dict) else None
+        if isinstance(code, int) and code in _RISK_CONTROL_CODES:
+            message = f"Bilibili refused the request (code {code})."
+            raise RefusedError(message)
+        return result
+
+
 class _YoutubeDL(yt_dlp.YoutubeDL):  # type: ignore[misc] # yt-dlp ships no type hints
     """yt-dlp that sends its requests with `_ProxiedRH` before any other handler."""
 
     _bounded_transfer_started = False
+    _transferring = False
+
+    def add_default_info_extractors(self) -> None:
+        """Stop on a refusal in a Bilibili JSON response, including an HTTP 200."""
+        super().add_default_info_extractors()
+        if BiliBiliIE.ie_key() in self._ies:
+            self.add_info_extractor(_GuardedBiliBiliIE())
 
     def urlopen(self, req: Any) -> Any:  # noqa: ANN401 -- untyped yt-dlp override
-        """Stop a rejected download request before the native HTTP loop can repeat it."""
+        """Stop the request before the downloader or extractor can repeat it."""
         try:
             return super().urlopen(req)
         except HTTPError as error:
-            if self.params.get("medleyplay_download"):
-                if error.status in _STOP_DOWNLOAD_STATUSES | _RETRY_LATER:
-                    error.close()
-                if error.status in _STOP_DOWNLOAD_STATUSES:
-                    message = f"Bilibili returned HTTP {error.status}. The download stopped."
-                    raise RefusedError(message) from None
+            if error.status in _STOP_STATUSES | _RETRY_LATER:
+                error.close()
+            if error.status in _STOP_STATUSES:
+                raise _http_stop(error.status, media=self._transferring) from None
             raise
+
+    def _transfer(self, info_dict: Any) -> None:  # noqa: ANN401 -- untyped yt-dlp override
+        self._transferring = True
+        try:
+            super().process_info(info_dict)
+        finally:
+            self._transferring = False
 
     def save_cookies(self) -> None:
         """Do not write a cookie jar during a bounded audio transfer."""
@@ -446,7 +486,7 @@ class _YoutubeDL(yt_dlp.YoutubeDL):  # type: ignore[misc] # yt-dlp ships no type
     def process_info(self, info_dict: Any) -> None:  # noqa: ANN401 -- untyped yt-dlp override
         """Bound joined downloads to the downloader that writes one partial file."""
         if not self.params.get("medleyplay_bounded_http"):
-            super().process_info(info_dict)
+            self._transfer(info_dict)
             return
         if (
             self._bounded_transfer_started
@@ -457,7 +497,7 @@ class _YoutubeDL(yt_dlp.YoutubeDL):  # type: ignore[misc] # yt-dlp ships no type
             raise BoundedDownloadError(message)
         self._bounded_transfer_started = True
         try:
-            super().process_info(info_dict)
+            self._transfer(info_dict)
         except (DownloadError, OSError, UnavailableVideoError) as error:
             reported = (
                 error.exc_info[1] if isinstance(error, DownloadError) and error.exc_info else None

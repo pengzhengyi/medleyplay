@@ -378,6 +378,10 @@ export interface Features {
 export interface JobProgress {
   readonly fraction: number | null;
   readonly message: string;
+  readonly stage?: DownloadStage;
+  readonly part?: number;
+  readonly current?: number;
+  readonly total?: number;
 }
 
 /** A Job as the event stream sends it, as far as the client follows one. */
@@ -392,6 +396,7 @@ export interface JobEvent {
   /** Whether it needs the network, and waits while the Mode is Offline. */
   readonly waits_for_online?: boolean;
   readonly retry_at?: string | null;
+  readonly failure_kind?: string | null;
   readonly failure_message?: string;
 }
 
@@ -416,6 +421,7 @@ export interface DownloadUnderWay {
     readonly progress: JobProgress | null;
     readonly waits_for_online: boolean;
     readonly retry_at?: string | null;
+    readonly failure_kind?: string | null;
     readonly failure_message?: string;
   };
 }
@@ -1406,6 +1412,37 @@ export interface AddedPart {
 
 /** Where a site Track's Download stands. */
 export type DownloadStatus = "downloaded" | "downloading" | "failed" | "unavailable" | "none";
+export type DownloadStage = "resolve" | "transfer" | "join" | "validate";
+export type DownloadHold = "provider_refused" | "response_unknown" | "attempt_uncertain";
+
+export interface DownloadReceipt {
+  readonly sequence: number;
+  readonly at: string;
+  readonly event:
+    "queued" | "dispatched" | "stage" | "waiting" | "succeeded" | "failed" | "cancelled";
+  readonly attempt: number | null;
+  readonly route: "direct" | "site_proxy" | null;
+  readonly stage: DownloadStage | null;
+  readonly part: number | null;
+  readonly reason: string | null;
+  readonly http_status: number | null;
+  readonly retry_at: string | null;
+}
+
+export interface DownloadDiagnostics {
+  readonly version: 1;
+  readonly job_id: number;
+  readonly state: Job["state"];
+  readonly has_saved_audio: boolean;
+  readonly attempts: number;
+  readonly max_attempts: number;
+  readonly waits_for_online: boolean;
+  readonly retry_at: string | null;
+  readonly hold: DownloadHold | null;
+  readonly reason: string | null;
+  readonly http_status: number | null;
+  readonly events: readonly DownloadReceipt[];
+}
 
 /** A Track's site Source, its link, and where its Download stands. */
 export interface TrackDownload {
@@ -1421,6 +1458,10 @@ export interface TrackDownload {
   readonly backend: string | null;
   /** The Job downloading it, or the one that failed, to retry; `null` for none. */
   readonly job_id: number | null;
+  readonly hold?: DownloadHold;
+  readonly latest_job_id?: number;
+  readonly reason?: string;
+  readonly http_status?: number;
 }
 
 /** A request the server refused; `status` is its HTTP status, and `code` names why, if it says. */
@@ -2087,6 +2128,8 @@ export const api = {
     call<TrackDownload>("GET", `/api/tracks/${String(trackId)}/download`),
   /** Each Download a Job is getting, the first asked for first, with its Track. */
   downloads: () => call<DownloadUnderWay[]>("GET", "/api/downloads"),
+  downloadDiagnostics: (jobId: number) =>
+    call<DownloadDiagnostics>("GET", `/api/downloads/${String(jobId)}/diagnostics`),
   dismissFailedDownloads: (ids: readonly number[]) =>
     call<undefined>("POST", "/api/downloads/failed/dismiss", { job_ids: ids }),
   /** Run a failed or cancelled Job again, as a new Job. */

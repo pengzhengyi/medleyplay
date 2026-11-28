@@ -12,18 +12,35 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.details import set_household
+from medleyplay.application.download_holds import (
+    BUSY_MESSAGE,
+    HOLD_MESSAGE,
+    hold_of,
+    record_hold,
+    release_dispatch,
+    require_clear,
+    require_clear_parts,
+    reserve_dispatch,
+)
 from medleyplay.application.downloads import DownloadService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.segments import keep_as_one
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDetails, TrackId
 from medleyplay.domain.details import Field, Kind, Value, check_value
+from medleyplay.domain.download_holds import DownloadSelection, HoldReason
 from medleyplay.domain.downloads import (
     JOIN_ESTIMATE_DETAIL,
     QUALITY_DETAIL,
     quality_kbps,
 )
-from medleyplay.domain.errors import ConflictError, InvalidInputError, OfflineError, PluginCallError
+from medleyplay.domain.errors import (
+    ConflictError,
+    InvalidInputError,
+    OfflineError,
+    PluginCallError,
+    PluginUnavailableError,
+)
 from medleyplay.domain.jobs import Job, JobId
 from medleyplay.domain.links import (
     MAX_PART_NUMBER,
@@ -233,7 +250,8 @@ class LinkService:
         quality `best`, and its parts have no duration until a file comes.
         """
         self.require_online()
-        return self.add_resolved(caller, self._resolve(link), quality, parts)
+        resolved = self._resolve(link, parts=tuple(each.part for each in parts))
+        return self.add_resolved(caller, resolved, quality, parts)
 
     def add_resolved(
         self, caller: Account, resolved: Resolved, quality: str, parts: Sequence[PartChoice]
@@ -247,6 +265,8 @@ class LinkService:
         else:
             _check_choice(read, quality, parts)
             durations = {part.part: part.duration_ms for part in read.parts}
+        with self._units() as db:
+            require_clear_parts(db, kind, video, [choice.part for choice in parts])
         added = []
         for choice in parts:
             key = SourceKey(kind, part_locator(video, choice.part))
@@ -281,6 +301,8 @@ class LinkService:
     ) -> list[Added]:
         """Add the selected new parts and their Jobs together, under the caller's write lock."""
         self.require_online()
+        selected = _import_choices(_readable(resolved), resolved.video, numbers)
+        require_clear_parts(db, resolved.kind, resolved.video, [choice.part for choice in selected])
         if album is not None and album.joined:
             return [self._join_in(db, caller, resolved, quality, album, numbers)]
         return self._separate_in(db, caller, resolved, quality, album, numbers)
@@ -412,11 +434,39 @@ class LinkService:
         """Publish the catalog change after an import commits."""
         self._catalog.announce_added()
 
-    def _resolve(self, link: str) -> Resolved:
+    def _resolve(self, link: str, *, parts: tuple[int, ...] = ()) -> Resolved:
         link = lookup_link(link)
         kind = recognize_link(link)
         # Read before any call, so a slow Keychain never holds up the plugin host.
         proxy = self._proxies.current(kind) if self._proxies is not None else None
+        initial = DownloadSelection.from_link(link)
+        with self._units.begin() as db:
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            require_clear(db, DownloadSelection(kind, initial.video, parts, initial.short))
+            if not reserve_dispatch(db, initial, None):
+                raise ConflictError(BUSY_MESSAGE)
+        try:
+            resolved = self._resolve_provider(link, initial, proxy, parts)
+        except PluginCallError as error:
+            with self._units.begin() as db:
+                if error.kind in HoldReason:
+                    record_hold(db, initial.key(), HoldReason(error.kind))
+                release_dispatch(db, kind, None)
+            if error.kind in HoldReason:
+                raise ConflictError(str(error)) from None
+            raise
+        except (ConflictError, InvalidInputError, PluginUnavailableError):
+            with self._units.begin() as db:
+                release_dispatch(db, kind, None)
+            raise
+        with self._units.begin() as db:
+            release_dispatch(db, kind, None)
+        return resolved
+
+    def _resolve_provider(
+        self, link: str, initial: DownloadSelection, proxy: str | None, parts: tuple[int, ...]
+    ) -> Resolved:
+        kind = initial.site
         canonical = self._plugins.call(
             CANONICALIZE, kind, Canonicalize(link=link.strip(), proxy=proxy)
         )
@@ -426,7 +476,22 @@ class LinkService:
         if canonical.video is None:
             message = "The link doesn't name a video."
             raise InvalidInputError(message)
-        read = self._read(kind, canonical.video, proxy)
+        selection = DownloadSelection(kind, canonical.video)
+        with self._units.begin() as db:
+            reason = hold_of(db, selection)
+            if reason is not None and initial.short:
+                record_hold(db, initial.key(), reason)
+        if reason is not None:
+            raise ConflictError(HOLD_MESSAGE)
+        with self._units() as db:
+            require_clear_parts(db, kind, canonical.video, parts)
+        try:
+            read = self._read(kind, canonical.video, proxy)
+        except PluginCallError as error:
+            if error.kind in HoldReason:
+                with self._units.begin() as db:
+                    record_hold(db, selection.key(), HoldReason(error.kind))
+            raise
         return Resolved(kind=kind, video=canonical.video, part=canonical.part, read=read)
 
     def _read(self, kind: str, video: str, proxy: str | None) -> _Read:
@@ -439,6 +504,8 @@ class LinkService:
             try:
                 details = self._plugins.call(READ_VIDEO, kind, ReadVideo(video=video, proxy=proxy))
             except PluginCallError as error:
+                if error.kind in HoldReason:
+                    raise
                 read: _Read = read_failure(error.kind, str(error))
             else:
                 read = read_details(details)

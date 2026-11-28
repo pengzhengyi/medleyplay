@@ -43,6 +43,8 @@ class BilibiliDetails:
                 max_bytes=MAX_COVER_BYTES,
             )
         except _ytdlp.RefusedError as error:
+            if error.reason == "response_unknown":
+                raise
             return Enriched(status=EnrichStatus.REFUSED, message=str(error)[:512])
         except (_ytdlp.GoneError, _ytdlp.NeedsLoginError) as error:
             return Enriched(status=EnrichStatus.GONE, message=str(error)[:512])

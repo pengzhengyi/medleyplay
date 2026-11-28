@@ -6,7 +6,7 @@ decides between a cancel and a completion that arrive together.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Final, Generic, Protocol, TypeVar
 
 from pydantic import BaseModel
@@ -15,8 +15,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.download_diagnostics import (
+    DownloadDiagnostics,
+    Receipt,
+    append_receipt,
+    download_timeline,
+)
+from medleyplay.application.download_holds import hold_dispatched_job, job_selection, require_clear
 from medleyplay.application.events import Events
 from medleyplay.domain.accounts import Account, AccountId
+from medleyplay.domain.downloads import DOWNLOAD_KIND
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
 from medleyplay.domain.jobs import (
     ACTIVE_STATES,
@@ -27,6 +35,7 @@ from medleyplay.domain.jobs import (
     JobView,
     Progress,
 )
+from medleyplay.download_receipts import DownloadEvent, DownloadReason, reason_for, reason_message
 from medleyplay.persistence.schema import JobRow
 
 I = TypeVar("I", bound=BaseModel)  # noqa: E741 -- the conventional name for an input
@@ -61,6 +70,7 @@ class JobCompletion:
 
     queued: tuple[JobId, ...] = ()
     failure: tuple[str, str] | None = None
+    diagnostic_reason: DownloadReason | None = None
 
 
 @dataclass(frozen=True)
@@ -130,9 +140,13 @@ def queue_job_in[I: BaseModel, R: BaseModel](
     )
     db.add(row)
     db.flush()
+    if (selection := job_selection(row.kind, row.request)) is not None:
+        require_clear(db, selection)
     job = to_job(row)
     if kind.on_submit is not None:
         kind.on_submit(db, job)
+    if job.kind == DOWNLOAD_KIND:
+        append_receipt(db, job.id, job.created_at, Receipt(DownloadEvent.QUEUED))
     return job
 
 
@@ -193,7 +207,7 @@ class JobService:
         self._runner.start()
 
     def stop(self) -> None:
-        """Stop running Jobs; the running ones go back in the queue."""
+        """Stop the runner and settle running Jobs."""
         self._runner.stop()
 
     def submit(
@@ -287,11 +301,14 @@ class JobService:
             row = _row(db, job_id)
             _require_owner_or_admin(caller, row)
             was_running = row.state == JobState.RUNNING
+            now = self._clock()
             cancelled = db.connection().execute(
                 update(JobRow)
                 .where(JobRow.id == job_id, JobRow.state.in_(ACTIVE_STATES))
-                .values(state=JobState.CANCELLED, finished_at=self._clock(), pid=None)
+                .values(state=JobState.CANCELLED, finished_at=now, pid=None)
             )
+            if cancelled.rowcount == 1:
+                _record_cancel(db, job_id, now)
         if was_running and cancelled.rowcount == 1:
             self._runner.kill(job_id)
         if cancelled.rowcount == 1:
@@ -308,12 +325,15 @@ class JobService:
         running Job's process.
         """
         why = {} if reason is None else {"failure_kind": reason}
+        now = self._clock()
         cancelled = db.execute(
             update(JobRow)
             .where(JobRow.kind == kind, JobRow.target == target, JobRow.state.in_(ACTIVE_STATES))
-            .values(state=JobState.CANCELLED, finished_at=self._clock(), pid=None, **why)
+            .values(state=JobState.CANCELLED, finished_at=now, pid=None, **why)
             .returning(JobRow.id)
         ).scalar_one_or_none()
+        if cancelled is not None:
+            _record_cancel(db, cancelled, now, reason)
         return None if cancelled is None else JobId(cancelled)
 
     def announce_cancelled(self, job_id: JobId) -> None:
@@ -341,6 +361,8 @@ class JobService:
                 raise ConflictError(message)
             if kind.retry_refused is not None:
                 raise ConflictError(kind.retry_refused)
+            if (selection := job_selection(row.kind, row.request)) is not None:
+                require_clear(db, selection)
             target, request = row.target, kind.request.model_validate(row.request)
         # The runner lends the login only if it is valid when the Job starts.
         return self.submit(kind, target, request, caller.id, login_account=caller.id)
@@ -408,6 +430,20 @@ class JobService:
         if self._events is not None:
             self._events.publish(job_id)
 
+    def download_diagnostics(self, viewer: Account, job_id: JobId) -> DownloadDiagnostics:
+        """Return the private diagnostic snapshot of a download Job."""
+        kind = self._kinds.get(DOWNLOAD_KIND)
+        with self._units() as db:
+            db.connection().exec_driver_sql("BEGIN")
+            return download_timeline(
+                db,
+                viewer,
+                job_id,
+                self._clock(),
+                online=self._online(),
+                max_attempts=kind.max_attempts if kind is not None else MAX_ATTEMPTS,
+            )
+
     def online(self) -> bool:
         """Return whether the Mode is Online, so Jobs that need the network may run."""
         return self._online()
@@ -444,6 +480,7 @@ class JobService:
 
 def to_job(row: JobRow) -> Job:
     """Return the domain view of a `job` row."""
+    reason = reason_for(row.failure_kind) if row.kind == DOWNLOAD_KIND else None
     return Job(
         id=JobId(row.id),
         kind=row.kind,
@@ -451,13 +488,34 @@ def to_job(row: JobRow) -> Job:
         state=JobState(row.state),
         requested_by=None if row.requested_by is None else AccountId(row.requested_by),
         attempts=row.attempts,
-        failure_kind=row.failure_kind,
-        failure_message=row.failure_message,
+        failure_kind=reason if row.kind == DOWNLOAD_KIND else row.failure_kind,
+        failure_message=(
+            reason_message(reason, row.provider_http_status)
+            if row.kind == DOWNLOAD_KIND
+            else row.failure_message
+        ),
         created_at=row.created_at,
         started_at=row.started_at,
         finished_at=row.finished_at,
         not_before=row.not_before,
+        provider_http_status=row.provider_http_status if row.kind == DOWNLOAD_KIND else None,
     )
+
+
+def _record_cancel(db: Session, job_id: int, now: datetime, reason: str | None = None) -> None:
+    hold_dispatched_job(db, job_id)
+    row = _row(db, JobId(job_id))
+    if row.kind == DOWNLOAD_KIND:
+        append_receipt(
+            db,
+            job_id,
+            now,
+            Receipt(
+                DownloadEvent.CANCELLED,
+                attempt=row.provider_attempts or None,
+                reason=reason_for(reason),
+            ),
+        )
 
 
 def _row(db: Session, job_id: JobId) -> JobRow:

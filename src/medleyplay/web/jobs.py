@@ -3,11 +3,12 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import NotFoundError
 from medleyplay.domain.jobs import JobId, JobState, JobView, failure_shown_to
+from medleyplay.download_receipts import DownloadStage
 from medleyplay.web.deps import JobsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
@@ -19,6 +20,10 @@ class ProgressOut(BaseModel):
 
     fraction: float | None
     message: str
+    stage: DownloadStage | None = Field(default=None, exclude_if=lambda value: value is None)
+    part: int | None = Field(default=None, exclude_if=lambda value: value is None)
+    current: int | None = Field(default=None, exclude_if=lambda value: value is None)
+    total: int | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class JobOut(BaseModel):

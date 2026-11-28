@@ -24,6 +24,7 @@ from medleyplay.application.download_budgets import (
     estimate_of,
     limit_refusal,
 )
+from medleyplay.application.download_holds import DownloadHeldError, source_is_held
 from medleyplay.application.jobs import (
     JobCompletion,
     JobKind,
@@ -36,10 +37,10 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account, AccountId, Role
 from medleyplay.domain.catalog import SourceId, SourceState
+from medleyplay.domain.download_holds import NO_AUTOMATIC_RETRY
 from medleyplay.domain.downloads import (
     DOWNLOAD_EXTENSIONS,
     DOWNLOAD_KIND,
-    DOWNLOAD_PROVIDER_REFUSED,
     DOWNLOADS_FOLDER,
     JOIN_ESTIMATE_DETAIL,
     JOIN_LANE,
@@ -51,6 +52,7 @@ from medleyplay.domain.errors import ConflictError, NotFoundError
 from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState
 from medleyplay.domain.links import BILIBILI_SOURCE, joined_locator, video_selection
 from medleyplay.download_limits import JOIN_SCRATCH_BYTES, MAX_DOWNLOAD_BYTES
+from medleyplay.download_receipts import DOWNLOAD_PROGRAM, DownloadReason
 from medleyplay.persistence.schema import AccountRow, DownloadRow, JobRow, SourceRow, TrackRow
 from medleyplay.plugin_api import BEST_QUALITY, SOURCE_DOWNLOADER
 from medleyplay.programs.download_source import (
@@ -73,7 +75,7 @@ def download_source_kind(data_dir: Path, jobs_dir: Path, clock: Clock) -> Downlo
     """
     return JobKind(
         name=DOWNLOAD_KIND,
-        program="medleyplay.programs.download_source:DOWNLOAD_SOURCE",
+        program=DOWNLOAD_PROGRAM,
         request=DownloadSource,
         result=DownloadedSource,
         complete=partial(_complete, data_dir=data_dir, jobs_dir=jobs_dir, clock=clock),
@@ -108,7 +110,7 @@ def _complete(
         return None
     if downloaded.gone or downloaded.file is None:
         source.state = SourceState.UNAVAILABLE
-        return None
+        return JobCompletion(diagnostic_reason=DownloadReason.GONE)
     if joined and (refusal := limit_refusal(db, data_dir, source_id, downloaded.size)):
         return JobCompletion(failure=("refused", refusal))
     if PurePosixPath(downloaded.file).name != downloaded.file:  # pragma: no cover
@@ -137,15 +139,6 @@ def _admit(db: Session, job: Job, *, data_dir: Path) -> None:
     if source is None:
         message = "The Source is no longer in the Library."
         raise NotFoundError(message)
-    previous_failure = db.scalar(
-        select(JobRow.failure_kind)
-        .where(JobRow.kind == job.kind, JobRow.target == job.target, JobRow.id < job.id)
-        .order_by(JobRow.id.desc())
-        .limit(1)
-    )
-    if previous_failure == DOWNLOAD_PROVIDER_REFUSED:
-        message = "The provider rejected this download. Add a file you already have instead."
-        raise ConflictError(message)
     if not video_selection(source.locator).joined:
         return
     existing = db.get(DownloadRow, source.id)
@@ -231,9 +224,10 @@ class DownloadService:
             return {}
         dismissed = dismissed_download_tracks(db)
         return {
-            targets[target].locator: JobId(job_id)
+            source.locator: JobId(job_id)
             for target, job_id in failures
-            if targets[target].track_id in dismissed
+            if (source := targets[target]).track_id in dismissed
+            and not source_is_held(db, source.kind, source.locator)
         }
 
     def retry_dismissed_in(
@@ -303,7 +297,7 @@ class DownloadService:
             if row is None or row.kind != BILIBILI_SOURCE:
                 message = f"The Source {source_id} isn't one medleyplay downloads."
                 raise NotFoundError(message)
-            if row.state == SourceState.UNAVAILABLE:
+            if row.state == SourceState.UNAVAILABLE or source_is_held(db, row.kind, row.locator):
                 return None
             selection = video_selection(row.locator)
             existing = (
@@ -320,11 +314,14 @@ class DownloadService:
         if (
             latest is not None
             and latest.state is JobState.FAILED
-            and (not retry_failed or latest.failure_kind == DOWNLOAD_PROVIDER_REFUSED)
+            and (not retry_failed or latest.failure_kind in NO_AUTOMATIC_RETRY)
         ):
-            return latest
+            return latest if not retry_failed else None
         login = account_id if self._linked.has_valid(account_id, site) else None
-        return self._jobs.submit(self._kind, target, request, account_id, login_account=login)
+        try:
+            return self._jobs.submit(self._kind, target, request, account_id, login_account=login)
+        except DownloadHeldError:
+            return None
 
     def queue_new_in(self, db: Session, caller: Account, source: SourceRow) -> Job | None:
         """Queue audio for a newly inserted Source before its import commits."""

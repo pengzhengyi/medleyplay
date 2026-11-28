@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+from medleyplay.bilibili_links import is_short_link, parse_video_link
 from medleyplay.plugin_api import (
     AuthError,
     Canonical,
@@ -13,7 +14,6 @@ from medleyplay.plugin_api import (
     CheckLogin,
     Downloaded,
     DownloadPart,
-    DownloadRefusedError,
     ReadVideo,
     VideoDetails,
     VideoStatus,
@@ -21,7 +21,6 @@ from medleyplay.plugin_api import (
 )
 from medleyplay.plugins.bilibili import _ytdlp
 from medleyplay.plugins.bilibili.cookies import NoSessionError, keep_login
-from medleyplay.plugins.bilibili.links import is_short_link, parse_video_link
 from medleyplay.plugins.bilibili.short_links import Fetch, follow_short_link, is_allowed
 from medleyplay.plugins.bilibili.videos import (
     audio_qualities,
@@ -105,8 +104,6 @@ class BilibiliDownloader:
             )
         except _ytdlp.BoundedDownloadError as error:
             return Downloaded(file=None, message=str(error))
-        except _ytdlp.RefusedError as error:
-            raise DownloadRefusedError(str(error)) from None
         except _ytdlp.GoneError as error:
             return Downloaded(file=None, gone=True, message=str(error)[:512])
         except _ytdlp.NeedsLoginError as error:

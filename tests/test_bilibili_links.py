@@ -2,7 +2,7 @@
 
 import pytest
 
-from medleyplay.plugins.bilibili.links import (
+from medleyplay.bilibili_links import (
     VideoLink,
     av_to_bv,
     bv_to_av,

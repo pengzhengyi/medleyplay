@@ -16,6 +16,7 @@ import {
   CheckIcon,
   CrosshairIcon,
   DotsThreeIcon,
+  FileTextIcon,
   ListPlusIcon,
   MicrophoneStageIcon,
   PencilSimpleIcon,
@@ -40,12 +41,13 @@ import {
   type TrackDownload,
   api,
 } from "../api";
-import { downloadFailureOf } from "../library/downloading";
+import { diagnosticReason, downloadFailureOf } from "../library/downloading";
 import { LOOKUPS, type Lookup } from "../library/lookups";
 import { siteNameOf } from "../library/videos";
 import { albumArtistOf, artistNamesOf, artistRouteOf } from "../library/views";
 import { type Words, useWords } from "../locale";
 import { navigate } from "../routes";
+import { DownloadDetails, type DownloadDetailsTarget } from "./DownloadDetails";
 
 /** Rate Your Music's search, which the household's own browser opens; medleyplay never reads the site. */
 const RYM_SEARCH = "https://rateyourmusic.com/search";
@@ -101,6 +103,7 @@ export function TrackMenu({
 }) {
   const t = useWords();
   const playable = track.availability === "ok";
+  const [details, setDetails] = useState<DownloadDetailsTarget>();
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger asChild>
@@ -194,6 +197,16 @@ export function TrackMenu({
             </a>
           </Menu.Item>
           {track.video !== null && <OpenTrackSource video={track.video} t={t} />}
+          {track.site !== null && (
+            <Item
+              icon={<FileTextIcon />}
+              onSelect={() => {
+                setDetails({ track: track.id });
+              }}
+            >
+              {t("Download details")}
+            </Item>
+          )}
           <Menu.Separator className="track-menu-line" />
           <RateMenu track={track} container={container} onRate={actions.onRate} />
           <Item
@@ -254,6 +267,14 @@ export function TrackMenu({
           )}
         </Menu.Content>
       </Menu.Portal>
+      {details !== undefined && (
+        <DownloadDetails
+          target={details}
+          close={() => {
+            setDetails(undefined);
+          }}
+        />
+      )}
     </Menu.Root>
   );
 }
@@ -422,9 +443,11 @@ function OpenTrackSource({ video, t }: { readonly video: string; readonly t: Wor
 /** Actions for a download that is queued, waiting, or running. */
 export function DownloadMenu({
   track,
+  openDetails,
   cancel,
 }: {
   readonly track: Track;
+  readonly openDetails: () => void;
   readonly cancel: (() => Promise<void>) | undefined;
 }) {
   const t = useWords();
@@ -484,6 +507,9 @@ export function DownloadMenu({
           {track.video !== null && <OpenTrackSource video={track.video} t={t} />}
           {cancel !== undefined && (
             <>
+              <Item icon={<FileTextIcon />} onSelect={openDetails}>
+                {t("Download details")}
+              </Item>
               <Menu.Separator className="track-menu-line" />
               <Item
                 icon={busy ? <ArrowClockwiseIcon className="spin" /> : <XIcon />}
@@ -507,6 +533,9 @@ type DownloadRead =
       readonly status: TrackDownload["status"];
       readonly text: string;
       readonly job: number | null;
+      readonly held: boolean;
+      readonly reason: string | undefined;
+      readonly httpStatus: number | undefined;
     }
   | { readonly state: "failed"; readonly cause: unknown };
 
@@ -545,6 +574,7 @@ export function DownloadFailed({
   const words = useWords();
   const [open, setOpen] = useState(false);
   const [read, setRead] = useState<DownloadRead>({ state: "loading" });
+  const [details, setDetails] = useState<DownloadDetailsTarget>();
   const [busy, setBusy] = useState<"retry" | "dismiss">();
   const [failure, setFailure] = useState<{
     readonly action: "retry" | "dismiss";
@@ -552,7 +582,7 @@ export function DownloadFailed({
   }>();
   const generation = useRef(0);
   const failedJob = track.download_failure_job_id;
-  const job = read.state === "loaded" && read.status === "failed" ? read.job : null;
+  const job = read.state === "loaded" && read.status === "failed" && !read.held ? read.job : null;
   const openRead = () => {
     const request = ++generation.current;
     setFailure(undefined);
@@ -565,6 +595,12 @@ export function DownloadFailed({
             status: download.status,
             text: download.message,
             job: download.job_id,
+            held: download.hold !== undefined,
+            reason: download.hold ?? download.reason,
+            httpStatus:
+              download.hold === undefined || download.hold === download.reason
+                ? download.http_status
+                : undefined,
           });
         }
       },
@@ -632,7 +668,9 @@ export function DownloadFailed({
                 ? words("Reading why it failed…")
                 : read.status === "downloading"
                   ? words("This download is already in progress.")
-                  : downloadFailureOf(read.text, words)}
+                  : read.reason === undefined
+                    ? downloadFailureOf(read.text, words)
+                    : diagnosticReason(read.reason, read.httpStatus ?? null, words)}
             </Menu.Label>
           )}
           {error !== "" && (
@@ -640,19 +678,31 @@ export function DownloadFailed({
               {error}
             </p>
           )}
-          <Item
-            icon={<ArrowClockwiseIcon className={busy === "retry" ? "spin" : undefined} />}
-            disabled={job === null || busy !== undefined}
-            onSelect={(event) => {
-              // Open until the server answers, so a refusal shows here.
-              event.preventDefault();
-              if (job !== null) {
-                act("retry", api.retryJob(job));
-              }
-            }}
-          >
-            {words(busy === "retry" ? "Retrying…" : "Retry download")}
-          </Item>
+          {!(read.state === "loaded" && read.held) && (
+            <Item
+              icon={<ArrowClockwiseIcon className={busy === "retry" ? "spin" : undefined} />}
+              disabled={job === null || busy !== undefined}
+              onSelect={(event) => {
+                // Open until the server answers, so a refusal shows here.
+                event.preventDefault();
+                if (job !== null) {
+                  act("retry", api.retryJob(job));
+                }
+              }}
+            >
+              {words(busy === "retry" ? "Retrying…" : "Retry download")}
+            </Item>
+          )}
+          {read.state === "loaded" && read.job !== null && (
+            <Item
+              icon={<FileTextIcon />}
+              onSelect={() => {
+                if (read.job !== null) setDetails({ job: read.job });
+              }}
+            >
+              {words("Download details")}
+            </Item>
+          )}
           {!track.joined && (
             <Item
               icon={<UploadSimpleIcon />}
@@ -678,6 +728,14 @@ export function DownloadFailed({
           )}
         </Menu.Content>
       </Menu.Portal>
+      {details !== undefined && (
+        <DownloadDetails
+          target={details}
+          close={() => {
+            setDetails(undefined);
+          }}
+        />
+      )}
     </Menu.Root>
   );
 }

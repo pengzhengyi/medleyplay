@@ -4,16 +4,19 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 import anyio.from_thread
-from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, Request, Response
+from pydantic import BaseModel, Field
 from starlette.requests import ClientDisconnect
 
+from medleyplay.application.download_diagnostics import DownloadDiagnostics
 from medleyplay.application.manual_downloads import DownloadStatus, DownloadUnderWay, TrackDownload
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
+from medleyplay.domain.download_holds import HoldReason
 from medleyplay.domain.errors import InvalidInputError, TooLargeError
 from medleyplay.domain.jobs import JobId
-from medleyplay.web.deps import EventsDep, ManualDownloadsDep, SignedInAccount
+from medleyplay.download_receipts import DownloadReason
+from medleyplay.web.deps import EventsDep, JobsDep, ManualDownloadsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 from medleyplay.web.jobs import JobOut
 
@@ -40,6 +43,10 @@ class TrackDownloadOut(BaseModel):
     message: str
     backend: str | None
     job_id: int | None
+    hold: HoldReason | None = Field(default=None, exclude_if=lambda value: value is None)
+    latest_job_id: int | None = Field(default=None, exclude_if=lambda value: value is None)
+    reason: DownloadReason | None = Field(default=None, exclude_if=lambda value: value is None)
+    http_status: int | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @classmethod
     def of(cls, download: TrackDownload) -> "TrackDownloadOut":
@@ -53,6 +60,10 @@ class TrackDownloadOut(BaseModel):
             message=download.message,
             backend=download.backend,
             job_id=download.job_id,
+            hold=download.hold,
+            latest_job_id=download.latest_job_id,
+            reason=download.reason,
+            http_status=download.http_status,
         )
 
 
@@ -118,6 +129,15 @@ class DownloadUnderWayOut(BaseModel):
 def list_downloads(me: SignedInAccount, manual: ManualDownloadsDep) -> list[DownloadUnderWayOut]:
     """Return each Download a Job is getting, the first asked for first, with its Track."""
     return [DownloadUnderWayOut.of(each, me) for each in manual.downloading()]
+
+
+@under_way_router.get("/{job_id}/diagnostics")
+def diagnostics(
+    job_id: RowId, me: SignedInAccount, jobs: JobsDep, response: Response
+) -> DownloadDiagnostics:
+    """Return one Job's safe, private receipts."""
+    response.headers["Cache-Control"] = "private, no-store"
+    return jobs.download_diagnostics(me, JobId(job_id))
 
 
 class FailedDownloadsIn(BaseModel):

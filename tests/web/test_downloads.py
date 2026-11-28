@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.manual_downloads import ManualDownloadService
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import SourceId, SourceKey, TrackDetails
-from medleyplay.persistence.schema import SourceRow
+from medleyplay.persistence.schema import JobRow, SourceRow
 from medleyplay.web.deps import Services
+from tests.support.api import add_bob, sign_in
 from tests.support.audio import Song, wav_bytes
 from tests.support.fakes import FakeClock
 from tests.support.sites import Site
@@ -96,9 +97,61 @@ def test_a_failed_download_is_reported_with_its_link_and_why(site_client: TestCl
         "link": "https://www.bilibili.com/video/BVrefused?p=1",
         "status": "failed",
         "message": "Bilibili refused the login.",
+        "reason": "auth",
         "backend": None,
         "job_id": job_id,
+        "latest_job_id": job_id,
     }
+
+
+def test_a_download_receipt_reports_the_typed_stop_without_legacy_provider_text(
+    site_client: TestClient, units: sessionmaker[Session]
+) -> None:
+    track, job = _failed_download(site_client, video="BVMediaStop")
+    leaked = "https://example.test/media?token=legacy-provider-sentinel"
+    with units.begin() as db:
+        db.get_one(JobRow, job).failure_message = leaked
+
+    trace = site_client.get(f"/api/downloads/{job}/diagnostics")
+    current = site_client.get(f"/api/tracks/{track}/download").json()
+    job_view = site_client.get(f"/api/jobs/{job}").json()
+
+    assert trace.status_code == 200
+    assert trace.headers["cache-control"] == "private, no-store"
+    body = trace.json()
+    assert (body["version"], body["job_id"], body["state"]) == (1, job, "failed")
+    assert (body["attempts"], body["hold"]) == (1, "response_unknown")
+    stopped = body["events"][-1]
+    assert (stopped["event"], stopped["attempt"], stopped["reason"], stopped["http_status"]) == (
+        "failed",
+        1,
+        "response_unknown",
+        567,
+    )
+    assert [event["sequence"] for event in body["events"]] == sorted(
+        event["sequence"] for event in body["events"]
+    )
+    assert current["hold"] == "response_unknown"
+    assert "567" in current["message"]
+    assert "legacy-provider-sentinel" not in repr((body, current, job_view))
+
+
+def test_only_the_requester_or_admin_can_open_download_diagnostics(site_client: TestClient) -> None:
+    _track, job = _failed_download(site_client)
+    path = f"/api/downloads/{job}/diagnostics"
+    assert site_client.get(path).status_code == 200
+    add_bob(site_client)
+    sign_in(site_client, "bob")
+
+    denied = site_client.get(path)
+
+    assert denied.status_code == 404
+    assert denied.json() == site_client.get("/api/downloads/999999/diagnostics").json()
+    _, bob_job = _failed_download(site_client, video="BVSignedIn")
+    bob_path = f"/api/downloads/{bob_job}/diagnostics"
+    assert site_client.get(bob_path).status_code == 200
+    sign_in(site_client, "alice")
+    assert site_client.get(bob_path).status_code == 200
 
 
 def test_a_failed_download_is_retried_through_the_job_it_names(site_client: TestClient) -> None:
@@ -300,7 +353,7 @@ def test_a_track_that_does_not_exist_has_no_download_to_report(site_client: Test
 
 
 def test_a_file_in_the_body_becomes_the_tracks_download_and_plays(site_client: TestClient) -> None:
-    track_id = _failed_track(site_client)
+    track_id, job_id = _failed_download(site_client)
 
     response = _put(site_client, track_id, "night-drive.wav", TWO_SECONDS)
 
@@ -314,6 +367,7 @@ def test_a_file_in_the_body_becomes_the_tracks_download_and_plays(site_client: T
         "message": "",
         "backend": "manual",
         "job_id": None,
+        "latest_job_id": job_id,
     }
     played = site_client.post(f"/api/tracks/{track_id}/playback").json()
     audio = site_client.get(played["audio_url"])

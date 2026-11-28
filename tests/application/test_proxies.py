@@ -213,6 +213,30 @@ def test_a_keychain_that_does_not_answer_fails_the_save_and_keeps_no_row(
     assert forgotten == []
 
 
+def test_an_interrupted_replacement_is_never_used_as_the_previous_route(
+    proxies: ProxyService, units: sessionmaker[Session], clock: FakeClock, secrets: MemorySecrets
+) -> None:
+    proxies.save(ADMIN, "bilibili", URL)
+    replacement = "http://proxy.test:8080"
+
+    def interrupt_save() -> None:
+        secrets.items["proxy:bilibili"] = replacement
+        message = "Keychain response was interrupted."
+        raise KeychainUnavailableError(message)
+
+    secrets.while_setting = interrupt_save
+
+    with pytest.raises(KeychainUnavailableError):
+        proxies.save(ADMIN, "bilibili", replacement)
+    restarted = ProxyService(units, clock, secrets)
+    with pytest.raises(KeychainUnavailableError, match="save it again"):
+        restarted.current("bilibili")
+
+    secrets.while_setting = None
+    restarted.save(ADMIN, "bilibili", replacement)
+    assert restarted.current("bilibili") == replacement
+
+
 def test_a_keychain_that_does_not_answer_fails_the_removal_and_keeps_the_proxy(
     proxies: ProxyService, secrets: MemorySecrets
 ) -> None:

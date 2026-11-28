@@ -10,7 +10,7 @@ from typing import IO, Final
 
 from pydantic import BaseModel, JsonValue, ValidationError
 
-from medleyplay.plugin_api import AuthError, NetworkError
+from medleyplay.plugin_api import AuthError, NetworkError, ProviderStopError
 from medleyplay.plugin_host.loader import Address, Endpoint, load_plugins
 from medleyplay.plugin_host.streams import take_standard_streams
 from medleyplay.plugin_host.wire import (
@@ -77,13 +77,19 @@ def answer(call: Call, endpoints: Mapping[Address, Endpoint]) -> Reply:
         return _failed(call, "request", f"The request is invalid: {error}")
     try:
         reply = _reply_json(endpoint.invoke(request))
-    except NetworkError as error:
-        return _failed(call, "network", str(error) or "The site couldn't be reached.")
-    except AuthError as error:
-        return _failed(call, "auth", str(error) or "The site refused the login.")
+    except (NetworkError, AuthError, ProviderStopError) as error:
+        return _answered_failure(call, error)
     except (Exception, SystemExit) as error:  # noqa: BLE001 -- any other failure is the plugin's
         return _failed(call, "plugin", f"{type(error).__name__}: {error}")
     return Reply(id=call.id, reply=reply, peak_memory=peak_memory())
+
+
+def _answered_failure(call: Call, error: NetworkError | AuthError | ProviderStopError) -> Reply:
+    if isinstance(error, ProviderStopError):
+        return _failed(call, error.reason, str(error))
+    if isinstance(error, NetworkError):
+        return _failed(call, "network", str(error) or "The site couldn't be reached.")
+    return _failed(call, "auth", str(error) or "The site refused the login.")
 
 
 def _reply_json(reply: BaseModel) -> JsonValue:

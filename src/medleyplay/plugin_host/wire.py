@@ -18,7 +18,9 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 MAX_LINE: Final = 16 * 1024 * 1024
 """The longest message, in characters, either side accepts."""
 
-type FailureKind = Literal["network", "auth", "plugin", "request"]
+type FailureKind = Literal[
+    "network", "auth", "plugin", "request", "provider_refused", "response_unknown"
+]
 """Why a call failed: the site's network, its login, the plugin, or a request the host refused."""
 
 

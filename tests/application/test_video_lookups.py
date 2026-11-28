@@ -9,6 +9,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.links import PartChoice
 from medleyplay.domain.errors import ConflictError, OfflineError
 from medleyplay.domain.jobs import JobState
+from medleyplay.persistence.schema import JobRow
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock, MemorySecrets
 from tests.support.sites import running_site
@@ -75,6 +76,28 @@ def test_a_failed_lookup_stays_visible_until_dismissed_even_offline(
             site.video_lookups.start(alice, "BV1Xx41117Tz")
         site.video_lookups.dismiss(alice, asked.id)
         assert site.video_lookups.list_for(alice) == []
+
+
+def test_neither_confirmation_form_can_schedule_media_from_an_ambiguous_legacy_lookup(
+    units: sessionmaker[Session],
+    accounts: AccountService,
+    clock: FakeClock,
+    tmp_path: Path,
+    secrets: MemorySecrets,
+) -> None:
+    alice = accounts.create_first_admin(NewAccountFactory.admin()).account
+    with running_site(units, clock, tmp_path / "data", secrets) as site:
+        saved = site.video_lookups.start(alice, "https://www.bilibili.com/video/BVdown")
+        site.wait_for(saved.id, JobState.SUCCEEDED)
+        with units.begin() as db:
+            db.get_one(JobRow, saved.id).provider_attempts = None
+
+        with pytest.raises(ConflictError, match="no confirmed provider outcome"):
+            site.video_lookups.confirm(alice, saved.id, "best", [PartChoice(1, "Opening", "")])
+        with pytest.raises(ConflictError, match="no confirmed provider outcome"):
+            site.video_lookups.import_parts(alice, saved.id, "best", None, [1])
+
+        assert site.video_lookups.list_for(alice)[0].id == saved.id
 
 
 def test_a_proxy_echoed_by_the_resolver_never_enters_the_saved_result(

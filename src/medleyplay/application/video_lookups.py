@@ -16,7 +16,7 @@ from medleyplay.domain.jobs import VIDEO_LOOKUP, Job, JobId, JobState
 from medleyplay.domain.links import BILIBILI_SOURCE, lookup_link
 from medleyplay.persistence.schema import JobRow, VideoLookupRow
 from medleyplay.plugin_api import SOURCE_RESOLVER
-from medleyplay.programs.lookup_video import Resolved, VideoRequest
+from medleyplay.programs.lookup_video import Reason, Resolved, Unreadable, VideoRequest
 
 
 def _open(db: Session, job: Job) -> None:
@@ -123,13 +123,8 @@ class VideoLookups:
         """Queue one retried part without consuming the caller's saved lookup."""
         with self._choices, self._units.begin() as db:
             db.connection().exec_driver_sql("BEGIN IMMEDIATE")
-            _, row = _owned(db, me, job_id)
-            if row.result is None:
-                message = "This video has no parts ready to choose."
-                raise ConflictError(message)
-            job = self._links.retry_part_in(
-                db, me, Resolved.model_validate(row.result), part, failed
-            )
+            resolved = _confirmable(*_owned(db, me, job_id))
+            job = self._links.retry_part_in(db, me, resolved, part, failed)
         self._jobs.announce_queued(job.id)
         self._links.announce_import()
         return job
@@ -140,11 +135,7 @@ class VideoLookups:
         """Validate the choices against the saved read; close it only after a successful add."""
         with self._choices:
             with self._units() as db:
-                _, row = _owned(db, me, job_id)
-                if row.result is None:
-                    message = "This video has no parts ready to choose."
-                    raise ConflictError(message)
-                resolved = Resolved.model_validate(row.result)
+                resolved = _confirmable(*_owned(db, me, job_id))
             added = self._links.add_resolved(me, resolved, quality, parts)
             self._close(me, job_id)
             return added
@@ -165,13 +156,8 @@ class VideoLookups:
         """Consume this Account's saved result only if the entire import commits."""
         with self._choices, self._units.begin() as db:
             db.connection().exec_driver_sql("BEGIN IMMEDIATE")
-            _, row = _owned(db, me, job_id)
-            if row.result is None:
-                message = "This video has no parts ready to choose."
-                raise ConflictError(message)
-            added = self._links.import_in(
-                db, me, Resolved.model_validate(row.result), quality, album, numbers
-            )
+            job, row = _owned(db, me, job_id)
+            added = self._links.import_in(db, me, _confirmable(job, row), quality, album, numbers)
             db.delete(row)
         self._jobs.announce_queued(*(p.job.id for p in added if p.job is not None))
         self._jobs.notify(job_id)
@@ -191,6 +177,21 @@ class VideoLookups:
             self._jobs.announce_cancelled(cancelled)
         else:
             self._jobs.notify(job_id)
+
+
+def _confirmable(job: JobRow, row: VideoLookupRow) -> Resolved:
+    if job.state != JobState.SUCCEEDED or row.result is None:
+        message = "This video has no parts ready to choose."
+        raise ConflictError(message)
+    resolved = Resolved.model_validate(row.result)
+    if (
+        job.provider_attempts is None
+        and isinstance(resolved.read, Unreadable)
+        and resolved.read.reason not in {Reason.GONE, Reason.NEEDS_LOGIN}
+    ):
+        message = "This saved lookup has no confirmed provider outcome."
+        raise ConflictError(message)
+    return resolved
 
 
 def _owned(db: Session, me: Account, job_id: JobId) -> tuple[JobRow, VideoLookupRow]:

@@ -4176,6 +4176,15 @@ details.dropdown[open] > summary.filter-summary {
   overflow-wrap: anywhere;
 }
 
+.download-receipts {
+  padding-inline-start: 1.4rem;
+  font-size: 0.85rem;
+}
+
+.download-receipts time {
+  color: var(--muted);
+}
+
 .tracks .time,
 .tracks .plays {
   font-variant-numeric: tabular-nums;
@@ -5572,6 +5581,10 @@ dialog.modal::backdrop {
   border-radius: 1.25rem;
   background: var(--surface);
   box-shadow: var(--float);
+}
+
+.download-details .card {
+  width: min(36rem, calc(100vw - 2rem));
 }
 
 .modal h2 {

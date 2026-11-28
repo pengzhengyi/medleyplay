@@ -70,7 +70,9 @@ class PluginUnavailableError(MedleyplayError):
     """No plugin can answer now: none is on for the key, or the plugin host is busy."""
 
 
-type PluginFailureKind = Literal["network", "auth", "plugin"]
+type PluginFailureKind = Literal[
+    "network", "auth", "plugin", "provider_refused", "response_unknown", "attempt_uncertain"
+]
 """Why a plugin call failed: the site's network, its login, or the plugin itself."""
 
 

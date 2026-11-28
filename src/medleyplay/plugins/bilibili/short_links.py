@@ -18,8 +18,8 @@ from collections.abc import Callable
 from typing import Final
 from urllib.parse import urljoin, urlsplit
 
+from medleyplay.bilibili_links import SHORT_LINK_HOST
 from medleyplay.plugins.bilibili import _ytdlp
-from medleyplay.plugins.bilibili.links import SHORT_LINK_HOST
 
 type Fetch = Callable[[str], str | None]
 """Fetch a URL and return where it redirects to, or `None` when it doesn't."""

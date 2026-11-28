@@ -6,6 +6,8 @@
 > read, and while a dialog, panel, or view waits for its code. It is the last of four
 > steps after [Cached reads](Cached%20reads.md), [Cheap reloads](Cheap%20reloads.md),
 > and [Cover thumbnails](Cover%20thumbnails.md).
+> Cold-part readiness is investigated below; its contained loading change is
+> proposed, not implemented.
 
 ## Contents
 
@@ -17,6 +19,7 @@
 - [A part that fails to load](#a-part-that-fails-to-load)
 - [Loading the rest while the browser is idle](#loading-the-rest-while-the-browser-is-idle)
 - [Opening a part whose code is ready](#opening-a-part-whose-code-is-ready)
+- [Cold-part readiness](#cold-part-readiness)
 - [Assets sent gzipped](#assets-sent-gzipped)
 - [Interfaces](#interfaces)
 - [Boundary cases](#boundary-cases)
@@ -328,6 +331,123 @@ further attribution.
 - [x] Headless browser checks cover editing, validation-driven parent updates,
       focus and selection, Escape, and reopening at desktop and phone widths in
       light and dark themes, with normal and reduced motion.
+
+## Cold-part readiness
+
+> [!NOTE]
+> **In progress.** Show module-loading feedback through a local context and
+> React state, without changing the public part contract or its callers.
+
+A cold Songs editor can finish downloading its module and then wait
+roughly another quarter-second before mounting. Its song-data request
+starts only after that mount. This is separate from connection waiting
+and from the already-fixed preloaded case.
+
+Three paired diagnostic samples hold the Songs module until its loading
+frame is visible, then release it. The production baseline shows useful
+controls about 360 ms after the click, with about 285 ms between module
+response completion and controls. A build-only experiment removes
+React's internal fallback throttle: controls appear in about 109 ms,
+with about 42 ms after the response. Every pair improves.
+
+These are causal diagnostic results, not retained implementation numbers.
+The experiment changes no source or installed dependency file, but its
+build transform deliberately changes an internal React constant.
+**That transform must not ship.** There is no supported application
+setting for that internal timer in the reviewed React API documentation.
+
+### Contained rendering boundary
+
+The design keeps dynamic imports, shared loads, idle
+preloading, and the existing error UI, but shows module-loading frames
+through explicit React state instead of suspending for module loading.
+Nested component suspension, if any, still belongs to React.
+
+| Option | Benefit | Cost |
+| --- | --- | --- |
+| Keep `React.lazy` and Suspense | Preserve the current contract and framework-managed loading | Keep the measured cold-opening delay |
+| Add an internal loading-frame context | Show loaded code without the module-reveal throttle; keep callers unchanged | Maintain a state-driven rendering path beside plain Suspense compatibility |
+| Make more parts eager | Avoid cold module suspension | Charge every startup for code that may not be opened |
+
+`LazyPart` provides its existing loading frame through an internal
+`PartFrame` context. Its error boundary and Suspense stay in place,
+including the root wrapper around `App`. A `Part.Component` captures its
+rendering mode and load generation once per mount. Within that context,
+a small state-driven component shows the frame while loading, then the
+resolved component. Without the context, it keeps the existing
+`React.lazy` path. Changing frame content does not switch a mounted
+editor between component types.
+
+Each loaded component clears the inherited frame context around its
+descendants. A nested part must use its own frame or ordinary Suspense,
+not reuse the outer dialog's frame. Suspense still handles actual
+component suspension; only this helper's module-loading wait changes.
+
+The shared load and retry mechanism remains in `lazyPart`. Each load
+generation owns both the native lazy component and a cached opening
+failure. Both rendering paths call the same generation's opening
+function. This distinguishes a failed background preload from a failure
+already presented by an opened part:
+
+| State | Opening or update |
+| --- | --- |
+| Ready | Render the saved component immediately and keep its type stable. |
+| Absent or pending | Show the local frame and share the existing load promise. |
+| Background preload failed | An opening may start a fresh attempt, as the unused native lazy component does. |
+| An opened part failed | Closing and reopening keeps that generation's error; do not silently retry. |
+| Try again or a new preload after failure | Reset the failed generation, preserving the existing retry interval and classification. |
+| Closed before completion | Ignore that instance's late result while keeping the shared module load. |
+
+The framed component observes its generation through an effect with
+cleanup, using React state for pending, ready, and failed results.
+`StrictMode` effect replay still shares one load. No global subscription
+store, private React timer change, synchronous flush, or new preload
+policy is needed.
+
+### Dependency choice and tradeoff
+
+React is already a dependency and supplies the context, state, and effect
+APIs needed to adapt the existing loader. Its guidance
+[prefers React state where possible](https://react.dev/reference/react/useSyncExternalStore#caveats).
+The existing code already owns retry and preload behavior.
+
+The registry and [loadable component API](https://loadable-components.com/docs/api-loadable-component/)
+were checked: `@loadable/component` declares React 19 compatibility but introduces
+another loader, additional dependencies, and different preload semantics.
+`react-loadable` also introduces a separate loading model. These packages
+are not recommended or installed; no runtime compatibility claim is made for
+either. Reusing existing React primitives avoids replacing the loader
+to change one rendering wait.
+
+A quickly arriving module may show the busy frame for only one or two
+frames. That brief feedback is intentional; there is no minimum spinner
+duration. Keyboard checks must establish that replacing `DialogOpening`
+does not invoke the user's close callback, lose Escape handling, or
+reset a draft. Changes to public props, caller structure, failure UX,
+dependencies, or the set of eagerly loaded parts require a separate decision.
+
+### Required invariants
+
+- A ready component renders immediately and keeps its identity, edits,
+  focus, and selection through parent updates.
+- Pending code shares one load and keeps an accessible, closable frame.
+- Closing during loading neither cancels the shared load nor updates an
+  unmounted view; a later opening can use the completed module.
+- Retry timing, failure classification, explicit recovery, and isolation
+  between two open parts remain unchanged.
+- Preload failure and failure after opening have defined recovery paths;
+  changing either requires an explicit decision.
+- The set of eagerly loaded parts, preload order, Account behavior, server API, and
+  unrelated dialogs remain unchanged.
+
+Approval requires focused tests for both rendering paths, failed preload
+versus failed opening, failed reopen and explicit retry, `StrictMode`,
+late resolution after unmount, nested contexts, and stable editing.
+Retention requires a supported-API implementation and
+paired production measurements for cold, pending, ready, and reopened
+parts. A smaller and larger song list, a non-editor part, slow/failing
+module loads, and phone/desktop keyboard behavior are controls.
+No improvement is claimed until that implementation passes review.
 
 ## Assets sent gzipped
 

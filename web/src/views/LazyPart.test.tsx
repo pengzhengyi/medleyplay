@@ -160,21 +160,30 @@ describe("a part of the page loaded when it opens", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
-  it("says something went wrong when the part loaded but failed to show", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    function Broken(): never {
-      throw new Error("A bug.");
-    }
-    const part = lazyPart(() => Promise.resolve(Broken));
+  it.each(["cold", "preloaded"])(
+    "reports a rendering error in a %s part and retries when asked",
+    async (opening) => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      let broken = true;
+      function Recoverable() {
+        if (broken) throw new Error("A bug.");
+        return <Greeting />;
+      }
+      const part = lazyPart(() => Promise.resolve(Recoverable));
+      if (opening === "preloaded") await part.preload();
+      render(
+        <LazyPart doing="Opening…">
+          <part.Component />
+        </LazyPart>,
+      );
+      expect(await screen.findByText("Something went wrong here.")).toBeInTheDocument();
 
-    render(
-      <LazyPart doing="Opening…">
-        <part.Component />
-      </LazyPart>,
-    );
+      broken = false;
+      await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
-    expect(await screen.findByText("Something went wrong here.")).toBeInTheDocument();
-  });
+      expect(screen.getByText("Hello")).toBeInTheDocument();
+    },
+  );
 
   it("keeps a part that has loaded while another one loads", async () => {
     const loaded = lazyPart(() => Promise.resolve(Greeting));

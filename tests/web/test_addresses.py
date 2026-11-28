@@ -46,3 +46,22 @@ def test_the_addresses_a_device_on_the_network_can_open_come_with_its_address_fi
 
 def test_the_addresses_need_a_sign_in(lan_client: TestClient) -> None:
     assert lan_client.get("/api/addresses").status_code == 401
+
+
+def test_managed_sharing_advertises_only_the_running_helper(
+    services: Services,
+) -> None:
+    app = create_app(services, allowed_hosts=HOSTS)
+    shared = None
+
+    def share_address() -> str | None:
+        return shared
+
+    app.state.share_address = share_address
+    with TestClient(app, base_url=f"http://{TEST_HOST}") as browser:
+        set_up_as_alice(browser)
+        assert browser.get("/api/addresses").json() == {"addresses": [], "share_url": None}
+
+        shared = "http://192.168.1.20:8123"
+
+        assert browser.get("/api/addresses").json() == {"addresses": [], "share_url": shared}

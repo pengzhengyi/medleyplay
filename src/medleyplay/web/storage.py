@@ -16,6 +16,7 @@ from medleyplay.application.storage_inspection import Inspection
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.policy import Plan, Remove, Shortfall
 from medleyplay.web.deps import PolicyDep, SignedInAccount, StorageFolderDep, StorageInspectionDep
+from medleyplay.web.share_ingress import sharing_peer
 
 router = APIRouter(prefix="/api/storage", tags=["storage"])
 
@@ -171,7 +172,11 @@ class FolderOut(BaseModel):
 
 
 def _on_this_machine(request: Request) -> bool:
-    return request.client is not None and request.client.host in LOOPBACK
+    return (
+        sharing_peer(request) is None
+        and request.client is not None
+        and request.client.host in LOOPBACK
+    )
 
 
 @router.get("/folder")

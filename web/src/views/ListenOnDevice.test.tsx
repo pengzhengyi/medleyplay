@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +29,64 @@ afterEach(() => {
 });
 
 describe("listening on another device", () => {
+  it("uses the managed sharing URL instead of the host browser port", async () => {
+    render(
+      <ListenOnDevice
+        username="alice"
+        load={() => Promise.resolve({ addresses: [], share_url: "http://192.168.1.20:8123" })}
+        here={ON_THIS_MACHINE}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("img", { name: "QR code of http://192.168.1.20:8123" }),
+    ).toBeVisible();
+    expect(screen.getByText("8123")).toBeVisible();
+  });
+
+  it("does not advertise a link while managed LAN sharing is off", async () => {
+    render(
+      <ListenOnDevice
+        username="alice"
+        load={() => Promise.resolve({ addresses: [], share_url: null })}
+        here={{ ...ON_THIS_MACHINE, hostname: "music.home" }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("LAN sharing is off. Start it from Terminal.")).toBeVisible();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("removes the QR code when sharing stops while the dialog is open", async () => {
+    vi.useFakeTimers();
+    try {
+      const load = vi
+        .fn<() => Promise<{ addresses: string[]; share_url: string | null }>>()
+        .mockResolvedValueOnce({ addresses: [], share_url: "http://192.168.1.20:8123" })
+        .mockResolvedValue({ addresses: [], share_url: null });
+      render(
+        <ListenOnDevice username="alice" load={load} here={ON_THIS_MACHINE} onClose={vi.fn()} />,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(
+        screen.getByRole("img", { name: "QR code of http://192.168.1.20:8123" }),
+      ).toBeVisible();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+
+      expect(screen.queryByRole("img")).not.toBeInTheDocument();
+      expect(screen.getByText("LAN sharing is off. Start it from Terminal.")).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("translates the setup instructions without changing the address or account name", async () => {
     render(<LanguageSelect />);
     const language = screen.getByRole("combobox", { name: "Language" });

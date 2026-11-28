@@ -2048,7 +2048,8 @@ export const api = {
   /** Forget a provider and delete its key; admins only. */
   removeAiProvider: (id: string) => call<undefined>("DELETE", `/api/ai/providers/${id}`),
   /** Where another device on the network can reach the server: addresses, then names. */
-  addresses: () => call<{ addresses: string[] }>("GET", "/api/addresses"),
+  addresses: () =>
+    call<{ addresses: string[]; share_url?: string | null }>("GET", "/api/addresses"),
   /** The enricher's state, and the Tracks it may be asked about. */
   enricher: (name: string) => heldReads.read<Enricher>(`/api/enrichers/${name}`),
   /** Ask the enricher about one Track: a Job that runs once the Mode is Online. */

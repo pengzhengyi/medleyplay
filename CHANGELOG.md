@@ -779,6 +779,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Preloaded editors and views open without an extra loading wait. Edit songs and
+  Fill from a list show useful controls sooner while keeping drafts and load recovery.
 - Artists stays more responsive during playback by reusing unchanged cards.
   Names, photos, favorites, and navigation remain current.
 - The Playing badge uses transformed bars to reduce repeated painting.

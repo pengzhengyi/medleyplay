@@ -8,7 +8,7 @@
  * afresh.
  */
 
-import { type ComponentType, type LazyExoticComponent, lazy } from "react";
+import { type ComponentType, type LazyExoticComponent, lazy, useState } from "react";
 
 import { whenIdle } from "./library/stages";
 
@@ -44,14 +44,20 @@ export function forgetFailedLoads(): void {
 /** Return a part whose code `load` gives, loaded when first rendered or preloaded. */
 export function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>): Part<P> {
   let loading: Promise<ComponentType<P>> | undefined;
+  let ready: ComponentType<P> | undefined;
   let failed = false;
   const attempt = () => {
-    loading ??= retriedOnce(load).catch((failure: unknown) => {
-      // Forgotten, so the next try loads; the shown part keeps its failure until then.
-      loading = undefined;
-      failed = true;
-      throw new PartLoadError(failure);
-    });
+    loading ??= retriedOnce(load)
+      .then((loaded) => {
+        ready = loaded;
+        return loaded;
+      })
+      .catch((failure: unknown) => {
+        // Forgotten, so the next try loads; the shown part keeps its failure until then.
+        loading = undefined;
+        failed = true;
+        throw new PartLoadError(failure);
+      });
     return loading;
   };
   const fresh = (): LazyExoticComponent<ComponentType<P>> =>
@@ -66,7 +72,8 @@ export function lazyPart<P extends object>(load: () => Promise<ComponentType<P>>
   renewals.add(renew);
 
   function Component(props: P) {
-    const Loaded = current;
+    // A stable component type keeps an editor's state across parent updates.
+    const [Loaded] = useState(() => ready ?? current);
     return <Loaded {...props} />;
   }
   return {

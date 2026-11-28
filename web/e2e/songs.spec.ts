@@ -169,7 +169,7 @@ test("segmented seek thumbs align and leave album previews reachable in both lay
       await bar.focus();
       await page.keyboard.press("Home");
       for (let press = 0; press < 3; press++) await page.keyboard.press("PageUp");
-      await expect(bar).toHaveAttribute("aria-valuenow", "18");
+      await expect(bar).toHaveJSProperty("ariaValueNow", "18");
       const error = await bar.evaluate((element) => {
         const box = element.getBoundingClientRect();
         const dot = element.querySelector(".seek-thumb")?.getBoundingClientRect();
@@ -187,7 +187,7 @@ test("segmented seek thumbs align and leave album previews reachable in both lay
       await expect(preview).toBeVisible();
       await preview.hover();
       await expect(preview).toBeVisible();
-      await expect(bar).toHaveAttribute("aria-valuenow", "18");
+      await expect(bar).toHaveJSProperty("ariaValueNow", "18");
     }
   } finally {
     expect((await request.delete(songs)).ok()).toBe(true);

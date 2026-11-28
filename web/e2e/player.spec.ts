@@ -274,7 +274,7 @@ async function pausedSeek(page: Page, inDialog: boolean) {
   await expect(bar).toHaveAttribute("aria-disabled", "false");
   await bar.focus();
   await page.keyboard.press("Home");
-  await expect(bar).toHaveAttribute("aria-valuenow", "0");
+  await expect(bar).toHaveJSProperty("ariaValueNow", "0");
   await expect
     .poll(() =>
       bar.evaluate(

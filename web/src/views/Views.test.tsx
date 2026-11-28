@@ -355,6 +355,65 @@ describe("artist contents stay current", () => {
   });
 });
 
+describe("repeated gallery lengths", () => {
+  it.each([
+    ["albums", false],
+    ["albums", true],
+    ["artists", false],
+    ["artists", true],
+  ] as const)(
+    "keeps %s labels current through duration and language changes (search: %s)",
+    async (view, search) => {
+      const tracks = [
+        trackOf(1, "Dawn", { artist: "Ryo", album: "First", duration_ms: 181_000 }),
+        trackOf(2, "Dusk", { artist: "Sia", album: "Second", duration_ms: 184_000 }),
+      ];
+      const props = viewPropsOf({
+        route: search ? { view: "search", query: `kind:${view}` } : { view },
+        tracks,
+      });
+      const { rerender } = render(<CurrentView {...props} />);
+      render(<LanguageSelect />);
+      const language = screen.getByRole("combobox", { name: "Language" });
+      const gallery = await screen.findByRole("list", {
+        name: view === "albums" ? "Albums" : "Artists",
+      });
+      const cards = within(gallery).getAllByRole("link");
+      const destinations = cards.map((card) => card.getAttribute("href"));
+      expect(cards).toHaveLength(2);
+      for (const card of cards) expect(card).toHaveTextContent("1 song, 3 min");
+
+      try {
+        await userEvent.selectOptions(language, "zh-Hans");
+
+        for (const card of cards) expect(card).toHaveTextContent("1 首歌曲，3 分钟");
+        rerender(
+          <CurrentView
+            {...props}
+            tracks={tracks.map((track) =>
+              track.id === 2 ? { ...track, duration_ms: 210_000 } : track,
+            )}
+          />,
+        );
+        expect(cards[0]).toHaveTextContent("1 首歌曲，3 分钟");
+        expect(cards[1]).toHaveTextContent("1 首歌曲，4 分钟");
+
+        await userEvent.selectOptions(language, "en");
+
+        expect(cards[0]).toHaveTextContent("1 song, 3 min");
+        expect(cards[1]).toHaveTextContent("1 song, 4 min");
+        expect(
+          within(gallery)
+            .getAllByRole("link")
+            .map((card) => card.getAttribute("href")),
+        ).toEqual(destinations);
+      } finally {
+        await userEvent.selectOptions(language, "auto");
+      }
+    },
+  );
+});
+
 describe("the views", () => {
   it("explains an empty library and keeps the API link when the language changes", async () => {
     open("#/library", signedIn([]));

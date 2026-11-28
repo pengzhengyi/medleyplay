@@ -185,10 +185,12 @@ class CatalogService:
             held = set(db.scalars(select(DownloadRow.source_id)))
             available = _availability(db, sources, held, online=online)
             downloaded = {source.track_id for source in sources if source.id in held}
+            local = {source.track_id for source in sources if source.kind == LIBRARY_SOURCE}
             sites = _site_sources(db)
-            failed = _download_failures(db, sites, downloaded)
             locations = album_song_locations(db)
             segment_of = {song: album for song, (album, _) in locations.items()}
+            failed = _album_download_failures(_download_failures(db, sites, downloaded), segment_of)
+            dismissed = _dismissed_downloads(failed, local | downloaded, segment_of)
             split = set(segment_of.values())
             videos = _videos_of(
                 (source.track_id, source.kind, source.locator) for source in sources
@@ -197,11 +199,7 @@ class CatalogService:
             community = _community_ratings(db, select(CommunityRatingRow), segment_of)
             rated = album_ratings_of(db, account_id)
             artists = artist_names_of(db)
-            # A song is downloaded, or failed to download, as its album file is.
             downloaded |= {song for song, album in segment_of.items() if album in downloaded}
-            failed.update(
-                {song: failed[album] for song, album in segment_of.items() if album in failed}
-            )
             tracks = [
                 _to_track(
                     track,
@@ -210,6 +208,7 @@ class CatalogService:
                     downloaded=track.id in downloaded,
                     download_failed=track.id in failed,
                     download_failure_job_id=failed.get(track.id),
+                    download_dismissed=track.id in dismissed,
                     site=sites[track.id].kind if track.id in sites else None,
                     joined=_is_joined(sites.get(track.id)),
                     # A song came from the video its album file did.
@@ -238,11 +237,14 @@ class CatalogService:
             locations = album_song_locations(db)
             segment_of = {song: album for song, (album, _) in locations.items()}
             looked_at = segment_of.get(track_id, track_id)
-            downloaded = _downloaded(
-                db, select(SourceRow.track_id).where(SourceRow.track_id == looked_at)
+            related = SourceRow.track_id.in_({looked_at, track_id})
+            downloaded = _downloaded(db, select(SourceRow.track_id).where(related))
+            sites = _site_sources(db, related)
+            split_song = {track_id: looked_at} if track_id != looked_at else {}
+            failed = _album_download_failures(_download_failures(db, sites, downloaded), split_song)
+            dismissed = _dismissed_downloads(
+                failed, downloaded | _library_tracks(db, related), split_song
             )
-            sites = _site_sources(db, SourceRow.track_id == looked_at)
-            failed = _download_failures(db, sites, downloaded)
             videos = _video_pages(db, SourceRow.track_id == looked_at)
             album_from_ms = read_settings(db).album_from_ms
             rated = select(CommunityRatingRow).where(
@@ -255,8 +257,9 @@ class CatalogService:
                 *found,
                 available[track_id],
                 downloaded=looked_at in downloaded,
-                download_failed=looked_at in failed,
-                download_failure_job_id=failed.get(looked_at),
+                download_failed=track_id in failed,
+                download_failure_job_id=failed.get(track_id),
+                download_dismissed=track_id in dismissed,
                 site=sites[track_id].kind if track_id in sites else None,
                 joined=_is_joined(sites.get(track_id)),
                 video=videos.get(looked_at),
@@ -837,6 +840,46 @@ def _is_joined(source: SourceRow | None) -> bool:
     )
 
 
+def dismissed_download_tracks(db: Session) -> set[int]:
+    """Return Tracks hidden by a dismissed download, including songs without saved audio."""
+    downloaded = _downloaded(db, select(SourceRow.track_id))
+    failures = _download_failures(db, _site_sources(db), downloaded)
+    if None not in failures.values():
+        return set()
+    segment_of = {song: album for song, (album, _) in album_song_locations(db).items()}
+    return _dismissed_downloads(
+        _album_download_failures(failures, segment_of), _library_tracks(db) | downloaded, segment_of
+    )
+
+
+def _library_tracks(db: Session, *where: ColumnElement[bool]) -> set[int]:
+    return set(
+        db.scalars(select(SourceRow.track_id).where(SourceRow.kind == LIBRARY_SOURCE, *where))
+    )
+
+
+def _album_download_failures(
+    failures: dict[int, JobId | None], segment_of: Mapping[TrackId, TrackId]
+) -> dict[int, JobId | None]:
+    return failures | {
+        song: failures[album] for song, album in segment_of.items() if album in failures
+    }
+
+
+def _dismissed_downloads(
+    failures: Mapping[int, JobId | None],
+    kept_tracks: set[int],
+    segment_of: Mapping[TrackId, TrackId],
+) -> set[int]:
+    return {
+        track
+        for track, job in failures.items()
+        if job is None
+        and track not in kept_tracks
+        and segment_of.get(TrackId(track)) not in kept_tracks
+    }
+
+
 def _community_ratings(
     db: Session, rated: Select[CommunityRatingRow], segment_of: Mapping[TrackId, TrackId]
 ) -> dict[TrackId, CommunityRating]:
@@ -867,6 +910,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
     downloaded: bool,
     download_failed: bool = False,
     download_failure_job_id: JobId | None = None,
+    download_dismissed: bool = False,
     site: str | None = None,
     joined: bool = False,
     video: str | None = None,
@@ -909,6 +953,7 @@ def _to_track(  # noqa: PLR0913 -- a Track's own fields, then what the catalog w
         downloaded=downloaded,
         download_failed=download_failed,
         download_failure_job_id=download_failure_job_id,
+        download_dismissed=download_dismissed,
         site=site,
         joined=joined,
         video=video,

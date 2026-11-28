@@ -140,7 +140,9 @@ def missing_track(db: Session, track: TrackRow) -> MissingTrack | None:
     return MissingTrack(track, whole, tuple(fields), origins, current, performers, key)
 
 
-def library_candidates(db: Session, track: MissingTrack) -> tuple[CreditCandidate, ...]:
+def library_candidates(
+    db: Session, track: MissingTrack, dismissed: set[int]
+) -> tuple[CreditCandidate, ...]:
     """Suggest album names only; a compilation credit does not identify a performer."""
     if "album" not in track.fields:
         return ()
@@ -161,6 +163,7 @@ def library_candidates(db: Session, track: MissingTrack) -> tuple[CreditCandidat
         name = donor.album.strip()
         if (
             name
+            and donor.id not in dismissed
             and _performers(db, donor) == track.performers
             and kind_shown_of(db, donor).kind is Kind.SONG
         ):

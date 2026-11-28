@@ -174,8 +174,8 @@ class ManualDownloadService:
             if (source := sources[job.job.target]) is not None and source in tracks
         ]
 
-    def dismiss_failures(self, job_ids: Iterable[JobId]) -> None:
-        """Hide the specified failed Downloads from Downloaded, keeping their Jobs and Tracks."""
+    def dismiss_failures(self, job_ids: Iterable[JobId]) -> int:
+        """Mark failed Downloads dismissed and return the number changed."""
         changed = 0
         with self._units.begin() as db:
             connection = db.connection()
@@ -193,6 +193,7 @@ class ManualDownloadService:
                 changed += result.rowcount
         if changed and self._on_change is not None:
             self._on_change("catalog")
+        return changed
 
     def upload(self, track_id: TrackId, name: str) -> "Upload":
         """Return an upload of the Track's file, which `name` is the name of.

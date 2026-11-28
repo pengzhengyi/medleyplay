@@ -81,6 +81,10 @@ class TrackOut(BaseModel):
     download_failure_job_id: int | None = Field(
         description="The failed download Job if it has not been dismissed from Downloaded."
     )
+    download_dismissed: bool = Field(
+        description="Whether to hide this Track because its download failed and was dismissed, "
+        "and it has no saved audio or Library file."
+    )
     site: str | None = Field(
         description="The kind of site its audio is downloaded from, such as `bilibili`, if any."
     )
@@ -139,6 +143,7 @@ class TrackOut(BaseModel):
             downloaded=track.downloaded,
             download_failed=track.download_failed,
             download_failure_job_id=track.download_failure_job_id,
+            download_dismissed=track.download_dismissed,
             site=track.site,
             joined=track.joined,
             video=track.video,

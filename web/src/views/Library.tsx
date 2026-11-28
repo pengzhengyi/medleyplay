@@ -139,7 +139,11 @@ export function Library({
   const locale = useFormattingLocale();
   const listFormat = useMemo(() => new Intl.ListFormat(locale, { type: "conjunction" }), [locale]);
   const library = useLibrary(onSignedOut);
-  const byId = library.tracks;
+  const catalog = library.tracks;
+  const byId = useMemo(
+    () => new Map([...catalog].filter(([, track]) => track.download_dismissed !== true)),
+    [catalog],
+  );
   const tracks = useMemo(() => [...byId.values()], [byId]);
   const admin = account.role === "admin";
   const { refreshFeatures } = library;
@@ -156,7 +160,7 @@ export function Library({
     () => [...new Set(tracks.map((track) => track.artist.trim()).filter((name) => name !== ""))],
     [tracks],
   );
-  const [local, audio] = usePlayer(byId, onSignedOut);
+  const [local, audio] = usePlayer(catalog, onSignedOut);
   const localSleep = useSleepTimer(local.pause);
   useSpeaker(onHost, local, localSleep, byId, library.speaker, library.onCommand);
   // Where a page that isn't on the computer plays; with the computer gone, it plays here.

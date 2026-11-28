@@ -1,7 +1,7 @@
 /** @file Refresh the playing album from the songs and boundaries saved for its file. */
 
 import type { Track } from "../api";
-import { type Queue, current } from "./queue";
+import { type Queue, current, withoutTracks } from "./queue";
 import { type Stretch, stretchOf } from "./stretch";
 
 export function segmentStretch(track: Track | undefined): Stretch | undefined {
@@ -33,17 +33,10 @@ export function withoutDeletedSongs(
   before: ReadonlyMap<number, Track>,
   after: ReadonlyMap<number, Track>,
 ): Queue {
-  const kept = (entry: Queue["entries"][number]) =>
-    before.get(entry.trackId)?.segment_of == null || after.has(entry.trackId);
-  const entries = queue.entries.filter(kept);
-  if (entries.length === queue.entries.length) return queue;
-  const keys = new Set(entries.map((entry) => entry.key));
-  return {
-    ...queue,
-    entries,
-    position: queue.entries.slice(0, queue.position).filter(kept).length,
-    order: queue.order?.filter((key) => keys.has(key)),
-  };
+  return withoutTracks(
+    queue,
+    (trackId) => before.get(trackId)?.segment_of != null && !after.has(trackId),
+  );
 }
 
 export function updatePlayingAlbum(

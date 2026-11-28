@@ -83,6 +83,19 @@ export function current(queue: Queue): Entry | undefined {
   return queue.entries[queue.position];
 }
 
+export function withoutTracks(queue: Queue, excludes: (trackId: number) => boolean): Queue {
+  const kept = (entry: Entry) => !excludes(entry.trackId);
+  const entries = queue.entries.filter(kept);
+  if (entries.length === queue.entries.length) return queue;
+  const keys = new Set(entries.map((entry) => entry.key));
+  return {
+    ...queue,
+    entries,
+    position: queue.entries.slice(0, queue.position).filter(kept).length,
+    order: queue.order?.filter((key) => keys.has(key)),
+  };
+}
+
 /** Return the entries that play after the current one. */
 export function upNext(queue: Queue): readonly Entry[] {
   return queue.entries.slice(queue.position + 1);

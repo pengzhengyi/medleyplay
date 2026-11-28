@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
 from medleyplay.application.ai import is_set_up
+from medleyplay.application.catalog import dismissed_download_tracks
 from medleyplay.application.changes import OnChange
 from medleyplay.application.details import set_household
 from medleyplay.application.jobs import JobKind, JobService, Lane
@@ -115,14 +116,17 @@ class MissingDetailsService:
             db.connection().exec_driver_sql("BEGIN")
             enabled = read_settings(db).suggest_missing_details_by_ai
             available = enabled and is_set_up(db) and self._available()
+            dismissed = dismissed_download_tracks(db)
             items: list[MissingDetailsItem] = []
             for row in db.scalars(_eligible_rows(after)):
+                if row.id in dismissed:
+                    continue
                 item = missing_track(db, row)
                 if item is None:
                     continue
                 if len(items) == PAGE_SIZE:
                     return MissingDetailsPage(tuple(items), items[-1].track_id)
-                items.append(_item(db, item, enabled=enabled, available=available))
+                items.append(_item(db, item, dismissed, enabled=enabled, available=available))
             return MissingDetailsPage(tuple(items), None)
 
     def ask(self, caller: Account, track_id: TrackId, key: str) -> Job:
@@ -134,7 +138,7 @@ class MissingDetailsService:
             if not (is_set_up(db) and self._available()):
                 message = "Set up an AI provider in Settings first."
                 raise ConflictError(message)
-            track = _reviewed(db, track_id, key)
+            track = _reviewed(db, track_id, key, dismissed_download_tracks(db))
             if (clues := track.clues()) is None:
                 message = "There is not enough named music metadata to ask AI."
                 raise ConflictError(message)
@@ -155,13 +159,17 @@ class MissingDetailsService:
         """Write one household override after checking current evidence and side effects."""
         with self._units.begin() as db:
             db.connection().exec_driver_sql("BEGIN IMMEDIATE")
-            track = _reviewed(db, track_id, decision.key)
+            dismissed = dismissed_download_tracks(db)
+            track = _reviewed(db, track_id, decision.key, dismissed)
             if decision.field not in track.fields:
                 raise ConflictError(_CHANGED)
             value = ""
             if decision.candidate is not None:
                 enabled = read_settings(db).suggest_missing_details_by_ai
-                if decision.candidate not in _choices(db, track, enabled=enabled)[decision.field]:
+                if (
+                    decision.candidate
+                    not in _choices(db, track, dismissed, enabled=enabled)[decision.field]
+                ):
                     raise ConflictError(_CHANGED)
                 value = decision.candidate.value
             field = Field(decision.field)
@@ -206,9 +214,9 @@ def _eligible_rows(after: int) -> Select[TrackRow]:
 
 
 def _item(
-    db: Session, track: MissingTrack, *, enabled: bool, available: bool
+    db: Session, track: MissingTrack, dismissed: set[int], *, enabled: bool, available: bool
 ) -> MissingDetailsItem:
-    choices = _choices(db, track, enabled=enabled)
+    choices = _choices(db, track, dismissed, enabled=enabled)
     row = track.track
     return MissingDetailsItem(
         track_id=row.id,
@@ -242,9 +250,9 @@ def _status(db: Session, track: MissingTrack, *, enabled: bool, available: bool)
 
 
 def _choices(
-    db: Session, track: MissingTrack, *, enabled: bool
+    db: Session, track: MissingTrack, dismissed: set[int], *, enabled: bool
 ) -> dict[MissingField, tuple[CreditCandidate, ...]]:
-    local = library_candidates(db, track)
+    local = library_candidates(db, track, dismissed)
     stored = _stored(db, track) if enabled else None
     choices: dict[MissingField, tuple[CreditCandidate, ...]] = {}
     for field in track.fields:
@@ -274,12 +282,12 @@ def _target(track_id: TrackId) -> str:
     return f"track:{track_id}"
 
 
-def _reviewed(db: Session, track_id: TrackId, key: str) -> MissingTrack:
+def _reviewed(db: Session, track_id: TrackId, key: str, dismissed: set[int]) -> MissingTrack:
     row = db.get(TrackRow, track_id)
     if row is None:
         message = "The Track is no longer in the Library."
         raise NotFoundError(message)
-    track = missing_track(db, row)
+    track = None if track_id in dismissed else missing_track(db, row)
     if track is None or track.key != key:
         raise ConflictError(_CHANGED)
     return track
@@ -292,7 +300,7 @@ def _refuse_start(db: Session, raw: object) -> str | None:
         return "Set up an AI provider in Settings first."
     request = MissingDetailsJob.model_validate(raw)
     try:
-        found = _reviewed(db, TrackId(request.track_id), request.key)
+        found = _reviewed(db, TrackId(request.track_id), request.key, dismissed_download_tracks(db))
     except (ConflictError, NotFoundError) as error:
         return str(error)
     return None if found.clues() == request.clues else _CHANGED

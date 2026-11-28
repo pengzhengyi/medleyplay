@@ -175,9 +175,12 @@
   menu has *Add the file yourself…* for any site Track, failed or not.
 - **In *Downloaded*,** *Dismiss failed download* in the warning menu hides that
   failed attempt for the household. *Dismiss all failed downloads* hides those
-  shown in the view. Neither action removes songs, files, or Job history. The
-  warning remains in the Library for retrying or adding a file, and a new failure
-  appears in *Downloaded* again.
+  shown in the view. When the latest failure is dismissed and the Track has no
+  saved Download or Library file, the Library hides it and the player removes
+  it from Up next, including queues restored from disk. The Track and its
+  missing artist or album details are left out of Clean up, including for
+  dismissals made before opening the view. Files and Job history are unchanged.
+  A new attempt or a saved file makes the Track visible again.
 - **The add-the-file dialog:** the failure's message, the other ways, a file
   picker, and *Add*, with the upload's progress; *Stop* beside it stops an upload
   under way. When it finishes, the dialog closes and the Track shows as downloaded and
@@ -200,7 +203,8 @@
 | `POST /api/downloads/failed/dismiss` | Signed in | Hide the failed download Jobs named by `job_ids`; other Jobs and saved files are unchanged |
 
 Tracks in every list include `download_failed`, `site`, and `download_failure_job_id`
-for a failed attempt still shown in *Downloaded*.
+for a failed attempt still shown in *Downloaded*. `download_dismissed` marks
+Tracks that the Library and player hide, regardless of when they were dismissed.
 
 ## Testing
 

@@ -30,8 +30,9 @@ import {
   current,
   following,
   reduce,
+  withoutTracks,
 } from "./queue";
-import { type Play, loadQueue, saveQueue } from "./storage";
+import { type Play, type Saved, loadQueue, saveQueue } from "./storage";
 import {
   type Stretch,
   WHOLE,
@@ -258,13 +259,20 @@ export function usePlayer(
   };
   const listen = useEffectEvent(startListening);
 
+  const restoreSaved = useEffectEvent((saved: Saved | undefined) => {
+    if (saved === undefined || saved.queue.entries.length === 0) return;
+    const restored = withoutDismissed(saved.queue, tracks);
+    const entry = current(restored);
+    const seconds = entry !== undefined && entry === current(saved.queue) ? saved.seconds : 0;
+    restore.current = entry === undefined ? undefined : seconds;
+    updatedPosition.current = { queue: restored, seconds };
+    dispatch({ type: "restore", queue: restored });
+  });
+
   // Restore the saved queue paused, and send any plays a closed page left behind.
   useEffect(() => {
     void loadQueue().then((saved) => {
-      if (saved !== undefined && saved.queue.entries.length > 0) {
-        restore.current = saved.seconds;
-        dispatch({ type: "restore", queue: saved.queue });
-      }
+      restoreSaved(saved);
     });
     void sendPlays();
   }, []);
@@ -503,13 +511,14 @@ export function usePlayer(
     next();
   });
 
-  const refreshAlbum = useEffectEvent(() => {
+  const refreshQueue = useEffectEvent(() => {
     const before = previousTracks.current;
     previousTracks.current = tracks;
-    if (before === tracks || key === undefined || trackId === undefined) return;
+    if (before === tracks) return;
     const element = audio.current;
     const loaded =
       element !== null &&
+      key !== undefined &&
       loadedKey.current === key &&
       view.key === key &&
       (view.status.kind === "playing" ||
@@ -522,7 +531,9 @@ export function usePlayer(
       loaded && !waitingMetadata.current ? element.currentTime : undefined,
       newId,
     );
-    const activeChanged = splitChanged(before.get(trackId), tracks.get(trackId));
+    const wasActive = trackId === undefined ? undefined : before.get(trackId);
+    const isActive = trackId === undefined ? undefined : tracks.get(trackId);
+    const activeChanged = splitChanged(wasActive, isActive);
     const coming = following(queue)?.trackId;
     if (
       revised !== undefined ||
@@ -533,13 +544,25 @@ export function usePlayer(
       setAlbumRevision((revision) => revision + 1);
     }
 
-    const nextQueue = withoutDeletedSongs(revised ?? queue, before, tracks);
+    const nextQueue = withoutDismissed(
+      withoutDeletedSongs(revised ?? queue, before, tracks),
+      tracks,
+    );
     const entry = current(nextQueue);
     const track = entry === undefined ? undefined : tracks.get(entry.trackId);
-    const file = before.get(trackId)?.segment_of;
+    const file = wasActive?.segment_of;
     const sameFile = file != null && (track?.segment_of === file || track?.id === file);
     const song = !sameFile ? undefined : track.id === file ? WHOLE : segmentStretch(track);
-    if (loaded && entry?.key === key && waitingMetadata.current && song !== undefined) {
+    if (isActive?.download_dismissed === true && entry?.key !== key) {
+      ++loads.current;
+      clearTimeout(ending.current);
+      if (entry !== undefined) {
+        const playing = loaded ? !element.paused : resumeAt.current === undefined;
+        restore.current = 0;
+        takenPlaying.current = playing;
+      }
+      if (element?.paused === false) element.pause();
+    } else if (loaded && entry?.key === key && waitingMetadata.current && song !== undefined) {
       if (activeChanged) stretch.current = song;
     } else if (
       loaded &&
@@ -584,7 +607,11 @@ export function usePlayer(
       takenPlaying.current = false;
     }
     if (nextQueue !== queue) {
-      if (entry?.key === key && updatedPosition.current?.queue !== nextQueue) {
+      if (
+        entry !== undefined &&
+        entry.key === key &&
+        updatedPosition.current?.queue !== nextQueue
+      ) {
         const seconds =
           loaded && !waitingMetadata.current
             ? positionIn(stretch.current, element.currentTime)
@@ -595,7 +622,7 @@ export function usePlayer(
     }
   });
   useEffect(() => {
-    refreshAlbum();
+    refreshQueue();
   }, [tracks]);
 
   const onTime = useEffectEvent((element: HTMLAudioElement) => {
@@ -879,23 +906,30 @@ export function usePlayer(
             play: handedPlay(listening.current),
           },
     take: (handoff, playing) => {
-      const taking = current(handoff.queue);
-      dispatch({ type: "restore", queue: handoff.queue });
+      const restored = withoutDismissed(handoff.queue, tracks);
+      const taking = current(restored);
+      const sameEntry = taking !== undefined && taking === current(handoff.queue);
+      const seconds = sameEntry ? handoff.seconds : 0;
+      dispatch({ type: "restore", queue: restored });
       if (taking !== undefined && taking.key === key) {
         // The entry already playing here: only its second and whether it plays change.
-        seek(handoff.seconds);
+        seek(seconds);
         if (playing === audio.current?.paused) {
           toggle();
         }
         return;
       }
-      restore.current = handoff.seconds;
+      restore.current = taking === undefined ? undefined : seconds;
       takenPlaying.current = playing;
-      takenCounted.current = handoff.counted;
-      takenPlay.current = handoff.play;
+      takenCounted.current = sameEntry && handoff.counted;
+      takenPlay.current = sameEntry ? handoff.play : undefined;
     },
   };
   return [player, audio];
+}
+
+function withoutDismissed(queue: Queue, tracks: ReadonlyMap<number, Track>): Queue {
+  return withoutTracks(queue, (id) => tracks.get(id)?.download_dismissed === true);
 }
 
 /** Return the status to show for `error`, or `undefined` when the session has expired. */

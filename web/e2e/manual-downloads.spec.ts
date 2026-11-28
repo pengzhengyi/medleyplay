@@ -118,6 +118,48 @@ test("a failed Download says so, and the file added by hand plays", async ({ pag
     .toBeGreaterThan(0.5);
 });
 
+test("dismissing a failed download hides the song in open Library and Clean up tabs", async ({
+  page,
+  request,
+}) => {
+  const title = "Dismissed download fixture";
+  const added = await request.post("/api/links", {
+    data: {
+      link: "https://www.bilibili.com/video/BVSignedIn",
+      parts: [{ part: 1, title, artist: "Blue Room" }],
+    },
+  });
+  expect(added.ok()).toBe(true);
+  await page.goto("/#/downloaded");
+  await expect(row(page, title).getByRole("button", { name: /^Download failed/ })).toBeVisible();
+
+  const library = await page.context().newPage();
+  const cleanup = await page.context().newPage();
+  try {
+    await library.goto("/");
+    await expect(row(library, title)).toBeVisible();
+    await cleanup.goto("/#/clean-up");
+    const review = cleanup.getByRole("region", { name: "Missing artist or album" });
+    const missing = review.getByText(title, { exact: true });
+    await expect(missing).toBeVisible();
+    await row(page, title)
+      .getByRole("button", { name: /^Download failed/ })
+      .click();
+
+    await page.getByRole("menuitem", { name: "Dismiss failed download" }).click();
+
+    await expect(row(page, title)).toHaveCount(0);
+    await expect(row(library, title)).toHaveCount(0);
+    await expect(missing).toHaveCount(0);
+    await library.reload();
+    await expect(library.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
+    await expect(row(library, title)).toHaveCount(0);
+  } finally {
+    await library.close();
+    await cleanup.close();
+  }
+});
+
 test("a video that cannot be read is added on the details given, then gets its file from the menu", async ({
   page,
 }) => {

@@ -81,6 +81,74 @@ const playing = (player: () => Player, track: Track) =>
     expect(now.status.kind).toBe("playing");
   });
 
+describe("dismissed downloads in the queue", () => {
+  const DISMISSED = trackOf(20, "Lost Signal", { download_dismissed: true });
+
+  it("cleans a saved shuffled queue without losing the paused song or its offset", async () => {
+    serve(ANSWERS);
+    const savedQueue = {
+      entries: [
+        { key: "past", trackId: DISMISSED.id },
+        { key: "melt", trackId: OTHER.id },
+        { key: "next", trackId: DISMISSED.id },
+      ],
+      position: 1,
+      order: ["melt", "next", "past"],
+      repeat: "off",
+    } as const;
+    const load = vi
+      .spyOn(storage, "loadQueue")
+      .mockResolvedValue({ queue: savedQueue, seconds: 12 });
+    const save = vi.spyOn(storage, "saveQueue");
+    try {
+      const { element, player, replaceCatalog } = renderPlayer([OTHER]);
+      await waitFor(() => {
+        expect(player().status.kind).toBe("paused");
+        expect(element.currentTime).toBe(12);
+      });
+
+      replaceCatalog([OTHER, DISMISSED]);
+
+      expect(player().queue).toEqual({
+        entries: [{ key: "melt", trackId: OTHER.id }],
+        position: 0,
+        order: ["melt"],
+        repeat: "off",
+      });
+      expect(player().status.kind).toBe("paused");
+      expect(element.currentTime).toBe(12);
+      expect(save).toHaveBeenLastCalledWith({ queue: player().queue, seconds: 12 });
+    } finally {
+      load.mockRestore();
+      save.mockRestore();
+    }
+  });
+
+  it("stops a track that is dismissed while playing, then plays the next kept song", async () => {
+    const available = { ...DISMISSED, download_dismissed: false };
+    let releaseNext: () => void = () => undefined;
+    const next = new Promise<void>((resolve) => {
+      releaseNext = resolve;
+    });
+    serve({
+      "POST /api/tracks/20/playback": { body: ready(20, null, null) },
+      "POST /api/tracks/7/playback": { body: ready(7, null, null), after: next },
+    });
+    const { element, player, replaceCatalog } = renderPlayer([available, OTHER]);
+    act(() => {
+      player().playList([available, OTHER], 0);
+    });
+    await playing(player, available);
+
+    replaceCatalog([DISMISSED, OTHER]);
+
+    expect(element.paused).toBe(true);
+    expect(player().queue.entries.map((entry) => entry.trackId)).toEqual([OTHER.id]);
+    releaseNext();
+    await playing(player, OTHER);
+  });
+});
+
 describe("playing songs inside one file", () => {
   it("updates the playing album and next song after a split edit without restarting the current song", async () => {
     const file = trackOf(104, "Bremen", { kind: "album", split: true, duration_ms: 60_000 });
